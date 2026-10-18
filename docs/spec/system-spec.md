@@ -192,6 +192,6 @@ Not part of this version: Azure and GCP targets (but see SYS-REQ-003); access le
 
 ## 5. Structure and acceptance
 
-The framework is divided into the components in the [component map](../architecture/component-map.md), which also defines their dependencies and a build order that allows each component to be implemented and verified before those that depend on it.
+The framework is divided into the components in the [component map](../architecture/component-map.md), which also defines how their requirements depend on one another.
 
 Each component document carries its own requirements and acceptance criteria, deriving from and verifying the requirements above. End-to-end scenarios (`E2E-…`) in `docs/acceptance/` verify the system requirements on the assembled framework and the demo app.

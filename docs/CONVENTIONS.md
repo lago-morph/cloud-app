@@ -78,7 +78,7 @@ A contract file is the single source of truth for the shape of its interface. De
 | --- | --- |
 | [README.md](README.md) | Index and reading order |
 | [spec/system-spec.md](spec/system-spec.md) | What the framework is and must achieve |
-| [architecture/component-map.md](architecture/component-map.md) | Components, responsibilities, dependencies, build order |
+| [architecture/component-map.md](architecture/component-map.md) | Components, responsibilities, dependencies |
 | [decisions/decision-log.md](decisions/decision-log.md) | All recorded decisions with origin |
 | [parameters/parameters.md](parameters/parameters.md) | All tunable values |
 | [guidance/implementing-agents.md](guidance/implementing-agents.md) | Working rules for agents implementing the framework |

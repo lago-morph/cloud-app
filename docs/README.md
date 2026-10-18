@@ -6,7 +6,7 @@ Specification and design documents for the Dual-Cloud Prototyping Framework.
 
 1. [CONVENTIONS.md](CONVENTIONS.md) — what is binding, identifiers, traceability, origins, parameter categories, contract formats.
 2. [spec/system-spec.md](spec/system-spec.md) — what the framework is and the system requirements (`SYS-REQ-…`).
-3. [architecture/component-map.md](architecture/component-map.md) — components, dependencies, and build order.
+3. [architecture/component-map.md](architecture/component-map.md) — components, responsibilities, and dependencies.
 4. The component documents under `components/` for the parts you are working on, with their contracts under `contracts/`.
 
 Reference material:

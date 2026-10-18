@@ -20,7 +20,7 @@ Each rule carries its origin (see [CONVENTIONS.md §4](../CONVENTIONS.md)). Rule
 | Commit and push to the feature branch frequently. Sandboxes are ephemeral; work held only in a sandbox can be lost. | owner |
 | Don't over-engineer. Prefer the simplest design that meets the requirements (SYS-REQ-007). | owner |
 | Work in the existing checkout and preserve existing user work and configuration. Do not create additional worktrees unless asked. | provenance-unclear |
-| Implement in the build order of the [component map](../architecture/component-map.md), and validate the riskiest platform mechanisms early, before polishing later layers. | provenance-unclear |
+| Follow the implementation plan's order once one exists, and validate the riskiest platform mechanisms early, before polishing later work. | provenance-unclear |
 | Once the required checks pass, do not broaden into unrelated features or test suites. | provenance-unclear |
 | The app-agent rule "report framework defects instead of working around them" does not apply to agents implementing the framework; they inspect and fix framework source. | provenance-unclear |
 

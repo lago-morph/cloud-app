@@ -322,3 +322,8 @@ An AI agent builds the demo app using the skill and only the framework's public 
 - The demo specification is written as app requirements, not implementation steps.
 - The skill's examples come from the app template and the compliance reference app, never from the demo, which avoids a circular dependency.
 - Gaps found while building the demo are fixed in the skill or the framework, not worked around in the demo.
+
+### DEC-0055 — Spec-level dependencies only; implementation order belongs to the plan
+Origin: owner · Status: accepted · Affects: component map, guidance
+
+The specification records only spec-level dependencies: component A depends on B when A's requirements or contract refer to B's capability. Its purpose is impact analysis under SYS-REQ-003. Dependencies that exist only because of a design choice are listed in each component design document's "Uses" section. The order of implementation is decided in a separate implementation plan, not in the specification. The containment rule (components interact only through published contracts) is stated separately from the dependency table.
