@@ -48,7 +48,7 @@ A dependency means "uses the contract of". A component may use only the contract
 | `CLI` | Developer commands | `dev`, `check`, `build`, `deploy`, `remove`. | LOCAL, PROV, MIG, CHECK |
 | `COMPL` | Compliance suite | One contract test suite and reference app run identically on all targets; evidence recording. | All capability components, LOCAL, CF, AWS, CLI |
 | `SKILL` | AI skill and template | Guidance for app-building agents, app template, scaffolder. | CORE, CHECK, CLI, and the contracts of all capability components |
-| `DEMO` | Demo app | Demo application, specified in `docs/demo/`. Uses only the framework's public exports. | CORE, CLI |
+| `DEMO` | Demo app | Demo application, specified in `docs/demo/`, built by an AI agent using SKILL and only the framework's public exports; it thereby also validates SKILL. | CORE, CLI, SKILL |
 
 ## 3. Dependency graph
 
@@ -85,7 +85,7 @@ graph TD
   CLI --> CHECK
   COMPL --> CLI
   SKILL --> CLI
-  DEMO --> CLI
+  DEMO --> SKILL
 ```
 
 The graph shows the edges needed to read the build order; the tables above are the complete dependency lists.
@@ -103,6 +103,7 @@ Each layer can be implemented and verified once the layers before it pass their 
 | 4 | LOCAL | A minimal app runs and passes `check` locally. |
 | 5 | GOOGLE, CF, AWS | Each target runs the minimal app. |
 | 6 | PROV, CLI | Deploy and remove work on both clouds. |
-| 7 | COMPL, SKILL, DEMO | Compliance suite passes on all targets; demo runs everywhere. |
+| 7 | COMPL, SKILL | Compliance suite passes on all targets; skill and template are usable. |
+| 8 | DEMO | Demo, built using the skill, runs on every target. |
 
 CLI's `dev` and `check` commands depend only on LOCAL and CHECK and may be delivered in layer 4; `deploy` and `remove` follow in layer 6.

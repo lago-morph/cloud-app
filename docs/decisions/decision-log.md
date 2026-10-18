@@ -314,3 +314,11 @@ The owner expects automated end-to-end tests against apps deployed on cloud prov
 Origin: owner-approved · Status: accepted · Affects: SYS-REQ-025, CHECK, CLI
 
 After an explanation from the AI, the owner kept SYS-REQ-025 and asked that it be worded as one scripted, deterministic command. The command runs type checking, the portability rules, the migration checker, and the app's automated tests. This command is how SYS-REQ-006 is enforced on app-building agents: the skill requires them to pass it before finishing. It proves nothing about cloud behavior.
+
+### DEC-0054 — The demo is built with the skill
+Origin: owner · Status: accepted · Affects: DEMO, SKILL, SYS-REQ-030
+
+An AI agent builds the demo app using the skill and only the framework's public exports, so building the demo also validates the skill. Consequences:
+- The demo specification is written as app requirements, not implementation steps.
+- The skill's examples come from the app template and the compliance reference app, never from the demo, which avoids a circular dependency.
+- Gaps found while building the demo are fixed in the skill or the framework, not worked around in the demo.
