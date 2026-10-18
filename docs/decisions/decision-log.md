@@ -293,3 +293,24 @@ One npm-workspace repository containing the framework package, the template, the
 Origin: provenance-unclear · Status: accepted
 
 The earlier spec recorded probe observations: local D1 table rebuilds, Data API transaction handling in Drizzle, drizzle-kit's remote D1 migration path, and text-folding and integer-range differences between SQLite and Postgres. The raw evidence was lost. Component designs may use these observations as hypotheses to test early, never as verified facts.
+
+---
+
+## Owner review of stage 1 (2026-10-18)
+
+### DEC-0051 — KV stores strings and has no expiry
+Origin: owner · Status: accepted · Affects: SYS-REQ-013, KV
+
+KV values are strings; an app that needs structure converts to and from text itself. Entries do not expire.
+
+Not adopted from the earlier spec: JSON values and optional time-to-live on entries.
+
+### DEC-0052 — Authentication mock scope; "production deployment"
+Origin: owner · Status: accepted · Affects: SYS-REQ-020, SYS-REQ-027, AUTH
+
+The owner expects automated end-to-end tests against apps deployed on cloud providers. Those tests run on test stages and use the authentication mock. A "production deployment" is any stage not marked as a test stage, and it never contains the mock. Fully automated tests that log in therefore cannot run against a production deployment. The real provider is covered by its certification (DEC-0021).
+
+### DEC-0053 — Pre-completion verification is one scripted, deterministic command
+Origin: owner-approved · Status: accepted · Affects: SYS-REQ-025, CHECK, CLI
+
+After an explanation from the AI, the owner kept SYS-REQ-025 and asked that it be worded as one scripted, deterministic command. The command runs type checking, the portability rules, the migration checker, and the app's automated tests. This command is how SYS-REQ-006 is enforced on app-building agents: the skill requires them to pass it before finishing. It proves nothing about cloud behavior.

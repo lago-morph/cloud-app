@@ -17,7 +17,9 @@ The applications are prototypes and personal tools: low criticality, low volume,
 | Owner | The person directing this project. The owner does not write or read code. |
 | App | An application built on the framework. |
 | Target | A place an app runs: `local`, `cloudflare`, or `aws`. |
-| Stage | One named deployment of an app on a cloud target (for example `dev`, `test-1234`). |
+| Stage | One named deployment of an app on a cloud target (for example `dev`, `test-1234`), with its own resources and configuration values. |
+| Test stage | A stage explicitly marked as being for automated testing. |
+| Production deployment | Any stage that is not a test stage. |
 | Capability | A service the framework offers to app code (SQL, KV, files, …). |
 | Adapter | The target-specific implementation of a capability. |
 | App code | Code written for a specific app, as opposed to framework code. |
@@ -93,9 +95,9 @@ Origin: provenance-unclear · Decision: DEC-0030
 Apps MUST evolve their database schema through framework-managed migrations that are applied during deployment and preserve existing data.
 
 #### SYS-REQ-013 — Key-value storage
-Origin: owner-approved · Decision: DEC-0010
+Origin: owner-approved · Decision: DEC-0010, DEC-0051
 
-The framework MUST provide key-value storage of JSON values with optional expiry, supporting get, put, delete, and listing by key prefix.
+The framework MUST provide key-value storage of string values, supporting get, put, delete, and listing by key prefix.
 
 #### SYS-REQ-014 — Files
 Origin: owner · Decision: DEC-0011
@@ -128,9 +130,9 @@ Origin: owner · Decision: DEC-0016
 Google MUST be supported as a real login provider. App code MUST NOT be able to tell which provider or protocol is in use, and additional providers (for example GitHub) MUST be addable behind the abstraction without app changes.
 
 #### SYS-REQ-020 — Mockable authentication
-Origin: owner · Decision: DEC-0017
+Origin: owner · Decision: DEC-0017, DEC-0052
 
-The authentication abstraction MUST be replaceable by a mock during testing, including in explicitly marked cloud test stages. Normal builds MUST NOT contain the mock.
+The authentication abstraction MUST be replaceable by a mock that reports a chosen access level, so automated tests — including end-to-end tests against deployed cloud test stages — run without a real login. The mock MAY be present only locally and in test stages; production deployments MUST NOT contain it.
 
 #### SYS-REQ-021 — Log
 Origin: owner · Decision: DEC-0018
@@ -154,10 +156,10 @@ Origin: provenance-unclear · Decision: DEC-0032
 
 Each stage MUST have its own app resources. Removing a stage MUST remove only that stage's resources and MUST NOT remove the shared log bucket.
 
-#### SYS-REQ-025 — Local definition of done
-Origin: provenance-unclear · Decision: DEC-0033
+#### SYS-REQ-025 — Scripted pre-completion verification
+Origin: owner-approved · Decision: DEC-0033, DEC-0053
 
-The framework MUST provide one local check command that an app passes before its work is considered done: type checking, portability checks, and the app's tests, with no cloud dependency.
+The framework MUST provide one scripted, deterministic command that an app must pass before work on it is considered done. The command runs, locally and with no network or cloud dependency: (1) type checking, (2) the portability rules, (3) the migration checker, and (4) the app's automated tests.
 
 #### SYS-REQ-026 — Compliance on every target
 Origin: owner-approved · Decision: DEC-0020
@@ -167,7 +169,7 @@ A single compliance suite MUST verify each capability's contract identically on 
 #### SYS-REQ-027 — Provider certification
 Origin: owner · Decision: DEC-0021
 
-Each real login provider adapter MUST be certified by a guided manual test using a dedicated test account. Re-certification is required only after major restructuring of the framework or a substantive change to that adapter. Routine verification uses the authentication mock.
+Each real login provider adapter MUST be certified by a guided manual test using a dedicated test account. Re-certification is required only after major restructuring of the framework or a substantive change to that adapter. All automated verification, including on cloud test stages, uses the authentication mock (SYS-REQ-020); the real provider is verified only by this certification.
 
 #### SYS-REQ-028 — Evidence before claims
 Origin: provenance-unclear · Decision: DEC-0034
