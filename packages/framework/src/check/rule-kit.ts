@@ -41,6 +41,23 @@ export function typeInfo(context: RuleContext): TypeInfo {
   return { program, checker: program.getTypeChecker(), tsNode: (node) => map.get(node) };
 }
 
+type Handler = (node: never) => void;
+
+/** Combines listener objects; handlers for the same selector run in order. */
+export function mergeListeners(...listeners: readonly Readonly<Record<string, Handler>>[]): RuleListener {
+  const merged: Record<string, Handler[]> = {};
+  for (const listener of listeners) {
+    for (const [selector, handler] of Object.entries(listener)) (merged[selector] ??= []).push(handler);
+  }
+  const out: Record<string, Handler> = {};
+  for (const [selector, handlers] of Object.entries(merged)) {
+    out[selector] = (node: never): void => {
+      for (const handler of handlers) handler(node);
+    };
+  }
+  return out;
+}
+
 /** The linted file's app code kind, from its path relative to the lint working directory. */
 export function codeKind(context: RuleContext): CodeKind | undefined {
   return classifyPath(relative(context.cwd, context.filename));
