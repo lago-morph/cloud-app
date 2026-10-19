@@ -478,7 +478,7 @@ Origin: owner · Status: accepted · Affects: CFG, PROV, AWS, PAR-060
 The `framework.aws` section is removed from per-stage configuration. The shared log bucket and the shared database network exist per account and region (DEC-0066, DEC-0074), so every stage must use the account's region. `setup-account` chooses the region (default PAR-060) and records it, and deploys use that recorded value. This satisfies DEC-0045: the region stays configurable and is not hard-coded.
 
 ### DEC-0076 — Schema changes replace the database, with downtime
-Origin: owner · Status: accepted · Supersedes: DEC-0065 · Affects: MIG, PROV, SQL, KV
+Origin: owner · Status: accepted, amended by DEC-0078 and DEC-0079 · Supersedes: DEC-0065 · Affects: MIG, PROV, SQL, KV
 
 These apps have one or a few users, little data, low usage, and low consequences for downtime. A cloud deploy with pending migrations therefore:
 1. stops the app (deleting the Worker, or setting the Lambda's concurrency to zero);
@@ -556,3 +556,23 @@ Pending owner decisions:
 - R-2: restart the old app after a failed migration.
 - R-3: optionally limit which logins count as users.
 - R-4: identify test stages by a name prefix.
+
+### DEC-0078 — Stopping the app on Cloudflare: turn its public address off and on
+Origin: owner · Status: accepted · Amends: DEC-0076 · Affects: MIG, PROV, CF
+
+The panel found that deleting the Worker to stop the app (DEC-0076, step 1) also deletes its secrets. The owner chose to stop a Cloudflare app by turning off the stage Worker's public address and turning it back on when the deploy finishes. The Worker itself is never deleted, so its secrets and bindings survive. AWS still stops by setting the Lambda's concurrency to zero. In both cases the CLI explicitly restarts the app; it does not rely on the provisioning tool to undo the stop.
+
+### DEC-0079 — A failed schema-changing deploy restarts the old app
+Origin: owner · Status: accepted · Amends: DEC-0076 · Affects: MIG, PROV
+
+If a migration or check fails, the new database is deleted and the old database is left unchanged, as before. The CLI now restarts the previous version against that database and the deploy exits with failure status. The app is no longer left down until a deploy succeeds.
+
+### DEC-0080 — Optional list of allowed users
+Origin: owner · Status: accepted · Affects: SYS-REQ-017 (refinement), AUTH, CFG, SKILL, DEMO
+
+Without a list, level `user` means any account the login provider accepts. The configuration may include an optional `framework.users` list of user IDs. When the list is present, a validated login whose ID is in neither `framework.users` nor `framework.admins` is treated as anonymous. The steps for finding and copying a user ID are the same as for admins.
+
+### DEC-0081 — Test stages are identified by name
+Origin: owner · Status: accepted · Supersedes: the `--test` flag and `framework.testStage` (PROV-REQ-005) · Affects: PROV, CFG, CLI, COMPL, AUTH
+
+A stage is a test stage exactly when its name starts with `test-`. Test stages use `config/<target>/test.json`; every other stage is a production deployment and needs its own committed values file. The `deploy --test` flag and the `framework.testStage` setting are removed. Run-ID test stage names include enough randomness that they cannot be guessed. The optional per-stage mock-login key was not adopted.
