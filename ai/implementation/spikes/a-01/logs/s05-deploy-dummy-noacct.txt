@@ -1,0 +1,14 @@
+SST 4.17.2 ready!
+
+➜  App:        spikewxlyyipn
+   Stage:      a01
+
+~  Deploy
+
+|  Warning     Cloudflare detected but `@cloudflare/workers-types` is not installed. Install it to get proper types for your bindings.
+
+✓  Complete    
+   kvId: <hex32>
+   rawTitle: spikewxlyyipn-a01-rawkv
+
+exit=0
