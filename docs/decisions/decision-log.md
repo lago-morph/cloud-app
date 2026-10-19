@@ -499,3 +499,60 @@ This removes several earlier pieces:
 Local development keeps applying migrations in place.
 
 The owner's instruction for this area: keep it simple, and do not design for high volume, large data, many users, or critical availability.
+
+### DEC-0077 — Changes from the persona review panel
+Origin: ai-proposed · Status: accepted · Affects: most component documents, contracts, parameters, scenarios
+
+An eight-persona review panel produced 97 findings, debated them, and the panel chair consolidated them into 38 recommendations. The personas were security, AI usability, debugging, simplicity, portability, implementability, testability, and a gap check against the earlier spec. Of the recommendations, 33 were applied, 4 await the owner, and 1 was rejected. "Retired IDs" lines in the affected documents refer to this entry. The main changes:
+
+**Deploy and migrations**
+- One deploy sequence, consistent with MIG-REQ-006:
+  - The CLI owns the app databases.
+  - The lowest-numbered existing database is the current one; any higher-numbered leftovers are deleted.
+  - The app is restarted explicitly on every deploy, followed by a health check (`/api/__framework/health`) and a check of the storage cross-origin settings.
+- A closed list of supported schema changes: no type changes and no renames. Instead, add a new column, copy the values in app code, and drop the old one. Each D1 migration is sent as one batch.
+- Databases are copied with each platform's native whole-database copy. Postgres databases are created with C collation.
+
+**Resource names and removal**
+- App names contain no hyphens. Resources are referred to by their exact identifiers, never by wildcards.
+- The account must own its shared resources; a squatted log bucket is refused.
+- Provisioning state and the account's region are kept in the cloud account, not only on the owner's machine.
+- An explicit list of removal steps, so `remove` leaves nothing behind.
+
+**Errors and logs**
+- The `component` field and `FILES.TICKET_EXPIRED` are removed from the error catalogue, and `retryable` is defined.
+- `HTTP.CONFLICT` is added. `HTTP.NETWORK_ERROR` now also covers responses that did not come from the app.
+- Every response with status 500 or higher writes exactly one log entry.
+- Rules on what log entries must never contain.
+- A log key layout that can be searched by severity and request ID.
+
+**Testing**
+- `connectTestStage` and the `smoke` command let apps run their smoke tests against deployed test stages.
+- `TestApp.logs()` and capability fault injection in tests.
+- The SQL dialect is fixed per test process.
+- A test-only stub login provider, used to test the real-provider code paths locally.
+
+**Contracts**
+- Settled typing for the SQL contract, with a narrowed user type after `requireUser`.
+- Normative code layout (browser, server, shared, and test folders).
+- Server code is type-checked against Web APIs only; `node:` imports are rejected.
+
+**Verification**
+- "Works" has two tiers: automated checks for every commit, plus milestone checks that are invalidated by events, never by a clock.
+- One long-lived `prodcheck` stage per cloud.
+- Evidence statuses are reduced to passed, failed, blocked, and not-run.
+- Framework scenarios run against the reference app, not the AI-built demo.
+
+**Removals and smaller fixes**
+- The AWS secret cache (PAR-240) is removed.
+- A troubleshooting guide for the owner, covering idle costs.
+- The verify-script check, which could not work, is dropped.
+- Control characters are banned in file names.
+- The packaged-install check is added to E2E-001.
+- A format for `FRAMEWORK-ISSUE.md` entries, and what the app agent does next.
+
+Pending owner decisions:
+- R-1: how to stop the app on Cloudflare without deleting the Worker and its secrets.
+- R-2: restart the old app after a failed migration.
+- R-3: optionally limit which logins count as users.
+- R-4: identify test stages by a name prefix.
