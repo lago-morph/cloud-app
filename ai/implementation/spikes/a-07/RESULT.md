@@ -99,4 +99,4 @@ None. Teardown deleted all objects, both buckets and the token, then listed buck
 
 ## Fallback
 
-None applied: the assumption holds. The design names no fallback for this spike ("ask owner"); the CORS-on-403 finding is raised to the owner (decision draft DEC-PENDING-A-07-4).
+None applied: the assumption holds. The design names no fallback for this spike ("ask owner"); the CORS-on-403 finding is raised to the owner (decision DEC-0101).
