@@ -6,11 +6,13 @@ import type { FrameworkRule } from "./rule-kit.js";
 import { PLUGIN_NAME, type ExtraRuleName, type RuleName } from "./rule-names.js";
 import { allowedImports } from "./rules/allowed-imports.js";
 import { frameworkOrder } from "./rules/framework-order.js";
+import { noDialectFeatures } from "./rules/no-dialect-features.js";
 import { noRawSql } from "./rules/no-raw-sql.js";
 
 export const rules: Readonly<Partial<Record<RuleName | ExtraRuleName, FrameworkRule>>> = {
   "allowed-imports": allowedImports,
   "no-raw-sql": noRawSql,
+  "no-dialect-features": noDialectFeatures,
   "framework-order": frameworkOrder,
 };
 

@@ -198,6 +198,77 @@ export function isHonoType(info: TypeInfo, node: TSESTree.Node, names: readonly 
   return symbol !== undefined && names.includes(symbol.name) && declaredIn(info, symbol, "hono");
 }
 
+export type ColumnKind = "id" | "text" | "integer" | "number" | "timestamp" | "boolean" | "ref";
+
+const COLUMN_HELPERS: readonly ColumnKind[] = ["id", "text", "integer", "number", "timestamp", "boolean", "ref"];
+
+function isColumnKind(name: string): name is ColumnKind {
+  return COLUMN_HELPERS.some((k) => k === name);
+}
+
+/** The column helper (`text()`, `boolean().default(false)`, …) a `defineTable` entry was built with. */
+function builderKind(info: TypeInfo, expr: ts.Expression): ColumnKind | undefined {
+  let current = skipOuterExpressions(expr);
+  while (ts.isCallExpression(current) && ts.isPropertyAccessExpression(current.expression) && ts.isCallExpression(current.expression.expression)) {
+    current = current.expression.expression;
+  }
+  if (!ts.isCallExpression(current)) return undefined;
+  const symbol = info.checker.getSymbolAtLocation(current.expression);
+  if (symbol === undefined) return undefined;
+  const target = describeSymbol(info, symbol);
+  if (target?.origin !== "framework" || !isColumnKind(target.name)) return undefined;
+  return target.name;
+}
+
+function kindFromType(info: TypeInfo, node: ts.Node): ColumnKind | undefined {
+  const marker = info.checker.getTypeAtLocation(node).getProperty("_");
+  if (marker === undefined) return undefined;
+  const data = info.checker.getTypeOfSymbol(marker).getProperty("data");
+  if (data === undefined) return undefined;
+  const type = info.checker.getNonNullableType(info.checker.getTypeOfSymbol(data));
+  if ((type.flags & ts.TypeFlags.BooleanLike) !== 0) return "boolean";
+  if ((type.flags & ts.TypeFlags.StringLike) !== 0) return "text";
+  if ((type.flags & ts.TypeFlags.NumberLike) !== 0) return "number";
+  return undefined;
+}
+
+/**
+ * The kind of column an expression denotes (`posts.done` → `boolean`): from the `defineTable`
+ * entry it was declared with, else (e.g. subquery fields) coarsely from its data type, where
+ * `integer` and `timestamp` both read as `number`. Undefined when not a column.
+ */
+export function columnKind(info: TypeInfo, node: TSESTree.Node): ColumnKind | undefined {
+  if (node.type === "MemberExpression" && !node.computed && node.property.type === "Identifier") {
+    const kind = tableColumns(info, node.object)?.get(node.property.name);
+    if (kind !== undefined) return kind;
+  }
+  return kindFromType(info, info.tsNode(node));
+}
+
+/**
+ * The columns of a table expression (`posts`, imported or not) by key, read from the framework
+ * `defineTable` call that created it; undefined when the expression is not such a table.
+ */
+export function tableColumns(info: TypeInfo, node: TSESTree.Node): Map<string, ColumnKind> | undefined {
+  const symbol = info.checker.getSymbolAtLocation(info.tsNode(node));
+  if (symbol === undefined) return undefined;
+  const decl = resolveSymbol(info.checker, symbol).valueDeclaration;
+  if (decl === undefined || !ts.isVariableDeclaration(decl) || decl.initializer === undefined) return undefined;
+  const call = skipOuterExpressions(decl.initializer);
+  if (!ts.isCallExpression(call)) return undefined;
+  const callee = info.checker.getSymbolAtLocation(call.expression);
+  const target = callee === undefined ? undefined : describeSymbol(info, callee);
+  const columns = call.arguments[1];
+  if (target?.origin !== "framework" || target.name !== "defineTable" || columns === undefined || !ts.isObjectLiteralExpression(columns)) return undefined;
+  const out = new Map<string, ColumnKind>();
+  for (const prop of columns.properties) {
+    if (!ts.isPropertyAssignment(prop) || !(ts.isIdentifier(prop.name) || ts.isStringLiteral(prop.name))) continue;
+    const kind = builderKind(info, prop.initializer);
+    if (kind !== undefined) out.set(prop.name.text, kind);
+  }
+  return out;
+}
+
 /** The static name of a member access (`a.b` or `a["b"]`), if any. */
 export function memberName(member: TSESTree.MemberExpression): string | undefined {
   if (!member.computed && member.property.type === "Identifier") return member.property.name;
