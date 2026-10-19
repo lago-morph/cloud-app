@@ -9,11 +9,13 @@ import { noRelationalQueries, noTransactions } from "./rules/db-members.js";
 import { appErrorCodes } from "./rules/app-error-codes.js";
 import { frameworkIds } from "./rules/framework-ids.js";
 import { frameworkOrder } from "./rules/framework-order.js";
+import { noEnvAccess } from "./rules/no-env-access.js";
 import { noDialectFeatures } from "./rules/no-dialect-features.js";
 import { noRawSql } from "./rules/no-raw-sql.js";
 
 export const rules: Readonly<Partial<Record<RuleName | ExtraRuleName, FrameworkRule>>> = {
   "allowed-imports": allowedImports,
+  "no-env-access": noEnvAccess,
   "no-raw-sql": noRawSql,
   "no-dialect-features": noDialectFeatures,
   "framework-order": frameworkOrder,
