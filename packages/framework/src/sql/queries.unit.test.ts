@@ -9,7 +9,7 @@ import { getPlatformProxy } from "wrangler";
 import { tag } from "../../../../tests/support/tags.js";
 import { boolean, id, integer, number, ref, text } from "./columns.js";
 import type { Dialect } from "./dialect.js";
-import { openPostgres, postgresDb, sqliteDb } from "./drivers.js";
+import { openPostgres, postgresDb, sqliteDb, type SqlAdapterOptions } from "./drivers.js";
 import { asc, avg, containsText, count, countDistinct, desc, eq, max, min, sum } from "./public.js";
 import { defineTable, tableFor } from "./table.js";
 import type { AnyTable, PortableDb } from "./types.js";
@@ -33,6 +33,8 @@ const [R1, R2] = [uuid(101), uuid(102)];
 
 interface Harness {
   db: PortableDb;
+  /** Another handle over the same database, with adapter options. */
+  handle(options: SqlAdapterOptions): PortableDb;
   run(sql: string): Promise<void>;
   close(): Promise<void>;
 }
@@ -55,6 +57,7 @@ async function openD1(): Promise<Harness> {
   const binding = proxy.env.DB;
   return {
     db: sqliteDb(binding),
+    handle: (options) => sqliteDb(binding, options),
     run: async (sql) => void (await binding.prepare(sql).run()),
     close: () => proxy.dispose(),
   };
@@ -64,6 +67,7 @@ async function openPg(): Promise<Harness> {
   const pg = await openPostgres();
   return {
     db: postgresDb(pg),
+    handle: (options) => postgresDb(pg, options),
     run: async (sql) => void (await pg.exec(sql)),
     close: () => pg.close(),
   };
@@ -203,6 +207,16 @@ describe.each([
     await expect(h.db.update(p).set({ name: "second" }).where(eq(p.id, R1))).rejects.toMatchObject(conflict);
     await expect(h.db.insert(t).values({ id: uuid(51), parentId: uuid(999), name: "orphan" })).rejects.toMatchObject(conflict);
     await expect(h.db.delete(p).where(eq(p.id, R1))).rejects.toMatchObject(conflict);
+  });
+
+  it("a database that cannot be reached is SQL.UNAVAILABLE; a forced outage too", async () => {
+    const other = await open();
+    await other.close();
+    const t = T(things);
+    const unavailable = { name: "FrameworkError", code: "SQL.UNAVAILABLE" };
+    await expect(other.db.select({ id: t.id }).from(t)).rejects.toMatchObject(unavailable);
+    const forced = h.handle({ unavailable: true });
+    await expect(forced.select({ id: t.id }).from(t)).rejects.toMatchObject(unavailable);
   });
 
   describe("writes", () => {
