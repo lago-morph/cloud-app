@@ -1,26 +1,29 @@
 /**
- * CFG public names (contract: docs/contracts/ts/config.d.ts).
- * Stub written by B-01; implemented by B-09.
+ * CFG public names (contract: docs/contracts/ts/config.d.ts). Behavior: docs/components/config.md.
+ * Framework-internal parts: `keys.ts` (key definitions), `schema.ts` (values-file validation),
+ * `files.ts` (per-stage file selection), `resolve.ts` (build-time resolution), `embed.ts`
+ * (generated module), `service.ts` (`ConfigService`), `secret-locations.ts`.
  */
+import { declareKey } from "./keys.js";
 
 export interface ConfigKey<T> {
   readonly $type: T;
 }
 
 export function configString(options?: { readonly default?: string }): ConfigKey<string> {
-  throw new Error("not implemented: configString");
+  return declareKey("string", options);
 }
 
 export function configInteger(options?: { readonly default?: number }): ConfigKey<number> {
-  throw new Error("not implemented: configInteger");
+  return declareKey("integer", options);
 }
 
 export function configBoolean(options?: { readonly default?: boolean }): ConfigKey<boolean> {
-  throw new Error("not implemented: configBoolean");
+  return declareKey("boolean", options);
 }
 
 export function configStringList(options?: { readonly default?: readonly string[] }): ConfigKey<readonly string[]> {
-  throw new Error("not implemented: configStringList");
+  return declareKey("stringList", options);
 }
 
 /** App-declared keys: lowerCamelCase names mapped to key definitions. */
