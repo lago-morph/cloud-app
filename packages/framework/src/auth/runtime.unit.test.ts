@@ -360,6 +360,15 @@ describe("GET /api/auth/me", () => {
     expect(await res.json()).toStrictEqual({ level: "user", id: "u_USER", displayName: null });
   });
 
+  it(tag("AUTH-AC-005", "methods the contract does not define get 405 HTTP.METHOD_NOT_ALLOWED"), async () => {
+    const { request } = await stubHarness();
+    for (const [method, path] of [["GET", "/api/auth/logout"], ["DELETE", "/api/auth/me"], ["POST", "/api/auth/login"]] as const) {
+      const res = await request(path, { method });
+      expect(res.status, `${method} ${path}`).toBe(405);
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe("HTTP.METHOD_NOT_ALLOWED");
+    }
+  });
+
   it(tag("AUTH-AC-012", "an unlisted login is anonymous to app code; /me alone adds unlistedId"), async () => {
     const { request } = harness({ framework: { admins: [], users: ["u_LISTED"] } });
     const cookie = await session({ id: "u_OTHER", displayName: "O" });
