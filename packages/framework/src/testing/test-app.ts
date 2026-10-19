@@ -40,11 +40,15 @@ import { assembleStage } from "../targets/cloudflare/stage.js";
 
 /** Options for `createTestApp` (testing.d.ts). */
 export interface TestAppOptions {
+  /** Identity for every request; default anonymous (a session from mock-login then decides). */
   readonly user?: CurrentUser;
   /** Config values overriding the app's defaults; the reserved key `framework` holds the stage's `framework` section. */
   readonly config?: Record<string, unknown>;
+  /** Secret values for the test, by logical name. */
   readonly secrets?: Record<string, string>;
+  /** Capabilities that fail as unavailable: every operation of each one named throws its `*.UNAVAILABLE` code. */
   readonly unavailable?: readonly ("sql" | "kv" | "files" | "secrets")[];
+  /** Use the test-only stub login provider instead of the authentication mock. Default false. */
   readonly stubLoginProvider?: boolean;
   /** LOG-AC-001: a log writer that fails on every write, or whose writes never complete (DEC-PENDING-B-T1-1). */
   readonly logWriter?: "failing" | "never-completing";
