@@ -1,0 +1,4 @@
+=== export  @ 2026-10-19T19:51:50Z
+export poll 1: http=200 success=True status=complete type=export error=None messages=["Generating <uuid>-00000000-00000067-00005109-<hex32>.sql", "Uploaded part 1", "Finished uploading <uuid>-00000000-00000067-00005109-<hex32>.sql in 1 parts."] errors=[]
+export complete: filename=<uuid>-00000000-00000067-00005109-<hex32>.sql signed_url host=<hex32>.r2.cloudflarestorage.com
+export info: {"export_s": 1.37, "download_s": 0.58, "polls": 1, "bytes": 5595025, "signed_url_host": "<hex32>.r2.cloudflarestorage.com"}
