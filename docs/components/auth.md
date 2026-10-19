@@ -17,9 +17,9 @@ Origin: owner · Derives from: SYS-REQ-017
 The user ID MUST be derived deterministically from the provider's name and the provider's stable identifier for the person. It is the same in every stage and target, cannot be reversed into the provider identifier, and changes if the person signs in through a different provider.
 
 #### AUTH-REQ-003 — Admin by configuration
-Origin: owner · Derives from: SYS-REQ-017, SYS-REQ-018
+Origin: owner · Derives from: SYS-REQ-017, SYS-REQ-018 · Decision: DEC-0080
 
-With a real provider, a logged-in user MUST be `admin` exactly when their user ID is in the configured admin list, evaluated on every request. With the authentication mock, the level chosen by the test is used directly (AUTH-REQ-009).
+With a real provider, a logged-in user MUST be `admin` exactly when their user ID is in the configured admin list, evaluated on every request. When the optional `framework.users` list is present, a validated login whose ID is in neither `framework.users` nor `framework.admins` MUST be treated as anonymous, also evaluated on every request. Without the list, level `user` means any account the login provider accepts. With the authentication mock, the level chosen by the test is used directly (AUTH-REQ-009).
 
 #### AUTH-REQ-004 — Route protection
 Origin: provenance-unclear · Derives from: SYS-REQ-010, SYS-REQ-017
@@ -27,9 +27,9 @@ Origin: provenance-unclear · Derives from: SYS-REQ-010, SYS-REQ-017
 `requireUser()` MUST reject anonymous requests with 401 `AUTH.UNAUTHENTICATED`. `requireAdmin()` MUST additionally reject users with 403 `AUTH.FORBIDDEN`. `requireCurrentUser(c)` MUST return the logged-in user, or throw `AUTH.UNAUTHENTICATED` for an anonymous request.
 
 #### AUTH-REQ-005 — Framework routes and "who am I"
-Origin: owner · Derives from: SYS-REQ-018
+Origin: owner · Derives from: SYS-REQ-018 · Decision: DEC-0080
 
-The framework MUST provide the `/api/auth/*` routes in the HTTP contract. `/api/auth/me` MUST show a logged-in user their user ID. The skill and the app template's README MUST give copy-and-paste steps for adding that ID to the admin list.
+The framework MUST provide the `/api/auth/*` routes in the HTTP contract. `/api/auth/me` MUST show a logged-in user their user ID, including a validated login that `framework.users` makes anonymous. The skill and the app template's README MUST give copy-and-paste steps for adding that ID to the admin list or to `framework.users`.
 
 #### AUTH-REQ-006 — Sessions
 Origin: owner-approved · Derives from: SYS-REQ-017
@@ -58,7 +58,7 @@ A failed login MUST NOT create a session. It MUST redirect to `/?authError=login
 
 ## 2. Design
 
-**Levels.** Level `user` means any account the login provider accepts, not a person this app trusts.
+**Levels.** Without `framework.users`, level `user` means any account the login provider accepts, not a person this app trusts. An app that should admit only known people lists their IDs in `framework.users` (CFG). With the list present, a login on neither list still gets a session, but every request with it is anonymous: `c.var.user` is `{ level: "anonymous" }`, and guarded routes answer 401 `AUTH.UNAUTHENTICATED`. Like admin status, membership is evaluated per request, so adding or removing an ID takes effect at the next deploy without logging anyone out. `/api/auth/me` alone also returns such a login's ID, as `unlistedId` (HTTP contract), so the person can copy it for the owner; app code never sees it (AUTH-REQ-001).
 
 **User ID.** `u_` followed by the first 26 characters of the base32 encoding of SHA-256(`<provider id>:<subject>`) (DEC-0067).
 
@@ -77,13 +77,13 @@ A new login replaces any login in progress.
 
 **More than one provider.** If a deployment is later configured with several real providers, `/api/auth/login` shows a framework-owned page for choosing one. The app-facing contracts (`login()`, `/api/auth/login`) do not change.
 
-**Provider per stage.** Production deployments use the real provider (GOOGLE). Test stages and local development use the mock. `createTestApp` installs the mock directly. The `./testing` subpath and the mock module are excluded from production bundles (CORE-REQ-006).
+**Provider per stage.** Production deployments use the real provider (GOOGLE). Test stages (stages named `test-*`, PROV-REQ-005) and local development use the mock. `createTestApp` installs the mock directly. The `./testing` subpath and the mock module are excluded from production bundles (CORE-REQ-006).
 
-**Stub provider.** Because the mock bypasses ID derivation and the admin list, real-provider paths are tested locally with a test-only stub provider that implements [internal/login-provider.d.ts](../contracts/ts/internal/login-provider.d.ts). It is available only under `./testing` and speaks no protocol. Local tests use it to verify admin-list evaluation, callback-URL building under a forged Host header, failed and replayed callbacks, and per-provider ID derivation. On each cloud, the production-check stage (`prodcheck`, COMPL) keeps only the checks that need no login.
+**Stub provider.** Because the mock bypasses ID derivation and the admin list, real-provider paths are tested locally with a test-only stub provider that implements [internal/login-provider.d.ts](../contracts/ts/internal/login-provider.d.ts). It is available only under `./testing` and speaks no protocol. Local tests use it to verify admin-list and users-list evaluation, callback-URL building under a forged Host header, failed and replayed callbacks, and per-provider ID derivation. On each cloud, the production-check stage (`prodcheck`, COMPL) keeps only the checks that need no login.
 
 ## 3. Uses
 
-HTTP (routes, error handler), CFG (admin list, public origin, test-stage flag), SEC (session key), LOG (failed logins), GOOGLE (real provider).
+HTTP (routes, error handler), CFG (admin list, users list, public origin), CORE (test-stage flag, derived from the stage name: PROV-REQ-005), SEC (session key), LOG (failed logins), GOOGLE (real provider).
 
 ## 4. Acceptance criteria
 
@@ -100,6 +100,7 @@ HTTP (routes, error handler), CFG (admin list, public origin, test-stage flag), 
 | AUTH-AC-009 | `/api/auth/mock-login` works on test stages and returns 404 on a production deployment. Production bundles contain no mock module. | AUTH-REQ-009 | Local, cloud |
 | AUTH-AC-010 | With the stub provider, a refused callback and one with a missing, invalid, or replayed transaction create no session, redirect as specified, and write a log entry naming one fixed reason. Login with `returnTo` set to `//evil.example`, `/\evil.example`, `https://evil.example`, `/%2F%2Fevil.example`, or `javascript:` redirects to `/` after login. | AUTH-REQ-010 | Local |
 | AUTH-AC-011 | On each cloud's `prodcheck` stage, `/api/auth/login` with a forged Host header redirects with the correct callback URL, and a bogus callback creates no session and redirects as specified. | AUTH-REQ-008, AUTH-REQ-010 | Cloud |
+| AUTH-AC-012 | With `createTestApp` using `stubLoginProvider` and `framework.users` set to one user ID: after `loginWithStub` as the subject with that ID, the level is `user`; as a subject whose ID is only in `framework.admins`, the level is `admin`; as any other subject, the request is anonymous (a `requireUser()` route returns 401 `AUTH.UNAUTHENTICATED`, and `/api/auth/me` returns level `anonymous` with the login's ID as `unlistedId`). Without `framework.users`, every validated login is at least `user`. | AUTH-REQ-003, AUTH-REQ-005 | Local |
 
 ## 5. Portability note
 

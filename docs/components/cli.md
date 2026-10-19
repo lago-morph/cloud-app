@@ -17,7 +17,7 @@ The CLI MUST provide these commands as the framework package's own binary, invok
 | `verify` | The scripted pre-completion verification (CLI-REQ-002). |
 | `generate-migration` | Generate the next migration pair from the table definitions (MIG). |
 | `build --target <t> --stage <s>` | Build a deployment without deploying it. |
-| `deploy --target <t> --stage <s> [--test]` | Deploy a stage (PROV). |
+| `deploy --target <t> --stage <s>` | Deploy a stage (PROV). A stage named `test-*` is a test stage; every other stage is production (PROV-REQ-005). |
 | `smoke --target <t> --stage <s>` | Run the app's smoke tests (`tests/smoke/**`) against a deployed test stage, or against the running `dev` server with target `local`; write evidence and print the stage's log location for the day. |
 | `remove --target <t> --stage <s>` | Remove a stage (PROV). |
 | `secrets set <name> --target <t> --stage <s>` | Set a secret from standard input (SEC). |

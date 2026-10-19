@@ -8,8 +8,8 @@ info:
     Owners: AUTH (all /api/auth routes), HTTP (error format, unknown routes, health route).
     Behavior: docs/components/auth.md, docs/components/http.md.
 
-    Routes marked `x-test-stage-only: true` exist only locally and in test stages
-    (SYS-REQ-020); in production deployments they respond 404 HTTP.NOT_FOUND.
+    Routes marked `x-test-stage-only: true` exist only locally and in test stages, whose
+    names start with `test-` (SYS-REQ-020, PROV-REQ-005); in production deployments they respond 404 HTTP.NOT_FOUND.
 paths:
   /api/auth/login:
     get:
@@ -44,7 +44,9 @@ paths:
       summary: Current user
       description: |
         The current user. Logged-in users can read their user ID here to copy it into
-        the admin list (SYS-REQ-018). Responses are never cached.
+        the admin list or `framework.users` (SYS-REQ-018). A validated login that
+        `framework.users` makes anonymous gets level `anonymous` with its ID in
+        `unlistedId` (docs/components/auth.md, AUTH-REQ-005). Responses are never cached.
       responses:
         "200":
           description: Current user.
@@ -93,6 +95,12 @@ components:
           additionalProperties: false
           properties:
             level: { const: anonymous }
+            unlistedId:
+              type: string
+              description: |
+                Only from /api/auth/me: the user ID of a validated login whose ID is in
+                neither `framework.users` nor `framework.admins` while `framework.users`
+                is present. Never given to app code.
         - type: object
           required: [level, id, displayName]
           additionalProperties: false

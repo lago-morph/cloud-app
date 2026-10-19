@@ -25,7 +25,7 @@ Each **capability** component (SQL, KV, FILES, …) owns its portable contract a
 | [`MIG`](../components/migrations.md) | Migrations | Applying schema changes to deployed apps while preserving their data. |
 | [`KV`](../components/kv.md) | Key-value | The KV capability. |
 | [`FILES`](../components/files.md) | Files | The files capability, including the browser helper for uploading and downloading files. |
-| [`CFG`](../components/config.md) | Configuration | Config declaration, per-stage values, secret names and locations, the admin list. |
+| [`CFG`](../components/config.md) | Configuration | Config declaration, per-stage values, secret names and locations, the admin and users lists. |
 | [`SEC`](../components/secrets.md) | Secrets | The secrets capability. |
 | [`LOG`](../components/log.md) | Log | The write-only log capability and the shared per-account log bucket. |
 | [`AUTH`](../components/auth.md) | Current user | Access levels, user identity, login and logout, the login-provider interface, and the authentication mock. |

@@ -65,7 +65,7 @@ App code MUST NOT throw codes owned by capability components (`SQL.*`, `KV.*`, `
 
 **Services per request.** Each target exports a `createServices(env, deployment)` factory used by its runtime. Cheap, binding-backed objects are created per request on Cloudflare and locally. On AWS, SDK clients are created once per cold start and reused, but nothing request-specific is cached across requests.
 
-**Deployment identity** is embedded by the build (CLI) from the app definition and the stage configuration. App names use lowercase letters and digits only, with no hyphens, up to PAR-290 characters, so a `<app>-<stage>-` prefix belongs to exactly one app; the build rejects any other app name. Stage names use lowercase letters, digits, and hyphens, up to PAR-291 characters.
+**Deployment identity** is embedded by the build (CLI) from the app definition and the stage configuration. App names use lowercase letters and digits only, with no hyphens, up to PAR-290 characters, so a `<app>-<stage>-` prefix belongs to exactly one app; the build rejects any other app name. Stage names use lowercase letters, digits, and hyphens, up to PAR-291 characters. The test-stage flag is true exactly when the stage name starts with `test-` (PROV-REQ-005); it is computed by the build, not read from configuration or a command-line flag.
 
 **Errors.** `FrameworkError` carries a code; the HTTP error handler (HTTP) maps the code to its catalogue status. Any other thrown value becomes `CORE.INTERNAL`; the original error is written to the log with the request ID and never returned.
 

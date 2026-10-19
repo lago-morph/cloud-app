@@ -81,7 +81,8 @@ export declare function createTestApp<C extends ConfigDeclaration, S extends str
  * Connects to the deployed stage that the running `smoke` command targets (CLI), or to
  * the local `dev` server when `smoke` runs locally. The base URL comes from the stage's
  * recorded deploy output. It logs in through mock-login, keeps the session cookie, and
- * sets `Origin` on state-changing requests. It rejects a stage that is not a test stage.
+ * sets `Origin` on state-changing requests. It rejects a stage that is not a test stage
+ * (a stage whose name does not start with `test-`).
  * If connecting or logging in gets an unexpected response, it rejects with a message
  * naming the method, path, status, error code, and requestId.
  */
