@@ -59,3 +59,21 @@ In `packages/framework/test/integration/mig/local-d1.ts`, `d1DatabaseFiles` shou
 1. Red: a small helper test (or the existing suite) on an app dir after one `dev` run shows `d1DatabaseFiles` returning 2 with the current filter.
 2. Green: with the fix it returns exactly the `<hash>.sqlite` file, and `npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/mig/deploy-local.test.ts` passes 3/3.
 3. Keep the discriminating power. A mutation that leaves a second real D1 database file (for example, copy the `<hash>.sqlite` under another 64-hex name) must still make `expect(d1DatabaseFiles(dir)).toHaveLength(1)` fail.
+
+## Review
+
+Reviewer: independent root-cause reviewer (prompt §8 step 2). Did not diagnose this failure or write the code or tests. Date: 2026-10-19. No code or test changed.
+
+**Verdict: ACCEPTED.**
+
+Reasons:
+1. **Link 1 (Miniflare writes `metadata.sqlite` per namespace) independently reproduced.** In a scratch dir outside the repo, with only `wrangler@4.149.0` and `miniflare@5.20261006.1-alpha` (the `package-lock.json` versions) and no framework code, `getPlatformProxy({ persist: true })` with one D1 binding, one batch (`CREATE TABLE t`, one insert) and `dispose()` leaves exactly three `.sqlite` files: `cache/miniflare-CacheObject/metadata.sqlite`, `d1/miniflare-D1DatabaseObject/metadata.sqlite` and `d1/miniflare-D1DatabaseObject/e833abeb…7854.sqlite`. The D1 `metadata.sqlite` holds only `_cf_ALARM (actor_id, scheduled_time, actor_name) WITHOUT ROWID`. That is workerd's Durable Object alarm table, not a database. The same file exists in the Cache namespace, which has no D1. Miniflare's own explorer excludes `metadata.sqlite` when it lists Durable Object instances (`explorer.worker.js:8834`, `:14982`, `:15074`, confirmed).
+2. **Links 2–4 confirmed by reading the code.** `d1DatabaseFiles` (`local-d1.ts:21`) keeps every `*.sqlite` under `.wrangler/…/d1/`, and `onlyD1Database` throws when the count is not 1. `afterV2` is set only after the throw point, so the third test's failure is a knock-on.
+3. **The question asked of this review: does MIG-AC-002/-003 mean to catch this file, and should `dev` prevent it?** No, on both counts.
+   - **What the criterion means.** MIG-AC-003's "no new database behind" is about the deployment leaving a copy or second database (the Cloudflare copy-and-migrate path, migrations.md §2). DEC-0144 makes local application in place ("no copy and no second database"). The merged B-T2 reading turns this into "exactly one local D1 database file".
+   - **What creates the file.** Wrangler/workerd create `metadata.sqlite` for every persisted Durable Object namespace, whether or not the app has D1 and before any migration runs. It is not a database the framework creates.
+   - **Can the framework stop it?** The framework's own code makes no database files or copies: `src/` has no `copyFile` or `.sqlite` writes, `dev` only passes `--persist-to .wrangler/state` and `getPlatformProxy({ persist })`, and the applier runs in place. `dev` could avoid the file only by turning off persistence, and local.md / LOCAL-REQ-002 forbid that. So the file is not something `dev` should prevent, and excluding it does not loosen the criterion.
+4. **The fix addresses the cause and keeps the check strict.** Exclude `metadata.sqlite`, and preferably also require `^[0-9a-f]{64}\.sqlite$`. A real second D1 database would still be counted. The verification plan's mutation step (copy the database under another 64-hex name and expect the length-1 assertion to fail) has to be carried out, not skipped, so the assertion's discriminating power is shown.
+5. **Alternatives.** Leftover state, timing and a framework-made copy are ruled out with evidence (fresh `mkdtemp` dirs; the file persists after `dispose()`; the plain-wrangler reproduction). The diagnoser's confirming experiment (3/3 passing with only the filter changed) shows no second cause is hidden behind this one.
+
+Minor note, not a reason to reject: the wording "exactly one local D1 database file" comes from B-T2's merged draft inside DEC-0144 (decision-log.md:1127), not from DEC-0144's main paragraph. The record cites both, so this is fine.

@@ -54,3 +54,18 @@ Make the MIG scratch app compliant: the `/seed` route in `mig/apps.ts` generates
 1. Red: the current fixture's control `verify` exits 1 with 5 `framework-ids` problems (as reproduced).
 2. Green: with the fixture fix, `npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/mig/` passes all 6 tests. This also needs the `metadata.sqlite` fix from the other record for the deploy tests.
 3. Check that the control `verify` output shows `portability rules: passed`, and that after the edit `verify` fails at `migration checker` and names the edited file.
+
+## Review
+
+Reviewer: independent root-cause reviewer (prompt §8 step 2). Did not diagnose this failure or write the code or tests. Date: 2026-10-19. No code or test changed.
+
+**Verdict: ACCEPTED.**
+
+Reasons:
+1. **Link 1 confirmed.** `mig/apps.ts` `ROUTES` writes five string-literal UUIDs into the `id` keys of `insert(parents).values(…)` and `insert(children).values(…)` in `/seed`. These are the five flagged positions.
+2. **Link 2: the rule is correct per spec.** check.md:79 says: "`framework-ids`: in `insert(…).values(…)`, an `id()` column value that is a literal, a template, or a call or construction other than the framework's `newId` … is rejected". sql.md:49 says `id()` is "UUID v4 from `newId()`". `framework-ids.ts` `idValueProblem` returns a problem for `StringLiteral` and template literals and accepts only a framework-origin `newId` call. It inspects only `id()` keys of `values` objects and `id()` keys in `set`, so `parentId` (`ref()`) and the `eq(parents.id, …)` in `where` are correctly left alone. The rule is not over-broad. Suppression is not an option (`no-suppression-comments`), and the record correctly forbids moving the literals behind untraceable properties.
+3. **Links 3–5.** The control output shows every other verify step passing. The history (fixture `2b6fb55` before rule `ed99a2d`) explains how this happened. The confirming experiment isolates the literals as the only obstacle.
+4. **The question asked of this review: does seeding with `newId()` keep MIG-AC-001's test as strong as the criterion?** Yes.
+   - **generate.test.** It never calls `/seed`. It only generates migrations and runs `verify`. MIG-AC-001 (one new migration per dialect; an edited migration makes the checker fail) and DEC-0223's control run are judged exactly as before, and the control run must still exit 0 on a now spec-compliant app. A compliant fixture is required for the control to be meaningful: a control that fails for an unrelated reason cannot isolate the edit.
+   - **deploy-local (MIG-AC-002/-003).** The seed's IDs matter there. That suite uses `P1`/`P2`/`C1–C3` for `DATA_V1`/`DATA_V2` (`apps.ts:72–100`) and at `deploy-local.test.ts:200`, and `/fix-codes` targets parent 2 by a literal. The proposed fix keeps those tests as strong only if the expected data is built from the IDs the seed returns. Children a and b must still reference parent 1 and child c parent 2, so "every row and reference preserved" is still checked exactly. Sort order must not depend on random UUIDs: sort expected rows by `id` the same way, or order by `name`/`label`. The implementer should also assert that the seed returned five distinct IDs.
+5. **The fix addresses the cause** (a fixture that breaks a spec rule), not the symptom. No framework change, and no rule relaxation.
