@@ -33,10 +33,20 @@ export function errorStatus(code: ErrorCode): ContentfulStatusCode {
 /** One `error` entry for a failed request: method, path (no query), code, and the error's name, message and stack. */
 export function errorLogMessage(c: Context, code: ErrorCode, thrown: unknown): string {
   const error = asError(thrown);
-  const stack = error.stack ?? `${error.name}: ${error.message}`;
-  return `${c.req.method} ${c.req.path} failed with ${code}\n${stack.startsWith(error.name) ? stack : `${error.name}: ${error.message}\n${stack}`}`;
+  const heading = `${error.name}: ${error.message}`;
+  // V8 writes the name current at construction into the stack, so subclasses that set `name`
+  // afterwards (FrameworkError) start with "Error:"; put the real heading first then.
+  const stack = error.stack === undefined ? heading : error.stack.startsWith(heading) ? error.stack : `${heading}\n${error.stack}`;
+  return `${c.req.method} ${c.req.path} failed with ${code}\n${stack}`;
 }
 
+/**
+ * Default HTTP error handler. A `FrameworkError` becomes an `ErrorResponse` with its catalogue
+ * status; anything else becomes 500 CORE.INTERNAL with the catalogue meaning as its message, the
+ * original error going only to the log. Every response with status 500 or above leaves exactly
+ * one `error` entry, with component set to the code's owning component (LOG-REQ-005). The path
+ * is logged without the query string (HTTP-REQ-007). B-03 may supply a fuller handler in its slot.
+ */
 export function coreErrorHandler(thrown: unknown, c: Context): Response {
   const code = errorCode(thrown);
   const status = errorStatus(code);

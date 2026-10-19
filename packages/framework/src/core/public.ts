@@ -1,6 +1,7 @@
 /**
  * CORE public names (contract: docs/contracts/ts/core.d.ts, errors.d.ts).
- * Stub written by B-01; implemented by B-02.
+ * App-facing names only. Framework-internal parts: `identity.ts` (deployment identity),
+ * `assemble.ts` (runtime app assembler), `error-handler.ts`, `deferred.ts`.
  */
 import type { Hono, MiddlewareHandler } from "hono";
 import type { PortableDb, TableDefinitions } from "../sql/public.js";
