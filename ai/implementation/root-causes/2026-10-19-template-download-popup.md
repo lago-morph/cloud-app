@@ -83,3 +83,41 @@ No product or test change. When the exit check is re-run, its runner script shou
 ## Verification
 - Re-run the phase-B page exercise with the corrected script against `npm --workspace apps/template run dev`. Expected: a `download` event for the "Download" click whose saved file equals the uploaded `b-run.txt` bytes (as in E3), and the fetch step still matching.
 - No test change is needed for this finding. Note for the evaluator: at this commit, FILES-AC-003 is referenced only in `packages/framework/src/files/client.unit.test.ts`. No real-browser byte-exact download test appears in 05b (whose tests are FILES-AC-004, FILES-AC-006 and HTTP-AC-006) or in `06-per-test-statuses.txt`. If that real-browser test is written, it must read the download through Playwright's `download` event (or fetch), for the reason given above.
+
+## Review
+
+Reviewer: independent root-cause reviewer rc-b4-review (did not diagnose this or write the code; no code or test changed). Branch `claude/implement-local-cloudflare-rc-b4-review` from `origin/claude/implement-local-cloudflare`.
+
+**Verdict: ACCEPTED.**
+
+Checks against the source:
+- E1 is accurate. `route.ts:15,17,48-49` adds `Content-Disposition: attachment` for every non-raster type, alongside `nosniff` and `CSP: sandbox`. `files.ts:15-18` opens `downloadUrl(ticket)` with `window.open(..., "_blank", "noopener")`. `client.ts` `downloadUrl` returns `data.url` unchanged. `exercise-pages.mjs` waits only for a context `page` event and reads `popup.url()` and `body`, with no `download` listener. The 10 and 10a log lines are as quoted, and SUMMARY.md confirms that 10a's `Invalid URL` came from the script parsing the popup URL.
+- E5 is accurate. files.md "Local" requires `attachment` for non-raster types, and nothing requires the content to be shown in a page.
+
+Independent reproduction (Chromium from `/opt/pw-browsers`, my own scratch probe, `npm --workspace apps/template run dev` from the repo root on `http://localhost:39857/`, stopped afterwards). I clicked the template's real "Download" button, with `download` listeners on the opener page and on every popup:
+```
+{"case":"text/plain","popupUrl":"","popupBodyLen":0,"downloads":[{"tag":"opener","failure":null,"equal":true,"len":27,"expectedLen":27}]}
+{"case":"text/html","popupUrl":"","popupBodyLen":0,"downloads":[{"tag":"opener","failure":null,"equal":true,"len":47,"expectedLen":47}]}
+{"case":"image/png","popupUrl":"http://localhost:39857/api/__framework/files/<ticket>","downloads":[],"img":[1,1]}
+```
+The dev log shows each of the 3 uploads and 3 downloads answered 200.
+
+Link-by-link:
+1. Attachment disposition for text/plain is confirmed: E2 in the record matches the code.
+2. The page opens the ticket URL in a new context: confirmed by the code.
+3. The popup stays on the empty initial document with URL `""`: reproduced for text/plain and also for text/html. The raster control navigates and renders the image, which isolates the disposition header as the deciding factor.
+4. Playwright reports a `download` on the opener, with no failure and bytes equal to the upload: reproduced.
+5. The script read only the popup, which explains `popupPath ""`, `bodyLength 0`, `matches false`, and `new URL("")` → `Invalid URL` in 10a: confirmed from the script source.
+6. The fetch step matched because it read the body directly: consistent.
+
+Alternatives:
+- "The user gets no file" (a real defect) is ruled out. `download.failure()` is null and the saved bytes equal the upload exactly, so the button delivers the file.
+- A bad or missing URL, or `downloadUrl` altering it, is ruled out by the 200 responses and the byte-exact download.
+- `noopener` or timing as the cause is ruled out by the PNG control, which opens with the same call and the same waits.
+- A route or dev-proxy body problem is ruled out by the byte equality.
+
+Fix assessment: the proposal (no product change; the runner observes the `download` event, listening on the context's pages) addresses the cause, the observation method, rather than the symptom. It weakens no test.
+
+Notes, which do not affect the verdict:
+- The saved file's suggested name is the ticket token, because there is no `filename=`. The blank tab left open is a UX point. Both are correctly left to the owner as design questions.
+- The note that a real-browser FILES-AC-003 test must use the `download` event or `fetch` is sound.
