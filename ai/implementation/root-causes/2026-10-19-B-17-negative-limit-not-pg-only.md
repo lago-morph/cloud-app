@@ -33,4 +33,39 @@ The fixture needs a different supported, Postgres-only failure that Drizzle actu
 Probe the replacement query with the script above on PGlite (must error) and local D1 (must succeed), then rerun the test: `verify` must exit non-zero and name the fixture test.
 
 ## Review
-(to be written by the reviewer)
+
+Reviewer: independent root-cause reviewer (prompt §8 step 2); did not diagnose, write the code, or write the test. Date: 2026-10-19.
+
+**Verdict: ACCEPTED.**
+
+### Links checked
+1. *Drizzle 0.45.4 emits no LIMIT for a negative number.* Confirmed in source and at runtime. `node_modules/drizzle-orm/pg-core/dialect.js:286` (and `sqlite-core/dialect.js:213`, `buildLimit`): `typeof limit === "object" || typeof limit === "number" && limit >= 0 ? sql\` limit ${limit}\` : void 0`. Independent probe (`/tmp/claude-0/-home-user-cloud-app/b6482c07-38ed-5065-a51e-6194e2f52fc3/scratchpad/b17review/probe.mjs`, drizzle-orm 0.45.4 and PGlite 0.5.8 from a node_modules built from the same `package-lock.json`), output:
+   ```
+   pg limit(-1) {"sql":"select \"id\", \"title\" from \"items\"","params":[]} -> 2 rows
+   pg limit(1)  {"sql":"select \"id\", \"title\" from \"items\" limit $1","params":[1]} -> 1 rows
+   sqlite drizzle limit(-1): {"sql":"select \"id\", \"title\" from \"items\"","params":[]}
+   ```
+   The `limit(1)` control shows limits are otherwise sent. The SQLite builder drops it too, so neither dialect ever sees `LIMIT -1`.
+2. *So the fixture's query returns every row on both dialects and its test passes on both.* Follows from 1: the fixture (`test/fixtures/cli/pg-only/src/app.ts.fixture`, `GET /items`) passes `-1` straight to `.limit()`, and the fixture test expects 2 rows. The framework SQL layer does not touch limit/offset (`grep -i "limit\|offset" src/sql/*.ts`: only PAR-215 result-size and identifier-length hits).
+3. *`verify` really runs a Postgres process.* `src/cli/verify/tests.ts:87` spawns a child per dialect with `PROTOTYPE_FRAMEWORK_DIALECT: dialect`; the record's evidence 1 (LOCAL-AC-003 DISTINCT fixture failing `verify`, which can fail only on Postgres) shows it takes effect. Enough to rule out "Postgres process missing".
+4. *DEC-PENDING-B-T4-7's premise is the defect.* It says `.limit(-1)` gives Postgres "LIMIT must not be negative". Postgres does reject it (record evidence 2, raw SQL), but via Drizzle the clause is never sent, so the fixture is not a Postgres-only failure.
+
+### Alternatives
+- *`verify` should catch this some other way.* Ruled out by the text. CLI-REQ-002 says `verify` runs type checking, the portability rules, the migration checker and the app's tests on both dialects, and fails if any step fails. CLI-AC-002 says it "fails on … a Postgres-only failure". LOCAL-REQ-003/LOCAL-AC-003 say the Postgres-dialect check is done by running the tests on each dialect. Nothing requires `verify` to flag a query that behaves the same on both dialects. Here the app behaves identically on both, so there is no Postgres-only failure for `verify` to find. Exiting 0 is correct.
+- *A framework bug (wrapper rewriting the limit).* Ruled out by link 2 and by the plain-Drizzle probe.
+
+### Fix
+The fix is correct: it changes the fixture, which is where the cause is (a wrong test input, not a CLI defect), and it correctly re-records DEC-PENDING-B-T4-7. It does not weaken the test, because the assertions (non-zero exit, output names the fixture test) stay the same. Notes on the candidates:
+- `offset(-1)` meets the requirements. The probe shows Drizzle sends it. Its guard is `offset ? …`, and -1 is truthy:
+  ```
+  pg limit(10).offset(-1) {"sql":"… limit $1 offset $2","params":[10,-1]} -> error: … | cause: OFFSET must not be negative
+  sqlite select * from items limit ? offset ? [10,-1] -> 2 rows        (node:sqlite, not local D1)
+  ```
+  Pair it with a non-negative `limit`. A bare `offset` with no `limit` would make SQLite emit `offset ?` without `LIMIT`, which SQLite rejects as a syntax error, so the failure would not be Postgres-only. The SQLite result above came from `node:sqlite`, not from local D1 (Miniflare/workerd), so the D1 side still has to be probed as the record's verification plan says.
+- "Text column compared with an integer" is riskier. The restricted `sql.d.ts` typing (sql.md §2.3) may reject it at type-check time. `verify` would then fail on step 1, not on a Postgres-only test failure, and the test would pass for the wrong reason. Only the test-name assertion would expose that, and only if the type error does not mention the name.
+
+### What a corrected fixture must exhibit
+1. It uses only supported, type-correct framework/Drizzle API, so type check, portability rules and the migration check all pass. Prove this with a passing `verify` run on the same app minus the failing test, or by asserting that the output has no type-check or CHECK diagnostic.
+2. Drizzle sends the offending construct to the database. Show this with `toSQL()`: the clause and its parameter are present.
+3. On local D1 (the real `sqlite` test process, not `node:sqlite`) the fixture test passes. On PGlite the query raises a Postgres error and the fixture test fails. Show both with a probe and record them in DEC-PENDING-B-T4-7.
+4. `verify` exits non-zero and its output names the fixture test. Recommended, to keep the test as strong as "Postgres-only": also assert from the output that the `sqlite` test process passed and the `postgres` one failed. Neither the current test nor the LOCAL-AC-003 test checks this, so a fixture that fails on both dialects would also satisfy them.
