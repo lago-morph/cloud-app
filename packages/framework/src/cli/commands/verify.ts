@@ -70,13 +70,14 @@ function indent(text: string, prefix: string): string {
     .join("\n");
 }
 
-/** Every test in file and name order, with each failure's errors indented below it. */
+/** Failing and skipped tests in file and name order, each failure's errors indented below it. */
 export function formatTestRun(run: TestRun): string {
   const lines: string[] = [];
   for (const e of [...run.fileErrors].sort((a, b) => byText(a.file, b.file) || byText(a.message, b.message))) {
     lines.push(`  FAIL  ${e.file} (the file did not run)`, indent(e.message, "        "));
   }
-  const tests = [...run.tests].sort((a, b) => byText(a.file, b.file) || byText(a.name, b.name));
+  // Passing tests are only counted: a line naming a file reads as a problem with that file.
+  const tests = run.tests.filter((t) => t.state !== "passed").sort((a, b) => byText(a.file, b.file) || byText(a.name, b.name));
   for (const t of tests) {
     lines.push(`  ${t.state === "passed" ? "pass" : t.state === "failed" ? "FAIL" : "skip"}  ${t.file} > ${t.name}`);
     for (const e of t.errors) lines.push(indent(e, "        "));

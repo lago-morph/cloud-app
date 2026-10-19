@@ -93,12 +93,13 @@ describe("verify (CLI-REQ-002)", () => {
     expect(crashed.out).toContain("the test runner exited with status 3");
   });
 
-  it("prints test results in a fixed order, so two runs print the same text", async () => {
+  it("prints failing and skipped tests in a fixed order, so two runs print the same text", async () => {
     const shuffled: TestRun = {
       tests: [
-        { file: "tests/b.test.ts", name: "two", state: "passed", errors: [] },
-        { file: "tests/a.test.ts", name: "z", state: "passed", errors: [] },
-        { file: "tests/a.test.ts", name: "a", state: "passed", errors: [] },
+        { file: "tests/b.test.ts", name: "two", state: "failed", errors: ["boom"] },
+        { file: "tests/a.test.ts", name: "z", state: "skipped", errors: [] },
+        { file: "tests/a.test.ts", name: "a", state: "failed", errors: ["bang"] },
+        { file: "tests/a.test.ts", name: "ok", state: "passed", errors: [] },
       ],
       fileErrors: [],
     };
@@ -108,7 +109,14 @@ describe("verify (CLI-REQ-002)", () => {
     await verifyCommand(deps({ runTests: async () => ({ ...shuffled, tests: [...shuffled.tests].reverse() }) }))([], second);
     expect(second.out).toBe(first.out);
     expect(first.out.indexOf("tests/a.test.ts > a")).toBeLessThan(first.out.indexOf("tests/a.test.ts > z"));
-    expect(first.out).toMatch(/tests \(sqlite\): passed \(3 passed/);
+    expect(first.out).toMatch(/tests \(sqlite\): 2 failed \(1 passed, 2 failed, 1 skipped\)/);
+  });
+
+  it("does not name passing test files: only problems name files (DEC-PENDING-B-T4-4 reads lines naming a file as diagnostics)", async () => {
+    const io = captureIo();
+    expect(await verifyCommand(deps())([], io)).toBe(0);
+    expect(io.out).not.toContain("hello.test.ts");
+    expect(io.out).toMatch(/tests \(postgres\): passed \(1 passed, 0 failed, 0 skipped\)/);
   });
 
   it("a missing zod installation fails the zod step", async () => {
