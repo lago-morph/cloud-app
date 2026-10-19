@@ -39,8 +39,12 @@ There is no severity filtering, no batching, no retention rule, and no per-app i
 
 **What entries never contain.** Framework entries never include request headers, cookies, request or response bodies, OAuth codes, state, nonces or tokens, or ticket URLs (HTTP-REQ-007), and never secret values (SEC-REQ-002).
 
+**Writer and sinks.** Each target runtime creates one writer per request in CORE's log slot, right after the request ID, giving it the request's ID, method and path (without query), and a *sink* that stores entries for that target. `write` builds the entry, hands it to the sink, and returns: it never awaits the sink, drops a sink's thrown error or rejected promise, and so never throws or delays the response, whatever the sink does (DEC-PENDING-B-04-1). Tests inject a sink that throws, rejects, or never completes (LOG-AC-001).
+
+**Framework failures** (LOG-REQ-005) are written through one helper, `logFailure(log, error)`: one `error` entry with component = the code's owning component (`CORE` for anything that is not a `FrameworkError`) and message `<METHOD> <path> failed with <code>`, then the error's name, message and stack (HTTP-REQ-007). It remembers each error object it has logged and writes nothing the second time, so an adapter that logs a `*.UNAVAILABLE` failure when it raises it and the HTTP error handler that logs the resulting 5xx response together leave exactly one entry (DEC-PENDING-B-04-2).
+
 ### Local
-Worker code cannot write files directly under workerd. Entries are therefore printed to the Worker's output as single marked lines, and the CLI's `dev` command, which owns the Wrangler process, appends them to `.logs/` (DEC-0066). `createTestApp` collects entries in memory; tests read them through `TestApp.logs()`.
+Worker code cannot write files directly under workerd. Entries are therefore printed to the Worker's output as single marked lines — the marker `[prototype-framework:log] ` followed by the entry's JSON — and the CLI's `dev` command, which owns the Wrangler process, feeds that output through the framework's line capture, which appends each entry as a JSON line to `.logs/<yyyy-mm-dd>.log` (the entry's UTC day) and passes every other line on (DEC-0066, DEC-PENDING-B-04-3). `createTestApp` collects entries in memory and echoes each `error` entry to stderr as a JSON line when it is written; tests read them through `TestApp.logs()` (DEC-PENDING-B-04-4).
 
 ### Cloudflare
 An R2 binding to the shared log bucket. Each write is scheduled with the request's `waitUntil` so it does not delay the response.
