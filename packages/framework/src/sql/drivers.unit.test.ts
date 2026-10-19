@@ -1,7 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { openPostgres } from "./drivers.js";
 
 describe("PGlite harness (PAR-107, DEC-0106)", () => {
+  // The first openPostgres() in a process also makes the C/C template (~3 s, more under
+  // load); pay it here so each test measures only its own behaviour
+  // (ai/implementation/root-causes/2026-10-19-B-05-pglite-harness-test-timeout.md).
+  beforeAll(async () => {
+    await (await openPostgres()).close();
+  }, 60_000);
+
   it("opens a fresh database created with LC_COLLATE 'C' and LC_CTYPE 'C'", async () => {
     const pg = await openPostgres();
     try {
