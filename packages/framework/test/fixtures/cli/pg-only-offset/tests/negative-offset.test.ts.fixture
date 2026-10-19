@@ -8,12 +8,12 @@ const post = (title: string): RequestInit => ({
   body: JSON.stringify({ title }),
 });
 
-it("negative limit returns every item", async () => {
+it("negative offset returns every item", async () => {
   const t = await createTestApp(app);
   try {
     expect((await t.request("/api/items", post("a"))).status).toBe(201);
     expect((await t.request("/api/items", post("b"))).status).toBe(201);
-    const res = await t.request("/api/items?limit=-1");
+    const res = await t.request("/api/items?limit=10&offset=-1");
     expect(res.status).toBe(200);
     expect(await res.json()).toHaveLength(2);
   } finally {
