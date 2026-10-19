@@ -57,7 +57,9 @@ async function code(res: Response): Promise<string> {
   return ((await res.json()) as { error: { code: string } }).error.code;
 }
 
-describe("createTestApp", () => {
+// Each test app starts workerd (and, on Postgres, loads PGlite; the first one per process also
+// creates its template database, DEC-PENDING-B-05-4), so tests get the integration layer's timeout.
+describe("createTestApp", { timeout: 60_000 }, () => {
   it("runs app routes over fresh local storage with the app's tables created", async () => {
     const t = await open();
     const first = await t.request("/api/notes", { method: "POST" });
