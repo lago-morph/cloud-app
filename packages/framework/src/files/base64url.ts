@@ -7,7 +7,7 @@ export function bytesToBase64url(bytes: Uint8Array): string {
 }
 
 /** Undefined when `text` is not unpadded base64url. */
-export function base64urlToBytes(text: string): Uint8Array | undefined {
+export function base64urlToBytes(text: string): Uint8Array<ArrayBuffer> | undefined {
   if (!/^[A-Za-z0-9_-]*$/.test(text) || text.length % 4 === 1) return undefined;
   const binary = atob(text.replace(/-/g, "+").replace(/_/g, "/"));
   return Uint8Array.from(binary, (ch) => ch.charCodeAt(0));

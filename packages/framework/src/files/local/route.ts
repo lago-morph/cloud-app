@@ -31,7 +31,7 @@ export function registerLocalTransferRoute(api: Hono<RuntimeEnv>, options: Local
   const refuse = (c: Context<RuntimeEnv>, status: 403 | 404) => c.body(null, status, SAFE_HEADERS);
 
   api.put(path, async (c) => {
-    const grant = await verifyLocalTicket(c.req.param("token"), await options.key(c));
+    const grant = await verifyLocalTicket(c.req.param("token") ?? "", await options.key(c));
     if (grant === undefined || grant.op !== "upload" || c.req.header("Content-Type") !== grant.contentType) return refuse(c, 403);
     // Buffered: R2's binding needs a stream of known length, which a body in the Node test
     // process is not; local only, where memory is the machine's (DEC-PENDING-B-11-4).
@@ -41,7 +41,7 @@ export function registerLocalTransferRoute(api: Hono<RuntimeEnv>, options: Local
   });
 
   api.get(path, async (c) => {
-    const grant = await verifyLocalTicket(c.req.param("token"), await options.key(c));
+    const grant = await verifyLocalTicket(c.req.param("token") ?? "", await options.key(c));
     if (grant === undefined || grant.op !== "download") return refuse(c, 403);
     const file = await c.var.files.get(grant.name);
     if (file === null) return refuse(c, 404);
