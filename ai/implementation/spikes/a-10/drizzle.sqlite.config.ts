@@ -1,0 +1,3 @@
+import { defineConfig } from "drizzle-kit";
+
+export default defineConfig({ dialect: "sqlite", schema: "./src/schema-sqlite.ts", out: "./drizzle/sqlite", casing: "snake_case" });
