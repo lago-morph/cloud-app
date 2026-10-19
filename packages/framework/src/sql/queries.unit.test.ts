@@ -178,6 +178,22 @@ describe.each([
     }
   });
 
+  it(tag("SQL-AC-006", "a result larger than PAR-215 is SQL.RESULT_TOO_LARGE; exactly PAR-215 bytes succeeds"), async () => {
+    await h.run("delete from things");
+    await h.run("delete from parents");
+    const p = T(parents);
+    // 63 names of 4096 ASCII bytes and one of 2048 × "é" (4096 UTF-8 bytes): 262144 bytes.
+    const names = [...Array.from({ length: 63 }, (_, i) => `${i}`.padEnd(4096, "x")), "é".repeat(2048)];
+    for (let i = 0; i < names.length; i += 16) {
+      await h.db.insert(p).values(names.slice(i, i + 16).map((name, j) => ({ id: uuid(1000 + i + j), name })));
+    }
+    expect(await h.db.select({ name: p.name }).from(p)).toHaveLength(64);
+    await h.db.insert(p).values({ id: uuid(2000), name: "x" });
+    await expect(h.db.select({ name: p.name }).from(p)).rejects.toMatchObject({ name: "FrameworkError", code: "SQL.RESULT_TOO_LARGE" });
+    // Non-text values count 8 bytes each: 65 ids are well below the limit.
+    expect(await h.db.select({ id: p.id }).from(p)).toHaveLength(65);
+  });
+
   describe("writes", () => {
     it(tag("SQL-AC-003", "insert, update and delete without returning resolve to undefined"), async () => {
       const t = T(things);

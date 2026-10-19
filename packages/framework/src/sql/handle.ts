@@ -73,7 +73,7 @@ function wrapBuilder(target: object, adapter: Adapter, marks: WeakSet<object> | 
   const execute = (): Promise<unknown> =>
     adapter.guard(async () => {
       const result = await (target as { execute(): Promise<unknown> }).execute();
-      return normalizeResult(result);
+      return checkResultSize(normalizeResult(result));
     });
   const proxy: object = new Proxy(target, {
     get(t, property) {
