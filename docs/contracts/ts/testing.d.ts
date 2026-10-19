@@ -14,7 +14,7 @@ export interface TestAppOptions {
   readonly config?: Record<string, unknown>;
   /** Secret values for the test. */
   readonly secrets?: Record<string, string>;
-  /** SQL dialect to run against: local D1 (default) or the Postgres harness. */
+  /** SQL dialect to run against: SQLite (default) or Postgres. */
   readonly dialect?: "sqlite" | "postgres";
 }
 

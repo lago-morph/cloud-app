@@ -11,15 +11,14 @@ import type { SecretsService } from "./secrets";
 import type { LogService } from "./log";
 import type { CurrentUser } from "./auth";
 
-export type Target = "local" | "cloudflare" | "aws";
-
-/** Who and where this code is running as. Never derived from request data. */
+/**
+ * Which app and stage this code is running as. Never derived from request data.
+ * Deliberately omits the target and the test-stage flag: app code must not be able
+ * to behave differently per cloud or under test (CORE-REQ-003).
+ */
 export interface DeploymentIdentity {
   readonly app: string;
   readonly stage: string;
-  readonly target: Target;
-  /** True locally and in stages explicitly marked as test stages. */
-  readonly isTestStage: boolean;
 }
 
 /** Named context shape: the capabilities available to server-side app code. */

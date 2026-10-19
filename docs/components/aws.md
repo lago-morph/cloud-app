@@ -39,7 +39,7 @@ The HTTP Lambda timeout (PAR-270) MUST exceed the database resume budget (PAR-21
 
 ## 2. Design
 
-Resources are created by SST (PAR-100), using `sst.aws.Router`, `StaticSite`, `Function` with a Function URL, `Aurora` (Postgres engine PAR-110, Data API enabled, PAR-212 to PAR-214), and `Bucket`. Raw Pulumi AWS resources (PAR-109) are used only where SST has no component.
+Resources are created by SST (PAR-100), using `sst.aws.Router`, `StaticSite`, `Function` with a Function URL, `Aurora` (Postgres engine PAR-110, Data API enabled, PAR-212, PAR-213), and `Bucket`. Raw Pulumi AWS resources (PAR-109) are used only where SST has no component.
 
 The region is PAR-060 unless the stage configuration overrides it. The VPC SST creates for Aurora has no NAT gateway and no bastion host.
 

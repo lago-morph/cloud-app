@@ -14,41 +14,41 @@ Each **capability** component (SQL, KV, FILES, …) owns its portable contract a
 
 | Code | Name | Responsibility |
 | --- | --- | --- |
-| `CORE` | App contract | The services and context shapes passed to app code; app definition; deployment identity (app, stage, target); structure of the framework error catalogue; the framework's public export list. |
-| `HTTP` | HTTP and hosting | API routing, request and response handling, the HTTP error format, request size limits, serving the browser client from the same deployment as the API, and the browser-side helper for calling the API. |
+| [`CORE`](../components/core.md) | App contract | The services and context shapes passed to app code; app definition; deployment identity (app, stage, target); structure of the framework error catalogue; the framework's public export list. |
+| [`HTTP`](../components/http.md) | HTTP and hosting | API routing, request and response handling, the HTTP error format, request size limits, serving the browser client from the same deployment as the API, and the browser-side helper for calling the API. |
 
 ### Capabilities
 
 | Code | Name | Responsibility |
 | --- | --- | --- |
-| `SQL` | Portable SQL | Portable schema definition, the supported query subset, and all-or-nothing writes of several rows. |
-| `MIG` | Migrations | Applying schema changes to deployed apps while preserving their data. |
-| `KV` | Key-value | The KV capability. |
-| `FILES` | Files | The files capability, including the browser helper for uploading and downloading files. |
-| `CFG` | Configuration | Config declaration, per-stage values, secret names and locations, the admin list. |
-| `SEC` | Secrets | The secrets capability. |
-| `LOG` | Log | The write-only log capability and the shared per-account log bucket. |
-| `AUTH` | Current user | Access levels, user identity, login and logout, the login-provider interface, and the authentication mock. |
-| `GOOGLE` | Google login provider | The Google implementation of the AUTH provider interface; certified separately (SYS-REQ-027). |
+| [`SQL`](../components/sql.md) | Portable SQL | Portable schema definition, the supported query subset, and all-or-nothing writes of several rows. |
+| [`MIG`](../components/migrations.md) | Migrations | Applying schema changes to deployed apps while preserving their data. |
+| [`KV`](../components/kv.md) | Key-value | The KV capability. |
+| [`FILES`](../components/files.md) | Files | The files capability, including the browser helper for uploading and downloading files. |
+| [`CFG`](../components/config.md) | Configuration | Config declaration, per-stage values, secret names and locations, the admin list. |
+| [`SEC`](../components/secrets.md) | Secrets | The secrets capability. |
+| [`LOG`](../components/log.md) | Log | The write-only log capability and the shared per-account log bucket. |
+| [`AUTH`](../components/auth.md) | Current user | Access levels, user identity, login and logout, the login-provider interface, and the authentication mock. |
+| [`GOOGLE`](../components/google.md) | Google login provider | The Google implementation of the AUTH provider interface; certified separately (SYS-REQ-027). |
 
 ### Targets
 
 | Code | Name | Responsibility |
 | --- | --- | --- |
-| `LOCAL` | Local target | Running apps locally, including the local authentication mode. |
-| `CF` | Cloudflare target | Running apps on Cloudflare. |
-| `AWS` | AWS target | Running apps on AWS. |
+| [`LOCAL`](../components/local.md) | Local target | Running apps locally, including the local authentication mode. |
+| [`CF`](../components/cloudflare.md) | Cloudflare target | Running apps on Cloudflare. |
+| [`AWS`](../components/aws.md) | AWS target | Running apps on AWS. |
 
 ### Tooling and delivery
 
 | Code | Name | Responsibility |
 | --- | --- | --- |
-| `PROV` | Provisioning | Target-neutral resource declaration, per-target provisioning, deploy and remove, stage isolation, one-time setup of the shared log bucket. |
-| `CHECK` | Static checks | Portability rules for app code and the migration checker. |
-| `CLI` | Developer commands | `dev`, the scripted pre-completion verification command (SYS-REQ-025), `build`, `deploy`, `remove`. |
-| `COMPL` | Compliance suite | One contract test suite run identically on all targets; evidence recording. |
-| `SKILL` | AI skill and template | Guidance for app-building agents, the app template, the scaffolder. |
-| `DEMO` | Demo app | The demo application, specified in `docs/demo/`. An AI agent builds it using SKILL and only the framework's public exports, which also validates SKILL. |
+| [`PROV`](../components/provisioning.md) | Provisioning | Target-neutral resource declaration, per-target provisioning, deploy and remove, stage isolation, one-time setup of the shared log bucket. |
+| [`CHECK`](../components/check.md) | Static checks | Portability rules for app code and the migration checker. |
+| [`CLI`](../components/cli.md) | Developer commands | `dev`, the scripted pre-completion verification command (SYS-REQ-025), `build`, `deploy`, `remove`. |
+| [`COMPL`](../components/compliance.md) | Compliance suite | One contract test suite run identically on all targets; evidence recording. |
+| [`SKILL`](../components/skill.md) | AI skill and template | Guidance for app-building agents, the app template, the scaffolder. |
+| [`DEMO`](../demo/demo-spec.md) | Demo app | The demo application, specified in `docs/demo/`. An AI agent builds it using SKILL and only the framework's public exports, which also validates SKILL. |
 
 ## 3. Dependencies
 

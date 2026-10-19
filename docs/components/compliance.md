@@ -59,3 +59,4 @@ Every capability and target component, CLI, PROV.
 | COMPL-AC-003 | Evidence records validate against the schema. A run with a deliberately skipped criterion records it as skipped. | COMPL-REQ-003 | Local, cloud |
 | COMPL-AC-004 | After a cloud run that is interrupted mid-way, the next cleanup removes the stages, or the evidence lists them as leftovers. | COMPL-REQ-004 | Cloud |
 | COMPL-AC-005 | The production-stage checks run on both clouds. | COMPL-REQ-005 | Cloud |
+| COMPL-AC-006 | The release report for a commit says "works" only when every applicable criterion and scenario passed on every target and the certification is current. A commit with one unrun criterion, or with an expired certification, is reported as not working. | COMPL-REQ-006 | Local |

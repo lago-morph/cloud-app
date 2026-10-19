@@ -362,3 +362,91 @@ Origin: owner · Status: accepted · Affects: SYS-REQ-008, SYS-REQ-014, FILES, H
 The owner's first planned app uploads high-resolution photos (most about 4 MB), and the owner does not want arbitrary file size limits. The AWS Lambda request limit (about 6 MB, less for binary bodies) rules out passing large files through the API. Chunking through the API was rejected: S3's minimum multipart part size exceeds what one Lambda request can carry. Queue-based approaches were rejected because their own limits are smaller.
 
 The framework's browser-side file helper therefore moves file content directly between the browser and storage. Each transfer is authorized by the app's server, for example through short-lived signed access. App code calls only the framework helper and never sees storage services, signing, or cross-origin (CORS) configuration. The framework owns all of that. This amends DEC-0006. The principle that app code talks only to the app's own services still holds at the level of app code, but not at the level of network traffic.
+
+---
+
+## Component design decisions (stage 2, 2026-10-19)
+
+These were made by the AI while writing the component designs, after the owner approved stages 2 and 3. Each may be changed by an implementer with a new entry.
+
+### DEC-0059 — Zod for request validation
+Origin: ai-proposed · Status: accepted · Affects: HTTP, PAR-112
+
+Zod is re-exported at the framework's pinned version, so apps use exactly one validation library and AI agents know it well.
+
+### DEC-0060 — SQL type set and result-size limit
+Origin: ai-proposed · Status: accepted · Affects: SQL, PAR-215
+
+There is no JSON column type; structured data is stored as text. `sum` and `avg` are supported, normalized to JS numbers: excluding them would force unnatural workarounds (SYS-REQ-011). A portable result-size limit, enforced on every target, keeps queries that work locally from failing only on AWS, where Data API responses are capped.
+
+### DEC-0061 — Data API credentials live in AWS Secrets Manager
+Origin: ai-proposed · Status: accepted · Affects: SQL, SEC, AWS
+
+The RDS Data API only accepts database credentials stored in Secrets Manager. That one framework-internal secret is the exception to DEC-0012; app secrets and the other framework-internal secrets use SSM SecureString.
+
+### DEC-0062 — File transfer mechanism
+Origin: ai-proposed · Status: accepted · Affects: FILES, PAR-234
+
+Browser transfers implement DEC-0058:
+- **Single-request transfers.** One signed `PUT` or `GET` per transfer. A single upload reaches about 5 GB on both clouds, so multipart uploads are not needed for photos.
+- **Cloudflare.** Server-side operations use the R2 binding. Signed URLs use R2's S3-compatible endpoint with a stage-scoped R2 token, because the binding cannot sign.
+- **Local.** Transfers use a same-origin framework route instead of Wrangler's experimental S3 endpoint.
+
+### DEC-0063 — Configuration delivery
+Origin: ai-proposed · Status: accepted · Affects: CFG
+
+Values live in `config/<target>/<stage>.json`. Committed values are embedded in the build. Values known only after provisioning reach the runtime through Worker variables or Lambda environment variables, and only framework adapters read them.
+
+### DEC-0064 — Secret locations and framework-internal secrets
+Origin: ai-proposed · Status: accepted · Affects: SEC
+
+Secret locations follow a convention per target (SEC-REQ-003). Framework-internal secrets use the reserved `framework` prefix and are created by the CLI or provisioning.
+
+### DEC-0065 — Migration mechanics
+Origin: ai-proposed · Status: accepted · Affects: MIG
+
+The mechanics are:
+- paired drizzle-kit histories, one per dialect;
+- a ledger with checksums, plus a lock row;
+- readiness based on the latest migration ID embedded in the build.
+
+The atomic remote mechanism on Cloudflare is open (MIG-OQ-1). Candidates are the D1 HTTP batch API or a deploy-only migration route in the Worker.
+
+### DEC-0066 — Log storage details
+Origin: ai-proposed · Status: accepted · Affects: LOG
+
+- **Entries** include the request ID when there is one, so they can be matched to error responses.
+- **Local.** Worker code cannot write files under workerd, so entries are printed as marked lines and the CLI appends them to `.logs/`.
+- **Cloud.** One object per entry, under an app/stage/date key layout. The shared buckets are `prototype-logs-<account-id>` on AWS and `prototype-logs` on Cloudflare.
+
+### DEC-0067 — Authentication mechanics
+Origin: ai-proposed · Status: accepted · Affects: AUTH, GOOGLE
+
+- **User ID.** The user ID is a truncated hash of provider name and subject, so it is the same across stages and targets.
+- **Session key.** There is one session signing key per stage; rotating it logs everyone out.
+- **Provider per deployment.** Production deployments use Google; local development and test stages use the mock.
+- **Google scopes.** Google requests only `openid profile`, because email is never used.
+
+### DEC-0068 — App code cannot see target or test-stage flag
+Origin: ai-proposed · Status: accepted · Affects: CORE
+
+`c.var.deployment` exposes only app and stage. Exposing the target or the test-stage flag would let app code behave differently per cloud or under test. That would undermine SYS-REQ-004 and the value of testing on test stages.
+
+### DEC-0069 — Package subpaths and command names
+Origin: ai-proposed · Status: accepted · Affects: CORE, CLI, SKILL
+
+Subpaths are `.`, `./client`, `./testing`, `./targets/*`, `./provision`, and `./check`. The scripted pre-completion verification command is named `verify`.
+
+### DEC-0070 — Compliance suite shape
+Origin: provenance-unclear · Status: accepted · Affects: COMPL
+
+The suite consists of:
+- a reference app and a shared HTTP test driver;
+- Playwright for browser-level checks;
+- tests tagged with acceptance-criterion IDs and a generated traceability report;
+- disposable test stages named with the run ID, plus a production-stage check on each cloud.
+
+### DEC-0071 — Demo theme: photo board
+Origin: ai-proposed · Status: accepted · Affects: DEMO
+
+The demo is a shared photo board, matching the owner's first planned app (high-resolution photo uploads). It replaces the earlier spec's notes board. The demo specification states app requirements only.

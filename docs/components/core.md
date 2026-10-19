@@ -19,7 +19,7 @@ An app MUST be defined by one `defineApp` call in its entry module. Target entry
 #### CORE-REQ-003 — Deployment identity is fixed
 Origin: provenance-unclear · Derives from: SYS-REQ-002, SYS-REQ-020
 
-App name, stage, target, and the test-stage flag MUST be fixed when a deployment is built. They MUST NOT be derived from request data such as the Host header.
+App name, stage, target, and the test-stage flag MUST be fixed when a deployment is built. They MUST NOT be derived from request data such as the Host header. App code MUST see only the app name and stage. The target and the test-stage flag stay framework-internal, so app code cannot behave differently per cloud or under test.
 
 #### CORE-REQ-004 — Single error catalogue
 Origin: owner-approved · Derives from: SYS-REQ-010
@@ -67,7 +67,7 @@ AUTH (current user middleware), HTTP (error handler), all capability adapters (v
 | --- | --- | --- | --- |
 | CORE-AC-001 | A fixture app using only `.` exports type-checks, and `c.var` has exactly the `RequestVars` members. | CORE-REQ-001 | Local |
 | CORE-AC-002 | One unmodified app module builds and starts on local, Cloudflare, and AWS. | CORE-REQ-002 | Local, cloud |
-| CORE-AC-003 | Requests with forged Host or forwarding headers do not change `c.var.deployment`. | CORE-REQ-003 | Local, cloud |
+| CORE-AC-003 | Requests with forged Host or forwarding headers do not change `c.var.deployment`; `c.var.deployment` has exactly the members `app` and `stage`. | CORE-REQ-003 | Local, cloud |
 | CORE-AC-004 | Every code thrown by framework source appears in the catalogue; an app throwing a plain `Error` yields 500 `CORE.INTERNAL` with no stack trace or message details in the response. | CORE-REQ-004 | Local |
 | CORE-AC-005 | The package's exports map equals the subpath table; a fixture importing `./targets/aws` from app code fails the verification command. | CORE-REQ-005 | Local |
 | CORE-AC-006 | Bundle inspection: the Cloudflare bundle contains no AWS SDK, provisioning, or Postgres harness modules; the AWS bundle contains no Cloudflare-only modules; production bundles contain no mock. | CORE-REQ-006 | Local |

@@ -4,7 +4,7 @@
  * is a contract stated in docs/components/core.md (CORE-REQ-005).
  */
 export { defineApp } from "./core";
-export type { AppDefinition, AppEnv, DefinedApp, DeploymentIdentity, RequestVars, Services, Target } from "./core";
+export type { AppDefinition, AppEnv, DefinedApp, DeploymentIdentity, RequestVars, Services } from "./core";
 
 export { FrameworkError, ERROR_CATALOGUE } from "./errors";
 export type { ErrorCode, ErrorResponseBody } from "./errors";

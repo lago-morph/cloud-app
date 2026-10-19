@@ -73,7 +73,7 @@ The local D1 database runs under Wrangler. App tests can also run against PGlite
 D1 through its Worker binding.
 
 ### AWS
-Aurora Serverless v2 PostgreSQL through the RDS Data API (DEC-0037), from Lambdas outside any VPC. The Data API requires the database credentials to be held in AWS Secrets Manager. Provisioning creates that one framework-internal secret there; app secrets still use SSM SecureString (DEC-0012, DEC-0061). The Data API's "database resuming" error is retried with exponential backoff and jitter until PAR-210 is exhausted, then surfaced as `SQL.UNAVAILABLE`. Aurora capacity and pause settings are PAR-212 to PAR-214.
+Aurora Serverless v2 PostgreSQL through the RDS Data API (DEC-0037), from Lambdas outside any VPC. The Data API requires the database credentials to be held in AWS Secrets Manager. Provisioning creates that one framework-internal secret there; app secrets still use SSM SecureString (DEC-0012, DEC-0061). The Data API's "database resuming" error is retried with exponential backoff and jitter until PAR-210 is exhausted, then surfaced as `SQL.UNAVAILABLE`. Aurora capacity and pause settings are PAR-212 and PAR-213. Data API responses are limited to PAR-214, which is why the portable result limit PAR-215 exists.
 
 ## 3. Uses
 
