@@ -185,10 +185,162 @@ describe.each([
     });
   });
 
+  it(tag("SQL-AC-001", "the created schema has the expected logical shape (names, types, NOT NULL, keys, defaults, indexes, uniques, references)"), async () => {
+    const actual = await introspect(dialect, h);
+    schemas[dialect] = actual;
+    expect(actual).toEqual(expectedSchema(dialect));
+  });
+
+  it(tag("SQL-AC-001", "a referenced row cannot be deleted while references exist"), async () => {
+    const ownerId = newId();
+    await h.db.insert(T(owners)).values({ id: ownerId, name: `r-${ownerId}` });
+    await h.db.insert(T(items)).values({ id: newId(), ownerId, title: "ref", createdAt: 1 });
+    let failed = false;
+    try {
+      await h.db.delete(T(owners)).where(eqId(T(owners), ownerId));
+    } catch {
+      failed = true; // the driver error; SQL.CONFLICT mapping is B-06's (SQL-AC-006)
+    }
+    expect(failed).toBe(true);
+    expect(await h.db.select().from(T(owners)).where(eqId(T(owners), ownerId))).toHaveLength(1);
+  });
+
   async function countItems(): Promise<number> {
     const [r] = await h.rows("select count(*) as n from items");
     return Number(r?.["n"]);
   }
+});
+
+// ---- Logical schema (SQL-AC-001) ------------------------------------------------------
+
+interface LogicalTable {
+  columns: { name: string; type: string; notNull: boolean; primaryKey: boolean; default: string | null }[];
+  /** Unique column sets (constraints or unique indexes), with their names, sorted by name. */
+  uniques: { name: string; columns: string[] }[];
+  indexes: { name: string; columns: string[] }[];
+  references: { columns: string[]; table: string; foreignColumns: string[]; onDelete: string }[];
+}
+type LogicalSchema = Record<string, LogicalTable>;
+const schemas: Partial<Record<Dialect, LogicalSchema>> = {};
+
+/** SQL types per §2.1 column type, per dialect. */
+const sqlTypes: Record<string, Record<Dialect, string>> = {
+  id: { sqlite: "text", postgres: "text" },
+  text: { sqlite: "text", postgres: "text" },
+  integer: { sqlite: "integer", postgres: "integer" },
+  number: { sqlite: "real", postgres: "double precision" },
+  timestamp: { sqlite: "integer", postgres: "bigint" },
+  boolean: { sqlite: "integer", postgres: "boolean" },
+  ref: { sqlite: "text", postgres: "text" },
+};
+
+function expectedSchema(dialect: Dialect): LogicalSchema {
+  const col = (name: string, kind: string, notNull: boolean, extra: { primaryKey?: boolean; default?: string } = {}) => ({
+    name,
+    type: sqlTypes[kind]?.[dialect] ?? "?",
+    notNull,
+    primaryKey: extra.primaryKey ?? false,
+    default: extra.default ?? null,
+  });
+  return {
+    owners: {
+      columns: [col("id", "id", true, { primaryKey: true }), col("name", "text", true)],
+      uniques: [{ name: "owners_name_unique", columns: ["name"] }],
+      indexes: [],
+      references: [],
+    },
+    items: {
+      columns: [
+        col("id", "id", true, { primaryKey: true }),
+        col("owner_id", "ref", true),
+        col("title", "text", true),
+        col("note", "text", false),
+        col("count", "integer", true, { default: "0" }),
+        col("ratio", "number", false),
+        col("created_at", "timestamp", true),
+        col("is_done", "boolean", true, { default: "false" }),
+      ],
+      uniques: [{ name: "items_owner_id_title_unique", columns: ["owner_id", "title"] }],
+      indexes: [{ name: "items_owner_id_created_at_idx", columns: ["owner_id", "created_at"] }],
+      references: [{ columns: ["owner_id"], table: "owners", foreignColumns: ["id"], onDelete: "no action" }],
+    },
+  };
+}
+
+async function introspect(dialect: Dialect, h: Harness): Promise<LogicalSchema> {
+  const out: LogicalSchema = {};
+  const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
+  for (const table of ["owners", "items"]) {
+    if (dialect === "sqlite") {
+      const columns = (await h.rows(`pragma table_info('${table}')`)).map((c) => ({
+        name: String(c["name"]),
+        type: String(c["type"]).toLowerCase(),
+        notNull: c["notnull"] === 1,
+        primaryKey: c["pk"] === 1,
+        default: c["dflt_value"] === null ? null : String(c["dflt_value"]),
+      }));
+      const uniques: LogicalTable["uniques"] = [];
+      const indexes: LogicalTable["indexes"] = [];
+      for (const ix of await h.rows(`pragma index_list('${table}')`)) {
+        if (ix["origin"] === "pk") continue;
+        const name = String(ix["name"]);
+        const cols = (await h.rows(`pragma index_info('${name}')`)).sort((a, b) => Number(a["seqno"]) - Number(b["seqno"])).map((c) => String(c["name"]));
+        (ix["unique"] === 1 ? uniques : indexes).push({ name, columns: cols });
+      }
+      const references = (await h.rows(`pragma foreign_key_list('${table}')`)).map((f) => ({
+        columns: [String(f["from"])],
+        table: String(f["table"]),
+        foreignColumns: [String(f["to"])],
+        onDelete: String(f["on_delete"]).toLowerCase(),
+      }));
+      out[table] = { columns, uniques: uniques.sort(byName), indexes: indexes.sort(byName), references };
+    } else {
+      const pks = await h.rows(
+        `select a.attname as name from pg_index ix join pg_class t on t.oid = ix.indrelid join pg_attribute a on a.attrelid = t.oid and a.attnum = any(ix.indkey) where ix.indisprimary and t.relname = '${table}'`,
+      );
+      const columns = (
+        await h.rows(`select column_name, data_type, is_nullable, column_default from information_schema.columns where table_name = '${table}' order by ordinal_position`)
+      ).map((c) => ({
+        name: String(c["column_name"]),
+        type: String(c["data_type"]),
+        notNull: c["is_nullable"] === "NO",
+        primaryKey: pks.some((p) => p["name"] === c["column_name"]),
+        default: c["column_default"] === null ? null : String(c["column_default"]),
+      }));
+      const ixRows = await h.rows(
+        `select ic.relname as name, ix.indisunique as uniq, ix.indisprimary as pk,
+           (select string_agg(a.attname, ',' order by k.ord) from unnest(ix.indkey::int2[]) with ordinality as k(attnum, ord)
+              join pg_attribute a on a.attrelid = ix.indrelid and a.attnum = k.attnum) as cols
+         from pg_index ix join pg_class ic on ic.oid = ix.indexrelid join pg_class t on t.oid = ix.indrelid where t.relname = '${table}'`,
+      );
+      const pick = (unique: boolean) =>
+        ixRows.filter((r) => r["pk"] !== true && r["uniq"] === unique).map((r) => ({ name: String(r["name"]), columns: String(r["cols"]).split(",") })).sort(byName);
+      const references = (
+        await h.rows(
+          `select ft.relname as ftable, con.confdeltype as del,
+             (select string_agg(a.attname, ',') from unnest(con.conkey) as k(n) join pg_attribute a on a.attrelid = con.conrelid and a.attnum = k.n) as cols,
+             (select string_agg(a.attname, ',') from unnest(con.confkey) as k(n) join pg_attribute a on a.attrelid = con.confrelid and a.attnum = k.n) as fcols
+           from pg_constraint con join pg_class t on t.oid = con.conrelid join pg_class ft on ft.oid = con.confrelid where con.contype = 'f' and t.relname = '${table}'`,
+        )
+      ).map((f) => ({
+        columns: String(f["cols"]).split(","),
+        table: String(f["ftable"]),
+        foreignColumns: String(f["fcols"]).split(","),
+        onDelete: ({ a: "no action", r: "restrict", c: "cascade", n: "set null", d: "set default" } as Record<string, string>)[String(f["del"])] ?? String(f["del"]),
+      }));
+      out[table] = { columns, uniques: pick(true), indexes: pick(false), references };
+    }
+  }
+  return out;
+}
+
+it(tag("SQL-AC-001", "SQLite and Postgres get identical logical schemas (types compared through the §2.1 mapping)"), () => {
+  expect(schemas.sqlite).toBeDefined();
+  expect(schemas.postgres).toBeDefined();
+  // Same names, nullability, keys, defaults, indexes, uniques and references; the SQL types
+  // differ only as §2.1 maps them (e.g. timestamp: integer / bigint), checked per dialect above.
+  const strip = (s: LogicalSchema | undefined) => JSON.parse(JSON.stringify(s, (key, value: unknown) => (key === "type" ? undefined : value))) as unknown;
+  expect(strip(schemas.sqlite)).toEqual(strip(schemas.postgres));
 });
 
 type Patch = Record<string, unknown>;
