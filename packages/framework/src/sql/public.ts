@@ -35,13 +35,6 @@ export { eq, ne, gt, gte, lt, lte, and, or, not, isNull, isNotNull, inArray, not
 // Aggregates: Drizzle's signatures; results are normalized as sql.md SQL-REQ-003 states.
 export { count, countDistinct, min, max } from "drizzle-orm";
 
-/** Sum as a JS number (SQL-REQ-003); null on empty input. */
-export function sum(expression: SQLWrapper): SQL<number | null> {
-  return notImplemented("sum");
-}
-/** Average as a JS number (SQL-REQ-003); null on empty input. */
-export function avg(expression: SQLWrapper): SQL<number | null> {
-  return notImplemented("avg");
-}
+export { sum, avg } from "./expressions.js";
 
 export { asc, containsText, desc } from "./expressions.js";

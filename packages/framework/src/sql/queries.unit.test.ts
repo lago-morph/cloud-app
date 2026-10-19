@@ -10,7 +10,7 @@ import { tag } from "../../../../tests/support/tags.js";
 import { boolean, id, integer, number, ref, text } from "./columns.js";
 import type { Dialect } from "./dialect.js";
 import { openPostgres, postgresDb, sqliteDb } from "./drivers.js";
-import { asc, containsText, desc } from "./public.js";
+import { asc, avg, containsText, count, countDistinct, desc, eq, max, min, sum } from "./public.js";
 import { defineTable, tableFor } from "./table.js";
 import type { AnyTable, PortableDb } from "./types.js";
 
@@ -145,6 +145,29 @@ describe.each([
       expect(await ids("Àpple")).toEqual([T4]);
       expect(await ids("ÉMILE", "name")).toEqual([T3]);
       expect(await ids("émile", "name")).toEqual([]);
+    });
+  });
+
+  describe("aggregates", () => {
+    it(tag("SQL-AC-003", "count, sum and avg are JS numbers; min/max keep the column type"), async () => {
+      const t = T(things);
+      const [r] = await h.db
+        .select({
+          n: count(), scored: count(t.score), distinct: countDistinct(t.parentId),
+          sumScore: sum(t.score), avgScore: avg(t.score), sumRatio: sum(t.ratio), avgRatio: avg(t.ratio),
+          minScore: min(t.score), maxName: max(t.name),
+        })
+        .from(t);
+      expect(r).toEqual({ n: 4, scored: 3, distinct: 2, sumScore: 12, avgScore: 4, sumRatio: 4, avgRatio: 2, minScore: -5, maxName: "Émile" });
+    });
+
+    it(tag("SQL-AC-003", "on empty input count is 0 and every other aggregate is null"), async () => {
+      const t = T(things);
+      const [r] = await h.db
+        .select({ n: count(t.score), s: sum(t.score), a: avg(t.ratio), lo: min(t.score), hi: max(t.name) })
+        .from(t)
+        .where(eq(t.name, "missing"));
+      expect(r).toEqual({ n: 0, s: null, a: null, lo: null, hi: null });
     });
   });
 });
