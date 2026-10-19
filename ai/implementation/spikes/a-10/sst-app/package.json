@@ -1,0 +1,1 @@
+{ "name": "spike-a10-sst", "private": true, "type": "module", "dependencies": { "sst": "4.17.2" } }
