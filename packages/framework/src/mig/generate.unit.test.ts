@@ -6,7 +6,7 @@ import { tag } from "../../../../tests/support/tags.js";
 import { id, integer, ref, text } from "../sql/columns.js";
 import { defineTable } from "../sql/table.js";
 import type { AnyTable } from "../sql/types.js";
-import { appSchema, generateMigrations, MigrationGenerationError } from "./generate.js";
+import { appSchema, generateAppMigrations, generateMigrations, MigrationGenerationError } from "./generate.js";
 import { checksumOf, migrationFileNames } from "./history.js";
 
 const dirs: string[] = [];
@@ -137,6 +137,13 @@ describe("generate-migration engine", () => {
     }
     expect(await generate(root, V2)).toEqual({ status: "created", files: ["sqlite/0001_schema.sql", "postgres/0001_schema.sql"] });
     expect(read(root, "sqlite/0001_schema.sql")).toBe(second);
+  });
+
+  it(tag("MIG-AC-001", "generateAppMigrations writes an app's pair under <app>/migrations from its tables"), async () => {
+    const app = scratch();
+    expect(await generateAppMigrations(app, V1)).toEqual({ status: "created", files: ["sqlite/0000_schema.sql", "postgres/0000_schema.sql"] });
+    expect(migrationFileNames(join(app, "migrations"), "sqlite")).toEqual(["0000_schema.sql"]);
+    expect(existsSync(join(app, "migrations", "checksums.json"))).toBe(true);
   });
 
   it("refuses a slug that is not lowercase snake_case", async () => {

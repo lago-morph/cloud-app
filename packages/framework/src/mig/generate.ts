@@ -45,6 +45,11 @@ export function appSchema(tables: Readonly<Record<string, AnyTable>>): (dialect:
   return (dialect) => Object.fromEntries(Object.entries(tables).map(([key, table]) => [key, tableFor(table, dialect)]));
 }
 
+/** `generate-migration` for an app: its tables' next pair under `<appDir>/migrations/`. */
+export function generateAppMigrations(appDir: string, tables: Readonly<Record<string, AnyTable>>, name?: string): Promise<GenerateResult> {
+  return generateMigrations({ root: join(appDir, "migrations"), schema: appSchema(tables), ...(name === undefined ? {} : { name }) });
+}
+
 interface Snapshot {
   readonly id: string;
   readonly tables: Readonly<Record<string, { readonly name: string; readonly columns: Readonly<Record<string, unknown>> }>>;
