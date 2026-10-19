@@ -1,0 +1,449 @@
+# Implementation plan — local and Cloudflare phase
+
+Governing prompt: `ai/prompts/implement-local-cloudflare.md` (cited below as "prompt §n"). Sources of truth: `docs/` (binding: `*-REQ-*` and `docs/contracts/**` only). This plan is the brief for every subagent; when it disagrees with a binding document, the document wins and the plan must be revised by a planning subagent.
+
+Abbreviations: `FW` = `packages/framework` (package `@lago-morph/prototype-framework`, version `0.1.0`, DEC-0049; `<package>` in the docs). "Read" lists always include `docs/CONVENTIONS.md` and the prompt sections named; they are not repeated per item.
+
+---
+
+## 1. Ground rules for every item
+
+- **Roles are separate subagents** (prompt §7, §8): for any code, the *implementer*, the *test-case author*, the *test runner*, the *evaluator*, a *diagnoser*, and a *root-cause reviewer* are six different subagents. None may be the author of the code under test. Item IDs ending in `-Tn` are test-author items, `-RUN` runner items, `-EV` evaluator items, `-INT` integrator items.
+- **Branches:** each item works on `claude/implement-local-cloudflare-<item-id lowercase>` in its own worktree, branched from the current feature branch `claude/implement-local-cloudflare`; it commits and pushes before returning (CLAUDE.md).
+- **Before returning**, an implementer rebases on the feature branch and runs `npm run verify` (root, once B-17 has wired it; before that, `npm run typecheck && npm run test:unit`) and reports the result. The orchestrator merges only items that report a green run.
+- **Ownership:** an item edits only the paths in its "Owns" line, plus its own decision draft (§10.4) and its own root-cause records. Needing to edit anything else = stop and return an open question.
+- **Scope:** nothing AWS (no adapters, target, provisioning, or placeholder code that pretends to work); no queues, webhooks, or anything `removed`/`not-adopted` in the decision log; no `prodcheck` or any non-`test-` cloud stage (prompt §4).
+- **Docs in sync:** an implementer that changes a design detail updates that component's design doc in the same commit (it owns that doc for the item's duration); contract-file changes (`docs/contracts/**`) need a decision draft and are allowed only to the item named as the contract's owner below.
+
+---
+
+## 2. Phase A — Spikes
+
+Throwaway code only, each spike in `ai/implementation/spikes/<item-id>/` (own `package.json` if needed, never a workspace member). Each writes `ai/implementation/spikes/<item-id>/RESULT.md` (question, exact commands, raw output excerpts with credentials absent, verdict) and a decision draft (§10.4). Cloud spikes name every resource `spike<random8>-…`, remove it before returning, and list any leftover in RESULT.md. Exit for each: RESULT.md answers the question with evidence and the decision draft exists.
+
+| ID | Spike | Read | Decision draft records | Fallback named in design |
+| --- | --- | --- | --- | --- |
+| A-01 | Cloudflare access and tool auth: run the §10 token-verify curl; find by experiment what makes **wrangler** (PAR-101) and **SST/Pulumi** (PAR-100, PAR-108) work through the proxy with the injected token (env vars needed, whether a non-secret dummy value is accepted and replaced by the proxy, `NODE_USE_ENV_PROXY=1`, `NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt`); include SST's Cloudflare state home (PROV §2 "State home") | prompt §10; `docs/components/provisioning.md` §2; `docs/components/cloudflare.md` §2 | Exact working env and invocation per tool; what fails | **none — stop and ask owner** (prompt §10) |
+| A-02 | Is a deployed Worker's `workers.dev` address reachable from this sandbox (curl, Node `fetch` with `NODE_USE_ENV_PROXY=1`, and Playwright Chromium)? Deploy a trivial Worker with wrangler, then remove it | prompt §10; `cloudflare.md` §2 | Reachable or not, per client; account `workers.dev` subdomain status | **none — report the refused host to the owner; do not work around** (prompt §10) |
+| A-03 | An SST/Pulumi update of a Worker keeps secrets set separately through the Cloudflare API | `cloudflare.md` "Deploy mechanics" | Kept or not; if not, which API mechanism keeps them | **Keep them through the Cloudflare API's handling of a script's existing secret bindings; never store a second copy** (cloudflare.md) |
+| A-04 | A stage Worker's `workers.dev` route can be turned off and on via the API without redeploy, and secrets/bindings survive | DEC-0078; `migrations.md` §2 step 1/6; `cloudflare.md` | API calls used; observed state before/after; propagation delay | **none — ask owner** (DEC-0078 is an owner decision) |
+| A-05 | D1 HTTP API applies one migration file as one atomic batch prefixed with `PRAGMA defer_foreign_keys = on` (a failing last statement leaves nothing applied) | `migrations.md` §2 "Cloudflare" | Atomic or not; request shape; size limits observed | **none — ask owner** |
+| A-06 | D1 export and import produce a full copy (every row and value, incl. NULLs, unicode, large text, FK order) | `migrations.md` §2 "Cloudflare", "Fallback copy" | Copy fidelity; API steps; timings | **Fallback copy: page-by-page table copy, parents first, pages within D1 limits** (migrations.md) |
+| A-07 | SigV4-signed R2 S3-endpoint URLs (aws4fetch PAR-105) work for direct browser PUT (with required `Content-Type`) and GET, with a bucket CORS policy limited to one origin; an unrelated origin is refused by the browser; R2 API token creation via `api.cloudflare.com` works and is bucket-scoped | `files.md` §2 (Tickets, Cross-origin, Cloudflare); DEC-0062 | Signing details, CORS policy shape, token-creation API and scope | **none named — ask owner** (files.md §5 mentions a framework upload service only as a portability note) |
+| A-08 | Does local D1 (wrangler/Miniflare) enforce D1's bound-parameter and statement-size limits? Compare with remote D1 using the spike's account (SQL-OQ-1) | `sql.md` §6 SQL-OQ-1 | Limits observed locally vs remote | **If local does not enforce them: add a portable limit enforced on every target, one new catalogue code, one new AC (one parameter over D1's limit)** — implemented by B-06 |
+| A-09 | The `sql.d.ts` typing approach (restricted Drizzle pg-core types, `Pick<PgDatabase<…>>`) type-checks the sql.md §2.3 CRUD example, incl. `.returning({ id })`, `atomic` tuple typing, and a wrong-type insert failing | `docs/contracts/ts/sql.d.ts`; `sql.md` §2.3 | Works / which declarations need change | **none — ask owner** (contract change) |
+| A-10 | Pinned versions (PAR-100…PAR-116) install and work together on Node 22.22: SST 4.17.2 + @pulumi/cloudflare 6.15.0, Wrangler, Drizzle ORM/kit, Hono, aws4fetch, jose, PGlite (also: C collation available), Zod 4.x; pick and record exact PAR-111 (Node, TypeScript, ESLint), PAR-112, PAR-113 (Vite), PAR-114 (Playwright), PAR-116 (test runner and glob) | `docs/parameters/parameters.md` "Dependency pins" | Exact versions; parameter changes for PAR-1xx | **Replace a pin with a compatible version, record it in parameters.md, rerun affected ACs** (parameters.md) |
+| A-INT | Integrate phase-A decision drafts into `docs/decisions/decision-log.md` and `docs/parameters/parameters.md` (§10.4) | §10.4 | — | — |
+| A-EV | Evaluator: for each spike, does RESULT.md's evidence support the verdict and the decision entry? Did each failed assumption get its named fallback or an owner question? Writes `ai/implementation/evaluations/A.md` | spike RESULT.md files, decision log | — | — |
+
+Dependencies: A-02, A-05, A-06, A-07 need A-01 (and A-08's remote comparison needs A-01). A-03 needs A-01 and A-02's Worker know-how; A-04 needs A-02. A-INT needs all spikes; A-EV needs A-INT. **Phase A exit:** A-EV accepts all ten; any "ask owner" spike that failed is raised to the owner, and the items that depend on it wait. Spike → dependent items: A-01 → D-03, D-05 and every cloud run; A-02 → every cloud run; A-03, A-04 → D-03; A-05, A-06 → D-04; A-07 → D-02; A-08 → B-06; A-09 → B-05; A-10 → B-01.
+
+---
+
+## 3. Phase B — Local foundation
+
+Component directory map (fixed by B-01; each component's item owns its directory):
+`FW/src/{core,http,sql,mig,kv,files,config,secrets,log,auth,google,check,build,targets/local,targets/cloudflare,testing,cli,provision,evidence}/`, public hubs `FW/src/index.ts`, `FW/src/client/index.ts`, `FW/src/testing/index.ts`. Each component exposes its app-facing names from `FW/src/<comp>/public.ts` (browser helpers from `FW/src/<comp>/client.ts`); hubs only re-export. Unit tests are colocated as `FW/src/<comp>/**/*.unit.test.ts` (implementer-owned). In-process integration suites live in `FW/test/integration/<comp>/` (test-author-owned).
+
+### B-01 — Workspace bootstrap
+- **Task:** Create the npm-workspace skeleton of cli.md §2 with every workspace's `package.json` (root, `FW`, `apps/template`, `apps/reference`, `apps/demo` (empty stub only), `tests/compliance`) declaring all dependencies at the A-10 pins; generate the single root `package-lock.json`; root scripts `typecheck`, `lint`, `test:unit`, `test:integration`, `test:e2e`, `compliance`, `verify` (stubs that later items wire); `FW/package.json` `exports` map per CORE-REQ-005 with `./targets/local` and `./targets/cloudflare` only (no `./targets/aws` until the AWS phase: "one subpath per supported target"; record a decision) and the package `bin`; base `tsconfig` files (framework lib set; app lib set = ES + Web APIs, no `@types/node`, no workers-types: CHECK §2); `.gitignore` (`.framework/`, `.wrangler/`, `.logs/`, `.dev.vars`, `node_modules`, Playwright output); the component directories above, each with a `public.ts` stub that declares its contract names and throws `not implemented`, so hubs type-check; `FW/src/core/errors.ts` transcribed exactly from `errors.d.ts`; the test-tag helper and test-runner config for the three layers (§10.1); directories `ai/implementation/{decisions,root-causes,evaluations,spikes}/`, `validation/`.
+- **Read:** `cli.md` §2; `core.md` (CORE-REQ-005, CORE-REQ-006); `check.md` §2; all of `docs/contracts/ts/`; spike A-10 RESULT.md.
+- **Owns:** root `package.json`, `package-lock.json`, root tsconfig/lint/test configs, all workspace `package.json` files, `.gitignore`, hub files, every `FW/src/<comp>/public.ts` stub, `FW/src/core/errors.ts`.
+- **Deps:** A-EV.
+- **Exit:** `npm ci && npm run typecheck && npm run test:unit` pass (zero-test runs allowed only here); `node -e` print of `FW/package.json` exports equals the CORE-REQ-005 table minus `./targets/aws`.
+
+After B-01, ownership of a component's `public.ts` passes to that component's item; shared files pass to the integrator (§9.2).
+
+### B-02 — CORE
+- **Task:** `defineApp`; deployment identity (app-name rule PAR-290, stage-name rule PAR-291, test-stage flag computed from `test-` prefix) as a build-time value; `Services`/`RequestVars` shapes; `FrameworkError`; the runtime app assembler that each target runtime calls (mount routes under `/api`, middleware order of core.md §2 with pluggable slots for HTTP error handler, LOG writer, services factory, AUTH, forgery check); request IDs; non-`FrameworkError` → `CORE.INTERNAL` with details only to the log; deferred `CORE.MISCONFIGURED` checks on first request.
+- **Read:** `core.md`; `core.d.ts`, `errors.d.ts`, `index.d.ts`; DEC-0068.
+- **Owns:** `FW/src/core/**`, `docs/components/core.md`, contracts `core.d.ts`, `errors.d.ts`, `index.d.ts`.
+- **Deps:** B-01.
+- **Exit:** unit tests green; covers in unit form CORE-AC-001 (type fixtures), CORE-AC-003 (identity has only `app`,`stage`), CORE-AC-004 (catalogue completeness scan + plain `Error` → 500 `CORE.INTERNAL`), CORE-AC-007 (name rule; build part with B-15).
+
+### B-03 — HTTP
+- **Task:** Error handler (catalogue status, `ErrorResponse`, `HTTP.NOT_FOUND` for unknown `/api`, `HTTP.METHOD_NOT_ALLOWED`); the single HTTP-REQ-007 error log entry for ≥500 (with key/secret name where relevant) and the never-log list; `jsonBody`/`queryParams` with PAR-200 streamed size check; `z` re-export; `Cache-Control: no-store` default; `GET /api/__framework/health`; browser `api` helper and `ApiError` (incl. non-app responses → `HTTP.NETWORK_ERROR` with the exact message).
+- **Read:** `http.md`; `http.d.ts`, `client.d.ts`, `framework.openapi.yaml`, `errors.d.ts`.
+- **Owns:** `FW/src/http/**` (incl. `FW/src/http/client.ts`), `docs/components/http.md`, contracts `http.d.ts`, `framework.openapi.yaml` (shared with AUTH: AUTH owns `/api/auth/*` paths).
+- **Deps:** B-02.
+- **Exit:** unit tests green for HTTP-AC-002, -003, -006, -007 behaviours (in-process Hono); HTTP-AC-001 `/api` part.
+
+### B-04 — LOG (local)
+- **Task:** `log.write` that never throws and never delays beyond PAR-260; entry builder adding time/app/stage/target/requestId (log-entry schema); local sink = single marked lines on Worker output (DEC-0066); in-memory sink for `createTestApp` with stderr echo of `error` entries; failing and never-completing writer injection for tests; LOG-REQ-005 hooks (`CORE.INTERNAL`, `*.UNAVAILABLE`). The line parser that `dev` uses to append to `.logs/<yyyy-mm-dd>.log` lives here too (B-17 calls it).
+- **Read:** `log.md`; `log.d.ts`, `log-entry.schema.json`; `http.md` HTTP-REQ-007.
+- **Owns:** `FW/src/log/**` (except `FW/src/log/cloudflare/**`, D-01), `docs/components/log.md`, `log.d.ts`, `log-entry.schema.json`.
+- **Deps:** B-02.
+- **Exit:** unit tests green for LOG-AC-001 (local), LOG-AC-002 (schema validation).
+
+### B-05 — SQL: schema, column rules, dialect drivers
+- **Task:** `defineTable` and column helpers (sql.md §2.1) building Drizzle tables with snake_case casing for SQLite and Postgres; name rules, one `id()`, rejected features; value rules → `SQL.INVALID_VALUE` before the database; drivers for local D1 (Worker binding via Miniflare) and PGlite (PAR-107), dialect chosen per process; `newId`, `now`. Early checks the design asks for: PGlite C collation; the A-09 typing result.
+- **Read:** `sql.md` §1–§2.2; `sql.d.ts`; DEC-0038, DEC-0041, DEC-0050, DEC-0060; spikes A-08, A-09.
+- **Owns:** `FW/src/sql/**`, `docs/components/sql.md`, `sql.d.ts`.
+- **Deps:** B-02.
+- **Exit:** unit tests green for SQL-AC-001 and SQL-AC-004 on both dialects.
+
+### B-06 — SQL: queries, `atomic`, normalisation, failures
+- **Task:** Restricted `PortableDb`/`WriteDb`; `asc`/`desc` with explicit NULLS ordering; `containsText` via `lower()` + position; aggregate normalisation; writes resolve `void`; result-size measurement and `SQL.RESULT_TOO_LARGE` (PAR-215); `SQL.CONFLICT` mapping; `SQL.UNAVAILABLE` with PAR-210 budget (local adapters only; the Data API retry loop is AWS and is **not** built); `atomic` with the built-on-handle check before execution (D1 batch; PGlite transaction). If A-08 found local D1 does not enforce D1 limits: add the portable bound-parameter/statement limit, one catalogue code in `errors.d.ts` and `FW/src/core/errors.ts` (B-02 has finished; this item takes ownership of those two files for that edit), a new AC in sql.md, and a PAR entry (via decision draft).
+- **Read:** `sql.md` (all); `sql.d.ts`; `errors.d.ts`; spike A-08.
+- **Owns:** `FW/src/sql/**`, `docs/components/sql.md`, `sql.d.ts`; conditionally `errors.d.ts` + `FW/src/core/errors.ts`.
+- **Deps:** B-05.
+- **Exit:** unit tests green for SQL-AC-003, -005, -006 (local parts) on both dialects.
+
+### B-07 — MIG (local) and framework tables
+- **Task:** `generate-migration` engine: drizzle-kit (PAR-103) non-interactive for both dialects, refusing drop+add diffs (MIG §2), writing `migrations/{sqlite,postgres}/` and `migrations/checksums.json`; framework migration histories for `__framework_kv` and `__framework_migrations` shipped in the package; in-place application on local D1 and PGlite with the `__framework_migrations` record (framework first, then app); no-op when nothing pending.
+- **Read:** `migrations.md` (§1, §2 Generation/Supported changes/Record/Local); `sql.md` §2.1; `check.md` CHECK-REQ-004.
+- **Owns:** `FW/src/mig/**` (except `FW/src/mig/cloud/**`, D-04), `FW/migrations/**`, `docs/components/migrations.md`.
+- **Deps:** B-06.
+- **Exit:** unit tests green for MIG-AC-001 (generation part), MIG-AC-002/-003 local interpretation (in-place apply; a failing migration leaves the local database unchanged — record the local interpretation as a decision).
+
+### B-08 — KV
+- **Task:** KV on `__framework_kv` through the SQL adapters: key/value rules (PAR-220, PAR-223), key-range prefix listing, opaque prefix-bound cursor, PAR-221/222 pages, `KV.UNAVAILABLE` mapping.
+- **Read:** `kv.md`; `kv.d.ts`.
+- **Owns:** `FW/src/kv/**`, `docs/components/kv.md`, `kv.d.ts`.
+- **Deps:** B-07.
+- **Exit:** unit tests green for KV-AC-001…005 (local parts) on both dialects.
+
+### B-09 — CFG
+- **Task:** `configString/Integer/Boolean/StringList`; `ConfigService`; values-file schema validation (stage-config schema, unknown field rejected); per-stage file selection (`config/local.json`, `config/<target>/test.json` for `test-*`, own file otherwise, no fallback); build-time resolution and the generated embedded module (DEC-0063); admin and users lists; secret locations from SEC's convention; `CFG.UNDECLARED_KEY`. A production-stage build does **not** require `framework.google` (deploy preflight checks it, PROV-REQ-002), so fixtures never need a Google client ID.
+- **Read:** `config.md`; `config.d.ts`, `stage-config.schema.json`; `secrets.md` SEC-REQ-003; DEC-0063, DEC-0081.
+- **Owns:** `FW/src/config/**`, `docs/components/config.md`, `config.d.ts`, `stage-config.schema.json`.
+- **Deps:** B-02.
+- **Exit:** unit tests green for CFG-AC-001, -002, -004, -006.
+
+### B-10 — SEC (local)
+- **Task:** `SecretsService` reading `SECRET_<NAME>` (local `.dev.vars` via the Worker env), `SEC.UNDECLARED`, `SEC.MISSING`, `SEC.UNAVAILABLE`, per-request reuse only; reserved `framework` prefix; framework-internal secret names (session key, Google client secret, R2 credentials, local ticket key); generation of missing dev-only framework secrets into `.dev.vars` without overwriting (called by `dev`); local `setSecret` writer for `secrets set --target local` reading stdin only.
+- **Read:** `secrets.md`; `secrets.d.ts`; DEC-0012, DEC-0064.
+- **Owns:** `FW/src/secrets/**` (except `FW/src/secrets/cloudflare/**`, D-01), `docs/components/secrets.md`, `secrets.d.ts`.
+- **Deps:** B-09.
+- **Exit:** unit tests green for SEC-AC-001, SEC-AC-004 (logic), SEC-AC-003 (local location).
+
+### B-11 — FILES (local)
+- **Task:** Server operations over the R2 binding (local R2 via Miniflare): names (PAR-230, control characters), list pagination (PAR-231/232), `FILES.INVALID_CURSOR`, `FILES.NOT_FOUND` for download tickets, `FILES.UNAVAILABLE`; local tickets = HMAC-signed same-origin `/api/__framework/files/*` route with expiry PAR-233, op/name/content-type binding, and the nosniff/CSP sandbox/attachment headers; browser `uploadFile` (single PUT, progress, pre-send content-type rejection) and `downloadUrl`; `FILES.TRANSFER_FAILED` messages exactly as FILES-REQ-006. The route and ticket key must be omittable from cloud bundles (CORE-REQ-006).
+- **Read:** `files.md`; `files.d.ts`, `client.d.ts`; DEC-0058, DEC-0062.
+- **Owns:** `FW/src/files/**` (except `FW/src/files/cloudflare/**`, D-02), `docs/components/files.md`, `files.d.ts`.
+- **Deps:** B-03, B-10.
+- **Exit:** unit tests green for FILES-AC-001, -002, -004 (type inspection), -006 (server part).
+
+### B-12 — AUTH (mock and stub provider)
+- **Task:** Current-user middleware; `requireUser`/`requireAdmin`/`requireCurrentUser`; user-ID derivation (DEC-0067); signed session cookie (PAR-250, PAR-253; `session_local` locally, `__Host-session` + Secure on cloud; cloud builds must reject local cookie settings); transaction cookie (PAR-251); `/api/auth/login|callback|logout|me` incl. `unlistedId`; `returnTo` sanitising; failed-login redirect and fixed-reason log entry; Origin-based forgery check; admin/users lists evaluated per request; authentication mock + `POST /api/auth/mock-login` (test stages/local only); `mockUsers`; test-only stub login provider (`./testing` only); browser `getCurrentUser`/`login`/`logout`.
+- **Read:** `auth.md`; `auth.d.ts`, `client.d.ts`, `internal/login-provider.d.ts`, `testing.d.ts`, `framework.openapi.yaml` `/api/auth/*`; DEC-0028, DEC-0067, DEC-0072, DEC-0080.
+- **Owns:** `FW/src/auth/**` (incl. `FW/src/auth/client.ts`, `FW/src/auth/testing.ts`), `docs/components/auth.md`, `auth.d.ts`, `internal/login-provider.d.ts`, the `/api/auth/*` paths of `framework.openapi.yaml`.
+- **Deps:** B-03, B-09, B-10.
+- **Exit:** unit tests green for AUTH-AC-001…004, -006…010, -012 (local parts), AUTH-AC-005 contract-validation part.
+
+### B-13 — GOOGLE (offline)
+- **Task:** Google `LoginProvider`: discovery from the fixed well-known URL, PKCE + state + nonce, scope exactly `openid profile`, server-side token exchange with client secret, jose validation (signature, issuer, audience, exp/iat within PAR-252, nonce), never fetching token-supplied URLs. `certify-auth` procedure logic (steps 1–5) as a library function with injectable I/O, so its step-1 check and record writing can be unit-tested offline. Tests use hand-built tokens and a stubbed `fetch`; nothing contacts Google. Test fixtures may use obviously fake client IDs inside test files only (never in `config/**` or docs).
+- **Read:** `google.md`; `internal/login-provider.d.ts`; `evidence.schema.json`; prompt §4.
+- **Owns:** `FW/src/google/**`, `docs/components/google.md`.
+- **Deps:** B-02.
+- **Exit:** unit tests green for GOOGLE-AC-001 (local part), -002, -003.
+
+### B-14 — CHECK: portability rules
+- **Task:** ESLint rules with type information (`allowed-imports`, `no-env-access`, `browser-api-only`, `no-raw-sql`, `no-dialect-features`, `framework-order`, `no-transactions`, `no-relational-queries`, `framework-ids`, `app-error-codes`), path classification, raw-HTML sink rules for browser code, CHECK-REQ-002 type-escape bans, the shipped config exported from `./check`, detection of app configs that disable/weaken rules, diagnostics naming construct + rule + skill reference. The skill reference names are fixed here in one file `FW/src/check/references.ts`; E-01 must create exactly those files.
+- **Read:** `check.md`; `core.md` CORE-REQ-005, CORE-REQ-007; `sql.md` §2.3; DEC-0043.
+- **Owns:** `FW/src/check/**` (except `FW/src/check/migrations/**`), `docs/components/check.md`.
+- **Deps:** B-02, B-06.
+- **Exit:** unit tests green on minimal fixtures for each rule (full fixture suites are B-T4's).
+
+### B-15 — CHECK: migration checker
+- **Task:** Apply both histories to fresh local D1 and PGlite, compare introspected schemas; supported-change whitelist with add-copy-drop diagnostics; checksum verification against `migrations/checksums.json`.
+- **Read:** `check.md` CHECK-REQ-004; `migrations.md` §2.
+- **Owns:** `FW/src/check/migrations/**`.
+- **Deps:** B-07, B-14.
+- **Exit:** unit tests green for CHECK-AC-004 core cases.
+
+### B-16 — Build pipeline, target runtimes, `createTestApp`
+- **Task:** `build --target local|cloudflare --stage <s>` library: generate entry points under `.framework/` from `src/app.ts`; embed identity + resolved config; compose per-target bundles (esbuild/wrangler) that exclude other targets' code, provisioning, tooling, the Postgres harness, and — for cloud — the stub provider, the local transfer route and its key, and — for non-`test-` stages — the mock; `FW/src/targets/local` and `FW/src/targets/cloudflare` runtimes with `createServices(env, deployment)` over D1/R2/env bindings (Cloudflare-specific signing, R2 log writer, Worker vars come in D); `createTestApp` (Miniflare D1/R2 or PGlite per process, migrations applied, mock or stub provider, `unavailable`, `logs()`, `as`, `loginWithStub`, `dispose`). `build --target cloudflare` is needed now because CORE-AC-006, CF-AC-003 and PROV-AC-005 are Local criteria.
+- **Read:** `core.md` §2; `local.md`; `cloudflare.md` §1–§2 (Worker settings); `provisioning.md` PROV-REQ-005; `testing.d.ts`; `config.md` §2.
+- **Owns:** `FW/src/build/**`, `FW/src/targets/local/**`, `FW/src/targets/cloudflare/**`, `FW/src/testing/**`, `docs/components/local.md`, `testing.d.ts`.
+- **Deps:** B-04, B-08, B-11, B-12, B-13.
+- **Exit:** unit tests green for CORE-AC-006 (Cloudflare bundle part), CF-AC-003, PROV-AC-005, CFG-AC-002 (build part), CORE-AC-007 (build part).
+
+### B-17 — CLI (local commands)
+- **Task:** Package binary with all CLI-REQ-001 commands registered (cloud ones fail with a named missing prerequisite until D-05); implement `dev` (wrangler + Vite proxy on `localhost` loopback only, Host check, migrations, dev-secret generation, `.logs/` capture, clean shutdown), `verify` (typecheck with app lib set, portability rules loaded from the package, migration checker, zod-version check against PAR-112, app tests once per dialect in separate processes, fail on zero tests, deterministic, offline), `generate-migration`, `reset-local`, `build`, `secrets set --target local` (stdin only; rejects a value argument). Honest exit statuses (CLI-REQ-003) and no secret output (CLI-REQ-004). Wire root `npm run verify` = framework typecheck + framework lint + unit tests + `npx <package> verify` in `apps/template` (and `apps/reference` once it exists).
+- **Read:** `cli.md`; `local.md`; `check.md` CHECK-REQ-006; `migrations.md` §2; `secrets.md` SEC-REQ-004.
+- **Owns:** `FW/src/cli/**` (D-05 later takes `FW/src/cli/commands/{deploy,remove,setup-account,smoke-cloud,certify-auth}.ts`), `docs/components/cli.md`; the root `verify` script line (handed over by the integrator for this edit).
+- **Deps:** B-10, B-15, B-16.
+- **Exit:** unit tests green for CLI-AC-002 logic, CLI-AC-003 (local commands), SEC-AC-004.
+
+### B-18 — Template app
+- **Task:** `apps/template`: smallest app using every capability once (SQL table, KV, a file upload/download via tickets, config key, one secret, log write, access levels), with `src/server/env.ts` per skill.md §2, `src/client/` pages, `src/shared/`, `config/local.json`, `config/cloudflare/test.json`, generated migrations, tests incl. one `tests/smoke/` file usable both in-process and via `connectTestStage`. Exact framework version dependency. README owner tasks are E-02's.
+- **Read:** `skill.md` §2 "The template"; `cli.md` §2 App layout; the contracts in `index.d.ts`, `client.d.ts`, `testing.d.ts`.
+- **Owns:** `apps/template/**` except `apps/template/README.md`.
+- **Deps:** B-16 (code), B-17 (exit check).
+- **Exit:** **Phase B exit check** (run by B-RUN): `npm --workspace apps/template run dev` serves the client and `/api` on `http://localhost:<port>` and each capability works through its pages; `unshare -rn` (§10.2) + `npm --workspace apps/template run verify` passes twice with identical results. Covers CHECK-AC-005 (template part).
+
+### Phase B test-case authors (write from contracts and ACs, not from implementation; may start right after B-01)
+| ID | Suites (`FW/test/integration/<comp>/`) | Criteria to cover (local parts) | Deps |
+| --- | --- | --- | --- |
+| B-T1 | core, http, log, config, secrets | CORE-AC-001, -003, -004, -005, -007, -008; HTTP-AC-001…003, -006 (browser test, Playwright), -007; LOG-AC-001, -002, -003, -005; CFG-AC-001, -002, -003 (local), -004, -006; SEC-AC-001…004 | B-01 |
+| B-T2 | sql, mig, kv | SQL-AC-001, -003…-006 (local D1 + PGlite; Data API parts excluded); MIG-AC-001…003 (local); KV-AC-001…005 (local) | B-01 |
+| B-T3 | files, auth, google | FILES-AC-001, -002, -004, -006; AUTH-AC-001…004, -005 (contract part), -006…-010, -012; CFG-AC-005 (local); GOOGLE-AC-001 (local), -002, -003; E2E-007 (local, in-process per scenario text) | B-01 |
+| B-T4 | check, cli, local, build (fixtures in `FW/test/fixtures/**`) | CHECK-AC-001…004, -006; SQL-AC-002; CLI-AC-002; CORE-AC-005, -006 (CF bundle part), -008 (verify part); CF-AC-003; PROV-AC-005; LOCAL-AC-002…004 | B-01 |
+
+Each author owns only its suite directories (B-T4 also `FW/test/fixtures/**`).
+
+### B-RUN, B-EV, B-INT
+- **B-RUN:** runs `npm run test:unit` and `npm run test:integration` (framework suites) and the phase-B exit check commands; commits raw output to `validation/local/phase-B/` (interim; compliance-format evidence comes in C). Deps: B-18, B-T1…B-T4.
+- **B-EV:** judges the phase-B exit check from B-RUN's output and the integration results per criterion; writes `ai/implementation/evaluations/B.md` flagging skipped tests, weak assertions, mis-tagged tests.
+- **B-INT:** integrates phase-B decision drafts and parameter changes (§10.4); regenerates the lockfile if needed (§9.2). Runs before B-EV signs off.
+
+---
+
+## 4. Phase C — Local compliance
+
+### C-01 — Reference app
+- **Task:** `apps/reference`: routes per capability feature using only public exports; fixtures from compliance.md §2 (plain-`Error` route, log route, two-cookies route, v1/v2 schemas using only MIG §2 supported changes, data fixture incl. files); protected routes per level; a reference route per catalogue code with a status (HTTP-AC-002), routes raising the HTTP-AC-007 codes; a route that throws an error containing the test secret value; a generic "run case" route that executes the shared case sets in `apps/reference/src/server/cases/**`; `config/local.json`, `config/cloudflare/test.json` (no `prodcheck.json`: prompt §4).
+- **Read:** `compliance.md`; ACs of every component; `e2e-scenarios.md`; contracts `index.d.ts`, `client.d.ts`.
+- **Owns:** `apps/reference/**` except `apps/reference/src/server/cases/**`.
+- **Deps:** B-EV.
+- **Exit:** `npx <package> verify` passes in `apps/reference`; `dev` serves it.
+
+### C-02 — Compliance driver, evidence, reports
+- **Task:** `tests/compliance/harness/`: one command `npm run compliance -- --target <local|cloudflare> [--stage <s>] [--milestone]` that runs the tagged integration and E2E tests for that target, base-URL HTTP client, Playwright setup, multiset comparison, PAR-280 float tolerance, bounded cloud waits; the evidence writer in `FW/src/evidence/` (shared with `smoke`): schema-valid records in `validation/<target>/<runId>.json` + raw output under `validation/<target>/<runId>/raw/`, refusal on a dirty tree, `detail` with status/code/requestId for HTTP failures, `not-run`/`blocked` reasons; test-stage run IDs (CSPRNG, alphabet and length filling PAR-291 after `test-`); leftover hook calling `listStageResources`; traceability report generator (all `*-AC-*`/`E2E-*` IDs in `docs/`, tests, results, untested flagged); release report ("works" rule of COMPL-REQ-006, invalidations from `validation/invalidations.md`, commits touching GOOGLE/login-provider files); per-target expected-criteria list derived from the Where columns, including this phase's not-run rules (§8).
+- **Read:** `compliance.md`; `evidence.schema.json`; `e2e-scenarios.md` preamble; prompt §7, §11.
+- **Owns:** `tests/compliance/harness/**`, `tests/compliance/tools/**`, `FW/src/evidence/**`, `docs/components/compliance.md`, `evidence.schema.json`, `validation/invalidations.md`.
+- **Deps:** B-EV.
+- **Exit:** unit tests green for COMPL-AC-002, -003 (local), -006; harness self-test runs one tagged sample test and writes a schema-valid record.
+
+### C-03 — PROV target-neutral core (offline)
+- **Task:** `FW/src/provision/core/`: per-target operations interface (PROV §2 table); deploy sequence PROV-REQ-002 steps 1–7 incl. failure reporting (failed step, migration file, DB error, stage state, next action), database discovery by anchored pattern, MIG-REQ-006/-003 orchestration (stop, copy, migrate, check, delete, deploy, start; failure → drop new, restart old), first-Cloudflare-deploy secret check, runner-only abort points; `remove` sequencing and leftover reporting; `setup-account` idempotence and ownership refusal; a fake target for tests. Plus the Cloudflare log-bucket ownership check of `setupAccount` against a stubbed Cloudflare API response, in `FW/src/provision/cloudflare/account.ts` (D-03 extends it).
+- **Read:** `provisioning.md`; `migrations.md` §1–§2; `cloudflare.md` "Deploy mechanics"; DEC-0076, DEC-0078, DEC-0079.
+- **Owns:** `FW/src/provision/core/**`, `FW/src/provision/cloudflare/account.ts`, `docs/components/provisioning.md`.
+- **Deps:** B-EV.
+- **Exit:** unit tests green for COMPL-AC-007, PROV-AC-007, CLI-AC-003 (deploy/remove with fake target, incl. failing cleanup keeps original status).
+
+### C-04 — `smoke` and `connectTestStage`
+- **Task:** `smoke --target local` against the running `dev` server (and the stage form, completed in D-05); `connectTestStage` (base URL from recorded deploy output or the dev server, mock-login, cookie jar, `Origin` on state-changing requests, rejects non-`test-` stages, precise failure messages); evidence record via `FW/src/evidence`; prints the stage's log location for the day.
+- **Read:** `cli.md` (`smoke`); `testing.d.ts` `connectTestStage`; `log.md` LOG-REQ-003/-004.
+- **Owns:** `FW/src/cli/commands/smoke.ts`, `FW/src/testing/connect.ts`.
+- **Deps:** C-02.
+- **Exit:** CLI-AC-005 local part passes on the template.
+
+### C-05 — Scaffolder (minimal)
+- **Task:** `skill/scripts/scaffold`: copies `apps/template` into a new directory, installs the framework from an `npm pack` tarball at an exact version, never overwrites existing files unless explicitly told. Needed now for E2E-001, E2E-003 and LOCAL-AC-001 (Local criteria); the skill text around it is phase E.
+- **Read:** `skill.md` SKILL-REQ-005, §2 Layout; `e2e-scenarios.md` E2E-001; DEC-0049.
+- **Owns:** `skill/scripts/**`.
+- **Deps:** B-EV.
+- **Exit:** SKILL-AC-005 passes; a scaffolded app passes `verify` under `unshare -rn`.
+
+### Phase C test-case authors (target-parametrised; same tests later run on Cloudflare: COMPL-REQ-001)
+| ID | Owns | Criteria / scenarios |
+| --- | --- | --- |
+| C-T1 | `tests/compliance/criteria/{core,http,log,config,secrets,cli}/` | CORE-AC-002, -003; HTTP-AC-001…-005 (cloud-only ones written now, run in D); LOG-AC-001, -002, -004, -005; CFG-AC-003…-005; SEC-AC-001…-003, -005; CLI-AC-001, -004, -005 |
+| C-T2 | `tests/compliance/criteria/{sql,mig,kv}/`, `apps/reference/src/server/cases/**` | SQL-AC-003…-006 and KV-AC-004 as shared case sets run in-process (D1, PGlite) and through the reference app; MIG-AC-002, -003, -006; KV-AC-001…-005 |
+| C-T3 | `tests/compliance/criteria/{files,auth}/`, `tests/compliance/e2e/E2E-009*` | FILES-AC-001…-006 (Playwright for -003, -004, -006 transfer parts); AUTH-AC-004, -006, -007, -009 (test-stage part); E2E-009 |
+| C-T4 | `tests/compliance/e2e/` (except E2E-009) | E2E-001, -003, -004, -005, -010, -011, -012, -013, -014, -016 (scan part; the term list file `tests/compliance/e2e/terms.txt`); E2E-007 cloud part is not-run (§8) |
+
+Deps: C-02 (harness API), C-01 (route names; authors may start from the contracts and agree route names through C-01's route list file `apps/reference/ROUTES.md`).
+
+### C-RUN, C-EV, C-INT
+- **C-RUN:** `npm run compliance -- --target local` from a clean tree; also `npm run test:unit`; commits evidence + raw output. Deps: C-01…C-05, C-T1…C-T4.
+- **C-EV:** **Phase C exit check:** every criterion and scenario whose Where includes Local is `passed`, or `not-run` under §8, with an evidence record — for the framework components (CORE, HTTP, SQL, MIG, KV, FILES, CFG, SEC, LOG, AUTH, GOOGLE, LOCAL, CF, PROV, CHECK, CLI, COMPL) and E2E-001, -003, -004, -007, -009, -011, -013, -014, -016 (scan). SKILL-AC-001…-004, CHECK-AC-003 (diagnostics must name *existing* skill references), DEMO-AC-*, CHECK-AC-005 (demo part), E2E-002 (local part) and E2E-015 belong to components built in E/F and are judged at E-EV / F-EV (see Open question 1). Writes `ai/implementation/evaluations/C-local.md`.
+- **C-INT:** decision drafts and parameters (§10.4).
+
+---
+
+## 5. Phase D — Cloudflare
+
+Precondition: phase C accepted (prompt §10: all local work before touching the cloud), A-01…A-07 accepted.
+
+### D-01 — Cloudflare runtime parts of CFG, SEC, LOG, AUTH
+- **Task:** Worker-variable delivery of provisioning-derived config (public origin, bucket/database/log-bucket identifiers); Worker-secret reading; R2 log writer to the shared bucket with `waitUntil` and the LOG-REQ-004 key layout; cloud cookie attributes active in Cloudflare builds; static-asset and run-worker-first settings in the generated Worker config.
+- **Read:** `cloudflare.md`; `config.md` §2 Delivery; `secrets.md`; `log.md` LOG-REQ-004; `auth.md` AUTH-REQ-006.
+- **Owns:** `FW/src/log/cloudflare/**`, `FW/src/secrets/cloudflare/**`, `FW/src/targets/cloudflare/**`, `docs/components/cloudflare.md`.
+- **Deps:** C-EV.
+- **Exit:** unit tests green; `build --target cloudflare --stage test-x` bundle still passes CF-AC-003 / CORE-AC-006.
+
+### D-02 — FILES on Cloudflare
+- **Task:** SigV4-signed R2 S3-endpoint tickets with aws4fetch using the stage's R2 API token (framework-internal Worker secret); the bucket CORS policy definition (PUT/GET, stage origin only, `Content-Type`) for provisioning; health-step CORS preflight helper.
+- **Read:** `files.md` §2 Cloudflare; spike A-07; DEC-0062.
+- **Owns:** `FW/src/files/cloudflare/**`.
+- **Deps:** C-EV, A-07.
+- **Exit:** unit tests green (signing against fixed vectors; offline).
+
+### D-03 — PROV Cloudflare operations
+- **Task:** Implement per-target operations for Cloudflare: `setupAccount` (shared `prototype-logs` bucket, state home, `workers.dev` subdomain registration/recording, ownership check), `deploy` via SST built from the app definition (no app IaC; current D1 database as input; never retains resources), `setSecret` (`SECRET_<NAME>`), `stopApp`/`startApp` (workers.dev route off/on), R2 API token create/delete scoped to the stage bucket, `remove` (empty bucket, delete token, delete D1 databases, SST removal; print leftovers, non-zero exit), `listStageResources`; preflight incl. R2-token-creation permission; credentials only per A-01.
+- **Read:** `provisioning.md`; `cloudflare.md`; spikes A-01, A-03, A-04, A-07; DEC-0036, DEC-0073, DEC-0078.
+- **Owns:** `FW/src/provision/cloudflare/**` except `d1/**`.
+- **Deps:** C-EV, A-01, A-03, A-04.
+- **Exit:** unit tests green with stubbed Cloudflare API; no cloud calls in unit tests.
+
+### D-04 — D1 database operations and cloud migration
+- **Task:** `createDatabase`/`copyDatabase`/`dropDatabase` via the D1 HTTP API (export → import as one batch with `PRAGMA defer_foreign_keys = on`, or the fallback copy if A-06 failed); apply each migration file as one batch; the MIG step-4 check (row counts, references, column rules on added columns, record complete); naming `<app>-<stage>-db-<n>`.
+- **Read:** `migrations.md`; spikes A-05, A-06; `sql.md` §2.1.
+- **Owns:** `FW/src/provision/cloudflare/d1/**`, `FW/src/mig/cloud/**`.
+- **Deps:** C-EV, A-05, A-06.
+- **Exit:** unit tests green against a stubbed D1 API.
+
+### D-05 — CLI cloud commands
+- **Task:** Wire `deploy`, `remove`, `setup-account`, `secrets set --target cloudflare`, `smoke --target cloudflare --stage test-…`, `certify-auth` (command present; step-1 check and evidence via B-13 library; it requires a production stage, which this phase never creates), deploy output recording (base URL for `connectTestStage`), public-origin printing, health check + storage CORS preflight; the runner-only deploy abort points (COMPL §2 "Deploy recovery").
+- **Read:** `cli.md`; `provisioning.md` PROV-REQ-002; `google.md` §2.
+- **Owns:** `FW/src/cli/commands/{deploy,remove,setup-account,secrets-cloud,smoke-cloud,certify-auth}.ts`.
+- **Deps:** D-01…D-04, C-04.
+- **Exit:** unit tests green; `npx <package> deploy --target cloudflare --stage test-<id>` of the template succeeds once and `remove` leaves nothing (run by D-RUN, not by this item).
+
+### Phase D test-case authors
+| ID | Owns | Criteria / scenarios |
+| --- | --- | --- |
+| D-T1 | `tests/compliance/criteria/{cf,prov}/` | CF-AC-001, -002; PROV-AC-001 (CF part), -002, -003, -004, -006 (CF part, Open question 2); COMPL-AC-004, -008 |
+| D-T2 | `tests/compliance/criteria/_cloud/**` | Cloud test hooks used by C-T*/D-T1 tests: direct deletion of a Worker secret (SEC-AC-005, PROV-AC-002), R2 log listing with a read-only R2 token created and deleted by the test (LOG-AC-004, E2E-011), stage-resource probes (CF-AC-002, PROV-AC-003). It does not edit C-T* files; gaps found in them go back to a C-T* follow-up item |
+
+Deps: C-EV.
+
+### D-RUN, D-RUN-M, D-EV, D-INT
+- **D-RUN:** `setup-account --target cloudflare` (once; creates billable shared resources), then `npm run compliance -- --target cloudflare` on one `test-<random>` stage plus the per-criterion extra stages; always removes stages; records leftovers. Deps: D-05, D-T1, D-T2.
+- **D-RUN-M:** milestone run `npm run compliance -- --target cloudflare --milestone`: E2E-010, E2E-012, PROV-AC-003, PROV-AC-004, PROV-AC-006 (CF part), COMPL-AC-008. Deps: D-RUN.
+- **D-EV:** **Phase D exit check:** every automated criterion/scenario with Cloud in Where, except `aws.md` and §8 not-runs, `passed` on Cloudflare with evidence; a test stage removed with no leftovers (COMPL-AC-004 evidence); milestone records present or listed outstanding with reason. E2E-011 on Cloudflare must find the entry "using only commands copied from the skill's troubleshooting reference", which exists only after E-02; it is judged at E-EV. Writes `ai/implementation/evaluations/D-cloudflare.md`.
+- **D-INT:** decision drafts and parameters (§10.4).
+
+---
+
+## 6. Phase E — Skill
+
+### E-01 — Skill router, references, examples
+- **Task:** `skill/SKILL.md` (≤ PAR-070, hard rules of SKILL-REQ-003 incl. `FRAMEWORK-ISSUE.md` entry contents and next action, task map of SKILL-REQ-002), one reference per topic in skill.md §2 (≤ PAR-071, "read this when" opening, stopping condition), with exactly the reference file names listed in `FW/src/check/references.ts`; examples (≤ PAR-072) taken only from `apps/template` and `apps/reference`, each type-checked and run by CI; `skill/templates/` used by the scaffolder.
+- **Read:** `skill.md`; all contracts; `apps/template`, `apps/reference`; DEC-0054, DEC-0056.
+- **Owns:** `skill/SKILL.md`, `skill/reference/**` except the three files E-02 owns, `skill/examples/**`, `skill/templates/**`, `docs/components/skill.md`.
+- **Deps:** D-EV.
+- **Exit:** SKILL-AC-001…-004 tests (E-T1) pass.
+
+### E-02 — Owner tasks, template README, troubleshooting
+- **Task:** Copy-and-paste owner steps (SKILL-REQ-006): user ID → `framework.admins` / `framework.users`; `setup-account`; `secrets set`; Google OAuth client setup and callback registration (written, not executed: prompt §4); deploy and remove; reading logs. In both `skill/reference/owner-tasks.md` (or the name in `references.ts`) and `apps/template/README.md`, plus the README's billable-while-idle list. `skill/reference/troubleshooting.md` with per-cloud log commands (LOG-REQ-004 layout), "no log entry" fallbacks, error-code meanings, login failures.
+- **Read:** `skill.md` §2; `auth.md` AUTH-REQ-005; `google.md` GOOGLE-REQ-004; `provisioning.md`; `log.md`; spike A-01 (how commands work in practice).
+- **Owns:** `apps/template/README.md`, `skill/reference/{owner-tasks,troubleshooting,deploying}.md` (exact names per `references.ts`).
+- **Deps:** D-EV.
+- **Exit:** E-T1 checks pass; the E2E-011 cloud log lookup is re-run by E-RUN using only these commands.
+
+### E-T1, E-RUN, E-EV, E-INT
+- **E-T1:** tests in `tests/skill/`: size budgets, link checks, structure ("read this when"/stopping condition), router task coverage, hard-rule presence, examples type-check and run, no example derived from `apps/demo/`, scaffolder no-overwrite (SKILL-AC-001…-005). Deps: D-EV.
+- **E-RUN:** runs `tests/skill`, root `npm run verify`, CHECK-AC-003 (diagnostics name existing references), and re-runs E2E-011 (Cloudflare) on a fresh `test-` stage; records evidence; removes the stage.
+- **E-EV:** **Phase E exit check:** SKILL-AC-001…-005 and CHECK-AC-003 `passed`; SKILL-AC-006 `not-run` (§8); E2E-011 cloud re-run passed. Writes `ai/implementation/evaluations/E.md`.
+
+---
+
+## 7. Phase F — Demo
+
+### F-01 — Demo build (fresh agent)
+- **Task:** A subagent with no other context builds `apps/demo/` from **only** `skill/`, `apps/template/`, and `docs/demo/demo-spec.md` (E2E-015). It records its model and inputs in `apps/demo/BUILD-RECORD.md`, raises any framework/skill defect in `apps/demo/FRAMEWORK-ISSUE.md` per the skill's rules, writes the demo's tests and smoke test, and passes `verify`.
+- **Read:** only the three inputs above.
+- **Owns:** `apps/demo/**`.
+- **Deps:** E-EV.
+- **Exit:** `verify` passes in `apps/demo`, or open `FRAMEWORK-ISSUE.md` entries exist.
+
+### F-02 — Framework-issue loop (repeat per entry)
+- For each entry: diagnose (§10.5 record), independent review, fix red-green in the framework or skill (by the owning item's path set), re-run affected tests (runner + evaluator). Then a **new** fresh F-01 agent rebuilds the demo from scratch. Repeat until no entry remains open.
+
+### F-03 — Demo on Cloudflare (runner)
+- Deploy the demo to a `test-<random>` Cloudflare stage, run `smoke --target cloudflare`, run the demo smoke locally (`smoke --target local`), confirm no source differences (E2E-002 CF + local parts), run the compliance driver's DEMO-AC-008 cloud check, remove the stage; evidence committed.
+
+### F-04 — Architecture review (E2E-016 review part, milestone)
+- An independent reviewer (no code authored in this run) checks: every component doc has a portability note; no capability contract references another capability's adapter; no design adds features beyond its requirements. Records findings in `validation/reviews/E2E-016.md`; findings go through the owning items.
+
+### F-EV — Final evaluation
+- Judges DEMO-AC-001…-011 (local + Cloudflare; AWS parts not-run), CHECK-AC-005 (demo), E2E-002, E2E-015, E2E-016; then produces the full per-target status table of every `*-AC-*` and `E2E-*` (local, cloudflare, aws), confirming the §8 not-run lists, in `ai/implementation/evaluations/final.md`, and the generated release report (which must say "not working": AWS and Google certification outstanding, prompt §11).
+
+---
+
+## 8. Not-run rules (for every evaluator)
+
+### 8.1 Google mocked (detail: "Google login mocked for this phase")
+From prompt §4: GOOGLE-AC-001 (cloud part: certification step-1 check against a production deployment), GOOGLE-AC-005; AUTH-AC-005 (admin-list part), AUTH-AC-009 (cloud production part), AUTH-AC-011; COMPL-AC-005; SKILL-AC-006; E2E-006, E2E-007 (cloud part), E2E-008.
+Added by the planner for the evaluator to confirm: **CLI-AC-001** (`certify-auth` on cloud: needs a production stage with a Google client).
+
+### 8.2 AWS (detail: "AWS phase not started")
+- All of AWS-AC-001…-006.
+- The AWS run of every criterion whose Where says cloud (each cloud criterion is recorded for `aws` as not-run).
+- AWS parts of criteria otherwise run here: CORE-AC-002 (AWS start), CORE-AC-006 (AWS bundle part), SQL-AC-003/-004/-005/-006 (Data API results; SQL-AC-006's Data API retry loop, whose adapter is AWS code and is not built), KV-AC-004 (AWS), SEC-AC-003 (IAM simulation), LOG-AC-001 (AWS deny case), PROV-AC-001 (AWS deploy), PROV-AC-006 (region part, Open question 2), E2E-002 (AWS stage), E2E-004 / E2E-009 / E2E-011 / E2E-013 / E2E-014 (AWS runs), DEMO-AC-010 (AWS).
+
+### 8.3 Milestone items (COMPL-REQ-006)
+Run in this phase: E2E-010, E2E-012, PROV-AC-003, PROV-AC-004, PROV-AC-006 (CF part), COMPL-AC-008 (D-RUN-M); E2E-015 (F); E2E-016 review (F-04). Outstanding with reason: GOOGLE-AC-005, E2E-007 cloud, E2E-008, SKILL-AC-006, AUTH-AC-005 admin-list (Google mocked); all AWS runs.
+
+---
+
+## 9. Parallelism and serialisation
+
+### 9.1 Waves (items in one wave touch disjoint paths)
+| Wave | Items |
+| --- | --- |
+| A1 | A-01, A-09, A-10 |
+| A2 | A-02, A-05, A-06, A-07, A-08 |
+| A3 | A-03, A-04 → A-INT → A-EV |
+| B1 | B-01 (alone) |
+| B2 | B-02, B-T1, B-T2, B-T3, B-T4 |
+| B3 | B-03, B-04, B-05, B-09, B-13 |
+| B4 | B-06, B-10 |
+| B5 | B-07, B-11, B-12, B-14 |
+| B6 | B-08, B-15 |
+| B7 | B-16 |
+| B8 | B-17, B-18 → B-RUN → B-INT → B-EV |
+| C1 | C-01, C-02, C-03, C-05 |
+| C2 | C-04, C-T1, C-T2, C-T3, C-T4 → C-RUN → C-INT → C-EV |
+| D1 | D-01, D-02, D-03, D-04, D-T1, D-T2 |
+| D2 | D-05 → D-RUN → D-RUN-M → D-INT → D-EV |
+| E1 | E-01, E-02, E-T1 → E-RUN → E-INT → E-EV |
+| F | F-01 → (F-02 loop) → F-03, F-04 → F-EV |
+
+Test authors in B2 run until their suites are complete; their suites are expected to fail until the implementation lands (red is fine; they must not be skipped).
+
+### 9.2 Shared files and how they are serialised
+- **Root `package.json`, workspace `package.json`s, `package-lock.json`, root configs:** created complete by B-01. Afterwards an item may add a dependency only to its own workspace's `package.json` and only at a version already pinned in parameters.md (or via a decision draft). The lockfile is **never hand-merged**: on a merge conflict, the orchestrator hands the merge to an ad-hoc integrator subagent (`<phase>-INT`), which takes the feature branch's lockfile and runs `npm install` to regenerate, then commits.
+- **Hub files** (`FW/src/index.ts`, `client/index.ts`, `testing/index.ts`) and `FW/package.json` exports: B-01 writes them once; later changes only by the integrator on request.
+- **`FW/src/core/errors.ts` and `errors.d.ts`:** B-02 owns; B-06 only for the conditional SQL-OQ-1 code.
+- **`framework.openapi.yaml`:** HTTP (B-03) owns non-auth paths; AUTH (B-12) owns `/api/auth/*`. They run in different waves.
+- **`docs/decisions/decision-log.md`, `docs/parameters/parameters.md`:** only `-INT` items edit them (§10.4).
+- **Component design docs:** owned by that component's current item; at most one item per doc per wave (as assigned above).
+- **`FW/src/cli/**`:** B-17 owns; C-04 and D-05 own only their named command files.
+
+---
+
+## 10. Conventions for implementers
+
+### 10.1 Test layers and commands (root)
+- `npm run test:unit` — `FW/src/**/*.unit.test.ts` and tool unit tests; no network; red-green TDD per behaviour (prompt §6).
+- `npm run test:integration` — `FW/test/integration/**` in-process with real local dependencies (Miniflare/workerd D1, R2; PGlite; local file system), plus `tests/compliance/criteria/**` against `--target` (default `local`).
+- `npm run test:e2e` — `tests/compliance/e2e/**` against `--target`.
+- `npm run compliance -- --target <t> [--stage <s>] [--milestone]` — runs the integration + E2E layers for the target and writes evidence.
+- `npm run verify` — framework self-checks plus `npx <package> verify` in `apps/template` and `apps/reference`. Run before returning any item.
+- The test runner and file glob are PAR-116 (chosen by A-10).
+
+### 10.2 Offline runs
+"No network" runs use a network namespace: `unshare -rn sh -c 'ip link set lo up; <command>'` (confirmed working in this sandbox; loopback must be brought up for `dev`/workerd). Never simulate offline by unsetting `HTTPS_PROXY` or disabling TLS.
+
+### 10.3 Tagging
+- Every integration/E2E test title starts with its IDs in brackets: `[KV-AC-001] put, overwrite, get …`; several: `[SQL-AC-003][KV-AC-004] …`. A test covering only part of a criterion says which clause in the title after the tag. Unit tests may carry tags but do not count as evidence on their own unless the criterion is a unit-level criterion (e.g. GOOGLE-AC-002, COMPL-AC-002/-007).
+- Only the regex `\[((?:[A-Z]+-AC|E2E)-\d{3})\]` is parsed by the traceability generator. Do not tag a test with an ID it does not check.
+- Never skip, delete or weaken a test to get a pass (prompt §8).
+
+### 10.4 Decisions and parameters
+- Each item writes its decisions to `ai/implementation/decisions/<item-id>.md`, one entry per decision, in the decision-log format with a placeholder ID:
+  ```
+  ### DEC-PENDING-<item-id>-<n> — <title>
+  Origin: ai-proposed · Status: accepted · Affects: <IDs, docs>
+
+  <decision, reason, evidence path; for spikes: result and fallback applied>
+  ```
+  and a "Parameter changes" section (`PAR-nnn: old → new, reason`, or new PAR entries).
+- Design docs edited in the same item may cite `DEC-PENDING-<item-id>-<n>`.
+- The phase's `-INT` item numbers pending entries sequentially from the next free `DEC-` ID, appends them to `docs/decisions/decision-log.md` under a heading for this implementation phase, replaces every `DEC-PENDING-…` reference repo-wide, applies parameter changes to `docs/parameters/parameters.md`, and replaces each draft file's content with a list of the assigned IDs. Never edit `owner` entries; never renumber or reuse IDs.
+
+### 10.5 Evidence, root causes, evaluations
+- Evidence records: `validation/<target>/<runId>.json` (schema `evidence.schema.json`) with raw output in `validation/<target>/<runId>/raw/`; committed by the runner, never by implementers.
+- Root-cause records: `ai/implementation/root-causes/<yyyy-mm-dd>-<item-id>-<slug>.md` with sections Symptom, Evidence, Causal chain (evidence per link), Alternatives ruled out, Proposed fix, Verification plan, and Review (verdict + reasons, written by the reviewer). No "probably/flaky/timing" without evidence.
+- Evaluator verdicts: `ai/implementation/evaluations/<phase>[-<target>].md`.
+
+### 10.6 Credentials and Cloudflare (prompt §10)
+- **Never print, log, or commit a credential value** — including in RESULT.md, evidence, raw output, and root-cause records. Redact before committing raw output; the runner scans for test secret values (CLI-AC-004, SEC-AC-002).
+- The API token is injected by the proxy for `api.cloudflare.com` only; never send an `Authorization` header to it yourself. Account ID: `$CLOUDFLARE_ACCOUNT_ID`. Tool environment for wrangler/SST: exactly what A-01 recorded.
+- Node `fetch` needs `NODE_USE_ENV_PROXY=1`; CA bundle `/root/.ccr/ca-bundle.crt`. Proxy problems: `/root/.ccr/README.md`, `curl -sS "$HTTPS_PROXY/__agentproxy/status"`.
+- R2's S3 endpoint `<account>.r2.cloudflarestorage.com` uses the framework-created R2 token. A host refused by the proxy (403 / failed CONNECT) is reported to the owner, never worked around.
+- Never invent credentials (no placeholder Google client IDs in `config/**`, docs or deployed stages).
+- Cost: create only what the item needs; names start with `test-` (stages) or `spike` (spikes); remove after use; report anything left billable (shared `prototype-logs` bucket and SST state home stay by design).
+
+---
+
+## 11. Open questions for the owner
+
+1. **Phase C exit vs later-phase components.** Prompt §9 C's exit requires every Local criterion to pass, but SKILL-AC-001…-004 and CHECK-AC-003 (skill, phase E), DEMO-AC-* and CHECK-AC-005's demo part, E2E-002 (local part) and E2E-015 (demo, phase F) cannot pass before their components exist. The plan judges those at E-EV/F-EV; likewise E2E-011 on Cloudflare (needs the skill's troubleshooting commands) moves from D-EV to E-EV. To keep C's exit otherwise literal, the plan moves small pieces earlier: `build --target cloudflare` (B-16), `secrets set --target local` (B-17), the target-neutral PROV core with a fake target and the Cloudflare log-bucket ownership check offline (C-03), `smoke --target local` (C-04), and the scaffolder script (C-05). Proceeding on this reading unless the owner objects.
+2. **PROV-AC-006 on Cloudflare.** The region is an AWS account setting (DEC-0075); Cloudflare has none. The plan runs the "deploy from a clean machine with no local CLI state" part on Cloudflare and records the region part as not-run ("AWS phase not started"). Confirm.
+3. **`./targets/aws` subpath.** CORE-REQ-005 lists `./targets/aws`, but this phase must not build AWS code. The plan omits that subpath until the AWS phase ("one subpath per supported target"); CORE-AC-005's fixture importing `./targets/aws` still fails `verify` through `allowed-imports`. Recorded as an `ai-proposed` decision by B-01 unless the owner prefers otherwise.
