@@ -1,0 +1,31 @@
+# E4 explicit BEGIN/COMMIT and SAVEPOINT inside a request
+REQUEST POST .../d1/database/<uuid>/query body={"sql": <statements joined with ';\n'>}
+RESPONSE {
+ "http": 400,
+ "elapsed_s": 0.48,
+ "success": false,
+ "errors": [
+  {
+   "code": 7500,
+   "message": "To execute a transaction, please use the state.storage.transaction() or state.storage.transactionSync() APIs instead of the SQL BEGIN TRANSACTION or SAVEPOINT statements. The JavaScript API is safer because it will automatically roll back on exceptions, and because it interacts correctly with Durable Objects' automatic atomic write coalescing."
+  }
+ ],
+ "results": []
+}
+REQUEST POST .../d1/database/<uuid>/query body={"sql": <statements joined with ';\n'>}
+RESPONSE {
+ "http": 400,
+ "elapsed_s": 0.52,
+ "success": false,
+ "errors": [
+  {
+   "code": 7500,
+   "message": "To execute a transaction, please use the state.storage.transaction() or state.storage.transactionSync() APIs instead of the SQL BEGIN TRANSACTION or SAVEPOINT statements. The JavaScript API is safer because it will automatically roll back on exceptions, and because it interacts correctly with Durable Objects' automatic atomic write coalescing."
+  }
+ ],
+ "results": []
+}
+  schema: [('table', 'child'), ('table', 'parent')]
+  child: rows=[{'id': 1, 'parent_id': 1}] cols=['id', 'parent_id']
+  parent: rows=[{'id': 1, 'name': 'p1'}] cols=['id', 'name']
+  foreign_key_check: []

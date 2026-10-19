@@ -1,0 +1,19 @@
+# E8 upper bounds of one POST /query request (sql-string form, PRAGMA-prefixed)
+# (console output of `python3 -I upper.py <uuid-file>`, transcribed: the script crashed before writing its log
+#  because the count query after the 502 parsed a non-JSON body; the follow-up count is in e9-timeout.txt
+#  and the "rows after 502" line below was taken with a separate query right after.)
+## 300 statements of ~90 kB, body ~27.0 MB
+  http=200 success=True elapsed=5.5s errors=[] non_json=None
+  rows now: [{'n': 300}]
+## 560 statements of ~90 kB, body ~50.4 MB
+  http=500 success=False elapsed=2.5s errors=[{'code': 7500, 'message': 'internal error; reference = <hex32-ref>'}] non_json=None
+  rows now: [{'n': 0}]
+## 50000 small statements, body ~2.4 MB
+  http=200 success=True elapsed=8.5s errors=[] non_json=None
+  rows now: [{'n': 50000}]
+## 100000 small statements, body ~4.8 MB
+  http=200 success=True elapsed=16.8s errors=[] non_json=None
+  rows now: [{'n': 100000}]
+## 200000 small statements, body ~9.7 MB
+  http=502 success=None elapsed=33.1s errors=None non_json=upstream request failed
+  rows after (separate query, seconds later): [{'n': 200000}]   <- the batch committed although the client got 502

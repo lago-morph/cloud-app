@@ -1,0 +1,392 @@
+# E7 supported-change shapes involving the referenced table `parent`, each one request with the PRAGMA prefix
+## add nullable column + static-default column
+STATEMENTS ["PRAGMA defer_foreign_keys = on", "ALTER TABLE parent ADD COLUMN a TEXT", "ALTER TABLE parent ADD COLUMN b INTEGER NOT NULL DEFAULT 0"]
+REQUEST POST .../d1/database/<uuid>/query body={"sql": <statements joined with ';\n'>}
+RESPONSE {
+ "http": 200,
+ "elapsed_s": 0.92,
+ "success": true,
+ "errors": [],
+ "results": [
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 0,
+   "duration": 0.1095,
+   "changed_db": false
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 1,
+   "duration": 0.204,
+   "changed_db": false
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 1,
+   "duration": 0.1189,
+   "changed_db": false
+  }
+ ]
+}
+  schema: [('table', 'child'), ('table', 'parent')]
+  child: rows=[{'id': 1, 'parent_id': 1}] cols=['id', 'parent_id']
+  parent: rows=[{'id': 1, 'name': 'p1', 'a': None, 'b': 0}] cols=['id', 'name', 'a', 'b']
+  foreign_key_check: []
+## add column with REFERENCES (nullable)
+STATEMENTS ["PRAGMA defer_foreign_keys = on", "ALTER TABLE child ADD COLUMN other_parent INTEGER REFERENCES parent(id)"]
+REQUEST POST .../d1/database/<uuid>/query body={"sql": <statements joined with ';\n'>}
+RESPONSE {
+ "http": 200,
+ "elapsed_s": 0.48,
+ "success": true,
+ "errors": [],
+ "results": [
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 0,
+   "duration": 0.1602,
+   "changed_db": false
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 1,
+   "duration": 0.1968,
+   "changed_db": false
+  }
+ ]
+}
+  schema: [('table', 'child'), ('table', 'parent')]
+  child: rows=[{'id': 1, 'parent_id': 1, 'other_parent': None}] cols=['id', 'parent_id', 'other_parent']
+  parent: rows=[{'id': 1, 'name': 'p1'}] cols=['id', 'name']
+  foreign_key_check: []
+## drop column of referenced table
+STATEMENTS ["PRAGMA defer_foreign_keys = on", "ALTER TABLE parent ADD COLUMN gone TEXT", "ALTER TABLE parent DROP COLUMN gone"]
+REQUEST POST .../d1/database/<uuid>/query body={"sql": <statements joined with ';\n'>}
+RESPONSE {
+ "http": 200,
+ "elapsed_s": 0.45,
+ "success": true,
+ "errors": [],
+ "results": [
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 0,
+   "duration": 0.1352,
+   "changed_db": false
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 1,
+   "duration": 0.3593,
+   "changed_db": false
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 5,
+   "duration": 0.7685,
+   "changed_db": false
+  }
+ ]
+}
+  schema: [('table', 'child'), ('table', 'parent')]
+  child: rows=[{'id': 1, 'parent_id': 1}] cols=['id', 'parent_id']
+  parent: rows=[{'id': 1, 'name': 'p1'}] cols=['id', 'name']
+  foreign_key_check: []
+## add + drop index, unique index
+STATEMENTS ["PRAGMA defer_foreign_keys = on", "CREATE UNIQUE INDEX parent_name_uq ON parent (name)", "CREATE INDEX child_parent_idx ON child (parent_id)", "DROP INDEX parent_name_uq"]
+REQUEST POST .../d1/database/<uuid>/query body={"sql": <statements joined with ';\n'>}
+RESPONSE {
+ "http": 200,
+ "elapsed_s": 0.54,
+ "success": true,
+ "errors": [],
+ "results": [
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 0,
+   "duration": 0.1031,
+   "changed_db": false
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 2,
+   "duration": 0.1131,
+   "changed_db": true
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 2,
+   "duration": 0.1734,
+   "changed_db": true
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 1,
+   "duration": 0.1064,
+   "changed_db": true
+  }
+ ]
+}
+  schema: [('table', 'child'), ('index', 'child_parent_idx'), ('table', 'parent')]
+  child: rows=[{'id': 1, 'parent_id': 1}] cols=['id', 'parent_id']
+  parent: rows=[{'id': 1, 'name': 'p1'}] cols=['id', 'name']
+  foreign_key_check: []
+## drop parent then child (wrong order) in one request
+STATEMENTS ["PRAGMA defer_foreign_keys = on", "DROP TABLE parent", "DROP TABLE child"]
+REQUEST POST .../d1/database/<uuid>/query body={"sql": <statements joined with ';\n'>}
+RESPONSE {
+ "http": 200,
+ "elapsed_s": 0.43,
+ "success": true,
+ "errors": [],
+ "results": [
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 0,
+   "duration": 0.1287,
+   "changed_db": false
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 1,
+   "rows_written": 2,
+   "duration": 0.2013,
+   "changed_db": true
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 1,
+   "rows_written": 1,
+   "duration": 0.1074,
+   "changed_db": true
+  }
+ ]
+}
+  schema: []
+  foreign_key_check: []
+## drop child then parent
+STATEMENTS ["PRAGMA defer_foreign_keys = on", "DROP TABLE child", "DROP TABLE parent"]
+REQUEST POST .../d1/database/<uuid>/query body={"sql": <statements joined with ';\n'>}
+RESPONSE {
+ "http": 200,
+ "elapsed_s": 0.44,
+ "success": true,
+ "errors": [],
+ "results": [
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 0,
+   "duration": 0.1094,
+   "changed_db": false
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 0,
+   "duration": 0.1404,
+   "changed_db": true
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 0,
+   "duration": 0.9821,
+   "changed_db": true
+  }
+ ]
+}
+  schema: []
+  foreign_key_check: []
+## drop referenced parent only (child rows remain) -> must fail
+STATEMENTS ["PRAGMA defer_foreign_keys = on", "DROP TABLE parent"]
+REQUEST POST .../d1/database/<uuid>/query body={"sql": <statements joined with ';\n'>}
+RESPONSE {
+ "http": 400,
+ "elapsed_s": 0.44,
+ "success": false,
+ "errors": [
+  {
+   "code": 7500,
+   "message": "D1 DB was reset and rolled back to its last known good state because the application left the database in a state where constraints were violated: FOREIGN KEY constraint failed: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_FOREIGNKEY)"
+  }
+ ],
+ "results": []
+}
+  schema: [('table', 'child'), ('table', 'parent')]
+  child: rows=[{'id': 1, 'parent_id': 1}] cols=['id', 'parent_id']
+  parent: rows=[{'id': 1, 'name': 'p1'}] cols=['id', 'name']
+  foreign_key_check: []
+## rebuild of the referencing table (child)
+STATEMENTS ["PRAGMA defer_foreign_keys = on", "CREATE TABLE __new_child (id INTEGER PRIMARY KEY, parent_id INTEGER NOT NULL REFERENCES parent(id), n TEXT)", "INSERT INTO __new_child (id, parent_id) SELECT id, parent_id FROM child", "DROP TABLE child", "ALTER TABLE __new_child RENAME TO child"]
+REQUEST POST .../d1/database/<uuid>/query body={"sql": <statements joined with ';\n'>}
+RESPONSE {
+ "http": 200,
+ "elapsed_s": 0.41,
+ "success": true,
+ "errors": [],
+ "results": [
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 0,
+   "duration": 0.119,
+   "changed_db": false
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 2,
+   "duration": 0.1573,
+   "changed_db": true
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 1,
+   "rows_written": 1,
+   "duration": 0.1382,
+   "changed_db": true
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 1,
+   "duration": 0.1557,
+   "changed_db": true
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 4,
+   "duration": 0.381,
+   "changed_db": false
+  }
+ ]
+}
+  schema: [('table', 'child'), ('table', 'parent')]
+  child: rows=[{'id': 1, 'parent_id': 1, 'n': None}] cols=['id', 'parent_id', 'n']
+  parent: rows=[{'id': 1, 'name': 'p1'}] cols=['id', 'name']
+  foreign_key_check: []
+## rebuild of referenced table + delete/reinsert children (workaround probe)
+STATEMENTS ["PRAGMA defer_foreign_keys = on", "CREATE TABLE __tmp_child AS SELECT * FROM child", "DELETE FROM child", "CREATE TABLE __new_parent (id INTEGER PRIMARY KEY, name TEXT NOT NULL, note TEXT)", "INSERT INTO __new_parent (id, name) SELECT id, name FROM parent", "DROP TABLE parent", "ALTER TABLE __new_parent RENAME TO parent", "INSERT INTO child SELECT * FROM __tmp_child", "DROP TABLE __tmp_child"]
+REQUEST POST .../d1/database/<uuid>/query body={"sql": <statements joined with ';\n'>}
+RESPONSE {
+ "http": 200,
+ "elapsed_s": 1.33,
+ "success": true,
+ "errors": [],
+ "results": [
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 0,
+   "duration": 0.2824,
+   "changed_db": false
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 3,
+   "duration": 1.3077,
+   "changed_db": true
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 1,
+   "rows_written": 1,
+   "duration": 0.2853,
+   "changed_db": true
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 2,
+   "duration": 0.3474,
+   "changed_db": true
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 1,
+   "rows_written": 1,
+   "duration": 0.1974,
+   "changed_db": true
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 1,
+   "rows_written": 2,
+   "duration": 1.2903,
+   "changed_db": true
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 5,
+   "duration": 0.8654,
+   "changed_db": false
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 1,
+   "rows_written": 1,
+   "duration": 0.228,
+   "changed_db": true
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 0,
+   "duration": 0.1192,
+   "changed_db": true
+  }
+ ]
+}
+  schema: [('table', 'child'), ('table', 'parent')]
+  child: rows=[{'id': 1, 'parent_id': 1}] cols=['id', 'parent_id']
+  parent: rows=[{'id': 1, 'name': 'p1', 'note': None}] cols=['id', 'name', 'note']
+  foreign_key_check: []
