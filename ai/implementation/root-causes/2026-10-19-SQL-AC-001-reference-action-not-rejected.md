@@ -109,3 +109,32 @@ export function ref(target: () => Column<string, false>): ColumnBuilder<string> 
 5. Rerun the repro script: every "defineTable(children, ref(target, …))" line must report "threw: ref() takes only its target column…", plain `ref(target)` unchanged.
 
 All local; no Cloudflare calls; no test data beyond the in-memory table definitions.
+
+## Review
+
+Reviewer: independent root-cause reviewer (prompt §8 step 2; did not diagnose this failure or write the code or the tests). No code or test changed.
+
+**Verdict: ACCEPTED.**
+
+### Reproduction (branch `claude/implement-local-cloudflare-rc-sql001-review`, base `476fcab`, after `npm ci`)
+- `npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/sql/sql.postgres.test.ts packages/framework/test/integration/sql/sql.sqlite.test.ts -t "unsupported features"` → `Tests 2 failed | 90 skipped`, both `AssertionError: reference action other than fail-while-referenced must be rejected: expected false to be true` at `schema-rules.suite.ts:106:7`. Matches the symptom exactly.
+- The record's repro script (`PROTOTYPE_FRAMEWORK_DIALECT=sqlite npx tsx …/scratchpad/repro/ref-action.mts`) gives the recorded output: `ref.length 1`; all three action forms "no throw" in `defineTable` and `defineApp`; FK actions identical to plain `ref(target)`; both controls throw. (Note: the script imports from the diagnosing worktree `agent-aeb1b386be949a039`; the integration test rerun above independently confirms the result on this branch.)
+
+### Links checked
+1. `ref()` ignores extra arguments: confirmed by reading `packages/framework/src/sql/columns.ts:77-79` (the builder spec holds only `kind`, flags and `target`; no field could carry an action) and by `ref.length 1`. `grep -rn onDelete packages/framework/src` finds no app-input read.
+2. Same builder → no throw: `table.ts` only inspects `spec.target` for refs (`resolveRef`, lines 319-325), so nothing downstream could detect the dropped argument. Confirmed by the repro's identical FK output.
+3. `expectSchemaRejected` → assertion message: confirmed by reading the suite (lines 22-33, 106-110).
+4. Dialect-independent: `columns.ts` has no dialect branch; both dialect tests fail identically.
+
+### Alternatives
+The ruled-out list is complete and each item is backed by evidence (controls through the same `{ tables }` / `defineApp` path, stack line, both dialects, synchronous code, introspected FK actions, typecheck passing). I found no further plausible cause: `grep` finds no framework or app code calling `ref` with a second argument, and no `.map(ref)`-style call that would pass one implicitly.
+
+### Code or test
+Agree the code is wrong. SQL-REQ-001 says reference actions other than "fail while referenced" are not supported; SQL-AC-001 says such schemas are rejected; DEC-0221 (accepted) explicitly says reference actions are forced through with a cast and must be rejected at run time, and lists only collations as untestable. The test follows DEC-0221 literally and is not weakened or wrong.
+
+### Fix: cause, not symptom; consistency with requirement and contract
+- **Addresses the cause** (the silent drop in `ref()`), not the test: any untyped caller asking for an action now fails at definition time instead of getting a different-from-intended schema.
+- **Is rejecting *any* extra argument the right rule?** Yes. `docs/contracts/ts/sql.d.ts:67` declares `ref(target: () => Column<string, false>)` with no second parameter, and sql.md §2.1 (line 55) lists only `ref(() => t.id)`. Neither the requirement nor the contract offers any way to state an action, not even the supported one: "fail while referenced" is the fixed, implicit behaviour (DEC-0132: Drizzle's default). So there is no permitted second argument to distinguish; accepting e.g. `{ onDelete: "restrict" }` would add surface the contract does not have. Throwing on `arguments.length > 1` (including an explicit `undefined`) matches the contract exactly and mirrors how `defineTable` rejects unknown table options instead of filtering them.
+- **Error code / timing**: `CORE.MISCONFIGURED` matches DEC-0132 and sql.md §2.2 "Schema checks"; the throw happens while the `defineTable` arguments are evaluated, which DEC-0221 counts as "rejected".
+- **Minor, non-blocking**: §2.2 says the schema-check error names "the table and the broken rule"; a throw inside `ref()` cannot name the table or key. This has an accepted precedent: `id().nullable()/.unique()/.default()` already throw from the builder (`idOption`, `columns.ts:27-32`), as DEC-0132 describes. The fixer may, optionally, instead record the extra argument in the spec and reject it in `defineTable` with table and key named; either form satisfies SQL-AC-001 and the suite. Not a reason to reject.
+- **Verification plan** is red-green per §8 step 3 (unit test first, then fix, then both integration tests, `npm run verify` keeping the `@ts-expect-error` needed, repro rerun). Adequate. Local only; no Cloudflare calls.
