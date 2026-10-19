@@ -1,0 +1,111 @@
+# E5 size limits (statement length, request size, statement count)
+## single statement, string literal 90000 bytes, statement length 90045
+{
+ "http": 200,
+ "elapsed_s": 0.58,
+ "success": true,
+ "errors": [],
+ "results": [
+  {
+   "success": true,
+   "rows": [],
+   "changes": 1,
+   "rows_written": 1,
+   "duration": 0.9232,
+   "changed_db": true
+  }
+ ]
+}
+## single statement, string literal 99000 bytes, statement length 99045
+{
+ "http": 200,
+ "elapsed_s": 0.63,
+ "success": true,
+ "errors": [],
+ "results": [
+  {
+   "success": true,
+   "rows": [],
+   "changes": 1,
+   "rows_written": 1,
+   "duration": 6.9638,
+   "changed_db": true
+  }
+ ]
+}
+## single statement, string literal 100000 bytes, statement length 100046
+{
+ "http": 400,
+ "elapsed_s": 0.52,
+ "success": false,
+ "errors": [
+  {
+   "code": 7500,
+   "message": "statement too long: SQLITE_TOOBIG"
+  }
+ ],
+ "results": []
+}
+## single statement, string literal 101000 bytes, statement length 101046
+{
+ "http": 400,
+ "elapsed_s": 0.79,
+ "success": false,
+ "errors": [
+  {
+   "code": 7500,
+   "message": "statement too long: SQLITE_TOOBIG"
+  }
+ ],
+ "results": []
+}
+## single statement, string literal 200000 bytes, statement length 200046
+{
+ "http": 400,
+ "elapsed_s": 0.51,
+ "success": false,
+ "errors": [
+  {
+   "code": 7500,
+   "message": "statement too long: SQLITE_TOOBIG"
+  }
+ ],
+ "results": []
+}
+## single statement, string literal 1100000 bytes, statement length 1100047
+{
+ "http": 400,
+ "elapsed_s": 0.61,
+ "success": false,
+ "errors": [
+  {
+   "code": 7500,
+   "message": "statement too long: SQLITE_TOOBIG"
+  }
+ ],
+ "results": []
+}
+## one request, 12 statements of ~90 kB, sql string 1080548 bytes
+{  "http": 200,  "elapsed_s": 0.67,  "success": true,  "errors": [],  "results": [   {    "success": true,    "rows": [],    "changes": 0,    "rows_written": 0,    "duration": 0.8401,    "changed_db": false   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.8989,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 4.4248,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.8701,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 1.653,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.8778,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 1.6522,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.8302,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.9267,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.9839,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 2.711,    "changed_db": true   },   {    "su
+  rows now: [{'n': 12}]
+## one request, 56 statements of ~90 kB, sql string 5042484 bytes
+{  "http": 200,  "elapsed_s": 1.65,  "success": true,  "errors": [],  "results": [   {    "success": true,    "rows": [],    "changes": 0,    "rows_written": 0,    "duration": 0.1946,    "changed_db": false   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.6939,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.5376,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.6074,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.5403,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.5618,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.5679,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.5578,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.5734,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.6082,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.604,    "changed_db": true   },   {    "s
+  rows now: [{'n': 56}]
+## one request, 112 statements of ~90 kB, sql string 10084960 bytes
+{  "http": 200,  "elapsed_s": 1.69,  "success": true,  "errors": [],  "results": [   {    "success": true,    "rows": [],    "changes": 0,    "rows_written": 0,    "duration": 0.1893,    "changed_db": false   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.6253,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.6193,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.5807,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.5022,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.5715,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.5766,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.5252,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.7173,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.5971,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.5118,    "changed_db": true   },   {    "
+  rows now: [{'n': 112}]
+## one request, 160 statements of ~90 kB, sql string 14407120 bytes
+{  "http": 200,  "elapsed_s": 1.97,  "success": true,  "errors": [],  "results": [   {    "success": true,    "rows": [],    "changes": 0,    "rows_written": 0,    "duration": 0.1521,    "changed_db": false   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.5965,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.6353,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.629,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.619,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.6432,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.8543,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.617,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.6092,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.6367,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.6289,    "changed_db": true   },   {    "suc
+  rows now: [{'n': 160}]
+## one request, 1000 small INSERT statements
+{  "http": 200,  "elapsed_s": 1.11,  "success": true,  "errors": [],  "results": [   {    "success": true,    "rows": [],    "changes": 0,    "rows_written": 0,    "duration": 0.127,    "changed_db": false   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.0746,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.0447,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.0417,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.0607,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,
+  rows now: [{'n': 1000}]
+## one request, 5000 small INSERT statements
+{  "http": 200,  "elapsed_s": 1.29,  "success": true,  "errors": [],  "results": [   {    "success": true,    "rows": [],    "changes": 0,    "rows_written": 0,    "duration": 0.5461,    "changed_db": false   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.1265,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.0618,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.1376,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.0484,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1
+  rows now: [{'n': 5000}]
+## one request, 20000 small INSERT statements
+{  "http": 200,  "elapsed_s": 3.1,  "success": true,  "errors": [],  "results": [   {    "success": true,    "rows": [],    "changes": 0,    "rows_written": 0,    "duration": 1.3731,    "changed_db": false   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.0686,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.048,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.0519,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.0362,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1, 
+  rows now: [{'n': 20000}]
+## batch-array form, 56 statements of ~90 kB
+{  "http": 200,  "elapsed_s": 1.09,  "success": true,  "errors": [],  "results": [   {    "success": true,    "rows": [],    "changes": 0,    "rows_written": 0,    "duration": 4.7368,    "changed_db": false   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 0.6899,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 3.649,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 6.6653,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 7.8332,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 8.8552,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 11.8358,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 7.5221,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 7.8803,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 7.9401,    "changed_db": true   },   {    "success": true,    "rows": [],    "changes": 1,    "rows_written": 1,    "duration": 6.1952,    "changed_db": true   },   {    "
+  rows now: [{'n': 56}]
