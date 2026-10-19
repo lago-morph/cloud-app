@@ -194,6 +194,17 @@ describe.each([
     expect(await h.db.select({ id: p.id }).from(p)).toHaveLength(65);
   });
 
+  it(tag("SQL-AC-006", "uniqueness and reference violations are SQL.CONFLICT"), async () => {
+    const p = T(parents);
+    const t = T(things);
+    const conflict = { name: "FrameworkError", code: "SQL.CONFLICT" };
+    await expect(h.db.insert(p).values({ id: uuid(50), name: "first" })).rejects.toMatchObject(conflict);
+    await expect(h.db.insert(p).values({ id: R1, name: "other" })).rejects.toMatchObject(conflict);
+    await expect(h.db.update(p).set({ name: "second" }).where(eq(p.id, R1))).rejects.toMatchObject(conflict);
+    await expect(h.db.insert(t).values({ id: uuid(51), parentId: uuid(999), name: "orphan" })).rejects.toMatchObject(conflict);
+    await expect(h.db.delete(p).where(eq(p.id, R1))).rejects.toMatchObject(conflict);
+  });
+
   describe("writes", () => {
     it(tag("SQL-AC-003", "insert, update and delete without returning resolve to undefined"), async () => {
       const t = T(things);
