@@ -403,7 +403,7 @@ Origin: ai-proposed · Status: accepted · Affects: SEC
 Secret locations follow a convention per target (SEC-REQ-003). Framework-internal secrets use the reserved `framework` prefix and are created by the CLI or provisioning.
 
 ### DEC-0065 — Migration mechanics
-Origin: ai-proposed · Status: accepted · Affects: MIG
+Origin: ai-proposed · Status: superseded by DEC-0076 · Affects: MIG
 
 The mechanics are:
 - paired drizzle-kit histories, one per dialect;
@@ -476,3 +476,26 @@ AWS allows 5 VPCs per region by default. One VPC per stage would cap the number 
 Origin: owner · Status: accepted · Affects: CFG, PROV, AWS, PAR-060
 
 The `framework.aws` section is removed from per-stage configuration. The shared log bucket and the shared database network exist per account and region (DEC-0066, DEC-0074), so every stage must use the account's region. `setup-account` chooses the region (default PAR-060) and records it, and deploys use that recorded value. This satisfies DEC-0045: the region stays configurable and is not hard-coded.
+
+### DEC-0076 — Schema changes replace the database, with downtime
+Origin: owner · Status: accepted · Supersedes: DEC-0065 · Affects: MIG, PROV, SQL, KV
+
+These apps have one or a few users, little data, low usage, and low consequences for downtime. A cloud deploy with pending migrations therefore:
+1. stops the app (deleting the Worker, or setting the Lambda's concurrency to zero);
+2. copies the database into a new one;
+3. applies the migrations to the copy;
+4. checks it;
+5. deletes the old database as soon as the check passes; no databases are left behind;
+6. deploys the new version against the new database.
+
+On failure the new database is deleted, the old one is left unchanged, and the app stays down until a deploy succeeds.
+
+This removes several earlier pieces:
+- atomic migration of a live database (MIG-OQ-1);
+- special handling of table rebuilds;
+- the schema-readiness check, together with `SQL.SCHEMA_NOT_READY` and PAR-211;
+- the migration lock.
+
+Local development keeps applying migrations in place.
+
+The owner's instruction for this area: keep it simple, and do not design for high volume, large data, many users, or critical availability.

@@ -88,9 +88,9 @@ Pass: the downloads are byte-identical to the originals. App browser code made r
 #### E2E-010 — Schema evolution with data
 Verifies: SYS-REQ-012
 
-Deploy demo version 1 and create posts with photos. Deploy version 2, which adds a column and an index and requires a SQLite table rebuild. Deploy version 2 again.
+Deploy demo version 1 and create posts with photos. Deploy version 2, which adds a column, changes a column's type, and adds an index. Deploy version 2 again.
 
-Pass: all data survives the first upgrade, and the second deploy applies nothing.
+Pass: all data survives the first upgrade, the stage is left with one database, and the second deploy applies nothing and causes no downtime.
 
 #### E2E-011 — Logs land in the shared bucket
 Verifies: SYS-REQ-007, SYS-REQ-021

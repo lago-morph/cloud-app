@@ -47,7 +47,7 @@ Each target's runtime bundle MUST exclude other targets' adapters, provisioning 
 
 ## 2. Design
 
-**Hono.** An app is a Hono application (DEC-0023). `defineApp` returns a definition, not a running app; each target runtime builds the Hono app, mounts `routes` under `/api`, and installs framework middleware in this order: request ID → error handler → deployment and services → current user → request forgery check → app routes. Schema readiness is checked lazily by SQL, not by middleware (MIG-REQ-005).
+**Hono.** An app is a Hono application (DEC-0023). `defineApp` returns a definition, not a running app; each target runtime builds the Hono app, mounts `routes` under `/api`, and installs framework middleware in this order: request ID → error handler → deployment and services → current user → request forgery check → app routes.
 
 **Services per request.** Each target exports a `createServices(env, deployment)` factory used by its runtime. Cheap, binding-backed objects are created per request on Cloudflare and locally. On AWS, SDK clients are created once per cold start and reused, but nothing request-specific is cached across requests.
 

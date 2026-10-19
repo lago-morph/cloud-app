@@ -2,7 +2,7 @@
 
 Tunable values used by the framework — limits, sizes, timeouts, defaults, and dependency version pins — are recorded here and nowhere else. Design documents and contracts refer to values by `PAR-…` ID. A value is added only when a component design or contract actually uses it; spec-level requirements and decisions do not reference concrete values (DEC-0057).
 
-IDs are never reused. IDs 010–013, 020–022, 030–033, 040, 050–053, 061–066, and 080 belonged to entries removed by DEC-0057 and stay retired.
+IDs are never reused. IDs 010–013, 020–022, 030–033, 040, 050–053, 061–066, and 080 belonged to entries removed by DEC-0057, and 211 to an entry removed by DEC-0076; all stay retired.
 
 Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 
@@ -28,8 +28,7 @@ Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 
 | ID | Parameter | Value | Category | Notes |
 | --- | --- | --- | --- | --- |
-| PAR-210 | Time budget for reaching the database, including resume from pause | 45 seconds | ai-proposed | SQL-REQ-006, MIG deploy wait. Must be below PAR-270. |
-| PAR-211 | Minimum interval between schema-readiness re-checks | 5 seconds | ai-proposed | MIG-REQ-005. |
+| PAR-210 | Time budget for reaching the database, including resume from pause | 45 seconds | ai-proposed | SQL-REQ-006 and the deploy-time wait. Must be below PAR-270. |
 | PAR-212 | Aurora capacity range | 0 to 4 ACU | ai-proposed | 0 lets the database pause when idle. |
 | PAR-213 | Aurora auto-pause delay | 5 minutes | ai-proposed | Platform minimum is 300 seconds. |
 | PAR-214 | Data API maximum response size | 1 MiB | platform | RDS Data API quotas. |

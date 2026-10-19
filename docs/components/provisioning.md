@@ -1,6 +1,6 @@
 # PROV — Provisioning
 
-Creates, updates, and removes each stage's cloud resources from a target-neutral declaration. Runs deployments end to end: checks first, then infrastructure, secrets wiring, migrations, and readiness. Also performs the one-time account setup for the shared log bucket.
+Creates, updates, and removes each stage's cloud resources from a target-neutral declaration. Runs deployments end to end: checks first, then infrastructure, secrets wiring, migrations, and a health check. Also performs the one-time account setup for the shared resources.
 
 Contracts: [stage-config.schema.json](../contracts/schemas/stage-config.schema.json). Commands are listed in CLI.
 
@@ -18,8 +18,8 @@ Origin: provenance-unclear · Derives from: SYS-REQ-012, SYS-REQ-023
 1. Check that credentials are present and usable, without printing them; that the configuration is valid; and that required secrets are set. Report every missing prerequisite by name.
 2. Create or update the infrastructure.
 3. Wire the resolved configuration and secret locations.
-4. Apply migrations (MIG).
-5. Confirm that the deployment answers a readiness request.
+4. Apply migrations (MIG); with pending migrations on a cloud target, this stops the app and replaces its database (MIG-REQ-006).
+5. Confirm that the deployment answers a health request.
 
 #### PROV-REQ-003 — Removal
 Origin: provenance-unclear · Derives from: SYS-REQ-024
@@ -62,7 +62,7 @@ CFG, SEC, MIG, LOG, CF, AWS, CLI.
 | ID | Criterion | Verifies | Where |
 | --- | --- | --- | --- |
 | PROV-AC-001 | The template app deploys to both clouds with no files other than its app definition, code, and configuration values. | PROV-REQ-001 | Cloud |
-| PROV-AC-002 | With one credential removed, deploy names it and stops before creating anything. A failing migration stops the deploy with failure status. A clean deploy passes the readiness request. | PROV-REQ-002 | Cloud |
+| PROV-AC-002 | With one credential removed, deploy names it and stops before creating anything. A failing migration stops the deploy with failure status. A clean deploy passes the health request. | PROV-REQ-002 | Cloud |
 | PROV-AC-003 | Removing one of two stages leaves the other stage and the shared resources intact, and leaves no resource, secret, or parameter of the removed stage except its log entries. | PROV-REQ-003 | Cloud |
 | PROV-AC-004 | Running `setup-account` twice changes nothing the second time. Deploying without it fails with a clear message. | PROV-REQ-004 | Cloud |
 | PROV-AC-005 | Re-deploying a production stage with `--test` is refused. | PROV-REQ-005 | Cloud |

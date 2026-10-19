@@ -34,7 +34,6 @@ export declare const ERROR_CATALOGUE: {
   readonly "SQL.CONFLICT":             { component: "SQL";   status: 409; retryable: false; meaning: "A uniqueness or reference constraint was violated." };
   readonly "SQL.INVALID_VALUE":        { component: "SQL";   status: 400; retryable: false; meaning: "A value does not satisfy its portable column type." };
   readonly "SQL.UNAVAILABLE":          { component: "SQL";   status: 503; retryable: true;  meaning: "The database could not be reached in time." };
-  readonly "SQL.SCHEMA_NOT_READY":     { component: "SQL";   status: 503; retryable: true;  meaning: "The database schema is older than this build expects." };
   readonly "SQL.RESULT_TOO_LARGE":     { component: "SQL";   status: 500; retryable: false; meaning: "A query result exceeds the portable result size limit; paginate." };
 
   // KV

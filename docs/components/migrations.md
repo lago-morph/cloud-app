@@ -1,80 +1,79 @@
 # MIG — Migrations
 
-Applies schema changes to deployed apps while preserving their data: versioned, ordered migrations recorded in a ledger, applied on deployment and when local development starts.
+Applies schema changes to deployed apps while preserving their data. Migrations are versioned and ordered, and each database records which ones it has. On the cloud, a deploy that changes the schema takes the app offline, builds a new migrated copy of the database, checks it, deletes the old database, and deploys the new version. Downtime during such deploys is accepted (DEC-0076).
 
 Contracts: none app-facing. Migrations are generated files in the app repository. The migration checker's rules are part of CHECK.
 
 ## 1. Requirements
 
-#### MIG-REQ-001 — Generated, paired, immutable migrations
+#### MIG-REQ-001 — Generated, paired, unedited migrations
 Origin: provenance-unclear · Derives from: SYS-REQ-011, SYS-REQ-012
 
-Each schema change MUST be captured as a migration generated from the app's table definitions, once per SQL dialect, and committed to the repository. Migration files MUST NOT be edited by hand. A migration that has been applied anywhere MUST NOT change; a checksum enforces this.
+Each schema change MUST be captured as a migration generated from the app's table definitions, once per SQL dialect, and committed to the repository. Migration files MUST NOT be edited by hand once generated.
 
-#### MIG-REQ-002 — Ordered, recorded, repeatable application
+#### MIG-REQ-002 — Recorded migrations
 Origin: provenance-unclear · Derives from: SYS-REQ-012
 
-Deployment, and the start of local development, MUST apply pending migrations in order: framework migrations first, then app migrations. Each migration MUST apply atomically, and its application MUST be recorded in a ledger in the same database. Running again with nothing pending MUST change nothing. Deployment MUST refuse to proceed if an applied migration's recorded checksum differs from the committed file.
+Each database MUST record which migrations it has, framework migrations first, then app migrations, in order. A deploy with no pending migrations MUST change no data and cause no downtime.
 
 #### MIG-REQ-003 — Data preserved
-Origin: provenance-unclear · Derives from: SYS-REQ-012
+Origin: owner · Derives from: SYS-REQ-012
 
-Applying migrations MUST preserve existing data, except data a migration explicitly drops (a dropped table or column). A change that cannot be applied safely MUST be rejected before anything is applied. Dropping and recreating data MUST NOT be used as a substitute for a migration mechanism that fails.
+A schema-changing deploy MUST preserve all existing data, except data a migration explicitly drops (a dropped table or column). If any migration or check fails, the deploy MUST stop with an error and leave the existing database unchanged; the app stays stopped until a deploy succeeds.
 
-#### MIG-REQ-004 — One run at a time
-Origin: provenance-unclear · Derives from: SYS-REQ-012
+#### MIG-REQ-006 — Copy, migrate, check, replace
+Origin: owner · Derives from: SYS-REQ-007, SYS-REQ-012
 
-At most one migration run MAY be active per stage database; a second run MUST fail without applying anything.
+On cloud targets, a deploy with pending migrations MUST:
+1. stop the running app;
+2. copy the current database into a new one;
+3. apply the pending migrations to the new database;
+4. check it;
+5. delete the old database as soon as the check passes;
+6. deploy the new version using the new database.
 
-#### MIG-REQ-005 — Schema readiness
-Origin: owner-approved · Derives from: SYS-REQ-012
-
-A deployment whose database has not yet reached the schema its build expects MUST fail SQL operations with `SQL.SCHEMA_NOT_READY` instead of running them against the older schema. Requests that do not use the database MUST NOT be affected.
+The app is unavailable while this happens. After a successful deploy, no database other than the current one remains for the stage.
 
 ## 2. Design
 
-**Generation.** drizzle-kit (PAR-103) generates two histories, `migrations/sqlite/` and `migrations/postgres/`, from the same table definitions. `generate-migration` also appends each new file's checksum to a committed manifest, `migrations/checksums.json`. The checker fails when a file no longer matches its manifest entry, which catches edits offline (CHECK-REQ-004). Framework tables (`__framework_kv`, `__framework_migrations`) have their own pair of histories shipped in the package. The migration checker (CHECK) verifies three things:
-- Applying either history yields the same logical schema: tables, columns, types, nullability, defaults, indexes, uniqueness, and references.
-- Only portable changes are used.
-- Checksums of applied migrations are unchanged.
+**Generation.** drizzle-kit (PAR-103) generates two histories, `migrations/sqlite/` and `migrations/postgres/`, from the same table definitions. Framework tables (`__framework_kv`, `__framework_migrations`) have their own pair of histories shipped in the package. `generate-migration` records each new file's checksum in a committed `migrations/checksums.json`. The checker (CHECK) uses it to catch edited files offline, and verifies that both histories yield the same logical schema.
 
-**Supported changes.** Creating and dropping tables, adding columns (nullable or with a default), dropping columns, and creating and dropping indexes and unique constraints. Changes SQLite can only make by rebuilding a table are allowed in the generated rebuild pattern only. The rebuild runs as one atomic unit, and row counts and reference integrity are checked before commit. Because references never cascade (SQL-REQ-001), a rebuild cannot silently delete referencing rows (DEC-0050). D1 always enforces references and ignores `PRAGMA foreign_keys=OFF`, so rebuilds use `PRAGMA defer_foreign_keys = on` inside the atomic unit instead; verify early (DEC-0050).
+**Record.** `__framework_migrations(id, dialect, checksum, applied_at)` in each database.
 
-**Ledger.** `__framework_migrations(id, dialect, checksum, applied_at)`. A lock row in the same table serializes runs. A lock left behind by a crashed run is cleared only by an explicit CLI option, after the operator has confirmed no run is active.
+**Schema-changing cloud deploy** (PROV runs these as one step):
+1. **Stop the app.** On Cloudflare, delete the stage's Worker. On AWS, set the HTTP Lambda's concurrency to zero.
+2. **Copy.** Create a new database: a new D1 database on Cloudflare, or a new database inside the stage's existing Aurora cluster on AWS. Copy every table into it page by page, parent tables before the tables that reference them.
+3. **Migrate.** Apply the pending migrations to the new database. Nothing is live, so statements need not be atomic. On failure, delete the new database and stop.
+4. **Check.** Every table that was not explicitly dropped has the same row count as before, references are intact, and the record lists every migration. On failure, delete the new database and stop.
+5. **Delete** the old database.
+6. **Deploy** the new version, bound to the new database (PROV), which restarts the app.
 
-**Readiness.** The build embeds the ID of the latest migration. Each runtime instance reads the ledger lazily, at its first SQL use, so requests that never touch the database (for example `/api/auth/me`) neither wait for nor wake a paused database. If the database is behind, the instance answers `SQL.SCHEMA_NOT_READY` and re-checks at most every PAR-211.
+Databases are named `<app>-<stage>-db-<n>`, where `<n>` increases with each schema-changing deploy; the resolved configuration names the current one (CFG). Deploys are run by the owner from one place; the provisioning tool's own state locking prevents overlapping runs.
 
 ### Local
-`dev` and `createTestApp` apply both histories to their local databases: local D1, and PGlite when the Postgres dialect is selected.
+`dev` and `createTestApp` apply pending migrations in place: D1's batch call is atomic, and local data is disposable.
 
 ### Cloudflare
-Migrations must run atomically against the remote D1 database. The pinned drizzle-kit's remote D1 path sends one statement per HTTP call, which loses atomicity for rebuilds (DEC-0050); it is not used. Two candidate mechanisms exist:
-- the D1 HTTP API's batch execution, if it proves atomic for a whole migration;
-- otherwise, a framework-internal migration route in the deployed Worker that applies the migration through the D1 binding's batch interface. Only the deploy process can call this route, authenticated with a per-deploy secret.
-
-Which one is used is decided by testing early (open question MIG-OQ-1).
+Copying and migrating use the D1 HTTP API from the CLI.
 
 ### AWS
-Each migration runs inside one Data API transaction. Deployment waits for the database to resume (PAR-210) before starting.
+Copying and migrating use the Data API from the CLI. Deployment first waits for the cluster to resume (PAR-210).
 
 ## 3. Uses
 
-SQL (dialects, Drizzle tables), PROV and CLI (invocation during deploy and dev), SEC (per-deploy migration credential on Cloudflare), LOG.
+SQL (dialects, table definitions), PROV and CLI (invocation during deploy and dev), CFG (current database name), LOG.
 
 ## 4. Acceptance criteria
 
 | ID | Criterion | Verifies | Where |
 | --- | --- | --- | --- |
-| MIG-AC-001 | Generating from a changed schema produces one new migration per dialect; editing an applied migration makes the checker fail. | MIG-REQ-001 | Local |
-| MIG-AC-002 | Initial deployment creates the schema; a second deployment with no changes applies nothing; the ledger lists every migration once. | MIG-REQ-002 | Local, cloud |
-| MIG-AC-003 | With parent and child rows present, an incremental migration (including a SQLite table rebuild) preserves every row and reference. A deliberately failing migration leaves the schema and data unchanged. | MIG-REQ-003 | Local, cloud |
-| MIG-AC-004 | Two concurrent runs against one stage: exactly one applies, and the other fails without changes. | MIG-REQ-004 | Local, cloud |
-| MIG-AC-005 | With the database one migration behind the build, an SQL route returns 503 `SQL.SCHEMA_NOT_READY` and `/api/auth/me` still succeeds; after migration, the SQL route succeeds without a redeploy. | MIG-REQ-005 | Local, cloud |
+| MIG-AC-001 | Generating from a changed schema produces one new migration per dialect; editing a generated migration makes the checker fail. | MIG-REQ-001 | Local |
+| MIG-AC-002 | Initial deployment creates the schema. A second deployment with no changes neither changes data nor stops the app. The record lists every migration once. | MIG-REQ-002 | Local, cloud |
+| MIG-AC-003 | With parent and child rows present, a schema change that adds, drops, and changes columns preserves every row and reference not explicitly dropped. A deliberately failing migration stops the deploy, leaves the existing database unchanged and no new database behind, and a re-run after fixing the migration succeeds. | MIG-REQ-003 | Local, cloud |
+| MIG-AC-006 | After a successful schema-changing deploy, the stage has exactly one database, and requests made during the deploy failed rather than writing to the old database. | MIG-REQ-006 | Cloud |
 
-## 5. Open questions
+## 5. Portability note
 
-- **MIG-OQ-1:** Which atomic remote mechanism to use on Cloudflare (see Cloudflare section). Resolve by testing the D1 HTTP batch API first.
+Migrations are plain SQL per dialect plus a record table. A new target needs only a way to create a database, copy rows, and run SQL from the CLI.
 
-## 6. Portability note
-
-Migrations are plain SQL per dialect plus a ledger table. A new target with a supported dialect needs only a runner that can apply one migration atomically.
+Retired IDs: MIG-REQ-004, MIG-REQ-005, MIG-AC-004, MIG-AC-005, MIG-OQ-1 (DEC-0076).
