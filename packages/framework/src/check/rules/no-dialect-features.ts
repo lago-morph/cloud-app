@@ -55,7 +55,9 @@ function shortText(text: string): string {
 export const noDialectFeatures = createRule("Only the portable query subset", (context) =>
   mergeListeners(
     forEachValueReference(context, (node, resolved) => {
-      if (resolved.origin !== "drizzle" || !resolved.topLevel) return;
+      // Drizzle's SQL expressions and functions (`drizzle-orm/sql/…`); dialect modules
+      // (`pgTable`, `drizzle`, …) are allowed-imports' and reported once, at the import.
+      if (resolved.origin !== "drizzle" || !resolved.topLevel || !resolved.fileName.includes("/drizzle-orm/sql/")) return;
       if (SUPPORTED_DRIZZLE_EXPORTS.has(resolved.name) || RAW_SQL_EXPORTS.has(resolved.name) || OTHER_RULES.has(resolved.name)) return;
       report(context, node, `${drizzleName(node, resolved.name)}: ${HINT}.`);
     }),

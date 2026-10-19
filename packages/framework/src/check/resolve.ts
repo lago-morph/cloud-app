@@ -42,6 +42,8 @@ export interface Resolved {
   /** Declared at module level (not a member of a class, interface or namespace). */
   readonly topLevel: boolean;
   readonly declaration: ts.Declaration;
+  /** The declaring file, `/`-separated. */
+  readonly fileName: string;
 }
 
 function isTopLevel(decl: ts.Node): boolean {
@@ -95,6 +97,7 @@ export function describeSymbol(info: TypeInfo, symbol: ts.Symbol): Resolved | un
     name: target.name,
     topLevel: isTopLevel(declaration),
     declaration,
+    fileName: declaration.getSourceFile().fileName.split("\\").join("/"),
   };
 }
 
@@ -147,7 +150,8 @@ export function forEachValueReference(
         scopes.push(...scope.childScopes);
         for (const ref of scope.references) {
           const id = ref.identifier;
-          if (!ref.isValueReference || seen.has(id) || id.type !== "Identifier" || inTypeContext(id)) continue;
+          // Only reads: a declaration's own write (`const get = …`) is not a use.
+          if (!ref.isValueReference || !ref.isRead() || seen.has(id) || id.type !== "Identifier" || inTypeContext(id)) continue;
           seen.add(id);
           visit(id);
         }

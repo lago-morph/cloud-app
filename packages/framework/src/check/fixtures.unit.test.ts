@@ -58,6 +58,21 @@ describe("B-T4 failing fixtures (apps/base + check/fail)", () => {
     });
   }
 
+  it("[CHECK-AC-001] a dialect-module import is reported by allowed-imports only, not again per imported name", () => {
+    expect(forFile(diagnostics, "src/server/fail/ai-drizzle-d1.ts").map((d) => d.rule)).toEqual(["prototype-framework/allowed-imports"]);
+    expect(forFile(diagnostics, "src/server/fail/ai-drizzle-pg-core.ts").map((d) => d.rule)).toEqual(["prototype-framework/allowed-imports"]);
+  });
+
+  it("[CHECK-AC-001] an aliased fetch is reported where it is read, not where the alias is declared", () => {
+    expect(forFile(diagnostics, "src/client/fail/ba-fetch-alias.ts").map((d) => d.line)).toEqual([1, 3]);
+  });
+
+  it("[CHECK-AC-002] a @ts-ignore diagnostic does not recommend another suppression comment", () => {
+    const found = forFile(diagnostics, "src/server/fail/te-ts-ignore.ts");
+    expect(found.length).toBeGreaterThan(0);
+    for (const d of found) expect(d.message).not.toMatch(/instead of "@ts-ignore"|use "@ts-expect-error"/i);
+  });
+
   it("[CHECK-AC-001] the helper modules next to the failing fixtures get no diagnostic", () => {
     expect(forFile(diagnostics, "src/server/fail/tables.ts")).toEqual([]);
     expect(forFile(diagnostics, "src/shared/schemas.ts")).toEqual([]);

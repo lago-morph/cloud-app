@@ -13,13 +13,13 @@ export const APP_FILES = ["src/**/*.{ts,tsx,mts,cts}", "tests/**/*.{ts,tsx,mts,c
 
 /**
  * CHECK-REQ-002 type-escape bans, from typescript-eslint (PAR-111): `any`, every type assertion
- * except `as const` (`satisfies` is not an assertion), non-null assertions, and `@ts-…` comments.
+ * except `as const` (`satisfies` is not an assertion), and non-null assertions. Suppression
+ * comments (`@ts-…`, `eslint-disable…`) are the framework's `no-suppression-comments`.
  */
 const TYPE_ESCAPE_RULES: Linter.RulesRecord = {
   "@typescript-eslint/no-explicit-any": ["error", { fixToUnknown: false, ignoreRestArgs: false }],
   "@typescript-eslint/consistent-type-assertions": ["error", { assertionStyle: "never" }],
   "@typescript-eslint/no-non-null-assertion": "error",
-  "@typescript-eslint/ban-ts-comment": ["error", { "ts-check": false, "ts-expect-error": true, "ts-ignore": true, "ts-nocheck": true }],
 };
 
 /** Every rule of the shipped configuration with its setting. All are errors. */
