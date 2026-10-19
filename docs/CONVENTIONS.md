@@ -54,7 +54,7 @@ Every requirement, decision, and parameter carries an **origin**:
 
 ## 5. Parameter categories
 
-Parameters (limits, timeouts, sizes, defaults, version pins) live in [parameters/parameters.md](parameters/parameters.md), never inline in design text. Design text refers to them by ID. Each parameter has one category:
+Parameters (limits, timeouts, sizes, defaults, version pins) live in [parameters/parameters.md](parameters/parameters.md), never inline in design text. Design text refers to them by ID. A parameter is added only when a component design or contract actually uses it. Spec-level requirements and decisions do not reference concrete parameter values; concrete values come from component designs (DEC-0057). Each parameter has one category:
 
 | Category | Meaning | Change policy |
 | --- | --- | --- |

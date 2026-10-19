@@ -40,7 +40,7 @@ Target apps are not complex, low-volume, low-criticality, with no need to scale 
 The earlier spec's specific throughput figures are not adopted; the owner's qualitative statement replaces them.
 
 ### DEC-0006 — Browser calls only the app's own API
-Origin: owner · Status: accepted · Affects: SYS-REQ-008, SYS-REQ-014
+Origin: owner · Status: accepted, amended by DEC-0058 · Affects: SYS-REQ-008, SYS-REQ-014
 
 The browser client calls services in the app's API; those services make any further calls. Cloud credentials stay in the services. "If we ever have to deal with CORS, we are doing it wrong."
 
@@ -164,7 +164,7 @@ Origin: owner-approved · Status: accepted · Affects: SYS-REQ-017
 Anonymous, user, admin. A simplification so the first implementation is not bogged down by features that may never be needed.
 
 ### DEC-0028 — Stateless sessions without revocation
-Origin: owner-approved · Status: accepted · Affects: AUTH, PAR-050
+Origin: owner-approved · Status: accepted · Affects: AUTH
 
 A simplification for the first implementation. A copied valid session remains usable until it expires, even after logout.
 
@@ -210,16 +210,16 @@ The earlier spec defined four deliverables: framework package, compliance suite,
 ## Design decisions
 
 ### DEC-0036 — SST as the provisioning tool
-Origin: ai-proposed · Status: accepted · Affects: PROV
+Origin: owner-approved · Status: accepted · Affects: PROV
 
-The owner does not mind which tool is used (DEC-0019).
+The owner chose not to decide which tool is used (DEC-0019) and accepted the AI recommendation.
 
 Context (provenance-unclear, earlier spec): Terraform was considered viable; SST was chosen because one TypeScript template covers both providers. The earlier spec noted a risk that SST development had slowed, with raw Pulumi as the fallback.
 
 ### DEC-0037 — Aurora Serverless v2 PostgreSQL via the Data API on AWS
-Origin: ai-proposed · Status: accepted · Affects: SQL, AWS
+Origin: owner-approved · Status: accepted · Affects: SQL, AWS
 
-Chosen to meet the owner's requirements: Lambdas stay outside a VPC, so no NAT gateway is needed, and idle compute can pause (PAR-061 to PAR-064).
+The owner chose not to decide which databases are used (DEC-0009) and accepted the AI recommendation, which was made to meet the owner's requirements: Lambdas stay outside a VPC, so no NAT gateway is needed, and idle compute can pause. Concrete settings come from the SQL and AWS component designs.
 
 Context (provenance-unclear, earlier spec): rejected alternatives were Aurora DSQL (migration tooling conflicts with its one-DDL-per-transaction rule), plain RDS (needs VPC Lambdas and NAT), and MySQL.
 
@@ -236,7 +236,7 @@ Context (provenance-unclear, earlier spec): an exact match between local and clo
 ### DEC-0040 — One origin for browser client and API
 Origin: ai-proposed · Status: accepted · Affects: HTTP, CF, AWS
 
-The browser page and the API are served from the same address, which is what keeps CORS out of the design (DEC-0006).
+The browser page and the API are served from the same address, so app code never deals with CORS (DEC-0006). Cross-origin configuration needed by the framework's file transfer helper is framework-internal (DEC-0058).
 
 ### DEC-0041 — SQL subset details
 Origin: owner-approved · Status: accepted · Affects: SQL, CHECK
@@ -267,7 +267,7 @@ The AWS API Lambda's Function URL accepts requests directly as well as through t
 ### DEC-0045 — Region, engine version, and timing values are parameters
 Origin: owner · Status: accepted · Affects: PAR-060, PAR-110
 
-The default region is a configurable setting, not hard-coded. The Aurora engine version is grouped with the other dependency pins. Timeouts and similar values are recorded as parameters in the categories of DEC-0029.
+The default region is a configurable setting, not hard-coded. The Aurora engine version is grouped with the other dependency pins. Timeouts and similar values are chosen in component designs and recorded as parameters only when a design uses them (DEC-0057).
 
 ### DEC-0046 — Old specification files are non-authoritative and temporary
 Origin: owner · Status: accepted
@@ -344,3 +344,21 @@ The rules that are project-specific are kept elsewhere:
 - Evidence before claims: SYS-REQ-028.
 - No destructive drop-and-recreate in place of a migration: the MIG design.
 - Commit and push frequently: the repository's agent instructions file.
+
+### DEC-0057 — Parameters register trimmed; spec does not reference concrete values
+Origin: owner · Status: accepted · Affects: parameters register, CONVENTIONS §5
+
+The owner judged most register entries to be noise. The register keeps only:
+- the general design load (PAR-001)
+- the default AWS region (PAR-060)
+- the AI skill size budgets
+- the dependency pins
+
+The removed values were AI-proposed detail: HTTP, KV, files, secrets, authentication, AWS capacity and timing, and test tolerance. They may return only when a component design or contract actually uses them. Spec-level requirements and decisions do not reference concrete parameter values. For example, the session lifetime under DEC-0028 is an AUTH design detail the owner has no preference about, and Aurora settings come from the SQL and AWS designs.
+
+### DEC-0058 — Large files move directly between browser and storage, inside the framework
+Origin: owner · Status: accepted · Affects: SYS-REQ-008, SYS-REQ-014, FILES, HTTP
+
+The owner's first planned app uploads high-resolution photos (most about 4 MB), and the owner does not want arbitrary file size limits. The AWS Lambda request limit (about 6 MB, less for binary bodies) rules out passing large files through the API. Chunking through the API was rejected: S3's minimum multipart part size exceeds what one Lambda request can carry. Queue-based approaches were rejected because their own limits are smaller.
+
+The framework's browser-side file helper therefore moves file content directly between the browser and storage. Each transfer is authorized by the app's server, for example through short-lived signed access. App code calls only the framework helper and never sees storage services, signing, or cross-origin (CORS) configuration. The framework owns all of that. This amends DEC-0006. The principle that app code talks only to the app's own services still holds at the level of app code, but not at the level of network traffic.

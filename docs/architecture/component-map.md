@@ -24,7 +24,7 @@ Each **capability** component (SQL, KV, FILES, …) owns its portable contract a
 | `SQL` | Portable SQL | Portable schema definition, the supported query subset, and all-or-nothing writes of several rows. |
 | `MIG` | Migrations | Applying schema changes to deployed apps while preserving their data. |
 | `KV` | Key-value | The KV capability. |
-| `FILES` | Files | The files capability. |
+| `FILES` | Files | The files capability, including the browser helper for uploading and downloading files. |
 | `CFG` | Configuration | Config declaration, per-stage values, secret names and locations, the admin list. |
 | `SEC` | Secrets | The secrets capability. |
 | `LOG` | Log | The write-only log capability and the shared per-account log bucket. |
@@ -58,7 +58,8 @@ Every app-facing component depends on CORE; that dependency is not repeated belo
 
 | Component | Depends on | Why |
 | --- | --- | --- |
-| HTTP, SQL, KV, FILES, CFG, LOG | — | |
+| HTTP, SQL, KV, CFG, LOG | — | |
+| FILES | HTTP | Browser uploads and downloads are authorized through the app's API (SYS-REQ-008, SYS-REQ-014). |
 | MIG | SQL | Migrations change the SQL schema (SYS-REQ-012). |
 | SEC | CFG | Configuration holds secret names and locations (SYS-REQ-016). |
 | AUTH | HTTP, CFG | Login and logout are HTTP routes; admins are listed in configuration (SYS-REQ-018). |

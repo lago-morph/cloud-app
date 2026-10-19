@@ -68,9 +68,9 @@ The framework targets low-criticality, low-volume apps with a few simultaneous u
 ### 3.2 Application model
 
 #### SYS-REQ-008 — Browser talks only to its own API
-Origin: owner · Decision: DEC-0006
+Origin: owner · Decision: DEC-0006, DEC-0058
 
-An app consists of a browser client and a server HTTP API. Browser code MUST communicate only with the app's own API and MUST NOT call cloud provider services directly. Provider credentials MUST exist only on the server side. Browser-to-API communication MUST NOT depend on cross-origin (CORS) configuration.
+An app consists of a browser client and a server HTTP API. App browser code MUST communicate only with the app's own API and with framework-provided browser helpers, and MUST NOT call cloud provider services directly. Provider credentials MUST exist only on the server side. A framework browser helper MAY move file content directly between the browser and storage, provided the app's server authorizes each transfer and any cross-origin configuration it needs is owned by the framework and invisible to apps.
 
 #### SYS-REQ-009 — Capability set
 Origin: owner-approved · Decision: DEC-0007
@@ -100,9 +100,9 @@ Origin: owner-approved · Decision: DEC-0010, DEC-0051
 The framework MUST provide key-value storage of string values, supporting get, put, delete, and listing by key prefix.
 
 #### SYS-REQ-014 — Files
-Origin: owner · Decision: DEC-0011
+Origin: owner · Decision: DEC-0011, DEC-0058
 
-The framework MUST provide server-side storage of named binary files supporting the basic operations common to S3 and R2: write (whole-file create or replace), read, read metadata, delete, and list by name prefix.
+The framework MUST provide server-side storage of named binary files supporting the basic operations common to S3 and R2: write (whole-file create or replace), read, read metadata, delete, and list by name prefix. The framework MUST also let the browser client upload and download files, such as high-resolution photos, without app-visible size limits imposed by the framework or by request-size limits of the compute platform.
 
 #### SYS-REQ-015 — Secrets
 Origin: owner-approved · Decision: DEC-0012

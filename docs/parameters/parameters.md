@@ -1,6 +1,6 @@
 # Parameters Register
 
-Every tunable value used by the framework — limits, sizes, timeouts, defaults, and dependency version pins — is recorded here and nowhere else. Design documents and contracts refer to values by `PAR-…` ID.
+Tunable values used by the framework — limits, sizes, timeouts, defaults, and dependency version pins — are recorded here and nowhere else. Design documents and contracts refer to values by `PAR-…` ID. A value is added only when a component design or contract actually uses it; spec-level requirements and decisions do not reference concrete values (DEC-0057).
 
 Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 
@@ -8,66 +8,17 @@ Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 - **platform** — imposed by a cloud platform or dependency; re-verify against the cited source during implementation and whenever the platform changes.
 - **ai-proposed** — chosen by an AI with no external basis required; free to change during implementation and testing. When changed, update the value here.
 
-There are currently no numeric `owner` parameters. Platform values below were recorded from documentation during earlier AI-assisted work and have **not** been re-verified; treat them as "verify before relying on".
-
 ## General
 
 | ID | Parameter | Value | Category | Notes |
 | --- | --- | --- | --- | --- |
 | PAR-001 | Design load | A few simultaneous users | owner | Qualitative; see SYS-REQ-007. |
 
-## HTTP
-
-| ID | Parameter | Value | Category | Notes |
-| --- | --- | --- | --- | --- |
-| PAR-010 | Maximum non-file request body | 1,000,000 bytes | ai-proposed | |
-| PAR-011 | Maximum file size accepted through the app API | 4,000,000 bytes | ai-proposed | Must stay below the smallest platform request limit (PAR-012, PAR-013). |
-| PAR-012 | AWS Lambda synchronous request payload limit | 6 MB; binary bodies are base64-encoded, so raw capacity is lower | platform | AWS Lambda quotas. |
-| PAR-013 | Cloudflare Workers request body limit | 100 MB (Free and Pro plans) | platform | Cloudflare Workers limits. |
-
-## KV
-
-| ID | Parameter | Value | Category | Notes |
-| --- | --- | --- | --- | --- |
-| PAR-020 | Maximum key length | 1,024 UTF-8 bytes | ai-proposed | |
-| PAR-021 | Default list page size | 100 | ai-proposed | |
-| PAR-022 | Maximum list page size | 1,000 | ai-proposed | |
-
-## Files
-
-| ID | Parameter | Value | Category | Notes |
-| --- | --- | --- | --- | --- |
-| PAR-030 | Maximum file name length | 1,024 UTF-8 bytes | platform | S3 and R2 object key limit. |
-| PAR-031 | Default list page size | 100 | ai-proposed | |
-| PAR-032 | Maximum list page size | 1,000 | platform | S3 `ListObjectsV2` returns at most 1,000 keys per call. |
-| PAR-033 | Default content type | `application/octet-stream` | ai-proposed | |
-
-## Secrets
-
-| ID | Parameter | Value | Category | Notes |
-| --- | --- | --- | --- | --- |
-| PAR-040 | Maximum cache lifetime of a secret value read from AWS | 60 seconds | ai-proposed | |
-
-## Authentication
-
-| ID | Parameter | Value | Category | Notes |
-| --- | --- | --- | --- | --- |
-| PAR-050 | Session lifetime | 7 days | ai-proposed | Sessions are stateless (DEC-0028). |
-| PAR-051 | Validity of an in-progress login attempt | 10 minutes | ai-proposed | |
-| PAR-052 | Clock skew tolerated when validating provider responses | 60 seconds | ai-proposed | |
-| PAR-053 | Minimum session signing key length | 32 bytes | ai-proposed | |
-
 ## AWS deployment
 
 | ID | Parameter | Value | Category | Notes |
 | --- | --- | --- | --- | --- |
-| PAR-060 | Default AWS region | `us-east-1` | ai-proposed | Deployment setting, overridable per stage (SYS-REQ-023). |
-| PAR-061 | Aurora minimum capacity | 0 ACU | ai-proposed | Allows the database to pause when idle. |
-| PAR-062 | Aurora maximum capacity | 4 ACU | ai-proposed | |
-| PAR-063 | Aurora auto-pause delay | 5 minutes | ai-proposed | Platform minimum is 300 seconds. |
-| PAR-064 | Time budget for waiting on a paused database to resume (requests and deployment) | 45 seconds | ai-proposed | |
-| PAR-065 | HTTP Lambda timeout | 60 seconds | ai-proposed | |
-| PAR-066 | API read timeout at the AWS router | 60 seconds | ai-proposed | |
+| PAR-060 | Default AWS region | `us-east-1` | ai-proposed | Deployment setting, overridable per stage (SYS-REQ-023, DEC-0045). |
 
 ## AI skill
 
@@ -76,12 +27,6 @@ There are currently no numeric `owner` parameters. Platform values below were re
 | PAR-070 | Maximum size of the skill's top-level router document | 8,000 UTF-8 bytes | ai-proposed | |
 | PAR-071 | Maximum size of each capability reference document | 12,000 UTF-8 bytes | ai-proposed | |
 | PAR-072 | Maximum size of each complete example | 20,000 UTF-8 bytes | ai-proposed | |
-
-## Testing
-
-| ID | Parameter | Value | Category | Notes |
-| --- | --- | --- | --- | --- |
-| PAR-080 | Floating-point comparison tolerance in compliance tests | `abs(actual − expected) ≤ max(1e-12, 1e-12 × abs(expected))` | ai-proposed | |
 
 ## Dependency pins
 
