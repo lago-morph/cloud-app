@@ -4,7 +4,7 @@
  *
  * The inspected output is every file the build writes under `.framework/` (cli.md §2);
  * modules are recognised by strings that survive bundling and minification (package names,
- * import specifiers, route paths, property names). DEC-PENDING-B-T4-8.
+ * import specifiers, route paths, property names). DEC-0240.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { tag } from "../../../../../tests/support/tags.js";

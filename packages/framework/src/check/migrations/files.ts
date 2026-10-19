@@ -10,7 +10,7 @@ import { migrationDiagnostic, type MigrationDiagnostic } from "./diagnostic.js";
 
 const DIALECTS: readonly Dialect[] = ["sqlite", "postgres"];
 const SUMS = "migrations/checksums.json";
-/** Base names as generate-migration writes them (DEC-PENDING-B-07-1). */
+/** Base names as generate-migration writes them (DEC-0142). */
 const NAME = /^\d{4}_[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 
 /** Diagnostics for the app's `migrations/` files; none when the app has no migrations. */

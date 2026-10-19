@@ -50,6 +50,7 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "0.5.8",
+    "@typescript-eslint/utils": "8.72.0",
     "aws4fetch": "1.0.20",
     "drizzle-kit": "0.31.11",
     "drizzle-orm": "0.45.4",

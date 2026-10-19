@@ -10,7 +10,7 @@ import { FrameworkError } from "../core/errors.js";
 import type { LoginProvider, ProviderIdentity } from "./login-provider.js";
 import { base64urlEncode } from "./signing.js";
 
-/** The stub's provider name, part of the user-ID derivation (DEC-PENDING-B-T3-2). */
+/** The stub's provider name, part of the user-ID derivation (DEC-0227). */
 export const STUB_PROVIDER_ID = "stub";
 
 /** Subject used when the callback URL names none. */

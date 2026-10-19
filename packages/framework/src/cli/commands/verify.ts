@@ -4,7 +4,7 @@
  * package, never the app's lint configuration); the migration checker; the installed `zod`
  * version (PAR-112, check.md §2); the app's tests once per SQL dialect, each in its own
  * test-runner process. Every step runs and reports, so one run shows every problem
- * (DEC-PENDING-B-T4-5); `verify` fails if any step fails or no test ran. Output holds no clock
+ * (DEC-0238); `verify` fails if any step fails or no test ran. Output holds no clock
  * times or durations, so two runs on the same app print the same text.
  */
 import type { Dialect } from "../../sql/dialect.js";

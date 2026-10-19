@@ -3,7 +3,7 @@
  * LOCAL-REQ-004). Both cookies: HttpOnly, SameSite=Lax, Path=/, no Domain. On cloud targets
  * `__Host-session` / `__Host-login` and Secure. The local settings (not Secure) live in
  * `local-cookies.ts`, which only the local runtime and `createTestApp` import, so cloud bundles
- * never carry them (DEC-PENDING-B-16a-2); any non-Secure settings are refused on a cloud target.
+ * never carry them (DEC-0195); any non-Secure settings are refused on a cloud target.
  */
 import { FrameworkError } from "../core/errors.js";
 import type { Target } from "../core/identity.js";

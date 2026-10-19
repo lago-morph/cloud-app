@@ -24,7 +24,7 @@ describe("verify (CLI-REQ-002)", () => {
     expect(io.out).toMatch(/verify passed/);
   });
 
-  it("[CLI-AC-002] fails on type errors and on rule diagnostics, and reports both in one run (DEC-PENDING-B-T4-5)", async () => {
+  it("[CLI-AC-002] fails on type errors and on rule diagnostics, and reports both in one run (DEC-0238)", async () => {
     const io = captureIo();
     const code = await verifyCommand(
       deps({
@@ -112,7 +112,7 @@ describe("verify (CLI-REQ-002)", () => {
     expect(first.out).toMatch(/tests \(sqlite\): 2 failed \(1 passed, 2 failed, 1 skipped\)/);
   });
 
-  it("does not name passing test files: only problems name files (DEC-PENDING-B-T4-4 reads lines naming a file as diagnostics)", async () => {
+  it("does not name passing test files: only problems name files (DEC-0237 reads lines naming a file as diagnostics)", async () => {
     const io = captureIo();
     expect(await verifyCommand(deps())([], io)).toBe(0);
     expect(io.out).not.toContain("hello.test.ts");

@@ -10,7 +10,7 @@
  * Fixture trees live under `packages/framework/test/fixtures/`. TypeScript files in them are
  * stored with a trailing `.fixture` suffix (`app.ts.fixture`) so the framework's own
  * `tsc -p packages/framework` does not compile them with the framework lib set; the copy
- * step strips the suffix (decision DEC-PENDING-B-T4-1).
+ * step strips the suffix (decision DEC-0235).
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -53,7 +53,7 @@ export interface AppSpec {
   /**
    * Run `generate-migration` once after copying, as an owner does after defining tables.
    * Default true. The fixture trees hold no generated migrations because the generator is
-   * the framework's (decision DEC-PENDING-B-T4-3).
+   * the framework's (decision DEC-0236).
    */
   readonly generateMigrations?: boolean;
 }
@@ -65,7 +65,7 @@ export function stripAnsi(text: string): string {
 
 /**
  * The suites need the compiled package (`dist/`), because the package binary and every
- * export point there (DEC-PENDING-B-01-2). Fails with the command to run instead of
+ * export point there (DEC-0111). Fails with the command to run instead of
  * silently testing stale output.
  */
 export async function assertFrameworkBuilt(): Promise<void> {
@@ -287,7 +287,7 @@ function escapeRe(s: string): string {
  * Output lines that belong to diagnostics about `fileName` (a base name, unique within the
  * fixture app). A diagnostic is either one line that names the file (`path:line:col …`,
  * tsc's `path(line,col): …`) or a line naming the file followed by indented continuation
- * lines (ESLint's "stylish" layout). Decision DEC-PENDING-B-T4-4.
+ * lines (ESLint's "stylish" layout). Decision DEC-0237.
  */
 export function diagnosticsFor(output: string, fileName: string): string[] {
   const lines = stripAnsi(output).split(/\r?\n/);
@@ -370,7 +370,7 @@ function replaceStrings(node: Json, map: ReadonlyMap<string, string>): { node: J
  * Edits a committed migration and updates its entry in `migrations/checksums.json`, so the
  * checksum check passes and only the schema comparison can catch the edit. The checksum
  * format is the framework's; this finds the old file's digest (sha256/sha1/sha512, hex or
- * base64, optionally prefixed) and replaces it in the same form (DEC-PENDING-B-T4-5).
+ * base64, optionally prefixed) and replaces it in the same form (DEC-0238).
  */
 export async function editMigrationKeepingChecksum(app: FixtureApp, rel: string, edit: (sql: string) => string): Promise<void> {
   const before = await app.read(rel);

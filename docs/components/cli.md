@@ -74,7 +74,7 @@ No command may print a secret value.
 
 **`smoke`.** The tests reach the stage through `connectTestStage()` ([testing.d.ts](../contracts/ts/testing.d.ts)).
 
-**Implementation** (`src/cli/`, DEC-PENDING-B-17-1…-7). `main.ts` holds the command table; every CLI-REQ-001 command is registered, and those built in later work items (`deploy`, `remove`, `setup-account`, `certify-auth`, `smoke`, `secrets set --target cloudflare`) exit 1 saying which prerequisite they need. Exit statuses: 0 success, 1 failure, 2 usage error. A failure prints only its message; a usage message never repeats an argument the command did not expect, so a value typed by mistake is not printed (CLI-REQ-004).
+**Implementation** (`src/cli/`, DEC-0199…DEC-0205). `main.ts` holds the command table; every CLI-REQ-001 command is registered, and those built in later work items (`deploy`, `remove`, `setup-account`, `certify-auth`, `smoke`, `secrets set --target cloudflare`) exit 1 saying which prerequisite they need. Exit statuses: 0 success, 1 failure, 2 usage error. A failure prints only its message; a usage message never repeats an argument the command did not expect, so a value typed by mistake is not printed (CLI-REQ-004).
 - `build --target <t> --stage <s>` calls the build pipeline (`src/build/`). The local stage is named `local` by convention.
 - `generate-migration [--name <slug>]` loads the app's tables and calls MIG's generator; it lists the new files or says nothing changed.
 - `secrets set <name> --target local --stage <s>` composes SEC's `set-command.ts` (arguments, declared or framework name, value from standard input only) and writes `.dev.vars`; it prints the name and location, never the value.

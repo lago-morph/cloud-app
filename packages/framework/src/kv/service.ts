@@ -50,7 +50,7 @@ export function createKv(db: PortableDb, options: KvOptions = {}): KvService {
     delete(t: KvTable): { where(c: unknown): Promise<void> };
   };
 
-  /** Runs a SQL operation; its failures surface as KV's (KV-REQ-005, DEC-PENDING-B-08-4). */
+  /** Runs a SQL operation; its failures surface as KV's (KV-REQ-005, DEC-0149). */
   const storage = async <T>(operation: () => Promise<T>): Promise<T> => {
     try {
       return await operation();
@@ -98,7 +98,7 @@ export function createKv(db: PortableDb, options: KvOptions = {}): KvService {
   };
 }
 
-/** The page size for `limit`: PAR-221 when absent; clamped to 1…PAR-222 (DEC-PENDING-B-08-3). */
+/** The page size for `limit`: PAR-221 when absent; clamped to 1…PAR-222 (DEC-0148). */
 function pageSize(limit: number | undefined): number {
   if (limit === undefined || !Number.isFinite(limit)) return DEFAULT_PAGE_SIZE;
   return Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(limit)));

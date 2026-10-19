@@ -1,7 +1,7 @@
 /**
  * Runs the portability rules on an app (CHECK-REQ-001…003). Independent of type checking:
  * diagnostics are reported whether or not the app type-checks, so `verify` can report both
- * (DEC-PENDING-B-T4-5). The rules always come from this package (CHECK-REQ-006).
+ * (DEC-0238). The rules always come from this package (CHECK-REQ-006).
  */
 import { readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
@@ -24,7 +24,7 @@ export interface CheckDiagnostic {
 }
 
 /**
- * The app lib set (CHECK §2, DEC-PENDING-B-01-6): ES plus Web APIs, no `@types/node`, no
+ * The app lib set (CHECK §2, DEC-0115): ES plus Web APIs, no `@types/node`, no
  * `@cloudflare/workers-types`. Same options as the repository's `tsconfig.app.json`; `verify`'s
  * type check should use these too, so app-editable `tsconfig.json` cannot change them.
  */

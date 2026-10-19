@@ -11,7 +11,7 @@ const RULE = "no-raw-sql";
 /**
  * The rule's full ID as the shipped configuration (`<package>/check`) names it, e.g.
  * `prototype-framework/no-raw-sql`. Found by searching the module's exports, so the test
- * does not guess the plugin prefix (DEC-PENDING-B-T4-9).
+ * does not guess the plugin prefix (DEC-0241).
  */
 async function shippedRuleId(rule: string): Promise<string | undefined> {
   const specifier = `${PACKAGE_NAME}/check`;

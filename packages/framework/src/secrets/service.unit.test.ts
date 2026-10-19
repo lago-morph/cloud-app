@@ -51,7 +51,7 @@ describe("[SEC-AC-001] SecretsService reads declared secrets by logical name", (
   });
 
   it("does not remember a missing value: a later read in the same request reads again", async () => {
-    let value: string | undefined;
+    let value: string | undefined = undefined;
     const secrets = createSecretsService({ declared: ["apiKey"], read: async () => value });
     await expect(secrets.get("apiKey")).rejects.toMatchObject({ code: "SEC.MISSING" });
     value = dummy("late");

@@ -1,5 +1,5 @@
 /**
- * MIG-AC-002 and MIG-AC-003, local interpretation (DEC-PENDING-B-T2-7).
+ * MIG-AC-002 and MIG-AC-003, local interpretation (DEC-0144).
  *
  * Locally, a "deployment" is starting `dev` on the app directory: it applies pending
  * migrations in place to the persistent local D1 database (migrations.md §2 "Local",
@@ -60,7 +60,7 @@ const appMigrations = (dir: string): string[] => migrationFiles(dir, "sqlite").m
 /**
  * MIG-REQ-002: the record lists every migration once, framework migrations first, then app
  * migrations in order. A record row belongs to an app migration when its `id` contains the
- * migration's file base name (DEC-PENDING-B-T2-8).
+ * migration's file base name (DEC-0224).
  */
 function expectRecord(record: D1Snapshot["record"], appNames: string[]): void {
   const ids = record.map((r) => String(r["id"]));

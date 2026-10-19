@@ -23,7 +23,7 @@ export type AnyDefinedApp = DefinedApp<ConfigDeclaration, string>;
 
 export interface LoadedApp {
   readonly defined: AnyDefinedApp;
-  /** The export that holds the definition: `default` or `app` (DEC-PENDING-B-T1-5). */
+  /** The export that holds the definition: `default` or `app` (DEC-0214). */
   readonly exportName: "default" | "app";
 }
 

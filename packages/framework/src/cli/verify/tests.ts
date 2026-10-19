@@ -1,7 +1,7 @@
 /**
  * `verify` step 4 (CLI-REQ-002, LOCAL-REQ-003): the app's tests (PAR-116: Vitest, glob
  * `tests/**\/*.test.ts`) once per SQL dialect, each in its own process. The dialect is fixed
- * per process by `PROTOTYPE_FRAMEWORK_DIALECT` (DEC-PENDING-B-05-2). The child
+ * per process by `PROTOTYPE_FRAMEWORK_DIALECT` (DEC-0133). The child
  * (`test-runner-child.ts`) runs Vitest through its Node API with the framework's options only
  * (the app's Vitest configuration is not read), and writes a summary file the parent reads.
  */

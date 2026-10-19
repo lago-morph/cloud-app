@@ -62,7 +62,7 @@ Unreachable storage MUST surface as `FILES.UNAVAILABLE`. When a browser transfer
 
 Fetch fresh download tickets with each listing; do not cache URLs.
 
-**Shared runtime shape** (DEC-PENDING-B-11-1, -3, -5):
+**Shared runtime shape** (DEC-0160, DEC-0162, DEC-0164):
 - One target-neutral service runs over the object store (the R2 Worker binding, locally and on Cloudflare), with a ticket issuer supplied by each target.
 - Both kinds of ticket are plain JSON with `url` and `expiresAt` (milliseconds). An upload ticket also holds `method` (`PUT`) and `headers` (always `Content-Type`). The browser helpers read only these fields, so they behave the same on every target.
 - A `list` cursor encodes the prefix and the last name returned. The next page asks the store for names after that name, and the service fills each page to its limit even when the store returns short pages. A `limit` is clamped to 1…PAR-232.
@@ -73,7 +73,7 @@ Fetch fresh download tickets with each listing; do not cache URLs.
 ### Local
 Server operations use the local R2 emulation through its Worker binding. Tickets point to a same-origin framework route, `/api/__framework/files/*`, which checks an HMAC-signed ticket and streams the body to or from local storage. Its responses always carry `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`, plus `Content-Disposition: attachment` for content types other than raster images, so uploaded HTML or SVG never runs as the app's origin. There is no cross-origin traffic and no use of Wrangler's experimental local S3 endpoint.
 
-Implementation details (DEC-PENDING-B-11-2, -4):
+Implementation details (DEC-0161, DEC-0163):
 - A local ticket's URL is the relative path `/api/__framework/files/<token>`. The token is base64url JSON of operation, name, content type (uploads) and expiry time, followed by `.` and its HMAC-SHA-256 signature. The signing key is the framework-internal local secret that `dev` generates into `.dev.vars` (SEC).
 - The route accepts `PUT` with an upload ticket and `GET` with a download ticket. An upload must send exactly the ticket's `Content-Type`.
 - A ticket that is malformed, tampered with, expired, used for the other operation, or used with a different content type gets an empty 403. A download of a file deleted after the ticket was issued gets an empty 404. These refusals are not logged, so ticket URLs never reach the log.

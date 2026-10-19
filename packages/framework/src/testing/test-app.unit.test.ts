@@ -44,7 +44,7 @@ const app = defineApp({
 });
 
 const base = { config: { title: "t" } };
-let apps: TestApp[] = [];
+const apps: TestApp[] = [];
 afterEach(async () => {
   for (const a of apps.splice(0)) await a.dispose();
 });
@@ -58,7 +58,7 @@ async function code(res: Response): Promise<string> {
 }
 
 // Each test app starts workerd (and, on Postgres, loads PGlite; the first one per process also
-// creates its template database, DEC-PENDING-B-05-4), so tests get the integration layer's timeout.
+// creates its template database, DEC-0135), so tests get the integration layer's timeout.
 describe("createTestApp", { timeout: 60_000 }, () => {
   it("runs app routes over fresh local storage with the app's tables created", async () => {
     const t = await open();

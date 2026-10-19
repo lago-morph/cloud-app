@@ -172,7 +172,7 @@ describe("LOCAL-REQ-003 Postgres-dialect check", () => {
 });
 
 describe("CORE-REQ-005 export list", () => {
-  it(tag("CORE-AC-005", "the package's exports map equals the subpath table (without ./targets/aws this phase: DEC-PENDING-B-01-1)"), async () => {
+  it(tag("CORE-AC-005", "the package's exports map equals the subpath table (without ./targets/aws this phase: DEC-0110)"), async () => {
     const pkg: unknown = JSON.parse(await readFile(join(FW_DIR, "package.json"), "utf8"));
     const exportsMap: unknown = pkg !== null && typeof pkg === "object" ? Reflect.get(pkg, "exports") : undefined;
     expect(exportsMap).toBeTypeOf("object");

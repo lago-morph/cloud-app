@@ -2,7 +2,7 @@
  * The migration checker (CHECK-REQ-004; MIG-REQ-001, MIG-REQ-003), run by `verify`:
  * 1. offline file checks: every committed migration matches `migrations/checksums.json`, and
  *    the histories are paired and numbered in order (`files.ts`). The local applier checks
- *    neither (DEC-PENDING-B-07-4), so this is where edits and reordering are caught;
+ *    neither (DEC-0145), so this is where edits and reordering are caught;
  * 2. both histories are applied — the framework's first, then the app's, one migration at a
  *    time, exactly as `dev` and `createTestApp` apply them — to fresh local D1 and PGlite
  *    databases, and the schema is introspected after each migration;

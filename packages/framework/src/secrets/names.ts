@@ -10,9 +10,9 @@ export const FRAMEWORK_SECRET_PREFIX = "framework";
 
 /**
  * Framework-internal secrets of every target, read only by framework code (never through the
- * app's service). The Google client secret's name is the one GOOGLE reads (DEC-PENDING-B-13-2).
+ * app's service). The Google client secret's name is the one GOOGLE reads (DEC-0176).
  * This module is in every cloud bundle, so local-only names live in `local-names.ts`
- * (CORE-REQ-006, DEC-PENDING-B-16a-1).
+ * (CORE-REQ-006, DEC-0194).
  */
 export const FRAMEWORK_SECRETS = Object.freeze({
   /** AUTH's session signing key (PAR-253); generated per stage by the CLI when absent. */

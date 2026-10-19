@@ -52,7 +52,7 @@ export interface TestAppOptions {
   readonly unavailable?: readonly ("sql" | "kv" | "files" | "secrets")[];
   /** Use the test-only stub login provider instead of the authentication mock. Default false. */
   readonly stubLoginProvider?: boolean;
-  /** LOG-AC-001: a log writer that fails on every write, or whose writes never complete (DEC-PENDING-B-T1-1). */
+  /** LOG-AC-001: a log writer that fails on every write, or whose writes never complete (DEC-0210). */
   readonly logWriter?: "failing" | "never-completing";
 }
 
@@ -94,7 +94,7 @@ const generated = new WeakMap<object, Promise<string>>();
 
 /**
  * The app's migrations directory: `<cwd>/migrations` when it holds this dialect's history
- * (an app's tests run from the app root, DEC-PENDING-B-T2-2); otherwise, for an app with
+ * (an app's tests run from the app root, DEC-0192); otherwise, for an app with
  * tables, a history generated once from the table definitions into a temporary directory.
  */
 async function appMigrationsDir(defined: DefinedApp<ConfigDeclaration, string>, dialect: string): Promise<string> {

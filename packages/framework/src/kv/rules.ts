@@ -30,7 +30,7 @@ export function checkKey(key: string): void {
 
 /**
  * A list prefix: well-formed, at most PAR-220 bytes (a longer one matches no key); else
- * `KV.INVALID_KEY`. The empty prefix lists every key (DEC-PENDING-B-08-2).
+ * `KV.INVALID_KEY`. The empty prefix lists every key (DEC-0147).
  */
 export function checkPrefix(prefix: string): void {
   if (!wellFormed(prefix)) throw new FrameworkError("KV.INVALID_KEY", "a prefix must be well-formed Unicode text");
@@ -39,7 +39,7 @@ export function checkPrefix(prefix: string): void {
 
 /**
  * A value: well-formed (else `KV.INVALID_KEY`, as KV-REQ-002 says), at most PAR-223 bytes (else
- * `KV.VALUE_TOO_LARGE`). The empty string is a value (DEC-PENDING-B-08-1).
+ * `KV.VALUE_TOO_LARGE`). The empty string is a value (DEC-0146).
  */
 export function checkValue(value: string): void {
   if (!wellFormed(value)) throw new FrameworkError("KV.INVALID_KEY", "a value must be well-formed Unicode text");
