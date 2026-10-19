@@ -581,3 +581,302 @@ A stage is a test stage exactly when its name starts with `test-`. Test stages u
 Origin: owner · Status: accepted · Affects: DEC-0046, implementation planning
 
 After the owner's review (DEC-0046), the superseded files under `ai/spec/` were deleted; they remain in git history. The owner asked for a one-shot implementation prompt covering the local and Cloudflare targets: `ai/prompts/implement-local-cloudflare.md`. AWS is implemented in a later phase. This changes the order of work only. SYS-REQ-001 (both clouds mandatory) still holds, so the framework cannot be declared working (COMPL-REQ-006) until the AWS phase passes.
+
+---
+
+## Implementation phase: local and Cloudflare — phase A spikes (2026-10-19)
+
+These were recorded by AI spikes A-01…A-10 of `ai/implementation/plan.md` and integrated by item A-INT. Evidence is under `ai/implementation/spikes/<item>/`. All are `ai-proposed`; where an entry says it was taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue", it is open for owner review.
+
+### DEC-0083 — Cloudflare tool authentication in the sandbox: placeholder token replaced by the proxy
+Origin: ai-proposed · Status: accepted · Affects: PROV §2 "Credentials", cloudflare.md §2, CLI cloud commands (D-03, D-05), every cloud run, plan §10.6
+
+wrangler (PAR-101) and SST/Pulumi (PAR-100, PAR-108) authenticate in this sandbox when `CLOUDFLARE_API_TOKEN` is set to a non-empty, non-secret placeholder (the spike used the literal `proxy-injected`): the proxy replaces the tool's `Authorization` header with the injected token for `api.cloudflare.com`. With the variable unset or empty, wrangler reports "not authenticated" and SST stops with "Cloudflare API not initialized". Exact environment:
+- wrangler: `CLOUDFLARE_API_TOKEN=<placeholder>`, `CLOUDFLARE_ACCOUNT_ID`, `NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt` (required: without it wrangler fails with a certificate mismatch / "fetch failed"), `HTTPS_PROXY` (wrangler uses it on its own; `NODE_USE_ENV_PROXY` is not needed).
+- SST: `CLOUDFLARE_API_TOKEN=<placeholder>`, `CLOUDFLARE_DEFAULT_ACCOUNT_ID=$CLOUDFLARE_ACCOUNT_ID`, `SST_STAGE` (or `--stage`), `HTTPS_PROXY`; `NODE_EXTRA_CA_CERTS`/`NODE_USE_ENV_PROXY` not needed (system trust store holds the proxy CA).
+- The token is an Account API token, so account IDs are always passed explicitly.
+The framework's preflight (PROV §2 "Credentials") keeps checking `CLOUDFLARE_API_TOKEN` by name only; in this sandbox the placeholder satisfies it. The placeholder is not a credential and must never be replaced by a real token in sandbox runs. On an owner machine the real token goes in the same variable.
+Evidence: `ai/implementation/spikes/a-01/RESULT.md`, logs `w01`–`w15`, `s03`–`s07`. Fallback: none needed.
+
+### DEC-0084 — SST state home on Cloudflare is the R2 bucket `sst-state`; stage state objects outlive `sst remove`
+Origin: ai-proposed · Status: accepted · Affects: PROV §2 "State home", "Removal"; cloudflare.md "Deploy mechanics" (`setupAccount`, `remove`); PROV-AC-004; D-03
+
+With `home: "cloudflare"`, SST 4.17.2 creates the account-wide R2 bucket `sst-state` (name fixed by SST) and keeps `app/`, `passphrase/`, `snapshot/`, `eventlog/`, `update/` objects under `<app>/<stage>` there, accessed through `api.cloudflare.com` (works with the injected token, no R2 S3 credentials). `setupAccount` therefore creates/confirms `sst-state` as the state home. `sst remove` leaves the stage's state objects (including its passphrase); the Cloudflare `remove` deletes the objects under `*/<app>/<stage>` itself (R2 object DELETE via the Cloudflare API) and never deletes the bucket (shared, PROV §2).
+Evidence: `ai/implementation/spikes/a-01/RESULT.md` "State home". Fallback: none needed.
+
+### DEC-0085 — Stage `workers.dev` addresses are reachable from the sandbox; client settings for cloud runs
+Origin: ai-proposed · Status: accepted · Affects: cloudflare.md §2 (public origin), every cloud run (D-03, D-05, cloud ACs and Playwright compliance runs), plan §10.6, prompt §10
+
+A Worker deployed with wrangler 4.149.0 (`workers_dev: true`) is reachable at `https://<worker>.<account subdomain>.workers.dev` from this sandbox, through the proxy, with no extra credentials:
+- curl with sandbox defaults: 200 (CONNECT tunnel 200; the real Let's Encrypt certificate is presented).
+- Node 22 `fetch` with `NODE_USE_ENV_PROXY=1`: 200 (also in a minimal environment without `NODE_EXTRA_CA_CERTS`). Cloud test clients using Node `fetch` set `NODE_USE_ENV_PROXY=1`; without it Node bypasses `HTTPS_PROXY` and only works because a transparent egress gateway intercepts direct traffic, which is not relied on.
+- Playwright 1.64.1 Chromium: 200 for navigation and in-page `fetch`, with or without the `proxy` launch option; no browser proxy configuration is needed.
+The first request ~1 s after `wrangler deploy` returned already succeeded, so no wait after deploy is required for reachability (on/off propagation is A-04's question). The earlier refusal mentioned in prompt §10 is explained: a made-up *account subdomain* does not resolve and the gateway answers 502 to CONNECT; a made-up Worker name on the real account subdomain returns Cloudflare's 404 through an open tunnel.
+Evidence: `ai/implementation/spikes/a-02/RESULT.md`, logs `c02`, `c03`, `n01`, `n02`, `p01`. Fallback: none needed (plan fallback was "report the refused host to the owner").
+
+### DEC-0086 — The account's `workers.dev` subdomain is already registered
+Origin: ai-proposed · Status: accepted · Affects: cloudflare.md §2 (`setupAccount`), D-03/D-05
+
+`GET /accounts/{account}/workers/subdomain` returns `success: true` with a subdomain set, so on this account `setup-account --target cloudflare` only reads and records it (the "register if none" branch is not exercised here and is tested only by unit tests with a fake API). The subdomain value contains the owner's name; it is not written into committed docs or evidence (it is computed/recorded at runtime by `setup-account`), and spike logs redact it.
+Assumption (owner not asked, per instruction): treating the subdomain as non-secret but personal — redacted in committed artefacts, not a credential.
+Evidence: `ai/implementation/spikes/a-02/logs/c01-subdomain-get.txt`. Fallback: none needed.
+
+### DEC-0087 — SST/Pulumi Worker updates keep secrets set through the Cloudflare API; no second copy, no extra mechanism
+Origin: ai-proposed · Status: accepted · Affects: cloudflare.md "Deploy mechanics" (`deploy`, `setSecret`), SEC-REQ-003, PROV-REQ-002, D-03
+
+An `sst deploy` (SST 4.17.2, provider 6.15.0) that updates the stage Worker — new script content, changed plain-text variables, a removed binding, also after `sst refresh` — keeps every `SECRET_<NAME>` set by `setSecret` through `PUT /accounts/{id}/workers/scripts/{name}/secrets`; the running Worker keeps the same value. The Cloudflare script-upload API itself keeps a script's existing `secret_text` bindings when a new upload does not declare them (verified with a direct upload without `keep_bindings`). So `deploy` needs nothing extra and never stores secrets. The SST transform `transform.worker: args => { args.keepBindings = ["secret_text", "secret_key"] }` was verified to deploy and may be added as an explicit guard (assumption: D-03 adds it, since it is harmless and makes the reliance visible; not required for correctness today).
+Constraint: an upload that declares any binding with a secret's name replaces that secret permanently, so the framework must never pass a binding named `SECRET_*` through SST (CFG/framework variables must not use the `SECRET_` prefix). `sst remove` deletes the Worker and its secrets (expected).
+Evidence: `ai/implementation/spikes/a-03/RESULT.md`, logs `s02`–`s07`, `c03`–`c17`, `r01`–`r02`. Result: kept. Fallback: none needed (named fallback is the mechanism observed).
+
+### DEC-0088 — SST runs need `NODE_USE_ENV_PROXY=1` in the sandbox (amends DEC-0083)
+Origin: ai-proposed · Status: accepted · Affects: DEC-0083, plan §10.6, PROV §2 "Credentials", D-03, D-05, every cloud run
+
+SST's own Node dynamic providers (e.g. `WorkerUrl`, used by `sst.cloudflare.Worker` with `url: true`; also `kv-data`, `worker-placement`, `zone-lookup`) call `api.cloudflare.com` with Node's global `fetch`. Without `NODE_USE_ENV_PROXY=1` that fetch bypasses `HTTPS_PROXY`, the placeholder token is not replaced, and the deploy fails with Cloudflare error 9106 "Authentication failed". The SST environment is therefore A-01's plus `NODE_USE_ENV_PROXY=1` (Node ≥ 22.21; it prints a harmless "EnvHttpProxyAgent is experimental" warning). On an owner machine with a real token the variable is harmless.
+Evidence: `ai/implementation/spikes/a-03/RESULT.md` finding 2, logs `s01` (fails), `s02` (works).
+
+### DEC-0089 — Non-browser clients probing `workers.dev` send their own User-Agent
+Origin: ai-proposed · Status: accepted · Affects: C-04 `smoke`/`connectTestStage`, compliance drivers, D-RUN
+
+Cloudflare answers requests with the default `Python-urllib` User-Agent with 403 "error code: 1010" (not the proxy). Test and smoke clients set an explicit User-Agent.
+Evidence: `ai/implementation/spikes/a-03/logs/c07-diag-403.txt`.
+
+### DEC-0090 — `stopApp`/`startApp` on Cloudflare use the script-subdomain API with `previews_enabled` pinned to false
+Origin: ai-proposed · Status: accepted · Affects: DEC-0078, cloudflare.md §2 "Deploy mechanics" (`stopApp`, `startApp`), migrations.md §2 steps 1 and 6 and "Failure", D-03, MIG-AC-006
+
+DEC-0078's assumption holds. `stopApp` is `POST /accounts/{account}/workers/scripts/{worker}/subdomain` with `{"enabled": false, "previews_enabled": false}`; `startApp` is the same call with `{"enabled": true, "previews_enabled": false}`; the state is read with `GET` on the same path. The call returns the new state synchronously. While off, the `workers.dev` URL answers HTTP 404 (`error code: 1042`). Toggling creates no Worker version or deployment: script settings, deployments and versions were identical before, while off, and after on, and the secret, a plain-text variable and a KV binding all worked after the restart.
+Both fields are always sent: a body with only `{"enabled": true}` turned preview URLs on as a side effect.
+Propagation observed from the sandbox: off ≤ 2.3 s, on ≤ 1.6 s (6 cycles; typically ~0.8 s; probe resolution ~0.7 s). `startApp` therefore needs no fixed wait; a caller that must see the change (tests, smoke) polls the URL for up to 30 s (assumption: simplest reasonable bound, ≫ observed; to be set as a parameter by D-03 if needed).
+Evidence: `ai/implementation/spikes/a-04/RESULT.md`, logs `a01`–`a09`, `t01`–`t06a`, `c03`–`c05`. Fallback: none needed (plan fallback was "ask owner").
+
+### DEC-0091 — A deploy may itself re-enable the route; the CLI still calls `startApp` explicitly
+Origin: ai-proposed · Status: accepted · Affects: cloudflare.md §2 (`deploy`, `startApp`), migrations.md §2 step 6, D-03
+
+With the route off, `wrangler deploy` of a config with `workers_dev: true` turned the route back on. So a stop is not held across a deploy. This is consistent with MIG §2 step 6 (deploy, then start) and with cloudflare.md's rule that the CLI calls `startApp` explicitly after every deploy. SST's Worker (URL / `WorkersScriptSubdomain`) behaviour while the route is off was not tested here.
+Assumption (owner not asked, per instruction): no design change; D-03 verifies by test that an SST deploy followed by `startApp` leaves `enabled: true, previews_enabled: false`, and that `stopApp` is never followed by a deploy before migrations finish (MIG §2 order already guarantees this).
+Evidence: `ai/implementation/spikes/a-04/logs/w05-deploy-while-off.txt`, `a09-sub-after-redeploy.txt`, `c05-get-after-redeploy.txt`.
+
+### DEC-0092 — Secret updates reach requests after a short delay
+Origin: ai-proposed · Status: accepted · Affects: SEC tests (SEC-AC-001), MIG-AC-006, D-03 cloud tests
+
+Immediately after `wrangler secret put` the Worker still served the version without the secret; a few seconds later the new version (triggered by the secret) served it. Cloud tests that set a secret and then read it poll for the expected result (bounded) instead of reading once.
+Evidence: `ai/implementation/spikes/a-04/logs/c01-get-before.txt`, `c02-get-before-settled.txt`.
+
+### DEC-0093 — A Cloudflare migration file is applied as one `POST …/d1/database/{uuid}/query` request, which is atomic
+Origin: ai-proposed · Status: accepted · Affects: migrations.md §2 "Cloudflare", MIG-REQ-003, MIG-REQ-006, MIG-AC-003, D-04
+
+The CLI applies each pending migration file to the new D1 database with one request
+`POST /client/v4/accounts/{account}/d1/database/{uuid}/query` with body
+`{"sql": "PRAGMA defer_foreign_keys = on;\n<file text unchanged>;\n<INSERT INTO __framework_migrations …>;"}`.
+The drizzle-kit file is sent as-is (its `--> statement-breakpoint` lines are SQL comments); the migration-record
+insert rides in the same request so record and schema change commit together. The spike showed one such request
+is one transaction: a failing last statement (PK, NOT NULL, deferred FK at commit, syntax, missing table), a
+failing middle statement (unique index over duplicates) and a 5 MB / 5,058-statement request failing last all left
+schema, indexes and rows unchanged (HTTP 400, `errors[0].code` 7500, `result: []`); the valid request applied every
+statement. The `{"batch": [{sql, params}, …]}` form is equally atomic and may be used where bound parameters are
+needed. The prefix is required on every request (it does not persist); explicit `BEGIN`/`SAVEPOINT` are rejected by
+D1 and must not appear.
+Evidence: `ai/implementation/spikes/a-05/RESULT.md` (E0–E2, E4, E6, E10, E11). Fallback: none needed.
+
+### DEC-0094 — An error or missing response from the D1 API is not proof that nothing was applied
+Origin: ai-proposed · Status: accepted · Affects: migrations.md §2 "Failure", MIG-REQ-003, D-04 (also A-06's import)
+
+A ~30 s request returned HTTP 502 `text/plain` "upstream request failed" (from the sandbox proxy chain, no
+`Server: cloudflare`) while D1 had committed the whole batch. Rule: a JSON 4xx with `success: false` means
+rolled back; any other outcome (5xx, non-JSON body, timeout, connection reset) is ambiguous, and the CLI reads
+`__framework_migrations` on the new database to decide whether that file was applied before choosing between
+continuing and the Failure path. Requests are kept well inside the observed limits: one statement < 100,000 bytes
+(SQLITE_TOOBIG at 100,046), body ≤ 27 MB worked and 50 MB failed with 500, and runtime well under 30 s. Migration
+files are far below these; no parameter is added (assumption: a migration file never approaches them; A-06 decides
+import chunking).
+Evidence: RESULT.md E5, E8, E9. Fallback: none needed.
+
+### DEC-0095 — Supported changes need no table rebuild; a rebuild of a referenced table fails atomically on D1
+Origin: ai-proposed · Status: accepted · Affects: migrations.md §2 "Supported changes", CHECK-REQ-004, D-04
+
+drizzle-kit 0.31.11 (PAR-103) generates plain `CREATE TABLE` / `ALTER TABLE … ADD` / `ALTER TABLE … DROP COLUMN` /
+`CREATE [UNIQUE] INDEX` statements for every supported change tested (new table with FK, nullable column,
+static-default column, unique index, index, drop column), and these apply on D1 with rows and references preserved.
+A drizzle-style rebuild of a table that other rows reference fails at commit even with
+`PRAGMA defer_foreign_keys = on` (DROP TABLE's implicit delete counts violations the rename does not clear), and
+drizzle's `PRAGMA foreign_keys=OFF` wrapper has no effect inside the request; the request then rolls back, so the
+Failure path (old database unchanged) covers it. No design change: such rebuilds arise only from changes
+CHECK-REQ-004 already refuses. Not tested: drizzle-kit's output for a table-level `unique()` constraint (tested
+`uniqueIndex`) and for adding a foreign key to an existing column; D-04's tests should include one of each.
+Evidence: RESULT.md E3, E7, E10. Fallback: none needed.
+
+### DEC-0096 — Cloudflare `copyDatabase` uses the fallback page-by-page copy, not D1 export/import
+Origin: ai-proposed · Status: accepted · Affects: MIG-REQ-005, MIG-REQ-006 step 2, migrations.md §2 "Cloudflare" and "Fallback copy", PROV §2 `copyDatabase`, D-04
+
+Spike result: D1 export → import is **not** a usable whole-database copy, so the fallback named in migrations.md applies on Cloudflare. The native path fails on:
+- **Large rows.** The export writes each row as one `INSERT` with inline literals, and D1 refuses statements over 100 KB (`SQLITE_TOOBIG`). Legal framework rows can exceed that: PAR-215 is 256 KiB.
+- **Reference order.**
+  - Tables come out in creation order, so rows that reference a table created later fail (cycles always do).
+  - Inside the import API, `defer_foreign_keys` only spans about 4 KB of SQL, so a child row more than ~4 KB ahead of its parent is rolled back.
+- **Request size.** A dump is too large to send as "one batch": a 5.5 MB `/query` returned 502 after 30 s.
+- **Silent value loss.** A NUL in text silently truncates an import that still reports `complete`, and integers beyond 2^53 are rounded. Both are outside the portable rules, but nothing in the native path detects them.
+
+All native failures except the NUL case were atomic and loud. With none of these present, the native copy was exact.
+
+The CLI's Cloudflare `copyDatabase` therefore:
+1. creates the new D1 database and its tables from the source's `sqlite_master`;
+2. copies tables in reference order. Tables are grouped into strongly connected components of the reference graph, parents first. Rows inside a cyclic group (self-reference or mutual references) are ordered parents first, and a row cycle is never split across pages;
+3. sends each page as one atomic `/query` `batch` of `PRAGMA defer_foreign_keys = on` plus multi-row `INSERT`s with at most 100 bound parameters. Pages are at most 1000 rows / ~1 MB of values; a larger row (up to D1's 2 MB) goes alone;
+4. binds every value by its stored type (`CAST(? AS INTEGER)` from decimal text, JSON double, text, `unhex(?)` for blobs, `NULL`), never a JSON number for an integer, because D1 binds JSON numbers as REAL. It copies `rowid`, then indexes after the data, then `sqlite_sequence` if present;
+5. runs MIG step 4's checks unchanged.
+
+The prototype reproduced the fixture **identically**: every value with its type, rowids, schema, sequence, and an empty FK check, including a 1.9 MB row, reference cycles, unicode/control characters, NULL vs `''`, and int64/blob/NUL edge cases. It took 48.6 s for a 5 MB, 12k-row database, against ~3 s for native export + import when that works. Downtime is accepted (DEC-0076).
+
+Assumption (owner said not to stop for questions): always use the fallback on Cloudflare, rather than trying export/import first and falling back on error. That is the simplest choice, and the native NUL failure is silent. migrations.md §2 "Cloudflare" should be updated by D-04, which owns that doc for its item, to say the copy is the fallback copy. Page limits: PAR-218 (rows and bytes per request), PAR-216, PAR-217.
+
+Integration (A-INT): the always-fallback choice is recorded under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review. The migrations.md rewrite stays with D-04 (plan §5).
+
+Evidence: `ai/implementation/spikes/a-06/RESULT.md`, `logs/`, `fallback_copy.py`. Fallback applied: yes (migrations.md "Fallback copy").
+
+### DEC-0097 — D1 HTTP API facts the Cloudflare target relies on
+Origin: ai-proposed · Status: accepted · Affects: PROV §2 (Cloudflare `createDatabase`/`copyDatabase`/`dropDatabase`), migrations.md §2 "Cloudflare", D-04, A-05 (cross-check)
+
+Observed on this account:
+- `/query` accepts `{"batch":[{sql, params}, …]}`. One such request is atomic: a failing item leaves nothing applied. `PRAGMA defer_foreign_keys = on` as its first item defers FK checks to the end of the request.
+- `PRAGMA foreign_keys = off` is ignored.
+- At most 100 bound parameters per statement (PAR-216); SQL text at most 100,000 bytes per statement (PAR-217). A bound text parameter of ~2 MB is accepted.
+- JSON `true` binds as TEXT, so booleans are sent as 0/1.
+- **The account allows at most 10 D1 databases** (403, code 7406; PAR-219). A schema-changing deploy holds two databases per stage for a while. With other stages or spikes on the same account this limit can be hit, and `copyDatabase` must report that error clearly.
+- The export/import signed URLs point at `<hex32>.r2.cloudflarestorage.com`, which the sandbox proxy allows. They are no longer needed under DEC-0096.
+
+Evidence: `ai/implementation/spikes/a-06/RESULT.md` (`probe-query`, create-DB 403). Fallback: n/a.
+
+### DEC-0098 — Cloudflare upload/download tickets: aws4fetch query signing with Content-Type bound
+Origin: ai-proposed · Status: accepted · Affects: FILES §2 "Cloudflare", FILES-REQ-003, FILES-AC-003, PAR-105, PAR-233, D-02
+
+Tickets are path-style URLs `https://<account>.r2.cloudflarestorage.com/<bucket>/<key, each segment encodeURIComponent'd>` signed with aws4fetch `AwsClient({ accessKeyId, secretAccessKey, service: "s3", region: "auto" })`. `X-Amz-Expires` is set explicitly to PAR-233 in seconds (aws4fetch's default is 86400). Upload tickets are signed with `{ aws: { signQuery: true, allHeaders: true } }` so that `X-Amz-SignedHeaders=content-type;host`; aws4fetch treats `Content-Type` as unsignable by default, and a default-signed `image/png` ticket accepted a `text/html` upload (200), while the `allHeaders` ticket refused it (403 SignatureDoesNotMatch). Download tickets use `{ aws: { signQuery: true } }`. Observed: a ticket is reusable until expiry, refuses other keys (403), expires (403 ExpiredRequest), unsigned requests are refused (400). A 20 MiB XHR PUT with progress events and a byte-exact fetch GET worked in Chromium.
+Evidence: `ai/implementation/spikes/a-07/RESULT.md` (N1–N9, B1–B2). Fallback: none needed.
+
+### DEC-0099 — R2 bucket CORS policy shape set by provisioning
+Origin: ai-proposed · Status: accepted · Affects: FILES §2 "Cross-origin configuration", FILES-REQ-004, FILES-AC-004, PROV, D-02
+
+Provisioning sets `PUT /accounts/<account>/r2/buckets/<bucket>/cors` with `{ "rules": [{ "allowed": { "origins": ["<stage public origin>"], "methods": ["PUT","GET"], "headers": ["Content-Type"] }, "maxAgeSeconds": 60 }] }` (one rule, one origin; `exposeHeaders` not needed). It applies immediately. A preflight from the allowed origin returns 204 with that origin in `Access-Control-Allow-Origin`; from any other origin 403 without it, and Chromium blocks `fetch`/XHR transfers from that origin (no object written). `maxAgeSeconds` 60 is the only value tested; assumed adequate (simplest; not a requirement-level parameter).
+Evidence: RESULT.md (N13, N14, B4–B6). Fallback: none needed.
+
+### DEC-0100 — Stage R2 signing token: account API token with "Workers R2 Storage Bucket Item Write" on the stage bucket only
+Origin: ai-proposed · Status: accepted · Affects: FILES §2 "Cloudflare", SEC (R2 signing credentials), PROV, cloudflare.md, D-02
+
+Provisioning creates the token through `POST /accounts/<account>/tokens` (works with the sandbox's proxy-injected token) with one policy: permission group "Workers R2 Storage Bucket Item Write" (looked up by name from `GET /accounts/<account>/tokens/permission_groups`; id at test time `2efd5506f9c8494dacb1fa10a3e7d5b6`) on resource `com.cloudflare.edge.r2.bucket.<account>_default_<bucket>` = `"*"`. S3 credentials: access key ID = token `id`; secret access key = lowercase hex SHA-256 of the token `value` (returned once; stored only as the framework-internal Worker secret, never printed). Item Write includes object reads. The token was usable immediately and refused the other bucket and ListBuckets (403 AccessDenied). Removal deletes it with `DELETE /accounts/<account>/tokens/<id>`. Assumption (simplest): one token per stage, named after the stage's resources, created by provisioning; rotation is out of scope here.
+Evidence: RESULT.md "How it works", N10–N12, logs/01-setup.txt, logs/04-teardown.txt. Fallback: none needed.
+
+### DEC-0101 — R2 omits CORS headers on 403: on Cloudflare a rejected ticket reports status null (open owner item)
+Origin: ai-proposed · Status: accepted (interim assumption; owner decision outstanding) · Affects: FILES-REQ-006, FILES-AC-003, client.d.ts `uploadFile`/`downloadUrl` behaviour on Cloudflare, D-02
+
+R2 sends `Access-Control-Allow-Origin` on 200 and 404 responses but not on authentication failures (`403 SignatureDoesNotMatch`, `403 ExpiredRequest`), even for the allowed origin. In Chromium an expired or content-type-mismatched ticket therefore ends with XHR status 0 / `fetch` TypeError ("No 'Access-Control-Allow-Origin' header"), so the browser helpers can only report status null and `no response: network or cross-origin blocked`. FILES-AC-003 requires an expired ticket to fail with storage's status and `rejected by storage (HTTP n)`; that cannot be met on Cloudflare as designed. The design names no fallback.
+Assumption until the owner decides (simplest, no contract change): D-02 implements tickets as in DEC-0098…DEC-0100; on Cloudflare an expired/rejected ticket yields `FILES.TRANSFER_FAILED` with status null and the `no response …` message; the evaluator records FILES-AC-003's expired-ticket clause on Cloudflare as failing with a pointer to this entry, rather than the implementation working around it. Options for the owner: (a) revise FILES-REQ-006/AC-003 to allow status null when storage's response is not readable cross-origin; (b) have the browser helper check the ticket's expiry before sending and fail as an expired ticket without a storage status (still not "storage's status"); (c) route transfers through a framework upload service (files.md §5), losing direct-to-storage transfers.
+Evidence: `ai/implementation/spikes/a-07/RESULT.md` (B3, logs/03-errors.txt).
+
+Integration (A-INT): adopted as the interim behaviour under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review. The conflict, precisely: FILES-REQ-006 (owner-approved) says `status` is storage's status "when one was received, and null otherwise"; on Cloudflare the browser receives no readable response, so status null with `no response: network or cross-origin blocked` arguably meets the requirement's wording. FILES-AC-003 ("An expired ticket fails with `FILES.TRANSFER_FAILED`, storage's status, and a `rejected by storage (HTTP n)` message", Where: Local, cloud) cannot pass on Cloudflare. A content-type-mismatched upload is still refused by storage, so that clause holds, but it too reports status null. The requirement and criterion text are unchanged; the expired-ticket clause of FILES-AC-003 on Cloudflare is recorded as failing with a pointer here until the owner chooses (a), (b), (c) or another option. Local tickets are same-origin, so the clause is unaffected locally. files.md §2 "Cloudflare" points here.
+
+### DEC-0102 — SQL-OQ-1 resolved: local D1 enforces D1's limits; no portable limit added
+Origin: ai-proposed · Status: accepted · Affects: SQL-OQ-1, sql.md §2 "Common needs" and §6, SQL-REQ-002, B-06, PAR-216, PAR-217
+
+Measured with Wrangler 4.149.0 (Miniflare 5.20261006.1-alpha) against a remote D1 database: local D1
+(`getPlatformProxy`) and remote D1 (Worker binding via Wrangler remote bindings, and the D1 HTTP API)
+accept at most **100 bound parameters** per statement and at most **100,000 bytes** of SQL text per
+statement, through `prepare().bind()`, `batch()` and `exec()`, and fail with the same messages
+(`too many SQL variables … SQLITE_ERROR`, `variable number must be between ?1 and ?100`,
+`statement too long: SQLITE_TOOBIG`). Bound values do not count toward the statement size. Because local
+D1 fails exactly where Cloudflare does, the plan's fallback (portable limit, new catalogue code, new AC)
+is not applied: no `errors.d.ts` change, no new SQL-AC. SQL-OQ-1 is closed; sql.md "Common needs"
+should state the chunk sizes (PAR-216, PAR-217). Assumption (simplest reading, recorded rather than
+asked): PGlite/Postgres accepts far more parameters, but app tests run per dialect including local D1
+(DEC-0039, B-16), so the local D1 run catches an over-limit query; the framework does not add a
+pre-check of its own.
+Evidence: `ai/implementation/spikes/a-08/RESULT.md`, `out/local.txt`, `out/remote-binding.txt`,
+`out/remote-http.txt`. Fallback: not needed.
+
+### DEC-0103 — sql.d.ts typing approach works; three declarations revised (contract change)
+Origin: ai-proposed · Status: accepted (owner review open) · Affects: SQL-REQ-002, SQL-REQ-003, CORE (AppDefinition.tables), docs/contracts/ts/sql.d.ts, docs/contracts/ts/index.d.ts, B-05
+
+Spike A-09 (evidence: `ai/implementation/spikes/a-09/RESULT.md`, `revised.diff`; drizzle-orm 0.45.4,
+TypeScript 5.9.3 and 7.0.2). Result: the restricted Drizzle pg-core approach works — the sql.md §2.3
+example type-checks unchanged, `.returning({ id })` gives `{ id: string }[]`, writes without
+`returning()` give `void`, `atomic` infers per-step tuples (`[void, { id: string }[], Row[]]`),
+wrong-type inserts/updates/comparisons fail, and raw/transaction/relational members are absent.
+Three declarations are defective:
+1. `TableDefinitions = Record<string, Table>` rejects every concrete table (index signature), so
+   `defineApp({ tables })` does not compile.
+2. `Table`/`Column` fix the table name to `string`; Drizzle's left-join nullability is keyed by the
+   literal name, so every left-join field is typed `never`.
+3. `sum`/`avg` re-export Drizzle's `SQL<string | null>`, contradicting SQL-REQ-003 (JS numbers).
+
+Proposed change (verified: all checks pass): `Column` gains a `TableName` parameter and `Table` a
+`Name` parameter carried from `defineTable<const Name>`; new `AnyTable = PgTable` with
+`TableDefinitions = Record<string, AnyTable>` (export from index.d.ts); framework-declared
+`sum`/`avg` returning `SQL<number | null>`. Fallback named in the plan: none — ask owner.
+
+Integration (A-INT): adopted under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review. `revised.diff` was
+applied to `docs/contracts/ts/sql.d.ts` (now identical to the spike's `fw-revised/index.d.ts`),
+`AnyTable` is exported from `docs/contracts/ts/index.d.ts`, and sql.md §2.2 describes the types. The
+spike's checks, rerun against the edited contract file (drizzle-orm 0.45.4; TypeScript 5.9.3 and
+6.0.3), exit 0 for the §2.3 example and for every check, with no errors in the contract under
+`--skipLibCheck false`. B-05 builds on the revised contract.
+
+### DEC-0104 — Dependency pins verified; remaining pins chosen
+Origin: ai-proposed · Status: accepted · Affects: PAR-100…PAR-116, B-01, CHECK, LOCAL, COMPL
+
+Spike A-10 (evidence: `ai/implementation/spikes/a-10/RESULT.md`, `out/`) installed PAR-100…PAR-108 at
+their pinned versions with Node 22.22.0 and ran each: `wrangler dev` serving a Hono + Zod + jose +
+aws4fetch + Drizzle (D1) + R2 Worker, online and offline (`unshare -rn`); PGlite + drizzle-orm;
+drizzle-kit generating SQLite and Postgres migrations; `sst install` resolving `@pulumi/cloudflare`
+6.15.0 / `@pulumi/aws` 7.20.0; TypeScript type-check (app and framework lib sets); ESLint with
+typescript-eslint type information; Vite build and dev proxy; Playwright against Vite + Wrangler;
+Vitest with fake timers. Everything works together; no existing pin was replaced. Remaining pins are
+the latest stable releases compatible with each other, except TypeScript: 7.0.2 is the latest, but
+typescript-eslint (needed for CHECK's type-aware rules) supports only `<6.1.0`, so TypeScript is 6.0.3.
+Test runner: Vitest (Vite-native, Node process per file, fake timers, runs PGlite and Miniflare
+in-process); app test glob `tests/**/*.test.ts`. Playwright specs use `*.spec.ts` so the globs never
+overlap. Fallback applied: none needed.
+
+### DEC-0105 — `createTestApp` gets local Cloudflare bindings through Wrangler's `getPlatformProxy`
+Origin: ai-proposed · Status: accepted · Affects: CORE (`createTestApp`), LOCAL, B-16, PAR-101
+
+Wrangler 4.149.0 ships Miniflare `5.20261006.1-alpha`, whose constructor API differs from the
+documented Miniflare 3/4 shape (the old keys are rejected). `getPlatformProxy({ configPath, persist })`
+from `wrangler` gives working D1 and R2 bindings in the Node test process from the generated
+`wrangler.jsonc`, with no Miniflare-specific configuration, and works offline (spike A-10, test 2/3).
+Use it; if Miniflare is imported directly, pin it to exactly the version Wrangler depends on (one
+workerd; PAR-117). Miniflare's type declarations import `@cloudflare/workers-types`, so the framework adds it as
+a dev dependency at the matching version (PAR-118); it is never added to a `types` array, so app code stays free
+of workers-types (CHECK §2).
+
+### DEC-0106 — PGlite harness uses a database created with C collation and C ctype
+Origin: ai-proposed · Status: accepted · Affects: SQL (sql.md §2 `containsText`, collation), MIG §2, B-05, B-06, B-16
+
+PGlite 0.5.8's default database has `datcollate = C` (code-point ordering, matches D1) but
+`datctype = C.UTF-8`, so `lower('ÀB')` returns `àb`; sql.md §2 assumes `lower()` folds only ASCII on
+Postgres. `CREATE DATABASE <name> TEMPLATE template0 LC_COLLATE 'C' LC_CTYPE 'C'` works in PGlite and
+`PGlite.create(dir, { database: <name> })` opens it, where `lower('ÀB')` is `Àb` (spike A-10,
+`out/pg-lower.txt`). The local Postgres harness therefore creates and uses such a database, matching
+MIG §2 on AWS. (Alternative if that proves awkward in-memory: `containsText` applies `COLLATE "C"` to
+`lower()`, which gives the same result on the default database.)
+
+### DEC-0107 — Combined Cloudflare tool environment for sandbox runs
+Origin: ai-proposed · Status: accepted · Affects: DEC-0083, DEC-0088, DEC-0084, PROV §2 "Credentials" and "Removal", plan §10.6, D-03, D-05, every cloud run
+
+One statement of DEC-0083 as amended by DEC-0088, for implementers:
+- **wrangler:** `CLOUDFLARE_API_TOKEN=<non-secret placeholder>` (the proxy injects the real token for `api.cloudflare.com`), `CLOUDFLARE_ACCOUNT_ID`, `NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt`, plus the sandbox's `HTTPS_PROXY`.
+- **SST/Pulumi:** `CLOUDFLARE_API_TOKEN=<non-secret placeholder>`, `CLOUDFLARE_DEFAULT_ACCOUNT_ID=$CLOUDFLARE_ACCOUNT_ID`, `NODE_USE_ENV_PROXY=1`, `--stage` (or `SST_STAGE`), plus `HTTPS_PROXY`.
+- **Framework Node code** calling Cloudflare or `workers.dev` with `fetch`: `NODE_USE_ENV_PROXY=1` (DEC-0085).
+On an owner machine the real token goes in `CLOUDFLARE_API_TOKEN` and the proxy-specific variables are harmless. Removal: `sst remove` leaves the stage's state objects (including its passphrase) in the `sst-state` bucket, so the framework's Cloudflare `remove` deletes the objects under `*/<app>/<stage>` itself and never the bucket (DEC-0084).
+Recorded under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Evidence: `ai/implementation/spikes/a-01/RESULT.md`, `ai/implementation/spikes/a-03/RESULT.md`.
+
+### DEC-0108 — Offline runs use the spike's `offline.sh` wrapper
+Origin: ai-proposed · Status: accepted · Affects: plan §10.2, B-17 (`verify` offline check), B-18 / C-05 exit checks, CHECK-REQ-006 runs
+
+Plan §10.2's offline command runs `ip link set lo up`, but `ip` (iproute2) is not installed in this sandbox. Offline runs use `unshare -rn sh <dir>/offline.sh <command…>`, where `offline.sh` brings loopback up with `ip` if present and otherwise with an ioctl through `python3 -I lo-up.py`, then runs the command. Spike A-10 ran Vitest, `wrangler dev` and Playwright + Vite offline with it. The files are `ai/implementation/spikes/a-10/scripts/{offline.sh,lo-up.py}`; B-01 copies both unchanged to `scripts/offline.sh` and `scripts/lo-up.py` at the repository root, and later items use that path. Unsetting `HTTPS_PROXY` or disabling TLS is still never a substitute.
+Recorded under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Evidence: `ai/implementation/spikes/a-10/RESULT.md` "Environment", commands 3, 5, 13.
+
+### DEC-0109 — The framework depends on `@pulumi/cloudflare` only if its code imports it
+Origin: ai-proposed · Status: accepted · Affects: PAR-108, B-01 (`FW/package.json`), D-03
+
+SST 4.17.2 installs its own `@pulumi/cloudflare` 6.15.0 (PAR-108) in `.sst/platform`, and installing the package directly pulls a newer `@pulumi/pulumi` (3.270.0) than SST's (3.215.0). So the framework declares `@pulumi/cloudflare` as a dependency, at exactly PAR-108, only if framework code imports it (for example for types or a resource SST does not wrap); otherwise it relies on SST's copy and declares nothing. PAR-108 stays the pinned version either way.
+Recorded under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Evidence: `ai/implementation/spikes/a-10/RESULT.md` finding 5, command 15.

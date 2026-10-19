@@ -56,11 +56,11 @@ A uniqueness or reference violation MUST surface as `SQL.CONFLICT`. A database t
 
 There is no JSON column type; structured data is stored as text (DEC-0060). `.default()` takes a static value checked against the same rule.
 
-On Postgres, code-point text ordering comes from the database's C collation: every database is created with C collation and copies inherit it (MIG §2, AWS), so no per-column `COLLATE` is needed, including for `__framework_kv`. The local PGlite database also uses C collation (verify early).
+On Postgres, code-point text ordering comes from the database's C collation: every database is created with C collation and copies inherit it (MIG §2, AWS), so no per-column `COLLATE` is needed, including for `__framework_kv`. The local PGlite database is created with `LC_COLLATE 'C'` and `LC_CTYPE 'C'`: PGlite's default database orders by code point but folds non-ASCII in `lower()` (DEC-0106).
 
 ### 2.2 Implementation
 
-Drizzle ORM (PAR-102) provides the query builder for both dialects (DEC-0038). The build selects the dialect per target, and `defineTable` constructs the corresponding Drizzle table with snake_case casing, so lowerCamelCase column keys become snake_case SQL names. Public types are the Postgres-compatible ones. Results are normalized where drivers differ:
+Drizzle ORM (PAR-102) provides the query builder for both dialects (DEC-0038). The build selects the dialect per target, and `defineTable` constructs the corresponding Drizzle table with snake_case casing, so lowerCamelCase column keys become snake_case SQL names. Public types are the Postgres-compatible ones. `Table` and `Column` carry the table's literal name from `defineTable`, so Drizzle types left-join fields as nullable; the `tables` record accepts any defined table (`AnyTable`); `sum` and `avg` are typed as JS numbers to match the normalization below (DEC-0103). Results are normalized where drivers differ:
 - `count`, `sum`, and `avg` from Postgres may arrive as strings; they are converted to numbers, and unsafe integers raise `SQL.INVALID_VALUE`.
 - `boolean` and `timestamp` values are converted to their JS types.
 
@@ -131,7 +131,7 @@ export async function example(db: PortableDb, notebookId: string, since: number)
 - Compute derived values (fallbacks for NULL, lowercased text, sums across columns) in JS after selecting.
 - Rows keyed by a user-supplied value use `id()` plus a unique `text()` column holding that value.
 - Join tables use `id()` plus a `uniques` entry over their two reference columns.
-- Split long `inArray` lists and multi-row inserts into chunks (see SQL-OQ-1).
+- Split long `inArray` lists and multi-row inserts into chunks of at most PAR-216 bound parameters and PAR-217 bytes of SQL per statement. Local D1 enforces both, so `verify` catches an oversized statement (DEC-0102).
 
 ### Local
 The local D1 database runs under Wrangler. App tests can also run against PGlite (PAR-107), an in-process Postgres, to catch Postgres-dialect failures without AWS (DEC-0039). Neither proves Data API behavior.
@@ -163,4 +163,4 @@ The contract is ordinary relational SQL with a fixed type set; any managed SQLit
 
 ## 6. Open questions
 
-- **SQL-OQ-1 — D1 bound-parameter and statement-size limits.** D1 limits the bound parameters per statement and the statement size, so a long `inArray` list or multi-row insert could pass `verify` and fail only on Cloudflare. Early spike: check whether local D1 enforces the same limits. If it does not, add a portable limit enforced on every target, with one catalogue code and an acceptance criterion using one more bound parameter than D1 allows.
+- **SQL-OQ-1 — D1 bound-parameter and statement-size limits.** Resolved by DEC-0102: local D1 enforces the same limits (PAR-216, PAR-217) with the same errors, so no portable limit, catalogue code or criterion is added. Original question: D1 limits the bound parameters per statement and the statement size, so a long `inArray` list or multi-row insert could pass `verify` and fail only on Cloudflare. Early spike: check whether local D1 enforces the same limits. If it does not, add a portable limit enforced on every target, with one catalogue code and an acceptance criterion using one more bound parameter than D1 allows.

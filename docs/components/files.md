@@ -70,6 +70,8 @@ Server operations use the local R2 emulation through its Worker binding. Tickets
 ### Cloudflare
 Server operations use the R2 Worker binding. Tickets are SigV4-signed URLs for R2's S3-compatible endpoint, created with aws4fetch (PAR-105), because the binding cannot sign URLs. The signing credentials are an R2 API token scoped to the stage's bucket. Provisioning creates it and stores it as a framework-internal Worker secret.
 
+Note: R2 sends no CORS headers on its 403 responses (expired or mismatched ticket), so the browser cannot read storage's status there; on Cloudflare such a transfer fails with status null and the `no response: network or cross-origin blocked` message. This conflicts with FILES-AC-003's expired-ticket clause and is an open owner item: see DEC-0101.
+
 ### AWS
 Server operations and tickets use S3 with the Lambda's role credentials, including the session token, through aws4fetch. Tickets last PAR-233, on the assumption that role sessions outlast it; a ticket whose credentials expire early fails in the browser with `FILES.TRANSFER_FAILED` and storage's status. Lambdas access S3 directly, outside any VPC. File content reaches the browser only through `downloadUrl`, never as an API route's response body: Lambda buffers responses and refuses those above its response payload limit, so a route returning a `files.get` stream fails on AWS for large files.
 
