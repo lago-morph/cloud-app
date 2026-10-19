@@ -81,7 +81,6 @@ A contract file is the single source of truth for the shape of its interface. De
 | [architecture/component-map.md](architecture/component-map.md) | Components, responsibilities, dependencies |
 | [decisions/decision-log.md](decisions/decision-log.md) | All recorded decisions with origin |
 | [parameters/parameters.md](parameters/parameters.md) | All tunable values |
-| [guidance/implementing-agents.md](guidance/implementing-agents.md) | Working rules for agents implementing the framework |
 | `components/` | One design document per component |
 | `contracts/` | Interface contracts (see §6) |
 | `demo/` | Demo application specification |

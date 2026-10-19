@@ -13,13 +13,12 @@ Reference material:
 
 - [decisions/decision-log.md](decisions/decision-log.md) — every recorded decision and its origin.
 - [parameters/parameters.md](parameters/parameters.md) — every limit, timeout, default, and version pin.
-- [guidance/implementing-agents.md](guidance/implementing-agents.md) — working rules for agents implementing the framework.
 
 ## Status
 
 | Part | Status |
 | --- | --- |
-| Conventions, system spec, component map, decision log, parameters register, implementing-agent guidance | Draft for owner review |
+| Conventions, system spec, component map, decision log, parameters register | Draft for owner review |
 | Component design documents and contracts (`components/`, `contracts/`) | Not yet written |
 | Demo app specification (`demo/`) and end-to-end scenarios (`acceptance/`) | Not yet written |
 

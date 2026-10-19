@@ -275,9 +275,9 @@ Origin: owner · Status: accepted
 The files under `ai/spec/` are kept until the owner's separate review, then deleted; they remain in git history. They are not a source of requirements. The one-shot implementation prompt will not be used. A new one will be written after the specification and design documents are reorganized.
 
 ### DEC-0047 — Where implementing-agent instructions are recorded
-Origin: owner · Status: accepted
+Origin: owner · Status: superseded by DEC-0056
 
-Non-obvious working rules for implementing agents go in [guidance/implementing-agents.md](../guidance/implementing-agents.md), linked from the repository's `CLAUDE.md` so agents see it. Rules clearly based on owner statements are recorded in this log. Where provenance is unclear, the item is recorded with that marking. The guidance document was populated from the earlier one-shot prompt, so most of its rules are `provenance-unclear`.
+Non-obvious working rules for implementing agents go in `docs/guidance/implementing-agents.md` (since removed), linked from the repository's `CLAUDE.md` so agents see it. Rules clearly based on owner statements are recorded in this log. Where provenance is unclear, the item is recorded with that marking. The guidance document was populated from the earlier one-shot prompt, so most of its rules are `provenance-unclear`.
 
 ### DEC-0048 — Single framework package with subpath exports; export list is a contract
 Origin: owner-approved · Status: accepted · Affects: CORE
@@ -327,3 +327,20 @@ An AI agent builds the demo app using the skill and only the framework's public 
 Origin: owner · Status: accepted · Affects: component map, guidance
 
 The specification records only spec-level dependencies: component A depends on B when A's requirements or contract refer to B's capability. Its purpose is impact analysis under SYS-REQ-003. Dependencies that exist only because of a design choice are listed in each component design document's "Uses" section. The order of implementation is decided in a separate implementation plan, not in the specification. The containment rule (components interact only through published contracts) is stated separately from the dependency table.
+
+### DEC-0056 — Implementing-agent guidance file removed
+Origin: owner · Status: accepted · Supersedes: DEC-0047
+
+The owner reviewed `docs/guidance/implementing-agents.md` and found most of it generic agent discipline, which current models already follow and which isn't specific to this project. It came from the earlier AI-written one-shot prompt and spec (provenance-unclear). The file was removed.
+
+Specific findings:
+- "Work in the existing checkout; no extra worktrees" was a misapplied copy of an earlier-spec rule about the app template and skill. The owner likes worktrees, and feature branches prevent conflicts with the owner's work. The rule is not adopted.
+- "Do not broaden scope after checks pass" was too vague to act on. It is not adopted.
+- "App-agent rules do not bind framework implementers" belongs in the SKILL design, if anywhere.
+
+The rules that are project-specific are kept elsewhere:
+- `docs/` is authoritative: `CLAUDE.md` and DEC-0046.
+- Earlier observations are unverified: DEC-0050.
+- Evidence before claims: SYS-REQ-028.
+- No destructive drop-and-recreate in place of a migration: the MIG design.
+- Commit and push frequently: the repository's agent instructions file.
