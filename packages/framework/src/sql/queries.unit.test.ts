@@ -10,7 +10,7 @@ import { tag } from "../../../../tests/support/tags.js";
 import { boolean, id, integer, number, ref, text } from "./columns.js";
 import type { Dialect } from "./dialect.js";
 import { openPostgres, postgresDb, sqliteDb, type SqlAdapterOptions } from "./drivers.js";
-import { asc, atomic, avg, containsText, count, countDistinct, desc, eq, max, min, sum } from "./public.js";
+import { asc, atomic, avg, containsText, count, countDistinct, desc, eq, inArray, isNotNull, max, min, sum } from "./public.js";
 import { defineTable, tableFor } from "./table.js";
 import type { AnyTable, PortableDb, WriteDb } from "./types.js";
 
@@ -217,6 +217,41 @@ describe.each([
     await expect(other.db.select({ id: t.id }).from(t)).rejects.toMatchObject(unavailable);
     const forced = h.handle({ unavailable: true });
     await expect(forced.select({ id: t.id }).from(t)).rejects.toMatchObject(unavailable);
+  });
+
+  describe("select forms through the handle", () => {
+    it(tag("SQL-AC-003", "subqueries, select-only CTEs, joins and selectDistinct"), async () => {
+      const p = T(parents);
+      const t = T(things);
+      const names = await h.db
+        .select({ name: p.name })
+        .from(p)
+        .where(inArray(p.id, h.db.select({ id: t.parentId }).from(t).where(eq(t.flag, true))))
+        .orderBy(asc(p.name));
+      expect(names).toEqual([{ name: "first" }]);
+      const sq = h.db.select({ id: t.id }).from(t).where(eq(t.flag, false)).as("unflagged");
+      expect(await h.db.select({ n: count() }).from(sq)).toEqual([{ n: 3 }]);
+      const scored = h.db.$with("scored").as(h.db.select({ id: t.id }).from(t).where(isNotNull(t.score)));
+      expect(await h.db.with(scored).select({ n: count() }).from(scored)).toEqual([{ n: 3 }]);
+      const joined = await h.db
+        .select({ thing: t.name, parent: p.name })
+        .from(t)
+        .leftJoin(p, eq(t.parentId, p.id))
+        .orderBy(asc(t.id));
+      expect(joined.map((r) => r.parent)).toEqual(["first", "first", "second", null]);
+      const inner = await h.db.select({ id: t.id }).from(t).innerJoin(p, eq(t.parentId, p.id)).where(eq(p.name, "second"));
+      expect(inner).toEqual([{ id: T3 }]);
+      expect(await h.db.selectDistinct({ parentId: t.parentId }).from(t).orderBy(asc(t.parentId))).toEqual([{ parentId: null }, { parentId: R1 }, { parentId: R2 }]);
+    });
+
+    it(tag("SQL-AC-003", "upsert against a declared unique constraint, with returning"), async () => {
+      const p = T(parents);
+      const updated = await h.db.insert(p).values({ id: uuid(80), name: "first" })
+        .onConflictDoUpdate({ target: p.name, set: { name: "first!" } }).returning({ id: p.id });
+      expect(updated).toEqual([{ id: R1 }]);
+      const skipped = await h.db.insert(p).values({ id: uuid(81), name: "second" }).onConflictDoNothing({ target: p.name }).returning({ id: p.id });
+      expect(skipped).toEqual([]);
+    });
   });
 
   describe("atomic", () => {
