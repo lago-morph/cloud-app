@@ -581,3 +581,8 @@ A stage is a test stage exactly when its name starts with `test-`. Test stages u
 Origin: owner · Status: accepted · Affects: DEC-0046, implementation planning
 
 After the owner's review (DEC-0046), the superseded files under `ai/spec/` were deleted; they remain in git history. The owner asked for a one-shot implementation prompt covering the local and Cloudflare targets: `ai/prompts/implement-local-cloudflare.md`. AWS is implemented in a later phase. This changes the order of work only. SYS-REQ-001 (both clouds mandatory) still holds, so the framework cannot be declared working (COMPL-REQ-006) until the AWS phase passes.
+
+### DEC-0083 — Google login is mocked in the first implementation phase
+Origin: owner · Status: accepted · Affects: DEC-0082, GOOGLE, AUTH, COMPL, implementation planning
+
+For the local and Cloudflare phase (DEC-0082), the owner chose to mock the Google login. Automated tests log in with the authentication mock or the stub login provider. GOOGLE is built and tested offline only. No Google OAuth client or production cloud stage (including `prodcheck`) is set up. Every criterion that needs a real Google login, a Google client or a production cloud stage is recorded as `not-run` until a later phase runs it. This changes the order of work only. The requirements are unchanged, so the framework cannot be declared working (COMPL-REQ-006) until those criteria pass.
