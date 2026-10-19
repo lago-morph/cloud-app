@@ -1,0 +1,9 @@
+{
+  "name": "spike-a-08",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "22.22.0" },
+  "dependencies": {
+    "wrangler": "4.149.0"
+  }
+}
