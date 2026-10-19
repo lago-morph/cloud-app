@@ -12,7 +12,7 @@ import { d1MigrationDatabase, migrateLocal, pgliteMigrationDatabase, type D1Like
 import { openPostgres, postgresDb, sqliteDb, type SqlAdapterOptions } from "../sql/drivers.js";
 import type { PortableDb } from "../sql/types.js";
 import type { KvService } from "./public.js";
-import { createKv } from "./service.js";
+import { asKvFailure, createKv } from "./service.js";
 
 const NO_APP_MIGRATIONS = "/nonexistent-kv-unit-test-migrations";
 
@@ -27,11 +27,15 @@ interface Harness {
 async function openD1(): Promise<Harness> {
   const proxy = await getPlatformProxy<{ DB: D1Like }>({ configPath: new URL("./fixtures/wrangler.jsonc", import.meta.url).pathname, persist: false });
   const binding = proxy.env.DB;
+  let closed = false;
   await migrateLocal(d1MigrationDatabase(binding), NO_APP_MIGRATIONS);
   return {
     handle: (options) => sqliteDb(binding as never, options),
     rows: async () => (await binding.prepare(`select key, value from __framework_kv order by key`).all<{ key: string; value: string }>()).results,
-    close: () => proxy.dispose(),
+    close: async () => {
+      if (!closed) await proxy.dispose();
+      closed = true;
+    },
   };
 }
 
@@ -41,7 +45,9 @@ async function openPg(): Promise<Harness> {
   return {
     handle: (options) => postgresDb(pg, options),
     rows: async () => (await pg.query<{ key: string; value: string }>(`select key, value from __framework_kv order by key`)).rows,
-    close: () => pg.close(),
+    close: async () => {
+      if (!pg.closed) await pg.close();
+    },
   };
 }
 
@@ -162,5 +168,51 @@ describe.each([
     const page = await kv.list("max/", { limit: 50 });
     expect(page.items.map((i) => i.key)).toEqual(keys);
     expect(page.nextCursor).not.toBeNull();
+  });
+
+  describe("storage that cannot be used", () => {
+    const ops: Array<[string, (s: KvService) => Promise<unknown>]> = [
+      ["get", (s) => s.get("k")],
+      ["put", (s) => s.put("k", "v")],
+      ["delete", (s) => s.delete("k")],
+      ["list", (s) => s.list("k", { limit: 1 })],
+    ];
+
+    it(tag(["KV-AC-005", "KV-AC-004"], "with the SQL handle forced unavailable, every operation fails with KV.UNAVAILABLE, logged once under KV"), async () => {
+      const entries: { component: string; severity: string; message: string }[] = [];
+      const log = { write: (component: string, severity: string, message: string) => void entries.push({ component, severity, message }) };
+      const down = createKv(h.handle({ unavailable: true }), { log: log as never });
+      for (const [name, op] of ops) {
+        entries.length = 0;
+        const thrown = await op(down).then(() => undefined, (e: unknown) => e);
+        expect(thrown, name).toBeInstanceOf(FrameworkError);
+        expect((thrown as FrameworkError).code, name).toBe("KV.UNAVAILABLE");
+        expect(entries.map((e) => [e.component, e.severity]), name).toEqual([["KV", "error"]]);
+        expect(entries[0]?.message, name).toContain("KV.UNAVAILABLE");
+      }
+    });
+
+    it(tag(["KV-AC-005", "KV-AC-004"], "a closed database fails with KV.UNAVAILABLE, not SQL.UNAVAILABLE"), async () => {
+      const store = createKv(h.handle());
+      await h.close();
+      for (const [name, op] of ops) expect(await codeOf(op(store)), name).toBe("KV.UNAVAILABLE");
+    });
+  });
+});
+
+describe("asKvFailure", () => {
+  it("maps other SQL codes to CORE.INTERNAL (never surfaced under SQL's codes), unlogged; leaves other errors alone", () => {
+    const entries: string[] = [];
+    const log = { write: (component: string) => void entries.push(component) };
+    for (const code of ["SQL.RESULT_TOO_LARGE", "SQL.CONFLICT", "SQL.INVALID_VALUE"] as const) {
+      const mapped = asKvFailure(new FrameworkError(code, "x"), log as never);
+      expect(mapped).toBeInstanceOf(FrameworkError);
+      expect((mapped as FrameworkError).code).toBe("CORE.INTERNAL");
+    }
+    expect(entries).toEqual([]);
+    const internal = new FrameworkError("CORE.INTERNAL", "y");
+    expect(asKvFailure(internal, log as never)).toBe(internal);
+    const invalid = new FrameworkError("KV.INVALID_KEY", "z");
+    expect(asKvFailure(invalid, log as never)).toBe(invalid);
   });
 });

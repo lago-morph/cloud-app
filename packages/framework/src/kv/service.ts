@@ -9,6 +9,8 @@ import { frameworkTables } from "../mig/framework.js";
 import { asc } from "../sql/expressions.js";
 import { adapterOf } from "../sql/handle.js";
 import type { PortableDb } from "../sql/types.js";
+import { logFailure } from "../log/failures.js";
+import type { LogService } from "../log/public.js";
 import type { KvListOptions, KvListPage, KvService } from "./public.js";
 import { decodeCursor, encodeCursor } from "./cursor.js";
 import { prefixEnd } from "./range.js";
@@ -21,8 +23,16 @@ export const MAX_PAGE_SIZE = 50;
 
 type KvTable = ReturnType<typeof frameworkTables>["kv"];
 
-/** KV over `db`, a handle made by `sqliteDb`/`postgresDb`. */
-export function createKv(db: PortableDb): KvService {
+export interface KvOptions {
+  /** The request's log: each `KV.UNAVAILABLE` is written once, under component KV (LOG-REQ-005). */
+  readonly log?: LogService;
+}
+
+/**
+ * KV over `db`, a handle made by `sqliteDb`/`postgresDb`. Build that handle without the SQL
+ * adapter's `log` (KV logs its own failure) but with its `unavailable`/`budgetMs`.
+ */
+export function createKv(db: PortableDb, options: KvOptions = {}): KvService {
   const adapter = adapterOf(db);
   if (adapter === undefined) throw new FrameworkError("CORE.MISCONFIGURED", "KV needs a SQL handle made by the framework's SQL adapter");
   const table = frameworkTables(adapter.dialect).kv;
@@ -40,36 +50,47 @@ export function createKv(db: PortableDb): KvService {
     delete(t: KvTable): { where(c: unknown): Promise<void> };
   };
 
+  /** Runs a SQL operation; its failures surface as KV's (KV-REQ-005, DEC-PENDING-B-08-4). */
+  const storage = async <T>(operation: () => Promise<T>): Promise<T> => {
+    try {
+      return await operation();
+    } catch (thrown) {
+      throw asKvFailure(thrown, options.log);
+    }
+  };
+
   return {
     async get(key) {
       checkKey(key);
-      const rows = await sql.select({ value: table.value }).from(table).where(eq(table.key, key)).limit(1);
+      const rows = await storage(() => sql.select({ value: table.value }).from(table).where(eq(table.key, key)).limit(1));
       return rows[0]?.value ?? null;
     },
     async put(key, value) {
       checkKey(key);
       checkValue(value);
-      await sql.insert(table).values({ key, value }).onConflictDoUpdate({ target: table.key, set: { value } });
+      await storage(() => sql.insert(table).values({ key, value }).onConflictDoUpdate({ target: table.key, set: { value } }));
     },
     async delete(key) {
       checkKey(key);
-      await sql.delete(table).where(eq(table.key, key));
+      await storage(() => sql.delete(table).where(eq(table.key, key)));
     },
-    async list(prefix: string, options: KvListOptions = {}): Promise<KvListPage> {
+    async list(prefix: string, page: KvListOptions = {}): Promise<KvListPage> {
       checkPrefix(prefix);
-      const limit = pageSize(options.limit);
-      const after = options.cursor === undefined ? undefined : decodeCursor(options.cursor, prefix);
+      const limit = pageSize(page.limit);
+      const after = page.cursor === undefined ? undefined : decodeCursor(page.cursor, prefix);
       const end = prefixEnd(prefix);
       const conditions: SQL[] = [after === undefined ? gte(table.key, prefix) : gt(table.key, after)];
       if (end !== null) conditions.push(lt(table.key, end));
       // One row more than the page tells whether another page follows (nextCursor null otherwise).
       // A maximum page plus one row (51 × (PAR-220 + PAR-223) = 261,120 bytes) is within PAR-215.
-      const rows = await sql
-        .select({ key: table.key, value: table.value })
-        .from(table)
-        .where(and(...conditions))
-        .orderBy(asc(table.key as never))
-        .limit(limit + 1);
+      const rows = await storage(() =>
+        sql
+          .select({ key: table.key, value: table.value })
+          .from(table)
+          .where(and(...conditions))
+          .orderBy(asc(table.key as never))
+          .limit(limit + 1),
+      );
       const items = rows.slice(0, limit).map((r) => ({ key: r.key, value: r.value }));
       const last = items[items.length - 1];
       return { items, nextCursor: rows.length > limit && last !== undefined ? encodeCursor(prefix, last.key) : null };
@@ -81,4 +102,19 @@ export function createKv(db: PortableDb): KvService {
 function pageSize(limit: number | undefined): number {
   if (limit === undefined || !Number.isFinite(limit)) return DEFAULT_PAGE_SIZE;
   return Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(limit)));
+}
+
+/**
+ * A SQL failure as KV's: `SQL.UNAVAILABLE` becomes `KV.UNAVAILABLE` (logged here, once); any other
+ * `SQL.*` code is a framework bug for KV and becomes `CORE.INTERNAL`. `CORE.*` errors pass.
+ */
+export function asKvFailure(thrown: unknown, log: LogService | undefined): unknown {
+  if (!(thrown instanceof FrameworkError) || !thrown.code.startsWith("SQL.")) return thrown;
+  const failure =
+    thrown.code === "SQL.UNAVAILABLE"
+      ? new FrameworkError("KV.UNAVAILABLE", `key-value storage could not be used: ${thrown.message}`)
+      : new FrameworkError("CORE.INTERNAL", `KV storage failed with ${thrown.code}: ${thrown.message}`);
+  (failure as { cause?: unknown }).cause = thrown;
+  if (failure.code === "KV.UNAVAILABLE" && log !== undefined) logFailure(log, failure);
+  return failure;
 }
