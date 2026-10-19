@@ -96,6 +96,28 @@ describe("generate-migration engine", () => {
     expect(migrationFileNames(root, "sqlite")).toHaveLength(1);
   });
 
+  it.each([
+    ["a column type change", defineTable("parents", { id: id(), name: integer(), note: text().nullable() })],
+    ["a nullability change", defineTable("parents", { id: id(), name: text(), note: text() })],
+    ["a default change", defineTable("parents", { id: id(), name: text().default("x"), note: text().nullable() })],
+    ["a NOT NULL column without a static default added to an existing table", defineTable("parents", { id: id(), name: text(), note: text().nullable(), score: integer() })],
+  ])("refuses %s, naming the add-copy-drop pattern, and writes nothing", async (_what, changed) => {
+    const root = scratch();
+    await generate(root, { parents: parentsV1 });
+    const err = await generate(root, { parents: changed }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(MigrationGenerationError);
+    expect(String((err as Error).message)).toMatch(/add-copy-drop/);
+    expect(migrationFileNames(root, "sqlite")).toHaveLength(1);
+    expect(migrationFileNames(root, "postgres")).toHaveLength(1);
+  });
+
+  it("allows adding a NOT NULL column with a static default, and a nullable column, to an existing table", async () => {
+    const root = scratch();
+    await generate(root, { parents: parentsV1 });
+    const added = defineTable("parents", { id: id(), name: text(), note: text().nullable(), score: integer().default(0), extra: text().nullable() });
+    expect(await generate(root, { parents: added })).toMatchObject({ status: "created" });
+  });
+
   it("numbers the next migration after the highest existing one and keeps a schema snapshot per file", async () => {
     const root = scratch();
     await generate(root, V1);

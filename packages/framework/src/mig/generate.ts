@@ -127,7 +127,39 @@ function refuseRenames(dialect: Dialect, previous: Snapshot, current: Snapshot):
           "Renames and type changes are not supported: generate the drop and the add as separate migrations, and copy values with the add-copy-drop pattern (migrations.md §2).",
       );
     }
+    for (const column of Object.keys(table.columns)) {
+      const now = columnShape(table.columns[column]);
+      if (!(column in old.columns)) {
+        if (now.notNull && now.default === undefined) {
+          throw new MigrationGenerationError(
+            `column ${column} added to existing table ${name} is NOT NULL without a static default. Make it nullable or give it a static default, ` +
+              "then fill it with the add-copy-drop pattern (migrations.md §2).",
+          );
+        }
+        continue;
+      }
+      const was = columnShape(old.columns[column]);
+      const changed = (["type", "notNull", "default", "primaryKey"] as const).filter((k) => was[k] !== now[k]);
+      if (changed.length > 0) {
+        throw new MigrationGenerationError(
+          `column ${column} of table ${name} changes its ${changed.join(", ")} (${dialect}); changing an existing column is not supported. ` +
+            "Use the add-copy-drop pattern: add a new column, copy the values in app code, and drop the old column in a later migration (migrations.md §2).",
+        );
+      }
+    }
   }
+}
+
+interface ColumnShape {
+  readonly type: unknown;
+  readonly notNull: unknown;
+  readonly default: unknown;
+  readonly primaryKey: unknown;
+}
+
+function columnShape(column: unknown): ColumnShape {
+  const c = (column ?? {}) as Record<string, unknown>;
+  return { type: c["type"], notNull: c["notNull"] === true, default: c["default"], primaryKey: c["primaryKey"] === true };
 }
 
 /** Adds the new files' checksums; keeps every existing file's recorded checksum; drops entries of deleted files. */
