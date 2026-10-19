@@ -53,3 +53,20 @@ In `packages/framework/src/http/client.ts`, remove the exported named interface 
 - Red: the existing test already fails at `9c09143` (reproduction above); per §8 step 3 the fixer records that run as the red.
 - Green: after the fix and `npm run build -w packages/framework`, `npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/core/types.test.ts` → 4/4 pass; check `dist/http/client.d.ts` contains no `ApiErrorInit`.
 - Regression: `npm run typecheck`, `npm run test:unit`, and the browser tests using `ApiError` (`test/integration/http/api-helper.spec.ts`, `test/integration/files/transfers.spec.ts`, `test/integration/files/app-facing-types.test.ts`, `test/integration/auth/current-user.test.ts`) still pass.
+
+## Review
+
+Reviewer: independent root-cause reviewer (prompt §8 step 2); did not diagnose this failure or write the code or the test. Date: 2026-10-19. Local only, no Cloudflare calls. No code or test changed (the `dist/` edit below is git-ignored and was restored).
+
+**Verdict: ACCEPTED.**
+
+Reasons, each re-checked on `origin/claude/implement-local-cloudflare`:
+- *Symptom reproduced.* After `npm ci` and `npm run build -w packages/framework`, `types.test.ts` → `1 failed | 3 passed (4)` with exactly `"@lago-morph/prototype-framework/client: ApiErrorInit (used by ApiError)"`.
+- *Link 1 (code names the type).* `src/http/client.ts:8` exports `interface ApiErrorInit extends ErrorOptions`; line 22 uses it in `ApiError`'s constructor. `grep -rn ApiErrorInit packages docs` (excluding `dist/`) finds only those two lines, so nothing else depends on the name.
+- *Link 2 (it reaches the public declaration).* Built `dist/http/client.d.ts:19` is `constructor(message?: string, init?: ApiErrorInit);`.
+- *Link 3 (`./client` does not export it).* `src/client/index.ts:9` re-exports only `ApiError, api` from `../http/client.js`.
+- *Fix experiment re-run independently (Experiment A).* Replacing the `dist` constructor parameter with the proposed inline type `ErrorOptions & { readonly code?: ErrorCode; readonly status?: number | null; readonly requestId?: string | null }` → `Tests 4 passed (4)`; original restored, `git status` clean. This also rules out a second masked missing type.
+- *Contract match.* `docs/contracts/ts/client.d.ts:14–23` declares `ApiError extends Error` with no constructor and no `ApiErrorInit`, so the contract constructor is `Error`'s `(message?, options?: ErrorOptions)`. The inline type is structurally identical to the current interface (same three readonly optional fields, extends/intersects `ErrorOptions`), so it changes no caller and no type relation; it still satisfies DEC-0127 (`init` extends `ErrorOptions`, "no contract change"). `ErrorCode` is already exported by the contract and by `./client`; `ErrorOptions` is a lib type. No contract file changes.
+- *Alternative correctly rejected.* Exporting `ApiErrorInit` from `./client` (Experiment B) would add a name not in `client.d.ts`, contradicting the hub's "exactly the names of client.d.ts" and needing a contract change.
+- *Test strength.* The test checks the AC text literally ("Every framework type appearing in a public signature can be imported from the subpath whose signatures use it"); the fix changes code only, so the test stays as strong as the criterion.
+- Minor, non-blocking: the record's remark that a non-exported alias "is not enough" is right in effect (tsc emits a non-exported local declaration into the `.d.ts`, which the walker would still report), but was not demonstrated; the fix does not rely on it.
