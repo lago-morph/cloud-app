@@ -1,0 +1,3 @@
+import { noteInput } from "../../shared/schemas";
+
+export const parseNote = (value: unknown) => noteInput.parse(value);

@@ -1,0 +1,5 @@
+import { like } from "drizzle-orm";
+import type { PortableDb } from "@lago-morph/prototype-framework";
+import { authors, posts } from "./tables";
+
+export const query = (db: PortableDb) => db.select().from(posts).where(like(posts.title, "%a%"));

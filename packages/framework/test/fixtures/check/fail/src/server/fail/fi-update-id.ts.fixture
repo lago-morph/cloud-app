@@ -1,0 +1,4 @@
+import { eq, newId, type PortableDb } from "@lago-morph/prototype-framework";
+import { authors } from "./tables";
+
+export const reassign = (db: PortableDb, authorId: string) => db.update(authors).set({ id: newId() }).where(eq(authors.id, authorId));

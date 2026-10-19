@@ -1,0 +1,48 @@
+import { expect, it } from "vitest";
+import { z } from "zod";
+import { createTestApp, mockUsers } from "@lago-morph/prototype-framework/testing";
+import app from "../src/app";
+
+const json = (body: unknown): RequestInit => ({
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify(body),
+});
+
+it("the sql.md §2.3 example runs on this dialect", async () => {
+  const t = await createTestApp(app);
+  try {
+    const created = await t.request("/api/notebooks", json({ name: "first" }));
+    expect(created.status).toBe(201);
+    const { id } = z.object({ id: z.string() }).parse(await created.json());
+    const res = await t.request(`/api/notebooks/${id}/example`, { method: "POST" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ found: true });
+  } finally {
+    await t.dispose();
+  }
+});
+
+it("every supported query feature runs on this dialect", async () => {
+  const t = await createTestApp(app);
+  try {
+    const res = await t.request("/api/report", { method: "POST" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ upserted: true, totals: [{ rows: 2, labels: 2, hits: 6 }] });
+  } finally {
+    await t.dispose();
+  }
+});
+
+it("access levels and app error codes behave", async () => {
+  const t = await createTestApp(app);
+  try {
+    expect((await t.request("/api/me")).status).toBe(401);
+    expect((await t.as(mockUsers.user()).request("/api/admin")).status).toBe(403);
+    expect((await t.as(mockUsers.admin()).request("/api/admin")).status).toBe(200);
+    expect((await t.request("/api/notes", json({ title: "missing" }))).status).toBe(404);
+    expect((await t.request("/api/notes", json({ title: "other" }))).status).toBe(409);
+  } finally {
+    await t.dispose();
+  }
+});

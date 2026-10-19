@@ -1,0 +1,22 @@
+{
+  "name": "fixtureapp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "prototype-framework dev",
+    "verify": "prototype-framework verify",
+    "generate-migration": "prototype-framework generate-migration",
+    "build": "prototype-framework build",
+    "reset-local": "prototype-framework reset-local"
+  },
+  "dependencies": {
+    "@lago-morph/prototype-framework": "0.1.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "vite": "8.3.4",
+    "vitest": "5.0.5"
+  }
+}

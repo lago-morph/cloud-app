@@ -1,0 +1,4 @@
+import type { PortableDb } from "@lago-morph/prototype-framework";
+import { authors } from "./tables";
+
+export const addAuthor = (db: PortableDb) => db.insert(authors).values({ id: "fixed-note-id", name: "Ann" });

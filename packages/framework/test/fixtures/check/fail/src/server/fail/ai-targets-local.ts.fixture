@@ -1,0 +1,3 @@
+import * as localTarget from "@lago-morph/prototype-framework/targets/local";
+
+export const runtime = localTarget;

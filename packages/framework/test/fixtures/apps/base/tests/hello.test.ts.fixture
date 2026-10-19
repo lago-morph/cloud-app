@@ -1,0 +1,28 @@
+import { expect, it } from "vitest";
+import { createTestApp } from "@lago-morph/prototype-framework/testing";
+import app from "../src/app";
+
+it("hello route answers with the configured greeting", async () => {
+  const t = await createTestApp(app);
+  try {
+    const res = await t.request("/api/hello");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ greeting: "hello" });
+  } finally {
+    await t.dispose();
+  }
+});
+
+it("items can be created", async () => {
+  const t = await createTestApp(app);
+  try {
+    const res = await t.request("/api/items", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "first" }),
+    });
+    expect(res.status).toBe(201);
+  } finally {
+    await t.dispose();
+  }
+});

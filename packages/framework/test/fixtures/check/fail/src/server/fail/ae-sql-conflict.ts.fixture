@@ -1,0 +1,5 @@
+import { FrameworkError } from "@lago-morph/prototype-framework";
+
+export function reject(): never {
+  throw new FrameworkError("SQL.CONFLICT", "duplicate name");
+}

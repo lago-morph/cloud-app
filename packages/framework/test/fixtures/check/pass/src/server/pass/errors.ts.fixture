@@ -1,0 +1,18 @@
+// The CORE-REQ-007 codes app code may throw (passing fixtures for `app-error-codes`).
+import { FrameworkError } from "@lago-morph/prototype-framework";
+
+export function missing(): never {
+  throw new FrameworkError("HTTP.NOT_FOUND", "no such note");
+}
+
+export function readOnly(): never {
+  throw new FrameworkError("AUTH.FORBIDDEN");
+}
+
+export function invalid(): never {
+  throw new FrameworkError("HTTP.INVALID_INPUT", "title is empty");
+}
+
+export function limitReached(): never {
+  throw new FrameworkError("HTTP.CONFLICT", "too many notes");
+}

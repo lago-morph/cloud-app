@@ -1,0 +1,3 @@
+import { PGlite } from "@electric-sql/pglite";
+
+export const openDatabase = (): PGlite => new PGlite();

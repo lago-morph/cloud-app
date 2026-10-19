@@ -1,0 +1,22 @@
+import { configString, defineApp, jsonBody, newId, now, z } from "@lago-morph/prototype-framework";
+import { items } from "./server/schema";
+
+const newItem = z.object({ title: z.string().min(1) });
+
+export const app = defineApp({
+  name: "fixtureapp",
+  config: { greeting: configString({ default: "hello" }) },
+  secrets: [],
+  tables: { items },
+  routes: (api) => {
+    api.get("/hello", (c) => c.json({ greeting: c.var.config.get("greeting") }));
+    api.post("/items", jsonBody(newItem), async (c) => {
+      const { title } = c.req.valid("json");
+      const itemId = newId();
+      await c.var.sql.insert(items).values({ id: itemId, title, createdAt: now() });
+      return c.json({ id: itemId }, 201);
+    });
+  },
+});
+
+export default app;

@@ -1,0 +1,4 @@
+export async function loadNotes(): Promise<unknown> {
+  const res = await fetch("/api/notes");
+  return res.json();
+}

@@ -1,0 +1,37 @@
+// Browser code: `./client` helpers, a `zod` import and a type-only import from `src/shared/`
+// (passing fixtures for browser-api-only and the shared-import rule; CHECK-AC-001).
+import { z } from "zod";
+import { ApiError, api, getCurrentUser, login, logout } from "@lago-morph/prototype-framework/client";
+import type { NoteInput, ReportSummary } from "../../shared/schemas";
+
+const titleField = z.string().min(1);
+
+export async function createNote(title: string): Promise<string> {
+  const input: NoteInput = { title: titleField.parse(title) };
+  try {
+    const created = await api<{ id: string }>("/notes", { method: "POST", body: input });
+    return created.id;
+  } catch (err) {
+    if (err instanceof ApiError && err.code === "HTTP.INVALID_INPUT") return "";
+    throw err;
+  }
+}
+
+export async function renderSummary(target: HTMLElement): Promise<void> {
+  const summary = await api<ReportSummary>("/report");
+  target.textContent = `${summary.notes} notes`;
+}
+
+export async function renderUser(target: HTMLElement): Promise<void> {
+  const user = await getCurrentUser();
+  if (user.level === "anonymous") {
+    const button = document.createElement("button");
+    button.textContent = "Log in";
+    button.addEventListener("click", () => login("/"));
+    target.replaceChildren(button);
+  } else {
+    target.textContent = user.displayName ?? user.id;
+  }
+}
+
+export const signOut = (): Promise<void> => logout();

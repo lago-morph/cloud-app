@@ -1,0 +1,11 @@
+import { defineApp } from "@lago-morph/prototype-framework";
+
+export const fixture = defineApp({
+  name: "fixture",
+  config: {},
+  secrets: [],
+  tables: {},
+  routes: (api) => {
+    api.get("/bindings", (c) => c.json({ names: Object.keys(c.env) }));
+  },
+});

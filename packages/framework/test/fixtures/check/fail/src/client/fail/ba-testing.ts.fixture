@@ -1,0 +1,3 @@
+import { mockUsers } from "@lago-morph/prototype-framework/testing";
+
+export const visitor = mockUsers.anonymous;
