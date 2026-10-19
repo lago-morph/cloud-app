@@ -4,7 +4,7 @@
  * identifier spelling (CHECK-REQ-001).
  */
 import { realpathSync } from "node:fs";
-import { dirname, resolve, sep } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { TSESTree } from "@typescript-eslint/utils";
 import ts from "typescript";
@@ -26,13 +26,19 @@ const FRAMEWORK_ROOT = realpath(resolve(dirname(fileURLToPath(import.meta.url)),
 
 export type Origin = "framework" | "drizzle" | "hono" | "lib" | "app";
 
-export function originOfFile(program: ts.Program, sourceFile: ts.SourceFile): Origin {
-  const name = sourceFile.fileName.split("/").join(sep);
-  if (program.isSourceFileDefaultLibrary(sourceFile)) return "lib";
-  if (name.startsWith(FRAMEWORK_ROOT + sep) && !name.includes(`${sep}node_modules${sep}`)) return "framework";
-  if (name.includes(`${sep}node_modules${sep}drizzle-orm${sep}`)) return "drizzle";
-  if (name.includes(`${sep}node_modules${sep}hono${sep}`)) return "hono";
+/** Where a (non-lib) declaration file belongs, given the framework package's root directory. */
+export function originOfPath(fileName: string, frameworkRoot: string): Exclude<Origin, "lib"> {
+  const name = fileName.split("\\").join("/");
+  const root = frameworkRoot.split("\\").join("/").replace(/\/$/, "");
+  if (name.startsWith(`${root}/`) && !name.slice(root.length).includes("/node_modules/")) return "framework";
+  if (name.includes("/node_modules/drizzle-orm/")) return "drizzle";
+  if (name.includes("/node_modules/hono/")) return "hono";
   return "app";
+}
+
+export function originOfFile(program: ts.Program, sourceFile: ts.SourceFile): Origin {
+  if (program.isSourceFileDefaultLibrary(sourceFile)) return "lib";
+  return originOfPath(sourceFile.fileName, FRAMEWORK_ROOT);
 }
 
 export interface Resolved {
