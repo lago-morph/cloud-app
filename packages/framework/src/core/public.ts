@@ -69,7 +69,7 @@ export interface DefinedApp<C extends ConfigDeclaration, S extends string> {
 export function defineApp<C extends ConfigDeclaration, S extends string>(
   definition: AppDefinition<C, S>,
 ): DefinedApp<C, S> {
-  throw new Error("not implemented: defineApp");
+  return { definition };
 }
 
 export type { MiddlewareHandler };
