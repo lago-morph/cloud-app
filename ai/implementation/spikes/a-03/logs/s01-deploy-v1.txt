@@ -1,0 +1,34 @@
+SST 4.17.2 ready!
+
+➜  App:        spikeuekwqgqb
+   Stage:      a03
+
+~  Deploy
+
+|  Created     Kv sst:cloudflare:Kv
+|  Created     Api sst:cloudflare:Worker (1.1s)
+|  Created     default_6_15_0 pulumi:providers:cloudflare
+|  Created     Kv sst:cloudflare:Kv → KvNamespace cloudflare:index:WorkersKvNamespace
+|  Created     Api sst:cloudflare:Worker → ApiScript cloudflare:index:WorkersScript
+|  Created     default pulumi:providers:pulumi-nodejs
+Error: A request to the Cloudflare API (/accounts/<account-id>/workers/scripts/spikeuekwqgqb-a03-apiscript/subdomain) failed.
+    at Object.<anonymous> (<anonymous>:94:19)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async __f1.<anonymous> (<anonymous>:144:7)
+    at async Promise.all (index 1)
+    at async __f1.<anonymous> (<anonymous>:63:29)
+    at async __f1.<anonymous> (<anonymous>:28:17)
+    at ResourceProviderService.create (/home/user/cloud-app/.claude/worktrees/agent-ab53f8b9b936fcb78/ai/implementation/spikes/a-03/sst-app/.sst/platform/node_modules/@pulumi/cmd/dynamic-provider/index.ts:254:28) {
+  errors: [ { code: 9106, message: 'Authentication failed (status: 400)' } ],
+  messages: []
+}
+|  Error       Api sst:cloudflare:Worker → ApiUrl sst:cloudflare:WorkerUrl
+A request to the Cloudflare API (/accounts/<account-id>/workers/scripts/spikeuekwqgqb-a03-apiscript/subdomain) failed.
+|  Warning     Cloudflare detected but `@cloudflare/workers-types` is not installed. Install it to get proper types for your bindings.
+
+✕  Failed    
+
+Api sst:cloudflare:Worker → ApiUrl sst:cloudflare:WorkerUrl
+A request to the Cloudflare API (/accounts/<account-id>/workers/scripts/spikeuekwqgqb-a03-apiscript/subdomain) failed.
+
+exit=1

@@ -1,0 +1,3 @@
+GET settings: http=200 success=True
+bindings: [('Kv', 'kv_namespace'), ('SECRET_SPIKE', 'secret_text'), ('SPIKE_VARIANT', 'plain_text'), ('SST_RESOURCE_App', 'plain_text')]
+exit=0
