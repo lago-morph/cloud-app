@@ -12,6 +12,7 @@ import { frameworkIds } from "./rules/framework-ids.js";
 import { frameworkOrder } from "./rules/framework-order.js";
 import { noEnvAccess } from "./rules/no-env-access.js";
 import { noDialectFeatures } from "./rules/no-dialect-features.js";
+import { noRawHtml } from "./rules/no-raw-html.js";
 import { noRawSql } from "./rules/no-raw-sql.js";
 
 export const rules: Readonly<Partial<Record<RuleName | ExtraRuleName, FrameworkRule>>> = {
@@ -25,6 +26,7 @@ export const rules: Readonly<Partial<Record<RuleName | ExtraRuleName, FrameworkR
   "no-relational-queries": noRelationalQueries,
   "framework-ids": frameworkIds,
   "app-error-codes": appErrorCodes,
+  "no-raw-html": noRawHtml,
 };
 
 /**
