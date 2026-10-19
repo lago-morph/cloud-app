@@ -35,6 +35,12 @@ export interface TestAppOptions {
   readonly secrets?: Record<string, string>;
   /** Capabilities that fail as unavailable: every operation of each one named throws its `*.UNAVAILABLE` code. */
   readonly unavailable?: readonly ("sql" | "kv" | "files" | "secrets")[];
+  /**
+   * Use the test-only stub login provider instead of the authentication mock. Logins then
+   * go through the real login, callback, user-ID derivation, and admin-list code paths
+   * (docs/components/auth.md). Default false.
+   */
+  readonly stubLoginProvider?: boolean;
 }
 
 export interface TestApp {
@@ -55,6 +61,12 @@ export interface TestApp {
    * location, so on a connected stage this throws.
    */
   logs(): readonly LogEntry[];
+  /**
+   * With `stubLoginProvider`: completes a login through the stub provider as `subject`
+   * (the provider's identifier for the person) and keeps the resulting session for later
+   * requests. Optional `stubFailure` makes the stub's login fail in the named way.
+   */
+  loginWithStub(subject: string, options?: { readonly displayName?: string; readonly stubFailure?: "refused" | "replayed" }): Promise<void>;
   /** Discards all state created by this test app. On a connected stage it only logs out; stage data is kept. */
   dispose(): Promise<void>;
 }
