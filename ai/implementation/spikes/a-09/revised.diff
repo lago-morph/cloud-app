@@ -1,0 +1,77 @@
+--- ../../../../docs/contracts/ts/sql.d.ts	2026-10-19 19:28:56.091050463 +0000
++++ fw-revised/index.d.ts	2026-10-19 19:34:24.581629101 +0000
+@@ -11,8 +11,8 @@
+  * `PortableDb` and `WriteDb` methods and the re-exported expressions take a table or a
+  * column. App-facing code names the framework types, never Drizzle's.
+  */
+-import type { ColumnDataType, SQL } from "drizzle-orm";
+-import type { PgColumn, PgDatabase, PgQueryResultHKT, PgTableWithColumns } from "drizzle-orm/pg-core";
++import type { ColumnDataType, SQL, SQLWrapper } from "drizzle-orm";
++import type { PgColumn, PgDatabase, PgQueryResultHKT, PgTable, PgTableWithColumns } from "drizzle-orm/pg-core";
+ 
+ // ---- Schema definition -------------------------------------------------------------
+ 
+@@ -30,9 +30,14 @@
+ }
+ 
+ /** A column of a defined table (e.g. `notes.title`): Drizzle's `PgColumn`, restricted. */
+-export type Column<T = unknown, Nullable extends boolean = boolean, HasDefault extends boolean = boolean> = PgColumn<{
++export type Column<
++  T = unknown,
++  Nullable extends boolean = boolean,
++  HasDefault extends boolean = boolean,
++  TableName extends string = string,
++> = PgColumn<{
+   name: string;
+-  tableName: string;
++  tableName: TableName;
+   dataType: ColumnDataType;
+   columnType: string;
+   data: T;
+@@ -76,23 +81,26 @@
+  * `T | null`); `typeof t.$inferInsert` is the insert type, in which nullable and
+  * defaulted columns are optional.
+  */
+-export type Table<Cols extends ColumnBuilders = ColumnBuilders> = PgTableWithColumns<{
+-  name: string;
++export type Table<Cols extends ColumnBuilders = ColumnBuilders, Name extends string = string> = PgTableWithColumns<{
++  name: Name;
+   schema: undefined;
+   dialect: "pg";
+   columns: {
+-    [K in keyof Cols & string]: Cols[K] extends ColumnBuilder<infer T, infer N, infer D> ? Column<T, N, D> : never;
++    [K in keyof Cols & string]: Cols[K] extends ColumnBuilder<infer T, infer N, infer D> ? Column<T, N, D, Name> : never;
+   };
+ }>;
+ 
+-export declare function defineTable<const Cols extends ColumnBuilders>(
+-  name: string,
++/** Any defined table, whatever its columns (e.g. for the `tables` record). */
++export type AnyTable = PgTable;
++
++export declare function defineTable<const Name extends string, const Cols extends ColumnBuilders>(
++  name: Name,
+   columns: Cols,
+   options?: TableOptions<Cols>,
+-): Table<Cols>;
++): Table<Cols, Name>;
+ 
+ /** The `tables` record. Its keys are informative only; SQL names come from `defineTable`. */
+-export type TableDefinitions = Record<string, Table>;
++export type TableDefinitions = Record<string, AnyTable>;
+ 
+ // ---- Values ------------------------------------------------------------------------
+ 
+@@ -143,7 +151,11 @@
+ // Supported expressions: Drizzle's own, re-exported unchanged in signature.
+ export { eq, ne, gt, gte, lt, lte, and, or, not, isNull, isNotNull, inArray, notInArray, between } from "drizzle-orm";
+ // Aggregates: Drizzle's signatures; results are normalized as sql.md SQL-REQ-003 states.
+-export { count, countDistinct, min, max, sum, avg } from "drizzle-orm";
++export { count, countDistinct, min, max } from "drizzle-orm";
++/** Sum as a JS number (SQL-REQ-003); null on empty input. */
++export declare function sum(expression: SQLWrapper): SQL<number | null>;
++/** Average as a JS number (SQL-REQ-003); null on empty input. */
++export declare function avg(expression: SQLWrapper): SQL<number | null>;
+ 
+ /** Ascending, NULLs first. Use instead of any other ordering helper. */
+ export declare function asc(column: Column): SQL;
