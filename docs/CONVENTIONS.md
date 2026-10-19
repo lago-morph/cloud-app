@@ -86,4 +86,3 @@ A contract file is the single source of truth for the shape of its interface. De
 | `demo/` | Demo application specification |
 | `acceptance/` | End-to-end scenarios |
 
-Superseded material under `ai/spec/` is historical only and is not a source of requirements.

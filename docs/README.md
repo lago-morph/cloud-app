@@ -20,6 +20,5 @@ Reference material:
 | Part | Status |
 | --- | --- |
 | Conventions, system spec, component map, decision log, parameters register | Reviewed by owner |
-| Component designs, contracts, demo spec, end-to-end scenarios | Draft for owner review |
+| Component designs, contracts, demo spec, end-to-end scenarios | Reviewed by owner |
 
-Files under `ai/spec/` are superseded historical drafts and are not a source of requirements (DEC-0046).
