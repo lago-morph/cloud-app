@@ -15,6 +15,16 @@ Abbreviations: `FW` = `packages/framework` (package `@lago-morph/prototype-frame
 - **Scope:** nothing AWS (no adapters, target, provisioning, or placeholder code that pretends to work); no queues, webhooks, or anything `removed`/`not-adopted` in the decision log; no `prodcheck` or any non-`test-` cloud stage (prompt §4).
 - **Docs in sync:** an implementer that changes a design detail updates that component's design doc in the same commit (it owns that doc for the item's duration); contract-file changes (`docs/contracts/**`) need a decision draft and are allowed only to the item named as the contract's owner below.
 
+### Cloud usage limits (binding for every item)
+
+The target apps are low-volume; nothing in this framework needs more than a handful of rows to verify. Phase A spikes wrote about 1.22 million D1 rows in one day against the free plan's 100,000 rows written per day. These rules prevent a repeat:
+
+- **Test data matches the target apps:** tens of rows per test, never generated in loops. A test that must exceed a size limit (e.g. PAR-215 result size) uses one oversized row, not many rows.
+- **No stress tests, load tests or platform-limit probing**, on any target, unless a binding requirement names that exact limit; then the smallest test that shows it.
+- **Hard caps per item that touches Cloudflare:** ≤ 1,000 D1 rows written, ≤ 10,000 D1 rows read, ≤ 500 Cloudflare API requests, ≤ 2 D1 databases at once. **Whole run:** ≤ 10,000 D1 rows written per UTC day.
+- **Measure before and after:** every cloud item measures D1 usage before and after its work with the account's GraphQL analytics (`POST https://api.cloudflare.com/client/v4/graphql`, `d1AnalyticsAdaptiveGroups` summing `rowsRead`/`rowsWritten` for today's date, filtered by `accountTag` = `$CLOUDFLARE_ACCOUNT_ID`; send no Authorization header — the proxy injects it), records both readings in its RESULT/evidence, and stops and reports if it would pass a cap.
+- **Estimate before big runs:** before D-RUN, D-RUN-M or F-03, a subagent writes an estimate of D1 rows and Cloudflare API requests per run into that plan item's notes; the run does not start until the orchestrator has checked the estimate against the caps.
+
 ---
 
 ## 2. Phase A — Spikes
@@ -303,8 +313,8 @@ Precondition: phase C accepted (prompt §10: all local work before touching the 
 Deps: C-EV.
 
 ### D-RUN, D-RUN-M, D-EV, D-INT
-- **D-RUN:** `setup-account --target cloudflare` (once; creates billable shared resources); before each stage, check the account's D1 database count against PAR-219 (a schema-changing deploy holds two per stage), so extra stages run one after another; then `npm run compliance -- --target cloudflare` on one `test-<random>` stage plus the per-criterion extra stages; always removes stages; records leftovers. Deps: D-05, D-T1, D-T2.
-- **D-RUN-M:** milestone run `npm run compliance -- --target cloudflare --milestone`: E2E-010, E2E-012, PROV-AC-003, PROV-AC-004, PROV-AC-006 (CF part), COMPL-AC-008. Deps: D-RUN.
+- **D-RUN:** `setup-account --target cloudflare` (once; creates billable shared resources); before each stage, check the account's D1 database count against PAR-219 (a schema-changing deploy holds two per stage), so extra stages run one after another; then `npm run compliance -- --target cloudflare` on one `test-<random>` stage plus the per-criterion extra stages; always removes stages; records leftovers. Deps: D-05, D-T1, D-T2. Cloud usage: see §1 "Cloud usage limits" (estimate first; caps and before/after measurement apply).
+- **D-RUN-M:** milestone run `npm run compliance -- --target cloudflare --milestone`: E2E-010, E2E-012, PROV-AC-003, PROV-AC-004, PROV-AC-006 (CF part), COMPL-AC-008. Deps: D-RUN. Cloud usage: see §1 "Cloud usage limits" (estimate first; caps and before/after measurement apply).
 - **D-EV:** **Phase D exit check:** every automated criterion/scenario with Cloud in Where, except `aws.md` and §8 not-runs, `passed` on Cloudflare with evidence; a test stage removed with no leftovers (COMPL-AC-004 evidence); milestone records present or listed outstanding with reason. E2E-011 on Cloudflare must find the entry "using only commands copied from the skill's troubleshooting reference", which exists only after E-02; it is judged at E-EV. Writes `ai/implementation/evaluations/D-cloudflare.md`.
 - **D-INT:** decision drafts and parameters (§10.4).
 
@@ -346,7 +356,7 @@ Deps: C-EV.
 - For each entry: diagnose (§10.5 record), independent review, fix red-green in the framework or skill (by the owning item's path set), re-run affected tests (runner + evaluator). Then a **new** fresh F-01 agent rebuilds the demo from scratch. Repeat until no entry remains open.
 
 ### F-03 — Demo on Cloudflare (runner)
-- Deploy the demo to a `test-<random>` Cloudflare stage, run `smoke --target cloudflare`, run the demo smoke locally (`smoke --target local`), confirm no source differences (E2E-002 CF + local parts), run the compliance driver's DEMO-AC-008 cloud check, remove the stage; evidence committed.
+- Deploy the demo to a `test-<random>` Cloudflare stage, run `smoke --target cloudflare`, run the demo smoke locally (`smoke --target local`), confirm no source differences (E2E-002 CF + local parts), run the compliance driver's DEMO-AC-008 cloud check, remove the stage; evidence committed. Cloud usage: see §1 "Cloud usage limits" (estimate first; caps and before/after measurement apply).
 
 ### F-04 — Architecture review (E2E-016 review part, milestone)
 - An independent reviewer (no code authored in this run) checks: every component doc has a portability note; no capability contract references another capability's adapter; no design adds features beyond its requirements. Records findings in `validation/reviews/E2E-016.md`; findings go through the owning items.
