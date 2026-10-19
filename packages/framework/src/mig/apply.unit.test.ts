@@ -9,11 +9,11 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getPlatformProxy } from "wrangler";
 import { tag } from "../../../../tests/support/tags.js";
 import { id, integer, ref, text } from "../sql/columns.js";
-import { openPostgres } from "../sql/drivers.js";
+import { openPostgres } from "../sql/postgres.js";
 import { defineTable } from "../sql/table.js";
 import type { AnyTable } from "../sql/types.js";
 import { applyMigrations, d1MigrationDatabase, migrateLocal, MigrationFailedError, pgliteMigrationDatabase, type D1Like, type MigrationDatabase } from "./apply.js";
-import { FRAMEWORK_MIGRATIONS_DIR } from "./framework.js";
+import { FRAMEWORK_MIGRATIONS_DIR } from "./migrations-dir.js";
 import { appSchema, generateMigrations } from "./generate.js";
 import { readHistory } from "./history.js";
 

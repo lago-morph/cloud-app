@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { openPostgres } from "./drivers.js";
+import { frameworkTables } from "../mig/framework.js";
+import { openPostgres, postgresDb } from "./postgres.js";
 
 describe("PGlite harness (PAR-107, DEC-0106)", () => {
   // The first openPostgres() in a process also makes the C/C template (~3 s, more under
@@ -32,5 +33,12 @@ describe("PGlite harness (PAR-107, DEC-0106)", () => {
       await a.close();
       await b.close();
     }
+  });
+
+  it("a query on a closed harness database is SQL.UNAVAILABLE (SQL-REQ-006)", async () => {
+    const pg = await openPostgres();
+    const db = postgresDb(pg) as unknown as { select(): { from(t: unknown): Promise<unknown> } };
+    await pg.close();
+    await expect(db.select().from(frameworkTables("postgres").kv)).rejects.toMatchObject({ name: "FrameworkError", code: "SQL.UNAVAILABLE" });
   });
 });

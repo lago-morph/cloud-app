@@ -7,7 +7,8 @@
  * - `./apply.js` — `migrateLocal`, `d1MigrationDatabase`, `pgliteMigrationDatabase`,
  *   `MigrationFailedError` (`dev`, B-17; `createTestApp`, B-16);
  * - `./history.js` — `readHistory`, `checksumOf` (migration checker, B-15; cloud deploys, D-04);
- * - `./framework.js` — `frameworkTables` (KV, B-08), `FRAMEWORK_MIGRATIONS_DIR`.
+ * - `./framework.js` — `frameworkTables` (KV, B-08; Workers-compatible);
+ * - `./migrations-dir.js` — `FRAMEWORK_MIGRATIONS_DIR` (Node only).
  * The cloud copy-migrate-check-replace flow is D-04's (`FW/src/mig/cloud/**`).
  */
 export {};

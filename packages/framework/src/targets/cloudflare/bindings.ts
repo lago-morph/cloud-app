@@ -9,7 +9,7 @@ import type { RuntimeEnv } from "../../core/assemble.js";
 import { FrameworkError } from "../../core/errors.js";
 import type { FilesStore } from "../../files/service.js";
 import type { LogService } from "../../log/public.js";
-import { sqliteDb } from "../../sql/drivers.js";
+import { sqliteDb } from "../../sql/d1.js";
 import type { PortableDb } from "../../sql/types.js";
 
 type Env = RuntimeEnv["Bindings"];

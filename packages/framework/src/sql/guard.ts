@@ -20,6 +20,8 @@ export interface GuardOptions {
   readonly budgetMs?: number;
   /** The request's log, for the LOG-REQ-005 entry of an `SQL.UNAVAILABLE` failure. */
   readonly log?: LogService;
+  /** The driver's own messages for an unreachable database, besides `UNREACHABLE` (the Postgres harness's, postgres.ts). */
+  readonly unreachable?: readonly RegExp[];
 }
 
 export function createGuard(options: GuardOptions = {}): Guard {
@@ -40,7 +42,7 @@ export function createGuard(options: GuardOptions = {}): Guard {
     try {
       return await Promise.race([running, timeout]);
     } catch (thrown) {
-      throw normalizeError(thrown, unavailable);
+      throw normalizeError(thrown, unavailable, options.unreachable);
     } finally {
       clearTimeout(timer);
     }
@@ -57,10 +59,12 @@ const PG_CONFLICT_CODES = new Set(["23505", "23503"]);
 const SQLITE_CONFLICT = /\b(UNIQUE|PRIMARY KEY|FOREIGN KEY) constraint failed\b/;
 
 /**
- * Driver errors meaning the database cannot be reached: a closed PGlite instance, a disposed
- * Miniflare (local D1) binding, and connection-level failures of a Worker binding or socket.
+ * Driver errors meaning the database cannot be reached: a disposed Miniflare (local D1) binding
+ * and connection-level failures of a Worker binding or socket. Driver-specific messages (a
+ * closed PGlite instance) come from that driver's module through `unreachable`, so this module,
+ * which every Worker bundle contains, names no Node-only driver (DEC-PENDING-B-16a-3).
  */
-const UNREACHABLE = /PGlite is closed|poisoned stub|Network connection lost|ECONNREFUSED|ECONNRESET|fetch failed/i;
+const UNREACHABLE = /poisoned stub|Network connection lost|ECONNREFUSED|ECONNRESET|fetch failed/i;
 
 /** The error chain of `thrown` (Drizzle wraps driver errors in `DrizzleQueryError` with `cause`). */
 function chain(thrown: unknown): unknown[] {
@@ -80,16 +84,21 @@ function field(error: unknown, name: "code" | "message"): string {
 
 /**
  * A thrown value as app code may see it: a `FrameworkError`. `unavailable` makes (and logs) the
- * `SQL.UNAVAILABLE` error for an unreachable database.
+ * `SQL.UNAVAILABLE` error for an unreachable database; `unreachable` adds the driver's own
+ * patterns for one.
  */
-export function normalizeError(thrown: unknown, unavailable: (why: string) => FrameworkError = plainUnavailable): FrameworkError {
+export function normalizeError(
+  thrown: unknown,
+  unavailable: (why: string) => FrameworkError = plainUnavailable,
+  unreachable: readonly RegExp[] = [],
+): FrameworkError {
   if (thrown instanceof FrameworkError) return thrown;
   const errors = chain(thrown);
   if (errors.some((e) => PG_CONFLICT_CODES.has(field(e, "code")) || SQLITE_CONFLICT.test(field(e, "message")))) {
     return new FrameworkError("SQL.CONFLICT", "a uniqueness or reference constraint was violated");
   }
-  const unreachable = errors.find((e) => UNREACHABLE.test(field(e, "message")));
-  if (unreachable !== undefined) return unavailable(field(unreachable, "message"));
+  const lost = errors.find((e) => [UNREACHABLE, ...unreachable].some((p) => p.test(field(e, "message"))));
+  if (lost !== undefined) return unavailable(field(lost, "message"));
   const driver = errors[errors.length - 1];
   const message = field(driver, "message") || String(driver);
   const failure = new FrameworkError("CORE.INTERNAL", `database error: ${message}`);
