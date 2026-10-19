@@ -2,7 +2,7 @@
  * The SQLite dialect's driver (sql.md §2.2): D1 through its Worker binding, local D1 under
  * Wrangler/Miniflare and Cloudflare D1 alike. Gives a Drizzle database that enforces the column
  * rules before anything reaches the database. Workers-compatible: the only driver module Worker
- * runtimes import; the Postgres harness is `postgres.ts` (DEC-PENDING-B-16a-3).
+ * runtimes import; the Postgres harness is `postgres.ts` (DEC-0196).
  */
 import { drizzle as drizzleD1, type AnyD1Database } from "drizzle-orm/d1";
 import { createGuard, type GuardOptions } from "./guard.js";

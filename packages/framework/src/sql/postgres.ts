@@ -2,7 +2,7 @@
  * The Postgres harness (sql.md §2.2 "Local"; PAR-107): PGlite in-process, with a Drizzle
  * database that enforces the column rules before anything reaches the database. Node only:
  * used by `createTestApp`, the migration checker and the framework's tests, never imported by a
- * Worker runtime, so no Worker bundle contains it (CORE-REQ-006, DEC-PENDING-B-16a-3).
+ * Worker runtime, so no Worker bundle contains it (CORE-REQ-006, DEC-0196).
  */
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";

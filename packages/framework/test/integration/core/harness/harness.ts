@@ -35,7 +35,7 @@ export const PAR = {
 } as const;
 
 /**
- * The CLI binary and the package exports run the compiled `dist/` (DEC-PENDING-B-01-2).
+ * The CLI binary and the package exports run the compiled `dist/` (DEC-0111).
  * Tests that use them fail with this message when the framework has not been built.
  */
 export function requireBuiltFramework(): void {

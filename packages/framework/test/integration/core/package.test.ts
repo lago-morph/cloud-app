@@ -12,7 +12,7 @@ import { FRAMEWORK_DIR, listFiles } from "./harness/harness.js";
 
 /**
  * CORE-REQ-005's subpath table, without `./targets/aws`: this phase supports the local and
- * Cloudflare targets only ("one subpath per supported target"; DEC-PENDING-B-01-1, plan §11 Q3).
+ * Cloudflare targets only ("one subpath per supported target"; DEC-0110, plan §11 Q3).
  */
 const SUBPATHS = [".", "./client", "./testing", "./targets/local", "./targets/cloudflare", "./provision", "./check"];
 

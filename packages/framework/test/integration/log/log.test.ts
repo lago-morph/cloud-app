@@ -24,7 +24,7 @@ async function open(options: TestAppOptions = {}): Promise<TestApp> {
 /**
  * LOG-AC-001 needs an injected log writer that fails and one that never completes. testing.d.ts
  * has no such option yet; this is the option the B-T1 decision draft proposes for it
- * (DEC-PENDING-B-T1-1, owner of testing.d.ts: B-16; plan B-04 "failing and never-completing
+ * (DEC-0210, owner of testing.d.ts: B-16; plan B-04 "failing and never-completing
  * writer injection for tests").
  */
 type WithLogWriter = TestAppOptions & { readonly logWriter?: "failing" | "never-completing" };

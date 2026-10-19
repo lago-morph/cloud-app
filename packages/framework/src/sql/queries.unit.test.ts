@@ -1,7 +1,7 @@
 /**
  * Queries on the real local databases (B-06): ordering, `containsText`, aggregates, writes,
  * result size, failure mapping and `atomic`, on local D1 (getPlatformProxy, DEC-0105) and the
- * PGlite harness. Each dialect runs the same cases (unit-layer evidence only, DEC-PENDING-B-05-5).
+ * PGlite harness. Each dialect runs the same cases (unit-layer evidence only, DEC-0136).
  */
 import { generateDrizzleJson, generateMigration, generateSQLiteDrizzleJson, generateSQLiteMigration } from "drizzle-kit/api";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";

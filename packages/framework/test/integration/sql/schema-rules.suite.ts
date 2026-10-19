@@ -3,7 +3,7 @@
  * schemas with each unsupported feature or invalid name, and tables with no or two `id()`
  * columns, are rejected; `.default()` values are checked against the column rule
  * (sql.md §2.1). "Rejected" is taken as: `defineTable` or `defineApp` throws, so no
- * database is ever created from such a schema (DEC-PENDING-B-T2-4).
+ * database is ever created from such a schema (DEC-0221).
  *
  * Features the contract cannot even express (composite primary keys, reference actions,
  * collations, SQL defaults) are also asserted at the type level with `@ts-expect-error`,

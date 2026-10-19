@@ -31,7 +31,7 @@ function harness(options: Partial<AuthOptions> = {}, target: Target = "local", s
       if (name === FRAMEWORK_SECRETS.sessionKey) return KEY;
       throw new Error(`unexpected secret ${name}`);
     },
-    // The local runtime passes the local settings (DEC-PENDING-B-16a-2).
+    // The local runtime passes the local settings (DEC-0195).
     ...(target === "local" ? { cookies: LOCAL_COOKIES } : {}),
     ...options,
   });

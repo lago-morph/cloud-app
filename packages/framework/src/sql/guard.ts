@@ -62,7 +62,7 @@ const SQLITE_CONFLICT = /\b(UNIQUE|PRIMARY KEY|FOREIGN KEY) constraint failed\b/
  * Driver errors meaning the database cannot be reached: a disposed Miniflare (local D1) binding
  * and connection-level failures of a Worker binding or socket. Driver-specific messages (a
  * closed PGlite instance) come from that driver's module through `unreachable`, so this module,
- * which every Worker bundle contains, names no Node-only driver (DEC-PENDING-B-16a-3).
+ * which every Worker bundle contains, names no Node-only driver (DEC-0196).
  */
 const UNREACHABLE = /poisoned stub|Network connection lost|ECONNREFUSED|ECONNRESET|fetch failed/i;
 

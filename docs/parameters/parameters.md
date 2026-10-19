@@ -63,7 +63,7 @@ Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 | --- | --- | --- | --- | --- |
 | PAR-250 | Session lifetime | 7 days | ai-proposed | The owner has no preference (DEC-0057). |
 | PAR-251 | Validity of an in-progress login | 10 minutes | ai-proposed | |
-| PAR-252 | Clock skew tolerated when validating provider responses | 60 seconds | ai-proposed | |
+| PAR-252 | Clock skew tolerated when validating provider responses | 60 seconds | ai-proposed | Also bounds a session cookie's future issued-at time (DEC-0169). |
 | PAR-253 | Minimum session signing key length | 32 bytes | ai-proposed | |
 
 ## Log
@@ -118,10 +118,11 @@ All pins are **ai-proposed**. They were selected around October 9, 2026; spike A
 | PAR-108 | @pulumi/cloudflare | 6.15.0 | The provider generation SST 4.17.2 pins. A direct framework dependency only if framework code imports it (DEC-0109). |
 | PAR-109 | @pulumi/aws | 7.20.0 | The provider generation SST 4.17.2 pins. |
 | PAR-110 | Aurora PostgreSQL engine | 17.x | The highest 17.x minor that the region supports with Data API and auto-pause, resolved at implementation start; verified per region by `setup-account` and deploy preflight. |
-| PAR-111 | Node.js, TypeScript, ESLint, AWS SDKs | Node.js 22.22.0; TypeScript 6.0.3; ESLint 10.13.0 with typescript-eslint 8.72.0; @types/node 22.20.5 (framework and tests only); AWS SDKs: to be recorded in the AWS phase | TypeScript 7.x is outside typescript-eslint's supported range (`<6.1.0`), which CHECK's type-aware rules need (DEC-0104). |
+| PAR-111 | Node.js, TypeScript, ESLint, AWS SDKs | Node.js 22.22.0; TypeScript 6.0.3; ESLint 10.13.0 with typescript-eslint 8.72.0; @types/node 22.20.5 (framework and tests only); AWS SDKs: to be recorded in the AWS phase | TypeScript 7.x is outside typescript-eslint's supported range (`<6.1.0`), which CHECK's type-aware rules need (DEC-0104). `@typescript-eslint/utils` is declared at the typescript-eslint version (DEC-0243). |
 | PAR-112 | Zod | 4.6.7 | Re-exported to apps (DEC-0059). Verified by spike A-10 (DEC-0104). |
 | PAR-113 | Vite | 8.3.4 | Client build and local dev server; `/api` proxy to `wrangler dev` verified (DEC-0104). |
 | PAR-114 | Playwright | `@playwright/test` 1.64.1; browser Chrome Headless Shell 156.0.8078.4 (`npx playwright install chromium`) | Browser-level compliance tests (DEC-0104). |
 | PAR-116 | Test runner and test file glob | Vitest 5.0.5; app test glob `tests/**/*.test.ts` | The runner `verify` uses for the app test suite, once per supported dialect, and the glob that selects app test files. Framework unit tests `src/**/*.unit.test.ts`; Playwright specs `*.spec.ts`, so the globs never overlap (DEC-0104). |
 | PAR-117 | Miniflare | 5.20261006.1-alpha | Exactly the version Wrangler (PAR-101) depends on, so there is one workerd; declared only if framework code imports Miniflare directly (DEC-0105). Moves with PAR-101. |
 | PAR-118 | @cloudflare/workers-types | 5.20261006.1 | Framework dev dependency only, for Miniflare's type declarations; never in a `types` array (DEC-0105, CHECK §2). Moves with PAR-101. |
+| PAR-119 | esbuild | 0.28.2 | Exactly the version Wrangler (PAR-101) depends on; a framework dependency so npm hoists it for Vite (PAR-113) and the build pipeline, while drizzle-kit keeps its own nested copy (DEC-0114). Moves with PAR-101. |

@@ -5,7 +5,7 @@
  * `createTestApp` gives "fresh local storage, migrations applied" (testing.d.ts). The
  * migrations are the app's generated ones (MIG-REQ-001), so the suite first writes a
  * scratch app with the same tables, runs `generate-migration` there, and makes that
- * directory the working directory of this test process (DEC-PENDING-B-T2-2).
+ * directory the working directory of this test process (DEC-0192).
  */
 import { copyFileSync } from "node:fs";
 import { dirname, join } from "node:path";

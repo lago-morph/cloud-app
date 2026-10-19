@@ -7,7 +7,7 @@
  * `migrations/checksums.json`), then `verify`, whose step 3 is the migration checker
  * (CLI-REQ-002, CHECK-REQ-004). The checker has no other contracted entry point, so the
  * edit is judged through `verify`, with an unedited control run first so the failure can
- * only come from the edit (DEC-PENDING-B-T2-6).
+ * only come from the edit (DEC-0223).
  */
 import { readFileSync, appendFileSync } from "node:fs";
 import { basename, join } from "node:path";

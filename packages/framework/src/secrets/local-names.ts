@@ -2,7 +2,7 @@
  * Local-only framework secret names (secrets.md §2 "Framework-internal secrets"; CORE-REQ-006).
  * Imported only by the local target runtime, `createTestApp` and Node-side code (CLI, `.dev.vars`
  * store), never by a module a cloud bundle contains, so these names never appear in one
- * (DEC-PENDING-B-16a-1). Workers-compatible (no Node APIs).
+ * (DEC-0194). Workers-compatible (no Node APIs).
  */
 import { FRAMEWORK_SECRETS } from "./names.js";
 

@@ -1,5 +1,5 @@
 /**
- * The fixed parts of `dev` (local.md §2; DEC-PENDING-B-16-3): where local state and secrets
+ * The fixed parts of `dev` (local.md §2; DEC-0190): where local state and secrets
  * live, how Wrangler is started, which `Host` is accepted, where the client entry page is.
  */
 import { existsSync } from "node:fs";

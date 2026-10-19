@@ -43,7 +43,7 @@ export interface StageOptions {
   /**
    * The SQL handles for one request: the app's (`sql`, given the request's log for
    * `SQL.UNAVAILABLE` entries) and KV's own handle on the same database (no log: KV logs its
-   * own `KV.UNAVAILABLE`), DEC-PENDING-B-08-4.
+   * own `KV.UNAVAILABLE`), DEC-0149.
    */
   readonly sql: (env: Env, log: LogService) => { readonly sql: PortableDb; readonly kv: PortableDb };
   /** The object store FILES uses (the R2 binding, or a stand-in). */

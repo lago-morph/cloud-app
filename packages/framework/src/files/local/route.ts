@@ -34,7 +34,7 @@ export function registerLocalTransferRoute(api: Hono<RuntimeEnv>, options: Local
     const grant = await verifyLocalTicket(c.req.param("token") ?? "", await options.key(c));
     if (grant === undefined || grant.op !== "upload" || c.req.header("Content-Type") !== grant.contentType) return refuse(c, 403);
     // Buffered: R2's binding needs a stream of known length, which a body in the Node test
-    // process is not; local only, where memory is the machine's (DEC-PENDING-B-11-4).
+    // process is not; local only, where memory is the machine's (DEC-0163).
     const bytes = new Uint8Array(await c.req.arrayBuffer());
     await c.var.files.put(grant.name, bytes, { contentType: grant.contentType });
     return c.body(null, 200, SAFE_HEADERS);

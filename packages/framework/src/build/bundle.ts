@@ -4,7 +4,7 @@
  * not survive), and resolved with the Workers export conditions. Worker runtimes import no
  * Node-only framework module (the Postgres harness is `sql/postgres.ts`, the migrations
  * directory `mig/migrations-dir.ts`), so a Node built-in reaching the bundle fails the build
- * (DEC-PENDING-B-16a-3, DEC-PENDING-B-16a-4).
+ * (DEC-0196, DEC-0197).
  */
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";

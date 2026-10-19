@@ -3,7 +3,7 @@
  * the DOM sinks (`innerHTML`/`outerHTML` writes, `insertAdjacentHTML`, `document.write(ln)`,
  * `createContextualFragment`, `setHTMLUnsafe`) and React's `dangerouslySetInnerHTML`.
  * The framework's own rule instead of a third-party plugin (no plugin is pinned in
- * parameters.md; DEC-PENDING-B-14-4).
+ * parameters.md; DEC-0182).
  */
 import type { TSESTree } from "@typescript-eslint/utils";
 import { codeKind, createRule, report } from "../rule-kit.js";

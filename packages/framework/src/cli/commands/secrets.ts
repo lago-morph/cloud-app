@@ -2,7 +2,7 @@
  * `secrets set <name> --target <t> --stage <s>` (CLI-REQ-001, SEC-REQ-004): the value comes
  * from standard input only, through SEC's `set-command.ts`; no output ever contains it
  * (CLI-REQ-004). Locally the value goes to `<app>/.dev.vars` as `SECRET_<NAME>`; the stage is
- * accepted but unused locally (one `.dev.vars`, DEC-PENDING-B-10-3). The Cloudflare store is
+ * accepted but unused locally (one `.dev.vars`, DEC-0158). The Cloudflare store is
  * D-05's.
  */
 import { secretLocation } from "../../config/secret-locations.js";
