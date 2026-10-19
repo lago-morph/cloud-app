@@ -41,7 +41,7 @@ The HTTP Lambda timeout (PAR-270) MUST exceed the database resume budget (PAR-21
 
 Resources are created by SST (PAR-100), using `sst.aws.Router`, `StaticSite`, `Function` with a Function URL, `Aurora` (Postgres engine PAR-110, Data API enabled, PAR-212, PAR-213), and `Bucket`. Raw Pulumi AWS resources (PAR-109) are used only where SST has no component.
 
-The region is PAR-060 unless the stage configuration overrides it. Aurora clusters use one VPC per account and region, created by `setup-account` with no NAT gateway and no bastion host, so the number of stages is not limited by the VPC quota (DEC-0074).
+The region is the account setting recorded by `setup-account` (default PAR-060); every stage in the account uses it (DEC-0075). Aurora clusters use one VPC per account and region, created by `setup-account` with no NAT gateway and no bastion host, so the number of stages is not limited by the VPC quota (DEC-0074).
 
 The stage's public origin is its CloudFront URL; custom domains are not supported (DEC-0073). The HTTP entry uses Hono's AWS Lambda adapter. SDK clients are created once per cold start.
 

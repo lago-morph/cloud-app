@@ -1,6 +1,6 @@
 # CFG — Configuration
 
-Non-secret configuration: keys declared by the app, per-stage values committed to the repository, and the framework settings that live with them (admins, public origin, login client ID, region, test-stage marker). Values are fixed at deploy time.
+Non-secret configuration: keys declared by the app, per-stage values committed to the repository, and the framework settings that live with them (admins, login client ID, test-stage marker). Values are fixed at deploy time.
 
 Contracts: [config.d.ts](../contracts/ts/config.d.ts), [stage-config.schema.json](../contracts/schemas/stage-config.schema.json), [errors.d.ts](../contracts/ts/errors.d.ts) (`CFG.*`).
 

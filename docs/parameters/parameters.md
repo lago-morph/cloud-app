@@ -79,7 +79,7 @@ Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 
 | ID | Parameter | Value | Category | Notes |
 | --- | --- | --- | --- | --- |
-| PAR-060 | Default AWS region | `us-east-1` | ai-proposed | Deployment setting, overridable per stage (SYS-REQ-023, DEC-0045). |
+| PAR-060 | Default AWS region | `us-east-1` | ai-proposed | Used by `setup-account` unless another region is chosen there (SYS-REQ-023, DEC-0075). |
 | PAR-270 | HTTP Lambda timeout | 60 seconds | ai-proposed | Must exceed PAR-210. |
 | PAR-271 | API read timeout at the AWS router | 60 seconds | ai-proposed | At least PAR-270. |
 

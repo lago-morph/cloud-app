@@ -44,7 +44,7 @@ An R2 binding to the shared log bucket. Each write is scheduled with the request
 ### AWS
 An S3 `PutObject` to the shared log bucket using the Lambda role, which may only put objects there. A frozen Lambda would lose pending writes, so the runtime waits up to PAR-260 for them before completing a response.
 
-The shared bucket is named `prototype-logs-<account-id>` on AWS (in the default region, PAR-060) and `prototype-logs` on Cloudflare. It is created by the CLI's one-time account setup (PROV).
+The shared bucket is named `prototype-logs-<account-id>` on AWS (in the account's region) and `prototype-logs` on Cloudflare. It is created by the CLI's one-time account setup (PROV).
 
 ## 3. Uses
 

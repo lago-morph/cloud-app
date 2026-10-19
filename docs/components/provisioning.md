@@ -39,7 +39,7 @@ A stage is a test stage only when `framework.testStage` is true or `deploy --tes
 #### PROV-REQ-006 — Deployment settings are configuration
 Origin: owner · Derives from: SYS-REQ-023
 
-Region and other deployment settings MUST come from the stage configuration or documented defaults (PAR-060), never from hard-coded values.
+Region and other deployment settings MUST come from configuration or documented defaults, never from hard-coded values. The AWS region is an account setting chosen by `setup-account` (default PAR-060) and used by every stage in that account (DEC-0075).
 
 ## 2. Design
 
@@ -66,7 +66,7 @@ CFG, SEC, MIG, LOG, CF, AWS, CLI.
 | PROV-AC-003 | Removing one of two stages leaves the other stage and the shared resources intact, and leaves no resource, secret, or parameter of the removed stage except its log entries. | PROV-REQ-003 | Cloud |
 | PROV-AC-004 | Running `setup-account` twice changes nothing the second time. Deploying without it fails with a clear message. | PROV-REQ-004 | Cloud |
 | PROV-AC-005 | Re-deploying a production stage with `--test` is refused. | PROV-REQ-005 | Cloud |
-| PROV-AC-006 | A stage configured for a non-default region deploys there. | PROV-REQ-006 | Cloud |
+| PROV-AC-006 | After `setup-account` with a non-default region, stages deploy to that region. | PROV-REQ-006 | Cloud |
 
 ## 5. Portability note
 

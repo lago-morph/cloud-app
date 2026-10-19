@@ -471,3 +471,8 @@ Each stage's public origin is its generated URL (`workers.dev` on Cloudflare, th
 Origin: ai-proposed · Status: accepted · Affects: PROV, AWS
 
 AWS allows 5 VPCs per region by default. One VPC per stage would cap the number of stages, including disposable test stages. `setup-account` therefore creates one VPC, with no NAT gateway and no bastion host, for all stages' Aurora clusters. Like the log bucket, it is never removed by stage removal.
+
+### DEC-0075 — AWS region is an account setting, not stage configuration
+Origin: owner · Status: accepted · Affects: CFG, PROV, AWS, PAR-060
+
+The `framework.aws` section is removed from per-stage configuration. The shared log bucket and the shared database network exist per account and region (DEC-0066, DEC-0074), so every stage must use the account's region. `setup-account` chooses the region (default PAR-060) and records it, and deploys use that recorded value. This satisfies DEC-0045: the region stays configurable and is not hard-coded.

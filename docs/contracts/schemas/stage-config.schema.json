@@ -37,11 +37,6 @@
           "additionalProperties": false,
           "properties": { "clientId": { "type": "string", "minLength": 1 } }
         },
-        "aws": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": { "region": { "type": "string", "description": "Default: PAR-060." } }
-        },
         "testStage": {
           "description": "Marks the stage as a test stage (authentication mock present, SYS-REQ-020).",
           "type": "boolean",
