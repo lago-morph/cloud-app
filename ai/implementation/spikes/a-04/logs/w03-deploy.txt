@@ -1,0 +1,19 @@
+$ /home/user/cloud-app/.claude/worktrees/agent-ace588c8c4121f637/ai/implementation/spikes/a-04/run.sh deploy
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+
+ ⛅️ wrangler 4.149.0 (update available 4.151.2)
+───────────────────────────────────────────────
+Total Upload: 0.74 KiB / gzip: 0.46 KiB
+Worker Startup Time: 1 ms
+Your Worker has access to the following bindings:
+Binding                                               Resource                  
+env.KV (<hex32>)             KV Namespace              
+env.SPIKE_VAR ("plain-var-a04")                       Environment Variable      
+
+Uploaded spikeqgbznvyy-a04-worker (1.72 sec)
+Deployed spikeqgbznvyy-a04-worker triggers (1.14 sec)
+  https://spikeqgbznvyy-a04-worker.<subdomain>.workers.dev
+Current Version ID: 47adf6b6-8974-4c95-b456-cf3e68a5716f
+exit=0

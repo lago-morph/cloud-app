@@ -1,0 +1,18 @@
+$ ./run.sh toggle {"enabled":true,"previews_enabled":false} 200
+request sent at 19:54:48.851 UTC: POST /workers/scripts/spikeqgbznvyy-a04-worker/subdomain {"enabled":true,"previews_enabled":false}
+{
+  "result": {
+    "enabled": true,
+    "previews_enabled": false
+  },
+  "success": true,
+  "errors": [],
+  "messages": []
+}
+
+API returned at 19:54:49.296 UTC; probing every 0.5 s (t=0 = API return)
+t+0.00s status=404
+t+0.79s status=200
+stable: 10 consecutive 200 from t+0.79s
+GET subdomain after: {"result":{"enabled":true,"previews_enabled":false},"success":true,"errors":[],"messages":[]}
+exit=0
