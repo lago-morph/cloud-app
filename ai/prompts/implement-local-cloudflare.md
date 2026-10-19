@@ -4,7 +4,7 @@ Paste everything below the line into a new agent session started in this reposit
 
 ---
 
-You are implementing the Dual-Cloud Prototyping Framework in this repository. This phase covers two targets: **local** and **Cloudflare**. AWS comes in a later phase (DEC-0082). The Google login is mocked in this phase (DEC-0083).
+You are implementing the Dual-Cloud Prototyping Framework in this repository. This phase covers two targets: **local** and **Cloudflare**. AWS comes in a later phase (DEC-0082). The Google login is mocked in this phase (§4).
 
 ## 1. Your role: orchestrator only
 
@@ -73,11 +73,11 @@ When the plan needs to change, have a planning subagent revise it.
 
 The Postgres harness (PGlite) is part of local verification, so the SQL portability rules and dual-dialect migrations are fully in scope even without AWS.
 
-**Google login is mocked (DEC-0083).** There is no Google OAuth client in this phase, and nothing contacts Google:
+**Google login is mocked.** The owner does not want the run to stop and wait for them to do anything, so there is no Google OAuth client in this phase, and nothing contacts Google:
 - All automated tests log in with the authentication mock or the stub login provider (auth.md).
 - Build GOOGLE and `certify-auth`, and test them offline only: hand-built tokens, and `fetch` stubbed (GOOGLE-AC-001 local part, GOOGLE-AC-002, GOOGLE-AC-003).
 - Do not create the `prodcheck` stage or any other production (non-`test-`) cloud stage. They need a Google client.
-- Record as `not-run`, with the detail "Google login mocked per owner (DEC-0083)", every criterion or part of one that needs a real Google login, a Google OAuth client, or a production cloud stage. These include:
+- Record as `not-run`, with the detail "Google login mocked for this phase", every criterion or part of one that needs a real Google login, a Google OAuth client, or a production cloud stage. These include:
   - GOOGLE-AC-001 (cloud part), GOOGLE-AC-005
   - AUTH-AC-005 (admin-list part), AUTH-AC-009 (cloud production part), AUTH-AC-011
   - COMPL-AC-005
@@ -239,7 +239,7 @@ This is E2E-015. Any `FRAMEWORK-ISSUE.md` it raises is a defect to fix in the fr
 
 - **Local:** every acceptance criterion and end-to-end scenario with Local in its Where column has passed, with evidence, except those `not-run` under §4.
 - **Cloudflare:** every automated criterion and scenario whose Where column says Cloud has passed on Cloudflare, with evidence, except those `not-run` under §4 (milestone items are covered below).
-- **Google:** criteria that need a real Google login, a Google client or a production cloud stage are recorded as `not-run` with the detail "Google login mocked per owner (DEC-0083)".
+- **Google:** criteria that need a real Google login, a Google client or a production cloud stage are recorded as `not-run` with the detail "Google login mocked for this phase".
 - **AWS:** the AWS runs of those criteria, and criteria that apply only to AWS (for example in `aws.md`), are recorded as `not-run` with the detail "AWS phase not started".
 - **Milestone items** (COMPL-REQ-006) either have a record, or are listed as outstanding with the reason.
 
