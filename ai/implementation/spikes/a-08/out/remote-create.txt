@@ -1,0 +1,19 @@
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+
+ ⛅️ wrangler 4.149.0 (update available 4.151.2)
+───────────────────────────────────────────────
+✅ Successfully created DB 'spike2djg358e-a08-limits' in region ENAM
+Created your new D1 database.
+
+To access your new D1 Database in your Worker, add the following snippet to your configuration file:
+{
+  "d1_databases": [
+    {
+      "binding": "spike2djg358e_a08_limits",
+      "database_name": "spike2djg358e-a08-limits",
+      "database_id": "<d1-uuid>"
+    }
+  ]
+}
