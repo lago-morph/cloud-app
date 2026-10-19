@@ -1,0 +1,9 @@
+(node:8899) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+prefix spikecldsqqqq
+create bucket spikecldsqqqq-a07-main 200 true []
+create bucket spikecldsqqqq-a07-other 200 true []
+put cors 200 true []
+get cors 200 true {"rules":[{"allowed":{"origins":["http://127.0.0.1:8701"],"methods":["PUT","GET"],"headers":["Content-Type"]},"exposeHeaders":["ETag"],"maxAgeSeconds":60}]}
+create token request {"name":"spikecldsqqqq-a07-r2token","policies":[{"effect":"allow","permission_groups":[{"id":"<hex32>"}],"resources":{"com.cloudflare.edge.r2.bucket.<account>_default_spikecldsqqqq-a07-main":"*"}}]}
+create token 200 success {"name":"spikecldsqqqq-a07-r2token","status":"active","policies":[{"id":"<hex32>","effect":"allow","resources":{"com.cloudflare.edge.r2.bucket.<account>_default_spikecldsqqqq-a07-main":"*"},"permission_groups":[{"id":"<hex32>","name":"Workers R2 Storage Bucket Item Write"}]}]}

@@ -1,0 +1,29 @@
+signed headers (allHeaders: true): content-type;host
+PASS N1 signed PUT with ticket content type | expected: 200 | observed: {"status":200,"acao":null}
+PASS N2 same ticket, different Content-Type | expected: 403 | observed: {"status":403,"code":"SignatureDoesNotMatch","acao":null}
+PASS N3 ticket for a.png used for b.png | expected: 403 | observed: {"status":403,"code":"SignatureDoesNotMatch","acao":null}
+PASS N4 ticket reused (repeated use until expiry) | expected: 200 | observed: {"status":200,"acao":null}
+signed headers (GET): host
+PASS N5 signed GET | expected: 200 | observed: {"status":200,"acao":null}
+PASS N6 unsigned GET of existing object | expected: 400/401/403 | observed: {"status":400,"code":"InvalidArgument","acao":null}
+PASS N7 unsigned PUT | expected: 400/401/403 | observed: {"status":400,"code":"InvalidArgument","acao":null}
+signed headers (aws4fetch default): host
+PASS N8 DEFAULT aws4fetch signing (no allHeaders), different Content-Type | expected: informational | observed: {"status":200,"acao":null}
+PASS N9 expired ticket (X-Amz-Expires=1, used after 3 s) | expected: 403 | observed: {"status":403,"code":"ExpiredRequest","acao":null}
+PASS N10 token scoped to main: signed PUT to other bucket | expected: 403 | observed: {"status":403,"code":"AccessDenied","acao":null}
+PASS N11 token scoped to main: signed GET on other bucket | expected: 403 | observed: {"status":403,"code":"AccessDenied","acao":null}
+PASS N12 token scoped to main: ListBuckets | expected: 403 (or list without other) | observed: {"status":403,"code":"AccessDenied","acao":null}
+FAIL N13 preflight OPTIONS from http://127.0.0.1:8701 | expected: 200 + ACAO | observed: {"status":204,"acao":"http://127.0.0.1:8701"}
+PASS N14 preflight OPTIONS from http://127.0.0.1:8702 | expected: no ACAO for origin | observed: {"status":403,"code":"Unauthorized","acao":null}
+chromium version 156.0.8078.4
+PASS B1 allowed origin http://127.0.0.1:8701: XHR PUT 20 MiB with ticket Content-Type | expected: 200 | observed: {"status":200,"progressEvents":3,"lastLoaded":20971520}
+PASS B2 allowed origin: fetch GET byte-exact | expected: status 200, byteExact | observed: {"status":200,"length":20971520,"byteExact":true,"contentType":"image/png"}
+B-img (allowed) error (expected: bytes are not a real PNG)
+B console (allowed) []
+FAIL B3 allowed origin: same ticket, PUT with Content-Type text/html | expected: 403 | observed: {"error":"xhr error (status 0)","progressEvents":2,"lastLoaded":19185664}
+PASS B4 unrelated origin http://127.0.0.1:8702: XHR PUT | expected: browser error (CORS) | observed: {"error":"xhr error (status 0)","progressEvents":0,"lastLoaded":0}
+PASS B5 unrelated origin: fetch GET | expected: browser error (CORS) | observed: {"error":"TypeError: Failed to fetch"}
+B-img (unrelated) error (expected: bytes are not a real PNG)
+B console (unrelated) ["Access to XMLHttpRequest at '<url> from origin 'http://127.0.0.1:8702' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.","Failed to load resource: net::ERR_FAILED","Access to fetch at '<url> from origin 'http://127.0.0.1:8702' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.","Failed to load resource: net::ERR_FAILED"]
+PASS B6 object from unrelated-origin PUT absent | expected: 404 | observed: {"status":404,"code":"NoSuchKey","acao":null}
+SUMMARY 20 checks; FAILED: N13,B3
