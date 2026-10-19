@@ -10,9 +10,9 @@ import { tag } from "../../../../tests/support/tags.js";
 import { boolean, id, integer, number, ref, text } from "./columns.js";
 import type { Dialect } from "./dialect.js";
 import { openPostgres, postgresDb, sqliteDb, type SqlAdapterOptions } from "./drivers.js";
-import { asc, avg, containsText, count, countDistinct, desc, eq, max, min, sum } from "./public.js";
+import { asc, atomic, avg, containsText, count, countDistinct, desc, eq, max, min, sum } from "./public.js";
 import { defineTable, tableFor } from "./table.js";
-import type { AnyTable, PortableDb } from "./types.js";
+import type { AnyTable, PortableDb, WriteDb } from "./types.js";
 
 const parents = defineTable("parents", { id: id(), name: text().unique() });
 const things = defineTable("things", {
@@ -217,6 +217,75 @@ describe.each([
     await expect(other.db.select({ id: t.id }).from(t)).rejects.toMatchObject(unavailable);
     const forced = h.handle({ unavailable: true });
     await expect(forced.select({ id: t.id }).from(t)).rejects.toMatchObject(unavailable);
+  });
+
+  describe("atomic", () => {
+    const snapshot = async () => {
+      const p = T(parents);
+      const t = T(things);
+      return {
+        parents: await h.db.select().from(p).orderBy(asc(p.id)),
+        things: await h.db.select().from(t).orderBy(asc(t.id)),
+      };
+    };
+
+    it(tag("SQL-AC-005", "applies every step and resolves per step to undefined or its RETURNING rows; empty input is a no-op"), async () => {
+      const p = T(parents);
+      const t = T(things);
+      const results = await atomic(h.db, [
+        (w) => w.insert(p).values({ id: uuid(60), name: "third" }),
+        (w) => w.insert(t).values({ id: uuid(61), parentId: uuid(60), name: "child" }).returning({ id: t.id }),
+        (w) => w.update(t).set({ score: 3 }).where(eq(t.parentId, uuid(60))).returning({ id: t.id, score: t.score }),
+        (w) => w.delete(t).where(eq(t.id, T4)),
+      ] as const);
+      expect(results).toEqual([undefined, [{ id: uuid(61) }], [{ id: uuid(61), score: 3 }], undefined]);
+      expect((await snapshot()).things.map((r) => r.id)).toEqual([T1, T2, T3, uuid(61)]);
+      expect(await atomic(h.db, [] as const)).toEqual([]);
+    });
+
+    it(tag("SQL-AC-005", "a last step that violates a constraint leaves no rows from earlier steps"), async () => {
+      const p = T(parents);
+      const t = T(things);
+      const before = await snapshot();
+      await expect(
+        atomic(h.db, [
+          (w) => w.insert(p).values({ id: uuid(62), name: "fourth" }),
+          (w) => w.update(t).set({ score: 99 }).where(eq(t.id, T1)),
+          (w) => w.insert(p).values({ id: uuid(63), name: "first" }),
+        ] as const),
+      ).rejects.toMatchObject({ name: "FrameworkError", code: "SQL.CONFLICT" });
+      await expect(
+        atomic(h.db, [
+          (w) => w.insert(p).values({ id: uuid(64), name: "fifth" }),
+          (w) => w.update(t).set({ score: 2147483648 }).where(eq(t.id, T1)),
+        ] as const),
+      ).rejects.toMatchObject({ name: "FrameworkError", code: "SQL.INVALID_VALUE" });
+      expect(await snapshot()).toEqual(before);
+    });
+
+    it(tag("SQL-AC-005", "a step whose write was built on the outer handle is rejected with CORE.INTERNAL before any step executes"), async () => {
+      const p = T(parents);
+      const t = T(things);
+      const before = await snapshot();
+      const internal = { name: "FrameworkError", code: "CORE.INTERNAL" };
+      await expect(
+        atomic(h.db, [(w) => w.insert(p).values({ id: uuid(65), name: "a" }), () => h.db.insert(p).values({ id: uuid(66), name: "b" })]),
+      ).rejects.toMatchObject(internal);
+      await expect(
+        atomic(h.db, [() => h.db.update(t).set({ score: 1 }).where(eq(t.id, T1)), (w) => w.insert(p).values({ id: uuid(67), name: "c" })]),
+      ).rejects.toMatchObject(internal);
+      const outer = h.db.delete(t).where(eq(t.id, T1));
+      await expect(atomic(h.db, [(w) => w.insert(p).values({ id: uuid(68), name: "d" }), () => outer])).rejects.toMatchObject(internal);
+      // A step that is not synchronous, or returns something that is not a write.
+      await expect(atomic(h.db, [(async (w: WriteDb) => w.delete(t)) as never])).rejects.toMatchObject(internal);
+      expect(await snapshot()).toEqual(before);
+    });
+
+    it("fails with SQL.UNAVAILABLE on a forced outage, and with CORE.INTERNAL for a handle the framework did not make", async () => {
+      const p = T(parents);
+      await expect(atomic(h.handle({ unavailable: true }), [(w) => w.insert(p).values({ id: uuid(69), name: "e" })])).rejects.toMatchObject({ code: "SQL.UNAVAILABLE" });
+      await expect(atomic({} as PortableDb, [(w) => w.insert(p).values({ id: uuid(70), name: "f" })])).rejects.toMatchObject({ code: "CORE.INTERNAL" });
+    });
   });
 
   describe("writes", () => {

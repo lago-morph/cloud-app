@@ -17,12 +17,12 @@ export type SqlAdapterOptions = GuardOptions;
 /** The app-facing handle over a D1 binding (local D1 under Wrangler, or Cloudflare D1). */
 export function sqliteDb(binding: AnyD1Database, options: SqlAdapterOptions = {}): PortableDb {
   // The SQLite database has the same query-builder surface; app code sees the pg-typed contract.
-  return portableHandle({ dialect: "sqlite", db: withValueRules(drizzleD1(binding)) as DrizzleDb, guard: createGuard(options) });
+  return portableHandle({ dialect: "sqlite", db: withValueRules(drizzleD1(binding)) as unknown as DrizzleDb, guard: createGuard(options) });
 }
 
 /** The app-facing handle over a PGlite harness instance (see openPostgres). */
 export function postgresDb(client: PGlite, options: SqlAdapterOptions = {}): PortableDb {
-  return portableHandle({ dialect: "postgres", db: withValueRules(drizzlePglite(client)) as DrizzleDb, guard: createGuard(options) });
+  return portableHandle({ dialect: "postgres", db: withValueRules(drizzlePglite(client)) as unknown as DrizzleDb, guard: createGuard(options) });
 }
 
 /** Name of the harness database: created from template0 with C collation and C ctype (DEC-0106). */

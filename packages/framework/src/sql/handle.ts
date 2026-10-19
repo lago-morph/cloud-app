@@ -71,7 +71,9 @@ function restricted(db: DrizzleDb, members: readonly string[], wrap: (builder: o
 
 function wrapBuilder(target: object, adapter: Adapter, marks: WeakSet<object> | undefined): object {
   const execute = (): Promise<unknown> =>
-    adapter.guard(async () => {
+    marks !== undefined
+      ? Promise.reject(new FrameworkError("CORE.INTERNAL", "a write built on an atomic step's handle is executed only by atomic; return it from the step instead of awaiting it"))
+      : adapter.guard(async () => {
       const result = await (target as { execute(): Promise<unknown> }).execute();
       return checkResultSize(normalizeResult(result));
     });
