@@ -70,6 +70,14 @@ Drizzle ORM (PAR-102) provides the query builder for both dialects (DEC-0038). T
 
 **Writes.** Drivers return different result shapes for writes without `returning`; the framework discards them, so such writes resolve to `void` everywhere.
 
+**Schema checks.** `defineTable` checks the definition when the schema module is imported and throws `CORE.MISCONFIGURED` naming the table and the broken rule: table names match `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`, are at most 63 characters (the Postgres identifier limit) and do not start with `sqlite_`; column keys match `^[a-z][a-zA-Z0-9]*$` and each upper-case letter becomes `_` plus its lower case (`createdAt` → `created_at`), at most 63 characters; every column is made by a framework helper; exactly one `id()`; options are only `indexes` and `uniques`, whose entries list known keys, without repeats, and no unique column set is declared twice. `id()` takes no `.nullable()`, `.unique()` or `.default()`. Indexes, unique constraints and foreign keys get explicit names (`<table>_<columns>_idx`, `<table>_<columns>_unique`, `<table>_<column>_fk`), which must also fit in 63 characters. A `ref` resolves lazily (so tables may reference each other) and must return another table's `id()` column (DEC-PENDING-B-05-1).
+
+**Value checks.** Each column's rule runs where Drizzle binds a value for that column, so a value that breaks it raises `SQL.INVALID_VALUE` while the query is built, before the database sees it, for writes and for comparisons alike. Drizzle binds no value for NULL and fills omitted columns itself, so the drivers also check the rows given to `insert().values()`, `update().set()` and an upsert's `set`: NULL only in nullable columns, a value for every NOT NULL column without a default, and no change to an `id()` column. `id()` and `ref()` values must be lowercase UUID v4 text, the form `newId()` makes (DEC-PENDING-B-05-2).
+
+**Dialect per process.** The dialect is read once per process from `PROTOTYPE_FRAMEWORK_DIALECT` (`sqlite`, the default, or `postgres`); Worker bundles leave it unset. `defineTable` builds the table for that dialect and keeps a dialect-neutral definition, from which the other dialect's table is built on demand for migration generation (DEC-PENDING-B-05-3).
+
+**Local drivers.** Local D1 is used through its Worker binding (Wrangler's `getPlatformProxy` in Node, DEC-0105), PGlite in-process. Each PGlite harness database is an in-memory instance loaded from a data directory made once per process, holding an empty database created from `template0` with `LC_COLLATE 'C'` and `LC_CTYPE 'C'` (DEC-0106, DEC-PENDING-B-05-4).
+
 ### 2.3 Supported query features
 
 | Supported | Not supported |
