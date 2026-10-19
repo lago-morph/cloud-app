@@ -62,10 +62,24 @@ Unreachable storage MUST surface as `FILES.UNAVAILABLE`. When a browser transfer
 
 Fetch fresh download tickets with each listing; do not cache URLs.
 
+**Shared runtime shape** (DEC-PENDING-B-11-1, -3, -5):
+- One target-neutral service runs over the object store (the R2 Worker binding, locally and on Cloudflare), with a ticket issuer supplied by each target.
+- Both kinds of ticket are plain JSON with `url` and `expiresAt` (milliseconds). An upload ticket also holds `method` (`PUT`) and `headers` (always `Content-Type`). The browser helpers read only these fields, so they behave the same on every target.
+- A `list` cursor encodes the prefix and the last name returned. The next page asks the store for names after that name, and the service fills each page to its limit even when the store returns short pages. A `limit` is clamped to 1…PAR-232.
+- Every store failure that is not already a `FrameworkError` becomes `FILES.UNAVAILABLE` and is logged once. `createUploadTicket` asks the store for the name's metadata first, so it also fails when storage is unreachable.
+
 **Cross-origin configuration.** The bucket's CORS policy (the rules a browser checks before cross-origin requests) is set by provisioning. It allows `PUT` and `GET` from the stage's public origin only, with the `Content-Type` request header. App code and app configuration never touch it.
 
 ### Local
 Server operations use the local R2 emulation through its Worker binding. Tickets point to a same-origin framework route, `/api/__framework/files/*`, which checks an HMAC-signed ticket and streams the body to or from local storage. Its responses always carry `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`, plus `Content-Disposition: attachment` for content types other than raster images, so uploaded HTML or SVG never runs as the app's origin. There is no cross-origin traffic and no use of Wrangler's experimental local S3 endpoint.
+
+Implementation details (DEC-PENDING-B-11-2, -4):
+- A local ticket's URL is the relative path `/api/__framework/files/<token>`. The token is base64url JSON of operation, name, content type (uploads) and expiry time, followed by `.` and its HMAC-SHA-256 signature. The signing key is the framework-internal local secret that `dev` generates into `.dev.vars` (SEC).
+- The route accepts `PUT` with an upload ticket and `GET` with a download ticket. An upload must send exactly the ticket's `Content-Type`.
+- A ticket that is malformed, tampered with, expired, used for the other operation, or used with a different content type gets an empty 403. A download of a file deleted after the ticket was issued gets an empty 404. These refusals are not logged, so ticket URLs never reach the log.
+- The route sends no CORS headers, so other origins cannot use it. "Raster images" means `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/avif` and `image/bmp`.
+- The route reads an upload body completely before storing it. R2's binding accepts only streams of known length, and a request body in the Node process of `createTestApp` is not one. This is local only, so the limit is the machine's memory, not a framework limit.
+- The route, its tickets and the key's name live only in `src/files/local/`. Nothing else in FILES imports them, so cloud bundles can leave them out (CORE-REQ-006).
 
 ### Cloudflare
 Server operations use the R2 Worker binding. Tickets are SigV4-signed URLs for R2's S3-compatible endpoint, created with aws4fetch (PAR-105), because the binding cannot sign URLs. The signing credentials are an R2 API token scoped to the stage's bucket. Provisioning creates it and stores it as a framework-internal Worker secret.
