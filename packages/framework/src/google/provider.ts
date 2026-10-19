@@ -135,7 +135,8 @@ async function verifyIdToken(token: string, keys: ReturnType<typeof createRemote
 }
 
 export function createGoogleLoginProvider(options: GoogleProviderOptions = {}): LoginProvider {
-  const doFetch = options.fetch ?? fetch;
+  // Resolved per call, so a runtime (or test) that replaces global fetch later is honoured.
+  const doFetch: typeof fetch = (input, init) => (options.fetch ?? globalThis.fetch)(input, init);
   let jwks: ReturnType<typeof createRemoteJWKSet> | undefined;
 
   let discovered: Discovery | undefined;
