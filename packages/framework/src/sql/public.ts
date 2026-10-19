@@ -44,15 +44,4 @@ export function avg(expression: SQLWrapper): SQL<number | null> {
   return notImplemented("avg");
 }
 
-/** Ascending, NULLs first. */
-export function asc(column: Column): SQL {
-  return notImplemented("asc");
-}
-/** Descending, NULLs last. */
-export function desc(column: Column): SQL {
-  return notImplemented("desc");
-}
-/** Literal substring match, case-insensitive for ASCII A–Z only. */
-export function containsText(column: Column<string>, needle: string): SQL {
-  return notImplemented("containsText");
-}
+export { asc, containsText, desc } from "./expressions.js";
