@@ -170,4 +170,30 @@ describe.each([
       expect(r).toEqual({ n: 0, s: null, a: null, lo: null, hi: null });
     });
   });
+
+  it("the handle exposes only the PortableDb members (no raw SQL, transactions, batch or relational queries)", () => {
+    expect(Object.keys(h.db).sort()).toEqual(["$with", "delete", "insert", "select", "selectDistinct", "update", "with"]);
+    for (const member of ["run", "all", "execute", "batch", "transaction", "query", "$client", "values", "get"]) {
+      expect((h.db as unknown as Record<string, unknown>)[member], member).toBeUndefined();
+    }
+  });
+
+  describe("writes", () => {
+    it(tag("SQL-AC-003", "insert, update and delete without returning resolve to undefined"), async () => {
+      const t = T(things);
+      expect(await h.db.insert(t).values({ id: uuid(9), name: "new" })).toBeUndefined();
+      expect(await h.db.update(t).set({ score: 1 }).where(eq(t.id, uuid(9)))).toBeUndefined();
+      expect(await h.db.delete(t).where(eq(t.id, uuid(9)))).toBeUndefined();
+      // The same through execute() and promise chaining.
+      expect(await h.db.update(t).set({ score: 2 }).where(eq(t.id, T1)).execute()).toBeUndefined();
+      expect(await h.db.delete(t).where(eq(t.id, uuid(9))).then((v) => v)).toBeUndefined();
+    });
+
+    it(tag("SQL-AC-003", ".returning({ id }) lists exactly the affected rows"), async () => {
+      const t = T(things);
+      const updated = await h.db.update(t).set({ score: 0 }).where(eq(t.parentId, R1)).returning({ id: t.id });
+      expect(updated.map((r) => r.id).sort()).toEqual([T1, T2]);
+      expect(await h.db.delete(t).where(eq(t.name, "missing")).returning({ id: t.id })).toEqual([]);
+    });
+  });
 });
