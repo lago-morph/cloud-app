@@ -1,0 +1,7 @@
+=== import-api vorderbig @ 2026-10-19T19:53:20Z
+created spikecmmrxula-a06-vorderbig
+import init: http=200 success=True status=None keys=['filename', 'success', 'upload_url'] errors=[]
+upload PUT: http=200 etag_matches=True host=<hex32>.r2.cloudflarestorage.com
+import ingest: http=200 success=True status=None errors=[] error=D1 DB was reset and rolled back to its last known good state because the application left the database in a state where constraints were violated: FOREIGN KEY constraint failed: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_FOREIGNKEY)
+import poll 1: http=400 success=False status=None error=None messages=null
+import info: {"upload_url_host": "<hex32>.r2.cloudflarestorage.com", "upload_s": 1.24, "ingest_s": 4.75, "polls": 1, "status": null, "error": null, "num_queries": null, "meta": null}
