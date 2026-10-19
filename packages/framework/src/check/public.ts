@@ -8,7 +8,8 @@
  * - `runPortabilityRules(appDir)`: the portability rules on every app file, independent of type
  *   checking, plus the app-configuration check; `formatDiagnostics` renders them (CHECK-REQ-003).
  * - `APP_COMPILER_OPTIONS`: the app lib set the rules type-check with (also for `verify`'s type check).
- * Migration checker: B-15.
+ * - `runMigrationChecker(appDir)`: the migration checker (CHECK-REQ-004, `./migrations/`); its
+ *   diagnostics have the same shape, so `formatDiagnostics` renders both lists together.
  */
 import { portabilityConfig } from "./config.js";
 
@@ -23,6 +24,9 @@ export { formatDiagnostic, formatDiagnostics } from "./format.js";
 export { REFERENCE_FILES, referenceFor } from "./references.js";
 export { RULE_NAMES, EXTRA_RULE_NAMES, PLUGIN_NAME } from "./rule-names.js";
 export { classifyPath } from "./paths.js";
+export { runMigrationChecker } from "./migrations/checker.js";
+export { MIGRATION_CHECKS } from "./migrations/diagnostic.js";
+export type { MigrationCheck } from "./migrations/diagnostic.js";
 export type { CodeKind } from "./paths.js";
 
 /** The shipped lint configuration (type information from the app's `tsconfig.json`). */

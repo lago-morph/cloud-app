@@ -9,8 +9,9 @@ import { PLUGIN_NAME } from "../rule-names.js";
 
 export type MigrationDiagnostic = CheckDiagnostic;
 
-/** The checks of the migration checker, one rule ID each. */
-export type MigrationCheck = "migration-checksums" | "migration-history" | "migration-apply" | "migration-supported-changes" | "migration-dialects";
+/** The checks of the migration checker, one rule ID each (`prototype-framework/<check>`). */
+export const MIGRATION_CHECKS = ["migration-checksums", "migration-history", "migration-apply", "migration-supported-changes", "migration-dialects"] as const;
+export type MigrationCheck = (typeof MIGRATION_CHECKS)[number];
 
 const REFERENCE: ReferenceFile = "sql-and-migrations.md";
 
