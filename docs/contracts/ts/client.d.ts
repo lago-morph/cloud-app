@@ -22,9 +22,8 @@ export interface ApiRequestOptions {
 }
 
 /**
- * Calls the app's own API. `path` is relative to `/api` (e.g. "/notes"). Adds the
- * request-forgery protection header automatically, parses JSON responses, and throws
- * ApiError for error responses.
+ * Calls the app's own API. `path` is relative to `/api` (e.g. "/notes"). Parses JSON
+ * responses and throws ApiError for error responses.
  */
 export declare function api<T = unknown>(path: string, options?: ApiRequestOptions): Promise<T>;
 

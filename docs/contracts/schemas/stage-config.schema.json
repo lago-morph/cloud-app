@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "stage-config.schema.json",
   "title": "Per-stage configuration values",
-  "description": "Committed file `config/<target>/<stage>.json` (local: `config/local.json`). Owner: CFG. Behavior: docs/components/config.md. Secret values never appear here.",
+  "description": "Committed file `config/<target>/<stage>.json` (local: `config/local.json`; disposable test stages: `config/<target>/test.json`). Owner: CFG. Behavior: docs/components/config.md. Secret values never appear here.",
   "type": "object",
   "required": ["values", "framework"],
   "additionalProperties": false,
@@ -29,11 +29,6 @@
           "items": { "type": "string", "minLength": 1 },
           "uniqueItems": true,
           "default": []
-        },
-        "publicOrigin": {
-          "description": "Public origin of the stage, e.g. https://notes.example.com. If omitted on a cloud target, the generated URL from provisioning is used.",
-          "type": "string",
-          "format": "uri"
         },
         "google": {
           "description": "Google login client settings. Required for production deployments.",

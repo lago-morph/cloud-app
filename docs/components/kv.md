@@ -13,7 +13,7 @@ The operations behave as follows:
 - `get` returns the stored string, or null for an absent key.
 - `put` creates or replaces the value.
 - `delete` of an absent key succeeds.
-- `list` returns keys that start with the prefix, which is literal and case-sensitive, in code point order.
+- `list` returns the entries (key and value) whose keys start with the prefix, which is literal and case-sensitive, in key code point order.
 
 Entries do not expire (DEC-0051).
 
@@ -32,9 +32,14 @@ Origin: owner · Derives from: SYS-REQ-001, SYS-REQ-013
 
 KV MUST behave identically on every target.
 
+#### KV-REQ-005 — Own failure codes
+Origin: owner-approved · Derives from: SYS-REQ-005, SYS-REQ-010
+
+When its storage cannot be used, including while it is unreachable or not yet at the expected schema, KV MUST fail with `KV.UNAVAILABLE`. Failures of the storage behind it MUST NOT surface under another component's codes.
+
 ## 2. Design
 
-KV is stored in a framework table in the app's SQL database, `__framework_kv(key text primary key, value text)` (DEC-0010). This is a simplification, not part of the contract. Prefix listing uses a key range (`key >= prefix AND key < prefix-successor`), not `LIKE`. The cursor encodes the prefix and the last key returned. PAR-223 keeps one page of values within the portable SQL result limit (PAR-215).
+KV is stored in a framework table in the app's SQL database, `__framework_kv(key text primary key, value text)` (DEC-0010). This is a simplification, not part of the contract. Prefix listing uses a key range (`key >= prefix AND key < prefix-successor`), not `LIKE`. The cursor encodes the prefix and the last key returned. PAR-220, PAR-222, and PAR-223 are chosen so that a maximum page (PAR-222 × (PAR-220 + PAR-223)) stays within the portable SQL result limit (PAR-215). SQL failures, including `SQL.SCHEMA_NOT_READY`, are mapped to `KV.UNAVAILABLE`.
 
 The local, Cloudflare, and AWS adapters are the SQL adapters for each target; KV needs no target-specific code.
 
@@ -50,6 +55,7 @@ SQL, MIG (framework table migrations).
 | KV-AC-002 | Empty, oversized, and malformed keys and values are rejected with the specified codes; a key of exactly PAR-220 bytes and a value of exactly PAR-223 bytes are accepted. | KV-REQ-002 | Local, cloud |
 | KV-AC-003 | Listing 2.5 pages of keys returns each key once; a cursor used with a different prefix is rejected. | KV-REQ-003 | Local, cloud |
 | KV-AC-004 | The KV suite produces identical results on local D1, PGlite, Cloudflare, and AWS. | KV-REQ-004 | Local, cloud |
+| KV-AC-005 | With the database unreachable, or one migration behind the build, KV operations fail with `KV.UNAVAILABLE`; a maximum page of maximum-size entries lists successfully. | KV-REQ-005 | Local, cloud |
 
 ## 5. Portability note
 

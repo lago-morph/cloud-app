@@ -14,7 +14,7 @@ An app MUST declare each configuration key it reads, with its type (string, inte
 #### CFG-REQ-002 — Committed per-stage values
 Origin: owner · Derives from: SYS-REQ-016
 
-Each target and stage MUST have a committed values file conforming to the stage configuration schema. Building a deployment MUST fail when a value is missing, has the wrong type, or names an undeclared key.
+Each target and stage MUST have a committed values file conforming to the stage configuration schema. The exception is disposable test stages, which use the committed `config/<target>/test.json`. Building a deployment MUST fail when a value is missing, has the wrong type, or names an undeclared key.
 
 #### CFG-REQ-003 — Fixed at deploy time
 Origin: owner · Derives from: SYS-REQ-016
@@ -44,7 +44,7 @@ Configuration files MUST NOT contain secret values; the schema provides no place
 - the committed values;
 - the app's defaults;
 - the deployment identity;
-- values known only once resources exist, such as the database, bucket and log bucket identifiers, and the generated public origin when `publicOrigin` is not set;
+- values known only once resources exist, such as the database, bucket and log bucket identifiers, and the stage's generated public origin;
 - secret locations, derived by SEC's naming convention.
 
 **Delivery.** Committed values are embedded in the build as a generated module (DEC-0063). Provisioning-derived values reach the runtime through the platform's deployment-time settings (Worker variables on Cloudflare, Lambda environment variables on AWS). Only framework adapters read those settings; app code reads configuration through `c.var.config` only.

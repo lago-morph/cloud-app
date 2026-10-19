@@ -20,7 +20,7 @@ Lambdas MUST run outside any VPC, so the stage needs no NAT gateway. The databas
 Origin: provenance-unclear · Derives from: SYS-REQ-024
 
 Each stage MUST have its own:
-- Aurora cluster;
+- Aurora cluster, placed in the account's shared network;
 - database-credentials secret;
 - S3 bucket;
 - `/<app>/<stage>/secrets/` parameters.
@@ -41,9 +41,9 @@ The HTTP Lambda timeout (PAR-270) MUST exceed the database resume budget (PAR-21
 
 Resources are created by SST (PAR-100), using `sst.aws.Router`, `StaticSite`, `Function` with a Function URL, `Aurora` (Postgres engine PAR-110, Data API enabled, PAR-212, PAR-213), and `Bucket`. Raw Pulumi AWS resources (PAR-109) are used only where SST has no component.
 
-The region is PAR-060 unless the stage configuration overrides it. The VPC SST creates for Aurora has no NAT gateway and no bastion host.
+The region is PAR-060 unless the stage configuration overrides it. Aurora clusters use one VPC per account and region, created by `setup-account` with no NAT gateway and no bastion host, so the number of stages is not limited by the VPC quota (DEC-0074).
 
-The HTTP entry uses Hono's AWS Lambda adapter. SDK clients are created once per cold start.
+The stage's public origin is its CloudFront URL; custom domains are not supported (DEC-0073). The HTTP entry uses Hono's AWS Lambda adapter. SDK clients are created once per cold start.
 
 ## 3. Uses
 

@@ -41,6 +41,7 @@ export declare const ERROR_CATALOGUE: {
   readonly "KV.INVALID_KEY":           { component: "KV";    status: 400; retryable: false; meaning: "Key or prefix is empty, malformed, or too long." };
   readonly "KV.INVALID_CURSOR":        { component: "KV";    status: 400; retryable: false; meaning: "List cursor is malformed or belongs to another prefix." };
   readonly "KV.VALUE_TOO_LARGE":       { component: "KV";    status: 413; retryable: false; meaning: "Value exceeds the KV value size limit." };
+  readonly "KV.UNAVAILABLE":           { component: "KV";    status: 503; retryable: true;  meaning: "Key-value storage could not be used in time." };
 
   // FILES
   readonly "FILES.INVALID_NAME":       { component: "FILES"; status: 400; retryable: false; meaning: "File name or prefix is empty, malformed, or too long." };
@@ -61,7 +62,7 @@ export declare const ERROR_CATALOGUE: {
   // AUTH
   readonly "AUTH.UNAUTHENTICATED":     { component: "AUTH";  status: 401; retryable: false; meaning: "The route requires a logged-in user." };
   readonly "AUTH.FORBIDDEN":           { component: "AUTH";  status: 403; retryable: false; meaning: "The user's access level is insufficient." };
-  readonly "AUTH.REQUEST_FORGERY":     { component: "AUTH";  status: 403; retryable: false; meaning: "A state-changing request failed origin or forgery-token checks." };
+  readonly "AUTH.REQUEST_FORGERY":     { component: "AUTH";  status: 403; retryable: false; meaning: "A state-changing request with a session came from another origin." };
   readonly "AUTH.LOGIN_FAILED":        { component: "AUTH";  status: 400; retryable: false; meaning: "Login could not be completed." };
 };
 

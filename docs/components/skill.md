@@ -21,11 +21,12 @@ Origin: provenance-unclear · Derives from: SYS-REQ-029
 The router MUST map common tasks to the references they need: adding an endpoint, storing data, handling files, adding an admin page, testing, and deploying. Each reference MUST open with "read this when" and end with a stopping condition.
 
 #### SKILL-REQ-003 — Hard rules for app agents
-Origin: provenance-unclear · Derives from: SYS-REQ-006, SYS-REQ-025
+Origin: provenance-unclear · Derives from: SYS-REQ-006, SYS-REQ-025, SYS-REQ-028
 
 The router MUST require app agents to:
 - use only the framework's public exports;
 - pass `verify` before declaring work done;
+- claim an app works on a cloud only after the app's smoke test has passed on a deployed stage there (SYS-REQ-028);
 - never change framework version pins;
 - record a suspected framework defect in a reproducible `FRAMEWORK-ISSUE.md` instead of working around the framework.
 

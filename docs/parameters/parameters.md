@@ -33,16 +33,16 @@ Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 | PAR-212 | Aurora capacity range | 0 to 4 ACU | ai-proposed | 0 lets the database pause when idle. |
 | PAR-213 | Aurora auto-pause delay | 5 minutes | ai-proposed | Platform minimum is 300 seconds. |
 | PAR-214 | Data API maximum response size | 1 MiB | platform | RDS Data API quotas. |
-| PAR-215 | Portable maximum query result size | 512 KiB | ai-proposed | Enforced on every target; below PAR-214. |
+| PAR-215 | Portable maximum query result size | 256 KiB | ai-proposed | Enforced on every target, measured as defined in sql.md §2.3. Leaves room for the Data API's JSON encoding within PAR-214. |
 
 ## KV
 
 | ID | Parameter | Value | Category | Notes |
 | --- | --- | --- | --- | --- |
 | PAR-220 | Maximum key length | 1,024 UTF-8 bytes | ai-proposed | |
-| PAR-221 | Default list page size | 100 | ai-proposed | |
-| PAR-222 | Maximum list page size | 1,000 | ai-proposed | |
-| PAR-223 | Maximum value size | 4,096 UTF-8 bytes | ai-proposed | Keeps a maximum page within PAR-215. |
+| PAR-221 | Default list page size | 20 | ai-proposed | |
+| PAR-222 | Maximum list page size | 50 | ai-proposed | 50 × (PAR-220 + PAR-223) stays within PAR-215. |
+| PAR-223 | Maximum value size | 4,096 UTF-8 bytes | ai-proposed | |
 
 ## Files
 
@@ -97,6 +97,13 @@ Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 | --- | --- | --- | --- | --- |
 | PAR-280 | Floating-point comparison tolerance in compliance tests | `abs(actual − expected) ≤ max(1e-12, 1e-12 × abs(expected))` | ai-proposed | |
 
+## Names
+
+| ID | Parameter | Value | Category | Notes |
+| --- | --- | --- | --- | --- |
+| PAR-290 | Maximum app name length | 20 characters | ai-proposed | Lowercase letters, digits, hyphens. Keeps `<app>-<stage>-<purpose>` within cloud resource-name limits. |
+| PAR-291 | Maximum stage name length | 20 characters | ai-proposed | Same character set as app names. |
+
 ## Dependency pins
 
 All pins are **ai-proposed**. They were selected around October 9, 2026, and confirmed published at that time; their combined compatibility was never tested. Re-verify at the start of implementation. A pin may be replaced when it cannot satisfy a requirement or a newer compatible version is preferable; record the new value here and rerun the affected acceptance criteria. Apps never change framework pins.
@@ -113,7 +120,7 @@ All pins are **ai-proposed**. They were selected around October 9, 2026, and con
 | PAR-107 | PGlite | 0.5.8 | |
 | PAR-108 | @pulumi/cloudflare | 6.15.0 | The provider generation SST 4.17.2 pins. |
 | PAR-109 | @pulumi/aws | 7.20.0 | The provider generation SST 4.17.2 pins. |
-| PAR-110 | Aurora PostgreSQL engine | 17.x | Prefer 17.3 if the region supports it with Data API and auto-pause; otherwise the highest supported 17.x minor. |
+| PAR-110 | Aurora PostgreSQL engine | 17.x | The highest 17.x minor that the region supports with Data API and auto-pause, resolved at implementation start. |
 | PAR-111 | Node.js, TypeScript, ESLint, test runner, AWS SDKs | To be recorded | Pin at implementation start. |
 | PAR-112 | Zod | 4.x; exact version at implementation start | Re-exported to apps (DEC-0059). |
 | PAR-113 | Vite | To be recorded | Client build and local dev server. |

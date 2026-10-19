@@ -388,7 +388,7 @@ The RDS Data API only accepts database credentials stored in Secrets Manager. Th
 Origin: ai-proposed · Status: accepted · Affects: FILES, PAR-234
 
 Browser transfers implement DEC-0058:
-- **Single-request transfers.** One signed `PUT` or `GET` per transfer. A single upload reaches about 5 GB on both clouds, so multipart uploads are not needed for photos.
+- **Single-request transfers.** One signed `PUT` or `GET` per transfer. A single upload reaches the platform maximum (PAR-234) on both clouds, so multipart uploads are not needed for photos. A signed URL may carry the temporary credential's key ID and session token, but never a signing secret.
 - **Cloudflare.** Server-side operations use the R2 binding. Signed URLs use R2's S3-compatible endpoint with a stage-scoped R2 token, because the binding cannot sign.
 - **Local.** Transfers use a same-origin framework route instead of Wrangler's experimental S3 endpoint.
 
@@ -450,3 +450,24 @@ The suite consists of:
 Origin: ai-proposed · Status: accepted · Affects: DEMO
 
 The demo is a shared photo board, matching the owner's first planned app (high-resolution photo uploads). It replaces the earlier spec's notes board. The demo specification states app requirements only.
+
+### DEC-0072 — Request-forgery protection without a token
+Origin: ai-proposed · Status: accepted · Affects: AUTH, HTTP
+
+A review found the earlier design layered three defenses: an Origin check, an HMAC token, and SameSite=Lax cookies. For a few-user app, the Origin check plus SameSite=Lax cookies is sufficient. Dropping the token removes:
+- a header contract;
+- a token in the `/api/auth/me` response;
+- an extra round trip;
+- a CloudFront forwarding rule.
+
+The mock-login route became a POST so no framework GET changes state.
+
+### DEC-0073 — No custom domains in this version
+Origin: ai-proposed · Status: accepted · Affects: CFG, CF, AWS
+
+Each stage's public origin is its generated URL (`workers.dev` on Cloudflare, the CloudFront domain on AWS). Supporting custom domains would require DNS and certificate provisioning that no requirement asks for.
+
+### DEC-0074 — One shared database network per AWS account and region
+Origin: ai-proposed · Status: accepted · Affects: PROV, AWS
+
+AWS allows 5 VPCs per region by default. One VPC per stage would cap the number of stages, including disposable test stages. `setup-account` therefore creates one VPC, with no NAT gateway and no bastion host, for all stages' Aurora clusters. Like the log bucket, it is never removed by stage removal.

@@ -34,7 +34,7 @@ API responses MUST carry `Cache-Control: no-store` unless a route sets its own c
 #### HTTP-REQ-006 — Browser API helper
 Origin: owner-approved · Derives from: SYS-REQ-008, SYS-REQ-010
 
-The `api` helper MUST send the request-forgery header (AUTH) on state-changing requests, MUST parse `ErrorResponse` bodies into `ApiError` with the catalogue code, and MUST report unreachable APIs as `HTTP.NETWORK_ERROR`.
+The `api` helper MUST send requests to the app's own API with the browser's session cookie, MUST parse `ErrorResponse` bodies into `ApiError` with the catalogue code, and MUST report unreachable APIs as `HTTP.NETWORK_ERROR`.
 
 ## 2. Design
 
@@ -51,11 +51,11 @@ Vite serves the client and proxies `/api` to the Worker running under Wrangler (
 One Worker serves both: static assets are uploaded with the Worker, the Worker runs first for `/api` and `/api/*`, and the assets layer serves everything else with single-page-app fallback to `index.html`.
 
 ### AWS
-A CloudFront distribution (SST Router) sends `/api` and `/api/*` to the HTTP Lambda's Function URL (DEC-0044) and every other path to the static site bucket, with `index.html` fallback. API behaviors use a no-caching policy and forward cookies, query strings, and the request-forgery header. The router's read timeout (PAR-271) is at least the Lambda timeout (PAR-270).
+A CloudFront distribution (SST Router) sends `/api` and `/api/*` to the HTTP Lambda's Function URL (DEC-0044) and every other path to the static site bucket, with `index.html` fallback. API behaviors use a no-caching policy and forward cookies, query strings, and the `Origin` header, but not `Host`, which must be the Function URL's own host. The router's read timeout (PAR-271) is at least the Lambda timeout (PAR-270).
 
 ## 3. Uses
 
-CORE (error catalogue), AUTH (request-forgery header name), LOG (uncaught errors).
+CORE (error catalogue), LOG (uncaught errors).
 
 ## 4. Acceptance criteria
 
@@ -66,7 +66,7 @@ CORE (error catalogue), AUTH (request-forgery header name), LOG (uncaught errors
 | HTTP-AC-003 | A body of PAR-200 + 1 bytes is rejected with 413 before the handler runs; a schema-invalid body is rejected with 400 `HTTP.INVALID_INPUT`. | HTTP-REQ-003 | Local, cloud |
 | HTTP-AC-004 | The deployed client calls the API with no CORS preflight and no cross-origin requests to the API. | HTTP-REQ-004 | Cloud |
 | HTTP-AC-005 | Two different mock users requesting the same personal route through the deployed router each receive their own response; API responses carry `no-store`. | HTTP-REQ-005 | Cloud |
-| HTTP-AC-006 | In a browser test, `api` sends the forgery header on POST, throws `ApiError` with the server's code on an error response, and throws `HTTP.NETWORK_ERROR` when the API is unreachable. | HTTP-REQ-006 | Local |
+| HTTP-AC-006 | In a browser test, `api` sends the session cookie, throws `ApiError` with the server's code on an error response, and throws `HTTP.NETWORK_ERROR` when the API is unreachable. | HTTP-REQ-006 | Local |
 
 ## 5. Portability note
 

@@ -30,8 +30,9 @@ export interface FilesListPage {
  * and consumed by the browser helpers in client.d.ts. Its contents are not part of
  * the contract.
  */
-export interface UploadTicket { readonly kind: "upload"; readonly [internal: string]: unknown }
-export interface DownloadTicket { readonly kind: "download"; readonly [internal: string]: unknown }
+declare const ticketBrand: unique symbol;
+export interface UploadTicket { readonly [ticketBrand]: "upload" }
+export interface DownloadTicket { readonly [ticketBrand]: "download" }
 
 export interface UploadTicketOptions {
   /** Content type the upload must declare; default `application/octet-stream`. */

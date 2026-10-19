@@ -1,10 +1,14 @@
 /**
  * Portable SQL (SQL). Behavior, supported subset, and per-type rules: docs/components/sql.md.
  *
- * The query builder is a restricted view of Drizzle ORM. Only the members declared or
- * re-exported here are part of the contract; anything else reachable at runtime is not,
- * and the portability rules (CHECK) reject it in app code.
+ * The query builder is a restricted view of Drizzle ORM (PAR-102), typed with Drizzle's
+ * own Postgres-flavoured types so app code gets full type checking. Only the members
+ * declared or re-exported here are part of the contract, and only the features in
+ * docs/components/sql.md §2.3 may be used; the portability rules (CHECK) reject the rest.
+ * The exact generic parameters linking these column types to Drizzle's are settled during
+ * implementation; the names, members, and semantics here are the contract.
  */
+import type { PgDatabase } from "drizzle-orm/pg-core";
 
 // ---- Schema definition -------------------------------------------------------------
 
@@ -35,16 +39,20 @@ export interface TableOptions {
   readonly uniques?: readonly (readonly string[])[];
 }
 
-/** Opaque table handle. Names: lowercase ASCII snake_case; `__framework_` prefix reserved. */
-export interface Table<Row = Record<string, unknown>> {
-  readonly $row: Row;
-}
+/**
+ * Table handle: its columns are accessible by name (e.g. `notes.title`) for use in
+ * queries and `ref`. Names: lowercase ASCII snake_case; `__framework_` prefix reserved.
+ */
+export type Table<Cols extends Record<string, Column<unknown, boolean>> = Record<string, Column<unknown, boolean>>> =
+  { readonly [K in keyof Cols]: Cols[K] } & {
+    readonly $inferSelect: { [K in keyof Cols]: Cols[K] extends Column<infer T, infer N> ? (N extends true ? T | null : T) : never };
+  };
 
 export declare function defineTable<Cols extends Record<string, Column<unknown, boolean>>>(
   name: string,
   columns: Cols,
   options?: TableOptions,
-): Table<{ [K in keyof Cols]: Cols[K] extends Column<infer T, infer N> ? (N extends true ? T | null : T) : never }>;
+): Table<Cols>;
 
 export type TableDefinitions = Record<string, Table>;
 
@@ -57,30 +65,14 @@ export declare function now(): number;
 
 // ---- Queries -----------------------------------------------------------------------
 
-/**
- * The database handle in `c.var.sql`. Supports select / insert / update / delete,
- * inner and left joins, subqueries, select-only common table expressions,
- * limit / offset, upsert against a declared unique constraint, and RETURNING.
- * Not supported: raw SQL, right and full outer joins, window functions, full-text
- * search, triggers, stored procedures, views, interactive transactions.
- */
-export interface PortableDb {
-  select: unknown;
-  insert: unknown;
-  update: unknown;
-  delete: unknown;
-  $with: unknown;
-}
+/** The database handle in `c.var.sql`. Supported features: docs/components/sql.md §2.3. */
+export type PortableDb = Pick<PgDatabase<any>, "select" | "selectDistinct" | "insert" | "update" | "delete" | "$with">;
 
 /** Write-only handle passed to `atomic` step factories (named context shape). */
-export interface WriteDb {
-  insert: unknown;
-  update: unknown;
-  delete: unknown;
-}
+export type WriteDb = Pick<PgDatabase<any>, "insert" | "update" | "delete">;
 
 /** One step of an atomic unit: synchronously builds a single write on the handle it is given. */
-export type WriteStep = (db: WriteDb) => unknown;
+export type WriteStep = (db: WriteDb) => { execute(): Promise<unknown> };
 
 /**
  * Applies all steps as one all-or-nothing unit. Steps must be synchronous and must not
@@ -89,18 +81,17 @@ export type WriteStep = (db: WriteDb) => unknown;
  */
 export declare function atomic(db: PortableDb, steps: readonly WriteStep[]): Promise<unknown[]>;
 
-// Supported expressions (re-exported from Drizzle with portable semantics).
-export declare const eq: unknown, ne: unknown, gt: unknown, gte: unknown, lt: unknown, lte: unknown;
-export declare const and: unknown, or: unknown, not: unknown;
-export declare const isNull: unknown, isNotNull: unknown, inArray: unknown, notInArray: unknown, between: unknown;
-export declare const count: unknown, countDistinct: unknown, min: unknown, max: unknown, sum: unknown, avg: unknown;
+// Supported expressions: Drizzle's own, re-exported unchanged in signature.
+export { eq, ne, gt, gte, lt, lte, and, or, not, isNull, isNotNull, inArray, notInArray, between } from "drizzle-orm";
+// Aggregates: Drizzle's signatures; results are normalized to JS numbers (sql.md §2.2).
+export { count, countDistinct, min, max, sum, avg } from "drizzle-orm";
 
 /** Ascending, NULLs first. Use instead of any other ordering helper. */
-export declare function asc(column: Column<unknown, boolean>): unknown;
+export declare function asc(column: Column<unknown, boolean>): import("drizzle-orm").SQL;
 /** Descending, NULLs last. */
-export declare function desc(column: Column<unknown, boolean>): unknown;
+export declare function desc(column: Column<unknown, boolean>): import("drizzle-orm").SQL;
 /**
  * Literal substring match, case-insensitive for ASCII A–Z only. `%`, `_` and `\` are
  * literal. An empty needle matches every non-NULL value; NULL never matches.
  */
-export declare function containsText(column: Column<string, boolean>, needle: string): unknown;
+export declare function containsText(column: Column<string, boolean>, needle: string): import("drizzle-orm").SQL;

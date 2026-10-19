@@ -5,7 +5,7 @@
  */
 
 export interface ProviderContext {
-  /** Exact callback URL, built from the configured public origin. */
+  /** Exact callback URL, built from the deployment's resolved public origin. */
   readonly callbackUrl: string;
   readonly getSecret: (name: string) => Promise<string>;
   readonly getConfig: (key: string) => unknown;

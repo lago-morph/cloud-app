@@ -26,8 +26,8 @@ File names are opaque. They MUST be non-empty, well-formed Unicode text, at most
 Origin: owner · Derives from: SYS-REQ-008, SYS-REQ-014
 
 The browser MUST be able to upload and download files using tickets created by app server code, with no limit imposed by the framework or by compute request-size limits. Each ticket:
-- permits exactly one operation on exactly one name;
-- expires after PAR-233;
+- permits only its stated operation (upload or download) on its stated name;
+- may be used repeatedly until it expires after PAR-233;
 - for uploads, requires the content type the ticket names.
 
 Files up to the storage platform's single-upload maximum (PAR-234) are supported.
@@ -35,7 +35,7 @@ Files up to the storage platform's single-upload maximum (PAR-234) are supported
 #### FILES-REQ-004 — Hidden mechanism
 Origin: owner · Derives from: SYS-REQ-005, SYS-REQ-008
 
-App code MUST NOT see storage services, signing, credentials, or cross-origin configuration. Any cross-origin access storage needs for transfers MUST be configured by the framework and limited to the stage's public origin (DEC-0058).
+App code MUST NOT see storage services, signing, credentials, or cross-origin configuration; tickets are opaque types with no readable fields. Any cross-origin access storage needs for transfers MUST be configured by the framework and limited to the stage's public origin (DEC-0058).
 
 #### FILES-REQ-005 — Private storage
 Origin: provenance-unclear · Derives from: SYS-REQ-008
@@ -53,7 +53,7 @@ Unreachable storage MUST surface as `FILES.UNAVAILABLE`. The browser helpers MUS
 - an upload ticket holds a URL, the HTTP method, the required headers, and an expiry time;
 - a download ticket holds a URL and an expiry time.
 
-`uploadFile` sends one `PUT` with progress reporting. `downloadUrl` returns the URL, which works in `<img src>`, links, and `fetch`. One `PUT` covers files up to PAR-234; multipart uploads are not used (DEC-0062). An app that cares about upload size or type can check `head` after the upload.
+`uploadFile` sends one `PUT` with progress reporting. `downloadUrl` returns the URL, which works in `<img src>`, links, and `fetch`. A signed URL carries a signature and, on AWS, the temporary credential's key ID and session token, but never a signing secret: it can perform only its own operation until it expires (DEC-0062). One `PUT` covers files up to PAR-234; multipart uploads are not used (DEC-0062). An app that cares about upload size or type can check `head` after the upload.
 
 **Cross-origin configuration.** The bucket's CORS policy (the rules a browser checks before cross-origin requests) is set by provisioning. It allows `PUT` and `GET` from the stage's public origin only, with the `Content-Type` request header. App code and app configuration never touch it.
 

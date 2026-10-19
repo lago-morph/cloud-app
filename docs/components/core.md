@@ -47,11 +47,11 @@ Each target's runtime bundle MUST exclude other targets' adapters, provisioning 
 
 ## 2. Design
 
-**Hono.** An app is a Hono application (DEC-0023). `defineApp` returns a definition, not a running app; each target runtime builds the Hono app, mounts `routes` under `/api`, and installs framework middleware in this order: request ID → error handler → deployment and services → current user → request forgery check → schema readiness → app routes.
+**Hono.** An app is a Hono application (DEC-0023). `defineApp` returns a definition, not a running app; each target runtime builds the Hono app, mounts `routes` under `/api`, and installs framework middleware in this order: request ID → error handler → deployment and services → current user → request forgery check → app routes. Schema readiness is checked lazily by SQL, not by middleware (MIG-REQ-005).
 
 **Services per request.** Each target exports a `createServices(env, deployment)` factory used by its runtime. Cheap, binding-backed objects are created per request on Cloudflare and locally. On AWS, SDK clients are created once per cold start and reused, but nothing request-specific is cached across requests.
 
-**Deployment identity** is embedded by the build (CLI) from the app definition and the stage configuration.
+**Deployment identity** is embedded by the build (CLI) from the app definition and the stage configuration. Stage names use lowercase letters, digits, and hyphens, up to PAR-291 characters.
 
 **Errors.** `FrameworkError` carries a code; the HTTP error handler (HTTP) maps the code to its catalogue status. Any other thrown value becomes `CORE.INTERNAL`; the original error is written to the log with the request ID and never returned.
 

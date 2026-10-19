@@ -14,7 +14,7 @@ App tables MUST be defined only with `defineTable` and the portable column types
 #### SQL-REQ-002 — Supported query subset
 Origin: owner-approved · Derives from: SYS-REQ-011
 
-App code MUST be limited to the query features listed in `sql.d.ts`. The portability rules (CHECK) MUST reject anything else, including raw SQL, right and full outer joins, window functions, full-text search, triggers, stored procedures, views, relational query APIs, and interactive transactions (DEC-0041).
+App code MUST be limited to the query features in §2.3. The portability rules (CHECK) MUST reject anything else (DEC-0041).
 
 #### SQL-REQ-003 — Identical results
 Origin: owner-approved · Derives from: SYS-REQ-011
@@ -65,6 +65,21 @@ Drizzle ORM (PAR-102) provides the query builder for both dialects (DEC-0038). T
 `containsText` is implemented with `lower()` and a substring-position function, not `LIKE`. That makes `%`, `_`, and `\` literal, and both SQLite's `lower()` and Postgres `lower()` under the C collation fold only ASCII. Ordering helpers emit explicit `NULLS FIRST` / `NULLS LAST`.
 
 **`atomic`.** On D1, the steps are built once and submitted as one batch. On the Data API, the framework opens a transaction, invokes each step factory against the transaction's handle, awaits the writes in order, and commits, rolling back on error. Builders captured from the ordinary handle are never awaited inside the transaction, because they would run outside it (an earlier observation, DEC-0050; verify early).
+
+### 2.3 Supported query features
+
+| Supported | Not supported |
+| --- | --- |
+| `select` / `selectDistinct`, `insert`, `update`, `delete` | Raw SQL and low-level execution APIs |
+| Inner and left joins | Right and full outer joins |
+| Subqueries; select-only common table expressions (`$with`) | Data-modifying common table expressions |
+| The comparison, boolean, null, `inArray`, and `between` expressions exported by `sql.d.ts`; `containsText` | `like`/`ilike` and other dialect-specific operators |
+| `count`, `countDistinct`, `min`, `max`, `sum`, `avg` | Window functions, full-text search, JSON operators |
+| Ordering with the framework's `asc` / `desc`; `limit` / `offset` | Other ordering helpers |
+| Upsert against a declared unique constraint; `returning` | Triggers, stored procedures, views |
+| `atomic` for multi-row writes | Interactive transactions, `.batch()`, relational `db.query` |
+
+**Result size.** A result's size is the sum of the UTF-8 byte lengths of its text values, plus 8 bytes for every other non-NULL value. Results larger than PAR-215 fail on every target.
 
 ### Local
 The local D1 database runs under Wrangler. App tests can also run against PGlite (PAR-107), an in-process Postgres, to catch Postgres-dialect failures without AWS (DEC-0039). Neither proves Data API behavior.

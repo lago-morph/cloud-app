@@ -24,12 +24,12 @@ Origin: provenance-unclear · Derives from: SYS-REQ-012, SYS-REQ-023
 #### PROV-REQ-003 — Removal
 Origin: provenance-unclear · Derives from: SYS-REQ-024
 
-`remove` MUST delete only the named stage's resources and MUST NOT touch other stages or the shared log bucket.
+`remove` MUST delete all of the named stage's resources, including secrets and other values the CLI created outside the infrastructure tool. It MUST NOT touch other stages or the account-level shared resources (PROV-REQ-004).
 
 #### PROV-REQ-004 — Account setup
 Origin: owner · Derives from: SYS-REQ-021
 
-`setup-account` MUST create the account's shared log bucket if it does not exist, and MUST change nothing if it does. Deployment MUST fail with a clear message if the bucket is missing.
+`setup-account` MUST create the account's shared resources if they do not exist, and MUST change nothing if they do. On both clouds that is the shared log bucket; on AWS, also one network shared by all stages' databases (DEC-0074). Deployment MUST fail with a clear message if they are missing.
 
 #### PROV-REQ-005 — Test stages
 Origin: owner · Derives from: SYS-REQ-020
@@ -49,7 +49,7 @@ SST (PAR-100) is the provisioning engine on both clouds (DEC-0036). It is driven
 
 **Errors** from these tooling commands are reported as messages with a non-zero exit status; they are not part of the runtime error catalogue.
 
-**Stage resources** are named `<app>-<stage>-<purpose>`.
+**Stage resources** are named `<app>-<stage>-<purpose>`. App and stage name lengths (PAR-290, PAR-291) keep these within the shortest cloud resource-name limit.
 
 **Publishing the result.** After a successful deploy, the CLI prints the public origin. For production stages, it also prints the Google callback URL to register (GOOGLE-REQ-004).
 
@@ -63,7 +63,7 @@ CFG, SEC, MIG, LOG, CF, AWS, CLI.
 | --- | --- | --- | --- |
 | PROV-AC-001 | The template app deploys to both clouds with no files other than its app definition, code, and configuration values. | PROV-REQ-001 | Cloud |
 | PROV-AC-002 | With one credential removed, deploy names it and stops before creating anything. A failing migration stops the deploy with failure status. A clean deploy passes the readiness request. | PROV-REQ-002 | Cloud |
-| PROV-AC-003 | Removing one of two stages leaves the other stage and the log bucket intact. | PROV-REQ-003 | Cloud |
+| PROV-AC-003 | Removing one of two stages leaves the other stage and the shared resources intact, and leaves no resource, secret, or parameter of the removed stage except its log entries. | PROV-REQ-003 | Cloud |
 | PROV-AC-004 | Running `setup-account` twice changes nothing the second time. Deploying without it fails with a clear message. | PROV-REQ-004 | Cloud |
 | PROV-AC-005 | Re-deploying a production stage with `--test` is refused. | PROV-REQ-005 | Cloud |
 | PROV-AC-006 | A stage configured for a non-default region deploys there. | PROV-REQ-006 | Cloud |

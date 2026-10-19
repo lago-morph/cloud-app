@@ -35,9 +35,6 @@ paths:
   /api/auth/logout:
     post:
       summary: End the session
-      description: Requires the request-forgery token header when a session exists.
-      parameters:
-        - $ref: "#/components/parameters/RequestForgeryToken"
       responses:
         "204": { description: Session cookie cleared. }
         default: { $ref: "#/components/responses/Error" }
@@ -45,9 +42,8 @@ paths:
     get:
       summary: Current user
       description: |
-        The current user and, for logged-in users, the request-forgery token to send on
-        state-changing requests. Logged-in users can read their user ID here to copy it
-        into the admin list (SYS-REQ-018). Responses are never cached.
+        The current user. Logged-in users can read their user ID here to copy it into
+        the admin list (SYS-REQ-018). Responses are never cached.
       responses:
         "200":
           description: Current user.
@@ -55,36 +51,27 @@ paths:
             Cache-Control: { schema: { const: no-store } }
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/MeResponse" }
+              schema: { $ref: "#/components/schemas/CurrentUser" }
   /api/auth/mock-login:
-    get:
+    post:
       summary: Log in as a chosen identity (authentication mock)
       x-test-stage-only: true
-      parameters:
-        - name: level
-          in: query
-          required: true
-          schema: { enum: [anonymous, user, admin] }
-        - name: id
-          in: query
-          description: Mock user ID; default derived from level.
-          schema: { type: string }
-        - name: displayName
-          in: query
-          schema: { type: string }
-        - name: returnTo
-          in: query
-          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [level]
+              additionalProperties: false
+              properties:
+                level: { enum: [anonymous, user, admin] }
+                id: { type: string, description: "User ID to use as given. Default: a fixed ID per level." }
+                displayName: { type: [string, "null"] }
       responses:
-        "302": { description: Session set; redirect to returnTo. }
+        "204": { description: Session set (or cleared for anonymous). }
         default: { $ref: "#/components/responses/Error" }
 components:
-  parameters:
-    RequestForgeryToken:
-      name: X-Request-Token
-      in: header
-      description: Value of requestForgeryToken from /api/auth/me. Required on state-changing requests (POST, PUT, PATCH, DELETE) made with a session.
-      schema: { type: string }
   schemas:
     CurrentUser:
       oneOf:
@@ -100,13 +87,6 @@ components:
             level: { enum: [user, admin] }
             id: { type: string, description: Stable opaque user ID. }
             displayName: { type: [string, "null"] }
-    MeResponse:
-      type: object
-      required: [user, requestForgeryToken]
-      additionalProperties: false
-      properties:
-        user: { $ref: "#/components/schemas/CurrentUser" }
-        requestForgeryToken: { type: [string, "null"] }
     ErrorResponse:
       type: object
       required: [error]

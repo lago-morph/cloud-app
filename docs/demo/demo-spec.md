@@ -25,7 +25,7 @@ Origin: ai-proposed · Derives from: SYS-REQ-017, SYS-REQ-030
 #### DEMO-REQ-003 — Photos
 Origin: ai-proposed · Derives from: SYS-REQ-014, SYS-REQ-030
 
-A post's author can attach JPEG or PNG photos to a draft, up to the configured maximum per post. Photos of any size the framework supports must work, including files much larger than 6 MB. Photos display in the post. Deleting a post deletes its photo records and then its photo files. If deleting a file fails, the failure is logged and the post is still deleted.
+A post's author can attach JPEG or PNG photos to a draft, up to the configured maximum per post. Photos of any size the framework supports must work, including files much larger than the compute platforms' request limits. Photos display in the post. Deleting a post deletes its photo records and then its photo files. If deleting a file fails, the failure is logged and the post is still deleted.
 
 #### DEMO-REQ-004 — Site banner
 Origin: ai-proposed · Derives from: SYS-REQ-013, SYS-REQ-030
@@ -68,7 +68,7 @@ The same source runs locally and on both clouds. The app includes a smoke test t
 | --- | --- | --- | --- |
 | DEMO-AC-001 | Anonymous visitors see only published posts, newest first, paginated. A title containing `<script>` renders as text. | DEMO-REQ-001 | Local, cloud |
 | DEMO-AC-002 | Each cell of the permissions table is exercised with mock identities; forbidden actions are refused. | DEMO-REQ-002 | Local, cloud |
-| DEMO-AC-003 | A 20 MB JPEG uploads, displays, and is byte-identical when downloaded. The per-post maximum is enforced. Deleting the post removes its rows and files. A simulated file-deletion failure produces a `warn` log entry. | DEMO-REQ-003 | Local, cloud |
+| DEMO-AC-003 | A 20 MB JPEG uploads, displays, and is byte-identical when downloaded. The per-post maximum is enforced. Deleting the post removes its rows and files. In a local test, a simulated file-deletion failure produces a `warn` log entry. | DEMO-REQ-003 | Local, cloud |
 | DEMO-AC-004 | A banner set by an admin appears for anonymous visitors; users cannot set it. | DEMO-REQ-004 | Local, cloud |
 | DEMO-AC-005 | A user's posts-per-page choice survives logout and login. | DEMO-REQ-005 | Local, cloud |
 | DEMO-AC-006 | Changing the site title in configuration and redeploying changes the displayed title. | DEMO-REQ-006 | Local, cloud |

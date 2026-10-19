@@ -67,9 +67,9 @@ Every app-facing component depends on CORE; that dependency is not repeated belo
 | LOCAL, CF, AWS | All capability components | Each target provides every capability (SYS-REQ-001). |
 | PROV | CFG, SEC, MIG, LOG, CF, AWS | Deployment supplies configuration and secret locations, applies migrations, and sets up the shared log bucket (SYS-REQ-012, SYS-REQ-021, SYS-REQ-023). |
 | CHECK | SQL, MIG | Enforces SQL portability and checks migrations (SYS-REQ-011, SYS-REQ-025). |
-| CLI | LOCAL, CHECK, PROV | Local development, the verification command, deploy and remove (SYS-REQ-022, SYS-REQ-025). |
+| CLI | LOCAL, CHECK, PROV, MIG, SEC, GOOGLE | Local development, the verification command, deploy and remove, migration generation, setting secrets, certification (SYS-REQ-022, SYS-REQ-025, SYS-REQ-027). |
 | COMPL | All capability and target components | Verifies every contract on every target (SYS-REQ-026). |
-| SKILL | CORE, CLI | Guides use of the public exports and the verification command (SYS-REQ-029). |
+| SKILL | CORE, CLI, CFG, PROV, GOOGLE | Guides use of the public exports and the verification command, and documents the owner's configuration, deployment, and login-client tasks (SYS-REQ-018, SYS-REQ-029). |
 | DEMO | SKILL | Built using the skill (DEC-0054). |
 
 The order in which components are implemented belongs to the implementation plan, not to this document (DEC-0055).

@@ -44,7 +44,7 @@ The CLI MUST provide a guided manual certification against a production deployme
 
 ## 2. Design
 
-**Libraries.** Discovery and key handling use jose (PAR-106). The token's `sub` claim is the subject, and its `name` claim, if present, is the display name.
+**Libraries.** Google's discovery document is fetched with plain `fetch` from its fixed well-known URL. jose (PAR-106) handles the signing keys (`createRemoteJWKSet`) and token verification (`jwtVerify`). The token's `sub` claim is the subject, and its `name` claim, if present, is the display name.
 
 **Certification procedure** (`certify-auth --target <t> --stage <s>`):
 1. The CLI checks automatically that `/api/auth/login` redirects to Google with the configured client ID and callback URL.

@@ -104,7 +104,7 @@ Verifies: SYS-REQ-024
 
 Deploy two test stages of the demo on each cloud, with different data. Remove one.
 
-Pass: the other stage's data and the log bucket are intact, and nothing of the removed stage remains.
+Pass: the other stage's data and the shared resources are intact, and nothing of the removed stage remains except its entries in the shared log bucket.
 
 #### E2E-013 — Errors are uniform and safe
 Verifies: SYS-REQ-010

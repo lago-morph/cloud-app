@@ -40,13 +40,18 @@ export interface RequestVars<C extends ConfigDeclaration = ConfigDeclaration, S 
   readonly requestId: string;
 }
 
-/** Hono environment type for app routes. */
+/**
+ * Hono environment type for app routes. `Bindings` is empty so platform bindings are
+ * not visible through `c.env`; the portability rules also forbid `c.env`,
+ * `c.executionCtx`, and replacing the framework's error and not-found handlers.
+ */
 export interface AppEnv<C extends ConfigDeclaration = ConfigDeclaration, S extends string = string> {
+  Bindings: Record<never, never>;
   Variables: RequestVars<C, S>;
 }
 
 export interface AppDefinition<C extends ConfigDeclaration, S extends string> {
-  /** Lowercase letters, digits, hyphens; 1–32 characters. Used in resource and log names. */
+  /** Lowercase letters, digits, hyphens; at most PAR-290 characters. Used in resource and log names. */
   readonly name: string;
   /** Non-secret configuration keys the app reads (see config.d.ts). */
   readonly config: C;

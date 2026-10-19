@@ -36,7 +36,7 @@ Resources are created by SST (PAR-100) through its Cloudflare components, with r
 - framework variables (CFG);
 - secrets (SEC).
 
-The stage's public origin is its `workers.dev` URL unless `publicOrigin` is configured with a custom domain.
+The stage's public origin is its `workers.dev` URL. Custom domains are not supported (DEC-0073).
 
 ## 3. Uses
 
