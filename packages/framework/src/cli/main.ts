@@ -4,7 +4,9 @@
  */
 
 import { UsageError } from "./args.js";
+import { describeFailure } from "./failure.js";
 import { EXIT, type CliIo, type Command } from "./io.js";
+import { buildBinding, devBinding, generateMigrationBinding, resetLocalBinding, secretsBinding, verifyBinding } from "./wiring.js";
 
 export { EXIT, type CliIo, type Command } from "./io.js";
 
@@ -22,17 +24,17 @@ function notYet(prerequisite: string): Command {
 }
 
 const COMMANDS: Readonly<Record<string, Entry>> = {
-  dev: { summary: "run the app locally", run: notYet("the dev command") },
-  verify: { summary: "the pre-completion verification", run: notYet("the verify command") },
-  "generate-migration": { summary: "generate the next migration pair from the table definitions", run: notYet("the generator") },
-  build: { summary: "build --target <t> --stage <s>: build a deployment without deploying it", run: notYet("the build command") },
+  dev: { summary: "run the app locally on http://localhost:<port>", run: devBinding },
+  verify: { summary: "the pre-completion verification (offline)", run: verifyBinding },
+  "generate-migration": { summary: "generate-migration [--name <slug>]: the next migration pair from the table definitions", run: generateMigrationBinding },
+  build: { summary: "build --target <t> --stage <s>: build a deployment without deploying it", run: buildBinding },
   deploy: { summary: "deploy --target <t> --stage <s>: deploy a stage", run: notYet("the Cloudflare provisioning operations (work item D-05)") },
   smoke: { summary: "smoke --target <t> --stage <s>: run the app's smoke tests against a stage", run: notYet("the smoke runner (work items C-04, D-05)") },
   remove: { summary: "remove --target <t> --stage <s>: remove a stage", run: notYet("the Cloudflare provisioning operations (work item D-05)") },
-  secrets: { summary: "secrets set <name> --target <t> --stage <s>: set a secret from standard input", run: notYet("the secrets command") },
+  secrets: { summary: "secrets set <name> --target <t> --stage <s>: set a secret from standard input", run: secretsBinding },
   "setup-account": { summary: "setup-account --target <t>: one-time account setup", run: notYet("the Cloudflare provisioning operations (work item D-05)") },
   "certify-auth": { summary: "certify-auth --target <t> --stage <s>: guided login-provider certification", run: notYet("a deployed production stage with a Google client (work item D-05)") },
-  "reset-local": { summary: "clear local state", run: notYet("the reset-local command") },
+  "reset-local": { summary: "clear local state (local D1, R2 and .logs/)", run: resetLocalBinding },
 };
 
 export const COMMAND_NAMES: readonly string[] = Object.keys(COMMANDS);
@@ -44,10 +46,7 @@ function usage(): string {
 
 export type CommandTable = Readonly<Record<string, Entry>>;
 
-/** A failure's text for the owner: its message only (no stack; no argument is ever echoed). */
-export function describeFailure(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+export { describeFailure };
 
 export async function runCommand(argv: readonly string[], io: CliIo, table: CommandTable = COMMANDS): Promise<number> {
   const [name, ...args] = argv;
