@@ -35,10 +35,12 @@ export declare const ERROR_CATALOGUE: {
   readonly "SQL.INVALID_VALUE":        { component: "SQL";   status: 400; retryable: false; meaning: "A value does not satisfy its portable column type." };
   readonly "SQL.UNAVAILABLE":          { component: "SQL";   status: 503; retryable: true;  meaning: "The database could not be reached in time." };
   readonly "SQL.SCHEMA_NOT_READY":     { component: "SQL";   status: 503; retryable: true;  meaning: "The database schema is older than this build expects." };
+  readonly "SQL.RESULT_TOO_LARGE":     { component: "SQL";   status: 500; retryable: false; meaning: "A query result exceeds the portable result size limit; paginate." };
 
   // KV
   readonly "KV.INVALID_KEY":           { component: "KV";    status: 400; retryable: false; meaning: "Key or prefix is empty, malformed, or too long." };
   readonly "KV.INVALID_CURSOR":        { component: "KV";    status: 400; retryable: false; meaning: "List cursor is malformed or belongs to another prefix." };
+  readonly "KV.VALUE_TOO_LARGE":       { component: "KV";    status: 413; retryable: false; meaning: "Value exceeds the KV value size limit." };
 
   // FILES
   readonly "FILES.INVALID_NAME":       { component: "FILES"; status: 400; retryable: false; meaning: "File name or prefix is empty, malformed, or too long." };
