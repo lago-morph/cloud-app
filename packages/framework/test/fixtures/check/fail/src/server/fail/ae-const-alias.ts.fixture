@@ -1,0 +1,6 @@
+import { FrameworkError } from "@lago-morph/prototype-framework";
+
+export function reject(): never {
+  const code = "SEC.MISSING" as const;
+  throw new FrameworkError(code);
+}

@@ -1,0 +1,4 @@
+import { z } from "zod";
+
+export const noteInput = z.object({ title: z.string().min(1) });
+export type NoteInput = z.infer<typeof noteInput>;

@@ -1,0 +1,3 @@
+const get = globalThis.fetch;
+
+export const loadNotes = (): Promise<Response> => get("/api/notes");

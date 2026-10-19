@@ -1,0 +1,6 @@
+import { exists } from "drizzle-orm";
+import { eq } from "@lago-morph/prototype-framework";
+import type { PortableDb } from "@lago-morph/prototype-framework";
+import { authors, posts } from "./tables";
+
+export const query = (db: PortableDb) => db.select().from(authors).where(exists(db.select().from(posts).where(eq(posts.authorId, authors.id))));

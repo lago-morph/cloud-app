@@ -1,0 +1,14 @@
+import { defineTable, id, integer, text, timestamp } from "@lago-morph/prototype-framework";
+
+// `items` is kept so the base app's routes and tests still type-check.
+export const items = defineTable("items", {
+  id: id(),
+  title: text(),
+  createdAt: timestamp(),
+});
+
+export const records = defineTable("records", {
+  id: id(),
+  label: text(),
+  amount: integer().default(0),
+});

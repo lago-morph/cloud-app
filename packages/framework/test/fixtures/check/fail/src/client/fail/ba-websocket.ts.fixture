@@ -1,0 +1,1 @@
+export const openLive = (): WebSocket => new WebSocket("ws://localhost:5173/api/live");

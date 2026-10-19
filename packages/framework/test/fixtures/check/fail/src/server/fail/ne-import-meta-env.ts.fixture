@@ -1,0 +1,7 @@
+declare global {
+  interface ImportMeta {
+    readonly env: Record<string, string>;
+  }
+}
+
+export const mode = import.meta.env["MODE"];

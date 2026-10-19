@@ -1,0 +1,5 @@
+import { ascending } from "./fo-reexport";
+import type { PortableDb } from "@lago-morph/prototype-framework";
+import { authors, posts } from "./tables";
+
+export const query = (db: PortableDb) => db.select().from(posts).orderBy(ascending(posts.title));

@@ -1,0 +1,42 @@
+import { configString, defineApp, eq, jsonBody, newId, now, z } from "@lago-morph/prototype-framework";
+import { items } from "./server/schema";
+
+const newItem = z.object({ title: z.string().min(1) });
+const MARKER_TITLE = "persisted-row";
+const KV_KEY = "persisted-key";
+const FILE_NAME = "persisted.txt";
+
+export const app = defineApp({
+  name: "fixtureapp",
+  config: { greeting: configString({ default: "hello" }) },
+  secrets: [],
+  tables: { items },
+  routes: (api) => {
+    api.get("/hello", (c) => c.json({ greeting: c.var.config.get("greeting") }));
+    api.post("/items", jsonBody(newItem), async (c) => {
+      const { title } = c.req.valid("json");
+      const itemId = newId();
+      await c.var.sql.insert(items).values({ id: itemId, title, createdAt: now() });
+      return c.json({ id: itemId }, 201);
+    });
+    // Writes one row, one KV entry and one file (LOCAL-AC-002 persistence).
+    api.post("/state", async (c) => {
+      await c.var.sql.insert(items).values({ id: newId(), title: MARKER_TITLE, createdAt: now() });
+      await c.var.kv.put(KV_KEY, "kept");
+      await c.var.files.put(FILE_NAME, new TextEncoder().encode("kept"), { contentType: "text/plain" });
+      return c.body(null, 204);
+    });
+    api.get("/state", async (c) => {
+      const rows = await c.var.sql.select({ id: items.id }).from(items).where(eq(items.title, MARKER_TITLE));
+      const file = await c.var.files.get(FILE_NAME);
+      return c.json({
+        rows: rows.length,
+        kv: await c.var.kv.get(KV_KEY),
+        file: file === null ? null : await new Response(file.body).text(),
+      });
+    });
+    api.get("/whoami", (c) => c.json(c.var.user));
+  },
+});
+
+export default app;

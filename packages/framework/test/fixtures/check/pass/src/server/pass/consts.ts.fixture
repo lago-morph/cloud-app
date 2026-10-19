@@ -1,0 +1,13 @@
+// `as const` and `satisfies` are allowed (CHECK-REQ-002, CHECK-AC-002 passing fixtures).
+import type { ErrorCode } from "@lago-morph/prototype-framework";
+
+export const sortKeys = ["title", "createdAt"] as const;
+export type SortKey = (typeof sortKeys)[number];
+
+export const limits = { pageSize: 20, maxTitle: 200 } satisfies Record<string, number>;
+
+export const appCodes = ["HTTP.NOT_FOUND", "HTTP.CONFLICT"] as const satisfies readonly ErrorCode[];
+
+export function isSortKey(value: string): value is SortKey {
+  return sortKeys.some((key) => key === value);
+}

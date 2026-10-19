@@ -1,0 +1,1 @@
+export const loadNotes = (): Promise<Response> => window.fetch("/api/notes");

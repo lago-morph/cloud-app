@@ -1,0 +1,3 @@
+import { z } from "@lago-morph/prototype-framework";
+
+export const titleSchema = z.string();

@@ -1,0 +1,8 @@
+import { newId, type PortableDb } from "@lago-morph/prototype-framework";
+import { authors } from "./tables";
+
+export const twoAuthors = (db: PortableDb) =>
+  db.transaction(async (tx) => {
+    await tx.insert(authors).values({ id: newId(), name: "a" });
+    await tx.insert(authors).values({ id: newId(), name: "b" });
+  });

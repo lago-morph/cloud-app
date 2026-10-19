@@ -1,0 +1,5 @@
+interface Note {
+  readonly title: string;
+}
+
+export const note = 42 as unknown as Note;

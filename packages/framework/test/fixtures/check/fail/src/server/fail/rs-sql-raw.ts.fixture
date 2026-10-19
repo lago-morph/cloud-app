@@ -1,0 +1,5 @@
+import { sql } from "drizzle-orm";
+import type { PortableDb } from "@lago-morph/prototype-framework";
+import { posts } from "./tables";
+
+export const everything = (db: PortableDb) => db.select().from(posts).where(sql.raw("1 = 1"));

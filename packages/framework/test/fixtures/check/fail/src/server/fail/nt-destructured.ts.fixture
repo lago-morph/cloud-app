@@ -1,0 +1,6 @@
+import type { PortableDb } from "@lago-morph/prototype-framework";
+
+export const begin = (db: PortableDb) => {
+  const { transaction } = db;
+  return transaction;
+};

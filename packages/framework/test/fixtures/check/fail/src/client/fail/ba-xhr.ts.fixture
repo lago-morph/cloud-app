@@ -1,0 +1,6 @@
+export function loadNotes(): XMLHttpRequest {
+  const xhr = new XMLHttpRequest();
+  xhr.open("GET", "/api/notes");
+  xhr.send();
+  return xhr;
+}

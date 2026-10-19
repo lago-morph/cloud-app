@@ -1,0 +1,5 @@
+import type { PortableDb } from "@lago-morph/prototype-framework";
+import { sqlFragment } from "./rs-reexport";
+import { posts } from "./tables";
+
+export const lowered = (db: PortableDb) => db.select().from(posts).where(sqlFragment`lower(${posts.title}) = 'x'`);

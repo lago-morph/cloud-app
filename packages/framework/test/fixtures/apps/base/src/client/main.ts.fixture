@@ -1,0 +1,7 @@
+import { api } from "@lago-morph/prototype-framework/client";
+import type { Greeting } from "../shared/types";
+
+const target = document.querySelector("#greeting");
+void api<Greeting>("/hello").then((body) => {
+  if (target) target.textContent = body.greeting;
+});
