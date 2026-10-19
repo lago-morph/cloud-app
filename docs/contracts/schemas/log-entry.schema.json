@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "log-entry.schema.json",
+  "title": "Stored log entry",
+  "description": "One entry as stored by LOG: one JSON object per cloud bucket object, one JSON line per entry in local log files. Owner: LOG. Behavior: docs/components/log.md.",
+  "type": "object",
+  "required": ["time", "app", "stage", "target", "component", "severity", "message"],
+  "additionalProperties": false,
+  "properties": {
+    "time": { "type": "string", "format": "date-time", "description": "Added by the framework (UTC)." },
+    "app": { "type": "string" },
+    "stage": { "type": "string" },
+    "target": { "enum": ["local", "cloudflare", "aws"] },
+    "component": { "type": "string" },
+    "severity": { "enum": ["debug", "info", "warn", "error"] },
+    "message": { "type": "string" },
+    "requestId": { "type": "string", "description": "Present when written during an HTTP request; matches the requestId in error responses." }
+  }
+}
