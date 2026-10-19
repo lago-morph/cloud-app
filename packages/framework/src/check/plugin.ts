@@ -6,6 +6,7 @@ import type { FrameworkRule } from "./rule-kit.js";
 import { PLUGIN_NAME, type ExtraRuleName, type RuleName } from "./rule-names.js";
 import { allowedImports } from "./rules/allowed-imports.js";
 import { noRelationalQueries, noTransactions } from "./rules/db-members.js";
+import { frameworkIds } from "./rules/framework-ids.js";
 import { frameworkOrder } from "./rules/framework-order.js";
 import { noDialectFeatures } from "./rules/no-dialect-features.js";
 import { noRawSql } from "./rules/no-raw-sql.js";
@@ -17,6 +18,7 @@ export const rules: Readonly<Partial<Record<RuleName | ExtraRuleName, FrameworkR
   "framework-order": frameworkOrder,
   "no-transactions": noTransactions,
   "no-relational-queries": noRelationalQueries,
+  "framework-ids": frameworkIds,
 };
 
 /**
