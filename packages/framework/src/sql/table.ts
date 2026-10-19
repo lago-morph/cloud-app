@@ -109,6 +109,9 @@ function checkDefinition(name: string, columns: ColumnBuilders, options: LooseOp
     if (spec === undefined) {
       misconfigured(`column ${JSON.stringify(key)} of table ${quoted} is not made by a framework column helper (id, text, integer, number, timestamp, boolean, ref)`);
     }
+    if (spec.extraRefArguments) {
+      misconfigured(`column ${JSON.stringify(key)} of table ${quoted}: ref() takes only its target column; reference actions (onDelete/onUpdate) are not supported: deleting a referenced row fails while references exist`);
+    }
     specs[key] = spec;
   }
   const ids = Object.values(specs).filter((s) => s.kind === "id").length;

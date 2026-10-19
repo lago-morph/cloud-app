@@ -138,3 +138,21 @@ Agree the code is wrong. SQL-REQ-001 says reference actions other than "fail whi
 - **Error code / timing**: `CORE.MISCONFIGURED` matches DEC-0132 and sql.md §2.2 "Schema checks"; the throw happens while the `defineTable` arguments are evaluated, which DEC-0221 counts as "rejected".
 - **Minor, non-blocking**: §2.2 says the schema-check error names "the table and the broken rule"; a throw inside `ref()` cannot name the table or key. This has an accepted precedent: `id().nullable()/.unique()/.default()` already throw from the builder (`idOption`, `columns.ts:27-32`), as DEC-0132 describes. The fixer may, optionally, instead record the extra argument in the spec and reject it in `defineTable` with table and key named; either form satisfies SQL-AC-001 and the suite. Not a reason to reject.
 - **Verification plan** is red-green per §8 step 3 (unit test first, then fix, then both integration tests, `npm run verify` keeping the `@ts-expect-error` needed, repro rerun). Adequate. Local only; no Cloudflare calls.
+
+## Fix
+
+Fixer: fixing subagent (prompt §8 step 3). Branch `claude/implement-local-cloudflare-fix-sql001` from `origin/claude/implement-local-cloudflare`. Fix commit `bec7321`. Local only; no Cloudflare calls.
+
+### Change
+- Took the reviewer's optional form so the error names the table and key (sql.md §2.2): `ref()` (`packages/framework/src/sql/columns.ts`) no longer ignores extra arguments; when `arguments.length > 1` it records `extraRefArguments: true` in the column spec (carried through `.nullable()`/`.unique()`/`.default()`). `checkDefinition` in `packages/framework/src/sql/table.ts` throws `CORE.MISCONFIGURED`: `column "parentId" of table "children": ref() takes only its target column; reference actions (onDelete/onUpdate) are not supported: deleting a referenced row fails while references exist`.
+- The rejection still happens inside the `defineTable` call (definition time), as DEC-0221 requires. `sql.d.ts` and the integration tests are unchanged.
+- `docs/components/sql.md` §2.2 "Schema checks": one sentence added, "`ref()` takes only its target: an extra argument … is rejected."
+- The unit test is in `packages/framework/src/sql/table.unit.test.ts` (not `columns.unit.test.ts`) because the check now lives in `defineTable`.
+
+### Red
+New test `[SQL-AC-001] rejects ref() given %s: only fail-while-referenced is supported` (4 cases: `{ onDelete: "cascade" }`, `{ onDelete: "set null", onUpdate: "cascade" }`, `"cascade"`, explicit `undefined`; each checked plain and after `.nullable()`, expecting `CORE.MISCONFIGURED` naming `"children"` and `"parentId"`). On the unfixed code: `npx vitest run packages/framework/src/sql/table.unit.test.ts -t "rejects ref"` → `Tests 4 failed | 12 skipped`, each `Error: expected a FrameworkError` (nothing thrown: the expected reason).
+
+### Green
+- Same command after the fix: the 4 cases pass; `table.unit.test.ts` + `columns.unit.test.ts`: 35 passed.
+- `npm run verify` exit 0 (build, typecheck with the suite's `@ts-expect-error` still needed, lint, unit `111 files / 1205 tests passed`, template verify).
+- `npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/sql/` (after the framework build): `Test Files 3 passed`, `Tests 95 passed`, including both `[SQL-AC-001] unsupported features are rejected … (PGlite)` and `(local D1)`.
