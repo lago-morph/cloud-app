@@ -5,8 +5,9 @@ import type { Context, ErrorHandler, NotFoundHandler } from "hono";
 import { matchedRoutes } from "hono/route";
 import { TrieRouter } from "hono/router/trie-router";
 import type { RouterRoute } from "hono/types";
-import { errorCode, errorLogMessage, errorStatus } from "../core/error-handler.js";
+import { errorCode, errorStatus } from "../core/error-handler.js";
 import { ERROR_CATALOGUE, FrameworkError, type ErrorCode, type ErrorResponseBody } from "../core/errors.js";
+import { logFailure } from "../log/failures.js";
 import type { LogService } from "../log/public.js";
 
 /** An `ErrorResponse` with the catalogue status for `code`, the request's ID, and `no-store`. */
@@ -35,11 +36,16 @@ export function routePath(c: Context): string {
   return route?.path ?? c.req.path;
 }
 
-/** The HTTP-REQ-007 entry: method, route path, code, then the error's name, message and stack. */
-function logMessage(c: Context, code: ErrorCode, thrown: unknown): string {
-  const coreMessage = errorLogMessage(c, code, thrown);
-  // CORE's message starts with "<METHOD> <path> failed with"; HTTP logs the route path instead.
-  return `${c.req.method} ${routePath(c)}${coreMessage.slice(`${c.req.method} ${c.req.path}`.length)}`;
+/**
+ * The HTTP-REQ-007 entry goes through LOG's `logFailure`, so an error an adapter already logged
+ * is not logged twice. The writer handed to it is a plain wrapper (LOG adds no method and path
+ * for it), which prefixes the method and route path and redacts known secret values.
+ */
+function logServerError(c: Context, thrown: unknown, secrets: readonly string[]): void {
+  const log = c.get("log") as LogService | undefined;
+  if (log === undefined) return;
+  const prefix = `${c.req.method} ${routePath(c)} `;
+  logFailure({ write: (component, severity, message) => log.write(component, severity, redact(prefix + message, secrets)) }, thrown);
 }
 
 /**
@@ -53,10 +59,7 @@ export function createErrorHandler(options: { readonly secretValues?: SecretValu
     const code = errorCode(thrown);
     const status = errorStatus(code);
     const secrets = [...(options.secretValues?.(c) ?? [])];
-    if (status >= 500) {
-      const log = c.get("log") as LogService | undefined;
-      log?.write(code.slice(0, code.indexOf(".")), "error", redact(logMessage(c, code, thrown), secrets));
-    }
+    if (status >= 500) logServerError(c, thrown, secrets);
     const own = status < 500 && thrown instanceof FrameworkError && thrown.message !== "" ? thrown.message : undefined;
     return errorResponse(c, code, own === undefined ? undefined : redact(own, secrets));
   };

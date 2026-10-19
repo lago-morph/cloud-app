@@ -5,6 +5,7 @@ import { assembleApp, type RuntimeParts } from "../core/assemble.js";
 import { ERROR_CATALOGUE, FrameworkError, type ErrorCode } from "../core/errors.js";
 import { createDeployment } from "../core/identity.js";
 import { defineApp, type AppEnv, type Services } from "../core/public.js";
+import { logFailure } from "../log/failures.js";
 import type { LogService, Severity } from "../log/public.js";
 import { createHttpParts, type HttpOptions } from "./runtime.js";
 
@@ -185,6 +186,19 @@ describe("server error log entries (HTTP-REQ-007)", () => {
     expect(res.headers.get("cache-control")).toBe("no-store");
     expect(written).toHaveLength(1);
     expect(written[0]!.message).toMatch(/^GET \/api\/odd failed with CORE\.INTERNAL\nThrownValue: just a string/);
+  });
+
+  it(tag("HTTP-AC-007", "unit part: a *.UNAVAILABLE the adapter already logged with logFailure leaves exactly one entry"), async () => {
+    const { hono, written } = app((api) =>
+      api.get("/items", (c) => {
+        const error = new FrameworkError("SQL.UNAVAILABLE", "database did not answer");
+        logFailure(c.var.log, error);
+        throw error;
+      }),
+    );
+    expect((await hono.request("/api/items")).status).toBe(503);
+    expect(written).toHaveLength(1);
+    expect(written[0]!.component).toBe("SQL");
   });
 
   it("responses below 500 leave no log entry", async () => {
