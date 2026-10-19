@@ -268,6 +268,53 @@ function build(entry: Entry, dialect: Dialect): DrizzleTable {
   return table;
 }
 
+// ---- Row checks (SQL-REQ-004) ---------------------------------------------------------
+
+function invalidValue(message: string): never {
+  throw new FrameworkError("SQL.INVALID_VALUE", message);
+}
+
+/**
+ * Checks one row given to `insert(table).values(…)`: every column's value against its rule,
+ * NULL only in nullable columns, and a value for every NOT NULL column without a default.
+ * Tables not made by `defineTable` are left alone.
+ */
+export function checkInsertRow(table: unknown, row: unknown): void {
+  const def = tableDefinition(table);
+  if (def === undefined) return;
+  if (typeof row !== "object" || row === null) invalidValue(`insert into ${def.name}: a row must be an object`);
+  const values = row as Record<string, unknown>;
+  for (const [key, spec] of Object.entries(def.columns)) {
+    const value = values[key];
+    const label = `${def.name}.${key}`;
+    if (value === undefined) {
+      if (!spec.nullable && !spec.hasDefault) invalidValue(`${label}: a value is required (NOT NULL, no default)`);
+    } else if (value === null) {
+      if (!spec.nullable) invalidValue(`${label}: null is not allowed (the column is NOT NULL)`);
+    } else {
+      checkValue(spec.kind, value, label);
+    }
+  }
+}
+
+/** Checks the values given to `update(table).set(…)` or an upsert's `set`; `id()` columns are immutable. */
+export function checkUpdateSet(table: unknown, set: unknown): void {
+  const def = tableDefinition(table);
+  if (def === undefined) return;
+  if (typeof set !== "object" || set === null) invalidValue(`update of ${def.name}: set must be an object`);
+  for (const [key, value] of Object.entries(set)) {
+    const spec = def.columns[key];
+    if (spec === undefined || value === undefined) continue;
+    const label = `${def.name}.${key}`;
+    if (spec.kind === "id") invalidValue(`${label}: id() columns are immutable`);
+    if (value === null) {
+      if (!spec.nullable) invalidValue(`${label}: null is not allowed (the column is NOT NULL)`);
+    } else {
+      checkValue(spec.kind, value, label);
+    }
+  }
+}
+
 function resolveRef(table: string, key: string, spec: ColumnSpec, dialect: Dialect): unknown {
   const target = spec.target?.();
   const owner = typeof target === "object" && target !== null ? columnOwners.get(target) : undefined;
