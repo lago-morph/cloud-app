@@ -6,18 +6,23 @@
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle as drizzleD1, type AnyD1Database } from "drizzle-orm/d1";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
+import { createGuard, type GuardOptions } from "./guard.js";
+import { portableHandle, type DrizzleDb } from "./handle.js";
 import type { PortableDb } from "./types.js";
 import { withValueRules } from "./write-rules.js";
 
-/** Drizzle database over a D1 binding (local D1 under Wrangler, or Cloudflare D1). */
-export function sqliteDb(binding: AnyD1Database): PortableDb {
+/** Options of a handle: forced outage, PAR-210 budget, and the log for `SQL.UNAVAILABLE` (guard.ts). */
+export type SqlAdapterOptions = GuardOptions;
+
+/** The app-facing handle over a D1 binding (local D1 under Wrangler, or Cloudflare D1). */
+export function sqliteDb(binding: AnyD1Database, options: SqlAdapterOptions = {}): PortableDb {
   // The SQLite database has the same query-builder surface; app code sees the pg-typed contract.
-  return withValueRules(drizzleD1(binding)) as unknown as PortableDb;
+  return portableHandle({ dialect: "sqlite", db: withValueRules(drizzleD1(binding)) as unknown as DrizzleDb, guard: createGuard(options) });
 }
 
-/** Drizzle database over a PGlite harness instance (see openPostgres). */
-export function postgresDb(client: PGlite): PortableDb {
-  return withValueRules(drizzlePglite(client)) as unknown as PortableDb;
+/** The app-facing handle over a PGlite harness instance (see openPostgres). */
+export function postgresDb(client: PGlite, options: SqlAdapterOptions = {}): PortableDb {
+  return portableHandle({ dialect: "postgres", db: withValueRules(drizzlePglite(client)) as unknown as DrizzleDb, guard: createGuard(options) });
 }
 
 /** Name of the harness database: created from template0 with C collation and C ctype (DEC-0106). */
