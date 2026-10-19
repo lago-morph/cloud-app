@@ -1,6 +1,9 @@
 /**
- * build pipeline public names. No contract file declares app-facing names for this component;
- * the owning item adds them here.
- * Stub written by B-01; implemented by B-16.
+ * Build pipeline (framework-internal; no package subpath). The CLI (B-17) calls `buildApp`
+ * for `build`, `dev` and `deploy`, and `loadApp` wherever it needs the app definition
+ * (`generate-migration`, `secrets set`).
  */
-export {};
+export { buildApp, entrySource, localWranglerConfig, COMPATIBILITY_DATE, PACKAGE_NAME } from "./build.js";
+export type { BuildOptions, BuildResult } from "./build.js";
+export { loadApp, loadAppModule, APP_ENTRY, BUILD_DIR } from "./load.js";
+export type { AnyDefinedApp, LoadedApp } from "./load.js";
