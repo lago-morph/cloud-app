@@ -12,7 +12,7 @@ import { id, integer, ref, text } from "../sql/columns.js";
 import { openPostgres } from "../sql/drivers.js";
 import { defineTable } from "../sql/table.js";
 import type { AnyTable } from "../sql/types.js";
-import { applyMigrations, d1MigrationDatabase, MigrationFailedError, pgliteMigrationDatabase, type D1Like, type MigrationDatabase } from "./apply.js";
+import { applyMigrations, d1MigrationDatabase, migrateLocal, MigrationFailedError, pgliteMigrationDatabase, type D1Like, type MigrationDatabase } from "./apply.js";
 import { FRAMEWORK_MIGRATIONS_DIR } from "./framework.js";
 import { appSchema, generateMigrations } from "./generate.js";
 import { readHistory } from "./history.js";
@@ -169,6 +169,18 @@ describe.each([
     ]);
     // References still enforced: a child of a missing parent is refused.
     await expect(h.run(`INSERT INTO "children" ("id", "parent_id", "label") VALUES ('${C4}', '00000000-0000-4000-8000-0000000000ff', 'x')`)).rejects.toThrow();
+  });
+
+  it(tag("MIG-AC-002", "migrateLocal reads the package's framework history and the app's migrations directory, framework first"), async () => {
+    const root = await appHistory({ parents, children });
+    const result = await migrateLocal(h.db, root);
+    expect(result.applied).toEqual([...histories(root).framework, ...histories(root).app].map((m) => m.id));
+    expect((await migrateLocal(h.db, root)).applied).toEqual([]);
+  });
+
+  it("migrateLocal with no app migrations directory applies only the framework history", async () => {
+    const result = await migrateLocal(h.db, join(tmpdir(), "mig-apply-does-not-exist"));
+    expect(result.applied).toEqual(readHistory(FRAMEWORK_MIGRATIONS_DIR, dialect, "framework").map((m) => m.id));
   });
 
   async function seed(): Promise<void> {

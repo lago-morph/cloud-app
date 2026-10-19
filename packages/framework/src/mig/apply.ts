@@ -15,8 +15,8 @@
  */
 import type { PGlite } from "@electric-sql/pglite";
 import type { Dialect } from "../sql/dialect.js";
-import { MIGRATIONS_TABLE } from "./framework.js";
-import type { Migration } from "./history.js";
+import { FRAMEWORK_MIGRATIONS_DIR, MIGRATIONS_TABLE } from "./framework.js";
+import { readHistory, type Migration } from "./history.js";
 
 /** The subset of a D1 binding (local Wrangler/Miniflare) the applier uses. */
 export interface D1Like {
@@ -44,7 +44,7 @@ export class MigrationFailedError extends Error {
   constructor(
     readonly migration: string,
     readonly file: string,
-    readonly cause: unknown,
+    override readonly cause: unknown,
     readonly applied: readonly string[],
   ) {
     super(`migration ${migration} (${file}) failed and was not applied; the database is unchanged by it: ${cause instanceof Error ? cause.message : String(cause)}`);
@@ -75,6 +75,21 @@ export async function applyMigrations(db: MigrationDatabase, histories: Historie
     applied.push(migration.id);
   }
   return { applied };
+}
+
+/**
+ * Applies the package's framework history, then the app's history found in
+ * `appMigrationsDir` (an app's `migrations/`; missing = no app migrations).
+ */
+export function migrateLocal(db: MigrationDatabase, appMigrationsDir: string, clock: () => number = Date.now): Promise<ApplyResult> {
+  return applyMigrations(
+    db,
+    {
+      framework: readHistory(FRAMEWORK_MIGRATIONS_DIR, db.dialect, "framework"),
+      app: readHistory(appMigrationsDir, db.dialect, "app"),
+    },
+    clock,
+  );
 }
 
 const RECORD_COLUMNS = `"id", "dialect", "checksum", "applied_at"`;
