@@ -2,7 +2,7 @@
 
 Classifies every request as anonymous, user, or admin and gives app code a stable opaque user ID. Owns login and logout, sessions, request-forgery protection, the login-provider interface, and the authentication mock. All protocol details live behind the provider interface.
 
-Contracts: [auth.d.ts](../contracts/ts/auth.d.ts), [client.d.ts](../contracts/ts/client.d.ts) (`getCurrentUser`, `login`, `logout`), [framework.openapi.yaml](../contracts/http/framework.openapi.yaml) (`/api/auth/*`), [internal/login-provider.d.ts](../contracts/ts/internal/login-provider.d.ts), [testing.d.ts](../contracts/ts/testing.d.ts) (`mockUsers`), [errors.d.ts](../contracts/ts/errors.d.ts) (`AUTH.*`).
+Contracts: [auth.d.ts](../contracts/ts/auth.d.ts), [client.d.ts](../contracts/ts/client.d.ts) (`getCurrentUser`, `login`, `logout`), [framework.openapi.yaml](../contracts/http/framework.openapi.yaml) (`/api/auth/*`), [internal/login-provider.d.ts](../contracts/ts/internal/login-provider.d.ts), [testing.d.ts](../contracts/ts/testing.d.ts) (`mockUsers`, stub login provider), [errors.d.ts](../contracts/ts/errors.d.ts) (`AUTH.*`).
 
 ## 1. Requirements
 
@@ -24,7 +24,7 @@ With a real provider, a logged-in user MUST be `admin` exactly when their user I
 #### AUTH-REQ-004 — Route protection
 Origin: provenance-unclear · Derives from: SYS-REQ-010, SYS-REQ-017
 
-`requireUser()` MUST reject anonymous requests with 401 `AUTH.UNAUTHENTICATED`. `requireAdmin()` MUST additionally reject users with 403 `AUTH.FORBIDDEN`.
+`requireUser()` MUST reject anonymous requests with 401 `AUTH.UNAUTHENTICATED`. `requireAdmin()` MUST additionally reject users with 403 `AUTH.FORBIDDEN`. `requireCurrentUser(c)` MUST return the logged-in user, or throw `AUTH.UNAUTHENTICATED` for an anonymous request.
 
 #### AUTH-REQ-005 — Framework routes and "who am I"
 Origin: owner · Derives from: SYS-REQ-018
@@ -39,7 +39,7 @@ After a successful login, the framework MUST keep the user logged in with a sign
 #### AUTH-REQ-007 — Request forgery protection
 Origin: provenance-unclear · Derives from: SYS-REQ-017
 
-A state-changing request (POST, PUT, PATCH, DELETE) that carries a session MUST be rejected with `AUTH.REQUEST_FORGERY` unless its `Origin` header equals the deployment's public origin. Together with SameSite=Lax session cookies, this is the whole protection (DEC-0072). State-changing behavior on GET routes, including the framework's own, is not allowed.
+A state-changing request (POST, PUT, PATCH, DELETE) that carries a session MUST be rejected with `AUTH.REQUEST_FORGERY` unless its `Origin` header equals the deployment's public origin. Together with SameSite=Lax session cookies, this is the whole protection (DEC-0072). State-changing behavior on GET routes is not allowed, except the framework's `/api/auth/login` and `/api/auth/callback`, which set login cookies; the callback is protected by the transaction state.
 
 #### AUTH-REQ-008 — Provider interface
 Origin: owner · Derives from: SYS-REQ-019
@@ -54,18 +54,22 @@ A mock provider and the `/api/auth/mock-login` route MUST let tests choose any i
 #### AUTH-REQ-010 — Failed login
 Origin: provenance-unclear · Derives from: SYS-REQ-010
 
-A failed login MUST NOT create a session. It MUST redirect to `/?authError=login_failed` and log the provider's reason without exposing it to the browser.
+A failed login MUST NOT create a session. It MUST redirect to `/?authError=login_failed&requestId=<id>`, where `<id>` is the request's ID, and log the provider's reason without exposing it to the browser.
 
 ## 2. Design
+
+**Levels.** Level `user` means any account the login provider accepts, not a person this app trusts.
 
 **User ID.** `u_` followed by the first 26 characters of the base32 encoding of SHA-256(`<provider id>:<subject>`) (DEC-0067).
 
 **Login.**
 1. `/api/auth/login` asks the stage's provider to begin a login.
-2. It stores the provider's transaction state, the sanitized `returnTo` path, and an expiry (PAR-251) in a signed, HttpOnly transaction cookie, and redirects.
+2. It stores the provider's transaction state, the sanitized `returnTo` path, and an expiry (PAR-251) in a signed transaction cookie, and redirects. The transaction cookie has the session cookie's attributes: HttpOnly, SameSite=Lax (mandatory, so that the provider's redirect back carries it), and on cloud targets a `__Host-` name, Secure, Path=/, and no Domain.
 3. `/api/auth/callback` verifies the transaction cookie, asks the provider to complete the login, creates the session, clears the transaction cookie, and redirects to `returnTo`.
 
 A new login replaces any login in progress.
+
+**Failed login.** The log entry names one fixed reason: transaction missing or expired; state mismatch; provider refused; token exchange rejected, with its HTTP status; or token check failed, naming the check. It never contains authorization codes, state, or tokens.
 
 **Session cookie.** Named `__Host-session` on cloud targets and `session_local` locally. It holds a format version, user ID, display name, issued-at and expiry times, signed with HMAC-SHA-256 using the framework-internal session key (at least PAR-253 bytes, SEC). There is a single key; replacing it logs everyone out, which is acceptable at this scale. Admin status is not stored in the session; it is evaluated per request (AUTH-REQ-003).
 
@@ -75,6 +79,8 @@ A new login replaces any login in progress.
 
 **Provider per stage.** Production deployments use the real provider (GOOGLE). Test stages and local development use the mock. `createTestApp` installs the mock directly. The `./testing` subpath and the mock module are excluded from production bundles (CORE-REQ-006).
 
+**Stub provider.** Because the mock bypasses ID derivation and the admin list, real-provider paths are tested locally with a test-only stub provider that implements [internal/login-provider.d.ts](../contracts/ts/internal/login-provider.d.ts). It is available only under `./testing` and speaks no protocol. Local tests use it to verify admin-list evaluation, callback-URL building under a forged Host header, failed and replayed callbacks, and per-provider ID derivation. On each cloud, the production-check stage (`prodcheck`, COMPL) keeps only the checks that need no login.
+
 ## 3. Uses
 
 HTTP (routes, error handler), CFG (admin list, public origin, test-stage flag), SEC (session key), LOG (failed logins), GOOGLE (real provider).
@@ -83,16 +89,17 @@ HTTP (routes, error handler), CFG (admin list, public origin, test-stage flag), 
 
 | ID | Criterion | Verifies | Where |
 | --- | --- | --- | --- |
-| AUTH-AC-001 | Type inspection and a reference route dumping `c.var.user` show only the specified fields at each access level. | AUTH-REQ-001 | Local |
-| AUTH-AC-002 | The same mock identity yields the same user ID on local, Cloudflare, and AWS test stages; two subjects or two providers yield different IDs. | AUTH-REQ-002 | Local, cloud |
-| AUTH-AC-003 | Adding and removing a user ID in the admin list (with redeploy) changes that user's level accordingly. | AUTH-REQ-003 | Local, cloud |
-| AUTH-AC-004 | Protected reference routes return 401 and 403 as specified for each level. | AUTH-REQ-004 | Local, cloud |
-| AUTH-AC-005 | `/api/auth/*` responses validate against the HTTP contract. Following the documented steps, a tester copies their ID from `/api/auth/me` into the admin list and gains admin after redeploy. | AUTH-REQ-005 | Local, cloud |
-| AUTH-AC-006 | Cookie attributes are as specified on each target. Tampered, expired, and future-dated session cookies are treated as anonymous. Logout clears the cookie. | AUTH-REQ-006 | Local, cloud |
+| AUTH-AC-001 | Type inspection and a reference route dumping `c.var.user` show only the specified fields at each access level. A handler behind `requireUser()`, or one calling `requireCurrentUser(c)`, reads the user ID without a type assertion. | AUTH-REQ-001 | Local |
+| AUTH-AC-002 | With the stub provider, the same provider and subject always yield the same user ID, matching the specified derivation; two subjects or two providers yield different IDs. | AUTH-REQ-002 | Local |
+| AUTH-AC-003 | With the stub provider, adding and removing a user ID in the admin list (with rebuild) changes that user's level accordingly. | AUTH-REQ-003 | Local |
+| AUTH-AC-004 | Protected reference routes return 401 and 403 as specified for each level. `requireCurrentUser(c)` returns the user when logged in and throws `AUTH.UNAUTHENTICATED` when anonymous. | AUTH-REQ-004 | Local, cloud |
+| AUTH-AC-005 | `/api/auth/*` responses validate against the HTTP contract. Admin-list part, a milestone item run on each cloud's `prodcheck` stage: following the documented steps, a tester copies their ID from `/api/auth/me` into the admin list, commits the change to `config/<target>/prodcheck.json`, and gains admin after redeploy. | AUTH-REQ-005 | Local, cloud; admin-list part: cloud (milestone) |
+| AUTH-AC-006 | On each target, session and transaction cookie attributes are as specified, a tampered session cookie is treated as anonymous, and logout clears the cookie. Locally, expired and future-dated session cookies are also treated as anonymous. | AUTH-REQ-006 | Local, cloud |
 | AUTH-AC-007 | A POST with a session is rejected when `Origin` is missing or wrong and accepted when it equals the public origin, both directly and through the deployed router. | AUTH-REQ-007 | Local, cloud |
-| AUTH-AC-008 | The callback URL is unaffected by a forged Host header. | AUTH-REQ-008 | Local, cloud |
+| AUTH-AC-008 | With the stub provider, the callback URL it receives is built from the public origin despite a forged Host header. | AUTH-REQ-008 | Local |
 | AUTH-AC-009 | `/api/auth/mock-login` works on test stages and returns 404 on a production deployment. Production bundles contain no mock module. | AUTH-REQ-009 | Local, cloud |
-| AUTH-AC-010 | A callback with an invalid or replayed transaction creates no session, redirects as specified, and writes a log entry. | AUTH-REQ-010 | Local, cloud |
+| AUTH-AC-010 | With the stub provider, a refused callback and one with a missing, invalid, or replayed transaction create no session, redirect as specified, and write a log entry naming one fixed reason. Login with `returnTo` set to `//evil.example`, `/\evil.example`, `https://evil.example`, `/%2F%2Fevil.example`, or `javascript:` redirects to `/` after login. | AUTH-REQ-010 | Local |
+| AUTH-AC-011 | On each cloud's `prodcheck` stage, `/api/auth/login` with a forged Host header redirects with the correct callback URL, and a bogus callback creates no session and redirects as specified. | AUTH-REQ-008, AUTH-REQ-010 | Cloud |
 
 ## 5. Portability note
 

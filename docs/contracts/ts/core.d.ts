@@ -51,7 +51,11 @@ export interface AppEnv<C extends ConfigDeclaration = ConfigDeclaration, S exten
 }
 
 export interface AppDefinition<C extends ConfigDeclaration, S extends string> {
-  /** Lowercase letters, digits, hyphens; at most PAR-290 characters. Used in resource and log names. */
+  /**
+   * Lowercase letters and digits only, no hyphens (PAR-290), so `<app>-<stage>-…` names
+   * cannot collide between apps; at most PAR-290 characters. The build rejects any other
+   * name. Used in resource and log names.
+   */
   readonly name: string;
   /** Non-secret configuration keys the app reads (see config.d.ts). */
   readonly config: C;

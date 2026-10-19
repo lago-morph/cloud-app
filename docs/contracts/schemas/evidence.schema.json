@@ -4,7 +4,7 @@
   "title": "Verification evidence record",
   "description": "One record per verification run, written by COMPL and the guided certification (SYS-REQ-028). Stored under validation/. Owner: COMPL. Behavior: docs/components/compliance.md.",
   "type": "object",
-  "required": ["runId", "commit", "target", "command", "startedAt", "finishedAt", "exitStatus", "results", "counts", "versions"],
+  "required": ["runId", "commit", "target", "command", "startedAt", "finishedAt", "exitStatus", "results", "versions"],
   "additionalProperties": false,
   "properties": {
     "runId": { "type": "string" },
@@ -23,21 +23,11 @@
         "additionalProperties": false,
         "properties": {
           "id": { "type": "string", "description": "Acceptance criterion or scenario ID, e.g. KV-AC-003, E2E-004." },
-          "status": { "enum": ["passed", "failed", "blocked", "skipped", "unrun"] },
-          "detail": { "type": "string" }
-        }
-      }
-    },
-    "counts": {
-      "type": "object",
-      "required": ["passed", "failed", "blocked", "skipped", "unrun"],
-      "additionalProperties": false,
-      "properties": {
-        "passed": { "type": "integer", "minimum": 0 },
-        "failed": { "type": "integer", "minimum": 0 },
-        "blocked": { "type": "integer", "minimum": 0 },
-        "skipped": { "type": "integer", "minimum": 0 },
-        "unrun": { "type": "integer", "minimum": 0 }
+          "status": { "enum": ["passed", "failed", "blocked", "not-run"], "description": "blocked: a prerequisite was missing. not-run: not executed." },
+          "detail": { "type": "string", "description": "Required for blocked and not-run: the reason. For a failure that came from an HTTP response: the observed status, error code, and requestId." }
+        },
+        "if": { "properties": { "status": { "enum": ["blocked", "not-run"] } }, "required": ["status"] },
+        "then": { "required": ["detail"] }
       }
     },
     "versions": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Exact framework and dependency versions; never secrets." },

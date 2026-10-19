@@ -64,6 +64,8 @@ The same source runs locally and on both clouds. The app includes a smoke test t
 
 ## 2. Acceptance criteria
 
+The smoke test (DEMO-REQ-010) covers each criterion on a deployed stage, except: DEMO-AC-006, which needs a rebuild, the failure clause of DEMO-AC-003, and the expiry clause of DEMO-AC-007 (with the test runner's fake timers) are verified by local tests; DEMO-AC-008 on cloud is verified by the compliance driver.
+
 | ID | Criterion | Verifies | Where |
 | --- | --- | --- | --- |
 | DEMO-AC-001 | Anonymous visitors see only published posts, newest first, paginated. A title containing `<script>` renders as text. | DEMO-REQ-001 | Local, cloud |
@@ -71,7 +73,7 @@ The same source runs locally and on both clouds. The app includes a smoke test t
 | DEMO-AC-003 | A 20 MB JPEG uploads, displays, and is byte-identical when downloaded. The per-post maximum is enforced. Deleting the post removes its rows and files. In a local test, a simulated file-deletion failure produces a `warn` log entry. | DEMO-REQ-003 | Local, cloud |
 | DEMO-AC-004 | A banner set by an admin appears for anonymous visitors; users cannot set it. | DEMO-REQ-004 | Local, cloud |
 | DEMO-AC-005 | A user's posts-per-page choice survives logout and login. | DEMO-REQ-005 | Local, cloud |
-| DEMO-AC-006 | Changing the site title in configuration and redeploying changes the displayed title. | DEMO-REQ-006 | Local, cloud |
+| DEMO-AC-006 | Changing the site title in configuration and rebuilding changes the displayed title. | DEMO-REQ-006 | Local |
 | DEMO-AC-007 | A share link shows the draft to an anonymous visitor. An altered or expired link is refused. | DEMO-REQ-007 | Local, cloud |
 | DEMO-AC-008 | Publish and delete actions produce `info` entries in the target's log. | DEMO-REQ-008 | Local, cloud |
 | DEMO-AC-009 | The account page shows the same ID as `/api/auth/me`, and the copy button copies it. | DEMO-REQ-009 | Local, cloud |

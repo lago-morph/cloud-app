@@ -47,7 +47,7 @@ The CLI MUST provide a guided manual certification against a production deployme
 **Libraries.** Google's discovery document is fetched with plain `fetch` from its fixed well-known URL. jose (PAR-106) handles the signing keys (`createRemoteJWKSet`) and token verification (`jwtVerify`). The token's `sub` claim is the subject, and its `name` claim, if present, is the display name.
 
 **Certification procedure** (`certify-auth --target <t> --stage <s>`):
-1. The CLI checks automatically that `/api/auth/login` redirects to Google with the configured client ID and callback URL.
+1. The CLI checks automatically that `/api/auth/login` redirects to Google with the configured client ID and callback URL, a PKCE challenge, a state, and a nonce.
 2. The CLI prints the stage's URL; the owner logs in with the dedicated test account.
 3. The owner pastes the JSON shown at `/api/auth/me`; the CLI checks that the level is `user` and that the ID is well-formed.
 4. The owner logs out and pastes `/api/auth/me` again; the CLI checks that the level is `anonymous`.
@@ -63,12 +63,13 @@ AUTH (provider interface, transaction state), CFG (client ID, public origin), SE
 
 | ID | Criterion | Verifies | Where |
 | --- | --- | --- | --- |
-| GOOGLE-AC-001 | The login redirect carries a PKCE challenge, state, and nonce. The token request is made from the server with the client secret. | GOOGLE-REQ-001 | Cloud (manual) |
+| GOOGLE-AC-001 | The certification step-1 check finds a PKCE challenge, state, and nonce in the login redirect. A local test with `fetch` stubbed shows the token request is made from the server with the client secret and the PKCE verifier. | GOOGLE-REQ-001 | Local, cloud |
 | GOOGLE-AC-002 | Unit tests feeding the validator hand-built tokens reject a wrong signature, wrong issuer, wrong audience, expired token, future issued-at time beyond PAR-252, and wrong nonce. | GOOGLE-REQ-002 | Local |
 | GOOGLE-AC-003 | The authorization request's scope is exactly `openid profile`. | GOOGLE-REQ-003 | Local |
-| GOOGLE-AC-004 | Following the setup instructions on a fresh stage leads to a successful certification. | GOOGLE-REQ-004 | Cloud (manual) |
-| GOOGLE-AC-005 | Certification runs end to end on each cloud and writes a valid evidence record. | GOOGLE-REQ-005 | Cloud (manual) |
+| GOOGLE-AC-005 | Certification runs end to end on each cloud's `prodcheck` stage, set up by following the setup instructions, and writes a valid evidence record. | GOOGLE-REQ-004, GOOGLE-REQ-005 | Cloud (manual, milestone) |
 
 ## 5. Portability note
 
 Another provider, such as GitHub, is a sibling adapter behind the same interface, whatever protocol it uses; this one does not change. Google is independent of the cloud target.
+
+Retired IDs: GOOGLE-AC-004 (DEC-0077).

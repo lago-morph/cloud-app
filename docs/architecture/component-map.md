@@ -4,7 +4,7 @@ This document defines the framework's components, what each is responsible for, 
 
 ## 1. Organization
 
-Each **capability** component (SQL, KV, FILES, …) owns its portable contract and its adapters, one per target. Each **target** component (LOCAL, CF, AWS) owns that runtime's entry points and platform constraints. Adding a target therefore means a new target component plus a new adapter in each capability, without changing capability contracts (SYS-REQ-003).
+Each **capability** component (SQL, KV, FILES, …) owns its portable contract and its adapters, one per target. Each **target** component (LOCAL, CF, AWS) owns that runtime's entry points and platform constraints. Adding a target therefore means a new target component plus a new adapter in each capability, without changing app-facing capability contracts (SYS-REQ-003). It does change the few places that enumerate targets: the `./targets/<target>` subpaths (CORE-REQ-005), the `target` enumerations in the log-entry and evidence schemas, the SEC-REQ-003 storage table, and the targets COMPL-REQ-001 runs on.
 
 **Containment rule:** components interact only through each other's published contracts.
 
@@ -58,16 +58,17 @@ Every app-facing component depends on CORE; that dependency is not repeated belo
 
 | Component | Depends on | Why |
 | --- | --- | --- |
-| HTTP, SQL, KV, CFG, LOG | — | |
+| SQL, KV, CFG, LOG | — | |
+| HTTP | LOG | Server errors are recorded in the log (HTTP-REQ-007). |
 | FILES | HTTP | Browser uploads and downloads are authorized through the app's API (SYS-REQ-008, SYS-REQ-014). |
 | MIG | SQL | Migrations change the SQL schema (SYS-REQ-012). |
 | SEC | CFG | Configuration holds secret names and locations (SYS-REQ-016). |
 | AUTH | HTTP, CFG | Login and logout are HTTP routes; admins are listed in configuration (SYS-REQ-018). |
 | GOOGLE | AUTH | Implements AUTH's provider interface (SYS-REQ-019). |
 | LOCAL, CF, AWS | All capability components | Each target provides every capability (SYS-REQ-001). |
-| PROV | CFG, SEC, MIG, LOG, CF, AWS | Deployment supplies configuration and secret locations, applies migrations, and sets up the shared log bucket (SYS-REQ-012, SYS-REQ-021, SYS-REQ-023). |
+| PROV | CFG, SEC, MIG, LOG, CF, AWS, HTTP, AUTH | Deployment supplies configuration and secret locations, applies migrations, and sets up the shared log bucket (SYS-REQ-012, SYS-REQ-021, SYS-REQ-023); it calls the HTTP health route and checks the login provider's settings (PROV-REQ-002). |
 | CHECK | SQL, MIG | Enforces SQL portability and checks migrations (SYS-REQ-011, SYS-REQ-025). |
-| CLI | LOCAL, CHECK, PROV, MIG, SEC, GOOGLE | Local development, the verification command, deploy and remove, migration generation, setting secrets, certification (SYS-REQ-022, SYS-REQ-025, SYS-REQ-027). |
+| CLI | LOCAL, CHECK, PROV, MIG, SEC, GOOGLE, CORE, COMPL | Local development, the verification command, deploy and remove, migration generation, setting secrets, certification (SYS-REQ-022, SYS-REQ-025, SYS-REQ-027); `smoke` uses CORE's `./testing` and writes COMPL evidence (CLI-REQ-001). |
 | COMPL | All capability and target components | Verifies every contract on every target (SYS-REQ-026). |
 | SKILL | CORE, CLI, CFG, PROV, GOOGLE | Guides use of the public exports and the verification command, and documents the owner's configuration, deployment, and login-client tasks (SYS-REQ-018, SYS-REQ-029). |
 | DEMO | SKILL | Built using the skill (DEC-0054). |

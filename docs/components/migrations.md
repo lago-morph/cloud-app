@@ -38,42 +38,51 @@ The app is unavailable while this happens. After a successful deploy, no databas
 
 **Generation.** drizzle-kit (PAR-103) generates two histories, `migrations/sqlite/` and `migrations/postgres/`, from the same table definitions. Framework tables (`__framework_kv`, `__framework_migrations`) have their own pair of histories shipped in the package. `generate-migration` records each new file's checksum in a committed `migrations/checksums.json`. The checker (CHECK) uses it to catch edited files offline, and verifies that both histories yield the same logical schema.
 
+**Supported changes.** A migration may add a table; add a column that is nullable or has a static default; drop a column; drop a table; add or drop an index or a unique constraint. Column type changes and renames are not supported (CHECK-REQ-004). Instead, add a new column, copy the values in app code (or an admin route), and drop the old column in a later migration. `generate-migration` runs drizzle-kit non-interactively: it refuses a diff that both removes and adds tables, or both removes and adds columns in one table, and tells the agent to generate the drop and the add as separate migrations, so drizzle-kit never asks whether a change is a rename. A migration that has never been applied to any cloud stage may be deleted and regenerated with `generate-migration`; that is not a hand edit (MIG-REQ-001).
+
+*Backfill pattern (informative).* To change a column's type or name: (1) a migration adds the new column, nullable or with a static default; (2) app code writes both columns, and an admin route or a read-modify-write on access copies the old values into the new column; (3) once every row is copied and nothing reads the old column, a later migration drops it.
+
 **Record.** `__framework_migrations(id, dialect, checksum, applied_at)` in each database.
 
-**Schema-changing cloud deploy** (PROV runs these as one step):
+**Schema-changing cloud deploy.** PROV-REQ-002 step 4 runs steps 1–5; its steps 5 and 6 perform step 6. Steps 1–2 use `stopApp` and `copyDatabase` (per-target operations: PROV §2).
 1. **Stop the app.** On Cloudflare, delete the stage's Worker. On AWS, set the HTTP Lambda's concurrency to zero.
-2. **Copy.** Create a new database: a new D1 database on Cloudflare, or a new database inside the stage's existing Aurora cluster on AWS. Copy every table into it page by page, parent tables before the tables that reference them.
-3. **Migrate.** Apply the pending migrations to the new database. Nothing is live, so statements need not be atomic. On failure, delete the new database and stop.
-4. **Check.** Every table that was not explicitly dropped has the same row count as before, references are intact, and the record lists every migration. On failure, delete the new database and stop.
+2. **Copy.** Create a new database (a new D1 database on Cloudflare, or a new database inside the stage's existing Aurora cluster on AWS) as a copy of the current one, using the target's native whole-database copy (below).
+3. **Migrate.** Apply the pending migrations to the new database. On Cloudflare each migration file is applied as one batch (below). On AWS nothing is live, so a migration's statements need not be atomic. On failure, delete the new database and stop.
+4. **Check.** Every table that was not explicitly dropped has the same row count as before, references are intact, values in added columns satisfy their column rule (SQL §2.1), and the record lists every migration. On failure, delete the new database and stop.
 5. **Delete** the old database.
-6. **Deploy** the new version, bound to the new database (PROV), which restarts the app.
+6. **Deploy** the new version, bound to the new database, then explicitly start the app (PROV-REQ-002 steps 5 and 6).
 
-Databases are named `<app>-<stage>-db-<n>`, where `<n>` increases with each schema-changing deploy; the resolved configuration names the current one (CFG). Deploys are run by the owner from one place; the provisioning tool's own state locking prevents overlapping runs.
+Databases are named `<app>-<stage>-db-<n>`, where `<n>` increases with each schema-changing deploy. They are created and deleted by the CLI. A stage's databases are found by exact match on the anchored pattern `^<app>-<stage>-db-(\d+)$`, which app names without hyphens (PAR-290) make unambiguous; the lowest-numbered existing one is current (PROV-REQ-002 step 2). Deploys are run by the owner from one place; the provisioning tool's own state locking prevents overlapping runs.
+
+**Fallback copy.** Only for a target where the early spike shows the native copy is unusable, the framework copies every table page by page, parent tables before the tables that reference them, with pages sized within D1 and Data API limits. Step 4's checks apply either way.
 
 ### Local
 `dev` and `createTestApp` apply pending migrations in place: D1's batch call is atomic, and local data is disposable.
 
 ### Cloudflare
-Copying and migrating use the D1 HTTP API from the CLI.
+Copying and migrating use the D1 HTTP API from the CLI. The copy is a D1 export of the current database, imported into the new one as one batch prefixed with `PRAGMA defer_foreign_keys = on`. Each migration file is likewise sent to the new database as one batch prefixed with `PRAGMA defer_foreign_keys = on`; drizzle-kit's statement-by-statement D1 migrator is not used. Early spike: confirm that one such request is one transaction, and that export and import preserve every row and value.
 
 ### AWS
-Copying and migrating use the Data API from the CLI. Deployment first waits for the cluster to resume (PAR-210).
+Copying and migrating use the Data API from the CLI. Deployment first waits for the cluster to resume (PAR-210). Creating, copying and dropping run connected to the `postgres` database, outside any transaction, with every database name quoted:
+- The first database is created with `CREATE DATABASE "<name>" TEMPLATE template0 LC_COLLATE 'C' LC_CTYPE 'C'`, so it and every copy use C ordering (SQL §2.1).
+- A copy is `CREATE DATABASE "<new>" TEMPLATE "<old>"`. It requires that nothing else is connected to the old database, which holds while the app is stopped. Early spike: confirm that the Data API leaves no pooled connection to the old database open.
+- A database is deleted with `DROP DATABASE "<name>" WITH (FORCE)`.
 
 ## 3. Uses
 
-SQL (dialects, table definitions), PROV and CLI (invocation during deploy and dev), CFG (current database name), LOG.
+SQL (dialects, table definitions, column rules), PROV and CLI (invocation during deploy and dev, database discovery, stop and start), CFG (current database name), LOG.
 
 ## 4. Acceptance criteria
 
 | ID | Criterion | Verifies | Where |
 | --- | --- | --- | --- |
 | MIG-AC-001 | Generating from a changed schema produces one new migration per dialect; editing a generated migration makes the checker fail. | MIG-REQ-001 | Local |
-| MIG-AC-002 | Initial deployment creates the schema. A second deployment with no changes neither changes data nor stops the app. The record lists every migration once. | MIG-REQ-002 | Local, cloud |
-| MIG-AC-003 | With parent and child rows present, a schema change that adds, drops, and changes columns preserves every row and reference not explicitly dropped. A deliberately failing migration stops the deploy, leaves the existing database unchanged and no new database behind, and a re-run after fixing the migration succeeds. | MIG-REQ-003 | Local, cloud |
-| MIG-AC-006 | After a successful schema-changing deploy, the stage has exactly one database, and requests made during the deploy failed rather than writing to the old database. | MIG-REQ-006 | Cloud |
+| MIG-AC-002 | Initial deployment creates the schema. A second deployment with no changes neither changes data nor stops the app, and leaves the app answering. The record lists every migration once. | MIG-REQ-002 | Local, cloud |
+| MIG-AC-003 | With parent and child rows present, a schema change that makes supported changes, including a drop on a table with child rows, preserves every row and reference not explicitly dropped. A data-dependent failing migration (a unique constraint added over duplicate rows) stops the deploy, leaves the existing database unchanged and no new database behind, and a re-run after correcting the data or regenerating the unapplied migration succeeds. | MIG-REQ-003 | Local, cloud |
+| MIG-AC-006 | After a successful schema-changing deploy, every write acknowledged during the deploy is present afterwards, and the stage has exactly one database. | MIG-REQ-006 | Cloud |
 
 ## 5. Portability note
 
-Migrations are plain SQL per dialect plus a record table. A new target needs only a way to create a database, copy rows, and run SQL from the CLI.
+Migrations are plain SQL per dialect plus a record table. A new target needs only a way to create, copy, and delete a database and to run SQL from the CLI.
 
 Retired IDs: MIG-REQ-004, MIG-REQ-005, MIG-AC-004, MIG-AC-005, MIG-OQ-1 (DEC-0076).

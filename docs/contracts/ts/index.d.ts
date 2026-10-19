@@ -16,13 +16,17 @@ export {
   eq, ne, gt, gte, lt, lte, and, or, not, isNull, isNotNull, inArray, notInArray, between,
   count, countDistinct, min, max, sum, avg, asc, desc, containsText,
 } from "./sql";
-export type { PortableDb, WriteDb, WriteStep, Table, TableDefinitions } from "./sql";
+export type {
+  AtomicResults, Column, ColumnBuilder, ColumnBuilders, PortableDb, PortableQueryResult, WriteDb, WriteStep, Table, TableDefinitions, TableOptions,
+} from "./sql";
 
 export type { KvService, KvListOptions, KvListPage } from "./kv";
-export type { FilesService, FileInfo, FileContent, UploadTicket, DownloadTicket } from "./files";
+export type {
+  FilesService, FileInfo, FileContent, FilesListOptions, FilesListPage, UploadTicket, UploadTicketOptions, DownloadTicket,
+} from "./files";
 export { configString, configInteger, configBoolean, configStringList } from "./config";
-export type { ConfigDeclaration, ConfigService } from "./config";
+export type { ConfigDeclaration, ConfigKey, ConfigService } from "./config";
 export type { SecretsService } from "./secrets";
 export type { LogService, Severity } from "./log";
-export { requireUser, requireAdmin } from "./auth";
-export type { AccessLevel, CurrentUser } from "./auth";
+export { requireUser, requireAdmin, requireCurrentUser } from "./auth";
+export type { AccessLevel, CurrentUser, LoggedInUser } from "./auth";

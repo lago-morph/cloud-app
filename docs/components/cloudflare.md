@@ -36,7 +36,18 @@ Resources are created by SST (PAR-100) through its Cloudflare components, with r
 - framework variables (CFG);
 - secrets (SEC).
 
-The stage's public origin is its `workers.dev` URL. Custom domains are not supported (DEC-0073).
+The stage's public origin is its `workers.dev` URL. It is computed before deploy as `<worker>.<account subdomain>.workers.dev`, from the Worker's name and the account subdomain that `setup-account` recorded. `setup-account --target cloudflare` registers and records the account's `workers.dev` subdomain if it has none. Custom domains are not supported (DEC-0073).
+
+### Deploy mechanics
+
+How this target implements the per-target operations (PROV §2, Per-target operations):
+- **`setupAccount`** creates the shared R2 log bucket (LOG §2) and the provisioning tool's state home on Cloudflare, checks that this account owns them, and registers and records the `workers.dev` subdomain as above.
+- **`deploy`** runs SST with the Worker settings above. The current D1 database is an input; it is not in the provisioning tool's state.
+- **`setSecret`** sets the Worker secret `SECRET_<NAME>` (SEC-REQ-003) through the Cloudflare API.
+- **`stopApp` and `startApp`** currently follow MIG §2 step 1, which deletes the stage's Worker; the Worker deployed in PROV-REQ-002 step 5 is then the running app. Deleting the Worker also deletes its secrets, so a stop that keeps the Worker awaits an owner decision (DEC-0077).
+- **`createDatabase`, `copyDatabase` and `dropDatabase`** use the D1 HTTP API from the CLI (MIG §2).
+- **`remove`** empties the stage's R2 bucket, deletes the stage's R2 API token (the R2 signing credential, which is outside the provisioning tool's state) and its D1 databases, then runs the provisioning tool's removal (PROV §2, Removal).
+- **`listStageResources`** reports the Worker, the R2 bucket and the R2 API token by their identifiers, and the D1 databases by the exact database pattern.
 
 ## 3. Uses
 

@@ -24,7 +24,7 @@ Locally, entries MUST be appended as JSON lines to `.logs/<yyyy-mm-dd>.log` in t
 #### LOG-REQ-004 — Shared cloud bucket
 Origin: owner (one shared bucket per account); ai-proposed (key layout) · Derives from: SYS-REQ-021, SYS-REQ-024
 
-On each cloud, entries MUST be stored one object per entry in the account's shared log bucket, under `<app>/<stage>/<yyyy>/<mm>/<dd>/<time>-<random>.json`. The bucket MUST be created once per account, outside any app or stage, and MUST NOT be removed when a stage is removed.
+On each cloud, entries MUST be stored one object per entry in the account's shared log bucket, under `<app>/<stage>/<yyyy>/<mm>/<dd>/<hhmmss.sss>-<severity>-<id>.json`, where the date and time are the entry's UTC time and `<id>` is the entry's request ID, or a random value when it has none. The bucket MUST be created once per account, outside any app or stage, and MUST NOT be removed when a stage is removed.
 
 #### LOG-REQ-005 — Framework failures are logged
 Origin: owner · Derives from: SYS-REQ-007, SYS-REQ-021
@@ -35,8 +35,12 @@ The framework MUST log uncaught errors (`CORE.INTERNAL`) and every `*.UNAVAILABL
 
 There is no severity filtering, no batching, no retention rule, and no per-app isolation within the bucket (DEC-0018).
 
+**Finding entries.** The key layout puts the time, severity, and request ID in the object key, so the entries for a request ID from an error response, or all `error` entries of a day, are found by listing keys alone.
+
+**What entries never contain.** Framework entries never include request headers, cookies, request or response bodies, OAuth codes, state, nonces or tokens, or ticket URLs (HTTP-REQ-007), and never secret values (SEC-REQ-002).
+
 ### Local
-Worker code cannot write files directly under workerd. Entries are therefore printed to the Worker's output as single marked lines, and the CLI's `dev` command, which owns the Wrangler process, appends them to `.logs/` (DEC-0066). `createTestApp` collects entries in memory for assertions.
+Worker code cannot write files directly under workerd. Entries are therefore printed to the Worker's output as single marked lines, and the CLI's `dev` command, which owns the Wrangler process, appends them to `.logs/` (DEC-0066). `createTestApp` collects entries in memory; tests read them through `TestApp.logs()`.
 
 ### Cloudflare
 An R2 binding to the shared log bucket. Each write is scheduled with the request's `waitUntil` so it does not delay the response.
@@ -44,7 +48,7 @@ An R2 binding to the shared log bucket. Each write is scheduled with the request
 ### AWS
 An S3 `PutObject` to the shared log bucket using the Lambda role, which may only put objects there. A frozen Lambda would lose pending writes, so the runtime waits up to PAR-260 for them before completing a response.
 
-The shared bucket is named `prototype-logs-<account-id>` on AWS (in the account's region) and `prototype-logs` on Cloudflare. It is created by the CLI's one-time account setup (PROV).
+The shared bucket is named `prototype-logs-<account-id>` on AWS (in the account's region) and `prototype-logs` on Cloudflare. It is created by the CLI's one-time account setup (PROV; per-target operations: PROV §2).
 
 ## 3. Uses
 
@@ -54,11 +58,11 @@ CORE (deployment identity, request ID), PROV (account setup, write permission).
 
 | ID | Criterion | Verifies | Where |
 | --- | --- | --- | --- |
-| LOG-AC-001 | With the log bucket unavailable, a request that writes log entries still succeeds, and its response time grows by no more than PAR-260. | LOG-REQ-001 | Local, cloud |
+| LOG-AC-001 | Locally, with an injected log writer that fails and one that never completes, a request that writes log entries still succeeds, and its response time grows by no more than PAR-260. On AWS, with a deny on the stage role's `PutObject` to the log bucket, such a request still succeeds; on Cloudflare only the local case applies. The shared bucket itself is never altered. | LOG-REQ-001 | Local, cloud |
 | LOG-AC-002 | Stored entries validate against the schema and carry the request ID from the matching error response. | LOG-REQ-002 | Local, cloud |
 | LOG-AC-003 | After `dev`, entries written by the app appear in `.logs/` as JSON lines; `.logs/` is ignored by git. | LOG-REQ-003 | Local |
-| LOG-AC-004 | Entries appear under the specified key layout. After a stage is removed, the bucket and other stages' entries remain. | LOG-REQ-004 | Cloud |
-| LOG-AC-005 | An app route throwing a plain `Error`, and a forced SQL outage, each produce an `error` entry from the framework. | LOG-REQ-005 | Local, cloud |
+| LOG-AC-004 | Entries appear under the specified key layout: an entry written during a request has that request's ID and its severity in its key, and one written outside a request has a random final part. After a stage is removed, the bucket and other stages' entries remain. | LOG-REQ-004 | Cloud |
+| LOG-AC-005 | An app route throwing a plain `Error` produces an `error` entry from the framework, locally and on each cloud. Locally, a SQL outage forced with `createTestApp`'s `unavailable: ["sql"]` also produces one. | LOG-REQ-005 | Local, cloud |
 
 ## 5. Portability note
 

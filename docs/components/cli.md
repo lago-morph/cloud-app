@@ -9,7 +9,7 @@ Contracts: the command table below.
 #### CLI-REQ-001 — Commands
 Origin: provenance-unclear · Derives from: SYS-REQ-022, SYS-REQ-023, SYS-REQ-025
 
-The CLI MUST provide these commands. Apps expose them as npm scripts of the same name.
+The CLI MUST provide these commands as the framework package's own binary, invoked as `npx <package> <command>` (for example `npx <package> verify`). Apps also expose them as npm scripts of the same name.
 
 | Command | Purpose |
 | --- | --- |
@@ -18,9 +18,10 @@ The CLI MUST provide these commands. Apps expose them as npm scripts of the same
 | `generate-migration` | Generate the next migration pair from the table definitions (MIG). |
 | `build --target <t> --stage <s>` | Build a deployment without deploying it. |
 | `deploy --target <t> --stage <s> [--test]` | Deploy a stage (PROV). |
+| `smoke --target <t> --stage <s>` | Run the app's smoke tests (`tests/smoke/**`) against a deployed test stage, or against the running `dev` server with target `local`; write evidence and print the stage's log location for the day. |
 | `remove --target <t> --stage <s>` | Remove a stage (PROV). |
 | `secrets set <name> --target <t> --stage <s>` | Set a secret from standard input (SEC). |
-| `setup-account --target <t>` | One-time creation of the shared log bucket (PROV). |
+| `setup-account --target <t>` | One-time creation of the account's shared resources and settings (PROV-REQ-004). |
 | `certify-auth --target <t> --stage <s>` | Guided login-provider certification (GOOGLE). |
 | `reset-local` | Clear local state. |
 
@@ -63,21 +64,28 @@ No command may print a secret value.
 - `src/app.ts` holds the `defineApp` call.
 - `src/server/` holds API code.
 - `src/client/` holds browser code.
-- `tests/` holds the app's tests.
+- `tests/` holds the app's tests; `tests/smoke/` holds the smoke tests that `smoke` runs, which also run in-process.
 - `config/` holds the per-stage configuration values.
 - `migrations/sqlite/` and `migrations/postgres/` hold the generated migrations.
 
 `build` generates the target entry points under a git-ignored `.framework/` directory.
 
+**`verify` test runs.** `verify` runs the whole app test suite once per supported dialect, each in its own process. The test runner and test file glob are PAR-116.
+
+**`smoke`.** The tests reach the stage through `connectTestStage()` ([testing.d.ts](../contracts/ts/testing.d.ts)).
+
+**Deploy failures** are reported as PROV-REQ-002 specifies: the failed step, the failing migration file and database error where relevant, the stage's state, and the next action.
+
 ## 3. Uses
 
-LOCAL, CHECK, PROV, MIG, SEC, GOOGLE.
+LOCAL, CHECK, PROV, MIG, SEC, GOOGLE, CORE (`connectTestStage`), COMPL (evidence records).
 
 ## 4. Acceptance criteria
 
 | ID | Criterion | Verifies | Where |
 | --- | --- | --- | --- |
-| CLI-AC-001 | Each command in the table runs from the template app via its npm script. | CLI-REQ-001 | Local, cloud |
+| CLI-AC-001 | Each command in the table runs from the template app via `npx <package> <command>` and via its npm script. | CLI-REQ-001 | Local, cloud |
 | CLI-AC-002 | `verify` passes on the template; it fails on a type error, a portability violation, a mismatched migration, a failing test, a Postgres-only failure, and a project with zero tests. Two consecutive runs give identical results with networking disabled. | CLI-REQ-002 | Local |
-| CLI-AC-003 | Injected failures in each command, including a failure during cleanup, yield non-zero exit statuses that reflect the original failure. | CLI-REQ-003 | Local, cloud |
+| CLI-AC-003 | Injected failures in `deploy`, `remove` and the compliance runner, including a failure during cleanup, yield non-zero exit statuses that reflect the original failure. | CLI-REQ-003 | Local |
 | CLI-AC-004 | A scan of the output of every command in a full test run finds no test secret values. | CLI-REQ-004 | Local, cloud |
+| CLI-AC-005 | `smoke` runs the template's `tests/smoke/**` against the running `dev` server and against a deployed test stage, writes an evidence record, and prints the stage's log location for the day. | CLI-REQ-001 | Local, cloud |

@@ -18,17 +18,19 @@ The skill MUST consist of:
 #### SKILL-REQ-002 — Read only what the task needs
 Origin: provenance-unclear · Derives from: SYS-REQ-029
 
-The router MUST map common tasks to the references they need: adding an endpoint, storing data, handling files, adding an admin page, testing, and deploying. Each reference MUST open with "read this when" and end with a stopping condition.
+The router MUST map common tasks to the references they need: adding an endpoint, storing data, handling files, adding an admin page, testing, deploying, and diagnosing a failing request or deploy. Each reference MUST open with "read this when" and end with a stopping condition.
 
 #### SKILL-REQ-003 — Hard rules for app agents
 Origin: provenance-unclear · Derives from: SYS-REQ-006, SYS-REQ-025, SYS-REQ-028
 
 The router MUST require app agents to:
 - use only the framework's public exports;
-- pass `verify` before declaring work done;
+- never insert user text as HTML;
+- pass `npx <package> verify` (the framework package's own command, DEC-0049) before declaring work done;
 - claim an app works on a cloud only after the app's smoke test has passed on a deployed stage there (SYS-REQ-028);
 - never change framework version pins;
-- record a suspected framework defect in a reproducible `FRAMEWORK-ISSUE.md` instead of working around the framework.
+- record a suspected framework defect in a reproducible `FRAMEWORK-ISSUE.md` instead of working around the framework. Each entry MUST state the task attempted, the contract or reference consulted, a minimal reproduction, the observed code or diagnostic, and the workaround not taken;
+- after recording an entry, stop work on the blocked requirement, continue only work that does not depend on it, report the issue and the unfinished requirements to the user, and not declare the app done.
 
 These rules govern app agents only; agents implementing the framework fix framework defects directly (DEC-0056).
 
@@ -67,11 +69,20 @@ The skill and the template's README MUST contain step-by-step instructions for t
 - log;
 - local development;
 - deploying;
-- testing.
+- testing;
+- troubleshooting.
+
+Specific content the references carry:
+- **HTTP and validation.** Guards are applied per route (`requireUser()` or `requireAdmin()` on the route itself), so the handler sees a `LoggedInUser`. Where a guard is applied with `use()`, handlers obtain the user with `requireCurrentUser(c)`. Route modules take `Hono<Env>` from `src/server/env.ts` (see the template). Response types are declared once in `src/shared/` and passed to `api<T>` in browser code. Codes apps throw follow CORE-REQ-007: missing or private resource → `HTTP.NOT_FOUND`; visible but not changeable → `AUTH.FORBIDDEN`; bad input → `HTTP.INVALID_INPUT`; state or limit → `HTTP.CONFLICT`; never `SQL.*`/`KV.*`/`FILES.*`/`SEC.*`/`CFG.*`.
+- **Files.** One tested example of the upload pattern: the server generates the file name (for example a record-scoped `newId()` prefix) and decides access from app records, never from names; it issues the upload ticket with an explicit content type; the browser calls `uploadFile`; a finalize route calls `head`, deletes uploads that are oversized or of the wrong type, and only then creates the visible record. Listings fetch fresh download tickets each time; URLs are not cached. Rule: file content reaches the browser only through `downloadUrl`; `files.get` is for server-side processing.
+- **Secrets.** A tested HMAC signing and verification example using `crypto.subtle` and base64url encoding, without `Buffer`.
+- **Current user.** Level `user` means any account the login provider accepts, not a person this app trusts.
+- **Testing.** One test file under `tests/smoke/**` runs both in-process (`createTestApp`) and against a deployed test stage through `smoke --target <t> --stage <s>` (`connectTestStage()`). Time-dependent behaviour (for example share-link expiry) is tested locally with the test runner's fake timers, not in the smoke test.
+- **Troubleshooting.** Copy-and-paste commands per cloud to list a day's log entries and find the entry for a `requestId` under the LOG-REQ-004 key layout. On Cloudflare this uses the dashboard or an S3-compatible CLI with a manually created read-only R2 token. "When there is no log entry": `aws logs tail` on the stage Lambda's log group, or `wrangler tail` while reproducing. It points to the `meaning` of each code in `errors.d.ts`, and covers login failures (`redirect_uri_mismatch`: register the callback URL printed by deploy).
 
 **Diagnostics** from CHECK name the reference to read.
 
-**The template** (`apps/template/`) is the smallest app that uses every capability once, with tests. It is the starting point the scaffolder copies.
+**The template** (`apps/template/`) is the smallest app that uses every capability once, with tests. It is the starting point the scaffolder copies. It depends on an exact framework version, not a range. Its `src/server/env.ts` exports `config`, `secrets` and `type Env = AppEnv<typeof config, (typeof secrets)[number]>`; route modules take `Hono<Env>`. Its README lists what stays billable while idle (Aurora storage, the credentials secret, shared resources, leftover test stages) and how to remove each, and notes that on AWS public routes that read the database keep Aurora awake.
 
 ## 3. Uses
 
@@ -83,7 +94,7 @@ CORE (export list), CHECK, CLI, and the contracts of every capability.
 | --- | --- | --- | --- |
 | SKILL-AC-001 | A size check confirms every document is within its budget, and a link check confirms the router links to every reference and each reference links to its examples. | SKILL-REQ-001 | Local |
 | SKILL-AC-002 | Every reference opens with "read this when" and ends with a stopping condition; the router covers each listed task. | SKILL-REQ-002 | Local |
-| SKILL-AC-003 | The router states each hard rule. | SKILL-REQ-003 | Local |
+| SKILL-AC-003 | The router states each hard rule, including the `FRAMEWORK-ISSUE.md` entry contents and the next action after recording an entry. | SKILL-REQ-003 | Local |
 | SKILL-AC-004 | CI type-checks and runs every example and the template. No example file is derived from `apps/demo/`. | SKILL-REQ-004 | Local |
 | SKILL-AC-005 | Scaffolding into a directory with existing files stops without changing them. | SKILL-REQ-005 | Local |
-| SKILL-AC-006 | Following only the documented owner steps, a tester sets up an account, deploys, becomes admin, and removes the stage. | SKILL-REQ-006 | Cloud |
+| SKILL-AC-006 | Following only the documented owner steps, a tester sets up an account, deploys, becomes admin, and removes the stage. | SKILL-REQ-006 | Cloud (milestone) |

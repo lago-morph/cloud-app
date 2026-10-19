@@ -55,7 +55,7 @@ SQL, MIG (framework table migrations).
 | KV-AC-002 | Empty, oversized, and malformed keys and values are rejected with the specified codes; a key of exactly PAR-220 bytes and a value of exactly PAR-223 bytes are accepted. | KV-REQ-002 | Local, cloud |
 | KV-AC-003 | Listing 2.5 pages of keys returns each key once; a cursor used with a different prefix is rejected. | KV-REQ-003 | Local, cloud |
 | KV-AC-004 | The KV suite produces identical results on local D1, PGlite, Cloudflare, and AWS. | KV-REQ-004 | Local, cloud |
-| KV-AC-005 | With the database unreachable, KV operations fail with `KV.UNAVAILABLE`; a maximum page of maximum-size entries lists successfully. | KV-REQ-005 | Local, cloud |
+| KV-AC-005 | Locally, with the database unreachable, KV operations fail with `KV.UNAVAILABLE`. On every target, a maximum page of maximum-size entries lists successfully. | KV-REQ-005 | Local, cloud |
 
 ## 5. Portability note
 

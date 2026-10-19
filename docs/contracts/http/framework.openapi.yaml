@@ -5,7 +5,7 @@ info:
   description: |
     Routes the framework adds to every app, and the error format every API route uses.
     App routes are defined by each app under /api and use the same ErrorResponse.
-    Owners: AUTH (all /api/auth routes), HTTP (error format, unknown routes).
+    Owners: AUTH (all /api/auth routes), HTTP (error format, unknown routes, health route).
     Behavior: docs/components/auth.md, docs/components/http.md.
 
     Routes marked `x-test-stage-only: true` exist only locally and in test stages
@@ -28,7 +28,8 @@ paths:
       summary: Login provider callback
       description: |
         Completes login and redirects to the stored returnTo path. On failure, redirects
-        to "/?authError=login_failed" and creates no session. Query parameters are
+        to "/?authError=login_failed&requestId=<id>", where <id> is this request's ID, and
+        creates no session. Query parameters are
         provider-specific and are not part of this contract.
       responses:
         "302": { description: Redirect to the app. }
@@ -70,6 +71,18 @@ paths:
                 displayName: { type: [string, "null"] }
       responses:
         "204": { description: Session set (or cleared for anonymous). }
+        default: { $ref: "#/components/responses/Error" }
+  /api/__framework/health:
+    get:
+      summary: Deployment health check
+      description: |
+        Anonymous; no login required. Performs one trivial SQL read and checks that every
+        declared secret and every required framework secret has a value; values are never
+        returned. Returns 204, or an ErrorResponse with the first failing catalogue code
+        and the requestId; details go only to the log. Writes no log entry on success.
+        Called by the deploy health check (docs/components/provisioning.md, PROV-REQ-002).
+      responses:
+        "204": { description: Database reachable and all required secrets have values. }
         default: { $ref: "#/components/responses/Error" }
 components:
   schemas:

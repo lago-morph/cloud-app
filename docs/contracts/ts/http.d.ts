@@ -6,7 +6,11 @@
 import type { Env, MiddlewareHandler } from "hono";
 import type { z } from "zod";
 
-/** Zod, re-exported so app code has one validation library at the framework's pinned version. */
+/**
+ * Zod, re-exported so app code has one validation library at the framework's pinned version
+ * (PAR-112). Shared and browser code import `zod` directly, so apps depend on `zod` at exactly
+ * PAR-112, and `verify` checks that the installed version matches (docs/components/check.md §2).
+ */
 export { z } from "zod";
 
 /**

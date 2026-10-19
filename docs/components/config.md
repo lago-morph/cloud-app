@@ -68,9 +68,9 @@ CORE (deployment identity), SEC (secret location convention), PROV (provisioning
 | --- | --- | --- | --- |
 | CFG-AC-001 | Declared keys read with their typed values and defaults; reading an undeclared key fails with `CFG.UNDECLARED_KEY`. | CFG-REQ-001 | Local |
 | CFG-AC-002 | Builds fail, naming the key, for a missing value, a wrong type, and an undeclared key in the values file. | CFG-REQ-002 | Local |
-| CFG-AC-003 | Changing a value in the committed file has no effect on a running deployment and takes effect after the next deploy. | CFG-REQ-003 | Local, cloud |
+| CFG-AC-003 | Locally, changing a value in the committed file has no effect on a running build and takes effect only after the next build. On cloud, a deployed stage reports exactly its committed values. | CFG-REQ-003 | Local, cloud |
 | CFG-AC-004 | The resolved configuration of a deployment lists every declared secret with its target location. | CFG-REQ-004 | Local, cloud |
-| CFG-AC-005 | A user whose ID is added to `framework.admins` becomes admin after redeploy; removing it reverts. | CFG-REQ-005 | Local, cloud |
+| CFG-AC-005 | Locally, with the stub login provider, a user whose ID is added to `framework.admins` becomes admin only after the next build; removing it reverts. On cloud, a deployed stage reports exactly its committed `framework.admins`. | CFG-REQ-005 | Local, cloud |
 | CFG-AC-006 | A values file containing an unknown field is rejected by schema validation. | CFG-REQ-006 | Local |
 
 ## 5. Portability note
