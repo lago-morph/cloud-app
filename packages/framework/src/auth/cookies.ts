@@ -1,13 +1,12 @@
 /**
  * Session and transaction cookie settings (AUTH-REQ-006, auth.md §2 "Session cookie", "Login";
- * LOCAL-REQ-004). Both cookies: HttpOnly, SameSite=Lax, Path=/, no Domain. Locally they are named
- * `session_local` / `login_local` and not Secure; on cloud targets `__Host-session` /
- * `__Host-login` and Secure. The local relaxation is refused on any cloud target.
+ * LOCAL-REQ-004). Both cookies: HttpOnly, SameSite=Lax, Path=/, no Domain. On cloud targets
+ * `__Host-session` / `__Host-login` and Secure. The local settings (not Secure) live in
+ * `local-cookies.ts`, which only the local runtime and `createTestApp` import, so cloud bundles
+ * never carry them (DEC-PENDING-B-16a-2); any non-Secure settings are refused on a cloud target.
  */
 import { FrameworkError } from "../core/errors.js";
 import type { Target } from "../core/identity.js";
-
-export type CookieMode = "local" | "cloud";
 
 export interface CookieSettings {
   readonly session: string;
@@ -15,18 +14,18 @@ export interface CookieSettings {
   readonly secure: boolean;
 }
 
-const LOCAL: CookieSettings = Object.freeze({ session: "session_local", login: "login_local", secure: false });
-const CLOUD: CookieSettings = Object.freeze({ session: "__Host-session", login: "__Host-login", secure: true });
+export const CLOUD_COOKIES: CookieSettings = Object.freeze({ session: "__Host-session", login: "__Host-login", secure: true });
 
 /**
- * The settings for `target`. `mode` defaults to the target's own; asking for the local settings
- * on a cloud target is CORE.MISCONFIGURED (LOCAL-AC-004).
+ * The settings for `target`: `settings` when given (the local runtime passes `LOCAL_COOKIES`),
+ * otherwise the cloud settings. Non-Secure settings on a cloud target are CORE.MISCONFIGURED
+ * (LOCAL-AC-004).
  */
-export function cookieSettings(target: Target, mode: CookieMode = target === "local" ? "local" : "cloud"): CookieSettings {
-  if (mode === "local" && target !== "local") {
+export function cookieSettings(target: Target, settings: CookieSettings = CLOUD_COOKIES): CookieSettings {
+  if (!settings.secure && target !== "local") {
     throw new FrameworkError("CORE.MISCONFIGURED", `local cookie settings (not Secure) are not allowed on the ${target} target`);
   }
-  return mode === "local" ? LOCAL : CLOUD;
+  return settings;
 }
 
 function attributes(settings: CookieSettings, maxAge: number): string {

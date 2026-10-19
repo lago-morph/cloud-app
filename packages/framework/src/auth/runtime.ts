@@ -10,7 +10,7 @@ import { FrameworkError } from "../core/errors.js";
 import type { Deployment } from "../core/identity.js";
 import { FRAMEWORK_SECRETS } from "../secrets/names.js";
 import { deferredCheck } from "../core/deferred.js";
-import { clearCookie, cookieSettings, readCookie, setCookie, type CookieMode, type CookieSettings } from "./cookies.js";
+import { clearCookie, cookieSettings, readCookie, setCookie, type CookieSettings } from "./cookies.js";
 import { evaluateLogin, type AccessLists } from "./levels.js";
 import type { LoginProvider, ProviderContext, ProviderIdentity } from "./login-provider.js";
 import { MOCK_DEFAULT_IDS } from "./mock-ids.js";
@@ -33,8 +33,8 @@ export interface AuthOptions {
   readonly provider?: LoginProvider;
   /** The authentication mock: only locally and on test stages. */
   readonly mock?: AuthMock;
-  /** Cookie settings; default: the target's own. `local` on a cloud target is CORE.MISCONFIGURED. */
-  readonly cookies?: CookieMode;
+  /** Cookie settings; default: the cloud settings. The local runtime passes `LOCAL_COOKIES`; non-Secure settings on a cloud target are CORE.MISCONFIGURED. */
+  readonly cookies?: CookieSettings;
 }
 
 export interface AuthParts {

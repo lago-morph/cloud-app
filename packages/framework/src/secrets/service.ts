@@ -48,9 +48,15 @@ export function createSecretsService<S extends string>(options: SecretsServiceOp
   return serviceOver<S>(new Set(declared), "is not declared by the app", options);
 }
 
+export interface FrameworkSecretsOptions extends Omit<SecretsServiceOptions, "declared"> {
+  /** Target-specific names readable besides `FRAMEWORK_SECRETS` (locally: `LOCAL_FRAMEWORK_SECRETS`). */
+  readonly extra?: readonly FrameworkSecretName[];
+}
+
 /** Framework code's reader of its internal secrets (secrets.md §2); app names are refused. */
-export function createFrameworkSecrets(options: Omit<SecretsServiceOptions, "declared">): SecretsService<FrameworkSecretName> {
-  return serviceOver<FrameworkSecretName>(new Set(Object.values(FRAMEWORK_SECRETS)), "is not a framework-internal secret", options);
+export function createFrameworkSecrets(options: FrameworkSecretsOptions): SecretsService<FrameworkSecretName> {
+  const readable = new Set<string>([...Object.values(FRAMEWORK_SECRETS), ...(options.extra ?? [])]);
+  return serviceOver<FrameworkSecretName>(readable, "is not a framework-internal secret", options);
 }
 
 function serviceOver<S extends string>(readable: ReadonlySet<string>, refusal: string, options: Omit<SecretsServiceOptions, "declared">): SecretsService<S> {

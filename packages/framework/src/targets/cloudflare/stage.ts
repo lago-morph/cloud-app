@@ -17,6 +17,7 @@ import { createConfigService } from "../../config/service.js";
 import { createHttpParts, type HealthCheck } from "../../http/runtime.js";
 import { createAuthParts } from "../../auth/runtime.js";
 import type { AuthMock } from "../../auth/mock.js";
+import type { CookieSettings } from "../../auth/cookies.js";
 import type { LoginProvider } from "../../auth/login-provider.js";
 import { createKv } from "../../kv/service.js";
 import { createFilesService, type FilesStore, type TicketIssuer } from "../../files/service.js";
@@ -55,8 +56,13 @@ export interface StageOptions {
   readonly readFrameworkSecret: (env: Env) => SecretReader;
   /** Every secret value this request may hold, for redaction (HTTP). */
   readonly secretValues: (c: RuntimeContext) => Iterable<string>;
-  /** Framework-internal secrets the health check requires on this target. */
+  /**
+   * Framework-internal secrets the health check requires on this target. They are also readable
+   * by framework code, which is how a target adds its own (locally `LOCAL_FRAMEWORK_SECRETS`).
+   */
   readonly requiredFrameworkSecrets: readonly FrameworkSecretName[];
+  /** AUTH's cookie settings; default the cloud ones (the local runtime passes `LOCAL_COOKIES`). */
+  readonly cookies?: CookieSettings;
   /** The authentication mock: only locally and on test stages. */
   readonly mock?: AuthMock;
   /** The stage's real login provider (GOOGLE), or the stub in tests. */
@@ -73,7 +79,7 @@ export function assembleStage<C extends ConfigDeclaration, S extends string>(def
   const config = createConfigService(resolved);
 
   const frameworkSecrets = (env: Env, log?: LogService) =>
-    createFrameworkSecrets({ read: options.readFrameworkSecret(env), ...(log === undefined ? {} : { log }) });
+    createFrameworkSecrets({ read: options.readFrameworkSecret(env), extra: options.requiredFrameworkSecrets, ...(log === undefined ? {} : { log }) });
 
   const healthChecks: HealthCheck[] = [
     // One trivial SQL read (the migration record exists once the framework history is applied).
@@ -102,6 +108,7 @@ export function assembleStage<C extends ConfigDeclaration, S extends string>(def
     secret: (c, name) => frameworkSecrets(c.env, c.var.log).get(name as FrameworkSecretName),
     ...(options.provider === undefined ? {} : { provider: options.provider }),
     ...(options.mock === undefined ? {} : { mock: options.mock }),
+    ...(options.cookies === undefined ? {} : { cookies: options.cookies }),
   });
 
   const app = assembleApp(defined, {

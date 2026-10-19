@@ -6,6 +6,7 @@ import { defineApp, type Services } from "../core/public.js";
 import { createHttpParts } from "../http/runtime.js";
 import type { Severity } from "../log/public.js";
 import { FRAMEWORK_SECRETS } from "../secrets/names.js";
+import { LOCAL_COOKIES } from "./local-cookies.js";
 import { createAuthParts, type AuthOptions } from "./runtime.js";
 import { issueSession } from "./session.js";
 
@@ -30,6 +31,8 @@ function harness(options: Partial<AuthOptions> = {}, target: Target = "local", s
       if (name === FRAMEWORK_SECRETS.sessionKey) return KEY;
       throw new Error(`unexpected secret ${name}`);
     },
+    // The local runtime passes the local settings (DEC-PENDING-B-16a-2).
+    ...(target === "local" ? { cookies: LOCAL_COOKIES } : {}),
     ...options,
   });
   const http = createHttpParts();
