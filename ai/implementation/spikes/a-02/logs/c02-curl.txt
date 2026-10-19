@@ -1,0 +1,60 @@
+19:47:52
+* Connected to 127.0.0.1 (127.0.0.1) port 37701
+* CONNECT tunnel: HTTP/1.1 negotiated
+* Establish HTTP proxy tunnel to spikemkmteluy-a02-worker.<subdomain>.workers.dev:443
+< HTTP/1.1 200 Connection Established
+< 
+* CONNECT phase completed
+* CONNECT tunnel established, response 200
+< HTTP/2 200 
+< date: Mon, 19 Oct 2026 19:47:53 GMT
+< content-type: text/plain
+< content-length: 20
+< report-to: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=cKFMlveXwehjss0e72q5w0v70XGSHTWgxUReQ4%2BEFYXGjyggy78DomqauyXNeb1%2B%2BdHrjA4taYT1Tz1M4XTvMv6TekobCczomFbMfL768nvY6CuyVUwimc4dnGUS82LjtO1VAlTZ1ccF4RjK5uwhHvTlZ8A6Lso2GDM65kCQ3b8Jd6Ra"}]}
+< nel: {"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+< server: cloudflare
+< cf-ray: a4d24c12fc027287-EWR
+< alt-svc: h3=":443"; ma=86400
+< 
+spike a-02 ok /hello
+exit=0
+19:47:53
+* Connected to 127.0.0.1 (127.0.0.1) port 37701
+* CONNECT tunnel: HTTP/1.1 negotiated
+* Establish HTTP proxy tunnel to spikemkmteluy-a02-worker.<subdomain>.workers.dev:443
+< HTTP/1.1 200 Connection Established
+< 
+* CONNECT phase completed
+* CONNECT tunnel established, response 200
+< HTTP/2 200 
+< date: Mon, 19 Oct 2026 19:47:54 GMT
+< content-type: text/plain
+< content-length: 20
+< report-to: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=2qfXsJEIh9n7ToIG0dcwCM32apHD%2BR101TRkB5kSaegYNSf0OnA1UTUVLdJVVM8DPaDQsUE0ISHdkvFD35sE8vwXWOO5nblclz5SZMORBVar3mYHyMw%2B%2BjeQJGVfBx55bufn2YYHBLmWIjw%2F2%2BYxKIKR2KLTo3s%2BGThY83qiWj0PMI0B"}]}
+< nel: {"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+< server: cloudflare
+< cf-ray: a4d24c168e0535c4-ATL
+< alt-svc: h3=":443"; ma=86400
+< 
+spike a-02 ok /hello
+exit=0
+19:47:54
+* Connected to 127.0.0.1 (127.0.0.1) port 37701
+* CONNECT tunnel: HTTP/1.1 negotiated
+* Establish HTTP proxy tunnel to spikemkmteluy-a02-worker.<subdomain>.workers.dev:443
+< HTTP/1.1 200 Connection Established
+< 
+* CONNECT phase completed
+* CONNECT tunnel established, response 200
+< HTTP/2 200 
+< date: Mon, 19 Oct 2026 19:47:54 GMT
+< content-type: text/plain
+< content-length: 20
+< report-to: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=NvzbFar%2BZcZaUBRLrgNOtqeEHmK5pxw8TJ1TyAM75ytyn%2BLbTDWrwUbSkgcQ4gR0ZhKCOyGvKL0R34v2qtHee1P5cA%2FvSpwkUE8kl%2FMoZKt4wHC8yurQFrDxhbduyxYzetPm5dIQ2TKwprNxANwPnhkiz00AG%2FJRYoreyE%2BaVysQea%2BC"}]}
+< nel: {"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+< server: cloudflare
+< cf-ray: a4d24c18386d1f6b-ATL
+< alt-svc: h3=":443"; ma=86400
+< 
+spike a-02 ok /hello
+exit=0
