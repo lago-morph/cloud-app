@@ -1,0 +1,11 @@
+{
+  // Framework and tooling lib set: the app lib set plus Node types. Node ESM resolution so the
+  // compiled framework (dist/) runs in Node for the CLI. @cloudflare/workers-types is never
+  // listed in `types` (DEC-0105).
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"]
+  }
+}
