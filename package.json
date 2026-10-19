@@ -20,7 +20,7 @@
     "test:integration": "npm run build -w packages/framework && vitest run --config vitest.integration.config.ts && playwright test --project integration --pass-with-no-tests",
     "test:e2e": "playwright test --project e2e",
     "compliance": "node scripts/not-wired.mjs compliance C-02",
-    "verify": "node scripts/not-wired.mjs verify B-17"
+    "verify": "npm run build -w packages/framework && npm run typecheck && npm run test:unit && npm --workspace apps/template run verify"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",
