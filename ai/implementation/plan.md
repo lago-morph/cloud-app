@@ -38,6 +38,8 @@ Throwaway code only, each spike in `ai/implementation/spikes/<item-id>/` (own `p
 
 Dependencies: A-02, A-05, A-06, A-07 need A-01 (and A-08's remote comparison needs A-01). A-03 needs A-01 and A-02's Worker know-how; A-04 needs A-02. A-INT needs all spikes; A-EV needs A-INT. **Phase A exit:** A-EV accepts all ten; any "ask owner" spike that failed is raised to the owner, and the items that depend on it wait. Spike → dependent items: A-01 → D-03, D-05 and every cloud run; A-02 → every cloud run; A-03, A-04 → D-03; A-05, A-06 → D-04; A-07 → D-02; A-08 → B-06; A-09 → B-05; A-10 → B-01.
 
+**Phase A outcomes (A-INT):** decisions DEC-0083…DEC-0109, parameters PAR-216…PAR-219, PAR-117, PAR-118 and the PAR-111…PAR-116 values. Fallbacks applied: A-06 only (fallback copy, DEC-0096). Taken under the owner's "make an assumption and continue" instruction and open for owner review: DEC-0096, DEC-0101 (FILES-AC-003 on Cloudflare, §11 Q4), DEC-0103 (revised `sql.d.ts`), DEC-0107…DEC-0109. The items below already reflect these.
+
 ---
 
 ## 3. Phase B — Local foundation
@@ -46,9 +48,9 @@ Component directory map (fixed by B-01; each component's item owns its directory
 `FW/src/{core,http,sql,mig,kv,files,config,secrets,log,auth,google,check,build,targets/local,targets/cloudflare,testing,cli,provision,evidence}/`, public hubs `FW/src/index.ts`, `FW/src/client/index.ts`, `FW/src/testing/index.ts`. Each component exposes its app-facing names from `FW/src/<comp>/public.ts` (browser helpers from `FW/src/<comp>/client.ts`); hubs only re-export. Unit tests are colocated as `FW/src/<comp>/**/*.unit.test.ts` (implementer-owned). In-process integration suites live in `FW/test/integration/<comp>/` (test-author-owned).
 
 ### B-01 — Workspace bootstrap
-- **Task:** Create the npm-workspace skeleton of cli.md §2 with every workspace's `package.json` (root, `FW`, `apps/template`, `apps/reference`, `apps/demo` (empty stub only), `tests/compliance`) declaring all dependencies at the A-10 pins; generate the single root `package-lock.json`; root scripts `typecheck`, `lint`, `test:unit`, `test:integration`, `test:e2e`, `compliance`, `verify` (stubs that later items wire); `FW/package.json` `exports` map per CORE-REQ-005 with `./targets/local` and `./targets/cloudflare` only (no `./targets/aws` until the AWS phase: "one subpath per supported target"; record a decision) and the package `bin`; base `tsconfig` files (framework lib set; app lib set = ES + Web APIs, no `@types/node`, no workers-types: CHECK §2); `.gitignore` (`.framework/`, `.wrangler/`, `.logs/`, `.dev.vars`, `node_modules`, Playwright output); the component directories above, each with a `public.ts` stub that declares its contract names and throws `not implemented`, so hubs type-check; `FW/src/core/errors.ts` transcribed exactly from `errors.d.ts`; the test-tag helper and test-runner config for the three layers (§10.1); directories `ai/implementation/{decisions,root-causes,evaluations,spikes}/`, `validation/`.
-- **Read:** `cli.md` §2; `core.md` (CORE-REQ-005, CORE-REQ-006); `check.md` §2; all of `docs/contracts/ts/`; spike A-10 RESULT.md.
-- **Owns:** root `package.json`, `package-lock.json`, root tsconfig/lint/test configs, all workspace `package.json` files, `.gitignore`, hub files, every `FW/src/<comp>/public.ts` stub, `FW/src/core/errors.ts`.
+- **Task:** Create the npm-workspace skeleton of cli.md §2 with every workspace's `package.json` (root, `FW`, `apps/template`, `apps/reference`, `apps/demo` (empty stub only), `tests/compliance`) declaring all dependencies at the A-10 pins (DEC-0104; Miniflare PAR-117 only if imported directly and `@cloudflare/workers-types` PAR-118 as a framework dev dependency, DEC-0105; `@pulumi/cloudflare` only if framework code imports it, DEC-0109); generate the single root `package-lock.json`; root scripts `typecheck`, `lint`, `test:unit`, `test:integration`, `test:e2e`, `compliance`, `verify` (stubs that later items wire); `FW/package.json` `exports` map per CORE-REQ-005 with `./targets/local` and `./targets/cloudflare` only (no `./targets/aws` until the AWS phase: "one subpath per supported target"; record a decision) and the package `bin`; base `tsconfig` files (framework lib set; app lib set = ES + Web APIs, no `@types/node`, no workers-types: CHECK §2); `.gitignore` (`.framework/`, `.wrangler/`, `.logs/`, `.dev.vars`, `node_modules`, Playwright output); the component directories above, each with a `public.ts` stub that declares its contract names and throws `not implemented`, so hubs type-check; `FW/src/core/errors.ts` transcribed exactly from `errors.d.ts`; the test-tag helper and test-runner config for the three layers (§10.1); directories `ai/implementation/{decisions,root-causes,evaluations,spikes}/`, `validation/`; copy `ai/implementation/spikes/a-10/scripts/{offline.sh,lo-up.py}` unchanged to `scripts/` (DEC-0108, §10.2).
+- **Read:** `cli.md` §2; `core.md` (CORE-REQ-005, CORE-REQ-006); `check.md` §2; all of `docs/contracts/ts/`; spike A-10 RESULT.md; DEC-0104, DEC-0105, DEC-0108, DEC-0109.
+- **Owns:** root `package.json`, `package-lock.json`, root tsconfig/lint/test configs, `scripts/offline.sh`, `scripts/lo-up.py`, all workspace `package.json` files, `.gitignore`, hub files, every `FW/src/<comp>/public.ts` stub, `FW/src/core/errors.ts`.
 - **Deps:** A-EV.
 - **Exit:** `npm ci && npm run typecheck && npm run test:unit` pass (zero-test runs allowed only here); `node -e` print of `FW/package.json` exports equals the CORE-REQ-005 table minus `./targets/aws`.
 
@@ -76,16 +78,16 @@ After B-01, ownership of a component's `public.ts` passes to that component's it
 - **Exit:** unit tests green for LOG-AC-001 (local), LOG-AC-002 (schema validation).
 
 ### B-05 — SQL: schema, column rules, dialect drivers
-- **Task:** `defineTable` and column helpers (sql.md §2.1) building Drizzle tables with snake_case casing for SQLite and Postgres; name rules, one `id()`, rejected features; value rules → `SQL.INVALID_VALUE` before the database; drivers for local D1 (Worker binding via Miniflare) and PGlite (PAR-107), dialect chosen per process; `newId`, `now`. Early checks the design asks for: PGlite C collation; the A-09 typing result.
-- **Read:** `sql.md` §1–§2.2; `sql.d.ts`; DEC-0038, DEC-0041, DEC-0050, DEC-0060; spikes A-08, A-09.
+- **Task:** `defineTable` and column helpers (sql.md §2.1) building Drizzle tables with snake_case casing for SQLite and Postgres; name rules, one `id()`, rejected features; value rules → `SQL.INVALID_VALUE` before the database; drivers for local D1 (Worker binding via Miniflare) and PGlite (PAR-107), dialect chosen per process; `newId`, `now`. Types follow the revised `sql.d.ts` (DEC-0103: `Table<Cols, Name>`, `Column<…, TableName>`, `AnyTable`, framework-declared `sum`/`avg` typed as numbers). The PGlite harness creates its database with `LC_COLLATE 'C'` and `LC_CTYPE 'C'` (DEC-0106).
+- **Read:** `sql.md` §1–§2.2; `sql.d.ts`; DEC-0038, DEC-0041, DEC-0050, DEC-0060, DEC-0102, DEC-0103, DEC-0106; spike A-09 (`src/checks.ts` is a ready type-fixture set).
 - **Owns:** `FW/src/sql/**`, `docs/components/sql.md`, `sql.d.ts`.
 - **Deps:** B-02.
 - **Exit:** unit tests green for SQL-AC-001 and SQL-AC-004 on both dialects.
 
 ### B-06 — SQL: queries, `atomic`, normalisation, failures
-- **Task:** Restricted `PortableDb`/`WriteDb`; `asc`/`desc` with explicit NULLS ordering; `containsText` via `lower()` + position; aggregate normalisation; writes resolve `void`; result-size measurement and `SQL.RESULT_TOO_LARGE` (PAR-215); `SQL.CONFLICT` mapping; `SQL.UNAVAILABLE` with PAR-210 budget (local adapters only; the Data API retry loop is AWS and is **not** built); `atomic` with the built-on-handle check before execution (D1 batch; PGlite transaction). If A-08 found local D1 does not enforce D1 limits: add the portable bound-parameter/statement limit, one catalogue code in `errors.d.ts` and `FW/src/core/errors.ts` (B-02 has finished; this item takes ownership of those two files for that edit), a new AC in sql.md, and a PAR entry (via decision draft).
-- **Read:** `sql.md` (all); `sql.d.ts`; `errors.d.ts`; spike A-08.
-- **Owns:** `FW/src/sql/**`, `docs/components/sql.md`, `sql.d.ts`; conditionally `errors.d.ts` + `FW/src/core/errors.ts`.
+- **Task:** Restricted `PortableDb`/`WriteDb`; `asc`/`desc` with explicit NULLS ordering; `containsText` via `lower()` + position; aggregate normalisation; writes resolve `void`; result-size measurement and `SQL.RESULT_TOO_LARGE` (PAR-215); `SQL.CONFLICT` mapping; `SQL.UNAVAILABLE` with PAR-210 budget (local adapters only; the Data API retry loop is AWS and is **not** built); `atomic` with the built-on-handle check before execution (D1 batch; PGlite transaction). No portable bound-parameter/statement limit: A-08 found local D1 enforces D1's limits (PAR-216, PAR-217) with the same errors, so the A-08 fallback is not applied (DEC-0102); no new catalogue code or AC.
+- **Read:** `sql.md` (all); `sql.d.ts`; `errors.d.ts`; DEC-0102, DEC-0103.
+- **Owns:** `FW/src/sql/**`, `docs/components/sql.md`, `sql.d.ts`.
 - **Deps:** B-05.
 - **Exit:** unit tests green for SQL-AC-003, -005, -006 (local parts) on both dialects.
 
@@ -153,7 +155,7 @@ After B-01, ownership of a component's `public.ts` passes to that component's it
 - **Exit:** unit tests green for CHECK-AC-004 core cases.
 
 ### B-16 — Build pipeline, target runtimes, `createTestApp`
-- **Task:** `build --target local|cloudflare --stage <s>` library: generate entry points under `.framework/` from `src/app.ts`; embed identity + resolved config; compose per-target bundles (esbuild/wrangler) that exclude other targets' code, provisioning, tooling, the Postgres harness, and — for cloud — the stub provider, the local transfer route and its key, and — for non-`test-` stages — the mock; `FW/src/targets/local` and `FW/src/targets/cloudflare` runtimes with `createServices(env, deployment)` over D1/R2/env bindings (Cloudflare-specific signing, R2 log writer, Worker vars come in D); `createTestApp` (Miniflare D1/R2 or PGlite per process, migrations applied, mock or stub provider, `unavailable`, `logs()`, `as`, `loginWithStub`, `dispose`). `build --target cloudflare` is needed now because CORE-AC-006, CF-AC-003 and PROV-AC-005 are Local criteria.
+- **Task:** `build --target local|cloudflare --stage <s>` library: generate entry points under `.framework/` from `src/app.ts`; embed identity + resolved config; compose per-target bundles (esbuild/wrangler) that exclude other targets' code, provisioning, tooling, the Postgres harness, and — for cloud — the stub provider, the local transfer route and its key, and — for non-`test-` stages — the mock; `FW/src/targets/local` and `FW/src/targets/cloudflare` runtimes with `createServices(env, deployment)` over D1/R2/env bindings (Cloudflare-specific signing, R2 log writer, Worker vars come in D); `createTestApp` (local D1/R2 through Wrangler's `getPlatformProxy`, DEC-0105, or PGlite per process, migrations applied, mock or stub provider, `unavailable`, `logs()`, `as`, `loginWithStub`, `dispose`). `build --target cloudflare` is needed now because CORE-AC-006, CF-AC-003 and PROV-AC-005 are Local criteria.
 - **Read:** `core.md` §2; `local.md`; `cloudflare.md` §1–§2 (Worker settings); `provisioning.md` PROV-REQ-005; `testing.d.ts`; `config.md` §2.
 - **Owns:** `FW/src/build/**`, `FW/src/targets/local/**`, `FW/src/targets/cloudflare/**`, `FW/src/testing/**`, `docs/components/local.md`, `testing.d.ts`.
 - **Deps:** B-04, B-08, B-11, B-12, B-13.
@@ -200,7 +202,7 @@ Each author owns only its suite directories (B-T4 also `FW/test/fixtures/**`).
 - **Exit:** `npx <package> verify` passes in `apps/reference`; `dev` serves it.
 
 ### C-02 — Compliance driver, evidence, reports
-- **Task:** `tests/compliance/harness/`: one command `npm run compliance -- --target <local|cloudflare> [--stage <s>] [--milestone]` that runs the tagged integration and E2E tests for that target, base-URL HTTP client, Playwright setup, multiset comparison, PAR-280 float tolerance, bounded cloud waits; the evidence writer in `FW/src/evidence/` (shared with `smoke`): schema-valid records in `validation/<target>/<runId>.json` + raw output under `validation/<target>/<runId>/raw/`, refusal on a dirty tree, `detail` with status/code/requestId for HTTP failures, `not-run`/`blocked` reasons; test-stage run IDs (CSPRNG, alphabet and length filling PAR-291 after `test-`); leftover hook calling `listStageResources`; traceability report generator (all `*-AC-*`/`E2E-*` IDs in `docs/`, tests, results, untested flagged); release report ("works" rule of COMPL-REQ-006, invalidations from `validation/invalidations.md`, commits touching GOOGLE/login-provider files); per-target expected-criteria list derived from the Where columns, including this phase's not-run rules (§8).
+- **Task:** `tests/compliance/harness/`: one command `npm run compliance -- --target <local|cloudflare> [--stage <s>] [--milestone]` that runs the tagged integration and E2E tests for that target, base-URL HTTP client (explicit User-Agent, DEC-0089; `NODE_USE_ENV_PROXY=1` for Node `fetch`, DEC-0085), Playwright setup, multiset comparison, PAR-280 float tolerance, bounded cloud waits; the evidence writer in `FW/src/evidence/` (shared with `smoke`): schema-valid records in `validation/<target>/<runId>.json` + raw output under `validation/<target>/<runId>/raw/`, refusal on a dirty tree, `detail` with status/code/requestId for HTTP failures, `not-run`/`blocked` reasons; test-stage run IDs (CSPRNG, alphabet and length filling PAR-291 after `test-`); leftover hook calling `listStageResources`; traceability report generator (all `*-AC-*`/`E2E-*` IDs in `docs/`, tests, results, untested flagged); release report ("works" rule of COMPL-REQ-006, invalidations from `validation/invalidations.md`, commits touching GOOGLE/login-provider files); per-target expected-criteria list derived from the Where columns, including this phase's not-run rules (§8).
 - **Read:** `compliance.md`; `evidence.schema.json`; `e2e-scenarios.md` preamble; prompt §7, §11.
 - **Owns:** `tests/compliance/harness/**`, `tests/compliance/tools/**`, `FW/src/evidence/**`, `docs/components/compliance.md`, `evidence.schema.json`, `validation/invalidations.md`.
 - **Deps:** B-EV.
@@ -214,7 +216,7 @@ Each author owns only its suite directories (B-T4 also `FW/test/fixtures/**`).
 - **Exit:** unit tests green for COMPL-AC-007, PROV-AC-007, CLI-AC-003 (deploy/remove with fake target, incl. failing cleanup keeps original status).
 
 ### C-04 — `smoke` and `connectTestStage`
-- **Task:** `smoke --target local` against the running `dev` server (and the stage form, completed in D-05); `connectTestStage` (base URL from recorded deploy output or the dev server, mock-login, cookie jar, `Origin` on state-changing requests, rejects non-`test-` stages, precise failure messages); evidence record via `FW/src/evidence`; prints the stage's log location for the day.
+- **Task:** `smoke --target local` against the running `dev` server (and the stage form, completed in D-05); `connectTestStage` (base URL from recorded deploy output or the dev server, explicit User-Agent (DEC-0089), mock-login, cookie jar, `Origin` on state-changing requests, rejects non-`test-` stages, precise failure messages); evidence record via `FW/src/evidence`; prints the stage's log location for the day.
 - **Read:** `cli.md` (`smoke`); `testing.d.ts` `connectTestStage`; `log.md` LOG-REQ-003/-004.
 - **Owns:** `FW/src/cli/commands/smoke.ts`, `FW/src/testing/connect.ts`.
 - **Deps:** C-02.
@@ -232,7 +234,7 @@ Each author owns only its suite directories (B-T4 also `FW/test/fixtures/**`).
 | --- | --- | --- |
 | C-T1 | `tests/compliance/criteria/{core,http,log,config,secrets,cli}/` | CORE-AC-002, -003; HTTP-AC-001…-005 (cloud-only ones written now, run in D); LOG-AC-001, -002, -004, -005; CFG-AC-003…-005; SEC-AC-001…-003, -005; CLI-AC-001, -004, -005 |
 | C-T2 | `tests/compliance/criteria/{sql,mig,kv}/`, `apps/reference/src/server/cases/**` | SQL-AC-003…-006 and KV-AC-004 as shared case sets run in-process (D1, PGlite) and through the reference app; MIG-AC-002, -003, -006; KV-AC-001…-005 |
-| C-T3 | `tests/compliance/criteria/{files,auth}/`, `tests/compliance/e2e/E2E-009*` | FILES-AC-001…-006 (Playwright for -003, -004, -006 transfer parts); AUTH-AC-004, -006, -007, -009 (test-stage part); E2E-009 |
+| C-T3 | `tests/compliance/criteria/{files,auth}/`, `tests/compliance/e2e/E2E-009*` | FILES-AC-001…-006 (Playwright for -003, -004, -006 transfer parts; FILES-AC-003 asserted as written, so its expired-ticket clause is expected to fail on Cloudflare per DEC-0101, never skipped or weakened); AUTH-AC-004, -006, -007, -009 (test-stage part); E2E-009 |
 | C-T4 | `tests/compliance/e2e/` (except E2E-009) | E2E-001, -003, -004, -005, -010, -011, -012, -013, -014, -016 (scan part; the term list file `tests/compliance/e2e/terms.txt`); E2E-007 cloud part is not-run (§8) |
 
 Deps: C-02 (harness API), C-01 (route names; authors may start from the contracts and agree route names through C-01's route list file `apps/reference/ROUTES.md`).
@@ -249,30 +251,30 @@ Deps: C-02 (harness API), C-01 (route names; authors may start from the contract
 Precondition: phase C accepted (prompt §10: all local work before touching the cloud), A-01…A-07 accepted.
 
 ### D-01 — Cloudflare runtime parts of CFG, SEC, LOG, AUTH
-- **Task:** Worker-variable delivery of provisioning-derived config (public origin, bucket/database/log-bucket identifiers); Worker-secret reading; R2 log writer to the shared bucket with `waitUntil` and the LOG-REQ-004 key layout; cloud cookie attributes active in Cloudflare builds; static-asset and run-worker-first settings in the generated Worker config.
+- **Task:** Worker-variable delivery of provisioning-derived config (public origin, bucket/database/log-bucket identifiers; no variable or binding may use the `SECRET_` prefix, DEC-0087); Worker-secret reading; R2 log writer to the shared bucket with `waitUntil` and the LOG-REQ-004 key layout; cloud cookie attributes active in Cloudflare builds; static-asset and run-worker-first settings in the generated Worker config.
 - **Read:** `cloudflare.md`; `config.md` §2 Delivery; `secrets.md`; `log.md` LOG-REQ-004; `auth.md` AUTH-REQ-006.
 - **Owns:** `FW/src/log/cloudflare/**`, `FW/src/secrets/cloudflare/**`, `FW/src/targets/cloudflare/**`, `docs/components/cloudflare.md`.
 - **Deps:** C-EV.
 - **Exit:** unit tests green; `build --target cloudflare --stage test-x` bundle still passes CF-AC-003 / CORE-AC-006.
 
 ### D-02 — FILES on Cloudflare
-- **Task:** SigV4-signed R2 S3-endpoint tickets with aws4fetch using the stage's R2 API token (framework-internal Worker secret); the bucket CORS policy definition (PUT/GET, stage origin only, `Content-Type`) for provisioning; health-step CORS preflight helper.
-- **Read:** `files.md` §2 Cloudflare; spike A-07; DEC-0062.
+- **Task:** SigV4-signed R2 S3-endpoint tickets with aws4fetch using the stage's R2 API token (framework-internal Worker secret), per DEC-0098: path-style URLs, `X-Amz-Expires` = PAR-233, upload tickets signed with `allHeaders: true` so `Content-Type` is signed (default signing lets another content type through), download tickets with `signQuery: true`; S3 credentials derived from the token as DEC-0100; the bucket CORS policy definition of DEC-0099 for provisioning; health-step CORS preflight helper. R2 omits CORS headers on 403, so an expired or mismatched ticket reaches the browser helpers as status null / `no response …`: implement exactly that, no workaround (DEC-0101, open owner item).
+- **Read:** `files.md` §2 Cloudflare; spike A-07; DEC-0062, DEC-0098…DEC-0101.
 - **Owns:** `FW/src/files/cloudflare/**`.
 - **Deps:** C-EV, A-07.
 - **Exit:** unit tests green (signing against fixed vectors; offline).
 
 ### D-03 — PROV Cloudflare operations
-- **Task:** Implement per-target operations for Cloudflare: `setupAccount` (shared `prototype-logs` bucket, state home, `workers.dev` subdomain registration/recording, ownership check), `deploy` via SST built from the app definition (no app IaC; current D1 database as input; never retains resources), `setSecret` (`SECRET_<NAME>`), `stopApp`/`startApp` (workers.dev route off/on), R2 API token create/delete scoped to the stage bucket, `remove` (empty bucket, delete token, delete D1 databases, SST removal; print leftovers, non-zero exit), `listStageResources`; preflight incl. R2-token-creation permission; credentials only per A-01.
-- **Read:** `provisioning.md`; `cloudflare.md`; spikes A-01, A-03, A-04, A-07; DEC-0036, DEC-0073, DEC-0078.
+- **Task:** Implement per-target operations for Cloudflare: `setupAccount` (shared `prototype-logs` bucket, state home, `workers.dev` subdomain registration/recording, ownership check), `deploy` via SST built from the app definition (no app IaC; current D1 database as input; never retains resources), `setSecret` (`SECRET_<NAME>`), `stopApp`/`startApp` (workers.dev route off/on), R2 API token create/delete scoped to the stage bucket, `remove` (empty bucket, delete token, delete D1 databases, SST removal; print leftovers, non-zero exit), `listStageResources`; preflight incl. R2-token-creation permission; tool environment per DEC-0107. Spike findings to apply: state home is the `sst-state` R2 bucket and `remove` deletes the stage's state objects there itself, since `sst remove` leaves them (DEC-0084); `setupAccount` reads and records the existing `workers.dev` subdomain (DEC-0086); never pass a binding named `SECRET_*` through SST, which would replace the secret (DEC-0087; optional `keepBindings` guard); `stopApp`/`startApp` always send both `enabled` and `previews_enabled: false` (DEC-0090); a test checks the route state after an SST deploy onto a switched-off route, then `startApp` (DEC-0091; only wrangler was observed); cloud tests poll (bounded) for a newly set secret (DEC-0092); R2 token per DEC-0100.
+- **Read:** `provisioning.md`; `cloudflare.md`; spikes A-01, A-03, A-04, A-07; DEC-0036, DEC-0073, DEC-0078, DEC-0083…DEC-0092, DEC-0100, DEC-0107.
 - **Owns:** `FW/src/provision/cloudflare/**` except `d1/**`.
 - **Deps:** C-EV, A-01, A-03, A-04.
 - **Exit:** unit tests green with stubbed Cloudflare API; no cloud calls in unit tests.
 
 ### D-04 — D1 database operations and cloud migration
-- **Task:** `createDatabase`/`copyDatabase`/`dropDatabase` via the D1 HTTP API (export → import as one batch with `PRAGMA defer_foreign_keys = on`, or the fallback copy if A-06 failed); apply each migration file as one batch; the MIG step-4 check (row counts, references, column rules on added columns, record complete); naming `<app>-<stage>-db-<n>`.
-- **Read:** `migrations.md`; spikes A-05, A-06; `sql.md` §2.1.
-- **Owns:** `FW/src/provision/cloudflare/d1/**`, `FW/src/mig/cloud/**`.
+- **Task:** `createDatabase`/`copyDatabase`/`dropDatabase` via the D1 HTTP API. `copyDatabase` always uses the fallback page-by-page copy, never export/import (DEC-0096; pages within PAR-218, PAR-216, PAR-217; values bound by stored type); the account limit of 10 D1 databases (PAR-219) is reported clearly. Apply each migration file as one `/query` request prefixed with `PRAGMA defer_foreign_keys = on`, with the `__framework_migrations` insert in the same request (DEC-0093). Only a JSON 4xx with `success: false` means rolled back; any other error or missing response is ambiguous, so read `__framework_migrations` on the new database before choosing the Failure path (DEC-0094). Tests include a table-level `unique()` and an added foreign key (DEC-0095). The MIG step-4 check (row counts, references, column rules on added columns, record complete); naming `<app>-<stage>-db-<n>`. Update `migrations.md` §2 "Cloudflare" to describe the fallback copy as the Cloudflare copy.
+- **Read:** `migrations.md`; spikes A-05, A-06 (`fallback_copy.py` is a working prototype); `sql.md` §2.1; DEC-0093…DEC-0097.
+- **Owns:** `FW/src/provision/cloudflare/d1/**`, `FW/src/mig/cloud/**`, `docs/components/migrations.md`.
 - **Deps:** C-EV, A-05, A-06.
 - **Exit:** unit tests green against a stubbed D1 API.
 
@@ -292,7 +294,7 @@ Precondition: phase C accepted (prompt §10: all local work before touching the 
 Deps: C-EV.
 
 ### D-RUN, D-RUN-M, D-EV, D-INT
-- **D-RUN:** `setup-account --target cloudflare` (once; creates billable shared resources), then `npm run compliance -- --target cloudflare` on one `test-<random>` stage plus the per-criterion extra stages; always removes stages; records leftovers. Deps: D-05, D-T1, D-T2.
+- **D-RUN:** `setup-account --target cloudflare` (once; creates billable shared resources); before each stage, check the account's D1 database count against PAR-219 (a schema-changing deploy holds two per stage), so extra stages run one after another; then `npm run compliance -- --target cloudflare` on one `test-<random>` stage plus the per-criterion extra stages; always removes stages; records leftovers. Deps: D-05, D-T1, D-T2.
 - **D-RUN-M:** milestone run `npm run compliance -- --target cloudflare --milestone`: E2E-010, E2E-012, PROV-AC-003, PROV-AC-004, PROV-AC-006 (CF part), COMPL-AC-008. Deps: D-RUN.
 - **D-EV:** **Phase D exit check:** every automated criterion/scenario with Cloud in Where, except `aws.md` and §8 not-runs, `passed` on Cloudflare with evidence; a test stage removed with no leftovers (COMPL-AC-004 evidence); milestone records present or listed outstanding with reason. E2E-011 on Cloudflare must find the entry "using only commands copied from the skill's troubleshooting reference", which exists only after E-02; it is judged at E-EV. Writes `ai/implementation/evaluations/D-cloudflare.md`.
 - **D-INT:** decision drafts and parameters (§10.4).
@@ -389,7 +391,7 @@ Test authors in B2 run until their suites are complete; their suites are expecte
 ### 9.2 Shared files and how they are serialised
 - **Root `package.json`, workspace `package.json`s, `package-lock.json`, root configs:** created complete by B-01. Afterwards an item may add a dependency only to its own workspace's `package.json` and only at a version already pinned in parameters.md (or via a decision draft). The lockfile is **never hand-merged**: on a merge conflict, the orchestrator hands the merge to an ad-hoc integrator subagent (`<phase>-INT`), which takes the feature branch's lockfile and runs `npm install` to regenerate, then commits.
 - **Hub files** (`FW/src/index.ts`, `client/index.ts`, `testing/index.ts`) and `FW/package.json` exports: B-01 writes them once; later changes only by the integrator on request.
-- **`FW/src/core/errors.ts` and `errors.d.ts`:** B-02 owns; B-06 only for the conditional SQL-OQ-1 code.
+- **`FW/src/core/errors.ts` and `errors.d.ts`:** B-02 owns (SQL-OQ-1 needed no new code, DEC-0102).
 - **`framework.openapi.yaml`:** HTTP (B-03) owns non-auth paths; AUTH (B-12) owns `/api/auth/*`. They run in different waves.
 - **`docs/decisions/decision-log.md`, `docs/parameters/parameters.md`:** only `-INT` items edit them (§10.4).
 - **Component design docs:** owned by that component's current item; at most one item per doc per wave (as assigned above).
@@ -408,7 +410,7 @@ Test authors in B2 run until their suites are complete; their suites are expecte
 - The test runner and file glob are PAR-116 (chosen by A-10).
 
 ### 10.2 Offline runs
-"No network" runs use a network namespace: `unshare -rn sh -c 'ip link set lo up; <command>'` (confirmed working in this sandbox; loopback must be brought up for `dev`/workerd). Never simulate offline by unsetting `HTTPS_PROXY` or disabling TLS.
+"No network" runs use a network namespace: `unshare -rn sh scripts/offline.sh <command…>` (DEC-0108; before B-01 copies it, `ai/implementation/spikes/a-10/scripts/offline.sh`). `ip` is not installed in this sandbox, so the wrapper brings loopback up (needed for `dev`/workerd) through `lo-up.py`. Never simulate offline by unsetting `HTTPS_PROXY` or disabling TLS.
 
 ### 10.3 Tagging
 - Every integration/E2E test title starts with its IDs in brackets: `[KV-AC-001] put, overwrite, get …`; several: `[SQL-AC-003][KV-AC-004] …`. A test covering only part of a criterion says which clause in the title after the tag. Unit tests may carry tags but do not count as evidence on their own unless the criterion is a unit-level criterion (e.g. GOOGLE-AC-002, COMPL-AC-002/-007).
@@ -434,10 +436,13 @@ Test authors in B2 run until their suites are complete; their suites are expecte
 
 ### 10.6 Credentials and Cloudflare (prompt §10)
 - **Never print, log, or commit a credential value** — including in RESULT.md, evidence, raw output, and root-cause records. Redact before committing raw output; the runner scans for test secret values (CLI-AC-004, SEC-AC-002).
-- The API token is injected by the proxy for `api.cloudflare.com` only; never send an `Authorization` header to it yourself. Account ID: `$CLOUDFLARE_ACCOUNT_ID`. Tool environment for wrangler/SST: exactly what A-01 recorded.
+- The API token is injected by the proxy for `api.cloudflare.com` only; never send an `Authorization` header to it yourself. Account ID: `$CLOUDFLARE_ACCOUNT_ID`. Tool environment for wrangler/SST: exactly DEC-0107 (placeholder `CLOUDFLARE_API_TOKEN`; wrangler also `CLOUDFLARE_ACCOUNT_ID`, `NODE_EXTRA_CA_CERTS`; SST also `CLOUDFLARE_DEFAULT_ACCOUNT_ID`, `NODE_USE_ENV_PROXY=1`).
 - Node `fetch` needs `NODE_USE_ENV_PROXY=1`; CA bundle `/root/.ccr/ca-bundle.crt`. Proxy problems: `/root/.ccr/README.md`, `curl -sS "$HTTPS_PROXY/__agentproxy/status"`.
 - R2's S3 endpoint `<account>.r2.cloudflarestorage.com` uses the framework-created R2 token. A host refused by the proxy (403 / failed CONNECT) is reported to the owner, never worked around.
 - Never invent credentials (no placeholder Google client IDs in `config/**`, docs or deployed stages).
+- Non-browser clients calling `workers.dev` set their own User-Agent; Cloudflare refuses some default ones with 403 / error 1010 (DEC-0089).
+- The account's `workers.dev` subdomain contains the owner's name: it is personal, not secret. Redact it in every committed artefact (RESULT.md, evidence, raw output); it is computed at run time (DEC-0086).
+- The account allows at most 10 D1 databases (PAR-219), shared with every other stage and spike; remove promptly and check before creating more.
 - Cost: create only what the item needs; names start with `test-` (stages) or `spike` (spikes); remove after use; report anything left billable (shared `prototype-logs` bucket and SST state home stay by design).
 
 ---
@@ -447,3 +452,5 @@ Test authors in B2 run until their suites are complete; their suites are expecte
 1. **Phase C exit vs later-phase components.** Prompt §9 C's exit requires every Local criterion to pass, but SKILL-AC-001…-004 and CHECK-AC-003 (skill, phase E), DEMO-AC-* and CHECK-AC-005's demo part, E2E-002 (local part) and E2E-015 (demo, phase F) cannot pass before their components exist. The plan judges those at E-EV/F-EV; likewise E2E-011 on Cloudflare (needs the skill's troubleshooting commands) moves from D-EV to E-EV. To keep C's exit otherwise literal, the plan moves small pieces earlier: `build --target cloudflare` (B-16), `secrets set --target local` (B-17), the target-neutral PROV core with a fake target and the Cloudflare log-bucket ownership check offline (C-03), `smoke --target local` (C-04), and the scaffolder script (C-05). Proceeding on this reading unless the owner objects.
 2. **PROV-AC-006 on Cloudflare.** The region is an AWS account setting (DEC-0075); Cloudflare has none. The plan runs the "deploy from a clean machine with no local CLI state" part on Cloudflare and records the region part as not-run ("AWS phase not started"). Confirm.
 3. **`./targets/aws` subpath.** CORE-REQ-005 lists `./targets/aws`, but this phase must not build AWS code. The plan omits that subpath until the AWS phase ("one subpath per supported target"); CORE-AC-005's fixture importing `./targets/aws` still fails `verify` through `allowed-imports`. Recorded as an `ai-proposed` decision by B-01 unless the owner prefers otherwise.
+4. **FILES-AC-003 on Cloudflare (DEC-0101).** R2 sends no CORS headers on 403, so the browser cannot read storage's status for an expired or mismatched ticket; on Cloudflare the helpers report status null and `no response: network or cross-origin blocked`. FILES-REQ-006's wording ("null otherwise") is arguably met, but FILES-AC-003's expired-ticket clause (storage's status, `rejected by storage (HTTP n)`) cannot pass on Cloudflare. The requirement and criterion are unchanged; the clause is recorded as failing on Cloudflare until the owner chooses an option listed in DEC-0101.
+5. **Assumptions taken without asking** (owner instruction "make an assumption and continue"), open for review: revised `sql.d.ts` contract (DEC-0103); always the fallback D1 copy (DEC-0096); Cloudflare tool environment (DEC-0107); offline wrapper (DEC-0108); `@pulumi/cloudflare` dependency rule (DEC-0109).
