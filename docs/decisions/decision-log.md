@@ -362,3 +362,217 @@ Origin: owner · Status: accepted · Affects: SYS-REQ-008, SYS-REQ-014, FILES, H
 The owner's first planned app uploads high-resolution photos (most about 4 MB), and the owner does not want arbitrary file size limits. The AWS Lambda request limit (about 6 MB, less for binary bodies) rules out passing large files through the API. Chunking through the API was rejected: S3's minimum multipart part size exceeds what one Lambda request can carry. Queue-based approaches were rejected because their own limits are smaller.
 
 The framework's browser-side file helper therefore moves file content directly between the browser and storage. Each transfer is authorized by the app's server, for example through short-lived signed access. App code calls only the framework helper and never sees storage services, signing, or cross-origin (CORS) configuration. The framework owns all of that. This amends DEC-0006. The principle that app code talks only to the app's own services still holds at the level of app code, but not at the level of network traffic.
+
+---
+
+## Component design decisions (stage 2, 2026-10-19)
+
+These were made by the AI while writing the component designs, after the owner approved stages 2 and 3. Each may be changed by an implementer with a new entry.
+
+### DEC-0059 — Zod for request validation
+Origin: ai-proposed · Status: accepted · Affects: HTTP, PAR-112
+
+Zod is re-exported at the framework's pinned version, so apps use exactly one validation library and AI agents know it well.
+
+### DEC-0060 — SQL type set and result-size limit
+Origin: ai-proposed · Status: accepted · Affects: SQL, PAR-215
+
+There is no JSON column type; structured data is stored as text. `sum` and `avg` are supported, normalized to JS numbers: excluding them would force unnatural workarounds (SYS-REQ-011). A portable result-size limit, enforced on every target, keeps queries that work locally from failing only on AWS, where Data API responses are capped.
+
+### DEC-0061 — Data API credentials live in AWS Secrets Manager
+Origin: ai-proposed · Status: accepted · Affects: SQL, SEC, AWS
+
+The RDS Data API only accepts database credentials stored in Secrets Manager. That one framework-internal secret is the exception to DEC-0012; app secrets and the other framework-internal secrets use SSM SecureString.
+
+### DEC-0062 — File transfer mechanism
+Origin: ai-proposed · Status: accepted · Affects: FILES, PAR-234
+
+Browser transfers implement DEC-0058:
+- **Single-request transfers.** One signed `PUT` or `GET` per transfer. A single upload reaches the platform maximum (PAR-234) on both clouds, so multipart uploads are not needed for photos. A signed URL may carry the temporary credential's key ID and session token, but never a signing secret.
+- **Cloudflare.** Server-side operations use the R2 binding. Signed URLs use R2's S3-compatible endpoint with a stage-scoped R2 token, because the binding cannot sign.
+- **Local.** Transfers use a same-origin framework route instead of Wrangler's experimental S3 endpoint.
+
+### DEC-0063 — Configuration delivery
+Origin: ai-proposed · Status: accepted · Affects: CFG
+
+Values live in `config/<target>/<stage>.json`. Committed values are embedded in the build. Values known only after provisioning reach the runtime through Worker variables or Lambda environment variables, and only framework adapters read them.
+
+### DEC-0064 — Secret locations and framework-internal secrets
+Origin: ai-proposed · Status: accepted · Affects: SEC
+
+Secret locations follow a convention per target (SEC-REQ-003). Framework-internal secrets use the reserved `framework` prefix and are created by the CLI or provisioning.
+
+### DEC-0065 — Migration mechanics
+Origin: ai-proposed · Status: superseded by DEC-0076 · Affects: MIG
+
+The mechanics are:
+- paired drizzle-kit histories, one per dialect;
+- a ledger with checksums, plus a lock row;
+- readiness based on the latest migration ID embedded in the build.
+
+The atomic remote mechanism on Cloudflare is open (MIG-OQ-1). Candidates are the D1 HTTP batch API or a deploy-only migration route in the Worker.
+
+### DEC-0066 — Log storage details
+Origin: ai-proposed · Status: accepted · Affects: LOG
+
+- **Entries** include the request ID when there is one, so they can be matched to error responses.
+- **Local.** Worker code cannot write files under workerd, so entries are printed as marked lines and the CLI appends them to `.logs/`.
+- **Cloud.** One object per entry, under an app/stage/date key layout. The shared buckets are `prototype-logs-<account-id>` on AWS and `prototype-logs` on Cloudflare.
+
+### DEC-0067 — Authentication mechanics
+Origin: ai-proposed · Status: accepted · Affects: AUTH, GOOGLE
+
+- **User ID.** The user ID is a truncated hash of provider name and subject, so it is the same across stages and targets.
+- **Session key.** There is one session signing key per stage; rotating it logs everyone out.
+- **Provider per deployment.** Production deployments use Google; local development and test stages use the mock.
+- **Google scopes.** Google requests only `openid profile`, because email is never used.
+
+### DEC-0068 — App code cannot see target or test-stage flag
+Origin: ai-proposed · Status: accepted · Affects: CORE
+
+`c.var.deployment` exposes only app and stage. Exposing the target or the test-stage flag would let app code behave differently per cloud or under test. That would undermine SYS-REQ-004 and the value of testing on test stages.
+
+### DEC-0069 — Package subpaths and command names
+Origin: ai-proposed · Status: accepted · Affects: CORE, CLI, SKILL
+
+Subpaths are `.`, `./client`, `./testing`, `./targets/*`, `./provision`, and `./check`. The scripted pre-completion verification command is named `verify`.
+
+### DEC-0070 — Compliance suite shape
+Origin: provenance-unclear · Status: accepted · Affects: COMPL
+
+The suite consists of:
+- a reference app and a shared HTTP test driver;
+- Playwright for browser-level checks;
+- tests tagged with acceptance-criterion IDs and a generated traceability report;
+- disposable test stages named with the run ID, plus a production-stage check on each cloud.
+
+### DEC-0071 — Demo theme: photo board
+Origin: ai-proposed · Status: accepted · Affects: DEMO
+
+The demo is a shared photo board, matching the owner's first planned app (high-resolution photo uploads). It replaces the earlier spec's notes board. The demo specification states app requirements only.
+
+### DEC-0072 — Request-forgery protection without a token
+Origin: ai-proposed · Status: accepted · Affects: AUTH, HTTP
+
+A review found the earlier design layered three defenses: an Origin check, an HMAC token, and SameSite=Lax cookies. For a few-user app, the Origin check plus SameSite=Lax cookies is sufficient. Dropping the token removes:
+- a header contract;
+- a token in the `/api/auth/me` response;
+- an extra round trip;
+- a CloudFront forwarding rule.
+
+The mock-login route became a POST so no framework GET changes state.
+
+### DEC-0073 — No custom domains in this version
+Origin: ai-proposed · Status: accepted · Affects: CFG, CF, AWS
+
+Each stage's public origin is its generated URL (`workers.dev` on Cloudflare, the CloudFront domain on AWS). Supporting custom domains would require DNS and certificate provisioning that no requirement asks for.
+
+### DEC-0074 — One shared database network per AWS account and region
+Origin: ai-proposed · Status: accepted · Affects: PROV, AWS
+
+AWS allows 5 VPCs per region by default. One VPC per stage would cap the number of stages, including disposable test stages. `setup-account` therefore creates one VPC, with no NAT gateway and no bastion host, for all stages' Aurora clusters. Like the log bucket, it is never removed by stage removal.
+
+### DEC-0075 — AWS region is an account setting, not stage configuration
+Origin: owner · Status: accepted · Affects: CFG, PROV, AWS, PAR-060
+
+The `framework.aws` section is removed from per-stage configuration. The shared log bucket and the shared database network exist per account and region (DEC-0066, DEC-0074), so every stage must use the account's region. `setup-account` chooses the region (default PAR-060) and records it, and deploys use that recorded value. This satisfies DEC-0045: the region stays configurable and is not hard-coded.
+
+### DEC-0076 — Schema changes replace the database, with downtime
+Origin: owner · Status: accepted, amended by DEC-0078 and DEC-0079 · Supersedes: DEC-0065 · Affects: MIG, PROV, SQL, KV
+
+These apps have one or a few users, little data, low usage, and low consequences for downtime. A cloud deploy with pending migrations therefore:
+1. stops the app (deleting the Worker, or setting the Lambda's concurrency to zero);
+2. copies the database into a new one;
+3. applies the migrations to the copy;
+4. checks it;
+5. deletes the old database as soon as the check passes; no databases are left behind;
+6. deploys the new version against the new database.
+
+On failure the new database is deleted, the old one is left unchanged, and the app stays down until a deploy succeeds.
+
+This removes several earlier pieces:
+- atomic migration of a live database (MIG-OQ-1);
+- special handling of table rebuilds;
+- the schema-readiness check, together with `SQL.SCHEMA_NOT_READY` and PAR-211;
+- the migration lock.
+
+Local development keeps applying migrations in place.
+
+The owner's instruction for this area: keep it simple, and do not design for high volume, large data, many users, or critical availability.
+
+### DEC-0077 — Changes from the persona review panel
+Origin: ai-proposed · Status: accepted · Affects: most component documents, contracts, parameters, scenarios
+
+An eight-persona review panel produced 97 findings, debated them, and the panel chair consolidated them into 38 recommendations. The personas were security, AI usability, debugging, simplicity, portability, implementability, testability, and a gap check against the earlier spec. Of the recommendations, 33 were applied, 4 await the owner, and 1 was rejected. "Retired IDs" lines in the affected documents refer to this entry. The main changes:
+
+**Deploy and migrations**
+- One deploy sequence, consistent with MIG-REQ-006:
+  - The CLI owns the app databases.
+  - The lowest-numbered existing database is the current one; any higher-numbered leftovers are deleted.
+  - The app is restarted explicitly on every deploy, followed by a health check (`/api/__framework/health`) and a check of the storage cross-origin settings.
+- A closed list of supported schema changes: no type changes and no renames. Instead, add a new column, copy the values in app code, and drop the old one. Each D1 migration is sent as one batch.
+- Databases are copied with each platform's native whole-database copy. Postgres databases are created with C collation.
+
+**Resource names and removal**
+- App names contain no hyphens. Resources are referred to by their exact identifiers, never by wildcards.
+- The account must own its shared resources; a squatted log bucket is refused.
+- Provisioning state and the account's region are kept in the cloud account, not only on the owner's machine.
+- An explicit list of removal steps, so `remove` leaves nothing behind.
+
+**Errors and logs**
+- The `component` field and `FILES.TICKET_EXPIRED` are removed from the error catalogue, and `retryable` is defined.
+- `HTTP.CONFLICT` is added. `HTTP.NETWORK_ERROR` now also covers responses that did not come from the app.
+- Every response with status 500 or higher writes exactly one log entry.
+- Rules on what log entries must never contain.
+- A log key layout that can be searched by severity and request ID.
+
+**Testing**
+- `connectTestStage` and the `smoke` command let apps run their smoke tests against deployed test stages.
+- `TestApp.logs()` and capability fault injection in tests.
+- The SQL dialect is fixed per test process.
+- A test-only stub login provider, used to test the real-provider code paths locally.
+
+**Contracts**
+- Settled typing for the SQL contract, with a narrowed user type after `requireUser`.
+- Normative code layout (browser, server, shared, and test folders).
+- Server code is type-checked against Web APIs only; `node:` imports are rejected.
+
+**Verification**
+- "Works" has two tiers: automated checks for every commit, plus milestone checks that are invalidated by events, never by a clock.
+- One long-lived `prodcheck` stage per cloud.
+- Evidence statuses are reduced to passed, failed, blocked, and not-run.
+- Framework scenarios run against the reference app, not the AI-built demo.
+
+**Removals and smaller fixes**
+- The AWS secret cache (PAR-240) is removed.
+- A troubleshooting guide for the owner, covering idle costs.
+- The verify-script check, which could not work, is dropped.
+- Control characters are banned in file names.
+- The packaged-install check is added to E2E-001.
+- A format for `FRAMEWORK-ISSUE.md` entries, and what the app agent does next.
+
+Pending owner decisions:
+- R-1: how to stop the app on Cloudflare without deleting the Worker and its secrets.
+- R-2: restart the old app after a failed migration.
+- R-3: optionally limit which logins count as users.
+- R-4: identify test stages by a name prefix.
+
+### DEC-0078 — Stopping the app on Cloudflare: turn its public address off and on
+Origin: owner · Status: accepted · Amends: DEC-0076 · Affects: MIG, PROV, CF
+
+The panel found that deleting the Worker to stop the app (DEC-0076, step 1) also deletes its secrets. The owner chose to stop a Cloudflare app by turning off the stage Worker's public address and turning it back on when the deploy finishes. The Worker itself is never deleted, so its secrets and bindings survive. AWS still stops by setting the Lambda's concurrency to zero. In both cases the CLI explicitly restarts the app; it does not rely on the provisioning tool to undo the stop.
+
+### DEC-0079 — A failed schema-changing deploy restarts the old app
+Origin: owner · Status: accepted · Amends: DEC-0076 · Affects: MIG, PROV
+
+If a migration or check fails, the new database is deleted and the old database is left unchanged, as before. The CLI now restarts the previous version against that database and the deploy exits with failure status. The app is no longer left down until a deploy succeeds.
+
+### DEC-0080 — Optional list of allowed users
+Origin: owner · Status: accepted · Affects: SYS-REQ-017 (refinement), AUTH, CFG, SKILL, DEMO
+
+Without a list, level `user` means any account the login provider accepts. The configuration may include an optional `framework.users` list of user IDs. When the list is present, a validated login whose ID is in neither `framework.users` nor `framework.admins` is treated as anonymous. The steps for finding and copying a user ID are the same as for admins.
+
+### DEC-0081 — Test stages are identified by name
+Origin: owner · Status: accepted · Supersedes: the `--test` flag and `framework.testStage` (PROV-REQ-005) · Affects: PROV, CFG, CLI, COMPL, AUTH
+
+A stage is a test stage exactly when its name starts with `test-`. Test stages use `config/<target>/test.json`; every other stage is a production deployment and needs its own committed values file. The `deploy --test` flag and the `framework.testStage` setting are removed. Run-ID test stage names include enough randomness that they cannot be guessed. The optional per-stage mock-login key was not adopted.

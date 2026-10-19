@@ -1,0 +1,133 @@
+openapi: 3.1.0
+info:
+  title: Framework HTTP routes
+  version: 0.1.0
+  description: |
+    Routes the framework adds to every app, and the error format every API route uses.
+    App routes are defined by each app under /api and use the same ErrorResponse.
+    Owners: AUTH (all /api/auth routes), HTTP (error format, unknown routes, health route).
+    Behavior: docs/components/auth.md, docs/components/http.md.
+
+    Routes marked `x-test-stage-only: true` exist only locally and in test stages, whose
+    names start with `test-` (SYS-REQ-020, PROV-REQ-005); in production deployments they respond 404 HTTP.NOT_FOUND.
+paths:
+  /api/auth/login:
+    get:
+      summary: Start login
+      description: Redirects to the login provider. Starting a new login abandons any login in progress in this browser.
+      parameters:
+        - name: returnTo
+          in: query
+          description: Same-origin path to return to after login. Anything else is replaced by "/".
+          schema: { type: string }
+      responses:
+        "302": { description: Redirect to the login provider. }
+        default: { $ref: "#/components/responses/Error" }
+  /api/auth/callback:
+    get:
+      summary: Login provider callback
+      description: |
+        Completes login and redirects to the stored returnTo path. On failure, redirects
+        to "/?authError=login_failed&requestId=<id>", where <id> is this request's ID, and
+        creates no session. Query parameters are
+        provider-specific and are not part of this contract.
+      responses:
+        "302": { description: Redirect to the app. }
+  /api/auth/logout:
+    post:
+      summary: End the session
+      responses:
+        "204": { description: Session cookie cleared. }
+        default: { $ref: "#/components/responses/Error" }
+  /api/auth/me:
+    get:
+      summary: Current user
+      description: |
+        The current user. Logged-in users can read their user ID here to copy it into
+        the admin list or `framework.users` (SYS-REQ-018). A validated login that
+        `framework.users` makes anonymous gets level `anonymous` with its ID in
+        `unlistedId` (docs/components/auth.md, AUTH-REQ-005). Responses are never cached.
+      responses:
+        "200":
+          description: Current user.
+          headers:
+            Cache-Control: { schema: { const: no-store } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CurrentUser" }
+  /api/auth/mock-login:
+    post:
+      summary: Log in as a chosen identity (authentication mock)
+      x-test-stage-only: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [level]
+              additionalProperties: false
+              properties:
+                level: { enum: [anonymous, user, admin] }
+                id: { type: string, description: "User ID to use as given. Default: a fixed ID per level." }
+                displayName: { type: [string, "null"] }
+      responses:
+        "204": { description: Session set (or cleared for anonymous). }
+        default: { $ref: "#/components/responses/Error" }
+  /api/__framework/health:
+    get:
+      summary: Deployment health check
+      description: |
+        Anonymous; no login required. Performs one trivial SQL read and checks that every
+        declared secret and every required framework secret has a value; values are never
+        returned. Returns 204, or an ErrorResponse with the first failing catalogue code
+        and the requestId; details go only to the log. Writes no log entry on success.
+        Called by the deploy health check (docs/components/provisioning.md, PROV-REQ-002).
+      responses:
+        "204": { description: Database reachable and all required secrets have values. }
+        default: { $ref: "#/components/responses/Error" }
+components:
+  schemas:
+    CurrentUser:
+      oneOf:
+        - type: object
+          required: [level]
+          additionalProperties: false
+          properties:
+            level: { const: anonymous }
+            unlistedId:
+              type: string
+              description: |
+                Only from /api/auth/me: the user ID of a validated login whose ID is in
+                neither `framework.users` nor `framework.admins` while `framework.users`
+                is present. Never given to app code.
+        - type: object
+          required: [level, id, displayName]
+          additionalProperties: false
+          properties:
+            level: { enum: [user, admin] }
+            id: { type: string, description: Stable opaque user ID. }
+            displayName: { type: [string, "null"] }
+    ErrorResponse:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          additionalProperties: false
+          properties:
+            code:
+              type: string
+              description: A code from the framework error catalogue (contracts/ts/errors.d.ts).
+            message:
+              type: string
+              description: Human-readable; not for control flow. Never contains secret values or provider internals.
+            requestId: { type: string }
+  responses:
+    Error:
+      description: Any error. The status comes from the error catalogue.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }

@@ -7,7 +7,8 @@ Specification and design documents for the Dual-Cloud Prototyping Framework.
 1. [CONVENTIONS.md](CONVENTIONS.md) — what is binding, identifiers, traceability, origins, parameter categories, contract formats.
 2. [spec/system-spec.md](spec/system-spec.md) — what the framework is and the system requirements (`SYS-REQ-…`).
 3. [architecture/component-map.md](architecture/component-map.md) — components, responsibilities, and dependencies.
-4. The component documents under `components/` for the parts you are working on, with their contracts under `contracts/`.
+4. The component documents under [components/](components/) for the parts you are working on (linked from the component map), with their contracts under [contracts/](contracts/).
+5. [demo/demo-spec.md](demo/demo-spec.md) — the demo app, and [acceptance/e2e-scenarios.md](acceptance/e2e-scenarios.md) — end-to-end scenarios verifying the system requirements.
 
 Reference material:
 
@@ -18,8 +19,7 @@ Reference material:
 
 | Part | Status |
 | --- | --- |
-| Conventions, system spec, component map, decision log, parameters register | Draft for owner review |
-| Component design documents and contracts (`components/`, `contracts/`) | Not yet written |
-| Demo app specification (`demo/`) and end-to-end scenarios (`acceptance/`) | Not yet written |
+| Conventions, system spec, component map, decision log, parameters register | Reviewed by owner |
+| Component designs, contracts, demo spec, end-to-end scenarios | Draft for owner review |
 
 Files under `ai/spec/` are superseded historical drafts and are not a source of requirements (DEC-0046).

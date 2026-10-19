@@ -1,0 +1,80 @@
+# CHECK — Static checks
+
+Executable portability rules for app code, and the migration checker. These are what make SYS-REQ-006 ("enforced, not remembered") real; the verification command runs them (CLI).
+
+Contracts: rule names and diagnostics below. Configuration is provided by `./check`.
+
+## 1. Requirements
+
+#### CHECK-REQ-001 — Portability rules
+Origin: owner-approved · Derives from: SYS-REQ-004, SYS-REQ-006, SYS-REQ-011
+
+The rules below MUST run on all app code. They MUST resolve aliases, re-exports, and dynamic imports rather than relying on identifier spelling.
+
+App code is classified by path: `src/client/**` is browser code, `src/server/**` is server code, `src/app.ts` is server code, `src/shared/**` is shared code, and `tests/**` is test code. Shared code holds types and Zod schemas usable from both sides, and imports only `zod` and other shared code. Browser code MAY import `zod`, and MAY import from `src/shared/` only with type-only imports. In browser code, the shipped configuration MUST also enable existing lint rules that reject inserting raw HTML (§2).
+
+| Rule | Rejects |
+| --- | --- |
+| `allowed-imports` | Imports of platform SDKs, database drivers, Drizzle dialect modules, framework subpaths outside CORE-REQ-005's table, `node:*` modules, or bare Node built-in modules (for example `fs`, `crypto`, `buffer`). |
+| `no-env-access` | Reading `process.env`, `import.meta.env`, platform bindings, Hono's `c.env` or `c.executionCtx`, or replacing the framework's error and not-found handlers. |
+| `browser-api-only` | In browser code: imports from the framework other than `./client`, and direct `fetch`, `XMLHttpRequest`, `WebSocket`, or `EventSource` use; browser code reaches the server only through the `./client` helpers (SYS-REQ-008). |
+| `no-raw-sql` | Raw SQL and low-level database execution APIs. |
+| `no-dialect-features` | Query features outside SQL-REQ-002, including inside subqueries and common table expressions. |
+| `framework-order` | Ordering other than the framework's `asc` and `desc`. |
+| `no-transactions` | `.transaction()` and `.batch()`; use `atomic`. |
+| `no-relational-queries` | Drizzle's relational `db.query` API. |
+| `framework-ids` | ID values not from `newId()`, and updates to `id()` columns. |
+| `app-error-codes` | Throwing `FrameworkError` from app code with a code outside the CORE-REQ-007 table. |
+
+#### CHECK-REQ-002 — No type escapes
+Origin: ai-proposed · Derives from: SYS-REQ-006
+
+App code MUST NOT use `any`, unchecked type assertions, or comments that suppress type or lint errors (DEC-0043). `as const` and `satisfies` are allowed. Generated entry points and tooling have explicit, narrow exemptions.
+
+#### CHECK-REQ-006 — Rules cannot be switched off by apps
+Origin: ai-proposed · Derives from: SYS-REQ-006
+
+`verify` MUST load the portability rules from the framework package, not from app-editable configuration. It MUST fail if app configuration disables or weakens any framework rule.
+
+#### CHECK-REQ-003 — Actionable diagnostics
+Origin: provenance-unclear · Derives from: SYS-REQ-006, SYS-REQ-029
+
+Each diagnostic MUST name the offending construct, the rule, and the skill reference to read.
+
+#### CHECK-REQ-004 — Migration checker
+Origin: provenance-unclear · Derives from: SYS-REQ-011, SYS-REQ-012
+
+The checker MUST enforce MIG-REQ-001 and MIG-REQ-003:
+- both dialect histories yield the same logical schema;
+- only the supported changes listed in MIG §2 are used; adding a NOT NULL column without a static default to an existing table, a column type change, and a rename fail with a diagnostic naming the add-copy-drop pattern;
+- committed migrations still match `migrations/checksums.json`.
+
+#### CHECK-REQ-005 — Fixtures
+Origin: provenance-unclear · Derives from: SYS-REQ-006
+
+Every rule MUST have failing fixtures and realistic passing fixtures, and the template and demo code MUST pass.
+
+## 2. Design
+
+The rules are ESLint rules using TypeScript type information, exported with a ready configuration from `./check`. The migration checker applies both histories to fresh local D1 and PGlite databases, then compares their introspected schemas.
+
+**Zod version.** Shared and browser code cannot import `.`, so they import `zod` directly. Apps therefore depend on `zod` at exactly the version of PAR-112, the version `.` re-exports, and `verify` checks that the installed `zod` version matches PAR-112.
+
+App server and shared code is type-checked against an ES plus Web API lib set, with no `@types/node` and no `@cloudflare/workers-types`, so Node and Workers globals (for example `Buffer`, `caches.default`) fail type checking without a dedicated rule. In browser code the shipped configuration enables existing raw-HTML sink rules (for example `no-unsanitized`, plus the UI library's no-danger rule where the app uses one). The `no-raw-sql` diagnostic also points to the "Common needs" list in SQL §2.3.
+
+Static rules cannot prove arbitrary behavior. They are narrow by design and are backed by the compliance suite.
+
+## 3. Uses
+
+CORE (export list), SQL (supported subset), MIG (migration rules), SKILL (reference names in diagnostics).
+
+## 4. Acceptance criteria
+
+| ID | Criterion | Verifies | Where |
+| --- | --- | --- | --- |
+| CHECK-AC-001 | Each rule fails its failing fixtures, including aliased and re-exported variants, and passes its passing fixtures. Fixtures include a `node:fs` and a bare `fs` import, a server-side `Buffer` use (fails type checking), one raw-HTML insertion in browser code, a value import from `src/shared/` in browser code (fails), a `FrameworkError` thrown from app code with `SQL.CONFLICT` (fails `app-error-codes`), and a type-only import from `src/shared/` plus a `zod` import in browser code (pass). | CHECK-REQ-001 | Local |
+| CHECK-AC-002 | Fixtures using `any`, `as` casts to unrelated types, and `@ts-ignore` / `eslint-disable` comments fail; fixtures using `as const` and `satisfies` pass. | CHECK-REQ-002 | Local |
+| CHECK-AC-003 | Every rule's diagnostic names its construct, rule, and an existing skill reference. | CHECK-REQ-003 | Local |
+| CHECK-AC-004 | Mismatched dialect histories, an edited applied migration, and each unsupported change (a NOT NULL column without a static default added to an existing table, a column type change, a rename) fail the checker, each unsupported change with a diagnostic naming the add-copy-drop pattern. Each supported change in MIG §2 passes. | CHECK-REQ-004 | Local |
+| CHECK-AC-005 | The template and demo pass all rules. | CHECK-REQ-005 | Local |
+| CHECK-AC-006 | An app lint configuration that turns off a framework rule makes `verify` fail. | CHECK-REQ-006 | Local |

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stage-config.schema.json",
+  "title": "Per-stage configuration values",
+  "description": "Committed file `config/<target>/<stage>.json` (local: `config/local.json`; test stages, whose names start with `test-`: `config/<target>/test.json`). Owner: CFG. Behavior: docs/components/config.md. Secret values never appear here.",
+  "type": "object",
+  "required": ["values", "framework"],
+  "additionalProperties": false,
+  "properties": {
+    "values": {
+      "description": "Values for the keys the app declares. Keys with defaults may be omitted; keys not declared by the app are rejected.",
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          { "type": "string" },
+          { "type": "integer" },
+          { "type": "boolean" },
+          { "type": "array", "items": { "type": "string" } }
+        ]
+      }
+    },
+    "framework": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "admins": {
+          "description": "User IDs of admins, as shown by /api/auth/me.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "default": []
+        },
+        "users": {
+          "description": "Optional list of user IDs, as shown by /api/auth/me, allowed to log in as `user`. When present, a validated login whose ID is in neither `users` nor `admins` is treated as anonymous. When absent, `user` means any account the login provider accepts. See docs/components/auth.md (AUTH-REQ-003).",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "google": {
+          "description": "Google login client settings. Required for production deployments.",
+          "type": "object",
+          "required": ["clientId"],
+          "additionalProperties": false,
+          "properties": { "clientId": { "type": "string", "minLength": 1 } }
+        }
+      }
+    }
+  }
+}

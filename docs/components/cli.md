@@ -1,0 +1,91 @@
+# CLI — Developer commands
+
+The commands the owner and agents use, including the scripted pre-completion verification command (SYS-REQ-025). Also defines the repository and app layout the commands work on.
+
+Contracts: the command table below.
+
+## 1. Requirements
+
+#### CLI-REQ-001 — Commands
+Origin: provenance-unclear · Derives from: SYS-REQ-022, SYS-REQ-023, SYS-REQ-025
+
+The CLI MUST provide these commands as the framework package's own binary, invoked as `npx <package> <command>` (for example `npx <package> verify`). Apps also expose them as npm scripts of the same name.
+
+| Command | Purpose |
+| --- | --- |
+| `dev` | Run the app locally (LOCAL). |
+| `verify` | The scripted pre-completion verification (CLI-REQ-002). |
+| `generate-migration` | Generate the next migration pair from the table definitions (MIG). |
+| `build --target <t> --stage <s>` | Build a deployment without deploying it. |
+| `deploy --target <t> --stage <s>` | Deploy a stage (PROV). A stage named `test-*` is a test stage; every other stage is production (PROV-REQ-005). |
+| `smoke --target <t> --stage <s>` | Run the app's smoke tests (`tests/smoke/**`) against a deployed test stage, or against the running `dev` server with target `local`; write evidence and print the stage's log location for the day. |
+| `remove --target <t> --stage <s>` | Remove a stage (PROV). |
+| `secrets set <name> --target <t> --stage <s>` | Set a secret from standard input (SEC). |
+| `setup-account --target <t>` | One-time creation of the account's shared resources and settings (PROV-REQ-004). |
+| `certify-auth --target <t> --stage <s>` | Guided login-provider certification (GOOGLE). |
+| `reset-local` | Clear local state. |
+
+#### CLI-REQ-002 — `verify`
+Origin: owner-approved · Derives from: SYS-REQ-025
+
+`verify` MUST run locally, deterministically, and with no network or cloud dependency:
+1. type checking;
+2. the portability rules (CHECK);
+3. the migration checker (CHECK);
+4. the app's automated tests on both SQL dialects.
+
+It MUST fail if any step fails or if no tests ran.
+
+#### CLI-REQ-003 — Honest exit status
+Origin: provenance-unclear · Derives from: SYS-REQ-028
+
+Every command MUST exit with non-zero status when it fails, including partial failures. When cleanup also fails, it MUST keep the original failure's status.
+
+#### CLI-REQ-004 — No secret output
+Origin: owner-approved · Derives from: SYS-REQ-015
+
+No command may print a secret value.
+
+## 2. Design
+
+**Repository layout** (DEC-0049): one npm-workspace repository.
+
+| Path | Contents |
+| --- | --- |
+| `packages/framework/` | The framework package. |
+| `apps/template/` | Minimal app. |
+| `apps/demo/` | Demo app (DEMO). |
+| `apps/reference/` | Compliance reference app (COMPL). |
+| `tests/compliance/` | Compliance test driver. |
+| `skill/` | The skill (SKILL). |
+| `validation/` | Evidence records. |
+
+**App layout.**
+- `src/app.ts` holds the `defineApp` call.
+- `src/server/` holds API code.
+- `src/client/` holds browser code.
+- `tests/` holds the app's tests; `tests/smoke/` holds the smoke tests that `smoke` runs, which also run in-process.
+- `config/` holds the per-stage configuration values.
+- `migrations/sqlite/` and `migrations/postgres/` hold the generated migrations.
+
+`build` generates the target entry points under a git-ignored `.framework/` directory.
+
+**`verify` test runs.** `verify` runs the whole app test suite once per supported dialect, each in its own process. The test runner and test file glob are PAR-116.
+
+**`smoke`.** The tests reach the stage through `connectTestStage()` ([testing.d.ts](../contracts/ts/testing.d.ts)).
+
+**Deploy failures** are reported as PROV-REQ-002 specifies: the failed step, the failing migration file and database error where relevant, the stage's state, and the next action.
+
+## 3. Uses
+
+LOCAL, CHECK, PROV, MIG, SEC, GOOGLE, CORE (`connectTestStage`), COMPL (evidence records).
+
+## 4. Acceptance criteria
+
+| ID | Criterion | Verifies | Where |
+| --- | --- | --- | --- |
+| CLI-AC-001 | Each command in the table runs from the template app via `npx <package> <command>` and via its npm script. | CLI-REQ-001 | Local, cloud |
+| CLI-AC-002 | `verify` passes on the template; it fails on a type error, a portability violation, a mismatched migration, a failing test, a Postgres-only failure, and a project with zero tests. Two consecutive runs give identical results with networking disabled. | CLI-REQ-002 | Local |
+| CLI-AC-003 | Injected failures in `deploy`, `remove` and the compliance runner, including a failure during cleanup, yield non-zero exit statuses that reflect the original failure. | CLI-REQ-003 | Local |
+| CLI-AC-004 | A scan of the output of every command in a full test run finds no test secret values. | CLI-REQ-004 | Local, cloud |
+| CLI-AC-005 | `smoke` runs the template's `tests/smoke/**` against the running `dev` server and against a deployed test stage, writes an evidence record, and prints the stage's log location for the day. | CLI-REQ-001 | Local, cloud |
