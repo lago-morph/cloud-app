@@ -29,7 +29,11 @@ export interface LogEntry {
 export interface TestAppOptions {
   /** Identity for every request; default anonymous. */
   readonly user?: CurrentUser;
-  /** Config values overriding the app's defaults. A key the app did not declare makes `createTestApp` throw. */
+  /**
+   * Config values overriding the app's defaults. A key the app did not declare makes `createTestApp` throw.
+   * The reserved key `framework` holds the stage configuration's `framework` section
+   * (`{ admins?, users? }`, stage-config.schema.json); each `createTestApp` call is one build.
+   */
   readonly config?: Record<string, unknown>;
   /** Secret values for the test. */
   readonly secrets?: Record<string, string>;
@@ -41,6 +45,11 @@ export interface TestAppOptions {
    * (docs/components/auth.md). Default false.
    */
   readonly stubLoginProvider?: boolean;
+  /**
+   * For the framework's own LOG tests (LOG-AC-001): a log writer whose every write fails, or
+   * whose writes never complete. `logs()` then returns no entries. Default: the in-memory log.
+   */
+  readonly logWriter?: "failing" | "never-completing";
 }
 
 export interface TestApp {
@@ -52,7 +61,8 @@ export interface TestApp {
   request(path: string, init?: RequestInit): Promise<Response>;
   /**
    * Returns a test app that sends subsequent requests as `user`. It shares storage with
-   * the original. On a connected stage it logs in as `user` through mock-login.
+   * the original. On a connected stage it logs in as `user` through mock-login. A test app
+   * created with `stubLoginProvider` has no authentication mock, so `as` throws there.
    */
   as(user: CurrentUser): TestApp;
   /**
