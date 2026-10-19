@@ -15,6 +15,11 @@ export interface ColumnSpec {
   readonly defaultValue?: unknown;
   /** `ref()` only: returns the referenced `id()` column, resolved lazily. */
   readonly target?: () => unknown;
+  /**
+   * `ref()` only: set when it was given anything after its target (e.g. a cast-through
+   * `{ onDelete }`). `defineTable` rejects it, naming the table and key (DEC-0132).
+   */
+  readonly extraRefArguments?: true;
 }
 
 const specs = new WeakMap<object, ColumnSpec>();
@@ -75,5 +80,7 @@ export function boolean(): ColumnBuilder<boolean> {
 }
 /** Reference to another table's id column. Deleting a referenced row fails while references exist. */
 export function ref(target: () => Column<string, false>): ColumnBuilder<string> {
+  // sql.d.ts has no second parameter; one passed by untyped code is recorded, not ignored.
+  if (arguments.length > 1) return builder({ ...plain("ref"), target, extraRefArguments: true });
   return builder({ ...plain("ref"), target });
 }

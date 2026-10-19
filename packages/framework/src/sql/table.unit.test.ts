@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { tag } from "../../../../tests/support/tags.js";
 import { FrameworkError } from "../core/errors.js";
-import { boolean, id, integer, text } from "./columns.js";
+import { boolean, id, integer, ref, text } from "./columns.js";
 import { defineTable } from "./table.js";
 import type { ColumnBuilders, TableOptions } from "./types.js";
 
@@ -41,6 +41,18 @@ describe("defineTable: rejected schemas (SQL-REQ-001)", () => {
 
   it(tag("SQL-AC-001", "rejects a table with two id() columns (no composite primary keys)"), () => {
     rejected("notes", { id: id(), otherId: id() }, undefined, "exactly one id()");
+  });
+
+  it.each([
+    ["an onDelete action", { onDelete: "cascade" }],
+    ["onDelete and onUpdate actions", { onDelete: "set null", onUpdate: "cascade" }],
+    ["a bare action string", "cascade"],
+    ["an explicit undefined", undefined],
+  ] as const)(tag("SQL-AC-001", "rejects ref() given %s: only fail-while-referenced is supported"), (_label, action) => {
+    const parents = defineTable("parents", { id: id() });
+    const child = (ref as (...args: unknown[]) => ReturnType<typeof ref>)(() => parents.id, action);
+    rejected("children", { id: id(), parentId: child }, undefined, '"parentId"');
+    rejected("children", { id: id(), parentId: child.nullable() }, undefined, "reference actions");
   });
 
   it(tag("SQL-AC-001", "rejects a column that is not a framework column helper (e.g. a raw Drizzle column)"), () => {
