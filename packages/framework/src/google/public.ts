@@ -5,3 +5,5 @@
  */
 export { createGoogleLoginProvider, GOOGLE_CLIENT_ID_KEY, GOOGLE_CLIENT_SECRET_NAME } from "./provider.js";
 export type { GoogleProviderOptions } from "./provider.js";
+export { certifyAuth, checkLoginRedirect } from "./certify.js";
+export type { CertifyIo, CertifyOptions, CertifyOutcome, EvidenceRecord, EvidenceResult, LoginRedirectCheck } from "./certify.js";
