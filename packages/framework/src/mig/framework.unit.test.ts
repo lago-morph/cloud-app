@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { tag } from "../../../../tests/support/tags.js";
-import { FRAMEWORK_MIGRATIONS_DIR, frameworkSchema, frameworkTables } from "./framework.js";
+import { frameworkSchema, frameworkTables } from "./framework.js";
+import { FRAMEWORK_MIGRATIONS_DIR } from "./migrations-dir.js";
 import { generateMigrations } from "./generate.js";
 import { checksumOf, readHistory } from "./history.js";
 

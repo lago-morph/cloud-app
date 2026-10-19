@@ -14,6 +14,8 @@ import { createAuthMock } from "../../auth/mock.js";
 import { workerOutputSink } from "../../log/local.js";
 import { createFrameworkSecrets, envSecretReader } from "../../secrets/service.js";
 import { FRAMEWORK_SECRETS } from "../../secrets/names.js";
+import { LOCAL_FRAMEWORK_SECRETS, LOCAL_TICKET_KEY } from "../../secrets/local-names.js";
+import { LOCAL_COOKIES } from "../../auth/local-cookies.js";
 import { createLocalTicketIssuer } from "../../files/local/tickets.js";
 import { registerLocalTransferRoute } from "../../files/local/route.js";
 import { workerPublicOrigin, workerSecretValues, workerSql, workerStore, type WorkerHandler } from "../cloudflare/bindings.js";
@@ -23,18 +25,19 @@ export type { WorkerHandler } from "../cloudflare/bindings.js";
 
 export function createLocalWorker<C extends ConfigDeclaration, S extends string>(app: DefinedApp<C, S>, resolved: ResolvedConfig): WorkerHandler {
   const target = resolved.deployment.target;
-  const ticketKey = (c: RuntimeContext) => createFrameworkSecrets({ read: envSecretReader(c.env, target), log: c.var.log }).get(FRAMEWORK_SECRETS.localTicketKey);
+  const ticketKey = (c: RuntimeContext) => createFrameworkSecrets({ read: envSecretReader(c.env, target), log: c.var.log, extra: LOCAL_FRAMEWORK_SECRETS }).get(LOCAL_TICKET_KEY);
   const hono = assembleStage(app, {
     resolved,
     sink: workerOutputSink(),
     publicOrigin: (c) => workerPublicOrigin(c.env),
     sql: workerSql,
     store: workerStore,
-    tickets: (_env, frameworkSecret) => createLocalTicketIssuer({ key: () => frameworkSecret(FRAMEWORK_SECRETS.localTicketKey) }),
+    tickets: (_env, frameworkSecret) => createLocalTicketIssuer({ key: () => frameworkSecret(LOCAL_TICKET_KEY) }),
     readSecret: (env) => envSecretReader(env, target),
     readFrameworkSecret: (env) => envSecretReader(env, target),
     secretValues: (c) => workerSecretValues(c.env),
-    requiredFrameworkSecrets: [FRAMEWORK_SECRETS.sessionKey, FRAMEWORK_SECRETS.localTicketKey],
+    requiredFrameworkSecrets: [FRAMEWORK_SECRETS.sessionKey, ...LOCAL_FRAMEWORK_SECRETS],
+    cookies: LOCAL_COOKIES,
     mock: createAuthMock(),
     routes: (api) => registerLocalTransferRoute(api, { key: ticketKey }),
   });

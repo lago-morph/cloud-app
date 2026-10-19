@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { applyMigrations } from "../../mig/apply.js";
-import { FRAMEWORK_MIGRATIONS_DIR } from "../../mig/framework.js";
+import { FRAMEWORK_MIGRATIONS_DIR } from "../../mig/migrations-dir.js";
 import { appSchema, generateMigrations } from "../../mig/generate.js";
 import { readHistory } from "../../mig/history.js";
 import { boolean, id, integer, number, ref, text, timestamp } from "../../sql/columns.js";

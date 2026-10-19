@@ -1,28 +1,26 @@
 /**
- * SQL drivers for the local dialects (sql.md §2.2 "Local"): local D1 through its Worker
- * binding (Wrangler/Miniflare) and the PGlite Postgres harness (PAR-107). Both give a Drizzle
- * database that enforces the column rules before anything reaches the database.
+ * The Postgres harness (sql.md §2.2 "Local"; PAR-107): PGlite in-process, with a Drizzle
+ * database that enforces the column rules before anything reaches the database. Node only:
+ * used by `createTestApp`, the migration checker and the framework's tests, never imported by a
+ * Worker runtime, so no Worker bundle contains it (CORE-REQ-006, DEC-PENDING-B-16a-3).
  */
 import { PGlite } from "@electric-sql/pglite";
-import { drizzle as drizzleD1, type AnyD1Database } from "drizzle-orm/d1";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
-import { createGuard, type GuardOptions } from "./guard.js";
+import type { SqlAdapterOptions } from "./d1.js";
+import { createGuard } from "./guard.js";
 import { portableHandle, type DrizzleDb } from "./handle.js";
 import type { PortableDb } from "./types.js";
 import { withValueRules } from "./write-rules.js";
 
-/** Options of a handle: forced outage, PAR-210 budget, and the log for `SQL.UNAVAILABLE` (guard.ts). */
-export type SqlAdapterOptions = GuardOptions;
+export type { SqlAdapterOptions } from "./d1.js";
 
-/** The app-facing handle over a D1 binding (local D1 under Wrangler, or Cloudflare D1). */
-export function sqliteDb(binding: AnyD1Database, options: SqlAdapterOptions = {}): PortableDb {
-  // The SQLite database has the same query-builder surface; app code sees the pg-typed contract.
-  return portableHandle({ dialect: "sqlite", db: withValueRules(drizzleD1(binding)) as unknown as DrizzleDb, guard: createGuard(options) });
-}
+/** PGlite's error for a closed instance: the database cannot be reached (`SQL.UNAVAILABLE`). */
+const PGLITE_UNREACHABLE: readonly RegExp[] = [/PGlite is closed/i];
 
 /** The app-facing handle over a PGlite harness instance (see openPostgres). */
 export function postgresDb(client: PGlite, options: SqlAdapterOptions = {}): PortableDb {
-  return portableHandle({ dialect: "postgres", db: withValueRules(drizzlePglite(client)) as unknown as DrizzleDb, guard: createGuard(options) });
+  const guard = createGuard({ ...options, unreachable: PGLITE_UNREACHABLE });
+  return portableHandle({ dialect: "postgres", db: withValueRules(drizzlePglite(client)) as unknown as DrizzleDb, guard });
 }
 
 /** Name of the harness database: created from template0 with C collation and C ctype (DEC-0106). */

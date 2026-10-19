@@ -15,7 +15,7 @@
  */
 import { join } from "node:path";
 import { applyMigrations, MigrationFailedError } from "../../mig/apply.js";
-import { FRAMEWORK_MIGRATIONS_DIR } from "../../mig/framework.js";
+import { FRAMEWORK_MIGRATIONS_DIR } from "../../mig/migrations-dir.js";
 import { readHistory, type Migration } from "../../mig/history.js";
 import type { Dialect } from "../../sql/dialect.js";
 import { compareDialects, dataStatements, unsupportedChanges } from "./compare.js";

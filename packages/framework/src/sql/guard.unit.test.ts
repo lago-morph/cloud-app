@@ -52,9 +52,16 @@ describe("driver error normalisation (SQL-REQ-006)", () => {
   });
 
   it("errors of an unreachable database are SQL.UNAVAILABLE", () => {
-    for (const message of ["PGlite is closed", "Attempted to use poisoned stub.", "Network connection lost.", "connect ECONNREFUSED 127.0.0.1:1"]) {
+    for (const message of ["Attempted to use poisoned stub.", "Network connection lost.", "connect ECONNREFUSED 127.0.0.1:1"]) {
       expect(normalizeError(wrapped(new Error(message))).code, message).toBe("SQL.UNAVAILABLE");
     }
+  });
+
+  it("a driver adds its own unreachable patterns (the Postgres harness's live in postgres.ts, not here)", async () => {
+    const closed = wrapped(new Error("Harness is gone"));
+    expect(normalizeError(closed).code).toBe("CORE.INTERNAL");
+    expect(normalizeError(closed, undefined, [/Harness is gone/]).code).toBe("SQL.UNAVAILABLE");
+    await expect(createGuard({ unreachable: [/Harness is gone/] })(() => Promise.reject(closed))).rejects.toMatchObject({ code: "SQL.UNAVAILABLE" });
   });
 
   it("any other driver error is a CORE.INTERNAL FrameworkError, never the driver's own error", async () => {

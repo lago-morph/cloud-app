@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { tag } from "../../../../tests/support/tags.js";
 import { FrameworkError } from "../core/errors.js";
-import { cookieSettings, clearCookie, readCookie, setCookie } from "./cookies.js";
+import { CLOUD_COOKIES, cookieSettings, clearCookie, readCookie, setCookie } from "./cookies.js";
+import { LOCAL_COOKIES } from "./local-cookies.js";
 
 function attributes(line: string): string[] {
   return line.split(";").slice(1).map((a) => a.trim());
@@ -9,7 +10,7 @@ function attributes(line: string): string[] {
 
 describe("AUTH cookies", () => {
   it(tag("AUTH-AC-006", "local: session_local and login_local, HttpOnly, SameSite=Lax, Path=/, not Secure"), () => {
-    const local = cookieSettings("local");
+    const local = cookieSettings("local", LOCAL_COOKIES);
     expect(local.session).toBe("session_local");
     expect(local.login).toBe("login_local");
     const line = setCookie(local, local.session, "v1", 604800);
@@ -27,10 +28,10 @@ describe("AUTH cookies", () => {
   });
 
   it(tag("LOCAL-AC-004", "cloud builds reject the local cookie settings"), () => {
-    expect(cookieSettings("local", "local").secure).toBe(false);
+    expect(cookieSettings("local", LOCAL_COOKIES).secure).toBe(false);
     const error = (() => {
       try {
-        cookieSettings("cloudflare", "local");
+        cookieSettings("cloudflare", LOCAL_COOKIES);
       } catch (e) {
         return e;
       }
@@ -38,6 +39,12 @@ describe("AUTH cookies", () => {
     })();
     expect(error).toBeInstanceOf(FrameworkError);
     expect((error as FrameworkError).code).toBe("CORE.MISCONFIGURED");
+  });
+
+  it(tag("LOCAL-AC-004", "the local settings live in a local-only module; without them every target gets the cloud settings"), () => {
+    expect(cookieSettings("cloudflare")).toBe(CLOUD_COOKIES);
+    expect(cookieSettings("local")).toBe(CLOUD_COOKIES);
+    expect(Object.values(CLOUD_COOKIES)).not.toContain("session_local");
   });
 
   it(tag("AUTH-AC-006", "clearing sets an empty value with Max-Age=0 and the same attributes"), () => {

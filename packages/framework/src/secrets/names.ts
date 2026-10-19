@@ -3,13 +3,16 @@
  * Workers-compatible (no Node APIs).
  */
 import { FrameworkError } from "../core/errors.js";
+import type { LocalFrameworkSecretName } from "./local-names.js";
 
 /** Reserved prefix of framework-internal secret names; app declarations cannot use it. */
 export const FRAMEWORK_SECRET_PREFIX = "framework";
 
 /**
- * Framework-internal secrets, read only by framework code (never through the app's service).
- * The Google client secret's name is the one GOOGLE reads (DEC-PENDING-B-13-2).
+ * Framework-internal secrets of every target, read only by framework code (never through the
+ * app's service). The Google client secret's name is the one GOOGLE reads (DEC-PENDING-B-13-2).
+ * This module is in every cloud bundle, so local-only names live in `local-names.ts`
+ * (CORE-REQ-006, DEC-PENDING-B-16a-1).
  */
 export const FRAMEWORK_SECRETS = Object.freeze({
   /** AUTH's session signing key (PAR-253); generated per stage by the CLI when absent. */
@@ -19,17 +22,10 @@ export const FRAMEWORK_SECRETS = Object.freeze({
   /** FILES' stage-scoped R2 API token (S3 credentials), created by provisioning on Cloudflare. */
   r2AccessKeyId: "frameworkR2AccessKeyId",
   r2SecretAccessKey: "frameworkR2SecretAccessKey",
-  /** FILES' local transfer-route ticket key; local only, never in a cloud bundle (CORE-REQ-006). */
-  localTicketKey: "frameworkLocalTicketKey",
 } as const);
 
-export type FrameworkSecretName = (typeof FRAMEWORK_SECRETS)[keyof typeof FRAMEWORK_SECRETS];
-
-/** Development-only framework secrets that `dev` generates into `.dev.vars` when absent. */
-export const DEV_GENERATED_SECRETS: readonly FrameworkSecretName[] = Object.freeze([
-  FRAMEWORK_SECRETS.sessionKey,
-  FRAMEWORK_SECRETS.localTicketKey,
-]);
+/** Every framework-internal name, local-only ones included (a type only: no name in a bundle). */
+export type FrameworkSecretName = (typeof FRAMEWORK_SECRETS)[keyof typeof FRAMEWORK_SECRETS] | LocalFrameworkSecretName;
 
 /** True when `name` starts with the reserved `framework` prefix. */
 export function isReservedSecretName(name: string): boolean {

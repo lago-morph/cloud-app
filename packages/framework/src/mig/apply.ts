@@ -15,7 +15,8 @@
  */
 import type { PGlite } from "@electric-sql/pglite";
 import type { Dialect } from "../sql/dialect.js";
-import { FRAMEWORK_MIGRATIONS_DIR, MIGRATIONS_TABLE } from "./framework.js";
+import { MIGRATIONS_TABLE } from "./framework.js";
+import { FRAMEWORK_MIGRATIONS_DIR } from "./migrations-dir.js";
 import { readHistory, type Migration } from "./history.js";
 
 /** The subset of a D1 binding (local Wrangler/Miniflare) the applier uses. */

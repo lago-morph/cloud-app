@@ -95,6 +95,15 @@ describe("[SEC-AC-001] SecretsService reads declared secrets by logical name", (
     await expect(internal.get("apiKey" as never)).rejects.toMatchObject({ code: "SEC.UNDECLARED" });
   });
 
+  it("the local ticket key is readable only when the target passes it as an extra framework name", async () => {
+    const ticket = dummy("ticket");
+    const env = { SECRET_FRAMEWORK_LOCAL_TICKET_KEY: ticket };
+    const cloud = createFrameworkSecrets({ read: envSecretReader(env, "cloudflare") });
+    await expect(cloud.get("frameworkLocalTicketKey")).rejects.toMatchObject({ code: "SEC.UNDECLARED" });
+    const local = createFrameworkSecrets({ read: envSecretReader(env, "local"), extra: ["frameworkLocalTicketKey"] });
+    await expect(local.get("frameworkLocalTicketKey")).resolves.toBe(ticket);
+  });
+
   it("an app declaration of a reserved framework name does not make it readable", async () => {
     const secrets = createSecretsService<string>({
       declared: ["frameworkSessionKey"],

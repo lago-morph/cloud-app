@@ -4,6 +4,7 @@
  * repeats a command-line argument, so a value typed by mistake is never printed back.
  */
 import type { Target } from "../core/identity.js";
+import { LOCAL_FRAMEWORK_SECRETS } from "./local-names.js";
 import { FRAMEWORK_SECRETS, isReservedSecretName } from "./names.js";
 
 /** A usage error of `secrets set`; its message never contains an argument. */
@@ -36,7 +37,7 @@ export async function readSecretValue(stdin: AsyncIterable<string | Uint8Array>)
 
 /** Only a secret the app declares, or a framework-internal secret, can be set. */
 export function checkSettableName(name: string, declared: readonly string[]): void {
-  const settable = [...declared.filter((n) => !isReservedSecretName(n)), ...Object.values(FRAMEWORK_SECRETS)];
+  const settable = [...declared.filter((n) => !isReservedSecretName(n)), ...Object.values(FRAMEWORK_SECRETS), ...LOCAL_FRAMEWORK_SECRETS];
   if (!settable.includes(name)) {
     throw new SecretsSetUsageError(`the secret name is neither declared by the app nor a framework secret; names that can be set: ${settable.join(", ")}`);
   }

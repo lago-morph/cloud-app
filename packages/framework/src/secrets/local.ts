@@ -6,7 +6,8 @@ import { chmod, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { secretLocation } from "../config/secret-locations.js";
 import { addMissingDevSecrets, setDevVar } from "./dev-vars.js";
-import { DEV_GENERATED_SECRETS, type FrameworkSecretName } from "./names.js";
+import { DEV_GENERATED_SECRETS } from "./local-names.js";
+import type { FrameworkSecretName } from "./names.js";
 
 export const DEV_VARS_FILE = ".dev.vars";
 

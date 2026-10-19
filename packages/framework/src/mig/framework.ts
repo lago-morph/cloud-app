@@ -10,14 +10,11 @@
  *   `checksum` the file's SHA-256 hex, `applied_at` epoch milliseconds.
  *
  * These are plain Drizzle tables, not `defineTable` tables: their keys are not UUIDs.
+ * Workers-compatible; the histories' location (Node only) is `migrations-dir.ts`.
  */
-import { fileURLToPath } from "node:url";
 import { bigint as pgBigint, pgTable, text as pgText } from "drizzle-orm/pg-core";
 import { integer as sqliteInteger, sqliteTable, text as sqliteText } from "drizzle-orm/sqlite-core";
 import type { Dialect } from "../sql/dialect.js";
-
-/** The package's framework migrations directory (same relative place from `src/mig/` and `dist/mig/`). */
-export const FRAMEWORK_MIGRATIONS_DIR = fileURLToPath(new URL("../../migrations/", import.meta.url));
 
 export const KV_TABLE = "__framework_kv";
 export const MIGRATIONS_TABLE = "__framework_migrations";

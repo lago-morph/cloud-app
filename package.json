@@ -17,7 +17,7 @@
     "typecheck": "tsc -p packages/framework/tsconfig.json && tsc -p tsconfig.json",
     "lint": "node scripts/not-wired.mjs lint B-14/B-17",
     "test:unit": "vitest run --config vitest.unit.config.ts",
-    "test:integration": "vitest run --config vitest.integration.config.ts && playwright test --project integration --pass-with-no-tests",
+    "test:integration": "npm run build -w packages/framework && vitest run --config vitest.integration.config.ts && playwright test --project integration --pass-with-no-tests",
     "test:e2e": "playwright test --project e2e",
     "compliance": "node scripts/not-wired.mjs compliance C-02",
     "verify": "node scripts/not-wired.mjs verify B-17"

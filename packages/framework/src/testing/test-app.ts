@@ -20,16 +20,18 @@ import { resolveConfig, type ResolvedConfig } from "../config/resolve.js";
 import { parseStageConfig } from "../config/schema.js";
 import { secretLocation } from "../config/secret-locations.js";
 import { createAuthMock } from "../auth/mock.js";
-import { cookieSettings } from "../auth/cookies.js";
+import { LOCAL_COOKIES } from "../auth/local-cookies.js";
 import { createStubLoginProvider, stubCallbackUrl, type StubFailure } from "../auth/stub-provider.js";
 import type { CurrentUser } from "../auth/public.js";
 import { checkSecretDeclarations, FRAMEWORK_SECRETS } from "../secrets/names.js";
+import { LOCAL_FRAMEWORK_SECRETS, LOCAL_TICKET_KEY } from "../secrets/local-names.js";
 import { envSecretReader, type SecretReader } from "../secrets/service.js";
 import { createMemorySink } from "../log/memory.js";
 import { failingSink, neverCompletingSink } from "../log/test-sinks.js";
 import type { LogEntry } from "../log/entry.js";
 import { processDialect } from "../sql/dialect.js";
-import { openPostgres, postgresDb, sqliteDb } from "../sql/drivers.js";
+import { sqliteDb } from "../sql/d1.js";
+import { openPostgres, postgresDb } from "../sql/postgres.js";
 import type { AnyTable } from "../sql/types.js";
 import { d1MigrationDatabase, migrateLocal, pgliteMigrationDatabase, type D1Like } from "../mig/apply.js";
 import { generateAppMigrations } from "../mig/generate.js";
@@ -188,7 +190,7 @@ function testApp(shared: Shared, user: CurrentUser | undefined): TestApp {
         }),
       );
       const done = await self.request(`${callback.pathname}${callback.search}`, { headers: { cookie: transaction } });
-      const name = cookieSettings("local").session;
+      const name = LOCAL_COOKIES.session;
       const session = cookiePairs(done).get(name);
       if (session === undefined || session === "") {
         throw new Error(`stub login as ${JSON.stringify(subject)} failed: redirected to ${done.headers.get("location") ?? "(none)"}`);
@@ -225,7 +227,7 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
   // Secret store: the Worker env form (`SECRET_<NAME>`), with fresh framework keys per app.
   const secretEnv: Record<string, string> = {
     [secretLocation("local", FRAMEWORK_SECRETS.sessionKey)]: randomKey(),
-    [secretLocation("local", FRAMEWORK_SECRETS.localTicketKey)]: randomKey(),
+    [secretLocation("local", LOCAL_TICKET_KEY)]: randomKey(),
   };
   for (const [name, value] of Object.entries(options.secrets ?? {})) secretEnv[secretLocation("local", name)] = value;
   const frameworkReader = envSecretReader(secretEnv, "local");
@@ -234,7 +236,7 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
         throw new Error("the local secret store is unavailable (forced for this test app)");
       }
     : frameworkReader;
-  const ticketKey = async (): Promise<string> => (await frameworkReader(FRAMEWORK_SECRETS.localTicketKey)) ?? "";
+  const ticketKey = async (): Promise<string> => (await frameworkReader(LOCAL_TICKET_KEY)) ?? "";
 
   const memory = createMemorySink();
   const sink = options.logWriter === "failing" ? failingSink() : options.logWriter === "never-completing" ? neverCompletingSink() : memory.sink;
@@ -257,7 +259,8 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
     readSecret: () => appReader,
     readFrameworkSecret: () => frameworkReader,
     secretValues: () => Object.values(secretEnv),
-    requiredFrameworkSecrets: [FRAMEWORK_SECRETS.sessionKey, FRAMEWORK_SECRETS.localTicketKey],
+    requiredFrameworkSecrets: [FRAMEWORK_SECRETS.sessionKey, ...LOCAL_FRAMEWORK_SECRETS],
+    cookies: LOCAL_COOKIES,
     ...(stub ? { provider: createStubLoginProvider() } : { mock: createAuthMock({ fixedUser: (c) => fixed.get(c.req.raw) }) }),
     routes: (api) => registerLocalTransferRoute(api, { key: ticketKey }),
   });

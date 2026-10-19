@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { d1MigrationDatabase, pgliteMigrationDatabase, type D1Like, type MigrationDatabase } from "../../mig/apply.js";
 import type { Dialect } from "../../sql/dialect.js";
-import { openPostgres } from "../../sql/drivers.js";
+import { openPostgres } from "../../sql/postgres.js";
 
 export interface ColumnSchema {
   /** Declared type, lowercase (`integer`, `double precision`, …). */

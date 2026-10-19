@@ -82,7 +82,7 @@ Drizzle ORM (PAR-102) provides the query builder for both dialects (DEC-0038). T
 
 **Dialect per process.** The dialect is read once per process from `PROTOTYPE_FRAMEWORK_DIALECT` (`sqlite`, the default, or `postgres`); Worker bundles leave it unset. `defineTable` builds the table for that dialect and keeps a dialect-neutral definition, from which the other dialect's table is built on demand for migration generation (DEC-PENDING-B-05-3).
 
-**Local drivers.** Local D1 is used through its Worker binding (Wrangler's `getPlatformProxy` in Node, DEC-0105), PGlite in-process. Each PGlite harness database is an in-memory instance loaded from a data directory made once per process, holding an empty database created from `template0` with `LC_COLLATE 'C'` and `LC_CTYPE 'C'` (DEC-0106, DEC-PENDING-B-05-4).
+**Local drivers.** Local D1 is used through its Worker binding (Wrangler's `getPlatformProxy` in Node, DEC-0105), PGlite in-process. The D1 driver (`src/sql/d1.ts`) is the only driver module a Worker runtime imports; the PGlite harness (`src/sql/postgres.ts`) is Node-only and hands the guard its own unreachable-database message, so no Worker bundle names it (DEC-PENDING-B-16a-3). Each PGlite harness database is an in-memory instance loaded from a data directory made once per process, holding an empty database created from `template0` with `LC_COLLATE 'C'` and `LC_CTYPE 'C'` (DEC-0106, DEC-PENDING-B-05-4).
 
 ### 2.3 Supported query features
 

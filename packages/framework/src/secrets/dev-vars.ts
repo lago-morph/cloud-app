@@ -5,7 +5,7 @@
  */
 
 import { secretLocation } from "../config/secret-locations.js";
-import { DEV_GENERATED_SECRETS } from "./names.js";
+import { DEV_GENERATED_SECRETS } from "./local-names.js";
 
 /** PAR-253: minimum session signing key length, in bytes; also used for the local ticket key. */
 export const DEV_SECRET_BYTES = 32;

@@ -27,4 +27,12 @@ describe("[CHECK-AC-003] diagnostic layout (CHECK-REQ-003)", () => {
     expect(text).toMatch(/2 portability problems/);
     expect(formatDiagnostics([])).toBe("");
   });
+
+  it("the count line names migration problems as such, and both kinds when mixed", () => {
+    const migration = { ...diag, file: "migrations/sqlite/0001_x.sql", rule: "prototype-framework/migration-checksums", reference: "skill/reference/sql-and-migrations.md" };
+    expect(formatDiagnostics([migration]).split("\n").at(-1)).toBe("1 migration problem");
+    expect(formatDiagnostics([migration, migration]).split("\n").at(-1)).toBe("2 migration problems");
+    expect(formatDiagnostics([diag]).split("\n").at(-1)).toBe("1 portability problem");
+    expect(formatDiagnostics([diag, migration, migration]).split("\n").at(-1)).toBe("1 portability problem, 2 migration problems");
+  });
 });
