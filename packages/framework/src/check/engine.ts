@@ -7,6 +7,7 @@ import { readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { ESLint } from "eslint";
 import ts from "typescript";
+import { checkAppLintConfig } from "./app-config.js";
 import { portabilityConfig } from "./config.js";
 import { referenceFor } from "./references.js";
 
@@ -73,8 +74,15 @@ function toPosix(path: string): string {
   return path.split("\\").join("/");
 }
 
-/** Lints every app file with the shipped configuration; never reads the app's lint configuration. */
+/**
+ * Lints every app file with the shipped configuration (never with the app's lint configuration),
+ * and reports an app lint configuration that disables or weakens a framework rule.
+ */
 export async function runPortabilityRules(appDir: string): Promise<CheckDiagnostic[]> {
+  return sortDiagnostics([...(await lintAppFiles(appDir)), ...(await checkAppLintConfig(appDir))]);
+}
+
+async function lintAppFiles(appDir: string): Promise<CheckDiagnostic[]> {
   const files = await collectAppFiles(appDir);
   if (files.length === 0) return [];
   const program = ts.createProgram(files, APP_COMPILER_OPTIONS);
@@ -101,7 +109,7 @@ export async function runPortabilityRules(appDir: string): Promise<CheckDiagnost
       });
     }
   }
-  return sortDiagnostics(diagnostics);
+  return diagnostics;
 }
 
 export function sortDiagnostics(diagnostics: readonly CheckDiagnostic[]): CheckDiagnostic[] {

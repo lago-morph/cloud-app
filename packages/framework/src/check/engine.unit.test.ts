@@ -32,6 +32,13 @@ describe("rule engine (independent of type checking)", () => {
     expect(found[0]?.message).toMatch(/node:fs/);
   });
 
+  it("[CHECK-AC-006] the app's lint configuration is not used for the rules, but a weakening one is reported", async () => {
+    await app.write({ "eslint.config.js": `export default [{ rules: { "prototype-framework/allowed-imports": "off" } }];\n` });
+    const again = await app.lint();
+    expect(forFile(again, "src/server/fs.ts").map((d) => d.rule)).toEqual(["prototype-framework/allowed-imports"]);
+    expect(forFile(again, "eslint.config.js").map((d) => d.rule)).toEqual(["prototype-framework/allowed-imports"]);
+  });
+
   it("clean files and files outside src/ and tests/ get no diagnostic", () => {
     expect(forFile(diagnostics, "src/server/clean.ts")).toEqual([]);
     expect(forFile(diagnostics, "tests/a.test.ts")).toEqual([]);
