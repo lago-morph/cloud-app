@@ -16,13 +16,17 @@ export const app = defineApp({
       await c.var.sql.insert(items).values({ id: itemId, title, createdAt: now() });
       return c.json({ id: itemId }, 201);
     });
-    // Works on SQLite (LIMIT -1 means "no limit"); Postgres rejects a negative LIMIT.
-    api.get("/items", queryParams(z.object({ limit: z.coerce.number().int() })), async (c) => {
+    // Works on SQLite/D1 (a negative OFFSET counts as 0); Postgres rejects it ("OFFSET must not
+    // be negative"). Drizzle sends `limit ? offset ?` with the -1 bound (it drops a negative
+    // limit, but not a negative offset). The limit must stay: SQLite rejects OFFSET without LIMIT.
+    api.get("/items", queryParams(z.object({ limit: z.coerce.number().int(), offset: z.coerce.number().int() })), async (c) => {
+      const { limit, offset } = c.req.valid("query");
       const rows = await c.var.sql
         .select({ id: items.id, title: items.title })
         .from(items)
         .orderBy(asc(items.createdAt), asc(items.id))
-        .limit(c.req.valid("query").limit);
+        .limit(limit)
+        .offset(offset);
       return c.json(rows);
     });
     // Works on SQLite; Postgres requires ORDER BY expressions of SELECT DISTINCT to be selected.

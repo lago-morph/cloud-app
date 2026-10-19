@@ -69,3 +69,54 @@ The fix is correct: it changes the fixture, which is where the cause is (a wrong
 2. Drizzle sends the offending construct to the database. Show this with `toSQL()`: the clause and its parameter are present.
 3. On local D1 (the real `sqlite` test process, not `node:sqlite`) the fixture test passes. On PGlite the query raises a Postgres error and the fixture test fails. Show both with a probe and record them in DEC-PENDING-B-T4-7.
 4. `verify` exits non-zero and its output names the fixture test. Recommended, to keep the test as strong as "Postgres-only": also assert from the output that the `sqlite` test process passed and the `postgres` one failed. Neither the current test nor the LOCAL-AC-003 test checks this, so a fixture that fails on both dialects would also satisfy them.
+
+## Fix
+
+Author: test-case author (prompt §8 step 3); did not write the CLI code, the diagnosis or the review. Date: 2026-10-19. No CLI code changed.
+
+### What changed
+- `packages/framework/test/fixtures/cli/pg-only/src/app.ts.fixture`: `GET /items` now takes `limit` and `offset` query params and calls `.limit(limit).offset(offset)`. (The `/titles` route used by LOCAL-AC-003 is unchanged.)
+- `packages/framework/test/fixtures/cli/pg-only-limit/` renamed to `pg-only-offset/`; its test is now `tests/negative-offset.test.ts.fixture`, `it("negative offset returns every item")`, requesting `/api/items?limit=10&offset=-1` and expecting 200 with 2 rows. Same assertions as before.
+- `packages/framework/test/integration/cli/verify.test.ts`: the test is now "[CLI-AC-002] verify fails on a Postgres-only failure (negative OFFSET)". It uses the new layer and keeps the original assertions (non-zero exit, the fixture test named). It also asserts, for review point 4, that `type checking`, `portability rules`, `migration checker` and `zod version` each print `passed`; `tests (sqlite): passed (N passed, 0 failed, 0 skipped)`; `tests (postgres): 1 failed (N passed, 1 failed, 0 skipped)`; the `FAIL  tests/negative-offset.test.ts > negative offset returns every item` line appears inside the postgres section; and the summary is exactly `verify failed: tests (postgres)`.
+
+### Evidence against the review's list
+1. **Type check and CHECK steps pass.** These are asserted in the test. Control run: the same app with `offset=0` makes `verify` exit 0 with every step passed, including `tests (postgres): passed (3 passed, 0 failed, 0 skipped)`. This also shows the postgres failure comes from the negative offset alone.
+2. **The clause is sent.** Probe `/tmp/claude-0/-home-user-cloud-app/b6482c07-38ed-5065-a51e-6194e2f52fc3/scratchpad/b17fix/probe.mjs` (drizzle-orm 0.45.4, wrangler 4.149.0 / miniflare 5.20261006.1-alpha via `getPlatformProxy`, the same local D1 path the migration checker uses, PGlite 0.5.8, all from the workspace `node_modules`), verbatim:
+   ```
+   d1 limit(10).offset(-1) toSQL {"sql":"select \"id\", \"title\" from \"items\" order by \"items\".\"created_at\" asc, \"items\".\"id\" asc limit ? offset ?","params":[10,-1]}
+   d1 -> 2 rows
+   d1 control limit(10).offset(1) -> 1 rows
+   pg limit(10).offset(-1) toSQL {"sql":"select \"id\", \"title\" from \"items\" order by \"items\".\"created_at\" asc, \"items\".\"id\" asc limit $1 offset $2","params":[10,-1]}
+   pg -> error: Failed query: select "id", "title" from "items" order by "items"."created_at" asc, "items"."id" asc limit $1 offset $2 | cause: OFFSET must not be negative
+   pg control limit(10).offset(1) -> 1 rows
+   ```
+3. **Passes on real local D1 and fails on PGlite.** The probe above shows this directly. In `verify` itself, the sqlite test process passed 3/3 and the postgres process failed only the fixture test (output below).
+4. **`verify` exits non-zero and names the test.** `verify` output with the corrected fixture:
+   ```
+   verify: type checking: passed
+   verify: portability rules: passed
+   verify: migration checker: passed
+   verify: zod version: passed (4.6.7)
+   verify: tests (sqlite)
+   verify: tests (sqlite): passed (3 passed, 0 failed, 0 skipped)
+   verify: tests (postgres)
+     FAIL  tests/negative-offset.test.ts > negative offset returns every item
+           expected 500 to be 200 // Object.is equality
+   verify: tests (postgres): 1 failed (2 passed, 1 failed, 0 skipped)
+   verify failed: tests (postgres)
+   ```
+
+### Red-green
+- Red: the original test on `origin/claude/implement-local-cloudflare` (18c5207), with the framework built, failed with `verify exit 0` and both `tests (sqlite)` and `tests (postgres)` reported `passed (3 passed, 0 failed, 0 skipped)`. So it did not catch a Postgres-only failure.
+- Green: the corrected test passes against the current CLI.
+
+### Commands run
+- `npm ci`; `npm run build -w packages/framework`
+- `npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/cli/verify.test.ts -t "negative LIMIT"` (red, before the change)
+- `node <scratchpad>/b17fix/probe.mjs <repo>` (probe above)
+- `npx vitest run … -t "negative OFFSET"`: passed; the same run with `offset=0` as a control: `verify exit 0` (restored afterwards)
+- `npm run typecheck && npm run test:unit`: 111 files, 1201 tests passed
+- `npm run build -w packages/framework`, then `npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/cli/verify.test.ts`: 12/12 passed
+
+### Open item
+DEC-PENDING-B-T4-7 (`ai/implementation/decisions/B-T4.md`) still describes `.limit(-1)` and says the dialect is not separately asserted. It needs re-recording to `.limit(10).offset(-1)`, with the evidence above and the per-dialect assertions. It was left untouched because this fix was limited to the fixture, the test and this record.

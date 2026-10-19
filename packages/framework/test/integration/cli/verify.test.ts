@@ -136,12 +136,26 @@ describe("verify fails on each kind of defect", () => {
   );
 
   it(
-    tag("CLI-AC-002", "verify fails on a Postgres-only failure (negative LIMIT)"),
+    tag("CLI-AC-002", "verify fails on a Postgres-only failure (negative OFFSET)"),
     async () => {
-      const app = await fixture(["apps/base", "cli/pg-only", "cli/pg-only-limit"]);
+      // `.limit(10).offset(-1)`: Drizzle sends `limit ? offset ?` with -1; local D1 returns every
+      // row, PGlite raises "OFFSET must not be negative" (DEC-PENDING-B-T4-7; root-cause record
+      // 2026-10-19-B-17-negative-limit-not-pg-only.md).
+      const app = await fixture(["apps/base", "cli/pg-only", "cli/pg-only-offset"]);
       const result = await app.cli(["verify"]);
       expect(result.code, show(result)).not.toBe(0);
-      expect(result.output, show(result)).toContain("negative limit returns every item");
+      // Only a supported, type-correct construct: every static step passes.
+      for (const step of ["type checking", "portability rules", "migration checker", "zod version"]) {
+        expect(result.output, show(result)).toMatch(new RegExp(`^verify: ${step}: passed\\b`, "m"));
+      }
+      // Postgres-only: the sqlite test process passes, the postgres one fails on the fixture test.
+      expect(result.output, show(result)).toMatch(/^verify: tests \(sqlite\): passed \(\d+ passed, 0 failed, 0 skipped\)$/m);
+      expect(result.output, show(result)).toMatch(/^verify: tests \(postgres\): 1 failed \(\d+ passed, 1 failed, 0 skipped\)$/m);
+      const pgStart = result.output.indexOf("verify: tests (postgres)\n");
+      const pgEnd = result.output.indexOf("verify: tests (postgres): ");
+      expect(pgStart, show(result)).toBeGreaterThanOrEqual(0);
+      expect(result.output.slice(pgStart, pgEnd), show(result)).toContain("FAIL  tests/negative-offset.test.ts > negative offset returns every item");
+      expect(result.output, show(result)).toMatch(/^verify failed: tests \(postgres\)$/m);
     },
     TIMEOUT,
   );
