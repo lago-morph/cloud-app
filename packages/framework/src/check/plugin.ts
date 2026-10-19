@@ -5,6 +5,7 @@
 import type { FrameworkRule } from "./rule-kit.js";
 import { PLUGIN_NAME, type ExtraRuleName, type RuleName } from "./rule-names.js";
 import { allowedImports } from "./rules/allowed-imports.js";
+import { browserApiOnly } from "./rules/browser-api-only.js";
 import { noRelationalQueries, noTransactions } from "./rules/db-members.js";
 import { appErrorCodes } from "./rules/app-error-codes.js";
 import { frameworkIds } from "./rules/framework-ids.js";
@@ -16,6 +17,7 @@ import { noRawSql } from "./rules/no-raw-sql.js";
 export const rules: Readonly<Partial<Record<RuleName | ExtraRuleName, FrameworkRule>>> = {
   "allowed-imports": allowedImports,
   "no-env-access": noEnvAccess,
+  "browser-api-only": browserApiOnly,
   "no-raw-sql": noRawSql,
   "no-dialect-features": noDialectFeatures,
   "framework-order": frameworkOrder,
