@@ -58,7 +58,9 @@ async function options(overrides: Partial<StageOptions> = {}): Promise<{ options
   };
 }
 
-describe("assembleStage", () => {
+// The first test per process also creates PGlite's template database (DEC-PENDING-B-05-4), which
+// takes seconds under a parallel full-suite run.
+describe("assembleStage", { timeout: 60_000 }, () => {
   it("serves app routes under /api with every service in c.var", async () => {
     const app = defineApp({
       name: "stageapp",
