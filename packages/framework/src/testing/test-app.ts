@@ -23,6 +23,7 @@ import { createAuthMock } from "../auth/mock.js";
 import { LOCAL_COOKIES } from "../auth/local-cookies.js";
 import { createStubLoginProvider, stubCallbackUrl, type StubFailure } from "../auth/stub-provider.js";
 import type { CurrentUser } from "../auth/public.js";
+import { appUrl } from "./connect.js";
 import { checkSecretDeclarations, FRAMEWORK_SECRETS } from "../secrets/names.js";
 import { LOCAL_FRAMEWORK_SECRETS, LOCAL_TICKET_KEY } from "../secrets/local-names.js";
 import { envSecretReader, type SecretReader } from "../secrets/service.js";
@@ -157,12 +158,13 @@ function testApp(shared: Shared, user: CurrentUser | undefined): TestApp {
   const self: TestApp = {
     async request(path, init = {}) {
       if (shared.disposed) throw new Error("this test app was disposed");
+      const url = appUrl(path, TEST_APP_ORIGIN);
       const headers = new Headers(init.headers);
       const method = (init.method ?? "GET").toUpperCase();
       if (!SAFE_METHODS.has(method) && !headers.has("origin")) headers.set("origin", TEST_APP_ORIGIN);
       if (shared.session !== undefined && !headers.has("cookie")) headers.set("cookie", shared.session);
       const body = init.body;
-      const request = new Request(new URL(path, TEST_APP_ORIGIN), {
+      const request = new Request(url, {
         ...init,
         headers,
         ...(body instanceof ReadableStream ? { duplex: "half" } : {}),

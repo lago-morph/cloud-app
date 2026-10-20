@@ -57,6 +57,10 @@ export interface TestApp {
    * Sends a request to the app's API and returns the response. State-changing requests
    * (any method other than GET, HEAD, and OPTIONS) carry the deployment's origin in
    * `Origin` unless `init` sets one, so they pass the request forgery check.
+   * `path` is a path on the app's origin, or a URL on that origin; a URL on any other origin
+   * (including `//host`, `/\host`, another protocol on the app's host, and `blob:`) is refused
+   * before anything is sent, on both test apps. Send requests to other hosts, such as a cloud
+   * ticket's `url`, with `fetch`.
    */
   request(path: string, init?: RequestInit): Promise<Response>;
   /**

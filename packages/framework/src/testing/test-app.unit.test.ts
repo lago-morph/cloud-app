@@ -186,6 +186,26 @@ describe("createTestApp", { timeout: 60_000 }, () => {
     expect(none.status).toBe(404);
   });
 
+  it("refuses URLs on any other origin or protocol before the app sees them (root cause F-02 entry 2 revised)", async () => {
+    const t = await open({ ...base, user: mockUsers.admin("a1") });
+    const refused = /is not the app's origin \(http:\/\/localhost:8787\); the test app sends requests only to the app\. Send requests to other hosts, such as a cloud upload or download ticket's url, with fetch\./;
+    const admin = t.as(mockUsers.admin("a1"));
+    for (const target of [
+      "https://acct.r2.cloudflarestorage.com/api/me",
+      "//other.example/api/me",
+      "/\\other.example/api/me",
+      "https://localhost:8787/api/me",
+      "blob:http://localhost:8787/api/me",
+    ]) {
+      await expect(admin.request(target), target).rejects.toThrow(refused);
+    }
+    const posted = admin.request("//other.example/api/notes", { method: "POST" });
+    await expect(posted).rejects.toThrow(refused);
+    expect(await (await admin.request("/api/notes", { method: "POST" })).json()).toEqual({ count: 1 });
+    expect(await (await admin.request("http://localhost:8787/api/me")).json()).toEqual({ level: "admin", id: "a1", displayName: null });
+    expect(await (await admin.request("HTTP://LOCALHOST:8787/api/me")).json()).toEqual({ level: "admin", id: "a1", displayName: null });
+  });
+
   it("rejects an app whose name breaks the app-name rule", async () => {
     const bad = defineApp({ name: "bad-name", config: {}, secrets: [], tables: {}, routes: () => undefined });
     await expect(createTestApp(bad)).rejects.toThrow(FrameworkError);
