@@ -48,7 +48,7 @@ function keyPath(name: string): string {
   return segments.some((s) => DOT_SEGMENT.test(s)) ? encodeSegment(name) : segments.map(encodeSegment).join("/");
 }
 
-/** The Cloudflare issuer. A download is always an `attachment` named after the file (DEC-0313, DEC-PENDING-fix-f04b-1). */
+/** The Cloudflare issuer. A download is always an `attachment` named after the file (DEC-0313, DEC-0414). */
 export interface CloudflareTicketIssuer extends TicketIssuer {
   upload(name: string, contentType: string): Promise<UploadTicketData>;
   download(name: string): Promise<DownloadTicketData>;

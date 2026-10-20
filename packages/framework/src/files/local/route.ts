@@ -3,7 +3,7 @@
  * body to or from local storage through the request's `FilesService`. Its responses always carry
  * `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`, and a download's
  * `Content-Disposition` names the file (DEC-0313): `attachment` for every content type, as on
- * Cloudflare (DEC-PENDING-fix-f04b-1), so uploaded HTML or SVG never runs as the app's origin. It sends no CORS headers: other origins cannot use it.
+ * Cloudflare (DEC-0414), so uploaded HTML or SVG never runs as the app's origin. It sends no CORS headers: other origins cannot use it.
  * Refusals are plain 403 / 404 responses and are not logged (ticket URLs never reach the log).
  * LOCAL ONLY (CORE-REQ-006).
  */

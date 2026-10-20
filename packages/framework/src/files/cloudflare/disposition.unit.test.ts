@@ -14,7 +14,7 @@ describe("download Content-Disposition (DEC-0313, FILES-REQ-003)", () => {
     expect(downloadDisposition("!#$&+-.^_`|~")).toBe("attachment; filename*=UTF-8''!#$&+-.^_`|~");
   });
 
-  it.each(["p.png", "p.jpg", "p.gif", "p.webp", "p.avif", "p.bmp", "p.svg", "p.html", "p"])("%j, a raster image or not, is an attachment (DEC-PENDING-fix-f04b-1)", (name) => {
+  it.each(["p.png", "p.jpg", "p.gif", "p.webp", "p.avif", "p.bmp", "p.svg", "p.html", "p"])("%j, a raster image or not, is an attachment (DEC-0414)", (name) => {
     expect(downloadDisposition(name)).toBe(`attachment; filename*=UTF-8''${name}`);
   });
 });

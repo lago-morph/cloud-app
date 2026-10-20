@@ -1,7 +1,7 @@
 /**
  * The `Content-Disposition` of a download (DEC-0313): the file is named after its whole name
  * with RFC 6266 / RFC 8187 `filename*=UTF-8''…`, always `attachment`, for every content type
- * (DEC-PENDING-fix-f04b-1, superseding DEC-0313's raster `inline`). Images still display through `<img src>`,
+ * (DEC-0414, superseding DEC-0313's raster `inline`). Images still display through `<img src>`,
  * which ignores the header. Shared by the local transfer route and the
  * Cloudflare download ticket (R2's `response-content-disposition`). Workers- and browser-
  * compatible; no local-only names (CORE-REQ-006).
