@@ -1,6 +1,6 @@
 /**
  * The seam between the Cloudflare target (D-03) and its D1 database operations (D-04,
- * `provision/cloudflare/d1/**`; DEC-PENDING-D-03-7). The type matches D-04's
+ * `provision/cloudflare/d1/**`; DEC-0337). The type matches D-04's
  * `D1DatabaseOperations` (returned by `d1DatabaseOperations({ api, accountId })` in
  * `d1/operations.ts`): the five `TargetOperations` database methods plus `listDatabases()`, the
  * account's D1 databases (name and UUID) for `listStageResources`. It is declared here

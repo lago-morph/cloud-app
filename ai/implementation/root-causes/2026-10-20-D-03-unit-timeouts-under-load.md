@@ -37,3 +37,7 @@ The scratchpad directory is shared with other agents, and one log (`verify2.log`
 
 ## Review
 Pending (an independent reviewer subagent).
+
+## Integrator note (2026-10-20, appended; the text above is unchanged)
+
+This record's Review was left pending. The same cause (unit-test timeouts when the host is loaded) is covered by `2026-10-20-D-04-verify-unrelated-failures.md`, whose Review is ACCEPTED. Its fix is recorded in `2026-10-20-verify-fixes.md`, and the global unit-test timeout in `2026-10-20-global-unit-timeout-review.md`. Read those for the reviewed causal chain and the fix.

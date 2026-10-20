@@ -1,6 +1,6 @@
 /**
  * The SST app of one Cloudflare stage, built from the app definition alone (PROV-REQ-001;
- * cloudflare.md §2; DEC-0036, DEC-0084, DEC-0087; DEC-PENDING-D-03-6). Apps contain no IaC:
+ * cloudflare.md §2; DEC-0036, DEC-0084, DEC-0087; DEC-0336). Apps contain no IaC:
  * the framework writes `sst.config.ts` into `<app>/.framework/provision/cloudflare/` on every
  * deploy and remove and runs SST there.
  *
@@ -18,7 +18,7 @@
  *
  * Step 3 (long-lived infrastructure) runs `sst deploy --target Files`; step 5 runs a full
  * `sst deploy`. Not yet run against the live API (D1 stop, DEC-0317): D-RUN's first deploy
- * verifies the generated program (DEC-PENDING-D-03-6 lists what to check).
+ * verifies the generated program (DEC-0336 lists what to check).
  */
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -69,7 +69,7 @@ function refuseSecretNames(names: readonly string[]): void {
 }
 
 /**
- * SST's Worker `assets` argument from D-01's Worker settings (DEC-PENDING-D-06-1): the built
+ * SST's Worker `assets` argument from D-01's Worker settings (DEC-0356): the built
  * client, entry-page fallback, the Worker first for `/api` and `/api/*`. SST 4.17.2 passes
  * `notFoundHandling` and `runWorkerFirst` on as the script's `assets.config`.
  */
