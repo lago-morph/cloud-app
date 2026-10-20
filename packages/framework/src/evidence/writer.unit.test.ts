@@ -2,15 +2,40 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { EvidenceRecord } from "./writer.js";
 import { DirtyTreeError, gitState, redact, writeEvidence } from "./writer.js";
 import { validateEvidence } from "./schema.js";
 
 let repo: string;
 
+// Hermetic git: ignore the developer's global and system config (e.g. commit signing through a loopback helper, which
+// fails offline). Root cause: ai/implementation/root-causes/2026-10-20-D-04-verify-unrelated-failures.md, Review (b).
+// Set in process.env too, so the gitState() calls under test see the same isolated config.
+const HERMETIC_GIT_ENV = { GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" } as const;
+const savedEnv: Record<string, string | undefined> = {};
+
+beforeAll(() => {
+  for (const [key, value] of Object.entries(HERMETIC_GIT_ENV)) {
+    savedEnv[key] = process.env[key];
+    process.env[key] = value;
+  }
+});
+
+afterAll(() => {
+  for (const key of Object.keys(HERMETIC_GIT_ENV)) {
+    const value = savedEnv[key];
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+});
+
 function git(...args: string[]): string {
-  return execFileSync("git", ["-c", "user.email=t@example.invalid", "-c", "user.name=t", ...args], { cwd: repo, encoding: "utf8" }).trim();
+  return execFileSync("git", ["-c", "user.email=t@example.invalid", "-c", "user.name=t", ...args], {
+    cwd: repo,
+    encoding: "utf8",
+    env: { ...process.env, ...HERMETIC_GIT_ENV },
+  }).trim();
 }
 
 beforeEach(() => {
