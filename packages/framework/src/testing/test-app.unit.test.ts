@@ -4,10 +4,10 @@
  * dialect — with migrations applied, the authentication mock or the stub provider, the
  * `unavailable` option, `logs()`, `as`, `loginWithStub` and `dispose`.
  */
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { tag } from "../../../../tests/support/tags.js";
 import { configString, defineApp, defineTable, FrameworkError, id, newId, text } from "../index.js";
 import { generateAppMigrations } from "../mig/generate.js";
@@ -216,5 +216,85 @@ describe("createTestApp", { timeout: 60_000 }, () => {
     await t.request("/api/notes", { method: "POST" });
     await t.dispose();
     await expect(t.request("/api/notes", { method: "POST" })).rejects.toThrow(/disposed/);
+  });
+});
+
+// Root cause 2026-10-20-testing-dev-registry.md: a test app never joins Miniflare's dev registry.
+// Each test points WRANGLER_REGISTRY_PATH at a scratch registry (never the host's) holding live
+// foreign entries; a test app must neither write there, nor loop on a foreign entry under a past
+// clock, nor delete foreign entries under a future clock. These tests are also the guard for the
+// fix's dependence on Wrangler reading WRANGLER_REGISTRY_PATH before its first await.
+describe("createTestApp and the dev registry", { timeout: 60_000 }, () => {
+  let registry: string;
+  let warnings: number;
+  const onWarning = (warning: Error): void => {
+    if (warning.name === "TimeoutOverflowWarning") warnings += 1;
+  };
+
+  beforeEach(() => {
+    registry = mkdtempSync(join(tmpdir(), "testapp-registry-"));
+    vi.stubEnv("WRANGLER_REGISTRY_PATH", registry);
+    warnings = 0;
+    process.on("warning", onWarning);
+  });
+
+  afterEach(() => {
+    process.off("warning", onWarning);
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+    rmSync(registry, { recursive: true, force: true });
+  });
+
+  function plant(...names: string[]): void {
+    for (const name of names) writeFileSync(join(registry, name), JSON.stringify({ instanceId: "foreign-process" }));
+  }
+
+  function snapshot(): Record<string, { mtimeMs: number; content: string }> {
+    const entries: Record<string, { mtimeMs: number; content: string }> = {};
+    for (const name of readdirSync(registry).sort()) {
+      const file = join(registry, name);
+      entries[name] = { mtimeMs: statSync(file).mtimeMs, content: readFileSync(file, "utf8") };
+    }
+    return entries;
+  }
+
+  /** Creates a test app, checks the variable is restored, makes one request, and returns the registry while the app is live. */
+  async function liveRegistry(): Promise<ReturnType<typeof snapshot>> {
+    const t = await createTestApp(app, base);
+    try {
+      expect(process.env.WRANGLER_REGISTRY_PATH).toBe(registry);
+      expect((await t.request("/api/hello")).status).toBe(200);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return snapshot();
+    } finally {
+      await t.dispose();
+    }
+  }
+
+  it("with the real clock, writes no entry of its own to the registry", async () => {
+    plant("someone-elses-worker");
+    const planted = snapshot();
+    expect(await liveRegistry()).toEqual(planted);
+    expect(snapshot()).toEqual(planted);
+  });
+
+  it("with Date faked into the past, does not loop on a live foreign entry of the same name", async () => {
+    plant("test-app", "someone-elses-worker");
+    const planted = snapshot();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-03-01T12:00:00Z"));
+    const live = await liveRegistry();
+    expect(warnings).toBe(0);
+    expect(live).toEqual(planted);
+    expect(snapshot()).toEqual(planted);
+  });
+
+  it("with Date faked into the future, does not delete other processes' live entries", async () => {
+    plant("test-app", "someone-elses-worker");
+    const planted = snapshot();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2027-01-01T00:00:00Z"));
+    expect(await liveRegistry()).toEqual(planted);
+    expect(snapshot()).toEqual(planted);
   });
 });
