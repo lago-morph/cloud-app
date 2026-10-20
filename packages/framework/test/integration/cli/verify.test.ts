@@ -139,7 +139,7 @@ describe("verify fails on each kind of defect", () => {
     tag("CLI-AC-002", "verify fails on a Postgres-only failure (negative OFFSET)"),
     async () => {
       // `.limit(10).offset(-1)`: Drizzle sends `limit ? offset ?` with -1; local D1 returns every
-      // row, PGlite raises "OFFSET must not be negative" (DEC-PENDING-B-T4-7; root-cause record
+      // row, PGlite raises "OFFSET must not be negative" (DEC-0311, correcting DEC-0239; root-cause record
       // 2026-10-19-B-17-negative-limit-not-pg-only.md).
       const app = await fixture(["apps/base", "cli/pg-only", "cli/pg-only-offset"]);
       const result = await app.cli(["verify"]);

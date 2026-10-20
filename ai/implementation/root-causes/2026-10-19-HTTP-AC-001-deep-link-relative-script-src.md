@@ -85,3 +85,5 @@ Fixer: test-case author (prompt §8 step 3); did not write the framework code, d
 - **Regression** (other users of the harness fixture): vitest `log/dev-files`, `config/dev`, `config/build`, `secrets/cli`, `core/build`, `core/types` → 26 passed, 1 failed; Playwright `--project=integration api-helper` → 5 passed. The one failure, `core/types.test.ts` "[CORE-AC-001] every framework type in a public signature is importable…" (`ApiErrorInit (used by ApiError)` not exported from `/client`), fails identically with the harness change reverted, so it is pre-existing and unrelated to this fixture; it needs its own §8 diagnosis.
 - `npm run verify` → passed.
 - **Follow-up for the decision owner (not done here):** DEC-0213's text should state that byte identity of the deep-link and `/` responses holds only for entry pages that load their scripts with absolute URLs, because Vite's dev server rewrites relative URLs on SPA-fallback paths; the fixture uses an absolute URL for that reason. The framework must not be "fixed" for relative-URL apps.
+
+Closed by C-INT (2026-10-20): DEC-0312 records the limitation.

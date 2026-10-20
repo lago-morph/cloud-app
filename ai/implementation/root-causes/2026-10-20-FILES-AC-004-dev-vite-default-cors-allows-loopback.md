@@ -13,7 +13,7 @@ Author: diagnosing subagent (prompt §8 step 1; did not write the code or the te
     -   "ok": false,  "status": null,
     +   "ok": true,   "status": 200,
 ```
-(plus the dependent soft assertions on `up.message` / `down.message`, which are `undefined` because both transfers succeeded). The same-origin control in the same test passed. C-T3's DEC-PENDING-C-T3-6 recorded the same observation.
+(plus the dependent soft assertions on `up.message` / `down.message`, which are `undefined` because both transfers succeeded). The same-origin control in the same test passed. C-T3's DEC-0293 recorded the same observation.
 
 ## Evidence
 1. **Reproduced** with the command above (1 of 1 runs; C-T3 observed it earlier on 2026-10-20).
@@ -41,7 +41,7 @@ Author: diagnosing subagent (prompt §8 step 1; did not write the code or the te
 ## Causal chain
 1. `startClient` leaves `server.cors` unset → Vite uses its default `{ origin: defaultAllowedOrigins }` (evidence 2, 3).
 2. Vite's CORS middleware runs for every request, including `/api/*` before the proxy, and reflects any origin matching the loopback regex in `Access-Control-Allow-Origin`, answering preflights itself with `PUT` and the requested headers allowed (evidence 3, 4, 5).
-3. The test's unrelated page is `http://127.0.0.1:<port>` (DEC-PENDING-C-T3-6), which matches the regex → Chromium's preflight for the `PUT` (Content-Type `image/png`) succeeds and the actual `PUT`/`GET` responses carry `Access-Control-Allow-Origin` for that origin (evidence 4).
+3. The test's unrelated page is `http://127.0.0.1:<port>` (DEC-0293), which matches the regex → Chromium's preflight for the `PUT` (Content-Type `image/png`) succeeds and the actual `PUT`/`GET` responses carry `Access-Control-Allow-Origin` for that origin (evidence 4).
 4. Chromium therefore lets the cross-origin upload through (the Worker stores it: `stored` is the file) and exposes the download response (`ok: true, status: 200`) → the test's soft assertions fail (symptom). With `cors: false` the same browser request fails with `TypeError: Failed to fetch` (evidence 6), so this link is necessary and sufficient.
 
 ## Alternatives ruled out

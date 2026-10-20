@@ -9,7 +9,7 @@ Author: diagnosing subagent (prompt §8 step 1; did not write the code or the te
 FAIL tests/compliance/criteria/auth/forgery.test.ts > AUTH-AC-007 through the deployed router > [AUTH-AC-007] through the deployed router: a POST with a session and a wrong Origin is rejected with AUTH.REQUEST_FORGERY
 HttpCheckError: HTTP check failed: POST /api/levels/user → status 200, code none, requestId none (expected status 403 with code AUTH.REQUEST_FORGERY)
 ```
-The no-Origin, public-origin and in-process tests passed. C-T3's DEC-PENDING-C-T3-11 recorded that the failing origin is the other scheme, `https://localhost:<dev port>`.
+The no-Origin, public-origin and in-process tests passed. C-T3's DEC-0298 recorded that the failing origin is the other scheme, `https://localhost:<dev port>`.
 
 ## Evidence
 1. **Reproduced** with the command above (1 of 1 runs).
