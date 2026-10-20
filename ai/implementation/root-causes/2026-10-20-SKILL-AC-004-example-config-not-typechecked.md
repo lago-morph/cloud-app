@@ -59,3 +59,35 @@ Sizes stay within PAR-072, since the file only gets smaller (now 12,545 bytes). 
 
 ## Observation (not part of this failure)
 SKILL-AC-004 also says CI type-checks "the template". By the same evidence (items 2, 3), the template's own `vitest.config.ts` is not type-checked by CI either. It does type-check clean (item 5), and `verify` does not use it (item 4). If the owner reads "the template" as every TypeScript file in `apps/template`, a reviewer may want a separate decision on it. No current test covers that reading.
+
+## Review
+
+Reviewer: independent root-cause reviewer (prompt §8 step 2; did not diagnose this, or write the skill, template or tests). Branch `claude/implement-local-cloudflare-rc-e1-review` from `origin/claude/implement-local-cloudflare`.
+
+**Verdict: ACCEPTED.**
+
+### Links checked
+- **Example copies a file outside `src/`/`tests/`** (chain 1–2): confirmed. `skill/examples/tests.md:252–266` carries the `example-source: apps/template/vitest.config.ts` block; line 9 has the intro bullet. skill.md §2 line 90 says example code "is type-checked and tested where it lives, by each app's `verify`", so an example block whose source `verify` neither compiles nor runs breaks that rule.
+- **No CI step type-checks it** (evidence 3): confirmed. Root `typecheck` runs only the framework, root and harness tsconfigs. Root `verify` runs each app's `prototype-framework verify`, and that has no `tsc -p apps/*`.
+- **`verify`/`smoke` do not read it** (evidence 4): confirmed. Decision log line 1564 says `config: false` and "The app's Vitest configuration is not read". `skill/reference/testing.md` lines 5–8 describe `verify`'s own glob and 60 s timeouts.
+
+### Is the file used by anything an app developer runs?
+No documented path uses it:
+- `apps/template/package.json` has **no `test` script**. Only framework commands (`verify`, `smoke`, …) are there, so `npm test` does not exist in the template or in a scaffolded app.
+- The skill never tells agents to run Vitest directly. `grep -rn "vitest" skill --include=*.md` finds only imports, version pins, the import table and this example block. `testing.md` "What runs your tests" names only `verify` and `smoke`.
+- The scaffolder (`skill/scripts/scaffold.mjs`, `cpSync` with SKIP = build/state dirs) copies it into every scaffolded app, where only a bare `npx vitest` would read it. Such a run does not match how apps run tests. It never sets `PROTOTYPE_FRAMEWORK_DIALECT` (only `cli/verify/tests.ts:87` does), so it runs SQLite only and skips the Postgres pass that `verify` requires. The record calls the file "harmless" because it "serves a plain `npx vitest` run". That is accurate, but the run it serves is not one the skill supports. This does not affect the verdict.
+- `skill/scripts/vitest.config.ts` and `tests/compliance/harness/self-test/vitest.config.ts` are unrelated; neither one is an app file.
+
+### Alternatives
+- **Weaken the test**: correctly ruled out (§8; the criterion has no config-file exception).
+- **Bring the file into a type-check**: correctly ruled out. The template `tsconfig.json` is not used by CI. Widening `verify`'s scope is a CLI-REQ-002 / cli.md §2 change, and it would type-check a file the framework ignores at run time. It would also leave the example teaching a setting that does not change what `verify` does. Only removing the block keeps the examples true to how apps run tests.
+- **Delete the file from the template**: there is evidence for this. It is dead for every documented workflow, it is copied into every app, and it suggests a bare `npx vitest` (one dialect) is the test command. But it is a separate change, not the cause of this failure. It touches PROV-AC-001's reading (`tests/compliance/criteria/prov/template-deploy.test.ts:10` lists it as permitted metadata), the matching file in `apps/reference/`, and the decision log (lines 1564, 1599). The example fix does not depend on it. It also resolves the record's "Observation": the template would then have no TypeScript outside `src/`/`tests/`. Raise it as a separate owner decision. Do not fold it into this fix.
+
+### Fix addresses the cause
+Yes. The cause is an example block whose source lies outside what `verify` type-checks and runs. Removing the block, and its mentions, removes that block from the examples. It touches no test, code or template. The test's scope is unchanged.
+
+### Exact fix (as proposed, confirmed)
+1. `skill/examples/tests.md`: delete the section `` ## `apps/template/vitest.config.ts` `` (heading, `<!-- example-source: apps/template/vitest.config.ts -->` marker and fenced block, lines 252–266). Delete intro bullet line 9 ("`vitest.config.ts`: the timeouts the template uses."). Optionally add one prose line, with no code block: `verify` runs tests with its own settings (PAR-116 glob, 60 s test and hook timeouts, both dialects) and does not read an app's Vitest configuration.
+2. `skill/reference/testing.md` line 48: drop "its Vitest configuration," from the link text.
+3. Verify: `grep -rn "vitest.config" skill/examples skill/reference` prints nothing. The `-t "type-checked by its app's verify"` run passes. `npx vitest run --config vitest.integration.config.ts tests/skill/` reports 26/26. A byte-for-byte check confirms every remaining block still equals its source.
+4. Follow-up (separate, owner decision): whether to delete `vitest.config.ts` from `apps/template` (and `apps/reference`), updating the PROV-AC-001 reading and the decision log to match.
