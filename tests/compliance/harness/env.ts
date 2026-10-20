@@ -1,0 +1,61 @@
+/**
+ * The environment the driver passes to the test processes, and how tests read it. Tests never
+ * branch on the target except where a criterion states a per-target expectation
+ * (COMPL-REQ-001); they use `baseUrl` and the harness helpers.
+ */
+import type { Target } from "./catalogue.js";
+import { USER_AGENT } from "./http.js";
+
+export const ENV = {
+  target: "COMPLIANCE_TARGET",
+  stage: "COMPLIANCE_STAGE",
+  baseUrl: "COMPLIANCE_BASE_URL",
+  runId: "COMPLIANCE_RUN_ID",
+} as const;
+
+export interface TargetEnv {
+  readonly target: Target;
+  readonly stage?: string;
+  /** Base URL of the reference app on this target; throws when the driver did not set one. */
+  readonly baseUrl: string;
+  readonly runId?: string;
+}
+
+type Env = Readonly<Record<string, string | undefined>>;
+
+export function readTargetEnv(env: Env = process.env): TargetEnv {
+  const target = env[ENV.target] ?? "local";
+  if (target !== "local" && target !== "cloudflare" && target !== "aws") throw new Error(`${ENV.target}=${target} is not one of local, cloudflare, aws`);
+  const stage = env[ENV.stage];
+  const runId = env[ENV.runId];
+  const baseUrl = env[ENV.baseUrl];
+  return {
+    target,
+    ...(stage === undefined ? {} : { stage }),
+    ...(runId === undefined ? {} : { runId }),
+    get baseUrl(): string {
+      if (baseUrl === undefined || baseUrl === "") {
+        throw new Error(`${ENV.baseUrl} is not set: run the tests through \`npm run compliance -- --target <t>\`, which starts or deploys the reference app and sets it`);
+      }
+      return baseUrl;
+    },
+  };
+}
+
+/** The environment for a test process: the parent's, plus the target variables. */
+export function childEnv(base: Env, t: { readonly target: Target; readonly stage?: string; readonly baseUrl?: string; readonly runId: string }): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(base)) if (v !== undefined) out[k] = v;
+  out[ENV.target] = t.target;
+  out[ENV.runId] = t.runId;
+  if (t.stage !== undefined) out[ENV.stage] = t.stage;
+  if (t.baseUrl !== undefined) out[ENV.baseUrl] = t.baseUrl;
+  if (t.target !== "local") out.NODE_USE_ENV_PROXY = "1";
+  return out;
+}
+
+/** Playwright `use` options for compliance specs: the base URL and the explicit User-Agent. */
+export function browserOptions(env: Env = process.env): { baseURL?: string; userAgent: string } {
+  const baseUrl = env[ENV.baseUrl];
+  return { ...(baseUrl === undefined || baseUrl === "" ? {} : { baseURL: baseUrl }), userAgent: USER_AGENT };
+}
