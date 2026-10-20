@@ -38,6 +38,11 @@ export interface StageOptions {
   readonly resolved: ResolvedConfig;
   /** Where log entries go on this target. */
   readonly sink: LogSink;
+  /**
+   * A sink built per request (it needs that request's bindings and `waitUntil`, as the
+   * Cloudflare R2 log writer does); when given, it is used instead of `sink`.
+   */
+  readonly requestSink?: (c: RuntimeContext) => LogSink;
   /** The deployment's public origin, from deployment-time settings (never request headers). */
   readonly publicOrigin: (c: RuntimeContext) => string;
   /**
@@ -69,6 +74,12 @@ export interface StageOptions {
   readonly provider?: LoginProvider;
   /** Further framework routes under `/api` (the local file-transfer route). */
   readonly routes?: (api: Hono<RuntimeEnv>) => void;
+}
+
+function requestLog(deployment: ResolvedConfig["deployment"], options: StageOptions): (c: RuntimeContext) => LogService {
+  const { requestSink } = options;
+  if (requestSink === undefined) return requestLogFactory(deployment, options.sink);
+  return (c) => requestLogFactory(deployment, requestSink(c))(c);
 }
 
 /** Builds the stage's Hono app. Never throws for misconfiguration (checks are deferred to the first request). */
@@ -113,7 +124,7 @@ export function assembleStage<C extends ConfigDeclaration, S extends string>(def
 
   const app = assembleApp(defined, {
     deployment,
-    createLog: requestLogFactory(deployment, options.sink),
+    createLog: requestLog(deployment, options),
     createServices: (env, _deployment, log) => {
       const handles = options.sql(env, log);
       const framework = frameworkSecrets(env, log);
