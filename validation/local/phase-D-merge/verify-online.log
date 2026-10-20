@@ -1,0 +1,80 @@
+
+> prototype-framework-workspace@0.0.0 verify
+> npm run build -w packages/framework && npm run typecheck && npm run lint && npm run test:unit && npm --workspace apps/template run verify && npm --workspace apps/reference run verify
+
+
+> @lago-morph/prototype-framework@0.1.0 build
+> tsc -p tsconfig.build.json
+
+
+> prototype-framework-workspace@0.0.0 typecheck
+> tsc -p packages/framework/tsconfig.json && tsc -p tsconfig.json && tsc -p tests/compliance/harness/tsconfig.json
+
+
+> prototype-framework-workspace@0.0.0 lint
+> eslint packages/framework/src packages/framework/bin packages/framework/test
+
+
+> prototype-framework-workspace@0.0.0 test:unit
+> vitest run --config vitest.unit.config.ts
+
+
+ RUN  v5.0.5 /home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2
+
+{"time":"2026-10-20T05:59:20.246Z","app":"testappunit","stage":"local","target":"local","component":"SEC","severity":"error","message":"GET /api/secret failed with SEC.MISSING\nFrameworkError: secret \"apiKey\" has no value in this stage\n    at Object.get (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/secrets/service.ts:74:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at /home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/testing/test-app.unit.test.ts:32:53\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:11)\n    at noStore (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/http/runtime.ts:34:3)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:11)\n    at forgeryCheck (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/auth/runtime.ts:134:7)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:11)\n    at currentUser (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/auth/runtime.ts:123:7)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:11)","requestId":"920203d0-5cb6-4291-9301-940cac5609ba"}
+{"time":"2026-10-20T05:59:24.915Z","app":"testappunit","stage":"local","target":"local","component":"CORE","severity":"error","message":"GET /api/boom failed with CORE.INTERNAL\nError: unit boom\n    at /home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/testing/test-app.unit.test.ts:39:13\n    at dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:17)\n    at file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:40\n    at noStore (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/http/runtime.ts:34:9)\n    at dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:17)\n    at file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:40\n    at forgeryCheck (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/auth/runtime.ts:134:13)\n    at dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:17)\n    at file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:40\n    at currentUser (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/auth/runtime.ts:123:13)","requestId":"fab535e5-ddba-4666-957e-84e1d13062b8"}
+{"time":"2026-10-20T05:59:26.217Z","app":"testappunit","stage":"local","target":"local","component":"SQL","severity":"error","message":"POST /api/notes failed with SQL.UNAVAILABLE\nFrameworkError: the database could not be reached: it is unavailable (forced for this test app)\n    at plainUnavailable (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/sql/guard.ts:53:10)\n    at unavailable (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/sql/guard.ts:30:21)\n    at Object.guard (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/sql/guard.ts:35:45)\n    at execute (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/sql/handle.ts:76:17)\n    at Proxy.<anonymous> (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/sql/handle.ts:86:99)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","requestId":"4aab623c-99bf-450a-869e-c5880186cf73"}
+{"time":"2026-10-20T05:59:27.305Z","app":"testappunit","stage":"local","target":"local","component":"KV","severity":"error","message":"GET /api/kv failed with KV.UNAVAILABLE\nFrameworkError: key-value storage could not be used: the database could not be reached: it is unavailable (forced for this test app)\n    at asKvFailure (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/kv/service.ts:115:9)\n    at storage (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/kv/service.ts:58:13)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at Object.get (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/kv/service.ts:65:20)\n    at /home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/testing/test-app.unit.test.ts:30:49\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:11)\n    at noStore (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/http/runtime.ts:34:3)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:11)\n    at forgeryCheck (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/auth/runtime.ts:134:7)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:11)","requestId":"f545b8d8-8e2a-4793-b710-8885773f0cf6"}
+{"time":"2026-10-20T05:59:29.664Z","app":"testappunit","stage":"local","target":"local","component":"FILES","severity":"error","message":"GET /api/files failed with FILES.UNAVAILABLE\nFrameworkError: file storage could not be used (head): Error: local file storage is unavailable (forced for this test app)\n    at call (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/files/service.ts:82:23)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at Object.head (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/files/service.ts:110:22)\n    at /home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/testing/test-app.unit.test.ts:31:43\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:11)\n    at noStore (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/http/runtime.ts:34:3)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:11)\n    at forgeryCheck (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/auth/runtime.ts:134:7)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:11)\n    at currentUser (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/auth/runtime.ts:123:7)","requestId":"09909342-fbe1-4307-9b8e-0cf435476a61"}
+{"time":"2026-10-20T05:59:32.079Z","app":"testappunit","stage":"local","target":"local","component":"SEC","severity":"error","message":"GET /api/secret failed with SEC.UNAVAILABLE\nFrameworkError: secret \"apiKey\" could not be read: the secret store is unavailable\n    at readOrUnavailable (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/secrets/service.ts:39:21)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at Object.get (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/secrets/service.ts:72:21)\n    at /home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/testing/test-app.unit.test.ts:32:53\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:11)\n    at noStore (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/http/runtime.ts:34:3)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:11)\n    at forgeryCheck (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/auth/runtime.ts:134:7)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:11)\n    at currentUser (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/auth/runtime.ts:123:7)","requestId":"55262033-4a81-468b-bcfe-b19b4c552eb8"}
+{"time":"2026-10-20T05:59:34.355Z","app":"testappunit","stage":"local","target":"local","component":"KV","severity":"error","message":"GET /api/kv failed with KV.UNAVAILABLE\nFrameworkError: key-value storage could not be used: the database could not be reached: it is unavailable (forced for this test app)\n    at asKvFailure (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/kv/service.ts:115:9)\n    at storage (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/kv/service.ts:58:13)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at Object.get (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/kv/service.ts:65:20)\n    at /home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/testing/test-app.unit.test.ts:30:49\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:11)\n    at noStore (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/http/runtime.ts:34:3)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:11)\n    at forgeryCheck (/home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/packages/framework/src/auth/runtime.ts:134:7)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a4f7df15f495fc8d2/node_modules/hono/dist/compose.js:35:11)","requestId":"8580eba2-758a-46d4-afbb-a6dfff95bd1a"}
+
+ Test Files  166 passed (166)
+      Tests  1570 passed (1570)
+   Start at  05:57:50
+   Duration  451.19s (tests 68%, import 30%, transform 1%)
+
+     Import  410 modules were evaluated 844 times · 364.56s total, 30% of tracked time
+             ~26.92s faster with isolate: false — shared modules are evaluated once per worker instead of once per file
+             learn more: https://vitest.dev/guide/improving-performance#test-isolation
+
+
+> template@0.0.0 verify
+> prototype-framework verify
+
+verify: type checking
+verify: type checking: passed
+verify: portability rules
+verify: portability rules: passed
+verify: migration checker
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+verify: migration checker: passed
+verify: zod version
+verify: zod version: passed (4.6.7)
+verify: tests (sqlite)
+verify: tests (sqlite): passed (14 passed, 0 failed, 0 skipped)
+verify: tests (postgres)
+verify: tests (postgres): passed (14 passed, 0 failed, 0 skipped)
+verify passed
+
+> reference@0.0.0 verify
+> prototype-framework verify
+
+verify: type checking
+verify: type checking: passed
+verify: portability rules
+verify: portability rules: passed
+verify: migration checker
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+verify: migration checker: passed
+verify: zod version
+verify: zod version: passed (4.6.7)
+verify: tests (sqlite)
+verify: tests (sqlite): passed (52 passed, 0 failed, 0 skipped)
+verify: tests (postgres)
+verify: tests (postgres): passed (52 passed, 0 failed, 0 skipped)
+verify passed
