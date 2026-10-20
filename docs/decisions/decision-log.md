@@ -3332,7 +3332,7 @@ Sizes after the change (PAR-071, 12,000 bytes): owner-tasks ≈ 10.0 kB, trouble
 Item: E-04.
 
 ### DEC-0403 — SKILL-AC-001: "each reference links to its examples" means every example tied to it (F1)
-Origin: ai-proposed · Status: proposed · Affects: SKILL-AC-001, DEC-0386 (third bullet strengthened)
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SKILL-AC-001, DEC-0386 (third bullet strengthened)
 
 DEC-0386 read "its examples" as "at least one example". The criterion says *its* examples (plural, possessive): each reference must link every example that shows what it covers. `tests/skill/budgets-and-links.test.ts` now holds a table of each reference's examples, keyed by exactly `REFERENCE_FILES`, and requires every link in it. The "at least one" and "every example linked from somewhere" checks remain. Each row comes from skill.md §2 and from the files each example copies, not from the references' text:
 
@@ -3357,7 +3357,7 @@ Integrator note: item fix-e3 added that link (root cause `ai/implementation/root
 Item: E-T2.
 
 ### DEC-0404 — SKILL-AC-004: the template's browser examples are run (F2)
-Origin: ai-proposed · Status: proposed · Affects: SKILL-AC-004, DEC-0389
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SKILL-AC-004, DEC-0389
 
 "CI type-checks and runs every example." Examples copy `apps/template/index.html`, `src/client/main.ts`, `src/client/dom.ts` and `src/client/pages/{account,admin,files,notes,status}.ts`. No app test executes them; the app tests reach server routes only. New `tests/skill/example-pages.test.ts` (integration layer, so the driver runs it):
 - a static check: every example source that is an `index.html` or under `src/client/` must be loaded by the template's `index.html` (its module script, then the relative non-type imports). So the run covers each one, and a new browser example outside that graph fails;
@@ -3370,7 +3370,7 @@ Integrator note: item fix-e3 has since appended that line to root `verify` and r
 Item: E-T2.
 
 ### DEC-0405 — SKILL-AC-004: the byte-for-byte example check runs in root `verify` (F3)
-Origin: ai-proposed · Status: proposed · Affects: SKILL-AC-004, DEC-0384
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SKILL-AC-004, DEC-0384
 
 `tests/skill/examples.test.ts` was split into two files:
 - `tests/skill/example-copies.unit.test.ts` holds the file-only checks: markers, no `apps/demo/`, byte-for-byte equality, sources inside what `verify` covers, and the root `verify` wiring. The unit include glob `tests/**/*.unit.test.ts` collects it, so `npm run test:unit` and therefore root `npm run verify` run it. The integration glob `tests/skill/**/*.test.ts` also collects it, so the driver's integration run still evidences SKILL-AC-004 from it. The driver's unit run is limited to `UNIT_LEVEL` and ignores it. No configuration changed. A new tagged test asserts this wiring: root `verify` runs `test:unit`, which uses `vitest.unit.config.ts`, which includes `tests/**/*.unit.test.ts`.
@@ -3378,7 +3378,7 @@ Origin: ai-proposed · Status: proposed · Affects: SKILL-AC-004, DEC-0384
 Item: E-T2.
 
 ### DEC-0406 — CHECK-AC-003 covers the five migration-checker rule IDs (F4)
-Origin: ai-proposed · Status: proposed · Affects: CHECK-AC-003, DEC-0187
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CHECK-AC-003, DEC-0187
 
 "Every rule's diagnostic" includes the migration checker's five rule IDs (check.md §2). New `packages/framework/test/integration/check/migration-diagnostics.test.ts` runs the real `verify` on three fixture apps (`apps/base` + `mig/base`; three apps so that one break cannot hide another). For each rule it requires a line in the check.md §2 layout carrying that rule ID, a message that names the construct (the location prefix is excluded), and a `skill/reference/*.md` that exists:
 - `migration-checksums`: a comment appended to a generated migration; the message names that migration.
@@ -3391,7 +3391,7 @@ All 5 pass.
 Item: E-T2.
 
 ### DEC-0407 — The CHECK-AC-003 coverage control is tagged and checks "exactly one" (F5)
-Origin: ai-proposed · Status: proposed · Affects: CHECK-AC-003
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CHECK-AC-003
 
 The control in `portability-rules.test.ts` is now tagged `[CHECK-AC-003]`, so the driver runs it. It was untagged and showed as `skipped`. Before, it mapped `RULES` through `some(...)`, so a rule with two representative fixtures passed. Now it lists every representative fixture's rule, plus the other representatives, and requires that list sorted to equal `ALL_RULES`. So each rule has exactly one, none missing and none twice. It passes.
 Item: E-T2.
