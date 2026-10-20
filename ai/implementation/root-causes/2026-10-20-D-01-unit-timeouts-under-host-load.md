@@ -30,3 +30,7 @@ Re-run `npm run verify` and the offline form at normal load; both must be green.
 
 ## Addendum: offline run (`unshare -rn sh scripts/offline.sh npm run verify`, ~04:42 UTC)
 12 failures. 3 were timeouts again (PGlite, `cli/verify/type-check`, and D-01's own `settings.workerd.unit.test.ts` first request into workerd). D-01 gave its workerd-backed suites the 60 s allowance `build.unit.test.ts` already uses for workerd. 9 were in `evidence/writer.unit.test.ts` and are not timeouts: the test's `git commit` fails because this sandbox's global git config signs commits through a helper (`environment-runner code-sign`) that calls an MCP server on `127.0.0.1:45463`, which does not exist inside the new network namespace ("dial tcp 127.0.0.1:45463: connect: connection refused"). That is the sandbox's git signing configuration, not framework code; D-01 does not touch `src/evidence/**`. Proposed fix (owner of `src/evidence/**` or `scripts/offline.sh`): have the test's git calls pass `-c commit.gpgsign=false`, or have the offline wrapper set `GIT_CONFIG_GLOBAL=/dev/null`.
+
+## Re-runs (verification)
+- ~05:07 UTC, `npm run verify` (load ≈ 14): exit 0; 145 files, 1433 tests passed.
+- ~05:15 UTC, offline `npm run verify`: 1424 passed, 9 failed, all in `evidence/writer.unit.test.ts` with the git-signing error above; no timeouts. The `/root/.gitconfig` sets `commit.gpgsign true` with `gpg.ssh.program /tmp/code-sign`, which needs the loopback service outside the namespace.
