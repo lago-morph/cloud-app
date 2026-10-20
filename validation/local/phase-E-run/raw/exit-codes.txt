@@ -1,0 +1,5 @@
+01-npm-ci exit=0
+02-build-framework exit=0
+03-verify exit=0
+04-tests-skill exit=0
+05-compliance-local exit=1

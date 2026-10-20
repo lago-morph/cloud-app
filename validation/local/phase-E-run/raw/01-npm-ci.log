@@ -1,0 +1,17 @@
+$ npm ci
+# started 2026-10-20T13:38:15Z head=4d73f396a1219d28e8a49bbbcb6803984c6abac6
+npm warn deprecated @esbuild-kit/esm-loader@2.6.5: Merged into tsx: https://tsx.hirok.io
+npm warn deprecated @esbuild-kit/core-utils@3.3.2: Merged into tsx: https://tsx.hirok.io
+
+added 229 packages, and audited 235 packages in 19s
+
+56 packages are looking for funding
+  run `npm fund` for details
+
+4 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+# finished 2026-10-20T13:38:34Z exit=0
