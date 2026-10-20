@@ -91,28 +91,35 @@ describe("local transfer route: downloads (FILES-REQ-003, files.md §2 Local)", 
     const res = await app.request(urlOf(await files.createDownloadTicket("p.png")));
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("image/png");
-    expect(res.headers.get("Content-Disposition")).toBeNull();
+    expect(res.headers.get("Content-Disposition")).toBe("inline; filename*=UTF-8''p.png");
     expectSafeHeaders(res);
     expect(Array.from(new Uint8Array(await res.arrayBuffer()))).toEqual([137, 80, 78, 71]);
   });
 
   it.each(["text/html", "image/svg+xml", "application/octet-stream", "application/pdf"])(
-    "content of type %s is served as an attachment",
+    "content of type %s is served as an attachment named after the file (DEC-0313)",
     async (contentType) => {
       const { app, files } = setup();
       await files.put("f", new TextEncoder().encode("<svg onload=alert(1)>"), { contentType });
       const res = await app.request(urlOf(await files.createDownloadTicket("f")));
       expect(res.status).toBe(200);
-      expect(res.headers.get("Content-Disposition")).toBe("attachment");
+      expect(res.headers.get("Content-Disposition")).toBe("attachment; filename*=UTF-8''f");
       expectSafeHeaders(res);
     },
   );
 
-  it.each(["image/jpeg", "image/gif", "image/webp", "image/avif", "image/bmp"])("raster image type %s is served inline", async (contentType) => {
+  it.each(["image/jpeg", "image/gif", "image/webp", "image/avif", "image/bmp"])("raster image type %s is served inline, named after the file (DEC-0313)", async (contentType) => {
     const { app, files } = setup();
     await files.put("i", new Uint8Array([1]), { contentType });
     const res = await app.request(urlOf(await files.createDownloadTicket("i")));
-    expect(res.headers.get("Content-Disposition")).toBeNull();
+    expect(res.headers.get("Content-Disposition")).toBe("inline; filename*=UTF-8''i");
+  });
+
+  it("a download is saved under the whole file name, percent-encoded, never the ticket token (DEC-0313)", async () => {
+    const { app, files } = setup();
+    await files.put("photos/ä b.txt", new Uint8Array([1]), { contentType: "text/plain" });
+    const res = await app.request(urlOf(await files.createDownloadTicket("photos/ä b.txt")));
+    expect(res.headers.get("Content-Disposition")).toBe("attachment; filename*=UTF-8''photos%2F%C3%A4%20b.txt");
   });
 
   it("an upload ticket cannot download, a tampered or expired ticket is refused, and a deleted file is 404", async () => {

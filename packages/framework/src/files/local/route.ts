@@ -1,28 +1,22 @@
 /**
  * The local transfer route (files.md §2 "Local"): checks a signed local ticket and streams the
  * body to or from local storage through the request's `FilesService`. Its responses always carry
- * `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`, plus
- * `Content-Disposition: attachment` for anything but raster images, so uploaded HTML or SVG never
- * runs as the app's origin. It sends no CORS headers: other origins cannot use it.
+ * `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`, and a download's
+ * `Content-Disposition` names the file (DEC-0313): `attachment` for anything but raster images,
+ * so uploaded HTML or SVG never runs as the app's origin. It sends no CORS headers: other origins cannot use it.
  * Refusals are plain 403 / 404 responses and are not logged (ticket URLs never reach the log).
  * LOCAL ONLY (CORE-REQ-006).
  */
 import type { Context, Hono } from "hono";
 import type { RuntimeEnv } from "../../core/assemble.js";
+import { downloadDisposition } from "../cloudflare/disposition.js";
 import { LOCAL_TRANSFER_PATH, verifyLocalTicket } from "./tickets.js";
-
-/** Raster image types a browser renders without running content; served inline. */
-const RASTER_IMAGES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif", "image/bmp"]);
 
 const SAFE_HEADERS = { "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "sandbox" } as const;
 
 export interface LocalTransferRouteOptions {
   /** The framework-internal local signing secret. */
   readonly key: (c: Context<RuntimeEnv>) => Promise<string>;
-}
-
-function mediaType(contentType: string): string {
-  return (contentType.split(";")[0] ?? "").trim().toLowerCase();
 }
 
 /** Registers the route on the framework's `/api` router. */
@@ -45,8 +39,12 @@ export function registerLocalTransferRoute(api: Hono<RuntimeEnv>, options: Local
     if (grant === undefined || grant.op !== "download") return refuse(c, 403);
     const file = await c.var.files.get(grant.name);
     if (file === null) return refuse(c, 404);
-    const headers: Record<string, string> = { ...SAFE_HEADERS, "Content-Type": file.contentType, "Content-Length": String(file.size) };
-    if (!RASTER_IMAGES.has(mediaType(file.contentType))) headers["Content-Disposition"] = "attachment";
+    const headers: Record<string, string> = {
+      ...SAFE_HEADERS,
+      "Content-Type": file.contentType,
+      "Content-Length": String(file.size),
+      "Content-Disposition": downloadDisposition(grant.name, file.contentType),
+    };
     return c.body(file.body, 200, headers);
   });
 }
