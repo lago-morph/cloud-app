@@ -1,7 +1,11 @@
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { MigrationFailedError } from "../../mig/apply.js";
 import { captureIo } from "../io.test-support.js";
 import { devCommand, type DevDeps } from "./dev.js";
+import { devServerRecordPath } from "./smoke.js";
 
 function deferred<T>() {
   let resolve!: (v: T) => void;
@@ -32,18 +36,22 @@ function deps(calls: string[], overrides: Partial<DevDeps> = {}) {
   return { d, stop, workerExit };
 }
 
+/** `dev` writes `.framework/local/dev-server.json` into the app directory while it runs. */
+const tempAppDir = () => mkdtempSync(join(tmpdir(), "dev-record-"));
+
 describe("dev (local.md §2)", () => {
   it("builds, generates missing dev secrets, migrates, starts Wrangler and Vite, prints the localhost URL, and stops both on Ctrl-C", async () => {
     const calls: string[] = [];
     const { d, stop } = deps(calls);
-    const io = captureIo("/apps/one");
+    const appDir = tempAppDir();
+    const io = captureIo(appDir);
     const running = devCommand(d)([], io);
     await new Promise((r) => setTimeout(r, 10));
     expect(io.out).toContain("http://localhost:5100");
     expect(io.out).toContain("frameworkSessionKey");
     stop.resolve();
     expect(await running).toBe(0);
-    expect(calls[0]).toBe("build /apps/one");
+    expect(calls[0]).toBe(`build ${appDir}`);
     expect(calls.slice(1, 3)).toEqual(["secrets", "migrate"]);
     expect(calls[3]).toMatch(/^worker dev .*--port 5101 .*FRAMEWORK_PUBLIC_ORIGIN:http:\/\/localhost:5100/);
     expect(calls[4]).toBe("client 5100 -> http://127.0.0.1:5101");
@@ -65,7 +73,7 @@ describe("dev (local.md §2)", () => {
   it("exits 1 when Wrangler stops on its own, closing the client server", async () => {
     const calls: string[] = [];
     const { d, workerExit } = deps(calls);
-    const io = captureIo();
+    const io = captureIo(tempAppDir());
     const running = devCommand(d)([], io);
     await new Promise((r) => setTimeout(r, 10));
     workerExit.resolve(7);
@@ -77,5 +85,27 @@ describe("dev (local.md §2)", () => {
   it("takes no arguments", async () => {
     const { d } = deps([]);
     await expect(devCommand(d)(["--port", "3000"], captureIo())).rejects.toThrow();
+  });
+
+  it("[CLI-AC-005] records its origin for smoke while it runs and removes the record when it stops", async () => {
+    const appDir = tempAppDir();
+    const { d, stop } = deps([]);
+    const running = devCommand(d)([], captureIo(appDir));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(JSON.parse(readFileSync(devServerRecordPath(appDir), "utf8"))).toEqual({ origin: "http://localhost:5100", pid: process.pid });
+    stop.resolve();
+    expect(await running).toBe(0);
+    expect(existsSync(devServerRecordPath(appDir))).toBe(false);
+  });
+
+  it("[CLI-AC-005] removes the record when Wrangler stops on its own", async () => {
+    const appDir = tempAppDir();
+    const { d, workerExit } = deps([]);
+    const running = devCommand(d)([], captureIo(appDir));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(existsSync(devServerRecordPath(appDir))).toBe(true);
+    workerExit.resolve(7);
+    expect(await running).toBe(1);
+    expect(existsSync(devServerRecordPath(appDir))).toBe(false);
   });
 });
