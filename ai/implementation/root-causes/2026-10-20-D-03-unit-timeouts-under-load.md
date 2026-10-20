@@ -41,3 +41,29 @@ Pending (an independent reviewer subagent).
 ## Integrator note (2026-10-20, appended; the text above is unchanged)
 
 This record's Review was left pending. The same cause (unit-test timeouts when the host is loaded) is covered by `2026-10-20-D-04-verify-unrelated-failures.md`, whose Review is ACCEPTED. Its fix is recorded in `2026-10-20-verify-fixes.md`, and the global unit-test timeout in `2026-10-20-global-unit-timeout-review.md`. Read those for the reviewed causal chain and the fix.
+
+## Review (independent reviewer, prompt §8 step 2, 2026-10-20)
+
+**Verdict: ACCEPTED.** This covers the cause and the decision to rely on the D-04 fix. The reviewer did not write this record, D-04, or any of the fixes. Branch `claude/implement-local-cloudflare-rc-final-review`, from `origin/claude/implement-local-cloudflare` `7f8c5c0`. I checked the code and the committed evidence. No suite was run for this record.
+
+Reasons:
+- **The evidence supports every link.**
+  - The load was 21–25 on 4 CPUs, and the measured durations were 5.2–7.2 s, just over the 5 s default.
+  - At the same load, the same assertions pass with `--testTimeout 60000`. That shows directly that only the elapsed time exceeds the limit.
+  - This matches the accepted D-04 Review and `2026-10-20-global-unit-timeout-review.md`.
+- **A D-03 regression is ruled out.** The D-03 merge `e891c57` changes nothing under `src/sql/`, `src/cli/verify/`, `src/evidence/` or `src/check/` (`git diff --stat e891c57^1 e891c57`). It changes only `provision/cloudflare/**`, its test support, and `ai/implementation/**`.
+- **The fix covers every named test, and weakens none.**
+  - The global limit is `vitest.unit.config.ts:12`, `testTimeout: 30_000`. The named tests also have their own limits:
+    - `sql/postgres.unit.test.ts:27,40`;
+    - `sql/queries.unit.test.ts:223`;
+    - `cli/verify/type-check.unit.test.ts:24,32,41,46`. These are all three tsc tests, so they include both type-check tests that this record saw time out.
+  - No assertion changed. D-03 proposed that the integrator might raise `testTimeout`, and that is what was done, after its own review.
+- **Offline addendum, the 9 evidence-writer tests.** They were fixed by making the test hermetic, not by skipping it: `evidence/writer.unit.test.ts:15` (commit `9d866f4`).
+- **Offline addendum, "other side closed" in `check/migrations/checker.unit.test.ts`.**
+  - The record was right not to blame load without proof.
+  - A separate, accepted record now explains it: `2026-10-20-CLI-AC-002-MIG-AC-001-offline-verify-fetch-failed.md`. In the checker, PGlite's synchronous start-up runs in `Promise.all` alongside the D1 replay. It blocks the main thread for longer than workerd's idle timeout, and undici then reuses the keep-alive socket that workerd has closed.
+  - The symptom is the same (`SocketError: other side closed` from Miniflare's local proxy during D1 introspection), and so is the code path (the replay in `checker.ts`).
+  - It is not a timeout, so the D-04 timeout fix does not cover it. That record's own fix does.
+- **The log-mixing caveat.** The author acknowledged it, and the conclusions do not depend on the mixed `verify2.log`. The final run was logged to its own file. The D-04 fix's verify runs, online and offline, both exited 0 and supersede both logs.
+
+Required follow-up: none for this record. If the checker socket error comes back, it belongs to the CLI-AC-002/MIG-AC-001 record, not to this one.

@@ -164,3 +164,79 @@ This needs an independent review (§8 step 2) before any change. Option 2 also r
 - The 55 files not scanned (Coverage). The highest-value next step is the shuffle runs for `kv/*`, `sql/*`, `files/server-operations` (framework) and `local/dev`.
 - The `sessions.test.ts` observation above, which needs review and possibly a fix.
 - No processes were left running. The `dev` server, scan, and wait loops were all stopped.
+
+## Review (independent reviewer, prompt §8 step 2, 2026-10-20)
+
+**Verdict: ACCEPTED-WITH-CHANGES.**
+- The scan's main finding is accepted, with its stated limits: no test depends on another test's state in the 29 files scanned.
+- The `sessions.test.ts` observation is a **real defect**. Its cause differs from the hypothesis in this record, and the proposed fix 1 would not remove it. The changes required are below.
+- The reviewer did not write this record, the tests, or the code. Branch `claude/implement-local-cloudflare-rc-final-review`, from `origin/claude/implement-local-cloudflare` `7f8c5c0`.
+- One local reproduction was run, of that one test file only. There were no Cloudflare calls and no full suites.
+
+### Main result (order dependence): accepted
+- The tables and the single-tag runs support "no failure in any run", and the record states the coverage gap (55 of 84 files) itself.
+- The code reading in "Why the shared state is benign" matches `auth/sessions.test.ts`. Its only module state is `created` in `auth/support.ts:69`, which `newApp` fills (l. 71–75) and `afterEach` → `disposeAll` (`sessions.test.ts:27-30`, `support.ts:77-80`) empties after every test.
+- The open coverage (the `kv/*`, `sql/*`, `files/server-operations` and `local/dev` shuffles) stays open, as the record says.
+
+### The `TimeoutOverflowWarning` observation: real defect, cause found
+**Where the timer is.** Miniflare's dev registry, `DevRegistry.registerWorker` (`node_modules/miniflare/dist/src/index.js:131103-131130`, miniflare `5.20261006.1-alpha`, wrangler `4.149.0`). The registry and the framework's test app interact as follows:
+- `createTestApp` starts the platform proxy with `getPlatformProxy({ configPath: proxyConfigPath(), persist: false })` (`packages/framework/src/testing/test-app.ts:217`). The config has the fixed Worker name `"test-app"` (`test-app.ts:84`).
+- `getPlatformProxy` always passes `unsafeDevRegistryPath: getRegistryPath()` (`node_modules/wrangler/wrangler-dist/cli.js:376537`). By default that is the host-wide `~/.config/.wrangler/registry` (env override `WRANGLER_REGISTRY_PATH`, `cli.js:25330`). That directory is shared by every process on the machine, including other vitest forks and other agents' worktrees.
+- When `registerWorker` finds a `test-app` entry from another Miniflare instance whose file is not stale, it retries after `Math.max(1, stats.mtime.getTime() + staleMs - Date.now())` ms (`index.js:131118-131128`). `staleMs` is `WORKER_STALE_MS` = 90 s (`index.js:130935`). The staleness test, `mtime < Date.now() - staleMs` (`index.js:131111`), also reads `Date.now()`.
+- In the two clock tests, `Date` is faked to March 2026 (`sessions.test.ts:98-100,104,107,112-118`). The file's `mtime` is real time (October), so the delay is about 232 days, which exceeds 2³¹−1 ms. Node clamps it to 1 ms and warns. The retry runs `registerWorker` again, which finds the same entry and schedules again, so it loops every 1 ms.
+- Because the faked clock is far in the past, the foreign entry never looks stale, so the loop lasts until `Date` is real again, or until the app is disposed.
+
+**Reproduction (one run of `sessions.test.ts` only, load 0.2).**
+- Setup:
+  - `WRANGLER_REGISTRY_PATH` was a private scratch directory, so the host registry was untouched.
+  - A foreign entry, `test-app` = `{"instanceId":"foreign-process"}`, was written there just before the run.
+  - `NODE_OPTIONS=--trace-warnings` was set, and the Cloudflare variables were unset.
+- Command: `npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/auth/sessions.test.ts`.
+- Result: `Tests 7 passed (7)`, with 241 `TimeoutOverflowWarning`s.
+- All 241 stacks have `setTimeout` ← `DevRegistry.registerWorker (index.js:131124)`. The first call comes from `DevRegistry.register` ← `Miniflare #registerWorkers` ← `#assembleAndUpdateConfigInternal`, and the later calls from the retry timer itself.
+- The delays identify the faked clock exactly. Each one is the entry's `mtime` (22:03:22.950Z) + 90 s minus the faked "now":
+
+  | Delay (ms) | Count | Faked "now" | Matches |
+  |---|---|---|---|
+  | 20167492951 | 112 | 2026-03-01 12:00 | `start` / `now` |
+  | 20081092951 | 127 | 2026-03-02 12:00 | future-dated issue time |
+  | 19562392951 / 19562992951 | 1 each | 2026-03-08 12:00 ± 5 min | the two expiry checks |
+
+- The scan's own numbers fit the same formula: 232.06 and 233.06 days at about 13:23Z real time.
+
+**Corrections to this record's analysis.**
+1. The timer is not from "a previous test's not-yet-disposed app". The app is created inside each clock test, after `Date` is faked (`sessions.test.ts:101,116`). `afterEach` has already disposed of the previous apps. So **proposed fix 1 (`disposeAll` before faking) would not remove it.**
+2. "Timing-dependent" is more exact as "depends on whether another live Miniflare instance has registered `test-app` in the shared registry within the last 90 s":
+   - `vitest.integration.config.ts` runs files in parallel forks;
+   - 16 test files call `createTestApp`;
+   - other agents ran on the same host.
+
+   That explains warnings in some runs and none in others.
+3. The record attributed it to "undici, miniflare or PGlite": it is miniflare. It is triggered by the framework's test harness: the fixed name, plus the host-wide registry that a test app never uses.
+
+**Is it a real defect?** Yes. It is a low-severity defect in the framework's test harness (`src/testing/test-app.ts`), not in `sessions.test.ts`.
+- **Why it is a defect:**
+  - Every test app joins a host-wide dev registry under one fixed name. So test runs in different processes interfere with each other through files under `~/.config`.
+  - Under a faked `Date`, that interference becomes a 1 ms busy loop of synchronous `statSync` and read calls in the test process.
+  - Without a faked clock, it still leaves a 90 s registration-retry timer for each app.
+  - It is also a hidden cross-process dependency of a "fresh local storage" test app (`test-app.ts:3-4`).
+- **Why it is low severity:**
+  - No assertion depends on it, and all 7 tests pass. The loop stops at dispose, and the process exited cleanly in 9.9 s.
+  - `createTestApp` is a contracted public API (`<package>/testing`), so app developers' tests that fake `Date` hit the same loop.
+- **The test itself is correct.** Faking only `Date` is what `core.md` §2 "Testing" prescribes for session expiry (header, `sessions.test.ts:6-7`). Do **not** apply proposed fix 2 (moving `start` to `Date.now()`). It would hide the harness defect by changing a correct test, and it would not remove the cross-process registry dependency.
+
+### Required follow-up (§8 steps 1, 3 and 4)
+1. **Record.** A diagnosing subagent writes a root-cause record for "`createTestApp` registers in the host-wide Miniflare dev registry under a fixed name". It may reuse the evidence above.
+   - It must still rule out one alternative: that the 1 ms loop affects other `createTestApp` users under load.
+   - Because this reviewer found the cause, a *different* reviewer must review that record.
+2. **Fix, red-green, in `packages/framework/src/testing/test-app.ts`.** The test app's platform proxy should not take part in the host-wide dev registry. Two ways to do that:
+   - give it a private registry, for example a `WRANGLER_REGISTRY_PATH` scoped to the app's temporary directory, if `getPlatformProxy` can be given one without changing the process environment for other code;
+   - or give each test app a unique Worker name.
+
+   The record should choose between them with evidence. Changing `process.env` affects other code running in the same process.
+3. **Red test.** Put it in `testing/test-app.unit.test.ts`, or in an integration test if it needs workerd:
+   - plant a fresh foreign `test-app` entry in a scratch registry (`WRANGLER_REGISTRY_PATH`);
+   - fake `Date` to a past date, and create and use a test app;
+   - assert that no `TimeoutOverflowWarning` is emitted (`process.on("warning")`) and that no foreign registry entry is touched.
+4. **No change to `sessions.test.ts` assertions or its fixed clock.**
+5. **Re-check.** Run `sessions.test.ts` alone, with a foreign entry planted as above. Expect 7 passed and 0 warnings.
