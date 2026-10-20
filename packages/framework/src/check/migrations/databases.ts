@@ -58,13 +58,14 @@ const WRANGLER_CONFIG = {
 };
 
 async function openD1(): Promise<CheckDatabase> {
-  const { getPlatformProxy } = await import("wrangler");
+  const { startPlatformProxy } = await import("../../targets/local/platform-proxy.js");
   const dir = mkdtempSync(join(tmpdir(), "migration-checker-"));
   const configPath = join(dir, "wrangler.json");
   writeFileSync(configPath, JSON.stringify(WRANGLER_CONFIG));
-  let proxy: Awaited<ReturnType<typeof getPlatformProxy<{ DB: D1Like }>>>;
+  let proxy: Awaited<ReturnType<typeof startPlatformProxy<{ DB: D1Like }>>>;
   try {
-    proxy = await getPlatformProxy<{ DB: D1Like }>({ configPath, persist: false });
+    // Outside the dev registry; guarded by "sqlite check database and the dev registry" in databases.unit.test.ts.
+    proxy = await startPlatformProxy<{ DB: D1Like }>(configPath);
   } catch (error) {
     rmSync(dir, { recursive: true, force: true });
     throw error;

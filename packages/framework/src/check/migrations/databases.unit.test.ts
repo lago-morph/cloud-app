@@ -3,10 +3,10 @@
  * (check.md §2: "applies both histories to fresh local D1 and PGlite databases, then compares
  * their introspected schemas"). Real local D1 (getPlatformProxy) and PGlite.
  */
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyMigrations } from "../../mig/apply.js";
 import { FRAMEWORK_MIGRATIONS_DIR } from "../../mig/migrations-dir.js";
 import { appSchema, generateMigrations } from "../../mig/generate.js";
@@ -71,4 +71,42 @@ describe.each(["sqlite", "postgres"] as const)("%s", (dialect) => {
     },
     60_000,
   );
+});
+
+// Root cause 2026-10-20-testing-dev-registry.md (fix-registry-2): the checker's local D1 never
+// joins Miniflare's dev registry. WRANGLER_REGISTRY_PATH points at a scratch registry (never the
+// host's) holding live foreign entries; opening the database must write no entry there and leave
+// the foreign ones alone. The checker runs under the real clock (check, verify), so no faked clock
+// is needed. This is also a guard for the shared helper's dependence on Wrangler reading the
+// variable before its first await.
+describe("sqlite check database and the dev registry", { timeout: 60_000 }, () => {
+  let registry: string;
+  beforeEach(() => {
+    registry = mkdtempSync(join(tmpdir(), "mig-check-registry-"));
+    vi.stubEnv("WRANGLER_REGISTRY_PATH", registry);
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    rmSync(registry, { recursive: true, force: true });
+  });
+
+  const snapshot = (): Record<string, { mtimeMs: number; content: string }> =>
+    Object.fromEntries(readdirSync(registry).sort().map((name) => [name, { mtimeMs: statSync(join(registry, name)).mtimeMs, content: readFileSync(join(registry, name), "utf8") }]));
+
+  it("writes no entry of its own, keeps live foreign entries, and restores the variable", async () => {
+    for (const name of ["someone-elses-worker", "another-session"]) writeFileSync(join(registry, name), JSON.stringify({ instanceId: "foreign-process" }));
+    const planted = snapshot();
+    const db = await openCheckDatabase("sqlite");
+    let live: ReturnType<typeof snapshot>;
+    try {
+      expect(process.env.WRANGLER_REGISTRY_PATH).toBe(registry);
+      expect(await db.introspect()).toEqual({});
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      live = snapshot();
+    } finally {
+      await db.close();
+    }
+    expect(live).toEqual(planted);
+    expect(snapshot()).toEqual(planted);
+  });
 });
