@@ -4,7 +4,7 @@ import { runDeploy } from "../core/deploy.js";
 import { FakeTarget } from "../core/fake-target.js";
 import type { SharedResource } from "../core/operations.js";
 import { runSetupAccount } from "../core/setup-account.js";
-import { createSharedResources, inspectSharedResources, LOG_BUCKET, LOG_BUCKET_RESOURCE, type CloudflareApi } from "./account.js";
+import { accountSubdomain, createSharedResources, inspectSharedResources, LOG_BUCKET, LOG_BUCKET_RESOURCE, STATE_HOME_RESOURCE, SUBDOMAIN_RESOURCE, type CloudflareApi } from "./account.js";
 
 const ACCOUNT = "0123456789abcdef0123456789abcdef";
 
@@ -25,6 +25,14 @@ function stubApi(replies: Record<string, Reply>): CloudflareApi & { requests: st
 }
 
 const BUCKET_PATH = `/accounts/${ACCOUNT}/r2/buckets/${LOG_BUCKET}`;
+const STATE_PATH = `/accounts/${ACCOUNT}/r2/buckets/sst-state`;
+const SUBDOMAIN_PATH = `/accounts/${ACCOUNT}/workers/subdomain`;
+/** The state home and the subdomain present: the replies the log-bucket tests do not vary. */
+const OTHERS_PRESENT: Record<string, Reply> = { [`GET ${STATE_PATH}`]: ok({ name: "sst-state" }), [`GET ${SUBDOMAIN_PATH}`]: ok({ subdomain: "example" }) };
+const OTHERS_OWNED: SharedResource[] = [
+  { name: STATE_HOME_RESOURCE, state: "owned" },
+  { name: SUBDOMAIN_RESOURCE, state: "owned" },
+];
 
 describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
   it("the bucket is named prototype-logs (LOG §2)", () => {
@@ -33,22 +41,25 @@ describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
   });
 
   it("reads the bucket from this account: present → owned, not found → absent", async () => {
-    expect(await inspectSharedResources(stubApi({ [`GET ${BUCKET_PATH}`]: ok({ name: LOG_BUCKET }) }), ACCOUNT)).toEqual([
+    expect(await inspectSharedResources(stubApi({ [`GET ${BUCKET_PATH}`]: ok({ name: LOG_BUCKET }), ...OTHERS_PRESENT }), ACCOUNT)).toEqual([
       { name: LOG_BUCKET_RESOURCE, state: "owned" },
+      ...OTHERS_OWNED,
     ]);
-    expect(await inspectSharedResources(stubApi({ [`GET ${BUCKET_PATH}`]: err(404, 10006, "The specified bucket does not exist.") }), ACCOUNT)).toEqual([
+    expect(await inspectSharedResources(stubApi({ [`GET ${BUCKET_PATH}`]: err(404, 10006, "The specified bucket does not exist."), ...OTHERS_PRESENT }), ACCOUNT)).toEqual([
       { name: LOG_BUCKET_RESOURCE, state: "absent" },
+      ...OTHERS_OWNED,
     ]);
   });
 
   it("an existing bucket this account does not own is foreign", async () => {
-    expect(await inspectSharedResources(stubApi({ [`GET ${BUCKET_PATH}`]: err(403, 10002, "Unauthorized to access requested resource") }), ACCOUNT)).toEqual([
+    expect(await inspectSharedResources(stubApi({ [`GET ${BUCKET_PATH}`]: err(403, 10002, "Unauthorized to access requested resource"), ...OTHERS_PRESENT }), ACCOUNT)).toEqual([
       { name: LOG_BUCKET_RESOURCE, state: "foreign" },
+      ...OTHERS_OWNED,
     ]);
   });
 
   it("any other answer is an error naming the bucket and the status, never a guess", async () => {
-    await expect(inspectSharedResources(stubApi({ [`GET ${BUCKET_PATH}`]: err(500, 10001, "internal") }), ACCOUNT)).rejects.toThrow(
+    await expect(inspectSharedResources(stubApi({ [`GET ${BUCKET_PATH}`]: err(500, 10001, "internal"), ...OTHERS_PRESENT }), ACCOUNT)).rejects.toThrow(
       /R2 bucket prototype-logs.*HTTP 500.*internal/,
     );
   });
@@ -73,7 +84,7 @@ describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
   }
 
   it("[PROV-AC-007] with the stubbed response showing the shared log bucket belongs to another account, setup-account and deploy stop with a message naming the bucket and change nothing", async () => {
-    const api = stubApi({ [`GET ${BUCKET_PATH}`]: err(403, 10002, "Unauthorized to access requested resource") });
+    const api = stubApi({ [`GET ${BUCKET_PATH}`]: err(403, 10002, "Unauthorized to access requested resource"), ...OTHERS_PRESENT });
     const t = targetOver(api);
 
     const setupIo = captureIo();
@@ -96,6 +107,7 @@ describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
     const requests: string[] = [];
     const api: CloudflareApi = async (method, path) => {
       requests.push(`${method} ${path}`);
+      if (path === STATE_PATH || path === SUBDOMAIN_PATH) return path === STATE_PATH ? ok({ name: "sst-state" }) : ok({ subdomain: "example" });
       if (method === "GET") return exists ? ok({ name: LOG_BUCKET }) : err(404, 10006, "The specified bucket does not exist.");
       exists = true;
       return ok({ name: LOG_BUCKET });
@@ -104,6 +116,49 @@ describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
     expect(await runSetupAccount(t, captureIo())).toEqual({ status: 0, created: [LOG_BUCKET_RESOURCE] });
     requests.length = 0;
     expect(await runSetupAccount(t, captureIo())).toEqual({ status: 0, created: [] });
-    expect(requests).toEqual([`GET ${BUCKET_PATH}`]);
+    expect(requests).toEqual([`GET ${BUCKET_PATH}`, `GET ${STATE_PATH}`, `GET ${SUBDOMAIN_PATH}`]);
+  });
+
+  it("the state home sst-state is a shared bucket read the same way: owned, absent, foreign (DEC-0084, DEC-0270)", async () => {
+    const replies = (state: Reply) => ({ [`GET ${BUCKET_PATH}`]: ok({ name: LOG_BUCKET }), [`GET ${STATE_PATH}`]: state, [`GET ${SUBDOMAIN_PATH}`]: ok({ subdomain: "example" }) });
+    const stateOf = async (r: Reply) => (await inspectSharedResources(stubApi(replies(r)), ACCOUNT)).find((x) => x.name === STATE_HOME_RESOURCE)?.state;
+    expect(STATE_HOME_RESOURCE).toBe("R2 bucket sst-state");
+    expect(await stateOf(ok({ name: "sst-state" }))).toBe("owned");
+    expect(await stateOf(err(404, 10006, "The specified bucket does not exist."))).toBe("absent");
+    expect(await stateOf(err(403, 10002, "Unauthorized"))).toBe("foreign");
+  });
+
+  it("the workers.dev subdomain is an account setting: set → owned, none → absent; it is never foreign (DEC-0086)", async () => {
+    const replies = (sub: Reply) => ({ [`GET ${BUCKET_PATH}`]: ok({ name: LOG_BUCKET }), [`GET ${STATE_PATH}`]: ok({ name: "sst-state" }), [`GET ${SUBDOMAIN_PATH}`]: sub });
+    const stateOf = async (r: Reply) => (await inspectSharedResources(stubApi(replies(r)), ACCOUNT)).find((x) => x.name === SUBDOMAIN_RESOURCE)?.state;
+    expect(SUBDOMAIN_RESOURCE).toBe("workers.dev subdomain");
+    expect(await stateOf(ok({ subdomain: "example" }))).toBe("owned");
+    expect(await stateOf(ok({ subdomain: "" }))).toBe("absent");
+    expect(await stateOf(err(404, 10007, "This account does not have a workers.dev subdomain"))).toBe("absent");
+    await expect(stateOf(err(403, 10000, "Authentication error"))).rejects.toThrow(/workers\.dev subdomain.*HTTP 403/);
+  });
+
+  it("setup-account creates the absent state home and registers a subdomain derived from the account ID", async () => {
+    const api = stubApi({
+      [`POST /accounts/${ACCOUNT}/r2/buckets`]: ok({ name: "sst-state" }),
+      [`PUT ${SUBDOMAIN_PATH}`]: ok({ subdomain: "pf-0123456789ab" }),
+    });
+    await createSharedResources(api, ACCOUNT, [
+      { name: STATE_HOME_RESOURCE, state: "absent" },
+      { name: SUBDOMAIN_RESOURCE, state: "absent" },
+    ]);
+    expect(api.requests).toEqual([`POST /accounts/${ACCOUNT}/r2/buckets {"name":"sst-state"}`, `PUT ${SUBDOMAIN_PATH} {"subdomain":"pf-0123456789ab"}`]);
+  });
+
+  it("a subdomain registration that is refused names the subdomain and tells the owner how to register one", async () => {
+    const api = stubApi({ [`PUT ${SUBDOMAIN_PATH}`]: err(409, 10032, "subdomain unavailable") });
+    await expect(createSharedResources(api, ACCOUNT, [{ name: SUBDOMAIN_RESOURCE, state: "absent" }])).rejects.toThrow(
+      /registering the workers\.dev subdomain pf-0123456789ab failed: HTTP 409.*register one in the Cloudflare dashboard/,
+    );
+  });
+
+  it("the account subdomain is read from Cloudflare each time (recorded there, not on the owner's machine)", async () => {
+    expect(await accountSubdomain(stubApi({ [`GET ${SUBDOMAIN_PATH}`]: ok({ subdomain: "example" }) }), ACCOUNT)).toBe("example");
+    await expect(accountSubdomain(stubApi({ [`GET ${SUBDOMAIN_PATH}`]: ok({ subdomain: "" }) }), ACCOUNT)).rejects.toThrow(/no workers\.dev subdomain.*setup-account/);
   });
 });

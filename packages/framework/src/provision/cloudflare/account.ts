@@ -1,63 +1,94 @@
 /**
  * Cloudflare account setup, shared-resource part (PROV-REQ-004; cloudflare.md "Deploy
- * mechanics" `setupAccount`; LOG §2): the shared R2 log bucket `prototype-logs` and the check
- * that this account owns it. Used by `setupAccount` (create when absent) and by the deploy
- * preflight (inspect only), through the per-target operations `inspectAccount` and
- * `createSharedResources`. D-03 adds the state home (`sst-state`, DEC-0084) and the
- * `workers.dev` subdomain (DEC-0086) here.
+ * mechanics" `setupAccount`; LOG §2; PROV §2 "State home"). The account's shared resources are:
+ * - the shared R2 log bucket `prototype-logs`;
+ * - SST's state home, the R2 bucket `sst-state` (DEC-0084);
+ * - the account's `workers.dev` subdomain (DEC-0086), the account setting that every stage's
+ *   public origin is built from. Cloudflare keeps it; it is read from there on every deploy,
+ *   never only recorded on the owner's machine (DEC-PENDING-D-03-3).
+ * Used by `setupAccount` (create when absent) and by the deploy preflight (inspect only),
+ * through the per-target operations `inspectAccount` and `createSharedResources`.
  *
- * Ownership (DEC-0270): R2 bucket names are scoped to an account, so the bucket is
+ * Bucket ownership (DEC-0270): R2 bucket names are scoped to an account, so a bucket is
  * read through this account's API path. Found → owned; Cloudflare's "not found" (HTTP 404)
  * → absent; refused (HTTP 403), or a creation that conflicts with an existing bucket
  * (HTTP 409) → it exists but this account does not own it (or its credentials cannot see it).
  * Every other answer is an error naming the bucket and the status; nothing is guessed.
+ * These readings are not yet verified against the live API: D-RUN verifies them
+ * (DEC-PENDING-D-03-4; the exact requests are listed there).
  */
 import type { SharedResource } from "../core/operations.js";
+import { describeFailure, resultOf, succeeded, type CloudflareApi } from "./api.js";
+import { STATE_BUCKET } from "./names.js";
 
-/**
- * One Cloudflare API request, relative to `https://api.cloudflare.com/client/v4`. The caller
- * (D-03) supplies authentication and the proxy settings (DEC-0107); this module never sees a
- * credential.
- */
-export type CloudflareApi = (method: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: unknown) => Promise<{ readonly status: number; readonly body: unknown }>;
+export type { CloudflareApi } from "./api.js";
 
 /** The account's shared log bucket on Cloudflare (LOG §2). */
 export const LOG_BUCKET = "prototype-logs";
-/** The shared resource's name as printed to the owner. */
+/** The shared resources' names as printed to the owner. */
 export const LOG_BUCKET_RESOURCE = `R2 bucket ${LOG_BUCKET}`;
+export const STATE_HOME_RESOURCE = `R2 bucket ${STATE_BUCKET}`;
+export const SUBDOMAIN_RESOURCE = "workers.dev subdomain";
 
-function firstError(body: unknown): string {
-  const errors = (body as { errors?: { code?: unknown; message?: unknown }[] } | null)?.errors;
-  const e = Array.isArray(errors) ? errors[0] : undefined;
-  return e ? `${String(e.message ?? "")}${e.code !== undefined ? ` (code ${String(e.code)})` : ""}` : "no error detail";
+async function inspectBucket(api: CloudflareApi, accountId: string, bucket: string): Promise<SharedResource> {
+  const name = `R2 bucket ${bucket}`;
+  const r = await api("GET", `/accounts/${accountId}/r2/buckets/${bucket}`);
+  if (succeeded(r)) return { name, state: "owned" };
+  if (r.status === 404) return { name, state: "absent" };
+  if (r.status === 403) return { name, state: "foreign" };
+  throw new Error(`checking ${name} failed: ${describeFailure(r)}`);
 }
 
-const succeeded = (r: { status: number; body: unknown }) => r.status >= 200 && r.status < 300 && (r.body as { success?: unknown } | null)?.success === true;
-
-async function inspectLogBucket(api: CloudflareApi, accountId: string): Promise<SharedResource> {
-  const r = await api("GET", `/accounts/${accountId}/r2/buckets/${LOG_BUCKET}`);
-  if (succeeded(r)) return { name: LOG_BUCKET_RESOURCE, state: "owned" };
-  if (r.status === 404) return { name: LOG_BUCKET_RESOURCE, state: "absent" };
-  if (r.status === 403) return { name: LOG_BUCKET_RESOURCE, state: "foreign" };
-  throw new Error(`checking ${LOG_BUCKET_RESOURCE} failed: HTTP ${r.status}: ${firstError(r.body)}`);
-}
-
-async function createLogBucket(api: CloudflareApi, accountId: string): Promise<void> {
-  const r = await api("POST", `/accounts/${accountId}/r2/buckets`, { name: LOG_BUCKET });
+async function createBucket(api: CloudflareApi, accountId: string, bucket: string): Promise<void> {
+  const name = `R2 bucket ${bucket}`;
+  const r = await api("POST", `/accounts/${accountId}/r2/buckets`, { name: bucket });
   if (succeeded(r)) return;
-  if (r.status === 409) throw new Error(`${LOG_BUCKET_RESOURCE} already exists but belongs to another account; nothing was created`);
-  throw new Error(`creating ${LOG_BUCKET_RESOURCE} failed: HTTP ${r.status}: ${firstError(r.body)}`);
+  if (r.status === 409) throw new Error(`${name} already exists but belongs to another account; nothing was created`);
+  throw new Error(`creating ${name} failed: ${describeFailure(r)}`);
+}
+
+/** The account's `workers.dev` subdomain, or undefined when it has none. */
+async function readSubdomain(api: CloudflareApi, accountId: string): Promise<string | undefined> {
+  const r = await api("GET", `/accounts/${accountId}/workers/subdomain`);
+  if (r.status === 404) return undefined;
+  const result = resultOf<{ subdomain?: unknown } | null>(r, `checking the ${SUBDOMAIN_RESOURCE}`);
+  return typeof result?.subdomain === "string" && result.subdomain !== "" ? result.subdomain : undefined;
+}
+
+/** The subdomain `setup-account` registers on an account that has none (DEC-PENDING-D-03-3). */
+export const defaultSubdomain = (accountId: string): string => `pf-${accountId.slice(0, 12).toLowerCase()}`;
+
+async function registerSubdomain(api: CloudflareApi, accountId: string): Promise<void> {
+  const subdomain = defaultSubdomain(accountId);
+  const r = await api("PUT", `/accounts/${accountId}/workers/subdomain`, { subdomain });
+  if (succeeded(r)) return;
+  throw new Error(
+    `registering the ${SUBDOMAIN_RESOURCE} ${subdomain} failed: ${describeFailure(r)}; register one in the Cloudflare dashboard (Workers & Pages) and run setup-account again`,
+  );
+}
+
+/** The account subdomain every stage's public origin is built from; fails when there is none. */
+export async function accountSubdomain(api: CloudflareApi, accountId: string): Promise<string> {
+  const subdomain = await readSubdomain(api, accountId);
+  if (subdomain === undefined) throw new Error(`the account has no ${SUBDOMAIN_RESOURCE}; run setup-account --target cloudflare first`);
+  return subdomain;
 }
 
 /** The account's shared resources on Cloudflare and their state. Sends only reads. */
 export async function inspectSharedResources(api: CloudflareApi, accountId: string): Promise<SharedResource[]> {
-  return [await inspectLogBucket(api, accountId)];
+  return [
+    await inspectBucket(api, accountId, LOG_BUCKET),
+    await inspectBucket(api, accountId, STATE_BUCKET),
+    { name: SUBDOMAIN_RESOURCE, state: (await readSubdomain(api, accountId)) === undefined ? "absent" : "owned" },
+  ];
 }
 
 /** Creates the given absent shared resources. The core calls it only when none is foreign. */
 export async function createSharedResources(api: CloudflareApi, accountId: string, absent: readonly SharedResource[]): Promise<void> {
   for (const resource of absent) {
-    if (resource.name === LOG_BUCKET_RESOURCE) await createLogBucket(api, accountId);
+    if (resource.name === LOG_BUCKET_RESOURCE) await createBucket(api, accountId, LOG_BUCKET);
+    else if (resource.name === STATE_HOME_RESOURCE) await createBucket(api, accountId, STATE_BUCKET);
+    else if (resource.name === SUBDOMAIN_RESOURCE) await registerSubdomain(api, accountId);
     else throw new Error(`unknown Cloudflare shared resource ${resource.name}`);
   }
 }
