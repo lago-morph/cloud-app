@@ -62,3 +62,9 @@ None.
 ## Missing routes or fixtures
 
 None found: every route the scenarios need is in `apps/reference/ROUTES.md`. The template has no test IDs; E2E-001 uses its visible texts (headings, button names, placeholders, "Uploaded.", "Saved.", "The secret apiKey is set.").
+
+## Completion notes (resumed after a container restart)
+
+- Re-checked every scenario test against `docs/acceptance/e2e-scenarios.md`; no scenario in the C-T4 row was missing or unfinished, so no test changes were needed. E2E-005, E2E-010, E2E-012 and the cloud parts of E2E-011 and E2E-014 are cloud-only and run in phase D.
+- `npm run typecheck` needs the framework package built first (`npm run build -w packages/framework`), because the tests import the package's `dist/` exports. The driver builds before it type-checks.
+- Informational local run (`--only E2E-001,-003,-004,-007,-011,-013,-014,-016`; apiKey set locally to a generated dummy value; evidence not committed): all passed except E2E-004, whose coverage part fails as DEC-PENDING-C-T4-4 expects. Still untagged at this point: CHECK-AC-005, CLI-AC-003, COMPL-AC-001/002/003/006/007, DEMO-AC-001…011, E2E-002, KV-AC-001…005, LOCAL-AC-001, PROV-AC-007, SKILL-AC-001…005, SQL-AC-003…006. These belong to other items that are not merged yet. The record part passed.
