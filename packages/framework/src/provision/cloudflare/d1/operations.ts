@@ -9,6 +9,7 @@
  */
 import type { CloudflareApi } from "../account.js";
 import type { ListedDatabase, Stage, StageDatabase, TargetOperations } from "../../core/operations.js";
+import { copyD1Database, DEFAULT_COPY_LIMITS, type CopyLimits } from "./copy.js";
 import { d1HttpMigrationDatabase } from "./migration-database.js";
 import { d1Client, D1RequestError, DATABASE_LIMIT_CODE, type D1Client } from "./client.js";
 
@@ -16,12 +17,16 @@ export interface D1Options {
   /** D-03's Cloudflare API client. It may throw when no answer arrives (timeout, reset). */
   readonly api: CloudflareApi;
   readonly accountId: string;
+  /** Copy page limits; tests only. Defaults: PAR-216, PAR-218. */
+  readonly limits?: Partial<CopyLimits>;
 }
 
 export type D1DatabaseOperations = Pick<TargetOperations, "createDatabase" | "copyDatabase" | "dropDatabase" | "migrationDatabase" | "checkMigratedDatabase"> & {
   /** Every D1 database of the account, for `listStageResources`. */
   listDatabases(): Promise<ListedDatabase[]>;
 };
+
+const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 const NUMBER = /-db-(\d+)$/;
 
@@ -51,15 +56,28 @@ async function create(client: D1Client, name: string): Promise<StageDatabase> {
 
 export function d1DatabaseOperations(options: D1Options): D1DatabaseOperations {
   const client = d1Client(options.api, options.accountId);
+  const limits: CopyLimits = { ...DEFAULT_COPY_LIMITS, ...options.limits };
   const notYet = () => Promise.reject(new Error("not implemented"));
   return {
     createDatabase: (_stage: Stage, name: string) => create(client, name),
-    copyDatabase: notYet,
+    async copyDatabase(_stage: Stage, from: StageDatabase, name: string) {
+      const next = await create(client, name);
+      try {
+        await copyD1Database(client, from.id, next.id, limits);
+        return next;
+      } catch (error) {
+        const dropped = await client.delete(next.id).then(
+          () => "the new database was deleted",
+          (e: unknown) => `the new database could not be deleted (${messageOf(e)})`,
+        );
+        throw new Error(`copying D1 database ${from.name} into ${name} failed: ${messageOf(error)}; ${dropped}`);
+      }
+    },
     async dropDatabase(_stage: Stage, database: StageDatabase) {
       try {
         await client.delete(database.id);
       } catch (error) {
-        throw new Error(`deleting D1 database ${database.name}: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(`deleting D1 database ${database.name}: ${messageOf(error)}`);
       }
     },
     migrationDatabase: (database: StageDatabase) => d1HttpMigrationDatabase(client, database.id),

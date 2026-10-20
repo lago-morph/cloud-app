@@ -29,7 +29,10 @@ describe("D1 database operations: create, list, drop", () => {
     const ops = d1DatabaseOperations({ api: fake.api, accountId: ACCOUNT });
     await ops.createDatabase(stage, "notes-test-abc-db-1");
     await ops.createDatabase(stage, "notes-test-abc-db-2");
-    const err = await ops.createDatabase(stage, "notes-test-abc-db-3").catch((e: unknown) => e as Error);
+    const err = await ops.createDatabase(stage, "notes-test-abc-db-3").then(
+      () => new Error("expected a failure"),
+      (e: unknown) => e as Error,
+    );
     expect(err).toBeInstanceOf(Error);
     expect(err.message).toMatch(/notes-test-abc-db-3/);
     expect(err.message).toMatch(/maximum number of D1 databases/);
