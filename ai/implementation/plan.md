@@ -10,7 +10,7 @@ Abbreviations: `FW` = `packages/framework` (package `@lago-morph/prototype-frame
 
 - **Roles are separate subagents** (prompt §7, §8): for any code, the *implementer*, the *test-case author*, the *test runner*, the *evaluator*, a *diagnoser*, and a *root-cause reviewer* are six different subagents. None may be the author of the code under test. Item IDs ending in `-Tn` are test-author items, `-RUN` runner items, `-EV` evaluator items, `-INT` integrator items.
 - **Branches:** each item works on `claude/implement-local-cloudflare-<item-id lowercase>` in its own worktree, branched from the current feature branch `claude/implement-local-cloudflare`; it commits and pushes before returning (CLAUDE.md).
-- **Before returning**, an implementer rebases on the feature branch and runs `npm run verify` (root, once B-17 has wired it; before that, `npm run typecheck && npm run test:unit`) and reports the result. The orchestrator merges only items that report a green run.
+- **Before returning**, an implementer rebases on the feature branch, runs the per-item checks of "Test economy" below (not a full `npm run verify`, except where that section requires it), and reports the result. The orchestrator merges only items that report green per-item checks; the full `npm run verify` runs once per merge batch.
 - **Ownership:** an item edits only the paths in its "Owns" line, plus its own decision draft (§10.4) and its own root-cause records. Needing to edit anything else = stop and return an open question.
 - **Scope:** nothing AWS (no adapters, target, provisioning, or placeholder code that pretends to work); no queues, webhooks, or anything `removed`/`not-adopted` in the decision log; no `prodcheck` or any non-`test-` cloud stage (prompt §4).
 - **Docs in sync:** an implementer that changes a design detail updates that component's design doc in the same commit (it owns that doc for the item's duration); contract-file changes (`docs/contracts/**`) need a decision draft and are allowed only to the item named as the contract's owner below.
@@ -26,6 +26,20 @@ The target apps are low-volume; nothing in this framework needs more than a hand
 - **Estimate before big runs:** before D-RUN, D-RUN-M or F-03, a subagent writes an estimate of D1 rows and Cloudflare API requests per run into that plan item's notes; the run does not start until the orchestrator has checked the estimate against the caps.
 - **D1 is off until reset (owner direction, DEC-0317):** Cloudflare D1 is not used until the daily limit has reset and these caps can be met. Until then, every criterion that needs D1 on Cloudflare is recorded `blocked` with detail "D1 daily row limit exhausted by phase A spikes on 2026-10-19; re-run after reset" (driver `--blocked`, DEC-0261).
 - **At most two D1 databases at once (DEC-0318):** a schema-changing deploy holds two databases (MIG-REQ-006 copy), so a cloud run never has one running beside the run stage. The MIG criteria, E2E-010 and E2E-012 run in their own passes with no run stage (§5 D-RUN, D-RUN-M).
+
+### Test economy (binding for every item)
+
+Origin: owner · Status: accepted (approved by the owner on 2026-10-20). These rules override any per-item text that asks for more test runs; phase-end runs (`-RUN` items, exit checks) stay as written.
+
+1. **Implementers and fixers** run only: the unit tests related to the files they changed (`vitest related <files>`, or the changed package's unit tests), `npm run typecheck`, `npm run lint`, the integration suite of the component they changed, and the compliance criteria (by ID) their change affects. They run the full `npm run verify` only when they change shared configuration, the build, or root scripts.
+2. **Documentation-only items** run typecheck, lint and the skill tests (`tests/skill`). **Test-only items** run typecheck, lint and the tests they changed.
+3. **Full `npm run verify`**, online and offline (§10.2), runs once per merge batch, by a test runner on the merged code (on the staging branch first), not per item.
+4. **Offline runs per item** only when the item touches the CLI, `dev`, the migration checker, the evidence writer, or network code.
+5. **Full compliance suite** runs once at each phase end, after all fixes have landed. Between, only the affected criteria are re-run.
+6. **Order-dependence checks** cover only test files with state shared across tests: two shuffled seeds plus each tag run alone; no repeat of the normal order.
+7. **Concurrency:** at most 2–3 subagents run test suites at the same time; documentation and read-only work may run alongside them.
+8. **Reviewers** (diagnosers, root-cause reviewers) reproduce a failure once, plus one experiment per hypothesis; they repeat a run under load only when timing is the claimed cause.
+9. **Background commands:** a subagent keeps at most one background wait at a time, and stops every background command it started (dev servers, scans, wait loops) before reporting.
 
 ---
 
@@ -446,7 +460,7 @@ Test authors in B2 run until their suites are complete; their suites are expecte
 - `npm run test:integration` — `FW/test/integration/**` in-process with real local dependencies (Miniflare/workerd D1, R2; PGlite; local file system), plus `tests/compliance/criteria/**` against `--target` (default `local`).
 - `npm run test:e2e` — `tests/compliance/e2e/**` against `--target`.
 - `npm run compliance -- --target <t> [--stage <s>] [--milestone]` — runs the integration + E2E layers for the target (on local also the unit layer, for the unit-level criteria of §10.3 only; DEC-0319) and writes evidence.
-- `npm run verify` — framework self-checks plus `npx <package> verify` in `apps/template` and `apps/reference`. Run before returning any item.
+- `npm run verify` — framework self-checks plus `npx <package> verify` in `apps/template` and `apps/reference`. Run once per merge batch by a test runner, and per item only as §1 "Test economy" allows; items run the per-item checks listed there.
 - The test runner and file glob are PAR-116 (chosen by A-10).
 
 ### 10.2 Offline runs
