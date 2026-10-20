@@ -88,3 +88,13 @@ Simulated fix (wrangler of the live `dev` called with `Host: 127.0.0.1:44991`, w
 - **Not run by this review.** `npm run smoke` and the full `npm run verify`.
 
 **Verification plan.** Adequate. Its regression list, especially `npm run smoke` against `dev` and `npm run verify`, should be run by the fixer and evaluator. The red-green test should post through a running `dev`, not straight to wrangler.
+
+## Fix
+
+Fixing subagent (prompt §8 step 3), branch `claude/implement-local-cloudflare-fix-c1` from `origin/claude/implement-local-cloudflare`. Commit `69ae283`.
+
+- **Change.** `packages/framework/src/cli/dev/runtime.ts` (`startClient`): the `/api` proxy uses `changeOrigin: true`, so wrangler receives `Host: 127.0.0.1:<worker port>`. Vite's host check still reads the browser's `Host` before the proxy. docs/components/cli.md's `dev` paragraph records this.
+- **Red.** New unit test `packages/framework/src/cli/dev/runtime.unit.test.ts` `[AUTH-AC-007] proxies /api with the Worker's own Host…` checks the proxy entry passed to Vite's `createServer`. Before the change it failed with `- "changeOrigin": true / + "changeOrigin": false`.
+- **Green.** After the change it passes. `npm run verify` passes.
+- **Compliance (informational, evidence not committed).** The same run as the FILES-AC-004 record: AUTH-AC-007 passed all 4 tests, including `through the deployed router: … wrong Origin`. LOCAL-AC-004, FILES-AC-003, FILES-AC-004, FILES-AC-006 and E2E-009 also passed. HTTP-AC-004 is Cloud-only and was ignored.
+- **Smoke.** The template's `smoke --target local` passed 4/4 through the changed proxy, covering health, the public read, the note write/read with the mock session, and the status write/read. The first attempt's `SEC.MISSING` health failure was a local secret that had not been set. It was resolved by setting a dummy `apiKey`.

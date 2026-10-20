@@ -81,3 +81,13 @@ Author: diagnosing subagent (prompt §8 step 1; did not write the code or the te
 - **Side benefit.** With the default `cors`, a preflight was answered before the host check ran. With `cors: false`, every request reaches the host check.
 
 **Verification plan.** Adequate. It has a red-green `dev`-level test, the compliance rerun and same-origin regressions. The red test should also check that `OPTIONS` is no longer answered by Vite, for example that the status is not 204 and there is no `Access-Control-Allow-*` header.
+
+## Fix
+
+Fixing subagent (prompt §8 step 3), branch `claude/implement-local-cloudflare-fix-c1` from `origin/claude/implement-local-cloudflare`. Commit `69ae283`.
+
+- **Change.** `packages/framework/src/cli/dev/runtime.ts` (`startClient`): Vite's `server.cors: false`. docs/components/cli.md's `dev` paragraph now says Vite sends no CORS headers.
+- **Red.** New unit test `packages/framework/src/cli/dev/runtime.unit.test.ts` `[FILES-AC-004] adds no CORS headers…` mocks `vite`'s `createServer`, calls `realDevDeps().startClient` and checks the `server` options. Before the change it failed with `expected undefined to be false`: `cors` was unset, so Vite used its loopback default.
+- **Green.** After the change both tests in the file pass. `npm run verify` passes.
+- **Compliance (informational, evidence not committed).** `npm run compliance -- --target local --only FILES-AC-004,AUTH-AC-007,FILES-AC-003,FILES-AC-006,HTTP-AC-004,E2E-009,LOCAL-AC-004`, with a dummy reference `apiKey`: FILES-AC-004, FILES-AC-003, FILES-AC-006, E2E-009, AUTH-AC-007 and LOCAL-AC-004 passed. HTTP-AC-004 is Cloud-only and was ignored on `local`. The browser specs passed 10/10.
+- **Smoke.** The template's `smoke --target local` against `dev` passed 4/4. The first attempt failed the health test with `SEC.MISSING` because the template's `apiKey` was unset locally. After setting a dummy value and restarting `dev`, it passed.
