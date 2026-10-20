@@ -91,3 +91,12 @@ Yes. The cause is an example block whose source lies outside what `verify` type-
 2. `skill/reference/testing.md` line 48: drop "its Vitest configuration," from the link text.
 3. Verify: `grep -rn "vitest.config" skill/examples skill/reference` prints nothing. The `-t "type-checked by its app's verify"` run passes. `npx vitest run --config vitest.integration.config.ts tests/skill/` reports 26/26. A byte-for-byte check confirms every remaining block still equals its source.
 4. Follow-up (separate, owner decision): whether to delete `vitest.config.ts` from `apps/template` (and `apps/reference`), updating the PROV-AC-001 reading and the decision log to match.
+
+## Fix
+
+Fixing subagent (prompt §8 step 3), branch `claude/implement-local-cloudflare-fix-e1` from `origin/claude/implement-local-cloudflare`.
+
+- Red: `npx vitest run --config vitest.integration.config.ts tests/skill/examples.test.ts -t "type-checked by its app's verify"` failed (1 failed, 6 skipped), with the `skill/examples/tests.md` `vitest.config.ts` item.
+- Change, as the Review's exact fix: deleted the `` ## `apps/template/vitest.config.ts` `` section and the intro bullet from `skill/examples/tests.md`, and "its Vitest configuration," from `skill/reference/testing.md`. No prose line was added; `testing.md` already states `verify`'s own glob and timeouts.
+- Follow-up 4 (owner decision left open by the Review): nothing uses the file (no script, `verify`/`smoke` use `config: false`, no scaffolder step, no test that needs it, no doc that says to run plain `vitest`), so `apps/template/vitest.config.ts` and `apps/reference/vitest.config.ts` are deleted. Recorded as DEC-PENDING-fix-e1-1 in `ai/implementation/decisions/fix-e1.md`, ai-proposed, open for owner review.
+- Green: the same `-t` run passes; `npx vitest run --config vitest.integration.config.ts tests/skill/` 26/26 passed (includes both apps' `verify` and the byte-for-byte example checks). `grep -rn "vitest.config" skill/examples skill/reference` prints nothing.
