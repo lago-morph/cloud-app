@@ -257,3 +257,39 @@ describe("diag-c7 F2: pending-stages write failure", () => {
   });
 });
 ```
+
+---
+
+## Review
+
+Reviewer: independent root-cause reviewer (prompt §8 step 2). I did not diagnose this, nor write `cli.ts`, `driver.ts` or their tests. Branch `claude/implement-local-cloudflare-rc-c7-review` from `origin/claude/implement-local-cloudflare` (`5ff76ea`). Local only; no Cloudflare calls. No code or tests changed: my reproduction tests and the trial of both diffs were run, then removed and reverted (`git status` clean before this section was added).
+
+**Verdict: ACCEPTED.**
+
+### Independent reproduction (own fakes)
+Temporary `zz-rev-c7-cli.unit.test.ts` (mocks `./driver.js` and `./node-deps.js`, imports `./cli.js` after `vi.resetModules()`) and `zz-rev-c7-pending.unit.test.ts` (the `harness()` of `driver.unit.test.ts`, one passing `[KV-AC-001]` test, `pendingStages.remove` replaced by a thrower). On the unfixed code:
+- F1: unknown option `--bogus` → 64 (control, passes); resolved `{ exitStatus: 2 }` → 2 (control, passes); a **non-Error** rejection (`"boom"`) → `expected 64 to be 1`; `nodeDeps()` throwing (`git missing`) → `expected 64 to be 1`. The second case is a path the record did not list: `nodeDeps(repoRoot)` is evaluated inside the same `try` (`cli.ts:22`).
+- F2 A (own stage): events `… remove test-abcdefghij12345 | pending- test-abcdefghij12345 THROW`; `runCompliance` rejects with `EACCES`; `written` 0. Confirms E2.1.
+- F2 B (stale stage): events `run run | run run | remove test-oldoldoldold123 | pending- … THROW`; no deploy, no test run; KV-AC-001 and KV-AC-002 `not-run: setting up the target failed: EACCES…`; `leftovers []`; exit 1. Confirms E2.2.
+- F2 C (whole store unwritable: `add` also throws), stale stage: record written, exit 1, criteria `not-run: setting up the target failed`. Passes before and after the fix, which is right (record's ruling on `add`).
+- F2 D (own-stage write fails after a failing test run with runner status 3): before the fix it rejects (no record); after, exit 3 and KV-AC-001 `failed`, i.e. the original status is kept (CLI-REQ-003).
+
+### Trial of both diffs as written in the record
+Applied verbatim, with my temp tests present: `npx vitest run --config vitest.unit.config.ts tests/compliance/harness/` → `Test Files 16 passed (16)`, `Tests 103 passed (103)` (95 existing + my 8). `tsc -p tests/compliance/harness/tsconfig.json --noEmit` showed nothing in `cli.ts`/`driver.ts` (only the existing unbuilt-package TS2307 errors and strictness notes in my temp file). Then reverted.
+
+### Checks asked of the review
+1. **Evidence supports every link.** Yes. Each chain link (shared catch at `cli.ts:23-26`; unguarded `:158`; `finally` at `:233` replacing the completion so `:255` is never reached; `:182` inside the setup `try` → `:217-222`) is shown by the event logs and assertions above, and E2.0 shows the real store's `write` throws.
+2. **64 vs 2 for usage, against cli.md.** `cli.md` "Implementation (`src/cli/`, …)" (0 success, 1 failure, 2 usage) governs the framework CLI, not this runner; the runner already uses 2 for "evidence refused" (`cli.ts:5`, `driver.ts:119`, `:264`) and documents 64 for usage. Keeping usage at 64 and mapping runtime failures to 1 matches the runner's own contract and CLI-AC-003 ("reflect the original failure"). Moving the runner onto 0/1/2 would collide with its 2 and is an owner decision, out of scope. Not a reason to reject.
+3. **Alternatives ruled out.** Yes: the controls rule out the fakes; the driver cannot be made total (`writeEvidence` I/O); swallowing in the store hides a partial failure; reusing 2 mislabels.
+4. **Is a record now written in every path the defect covers?** For every pending-store path, yes: after the guard, nothing in `removeStage` can throw (`assertTestStage`, `ops.remove`, `checkLeftovers` and now `pendingStages.remove` are each guarded) and `local.stop` is guarded, so the `finally` cannot replace the completion; A, B and D all write one record. Paths that still write none are those before the record exists or while writing it (`select()`/`deps.catalogue()` at `:125`, non-dirty `assertCleanTree` at `:117`, `criterionResults`/`deps.versions()` at `:240`/`:251`, non-dirty `writeEvidence` at `:262`). After F1 they exit 1 with the message. The record lists them as an open observation; they are not part of this defect, and I do not require them here.
+5. **Stale-stage failure records criteria correctly, not as setup failures.** Yes (B after fix): KV-AC-001 `passed`, no `driver-error.log`, `raw["pending-stages.log"]` holds `EACCES`, exit 1 both returned and in the record, `leftovers` empty. Note: because the stale-stage write fails first, `exitStatus` is already 1 when the test runners report, so a later non-zero runner status (say 3) is recorded as 1. This is the existing first-failure-wins `||=` rule (same as typecheck at `:177`) and the per-criterion results still show the failures, so I accept it; the fixer should not "improve" it ad hoc.
+6. **Fix addresses the cause.** Yes: F1 separates usage errors from runtime errors at the one place the status is chosen; F2 guards the single unguarded call both paths go through.
+
+### Fix requirements (for §8 step 3)
+1. `tests/compliance/harness/cli.ts`: apply the F1 diff as given (parse in its own `try` → 64; run in a second `try` → print `compliance: <message>` and exit 1; `String(error)` for non-Error values). `nodeDeps(repoRoot)` must stay inside the second `try`. Update the header comment: "1 … when the runner failed unexpectedly (the message is printed)".
+2. `tests/compliance/harness/driver.ts`: apply the F2 diff in `removeStage` only, exactly as given (append to `raw["pending-stages.log"]`, log with `firstLine`, `exitStatus ||= 1`). Do not guard `pendingStages.add` (a stage that cannot be recorded as pending must not be deployed).
+3. Docs: add the pending-stage-list clause to the `cli.ts` header and to the exit sentence in `docs/components/compliance.md` (Driver paragraph), as proposed.
+4. Red-green tests tagged `[CLI-AC-003]`, committed red first:
+   - new `tests/compliance/harness/cli.unit.test.ts`: usage → 64 and `runCompliance` not called; resolved status passed through (include 2); `Error` rejection → 1 with message on stderr; non-Error rejection → 1; `nodeDeps` throwing → 1.
+   - in `driver.unit.test.ts`, using `harness()`: A (own stage: one record, exit 1, KV-AC-001 `passed`, `raw["pending-stages.log"]` contains the error); B (stale stage: deploy and tests run, KV-AC-001 `passed`, no `driver-error.log`, exit 1 returned and in record); D (failing run with runner status 3 + own-stage write failure: one record, exit 3, KV-AC-001 `failed`).
+5. Re-check per §8 step 4: the full `tests/compliance/harness/` unit run and the harness `tsc` check.
