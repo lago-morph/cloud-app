@@ -5,7 +5,7 @@
  * next, ending at the first line that does not start with `|`. The ID and the Where text are read
  * from their columns. Rows outside criteria tables are ignored, whatever their width; a malformed
  * row inside one, or an `ID | Criterion` header without that shape, throws with file and line
- * (root cause 2026-10-20-COMPL-AC-001-where-parser-decision-log, DEC-PENDING-fix-e2-1).
+ * (root cause 2026-10-20-COMPL-AC-001-where-parser-decision-log, DEC-0408).
  * Scenarios are `#### E2E-nnn` headers followed by a `Where:` line (e2e-scenarios.md preamble).
  */
 import { readdirSync, readFileSync } from "node:fs";
