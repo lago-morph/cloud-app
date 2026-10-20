@@ -192,3 +192,43 @@ Prefer a function matcher over a `${pkgRoot}/**` glob, so that glob metacharacte
 Verification as in the record: a red integration test first (fetch `/`, rebuild or rewrite a `dist/client/*.js`, then the first page sees one navigation and no `full-reload` frame), then the E5 repeat, then a full local compliance run with the `apiKey` secret set. Also check for the live form: with a reference page open, run the scaffolder, and the page must not reload.
 
 Side note (not part of this cause, no change asked): Vite also logs `[file change]` for `apps/reference/.wrangler/state/**`. No client module matches those files, so they cause no reload today.
+
+## Fix
+
+Fixer: fixing subagent (prompt §8 step 3). Branch `claude/implement-local-cloudflare-fix-c4b` from `origin/claude/implement-local-cloudflare`. Local only; no Cloudflare calls. Every `dev` server I started was stopped.
+
+### Change
+
+The reviewed fix, as written; no test was changed or weakened.
+- `packages/framework/src/cli/dev/runtime.ts`: a new `frameworkRoot()` walks up from `dirname(fileURLToPath(import.meta.url))` to the nearest directory with a `package.json` and returns its `realpathSync`. That directory is `packages/framework`, both from `dist/cli/dev` and from `src/cli/dev`.
+- `startClient` passes `server.watch.ignored: [(p) => p === pkgRoot || p.startsWith(pkgRoot + sep)]`. It is a function, not a glob. Vite appends it to its defaults (`.git`, `node_modules`, `test-results`, the cache dir).
+
+### Red, then green
+
+- Added a unit test, `[FILES-AC-003] does not watch the framework package's own files…`, in `runtime.unit.test.ts`. It uses the Vite mock already in that file, and it checks that:
+  - the framework's real root and `dist/client/index.js` are ignored;
+  - `/apps/one/src/client/main.ts` and a sibling `<root>-other/x.js` are not.
+- **Red on the original `runtime.ts`:** `AssertionError: expected false to be true` at the root assertion, line 54. The framework root was not ignored. 1 failed, 2 passed.
+- **Green with the fix:** 3 passed.
+
+### The original chain, reproduced on the fixed code
+
+Fresh `dev` of `apps/reference` with `DEBUG=vite:hmr`:
+1. **Crawl.** A crawler fetched `/` and every module it imports over HTTP: 13 paths, including the 6 `packages/framework/dist` modules.
+2. **Rebuild, then connect.** I ran `npm run build -w packages/framework` (it did rewrite `dist/client/index.js`), then opened the first Chromium page. Frames: `framenavigated /`, `ws<- {"type":"connected"}`, and then nothing for 3 s. Result: **1 navigation, 0 `full-reload` frames.** Before the fix, the page got `{"type":"full-reload",…dist/client/index.js}` and reloaded (record E5).
+3. **Live form.** With a page open, I rebuilt `dist` and watched for 15 s: 1 navigation, 0 `full-reload` frames.
+4. **The dev log** had 0 `[file change]` lines for `packages/framework` across all of this.
+5. **Control: app files are still watched.** With a page open, `touch apps/reference/src/client/main.ts` produced `[file change] src/client/main.ts` and a `full-reload` (2 navigations).
+
+### Checks
+
+- **`npm run verify`** passes online and offline (`unshare -rn sh scripts/offline.sh`). Unit tests: 1638 passed.
+- **`npm run compliance -- --target local --only FILES-AC-003,SKILL-AC-005,E2E-001,SEC-AC-002`:**
+  - Run `vhigthtzz589duv`, no `apiKey` set: FILES-AC-003, SKILL-AC-005 and E2E-001 passed; SEC-AC-002 failed.
+  - Run `bgsa0djfwc7wl79`, with a dummy `apiKey` set as in run 2, so `no-leak.test.ts` passed and crawled `/` before `scaffold.test.ts` rebuilt `dist`: the same three passed, including the expired-ticket clause (15.5 m). Its `raw/dev.log` (with `DEBUG=vite:hmr`) has 0 lines naming `packages/framework`.
+  - The dummy secret was removed from `.dev.vars` afterwards. Evidence for both runs is in scratch, outside the repo: `/tmp/claude-0/-home-user-cloud-app/b6482c07-38ed-5065-a51e-6194e2f52fc3/scratchpad/fix-c4b/compliance{,2}/`.
+- **SEC-AC-002's remaining failure is not caused by this change.** In both runs one test failed: `packages/framework/test/integration/secrets/cli.test.ts` `[SEC-AC-002] local: …` with `expected +0 to be 3` on `errorResponses.length`.
+  - That array is filled only by the same file's SEC-AC-001 test, which `--only` filters out.
+  - The file run unfiltered passes, 4 of 4.
+  - So it is an ordering dependency between tests, exposed by `--only`. It needs its own root-cause record and is not part of this fix.
+  - In the first run, `no-leak.test.ts` also failed with `PREREQUISITE MISSING` (no `apiKey`), as in record E7.

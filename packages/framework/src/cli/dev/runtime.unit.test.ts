@@ -1,3 +1,6 @@
+import { realpathSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Captures the configuration `dev` hands to Vite, without starting a server.
@@ -14,6 +17,7 @@ const { realDevDeps } = await import("./runtime.js");
 interface ServerOptions {
   cors?: unknown;
   proxy?: Record<string, { target?: string; changeOrigin?: boolean }>;
+  watch?: { ignored?: unknown };
 }
 
 async function serverOptions(): Promise<ServerOptions> {
@@ -38,5 +42,19 @@ describe("dev's Vite client server (local.md §2, files.md §2 Local, DEC-0006)"
     const proxy = Object.values((await serverOptions()).proxy ?? {});
     expect(proxy).toHaveLength(1);
     expect(proxy[0]).toMatchObject({ target: "http://127.0.0.1:8801", changeOrigin: true });
+  });
+
+  it("[FILES-AC-003] does not watch the framework package's own files, as in an installed app where it is under node_modules", async () => {
+    // In the monorepo the framework is a workspace link to packages/framework; a rebuild of its dist
+    // (the scaffolder's `npm pack` → prepack) would otherwise make Vite reload, or buffer a reload for, the app's pages.
+    const frameworkRoot = realpathSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../.."));
+    const ignored = (await serverOptions()).watch?.ignored;
+    const matchers = (Array.isArray(ignored) ? ignored : [ignored]).filter((m): m is (p: string) => boolean => typeof m === "function");
+    const isIgnored = (p: string) => matchers.some((m) => m(p));
+    expect(isIgnored(frameworkRoot)).toBe(true);
+    expect(isIgnored(join(frameworkRoot, "dist", "client", "index.js"))).toBe(true);
+    // The app's own files, and a sibling directory sharing the prefix, stay watched.
+    expect(isIgnored("/apps/one/src/client/main.ts")).toBe(false);
+    expect(isIgnored(`${frameworkRoot}-other/x.js`)).toBe(false);
   });
 });
