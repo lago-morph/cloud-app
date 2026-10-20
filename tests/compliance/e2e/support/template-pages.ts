@@ -13,7 +13,7 @@
  * - LOG: the note's log entry in `.logs/` (checked by the caller).
  */
 import { spawn } from "node:child_process";
-import { chromium, type Page } from "@playwright/test";
+import { chromium, type Download, type Page } from "@playwright/test";
 
 const appDir = process.argv[2];
 const greeting = process.argv[3] ?? "";
@@ -139,20 +139,42 @@ try {
     await files.getByText("Uploaded.").waitFor(T);
     const item = files.getByRole("listitem").filter({ hasText: "e2e-001.txt" });
     await item.waitFor(T);
-    const [popup] = await Promise.all([context.waitForEvent("page", T), item.getByRole("button", { name: "Download" }).click()]);
+    // The page opens the download URL in a new window: it either downloads or shows the file.
+    // Listeners are attached in the `page` handler, before any event of the new page.
+    const outcome = new Promise<Download | Page>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("no download and no page load within 30 s")), 30_000);
+      // Chromium may attribute a download from a new window to the opener page.
+      page.once("download", (d) => {
+        clearTimeout(timer);
+        resolve(d);
+      });
+      context.once("page", (p) => {
+        p.once("download", (d) => {
+          clearTimeout(timer);
+          resolve(d);
+        });
+        p.once("load", () => {
+          clearTimeout(timer);
+          resolve(p);
+        });
+      });
+    });
+    await item.getByRole("button", { name: "Download" }).click();
+    const got = await outcome.catch(async (error: unknown) => {
+      const shown = await files.locator("p").first().textContent();
+      throw new Error(`${error instanceof Error ? error.message : String(error)}; page message: ${JSON.stringify(shown)}; pages open: ${String(context.pages().length)}`);
+    });
     let body: string;
-    const download = await popup.waitForEvent("download", { timeout: 10_000 }).catch(() => undefined);
-    if (download !== undefined) {
-      const stream = await download.createReadStream();
+    if ("createReadStream" in got) {
+      const stream = await got.createReadStream();
       const chunks: Buffer[] = [];
       for await (const chunk of stream) chunks.push(Buffer.from(chunk as Uint8Array));
       body = Buffer.concat(chunks).toString("utf8");
     } else {
-      await popup.waitForLoadState("load", T);
-      body = await popup.evaluate(() => document.body.innerText);
+      body = await got.evaluate(() => document.body.innerText);
     }
+    for (const other of context.pages()) if (other !== page) await other.close();
     if (body.trim() !== content.trim()) throw new Error(`downloaded ${JSON.stringify(body.slice(0, 80))}, uploaded ${JSON.stringify(content)}`);
-    await popup.close();
   });
   await check("AUTH: log out through the account page", async () => {
     await page.bringToFront();

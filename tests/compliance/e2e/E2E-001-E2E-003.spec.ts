@@ -101,7 +101,9 @@ test(tag("E2E-001", "a scaffolded app installs the framework from a packed tarba
     const imported = await offline([process.execPath, join(checkDir, "imports.mjs")], { cwd: appDir, timeoutMs: 120_000 });
     expect(imported.status, `importing every public subpath failed:\n${tail(imported.output)}`).toBe(0);
     writeFileSync(join(checkDir, "imports.ts"), `${specifiers.map((s, i) => `import * as m${String(i)} from ${JSON.stringify(s)};`).join("\n")}\nexport const all = [${specifiers.map((_, i) => `m${String(i)}`).join(", ")}];\n`);
-    const typed = await offline(["npx", "--no-install", "tsc", "--noEmit", "--strict", "--skipLibCheck", "--target", "ES2023", "--module", "ESNext", "--moduleResolution", "Bundler", join(checkDir, "imports.ts")], { cwd: appDir, timeoutMs: 300_000 });
+    const tsconfig = { compilerOptions: { noEmit: true, strict: true, skipLibCheck: true, target: "ES2023", lib: ["ES2023", "DOM"], module: "ESNext", moduleResolution: "Bundler" }, files: ["imports.ts"] };
+    writeFileSync(join(checkDir, "tsconfig.json"), `${JSON.stringify(tsconfig, null, 2)}\n`);
+    const typed = await offline(["npx", "--no-install", "tsc", "-p", join(checkDir, "tsconfig.json")], { cwd: appDir, timeoutMs: 300_000 });
     expect(typed.status, `type checking imports of every public subpath failed:\n${tail(typed.output)}`).toBe(0);
   } finally {
     rmSync(checkDir, { recursive: true, force: true });
