@@ -259,6 +259,10 @@ function isAppApi(origin: string, request: Request): boolean {
 export class Recorder {
   private readonly done: Promise<Recorded>[] = [];
   private readonly listener: (request: Request) => void;
+  private readonly started: (request: Request) => void;
+  /** App API requests sent so far, and how many of them were state-changing. */
+  sent = 0;
+  mutationsSent = 0;
 
   constructor(
     private readonly page: Page,
@@ -278,23 +282,49 @@ export class Recorder {
         })(),
       );
     };
+    this.started = (request) => {
+      if (!isAppApi(this.origin, request)) return;
+      this.sent += 1;
+      if (request.method() !== "GET" && request.method() !== "HEAD") this.mutationsSent += 1;
+    };
+    page.on("request", this.started);
     page.on("requestfinished", this.listener);
     page.on("requestfailed", this.listener);
   }
 
-  /** Stops recording and returns what was recorded, in the order sent. */
+  /**
+   * Stops recording once every request sent has finished and the page has been quiet for a
+   * moment (a click's API call starts asynchronously, after the click returns), and returns what
+   * was recorded, in the order sent.
+   */
   async stop(): Promise<Recorded[]> {
-    await this.page.waitForLoadState("networkidle").catch(() => undefined);
+    let last = -1;
+    await expect
+      .poll(
+        async () => {
+          await this.page.waitForLoadState("load").catch(() => undefined);
+          const quiet = this.done.length === this.sent && last === this.sent;
+          last = this.sent;
+          return quiet;
+        },
+        { timeout: 60_000, intervals: [500] },
+      )
+      .toBe(true);
+    this.page.off("request", this.started);
     this.page.off("requestfinished", this.listener);
     this.page.off("requestfailed", this.listener);
     return Promise.all(this.done);
   }
 }
 
-/** Records the app API requests sent while `action` runs (and the page settles). */
-export async function record(page: Page, origin: string, action: () => Promise<void>): Promise<Recorded[]> {
+/**
+ * Records the app API requests sent while `action` runs (and the page settles). With
+ * `mutation`, first waits until the page has sent a state-changing request.
+ */
+export async function record(page: Page, origin: string, action: () => Promise<void>, options: { readonly mutation?: boolean } = {}): Promise<Recorded[]> {
   const recorder = new Recorder(page, origin);
   await action();
+  if (options.mutation === true) await expect.poll(() => recorder.mutationsSent, { message: "the page sends a state-changing API request", timeout: 30_000 }).toBeGreaterThan(0);
   return recorder.stop();
 }
 

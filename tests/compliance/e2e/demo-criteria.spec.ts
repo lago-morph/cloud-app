@@ -103,7 +103,7 @@ async function editTitle(s: Session, title: string, next: string): Promise<Recor
   const rec = await record(s.page, s.origin, async () => {
     await field.fill(next);
     await s.page.getByRole("button", { name: ASSUMED.saveButton }).first().click();
-  });
+  }, { mutation: true });
   return theMutation(rec, "saving the edited draft");
 }
 
@@ -112,7 +112,7 @@ async function act(s: Session, name: RegExp, what: string): Promise<Recorded> {
   s.page.once("dialog", (dialog) => void dialog.accept());
   const rec = await record(s.page, s.origin, async () => {
     await s.page.getByRole("button", { name }).first().click({ timeout: 30_000 });
-  });
+  }, { mutation: true });
   return theMutation(rec, what);
 }
 
@@ -306,7 +306,7 @@ async function setBannerThroughPage(admin: Session, text: string): Promise<Recor
   await openSettled(admin.page, "/");
   const field = await bannerField(admin.page);
   await field.fill(text, { timeout: 30_000 });
-  const rec = await record(admin.page, admin.origin, () => admin.page.getByRole("button", { name: ASSUMED.setBannerButton }).first().click());
+  const rec = await record(admin.page, admin.origin, () => admin.page.getByRole("button", { name: ASSUMED.setBannerButton }).first().click(), { mutation: true });
   return theMutation(rec, "the admin sets the banner");
 }
 
@@ -387,12 +387,13 @@ test(tag("DEMO-AC-005", "a user's posts-per-page choice, made through the page, 
     const chosen = choice ?? "";
     const rec = await record(user.page, o, async () => {
       await control(user.page).selectOption(chosen);
+      await user.page.waitForTimeout(1_000);
     });
     const saves = rec.filter((r) => r.method !== "GET");
     if (saves.length === 0) {
       // A separate save control, if the choice is not saved on change.
       const save = user.page.getByRole("button", { name: ASSUMED.saveButton });
-      if ((await save.count()) > 0) theMutation(await record(user.page, o, () => save.first().click()), "saving the posts-per-page choice");
+      if ((await save.count()) > 0) theMutation(await record(user.page, o, () => save.first().click(), { mutation: true }), "saving the posts-per-page choice");
     }
     expect(await settledValue(user.page), "the choice is shown after a reload").toBe(chosen);
 
@@ -419,7 +420,7 @@ test(tag("DEMO-AC-005", "a user's posts-per-page choice, made through the page, 
 async function createShareLink(author: Session): Promise<{ link: string; request: Recorded }> {
   const page = author.page;
   const before = new Set(await page.locator("a[href]").evaluateAll((els) => els.map((e) => (e as HTMLAnchorElement).href)));
-  const rec = await record(page, author.origin, () => page.getByRole("button", { name: ASSUMED.shareButton }).first().click({ timeout: 30_000 }));
+  const rec = await record(page, author.origin, () => page.getByRole("button", { name: ASSUMED.shareButton }).first().click({ timeout: 30_000 }), { mutation: true });
   const request = theMutation(rec, "creating a share link");
   const found = async (): Promise<string | undefined> => {
     const hrefs = await page.locator("a[href]").evaluateAll((els) => els.map((e) => (e as HTMLAnchorElement).href));

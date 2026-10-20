@@ -45,10 +45,12 @@ if (target().target === "local") {
     const copy: ScratchApp = await scratchCopy(DEMO_DIR, "e2e-002", { git: true });
     let dev: DevSession | undefined;
     try {
-      // The copy holds exactly the commit's files.
+      // The copy holds exactly the commit's files. `scratchCopy` writes its own `.gitignore` (the
+      // scratch repository's ignore list, not app source), so that one file is not compared.
       const differing: string[] = [];
       for (const file of files) {
         const rel = file.slice("apps/demo/".length);
+        if (rel === ".gitignore") continue;
         const committed = execFileSync("git", ["show", `HEAD:${file}`], { cwd: REPO_ROOT, maxBuffer: 64 * 1024 * 1024 });
         const copied = existsSync(join(copy.dir, rel)) ? readFileSync(join(copy.dir, rel)) : undefined;
         if (copied === undefined || !copied.equals(committed)) differing.push(rel);
