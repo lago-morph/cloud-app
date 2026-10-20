@@ -95,3 +95,17 @@ Checks:
 - **Cheaper alternative weighed:** relying on the compliance driver's local run (which already collects `example-pages.test.ts`, tagged SKILL-AC-004) would avoid the browser in `verify`. It is cheaper but contradicts accepted DEC-0389; it needs a new decision amending DEC-0389 to "CI = root `verify` plus the compliance suite's local run". Not recommended: the release report (COMPL-AC-006) already depends on the driver, so the amendment buys little, and it widens a definition other criteria rely on.
 - **Cost against Test economy:** the rules limit *how often* full `verify` runs (rule 1: implementers only when changing shared config/build/root scripts; rule 3: once per merge batch), not what it contains. So the ~20 s Chromium run is paid once per merge batch, beside the apps' `verify` runs that already take minutes. That is acceptable.
 - **Requirement if wired (orchestrator's call, with E-T2-2):** append `&& vitest run --config vitest.integration.config.ts tests/skill/example-pages.test.ts` to root `verify` in a separate item (not this fix); that item runs one full `verify` online **and offline** (rule 1, §10.2), because `dev` + Chromium under `scripts/offline.sh` is unproven; an offline failure is a new root-cause record, not a reason to drop the wiring. If the orchestrator prefers the driver-only wiring, it must record a decision amending DEC-0389 first.
+
+## Fix
+
+Fixer: prompt §8 step 3, branch `claude/implement-local-cloudflare-fix-e3` from `origin/claude/implement-local-cloudflare` (`9787c99`). Local only; no Cloudflare calls.
+
+1. **Missing link (SKILL-AC-001).**
+   - Red: `npx vitest run --config vitest.integration.config.ts tests/skill/budgets-and-links.test.ts` → 1 failed, 8 passed (the per-reference link test, as recorded).
+   - Change: `skill/reference/deploying.md` "Examples" gains one bullet linking `../examples/configuration.md` (`config/cloudflare/test.json`; a production stage needs its own `config/cloudflare/<stage>.json`). It is above "Stopping condition". The file is now 6,583 bytes (PAR-071 budget 12,000).
+   - Green: the same file 9/9. Per-item checks (Test economy rule 2): typecheck, lint, `tests/skill` without `examples.test.ts` and `example-pages.test.ts` (27/27); compliance driver `--target local --only SKILL-AC-001,SKILL-AC-002`: 2 passed.
+2. **SKILL-AC-004 wiring (DEC-0389, E-T2-2).** Root `package.json` `verify` now ends with `&& vitest run --config vitest.integration.config.ts tests/skill/example-pages.test.ts`, the line E-T2 recorded. Root scripts changed, so full `npm run verify` ran (plan §1 rule 1, §10.2):
+   - online: passed, 11 min 43 s in all; the added `example-pages.test.ts` run: 2/2 in 17.2 s;
+   - offline (`unshare -rn sh scripts/offline.sh npm run verify`): passed, 602 s in all; the added run: 2/2 in 19.3 s. So `dev` + Chromium work under the offline wrapper.
+
+No test, design or other reference changed.
