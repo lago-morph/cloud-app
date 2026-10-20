@@ -11,6 +11,11 @@ export const ENV = {
   stage: "COMPLIANCE_STAGE",
   baseUrl: "COMPLIANCE_BASE_URL",
   runId: "COMPLIANCE_RUN_ID",
+  /**
+   * The value the driver set for the reference app's test secret `apiKey` on a cloud run stage
+   * (DEC-0277; read by `testSecretValue()` in `criteria/core/support/stores.ts`).
+   */
+  testSecret: "COMPLIANCE_SECRET_API_KEY",
 } as const;
 
 export interface TargetEnv {
@@ -43,13 +48,14 @@ export function readTargetEnv(env: Env = process.env): TargetEnv {
 }
 
 /** The environment for a test process: the parent's, plus the target variables. */
-export function childEnv(base: Env, t: { readonly target: Target; readonly stage?: string; readonly baseUrl?: string; readonly runId: string }): Record<string, string> {
+export function childEnv(base: Env, t: { readonly target: Target; readonly stage?: string; readonly baseUrl?: string; readonly runId: string; readonly testSecret?: string }): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(base)) if (v !== undefined) out[k] = v;
   out[ENV.target] = t.target;
   out[ENV.runId] = t.runId;
   if (t.stage !== undefined) out[ENV.stage] = t.stage;
   if (t.baseUrl !== undefined) out[ENV.baseUrl] = t.baseUrl;
+  if (t.testSecret !== undefined) out[ENV.testSecret] = t.testSecret;
   if (t.target !== "local") out.NODE_USE_ENV_PROXY = "1";
   return out;
 }

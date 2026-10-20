@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ACCOUNT, FakeCloud } from "../../../packages/framework/src/provision/cloudflare/fake-cloud.test-support.js";
 import { stageLeftovers } from "./leftovers.js";
-import { deployOrigin, devOrigin, pendingStageStore, readVersions, stageResourceOperations } from "./node-deps.js";
+import { cloudflareOperations } from "../../../packages/framework/src/cli/commands/deploy.js";
+import { deployOrigin, devOrigin, generateTestSecret, pendingStageStore, readVersions, runProcess, secretsNotSet, stageResourceOperations } from "./node-deps.js";
 
 const repo = new URL("../../../", import.meta.url).pathname;
 let dir: string | undefined;
@@ -104,5 +105,47 @@ describe("the driver's Cloudflare leftover check (D-06-2; COMPL-REQ-004, PROV §
     expect(seen).toEqual([]);
     const proxied = await stageResourceOperations(repo, "cloudflare", { env: { ...ENV, HTTPS_PROXY: "http://proxy:1", NODE_USE_ENV_PROXY: "1" }, fetch });
     expect(await stageLeftovers(proxied, stage)).toEqual([]);
+  });
+});
+
+describe("the run stage's test secret (D-07; DEC-0277)", () => {
+  const ENV = { CLOUDFLARE_API_TOKEN: "placeholder", CLOUDFLARE_ACCOUNT_ID: ACCOUNT };
+
+  it("generates a long random value of letters and digits, different each time", () => {
+    const a = generateTestSecret();
+    const b = generateTestSecret();
+    expect(a).toMatch(/^[A-Za-z0-9]{32}$/);
+    expect(b).toMatch(/^[A-Za-z0-9]{32}$/);
+    expect(a).not.toBe(b);
+  });
+
+  it("recognises a deploy that stopped only because secrets are unset (first deploy after step 5, or the preflight)", () => {
+    expect(secretsNotSet("deploy failed at step code: required secrets are not set: apiKey\nnext: set them with secrets set")).toBe(true);
+    expect(secretsNotSet("missing prerequisites:\n  - secret apiKey is not set (set it with secrets set)")).toBe(true);
+    expect(secretsNotSet("deploy failed at step infrastructure: SST failed")).toBe(false);
+  });
+
+  it("passes standard input to the process and hides the given values in its live echo, line by line", async () => {
+    const echoed: string[] = [];
+    const value = "Zq8hidden0value0K3";
+    const result = await runProcess(
+      { command: process.execPath, args: ["-e", "let s='';process.stdin.on('data',c=>s+=c).on('end',()=>{process.stdout.write('got '+s.length+'\\n'+s.slice(0,4));process.stdout.write(s.slice(4)+' end\\n')})"], cwd: repo, env: { PATH: process.env.PATH ?? "" }, input: value, redact: [value] },
+      (text) => echoed.push(text),
+    );
+    expect(result.status).toBe(0);
+    expect(result.output).toBe(`got ${String(value.length)}\n${value} end\n`);
+    expect(echoed.join("")).toBe(`got ${String(value.length)}\n<test-secret> end\n`);
+    expect(echoed.join("")).not.toContain(value.slice(0, 8));
+  });
+
+  it("setting the value through the framework's Cloudflare operations is one API request", async () => {
+    const cloud = FakeCloud.withSharedResources();
+    cloud.workers.set("reference-test-abc", { secrets: new Map<string, string>(), enabled: true, previews: false, bindings: [] });
+    const seen: string[] = [];
+    const make = cloudflareOperations({ env: ENV, requireCredentials: true, fetch: cloudFetch(cloud, [], seen) });
+    const ops = make({ appDir: join(repo, "apps", "reference"), target: "cloudflare" });
+    await ops.setSecret({ app: "reference", stage: "test-abc" }, "apiKey", "Zq8hidden0value0K3");
+    expect(seen).toEqual([`/client/v4/accounts/${ACCOUNT}/workers/scripts/reference-test-abc/secrets`]);
+    expect(cloud.workers.get("reference-test-abc")?.secrets.get("SECRET_API_KEY")).toBe("Zq8hidden0value0K3");
   });
 });

@@ -1,11 +1,17 @@
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { validateEvidence, type EvidenceRecord, type GitState, type WriteEvidenceInput } from "../../../packages/framework/src/evidence/public.js";
+import { validateEvidence, writeEvidence, type EvidenceRecord, type GitState, type WriteEvidenceInput } from "../../../packages/framework/src/evidence/public.js";
 import { parseArgs } from "./args.js";
 import { parseWhere, type CatalogueEntry } from "./catalogue.js";
-import { runCompliance, type CloudStageOps, type DriverDeps, type RunCall } from "./driver.js";
+import { runCompliance, SecretsNotSetError, type CloudStageOps, type DriverDeps, type RunCall } from "./driver.js";
 
 const entry = (id: string, where: string, source = "components/x.md"): CatalogueEntry => ({ id, where, source, applies: parseWhere(where, source) });
 const CATALOGUE = [entry("KV-AC-001", "Local, cloud"), entry("KV-AC-002", "Local, cloud"), entry("CLI-AC-002", "Local"), entry("CLI-AC-001", "Local, cloud"), entry("PROV-AC-003", "Cloud (milestone)")];
+
+/** A made-up test secret for the fakes (DEC-0277: letters and digits, at least 12). */
+const SECRET = "Fk7test0secret0value0Q2w9";
 
 const vitestReport = (tests: { title: string; status: string; message?: string }[]): string =>
   JSON.stringify({ testResults: [{ name: "/repo/tests/compliance/criteria/a.test.ts", status: "passed", assertionResults: tests.map((t) => ({ ancestorTitles: [], title: t.title, status: t.status, failureMessages: t.message === undefined ? [] : [t.message] })) }] });
@@ -32,6 +38,7 @@ function harness(options: { dirty?: string[]; vitest?: string; vitestStatus?: nu
     git,
     catalogue: () => options.catalogue ?? CATALOGUE,
     newRunId: () => "abcdefghij12345",
+    newTestSecret: () => SECRET,
     now: () => new Date("2026-10-20T10:00:00.000Z"),
     versions: () => ({ "@lago-morph/prototype-framework": "0.1.0", node: "v22.22.0" }),
     tempDir: () => "/tmp/run",
@@ -52,6 +59,7 @@ function harness(options: { dirty?: string[]; vitest?: string; vitestStatus?: nu
     cloud: () => ({
       deploy: (stage) => (events.push(`deploy ${stage}`), Promise.resolve({ baseUrl: "https://reference-test.owner-sub.workers.dev", output: "deployed" })),
       remove: (stage) => (events.push(`remove ${stage}`), Promise.resolve("removed")),
+      setSecret: (stage, name) => (events.push(`secret ${name} ${stage}`), Promise.resolve(`set secret ${name} for target cloudflare as SECRET_API_KEY (a Worker secret of stage ${stage})`)),
       listStageResources: () => Promise.resolve([]),
       ...options.cloud,
     }),
@@ -208,7 +216,18 @@ describe("[COMPL-AC-004] cloud runs use a disposable test stage", () => {
   it("deploys test-<runId>, passes NODE_USE_ENV_PROXY, removes the stage, and redacts the account subdomain", async () => {
     const h = harness({ vitest: vitestReport([{ title: "[KV-AC-001] put", status: "passed" }]) });
     await runCompliance(parseArgs(["--target", "cloudflare"]), ["--target", "cloudflare"], h.deps);
-    expect(h.events).toEqual(["run run", "run run", "pending+ test-abcdefghij12345", "deploy test-abcdefghij12345", "run vitest", "run playwright", "remove test-abcdefghij12345", "pending- test-abcdefghij12345"]);
+    expect(h.events).toEqual([
+      "run run",
+      "run run",
+      "pending+ test-abcdefghij12345",
+      "deploy test-abcdefghij12345",
+      "secret apiKey test-abcdefghij12345",
+      "deploy test-abcdefghij12345",
+      "run vitest",
+      "run playwright",
+      "remove test-abcdefghij12345",
+      "pending- test-abcdefghij12345",
+    ]);
     const vitest = h.calls.find((c) => c.args[0] === "vitest");
     expect(vitest?.env.NODE_USE_ENV_PROXY).toBe("1");
     expect(vitest?.env.COMPLIANCE_STAGE).toBe("test-abcdefghij12345");
@@ -236,7 +255,7 @@ describe("[COMPL-AC-004] cloud runs use a disposable test stage", () => {
   it("cleans up a stage left by an interrupted earlier run, and reports what remains", async () => {
     const h = harness({ pending: ["test-old000000000001"], cloud: { listStageResources: (s) => Promise.resolve(s === "test-old000000000001" ? ["r2-token test-old000000000001"] : []) } });
     await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], h.deps);
-    expect(h.events.filter((e) => /^(remove|deploy) /.test(e))).toEqual(["remove test-old000000000001", "deploy test-abcdefghij12345", "remove test-abcdefghij12345"]);
+    expect(h.events.filter((e) => /^(remove|deploy) /.test(e))).toEqual(["remove test-old000000000001", "deploy test-abcdefghij12345", "deploy test-abcdefghij12345", "remove test-abcdefghij12345"]);
     expect(recordOf(h).leftovers).toEqual(["test-old000000000001: r2-token test-old000000000001"]);
   });
 
@@ -265,6 +284,125 @@ describe("[COMPL-AC-004] cloud runs use a disposable test stage", () => {
     const h = harness();
     await runCompliance(parseArgs(["--target", "cloudflare", "--milestone"]), [], h.deps);
     expect(recordOf(h).results.map((r) => r.id)).toEqual(["PROV-AC-003"]);
+  });
+});
+
+// DEC-0277, DEC-0366, D-07: on a cloud run stage the driver sets the reference app's test secret `apiKey` to a value it
+// generates, passes it to the tests in COMPLIANCE_SECRET_API_KEY, and never lets it reach the evidence, raw output or log.
+describe("[COMPL-AC-004] the test secret on a cloud run stage (DEC-0277)", () => {
+  const stopsOnSecrets = (events: string[]): Partial<CloudStageOps> => {
+    let deploys = 0;
+    return {
+      deploy: (stage) => {
+        events.push(`deploy ${stage}`);
+        deploys += 1;
+        if (deploys === 1) return Promise.reject(new SecretsNotSetError("deploy failed at step code: required secrets are not set: apiKey", "first deploy output"));
+        return Promise.resolve({ baseUrl: "https://reference-test.owner-sub.workers.dev", output: "redeployed" });
+      },
+    };
+  };
+  const files = (dir: string): string[] =>
+    readdirSync(dir, { recursive: true, withFileTypes: true })
+      .filter((d) => d.isFile())
+      .map((d) => join(d.parentPath, d.name));
+
+  it("first deploy stops on the unset secret: sets a generated value with secrets set, redeploys, and passes it to the tests only", async () => {
+    const events: string[] = [];
+    const set: { stage: string; name: string; value: string }[] = [];
+    const h = harness({
+      cloud: {
+        ...stopsOnSecrets(events),
+        setSecret: (stage, name, value) => (events.push(`secret ${name} ${stage}`), set.push({ stage, name, value }), Promise.resolve("set secret apiKey")),
+      },
+    });
+    await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], h.deps);
+    expect(events).toEqual(["deploy test-abcdefghij12345", "secret apiKey test-abcdefghij12345", "deploy test-abcdefghij12345"]);
+    expect(set).toEqual([{ stage: "test-abcdefghij12345", name: "apiKey", value: SECRET }]);
+    const tests = h.calls.filter((c) => c.args[0] === "vitest" || c.args[0] === "playwright");
+    expect(tests.length).toBeGreaterThan(0);
+    for (const c of tests) {
+      expect(c.env.COMPLIANCE_SECRET_API_KEY).toBe(SECRET);
+      // The test runners' live echo hides it too.
+      expect(c.redact).toEqual([SECRET]);
+    }
+    // Never on a command line, and not given to the build or typecheck.
+    for (const c of h.calls) expect(c.args.join(" ")).not.toContain(SECRET);
+    for (const c of h.calls.filter((x) => x.command === "npm")) expect(c.env.COMPLIANCE_SECRET_API_KEY).toBeUndefined();
+    const raw = h.written[0]?.raw ?? {};
+    expect(raw["deploy.log"]).toBe("first deploy output");
+    expect(raw["secrets-set.log"]).toBe("set secret apiKey");
+    expect(raw["redeploy.log"]).toBe("redeployed");
+    expect(h.written[0]?.redactions).toContainEqual({ value: SECRET, replacement: "<test-secret>" });
+  });
+
+  it("a stage whose first deploy succeeds (a reused --stage) still gets the generated value and a redeploy", async () => {
+    const h = harness();
+    await runCompliance(parseArgs(["--target", "cloudflare", "--stage", "test-reused", "--only", "KV-AC-001"]), [], h.deps);
+    expect(h.events.filter((e) => /^(deploy|secret|remove) /.test(e))).toEqual(["deploy test-reused", "secret apiKey test-reused", "deploy test-reused", "remove test-reused"]);
+    expect(h.calls.find((c) => c.args[0] === "vitest")?.env.COMPLIANCE_SECRET_API_KEY).toBe(SECRET);
+  });
+
+  it("evidence and raw output written by the real writer never contain the value, even when a test prints it", async () => {
+    const root = mkdtempSync(join(tmpdir(), "d07-evidence-"));
+    try {
+      const h = harness({ vitest: vitestReport([{ title: "[KV-AC-001] put", status: "failed", message: `expected body not to contain ${SECRET}` }]), vitestStatus: 1 });
+      const run = h.deps.run;
+      const deps: DriverDeps = {
+        ...h.deps,
+        run: async (c) => {
+          const r = await run(c);
+          return { ...r, output: `${r.output} saw ${c.env.COMPLIANCE_SECRET_API_KEY ?? ""}` };
+        },
+        writeEvidence: (input) => writeEvidence({ ...input, root }),
+      };
+      const result = await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], deps);
+      const written = files(root);
+      expect(written.some((f) => f.endsWith("abcdefghij12345.json"))).toBe(true);
+      const log = written.find((f) => f.endsWith("vitest.log"));
+      expect(log).toBeDefined();
+      for (const f of written) expect(readFileSync(f, "utf8"), f).not.toContain(SECRET);
+      expect(readFileSync(log ?? "", "utf8")).toContain("<test-secret>");
+      expect(h.logs.join("\n")).not.toContain(SECRET);
+      expect(result.exitStatus).toBe(1);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("a failed secrets set runs no tests, records the reason without the value, and still removes the stage", async () => {
+    const events: string[] = [];
+    const h = harness({
+      cloud: {
+        ...stopsOnSecrets(events),
+        setSecret: () => Promise.reject(new Error("secrets set apiKey --target cloudflare --stage test-abcdefghij12345 failed with status 1")),
+        remove: (s) => (events.push(`remove ${s}`), Promise.resolve("removed")),
+      },
+    });
+    const result = await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], h.deps);
+    expect(h.calls.filter((c) => c.args[0] === "vitest")).toEqual([]);
+    expect(recordOf(h).results.find((r) => r.id === "KV-AC-001")?.detail).toBe(
+      "not run: setting up the target failed: secrets set apiKey --target cloudflare --stage test-abcdefghij12345 failed with status 1",
+    );
+    expect(events).toContain("remove test-abcdefghij12345");
+    expect(h.written[0]?.redactions).toContainEqual({ value: SECRET, replacement: "<test-secret>" });
+    expect(result.exitStatus).toBe(1);
+  });
+
+  it("a first deploy that fails for another reason is not retried and sets no secret", async () => {
+    const h = harness({ cloud: { deploy: (s) => (h.events.push(`deploy ${s}`), Promise.reject(new Error("deploy failed at step infrastructure"))) } });
+    await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], h.deps);
+    expect(h.events.filter((e) => /^(deploy|secret) /.test(e))).toEqual(["deploy test-abcdefghij12345"]);
+  });
+
+  it("local runs and cloud runs on a given --base-url generate and set nothing (the local value stays in .dev.vars)", async () => {
+    let generated = 0;
+    const local = harness();
+    await runCompliance(parseArgs(["--target", "local", "--only", "KV-AC-001"]), [], { ...local.deps, newTestSecret: () => (generated++, SECRET) });
+    expect(local.calls.find((c) => c.args[0] === "vitest")?.redact).toBeUndefined();
+    const given = harness();
+    await runCompliance(parseArgs(["--target", "cloudflare", "--base-url", "https://x.y.workers.dev", "--only", "KV-AC-001"]), [], { ...given.deps, newTestSecret: () => (generated++, SECRET) });
+    expect(given.events.filter((e) => e.startsWith("secret "))).toEqual([]);
+    expect(generated).toBe(0);
   });
 });
 
