@@ -102,3 +102,46 @@ Make every test in `packages/framework/test/integration/secrets/cli.test.ts` ind
   - It also reruns `npm run compliance -- --target local --only SEC-AC-001`. Expect no failure from `cli.test.ts`.
   - Then a full unfiltered local run. The evaluator judges.
 - **Scan for the same pattern** (reviewer or fixer). Look for other integration and criteria files whose tests read module-level state that differently tagged tests write. Repeat the shuffle and single-tag `-t` runs per file. This record proves the pattern only for `cli.test.ts`.
+
+## Review
+
+Reviewer: independent root-cause reviewer (prompt §8 step 2); did not diagnose this, or write the code or the tests. Branch `claude/implement-local-cloudflare-rc-c5-review` from `origin/claude/implement-local-cloudflare`, after `npm ci` and `npm run build -w packages/framework`. No code or test changed.
+
+**Verdict: ACCEPTED.**
+
+### Reproduction (this review)
+`npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/secrets/cli.test.ts …`:
+
+| Filter | Result |
+|---|---|
+| none | `Tests 4 passed (4)` |
+| `-t '\[SEC-AC-002\]'` | `AssertionError: expected +0 to be 3` at `cli.test.ts:127:35`; 1 failed, 3 skipped |
+| `-t '\[SEC-AC-001\]'` | `expected 500 to be 200` at `cli.test.ts:94:25`; 1 failed, 3 skipped |
+| none, `--sequence.shuffle --sequence.seed=3` | `[SEC-AC-004]` fails at `:75:51` (`.dev.vars` already holds `secret`); `[SEC-AC-002]` fails at `:127:35`; 2 failed, 2 passed |
+
+This matches evidence 4. (Before the framework build, every test failed with "packages/framework/dist is missing". That is the documented `test:integration` prerequisite, not this cause.)
+
+### Reasons
+1. **Every link is supported.** The module-scope state (`app` l. 32, `errorResponses` l. 34) and the writer/reader table were checked against the file. SEC-AC-002 reads `errorResponses` (l. 127), `.logs/` (l. 137) and `.dev.vars` (l. 146). Only SEC-AC-001 (l. 103, 113, and starting `dev`) and SEC-AC-003 (l. 85) produce that state. The `-t` run above fails at exactly the first of those reads.
+2. **The alternatives are ruled out.** The failure reproduces with plain `vitest -t` and with shuffling, without the driver. So driver selection (alternative 1) is not the cause, and tag selection is the specified behaviour. The result is deterministic and follows from which tests run (alternative 2). The failing test uses its own temp app (`makeTempApp`, under `os.tmpdir()`) and its own `uniqueValue` secret, not `apps/reference/.dev.vars` (alternative 3).
+3. **The fix addresses the cause.** It removes the dependence of each test on other tests, which is the cause, and changes only the test file. Changing the driver would hide the dependency under `--only`, but not under a shuffle or a hand-run `-t`.
+
+### What the fix must ensure (the §8 step 3 fixer and the evaluator check these)
+1. **No assertion is weakened or removed.**
+   - SEC-AC-001 keeps: 200 with `{ value: secret }`; 500 with `SEC.UNDECLARED` and with `SEC.MISSING`; `errorResponseViolations` empty for both.
+   - SEC-AC-002 keeps: both builds exit 0; `errorResponses.length` is exactly 3; no response contains the secret; no hit outside `.dev.vars`/`.wrangler/`; at least one `.logs/` `"error"` entry; `git grep` is empty; `.dev.vars` contains the secret.
+   - SEC-AC-003 and SEC-AC-004 keep all their current assertions.
+2. **No vacuous pass.** Every "nothing found" assertion must stand next to a positive control from the same provisioned state. A pass must never be possible when nothing was produced.
+   - The fixture returns the recorded responses. SEC-AC-002 asserts there are exactly 3 before checking any of them. An empty list must fail.
+   - The fixture must produce the `.logs/` error entry in the same app that SEC-AC-002 scans.
+   - The fixture must also put the secret in that app's `.dev.vars` before `dev` and the builds run. Otherwise the leak scan scans an app that never held the value.
+   - Recommended: assert that the unfiltered `filesContaining(app.dir, secret)` result includes `.dev.vars`. That proves the scanner can see the value, so `hits` being `[]` means something. Today this relies on the separate `readFile` check at l. 146.
+3. **The fixture propagates failure.** The memoised helper must not catch and swallow errors, and must not return partial results. If it rejects, every test awaiting it fails (and does not skip), including on the second call. It must always stop `dev` (`finally`). `afterAll` removes the app only if it was created.
+4. **Ordering inside the shared fixture stays causal.** The steps run in this order: set the secret (stdin) → start `dev` → record the 4 responses, including the thrown response's headers → stop `dev`. SEC-AC-002 runs its builds after awaiting the fixture, so the build output it scans comes from an app that holds the secret.
+5. **SEC-AC-003 and SEC-AC-004 each use their own fresh app.** SEC-AC-004's stdin control (`dotenvValue(...) === other`) must stay. In a fresh app, the "not contain" check passes trivially when `.dev.vars` does not exist. Only that control shows that the rejected forms really failed to write.
+6. **Green criteria, as listed in "Verification":**
+   - the unfiltered file passes;
+   - each single-tag `-t` run (`SEC-AC-001`, `002`, `003`, `004`) passes;
+   - `-t '\[(?:SEC-AC-001|SEC-AC-002)\]'` passes;
+   - `--sequence.shuffle` with seeds 1–5 passes (seed 3 fails today).
+7. **The scan for the same pattern stays open.** A grep found module-level `let`/array state in 20 integration and criteria test files. Most are `beforeAll` fixtures, which are benign. Before the full rerun, the fixer or the test runner must check whether any of them is written by one tagged test and read by a differently tagged one, using the same per-file `-t` and shuffle runs.
