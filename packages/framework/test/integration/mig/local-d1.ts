@@ -9,6 +9,15 @@ import { readdirSync, statSync } from "node:fs";
 import { join, sep } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
+/**
+ * Miniflare/workerd keeps one `metadata.sqlite` per Durable Object namespace (D1 is one): it
+ * holds only the `_cf_ALARM` table and is not a database. Miniflare's own explorer skips it
+ * the same way. Root cause: `ai/implementation/root-causes/2026-10-19-MIG-AC-002-metadata-sqlite-counted-as-d1-database.md`.
+ * Only this exact name is skipped: every other `.sqlite` file (a D1 database is
+ * `<64 hex>.sqlite`) still counts, so a second database is still detected.
+ */
+const NAMESPACE_METADATA = "metadata.sqlite";
+
 /** Every local D1 database file under the app directory (excluding node_modules). */
 export function d1DatabaseFiles(appDir: string): string[] {
   const found: string[] = [];
@@ -18,7 +27,7 @@ export function d1DatabaseFiles(appDir: string): string[] {
       const full = join(dir, entry);
       const st = statSync(full);
       if (st.isDirectory()) walk(full);
-      else if (entry.endsWith(".sqlite") && full.includes(`${sep}.wrangler${sep}`) && full.includes(`${sep}d1${sep}`)) found.push(full);
+      else if (entry.endsWith(".sqlite") && entry !== NAMESPACE_METADATA && full.includes(`${sep}.wrangler${sep}`) && full.includes(`${sep}d1${sep}`)) found.push(full);
     }
   };
   walk(appDir);

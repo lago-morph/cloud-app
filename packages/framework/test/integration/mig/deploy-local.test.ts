@@ -20,7 +20,7 @@ import { basename, join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { tag } from "../../../../../tests/support/tags.js";
 import { createAppDir, migrationFiles, removeAppDir, runCli, startDev, writeApp, type DevServer } from "../sql/support/app-dir.js";
-import { APP_V1, APP_V2, APP_V3, DATA_V1, DATA_V2, P1, P2 } from "./apps.js";
+import { APP_V1, APP_V2, APP_V3, dataV1, dataV2, seedIds, type SeedIds } from "./apps.js";
 import { d1DatabaseFiles, onlyD1Database, snapshotD1, type D1Snapshot } from "./local-d1.js";
 
 let running: DevServer | undefined;
@@ -39,8 +39,17 @@ async function stop(): Promise<void> {
   running = undefined;
 }
 
-async function call(server: DevServer, method: "GET" | "POST", path: string): Promise<Response> {
-  return fetch(`${server.baseUrl}${path}`, { method, headers: method === "POST" ? { Origin: server.baseUrl } : {} });
+async function call(server: DevServer, method: "GET" | "POST", path: string, body?: unknown): Promise<Response> {
+  const headers: Record<string, string> = method === "POST" ? { Origin: server.baseUrl } : {};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  return fetch(`${server.baseUrl}${path}`, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+}
+
+/** Seeds version 1's rows; returns the IDs the app created with `newId()`. */
+async function seed(server: DevServer): Promise<SeedIds> {
+  const res = await call(server, "POST", "/api/seed");
+  expect(res.status).toBe(200);
+  return seedIds(await res.json());
 }
 
 async function data(server: DevServer): Promise<unknown> {
@@ -91,8 +100,8 @@ describe("MIG local deployment: initial and unchanged", () => {
     await generate(dir);
 
     let server = await serve(dir);
-    expect((await call(server, "POST", "/api/seed")).status).toBe(204);
-    expect(await data(server)).toEqual(DATA_V1);
+    const ids = await seed(server);
+    expect(await data(server)).toEqual(dataV1(ids));
     await stop();
 
     const first = snapshotD1(onlyD1Database(dir));
@@ -104,7 +113,7 @@ describe("MIG local deployment: initial and unchanged", () => {
 
     server = await serve(dir);
     expect((await call(server, "GET", "/api/__framework/health")).status).toBe(204);
-    expect(await data(server)).toEqual(DATA_V1);
+    expect(await data(server)).toEqual(dataV1(ids));
     await stop();
 
     const second = snapshotD1(onlyD1Database(dir));
@@ -118,6 +127,7 @@ describe("MIG local deployment: schema change with data, failing migration, reco
   let v2Migrations: string;
   let v3Migrations: string;
   let afterV2: D1Snapshot;
+  let ids: SeedIds;
 
   beforeAll(() => {
     dir = createAppDir({ "src/app.ts": APP_V1 });
@@ -134,8 +144,8 @@ describe("MIG local deployment: schema change with data, failing migration, reco
   it(tag("MIG-AC-003", "local: a supported schema change, including a column drop on a table with child rows, preserves every row and reference not explicitly dropped"), async () => {
     await generate(dir);
     let server = await serve(dir);
-    expect((await call(server, "POST", "/api/seed")).status).toBe(204);
-    expect(await data(server)).toEqual(DATA_V1);
+    ids = await seed(server);
+    expect(await data(server)).toEqual(dataV1(ids));
     await stop();
     const before = snapshotD1(onlyD1Database(dir));
 
@@ -144,7 +154,7 @@ describe("MIG local deployment: schema change with data, failing migration, reco
     expect(migrationFiles(dir, "sqlite")).toHaveLength(2);
 
     server = await serve(dir);
-    expect(await data(server)).toEqual(DATA_V2);
+    expect(await data(server)).toEqual(dataV2(ids));
     await stop();
 
     afterV2 = snapshotD1(onlyD1Database(dir));
@@ -163,6 +173,7 @@ describe("MIG local deployment: schema change with data, failing migration, reco
 
   it(tag("MIG-AC-003", "local: a data-dependent failing migration (unique over duplicates) fails the deployment, leaves the database unchanged with no new database; the old app answers again; a re-run after correcting the data succeeds"), async () => {
     expect(afterV2, "depends on the previous test's version 2 deployment").toBeDefined();
+    expect(ids, "depends on the previous test's seed").toBeDefined();
     writeApp(dir, { "src/app.ts": APP_V3 });
     await generate(dir);
     expect(migrationFiles(dir, "sqlite")).toHaveLength(3);
@@ -187,18 +198,18 @@ describe("MIG local deployment: schema change with data, failing migration, reco
     cpSync(v2Migrations, join(dir, "migrations"), { recursive: true });
     let server = await serve(dir);
     expect((await call(server, "GET", "/api/__framework/health")).status).toBe(204);
-    expect(await data(server)).toEqual(DATA_V2);
+    expect(await data(server)).toEqual(dataV2(ids));
 
     // Correct the data, then re-run the version 3 deployment.
-    expect((await call(server, "POST", "/api/fix-codes")).status).toBe(204);
+    expect((await call(server, "POST", "/api/fix-codes", { parentId: ids.parents[1] })).status).toBe(204);
     await stop();
     writeApp(dir, { "src/app.ts": APP_V3 });
     rmSync(join(dir, "migrations"), { recursive: true, force: true });
     cpSync(v3Migrations, join(dir, "migrations"), { recursive: true });
     server = await serve(dir);
     expect(await data(server)).toEqual({
-      parents: [{ id: P1, name: "one", code: "dup" }, { id: P2, name: "two", code: "unique-2" }],
-      children: DATA_V2.children,
+      parents: [{ id: ids.parents[0], name: "one", code: "dup" }, { id: ids.parents[1], name: "two", code: "unique-2" }],
+      children: dataV2(ids).children,
     });
     await stop();
 
