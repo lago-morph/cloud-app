@@ -14,15 +14,17 @@ Origin: ai-proposed · Status: accepted · Affects: CLI-AC-003
 - An original failure plus a failing cleanup: the exit status is still the original one (1), the record is still written, the original failure stays the recorded reason, and the cleanup failure is reported (raw remove log, `leftovers`, stage kept in the pending list).
 - A cleanup failure after tests that all passed is a partial failure (CLI-REQ-003: "including partial failures"; `remove` with leftovers exits 1), so the run must exit non-zero. The exact value is not fixed by the criterion; the test asserts non-zero and that the record's `exitStatus` matches the process status.
 
-### DEC-PENDING-C-T6-3 — Two tests fail against the current driver; committed as `it.skip`
-Origin: ai-proposed · Status: proposed (needs an implementer fix) · Affects: CLI-AC-003, tests/compliance/harness/driver.ts
+### DEC-PENDING-C-T6-3 — Two tests failed against the driver; driver fixed, tests unskipped
+Origin: ai-proposed · Status: accepted (resolved by the driver fix) · Affects: CLI-AC-003, tests/compliance/harness/driver.ts, tests/compliance/harness/cli.ts
 
-Found failing (commit with the tests unskipped is in this branch's history):
+The C-T6 test author found two `[CLI-AC-003]` tests failing and committed them as `it.skip` (the author does not change the code under test, prompt §7):
 
-1. Local: when `dev`'s `stop()` rejects after a failing test, `runCompliance` throws out of its `finally` block. No record is written and `cli.ts` exits 64 (usage-error status), losing the original status 1.
-2. Cloud: when every test passes but stage removal fails (leftovers remain) or the leftover check fails, the run exits 0. The leftovers are recorded but the exit status does not show the partial failure.
+1. Local: when `dev`'s `stop()` rejected after a failing test, `runCompliance` threw out of its `finally` block. No record was written and `cli.ts` exited 64 (usage-error status), losing the original status 1.
+2. Cloud: when every test passed but stage removal failed (leftovers remained) or the leftover check failed, the run exited 0.
 
-The test author does not change the code under test (prompt §7), and `npm run verify` must stay green, so both tests are `it.skip` with a comment naming this decision. Each skipped tagged test adds a `not-run` entry to CLI-AC-003's record, so the record does not claim these parts passed. When the driver is fixed, unskip them (no other change needed).
+Root cause and fix: `ai/implementation/root-causes/2026-10-20-CLI-AC-003-driver-cleanup-failures.md` (Review: ACCEPTED; Fix section). The driver now guards `local.stop()` (error text in raw `dev.log`, `exitStatus ||= 1`) and, after cleanup, sets `exitStatus ||= 1` when `leftovers` is non-empty, which includes a leftover check that could not run. `||=` keeps an earlier non-zero (original) status. Both tests are unskipped with no other test change; no `it.skip` remains in the harness tests. The `cli.ts` header and the Driver paragraph of `docs/components/compliance.md` state the rule. Cloud runs must be started with `NODE_USE_ENV_PROXY=1` in this sandbox (DEC-PENDING-D-06-2), or the leftover check cannot run and every cloud run correctly exits 1.
+
+Open follow-ups from the review (not done here): F1, `cli.ts` gives the usage status 64 to any runtime exception from `runCompliance`; F2, `deps.pendingStages.remove` in `removeStage` is unguarded, so a failure to persist the pending list stops the record from being written.
 
 ### DEC-PENDING-C-T6-4 — AWS not-run parts for CORE-AC-006 and SQL-AC-006
 Origin: ai-proposed · Status: accepted · Affects: CORE-AC-006, SQL-AC-006, tests/compliance/harness/expected.ts

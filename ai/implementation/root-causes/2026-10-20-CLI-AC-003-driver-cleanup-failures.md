@@ -138,3 +138,13 @@ Reviewer: independent root-cause reviewer (prompt §8 step 2). I did not diagnos
 
 - **F1.** In `cli.ts`, catch `parseArgs` errors (usage, 64) separately from exceptions thrown by `runCompliance`. Those should exit 1 and print the message, so that an unexpected failure is never reported with the usage status. Whether the runner should move to the framework's 0/1/2 convention (and `smoke` exits 1 on a dirty tree, while the runner exits 2) is an owner decision. Either way, CLI-REQ-003 is already met.
 - **F2.** Guard `deps.pendingStages.remove` in `removeStage` so that a failure to persist the pending list cannot stop the record from being written.
+
+## Fix
+
+Fixer: fixing subagent (prompt §8 step 3). I did not diagnose or review this record. Local only, no Cloudflare calls. Branch `claude/implement-local-cloudflare-fix-c6`, from `origin/claude/implement-local-cloudflare-rc-c6-review` with `origin/claude/implement-local-cloudflare` merged in.
+
+- **Red.** I unskipped both tests (`it.skip(` → `it(`, and removed the two "Skipped: …" comments; no other test change). Against the unfixed driver, `npx vitest run --config vitest.unit.config.ts tests/compliance/harness/driver.unit.test.ts -t "CLI-AC-003"` gave `2 failed | 3 passed`, with `Error: dev did not stop` and `AssertionError: expected +0 not to be +0`, as in E1.
+- **Green.** I applied the reviewed diff to `tests/compliance/harness/driver.ts` exactly: only `local.stop()` is guarded (the error text goes to `raw["dev.log"]`, a `compliance: stopping dev failed: …` line is logged, and `exitStatus ||= 1`), and after the `if (toRun.length > 0)` block, `if (leftovers.length > 0) exitStatus ||= 1;`. There is no new flag, and `leftover check failed` entries are not exempted. The same command then gave `5 passed`. `npx vitest run --config vitest.unit.config.ts tests/compliance/harness/` gave 14 files and 95 tests passed. `grep -rnE "(it|test|describe)\.skip" tests/compliance/harness/` finds nothing.
+- **Docs.** The `cli.ts` header comment and the Driver paragraph of `docs/components/compliance.md` state the rule (fix requirements 4 and 5). DEC-PENDING-C-T6-3 in `ai/implementation/decisions/C-T6.md` is now resolved and points here. Its integration into the decision log is left to the next -INT.
+- **verify.** `npm run verify` passed (rc 0).
+- **Not done here (review follow-ups).** F1: `cli.ts` still gives the usage status 64 to any runtime exception from `runCompliance`. F2: `deps.pendingStages.remove` in `removeStage` is still unguarded.
