@@ -1,8 +1,5 @@
-import type { CaseSets } from "./case-types";
-
 /**
- * The case sets `POST /api/cases/run` executes. C-T2 writes them in `src/server/cases/**` and
- * replaces this module's body with `export { caseSets } from "./cases/index";` (ROUTES.md
- * "Shared case sets"); until then no set is registered.
+ * The case sets `POST /api/cases/run` executes: C-T2's sets in `src/server/cases/**`
+ * (ROUTES.md "Shared case sets", DEC-PENDING-C-01-7).
  */
-export const caseSets: CaseSets = {};
+export { caseSets } from "./cases/index";
