@@ -1,0 +1,4 @@
+01-npm-ci 0
+02-build-framework 0
+03-secrets-set 0
+04-compliance-local 1
