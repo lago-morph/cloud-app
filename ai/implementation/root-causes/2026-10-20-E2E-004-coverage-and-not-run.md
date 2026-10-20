@@ -461,3 +461,8 @@ So the clash fixture alone (the original proposal and the unit test's fixture) w
 ### Open for C-02 (driver files; not done here)
 
 CHECK-AC-005 now carries the template test's tag, so without a part rule the whole criterion is recorded `passed` from the template alone. C-02 must add `{ id: "CHECK-AC-005", targets: ["local"], mode: "automated", part: "demo part", detail: "demo built in phase F (plan C-EV)" }` to `PHASE_RULES` (`tests/compliance/harness/expected.ts`), as the revised Cause C proposes. Until then the evaluator must not read the CHECK-AC-005 result as covering the demo.
+
+### Results
+
+- `npm run verify`: exit 0, 1407 unit tests passed. Two earlier attempts failed on unrelated unit tests (PGlite/KV) that timed out at 5 s while the shared machine had a load average of about 20 on 4 cores. The failing tests differed between the two runs, and none of them are files this fix touches.
+- `npm run compliance -- --target local --only SKILL-AC-005,LOCAL-AC-001,CHECK-AC-005,E2E-001 --out <scratch>` from a clean tree at `c1c5ba9`: exit 0, "105 not-run, 4 passed". SKILL-AC-005 passed (both tests, about 33 s and 36 s), LOCAL-AC-001 and E2E-001 passed (the E2E-001 test, 4.6 min), and CHECK-AC-005 passed. CHECK-AC-005 is recorded as a whole criterion with part `""`, because the C-02 demo-part rule above is not there yet. This was an informational run outside the repository; its record is not committed.
