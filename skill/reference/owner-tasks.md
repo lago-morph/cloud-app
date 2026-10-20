@@ -114,4 +114,10 @@ Removing an ID and deploying again takes the access away.
 - Keep test stages small: a few rows of data, one test stage at a time, and `remove` it right after use. An account holds at most **10 D1 databases**, and a deploy that changes the schema briefly uses two per stage.
 - See [deploying.md](deploying.md) for deploy, stop/start and remove.
 
-Stopping condition: stop when the owner has done the task they needed. Deploying and removing stages are in [deploying.md](deploying.md); reading logs is in [troubleshooting.md](troubleshooting.md).
+## Examples
+
+- [examples/configuration.md](../examples/configuration.md): the template's committed values files (`config/<target>/<stage>.json`), the files that also hold `framework.admins` and `framework.users`.
+
+## Stopping condition
+
+Stop reading when the owner has done the task they needed. Deploying and removing stages are in [deploying.md](deploying.md); reading logs is in [troubleshooting.md](troubleshooting.md).

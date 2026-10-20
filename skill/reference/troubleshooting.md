@@ -116,10 +116,18 @@ These steps are for production stages, which use Google. They are **not yet veri
 - A failure at the migration step: the previous version is restarted on the unchanged database. Fix the migration and deploy again.
 - `remove` lists leftovers and exits non-zero: run the same `remove` again. If a leftover stays, delete it in the dashboard by the exact name printed.
 
-## 5. A `verify` diagnostic that points here
+## Check rules that send you here
 
-- `prototype-framework/no-suppression-comments`: comments that switch off checks (`eslint-disable`, `@ts-ignore`, `@ts-expect-error`, `@ts-nocheck`) are not allowed. Remove the comment and fix the code the rule reported.
-- The type-escape bans (`no-explicit-any`, type assertions with `as`, the non-null `!`): give the value a real type. Check it with Zod, narrow it with `if`, or use the type the framework export already declares.
-- If you think the framework is wrong rather than your code, follow the `FRAMEWORK-ISSUE.md` rule in `skill/SKILL.md`. Do not work around it.
+- `prototype-framework/no-suppression-comments`: a comment switched off a check (`eslint-disable`, `@ts-ignore`, `@ts-expect-error`, `@ts-nocheck`). Remove the comment and fix the code the hidden check reported.
+- `@typescript-eslint/no-explicit-any`: the code wrote the type `any`. Give the value a real type, or `unknown` and then check it with Zod or narrow it with `if`.
+- `@typescript-eslint/consistent-type-assertions`: the code used a type assertion (`value as T`, `as unknown as T`, `<T>value`). Check the value with a Zod schema, narrow it with `if`, or declare the variable with the type (`const body: T = await res.json()`). `as const` and `satisfies` are allowed.
+- `@typescript-eslint/no-non-null-assertion`: the code used the non-null assertion `!`. Handle `undefined` or `null`: `if (x === undefined) throw new FrameworkError(...)`, `??` with a default, or a default in destructuring.
+- Any other rule ID without its own reference: fix the reported code. If you think the framework is wrong rather than your code, follow the `FRAMEWORK-ISSUE.md` rule in `skill/SKILL.md`. Do not work around it.
 
-Stopping condition: stop when you have the log entry or error code that explains the failure and the next action to take. If none of the above fits, record a `FRAMEWORK-ISSUE.md` entry.
+## Examples
+
+- [examples/tests.md](../examples/tests.md): app tests that read the log (`testApp.logs()`) and check error codes and statuses.
+
+## Stopping condition
+
+Stop reading when you have the log entry or error code that explains the failure and the next action to take. If none of the above fits, record a `FRAMEWORK-ISSUE.md` entry.
