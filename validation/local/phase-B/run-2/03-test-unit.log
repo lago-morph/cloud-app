@@ -1,0 +1,320 @@
+$ cd /home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389
+$ npm run test:unit -- --reporter=default --reporter=json --outputFile.json=validation/local/phase-B/run-2/03-test-unit.vitest.json
+# start: 2026-10-20T00:12:24Z
+
+> prototype-framework-workspace@0.0.0 test:unit
+> vitest run --config vitest.unit.config.ts --reporter=default --reporter=json --outputFile.json=validation/local/phase-B/run-2/03-test-unit.vitest.json
+
+
+ RUN  v5.0.5 /home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389
+
+stderr | packages/framework/src/kv/service.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+stderr | packages/framework/src/check/migrations/checker.unit.test.ts > migration checker > [CHECK-AC-004] each supported change of MIG §2, generated one per migration, passes (incl. a SQLite rebuild for dropping a reference column)
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+stderr | packages/framework/src/testing/test-app.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+{"time":"2026-10-20T00:12:32.451Z","app":"testappunit","stage":"local","target":"local","component":"SEC","severity":"error","message":"GET /api/secret failed with SEC.MISSING\nFrameworkError: secret \"apiKey\" has no value in this stage\n    at Object.get (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/secrets/service.ts:74:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at /home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/testing/test-app.unit.test.ts:32:53\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:11)\n    at noStore (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/http/runtime.ts:34:3)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:11)\n    at forgeryCheck (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/auth/runtime.ts:134:7)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:11)\n    at currentUser (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/auth/runtime.ts:123:7)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:11)","requestId":"adaa23b4-0705-4788-b300-9d4a001973a7"}
+{"time":"2026-10-20T00:12:33.661Z","app":"testappunit","stage":"local","target":"local","component":"CORE","severity":"error","message":"GET /api/boom failed with CORE.INTERNAL\nError: unit boom\n    at /home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/testing/test-app.unit.test.ts:39:13\n    at dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:17)\n    at file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:40\n    at noStore (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/http/runtime.ts:34:9)\n    at dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:17)\n    at file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:40\n    at forgeryCheck (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/auth/runtime.ts:134:13)\n    at dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:17)\n    at file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:40\n    at currentUser (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/auth/runtime.ts:123:13)","requestId":"f6ff9233-f55a-421d-8388-83a70e95cdd8"}
+{"time":"2026-10-20T00:12:34.219Z","app":"testappunit","stage":"local","target":"local","component":"SQL","severity":"error","message":"POST /api/notes failed with SQL.UNAVAILABLE\nFrameworkError: the database could not be reached: it is unavailable (forced for this test app)\n    at plainUnavailable (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/sql/guard.ts:53:10)\n    at unavailable (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/sql/guard.ts:30:21)\n    at Object.guard (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/sql/guard.ts:35:45)\n    at execute (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/sql/handle.ts:76:17)\n    at Proxy.<anonymous> (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/sql/handle.ts:86:99)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","requestId":"d4ac1444-d1f1-4646-9bce-2d1df294e803"}
+{"time":"2026-10-20T00:12:34.828Z","app":"testappunit","stage":"local","target":"local","component":"KV","severity":"error","message":"GET /api/kv failed with KV.UNAVAILABLE\nFrameworkError: key-value storage could not be used: the database could not be reached: it is unavailable (forced for this test app)\n    at asKvFailure (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/kv/service.ts:115:9)\n    at storage (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/kv/service.ts:58:13)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at Object.get (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/kv/service.ts:65:20)\n    at /home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/testing/test-app.unit.test.ts:30:49\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:11)\n    at noStore (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/http/runtime.ts:34:3)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:11)\n    at forgeryCheck (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/auth/runtime.ts:134:7)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:11)","requestId":"2cb50d62-218b-46ee-80e9-b7cc8b9366ef"}
+{"time":"2026-10-20T00:12:35.408Z","app":"testappunit","stage":"local","target":"local","component":"FILES","severity":"error","message":"GET /api/files failed with FILES.UNAVAILABLE\nFrameworkError: file storage could not be used (head): Error: local file storage is unavailable (forced for this test app)\n    at call (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/files/service.ts:82:23)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at Object.head (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/files/service.ts:110:22)\n    at /home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/testing/test-app.unit.test.ts:31:43\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:11)\n    at noStore (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/http/runtime.ts:34:3)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:11)\n    at forgeryCheck (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/auth/runtime.ts:134:7)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:11)\n    at currentUser (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/auth/runtime.ts:123:7)","requestId":"b8eef351-b4af-45fa-a67c-9ff37a45f18c"}
+{"time":"2026-10-20T00:12:36.050Z","app":"testappunit","stage":"local","target":"local","component":"SEC","severity":"error","message":"GET /api/secret failed with SEC.UNAVAILABLE\nFrameworkError: secret \"apiKey\" could not be read: the secret store is unavailable\n    at readOrUnavailable (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/secrets/service.ts:39:21)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at Object.get (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/secrets/service.ts:72:21)\n    at /home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/testing/test-app.unit.test.ts:32:53\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:11)\n    at noStore (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/http/runtime.ts:34:3)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:11)\n    at forgeryCheck (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/auth/runtime.ts:134:7)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:11)\n    at currentUser (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/auth/runtime.ts:123:7)","requestId":"cfe7ee5e-09b8-4f72-8bd6-7ea825238b88"}
+{"time":"2026-10-20T00:12:36.715Z","app":"testappunit","stage":"local","target":"local","component":"KV","severity":"error","message":"GET /api/kv failed with KV.UNAVAILABLE\nFrameworkError: key-value storage could not be used: the database could not be reached: it is unavailable (forced for this test app)\n    at asKvFailure (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/kv/service.ts:115:9)\n    at storage (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/kv/service.ts:58:13)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at Object.get (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/kv/service.ts:65:20)\n    at /home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/testing/test-app.unit.test.ts:30:49\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:11)\n    at noStore (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/http/runtime.ts:34:3)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:11)\n    at forgeryCheck (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/auth/runtime.ts:134:7)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:11)","requestId":"5d763af7-592b-4feb-a369-5a375b836019"}
+ ✓ packages/framework/src/testing/test-app.unit.test.ts (19 tests) 16552ms
+   ✓ createTestApp (19)
+     ✓ runs app routes over fresh local storage with the app's tables created 1660ms
+     ✓ applies the app's generated migrations from the working directory when it has them 876ms
+     ✓ applies config overrides and defaults; an undeclared key makes it throw 627ms
+     ✓ gives secrets from the secrets option and reports a missing one as SEC.MISSING 1232ms
+     ✓ returns log entries in order, with the request ID 614ms
+     ✓ [CORE-AC-004] a plain Error is 500 CORE.INTERNAL and logged once 576ms
+     ✓ unavailable: ["sql"] makes it fail with SQL.UNAVAILABLE 562ms
+     ✓ unavailable: ["kv"] makes it fail with KV.UNAVAILABLE 609ms
+     ✓ unavailable: ["files"] makes it fail with FILES.UNAVAILABLE 585ms
+     ✓ unavailable: ["secrets"] makes it fail with SEC.UNAVAILABLE 643ms
+     ✓ unavailable: ["sql"] also makes KV unavailable 683ms
+     ✓ sends the user option's identity, and as() returns an app sending another identity over the same storage 1762ms
+     ✓ adds the deployment's origin to state-changing requests unless init sets one 779ms
+     ✓ [LOG-AC-001] with a failing or never-completing log writer, requests still succeed 1361ms
+     ✓ loginWithStub completes a stub login and keeps the session; framework.admins comes from config 1321ms
+     ✓ loginWithStub with a stub failure leaves no session 719ms
+     ✓ without the stub, the mock-login route is installed; with the stub it is not 1176ms
+     ✓ dispose discards the storage; requests afterwards fail 763ms
+stderr | packages/framework/src/mig/apply.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ✓ packages/framework/src/kv/service.unit.test.ts (21 tests) 20909ms
+   ✓ KV on sqlite (10)
+     ✓ [KV-AC-001][KV-AC-004] get of an absent key is null; put creates and replaces; put resolves undefined 703ms
+     ✓ [KV-AC-001][KV-AC-004] delete removes the key; deleting an absent key succeeds 618ms
+     ✓ [KV-AC-002][KV-AC-004] invalid keys and values are rejected before the database; an empty value is stored 632ms
+     ✓ [KV-AC-001][KV-AC-004] list matches the prefix literally and case-sensitively, in code point order 1096ms
+     ✓ [KV-AC-003][KV-AC-004] listing 2.5 pages returns each key once, PAR-221 per page by default; a full last page has a null cursor 1447ms
+     ✓ [KV-AC-003][KV-AC-004] a cursor is valid only for its prefix 621ms
+     ✓ limit above PAR-222 is clamped to PAR-222, below 1 to 1; a non-finite limit means the default 1551ms
+     ✓ [KV-AC-005][KV-AC-004] a maximum page of maximum-size entries lists successfully 1266ms
+     ✓ storage that cannot be used (2)
+       ✓ [KV-AC-005][KV-AC-004] with the SQL handle forced unavailable, every operation fails with KV.UNAVAILABLE, logged once under KV 560ms
+       ✓ [KV-AC-005][KV-AC-004] a closed database fails with KV.UNAVAILABLE, not SQL.UNAVAILABLE 618ms
+   ✓ KV on postgres (10)
+     ✓ [KV-AC-001][KV-AC-004] get of an absent key is null; put creates and replaces; put resolves undefined 4780ms
+     ✓ [KV-AC-001][KV-AC-004] delete removes the key; deleting an absent key succeeds 689ms
+     ✓ [KV-AC-002][KV-AC-004] invalid keys and values are rejected before the database; an empty value is stored 835ms
+     ✓ [KV-AC-001][KV-AC-004] list matches the prefix literally and case-sensitively, in code point order 745ms
+     ✓ [KV-AC-003][KV-AC-004] listing 2.5 pages returns each key once, PAR-221 per page by default; a full last page has a null cursor 936ms
+     ✓ [KV-AC-003][KV-AC-004] a cursor is valid only for its prefix 776ms
+     ✓ limit above PAR-222 is clamped to PAR-222, below 1 to 1; a non-finite limit means the default 727ms
+     ✓ [KV-AC-005][KV-AC-004] a maximum page of maximum-size entries lists successfully 897ms
+     ✓ storage that cannot be used (2)
+       ✓ [KV-AC-005][KV-AC-004] with the SQL handle forced unavailable, every operation fails with KV.UNAVAILABLE, logged once under KV 733ms
+       ✓ [KV-AC-005][KV-AC-004] a closed database fails with KV.UNAVAILABLE, not SQL.UNAVAILABLE 673ms
+ ✓ packages/framework/src/check/migrations/checker.unit.test.ts (9 tests) 25084ms
+   ✓ migration checker (9)
+     ✓ [CHECK-AC-004] each supported change of MIG §2, generated one per migration, passes (incl. a SQLite rebuild for dropping a reference column) 9554ms
+     ✓ [CHECK-AC-004] mismatched dialect histories fail, naming the differing column (checksums kept valid) 1970ms
+     ✓ [CHECK-AC-004] an edited applied migration fails on its checksum 2021ms
+     ✓ [CHECK-AC-004] a NOT NULL column without a static default added to an existing table, hand-written with valid checksums, fails in both dialects naming the add-copy-drop pattern 2150ms
+     ✓ [CHECK-AC-004] a column type change (SQLite as drizzle-kit's table rebuild), hand-written with valid checksums, fails in both dialects naming the add-copy-drop pattern 1995ms
+     ✓ [CHECK-AC-004] a column rename, hand-written with valid checksums, fails in both dialects naming the add-copy-drop pattern 2000ms
+     ✓ [CHECK-AC-004] a migration that cannot be applied fails with the database error, and later migrations of that dialect are not judged 1835ms
+     ✓ [CHECK-AC-004] a migration that changes data fails 2028ms
+     ✓ an app without migrations passes 1501ms
+stderr | packages/framework/src/sql/queries.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ✓ packages/framework/src/check/fixtures.unit.test.ts (90 tests) 10153ms
+ ✓ packages/framework/src/mig/apply.unit.test.ts (12 tests) 13714ms
+   ✓ sqlite (6)
+     ✓ [MIG-AC-002] a fresh database gets the framework migrations, then the app's, each recorded once in order with its dialect and checksum 807ms
+     ✓ [MIG-AC-002] a second run with nothing pending applies nothing and changes no data or record 631ms
+     ✓ [MIG-AC-003] local: a data-dependent failing migration (unique over duplicates) fails, leaves the database unchanged, and a re-run after correcting the data succeeds 1201ms
+     ✓ [MIG-AC-003] local: supported changes, including a column drop on a table with child rows, preserve every row and reference not dropped 742ms
+     ✓ [MIG-AC-002] migrateLocal reads the package's framework history and the app's migrations directory, framework first 592ms
+     ✓ migrateLocal with no app migrations directory applies only the framework history 503ms
+   ✓ postgres (6)
+     ✓ [MIG-AC-002] a fresh database gets the framework migrations, then the app's, each recorded once in order with its dialect and checksum 4680ms
+     ✓ [MIG-AC-002] a second run with nothing pending applies nothing and changes no data or record 871ms
+     ✓ [MIG-AC-003] local: a data-dependent failing migration (unique over duplicates) fails, leaves the database unchanged, and a re-run after correcting the data succeeds 983ms
+     ✓ [MIG-AC-003] local: supported changes, including a column drop on a table with child rows, preserve every row and reference not dropped 772ms
+     ✓ [MIG-AC-002] migrateLocal reads the package's framework history and the app's migrations directory, framework first 916ms
+     ✓ migrateLocal with no app migrations directory applies only the framework history 988ms
+stderr | packages/framework/src/check/migrations/databases.unit.test.ts > sqlite > [CHECK-AC-004] introspects tables, columns (declared type, nullability, static default, primary key), indexes, uniques and references
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ✓ packages/framework/src/sql/queries.unit.test.ts (38 tests) 10473ms
+   ✓ sqlite (19)
+     ✓ [SQL-AC-006] a result larger than PAR-215 is SQL.RESULT_TOO_LARGE; exactly PAR-215 bytes succeeds 390ms
+     ✓ [SQL-AC-006] uniqueness and reference violations are SQL.CONFLICT 330ms
+     ✓ a database that cannot be reached is SQL.UNAVAILABLE; a forced outage too 683ms
+   ✓ postgres (19)
+     ✓ a database that cannot be reached is SQL.UNAVAILABLE; a forced outage too 760ms
+stderr | packages/framework/src/sql/databases.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ✓ packages/framework/src/targets/cloudflare/stage.unit.test.ts (6 tests) 8391ms
+   ✓ assembleStage (6)
+     ✓ serves app routes under /api with every service in c.var 4870ms
+     ✓ [HTTP-AC-001] unknown API paths are JSON 404s and a wrong method is 405 (HTTP parts attached) 694ms
+     ✓ the health route answers 204 when the database reads and every required secret has a value 617ms
+     ✓ the health route fails with SEC.MISSING when a declared secret has no value 673ms
+     ✓ [HTTP-AC-002] secret values are redacted from error responses 815ms
+     ✓ registers extra framework routes and the auth routes 719ms
+ ✓ packages/framework/src/check/migrations/databases.unit.test.ts (2 tests) 6879ms
+   ✓ sqlite (1)
+     ✓ [CHECK-AC-004] introspects tables, columns (declared type, nullability, static default, primary key), indexes, uniques and references 2401ms
+   ✓ postgres (1)
+     ✓ [CHECK-AC-004] introspects tables, columns (declared type, nullability, static default, primary key), indexes, uniques and references 4470ms
+stderr | packages/framework/src/build/build.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ✓ packages/framework/src/sql/databases.unit.test.ts (77 tests) 7296ms
+stdout | packages/framework/src/build/build.unit.test.ts > buildApp --target local > the local bundle runs in workerd and answers app routes and JSON 404s
+Your Worker has access to the following bindings:
+Binding                          Resource         Mode
+env.DB (buildunit-local)         D1 Database      local
+env.FILES (buildunit-local)      R2 Bucket        local
+
+
+ ✓ packages/framework/src/sql/postgres.unit.test.ts (3 tests) 7257ms
+   ✓ PGlite harness (PAR-107, DEC-0106) (3)
+     ✓ opens a fresh database created with LC_COLLATE 'C' and LC_CTYPE 'C' 842ms
+     ✓ gives every call its own empty database 1466ms
+     ✓ a query on a closed harness database is SQL.UNAVAILABLE (SQL-REQ-006) 688ms
+stdout | packages/framework/src/build/build.unit.test.ts > buildApp --target local > the local bundle runs in workerd and answers app routes and JSON 404s
+⎔ Starting local server...
+
+stdout | packages/framework/src/build/build.unit.test.ts > buildApp --target local > the local bundle runs in workerd and answers app routes and JSON 404s
+[wrangler:info] Ready on http://localhost:41099
+
+stdout | packages/framework/src/build/build.unit.test.ts > buildApp --target local > the local bundle runs in workerd and answers app routes and JSON 404s
+[wrangler:info] GET /api/hello 200 OK (503ms)
+
+stdout | packages/framework/src/build/build.unit.test.ts > buildApp --target local > the local bundle runs in workerd and answers app routes and JSON 404s
+[wrangler:info] GET /api/nope 404 Not Found (9ms)
+
+stdout | packages/framework/src/build/build.unit.test.ts > buildApp --target local > the local bundle runs in workerd and answers app routes and JSON 404s
+⎔ Shutting down local server...
+
+ ✓ packages/framework/src/build/build.unit.test.ts (14 tests) 4653ms
+   ✓ buildApp --target cloudflare (10)
+     ✓ [PROV-AC-005] build part: a test-<id> stage reads config/cloudflare/test.json and includes the mock 500ms
+     ✓ [PROV-AC-005] build part: a production stage reads its own file and has no mock or mock-login route 455ms
+     ✓ [CORE-AC-006] build part, stage test-b16: the Cloudflare bundle bundles no Postgres harness, stub provider, local transfer route, test helpers, provisioning or tooling module 501ms
+     ✓ [CORE-AC-006] build part, stage prod: the Cloudflare bundle bundles no Postgres harness, stub provider, local transfer route, test helpers, provisioning or tooling module 399ms
+     ✓ [CF-AC-003] build part: the Worker bundle imports no Node.js module (no filesystem access) 391ms
+     ✓ [CFG-AC-004] build part: the embedded resolved configuration lists each declared secret with its location 381ms
+   ✓ buildApp --target local (2)
+     ✓ writes the local Worker bundle and a wrangler.jsonc with the local D1 and R2 bindings 327ms
+     ✓ the local bundle runs in workerd and answers app routes and JSON 404s 1435ms
+ ✓ packages/framework/src/check/rules/allowed-imports.unit.test.ts (35 tests) 4132ms
+ ✓ packages/framework/src/check/rules/browser-api-only.unit.test.ts (12 tests) 3420ms
+ ✓ packages/framework/src/check/rules/no-env-access.unit.test.ts (11 tests) 2731ms
+ ✓ packages/framework/src/check/rules/no-dialect-features.unit.test.ts (22 tests) 2683ms
+ ✓ packages/framework/src/check/rules/db-handles.unit.test.ts (10 tests) 2523ms
+ ✓ packages/framework/src/check/rules/no-raw-sql.unit.test.ts (10 tests) 2246ms
+ ✓ packages/framework/src/check/rules/framework-ids.unit.test.ts (7 tests) 2328ms
+ ✓ packages/framework/src/check/rules/framework-order.unit.test.ts (8 tests) 2489ms
+ ✓ packages/framework/src/cli/verify/type-check.unit.test.ts (3 tests) 2351ms
+   ✓ verify's type check (CLI-REQ-002 step 1, CHECK §2 app lib set) (3)
+     ✓ [CLI-AC-002] reports a type error with its file, position and TS code 967ms
+     ✓ uses the app lib set, not the app's tsconfig.json: Node globals fail in server code 578ms
+     ✓ passes a clean app, and an app with no TypeScript files 804ms
+ ✓ packages/framework/src/check/type-escapes.unit.test.ts (16 tests) 1518ms
+ ✓ packages/framework/src/check/rules/app-error-codes.unit.test.ts (8 tests) 2149ms
+ ✓ packages/framework/src/check/engine.unit.test.ts (3 tests) 1903ms
+   ✓ rule engine (independent of type checking) (3)
+     ✓ [CHECK-AC-006] the app's lint configuration is not used for the rules, but a weakening one is reported 683ms
+ ✓ packages/framework/src/auth/runtime.unit.test.ts (25 tests) 348ms
+ ✓ packages/framework/src/google/provider.unit.test.ts (25 tests) 164ms
+stderr | packages/framework/src/targets/workers.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ✓ packages/framework/src/check/rules/no-raw-html.unit.test.ts (8 tests) 1036ms
+ ✓ packages/framework/src/http/validation.unit.test.ts (7 tests) 116ms
+ ✓ packages/framework/src/check/app-config.unit.test.ts (10 tests) 95ms
+ ✓ packages/framework/src/core/assemble.unit.test.ts (16 tests) 94ms
+ ✓ packages/framework/src/files/local/route.unit.test.ts (16 tests) 105ms
+ ✓ packages/framework/src/http/server.unit.test.ts (13 tests) 122ms
+stdout | packages/framework/src/targets/workers.unit.test.ts > createLocalWorker > fails with CORE.MISCONFIGURED when the public origin variable is not set
+[prototype-framework:log] {"time":"2026-10-20T00:13:34.818Z","app":"workerunit","stage":"local","target":"local","component":"CORE","severity":"error","message":"POST /api/auth/logout failed with CORE.MISCONFIGURED\nFrameworkError: the Worker variable FRAMEWORK_PUBLIC_ORIGIN (the stage's public origin) is not set\n    at workerPublicOrigin (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/targets/cloudflare/bindings.ts:46:11)\n    at Object.publicOrigin (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/targets/local/public.ts:32:26)\n    at originOf (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/auth/runtime.ts:80:98)\n    at forgeryCheck (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/auth/runtime.ts:130:58)\n    at dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:17)\n    at file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:40\n    at currentUser (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/auth/runtime.ts:123:13)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:11)\n    at /home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/core/assemble.ts:84:5","requestId":"1b747367-8c02-46b8-a367-19eb8ced320e"}
+
+stdout | packages/framework/src/targets/workers.unit.test.ts > createCloudflareWorker > a production stage given the mock fails with CORE.MISCONFIGURED
+[prototype-framework:log] {"time":"2026-10-20T00:13:34.828Z","app":"workerunit","stage":"prod","target":"cloudflare","component":"CORE","severity":"error","message":"GET /api/me failed with CORE.MISCONFIGURED\nFrameworkError: the authentication mock is not allowed on production stage \"prod\"\n    at checkAuthSettings (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/auth/runtime.ts:68:11)\n    at /home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/auth/runtime.ts:74:39\n    at /home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/core/deferred.ts:19:17\n    at currentUser (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/auth/runtime.ts:121:7)\n    at dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:17)\n    at file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:40\n    at /home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/core/assemble.ts:84:11\n    at dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:17)\n    at file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:40\n    at /home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/core/assemble.ts:70:13","requestId":"88ad9955-484d-40ad-a658-008a58915b9f"}
+
+stdout | packages/framework/src/targets/workers.unit.test.ts > createCloudflareWorker > has no local transfer route; tickets need the Cloudflare signer (CORE.MISCONFIGURED until D-02)
+[prototype-framework:log] {"time":"2026-10-20T00:13:34.843Z","app":"workerunit","stage":"test-unit","target":"cloudflare","component":"CORE","severity":"error","message":"GET /api/upload-ticket failed with CORE.MISCONFIGURED\nFrameworkError: file transfer tickets need the Cloudflare R2 signer, which this build does not include yet\n    at Object.upload (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/targets/cloudflare/public.ts:36:11)\n    at Object.createUploadTicket (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/files/service.ts:145:37)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at /home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/targets/workers.unit.test.ts:25:51\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:11)\n    at noStore (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/http/runtime.ts:34:3)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:11)\n    at forgeryCheck (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/auth/runtime.ts:134:7)\n    at async dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/node_modules/hono/dist/compose.js:35:11)\n    at currentUser (/home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/packages/framework/src/auth/runtime.ts:123:7)","requestId":"a43b21d7-1eac-4f2e-a8b9-00f684906d2d"}
+
+ ✓ packages/framework/src/targets/workers.unit.test.ts (9 tests) 752ms
+ ✓ packages/framework/src/auth/client.unit.test.ts (4 tests) 60ms
+ ✓ packages/framework/src/files/service.unit.test.ts (25 tests) 96ms
+ ✓ packages/framework/src/log/request.unit.test.ts (5 tests) 76ms
+ ✓ packages/framework/src/auth/guards.unit.test.ts (5 tests) 64ms
+ ✓ packages/framework/src/mig/generate.unit.test.ts (14 tests) 141ms
+ ✓ packages/framework/src/google/certify.unit.test.ts (19 tests) 86ms
+ ✓ packages/framework/src/http/client.unit.test.ts (6 tests) 60ms
+ ✓ packages/framework/src/sql/guard.unit.test.ts (8 tests) 61ms
+ ✓ packages/framework/src/log/writer.unit.test.ts (7 tests) 50ms
+ ✓ packages/framework/src/secrets/local.unit.test.ts (3 tests) 30ms
+ ✓ packages/framework/src/secrets/dev-vars.unit.test.ts (18 tests) 19ms
+ ✓ packages/framework/src/secrets/service.unit.test.ts (14 tests) 25ms
+ ✓ packages/framework/src/sql/values.unit.test.ts (64 tests) 23ms
+ ✓ packages/framework/src/auth/session.unit.test.ts (5 tests) 25ms
+ ✓ packages/framework/src/check/migrations/files.unit.test.ts (10 tests) 53ms
+ ✓ packages/framework/src/cli/dev/plan.unit.test.ts (4 tests) 9ms
+ ✓ packages/framework/src/secrets/set-command.unit.test.ts (16 tests) 16ms
+ ✓ packages/framework/src/cli/commands/dev.unit.test.ts (4 tests) 32ms
+ ✓ packages/framework/src/core/errors.unit.test.ts (4 tests) 15ms
+ ✓ packages/framework/src/files/local/tickets.unit.test.ts (5 tests) 25ms
+ ✓ packages/framework/src/auth/signing.unit.test.ts (3 tests) 19ms
+ ✓ packages/framework/src/sql/build.unit.test.ts (8 tests) 17ms
+ ✓ packages/framework/src/cli/args.unit.test.ts (3 tests) 10ms
+ ✓ packages/framework/src/files/client.unit.test.ts (12 tests) 15ms
+ ✓ packages/framework/src/mig/framework.unit.test.ts (3 tests) 28ms
+ ✓ packages/framework/src/log/entry.unit.test.ts (16 tests) 10ms
+ ✓ packages/framework/src/auth/transaction.unit.test.ts (3 tests) 22ms
+ ✓ packages/framework/src/log/failures.unit.test.ts (5 tests) 15ms
+ ✓ packages/framework/src/config/schema.unit.test.ts (19 tests) 32ms
+ ✓ packages/framework/src/mig/history.unit.test.ts (4 tests) 13ms
+ ✓ packages/framework/src/core/identity.unit.test.ts (20 tests) 11ms
+ ✓ packages/framework/src/sql/names.unit.test.ts (36 tests) 15ms
+ ✓ packages/framework/src/config/resolve.unit.test.ts (20 tests) 11ms
+ ✓ packages/framework/src/cli/commands/reset-local.unit.test.ts (2 tests) 16ms
+ ✓ packages/framework/src/auth/stub-provider.unit.test.ts (4 tests) 15ms
+ ✓ packages/framework/src/check/migrations/compare.unit.test.ts (11 tests) 12ms
+ ✓ packages/framework/src/config/files.unit.test.ts (8 tests) 12ms
+ ✓ packages/framework/src/files/names.unit.test.ts (28 tests) 17ms
+ ✓ packages/framework/src/cli/commands/secrets.unit.test.ts (4 tests) 13ms
+ ✓ packages/framework/src/cli/main.unit.test.ts (6 tests) 10ms
+ ✓ packages/framework/src/config/embed.unit.test.ts (4 tests) 7ms
+ ✓ packages/framework/src/log/memory.unit.test.ts (3 tests) 11ms
+ ✓ tests/support/tags.unit.test.ts (16 tests) 11ms
+ ✓ packages/framework/src/sql/handle.unit.test.ts (3 tests) 11ms
+ ✓ packages/framework/src/auth/levels.unit.test.ts (3 tests) 5ms
+ ✓ packages/framework/src/sql/table.unit.test.ts (16 tests) 14ms
+ ✓ packages/framework/src/cli/commands/verify.unit.test.ts (9 tests) 12ms
+ ✓ packages/framework/src/sql/columns.unit.test.ts (19 tests) 11ms
+ ✓ packages/framework/src/cli/verify/zod-version.unit.test.ts (2 tests) 9ms
+ ✓ packages/framework/src/auth/user-id.unit.test.ts (2 tests) 12ms
+ ✓ packages/framework/src/check/paths.unit.test.ts (10 tests) 12ms
+ ✓ packages/framework/src/cli/dev/logs.unit.test.ts (1 test) 8ms
+ ✓ packages/framework/src/cli/commands/generate-migration.unit.test.ts (3 tests) 6ms
+ ✓ packages/framework/src/kv/rules.unit.test.ts (9 tests) 10ms
+ ✓ packages/framework/src/config/secret-locations.unit.test.ts (6 tests) 8ms
+ ✓ packages/framework/src/config/service.unit.test.ts (4 tests) 9ms
+ ✓ packages/framework/src/check/references.unit.test.ts (3 tests) 7ms
+ ✓ packages/framework/src/secrets/names.unit.test.ts (6 tests) 7ms
+ ✓ packages/framework/src/core/define-app.unit.test.ts (1 test) 4ms
+ ✓ packages/framework/src/files/cursor.unit.test.ts (9 tests) 7ms
+ ✓ packages/framework/src/config/keys.unit.test.ts (4 tests) 8ms
+ ✓ packages/framework/src/auth/cookies.unit.test.ts (6 tests) 11ms
+ ✓ packages/framework/src/log/capture.unit.test.ts (6 tests) 7ms
+ ✓ packages/framework/src/kv/cursor.unit.test.ts (4 tests) 8ms
+ ✓ packages/framework/src/check/format.unit.test.ts (4 tests) 8ms
+ ✓ packages/framework/src/cli/commands/build.unit.test.ts (2 tests) 6ms
+ ✓ packages/framework/src/log/local.unit.test.ts (2 tests) 9ms
+ ✓ packages/framework/src/cli/verify/tests.unit.test.ts (2 tests) 6ms
+ ✓ packages/framework/src/kv/range.unit.test.ts (5 tests) 5ms
+ ✓ packages/framework/src/core/deferred.unit.test.ts (3 tests) 5ms
+ ✓ packages/framework/src/files/local-only.unit.test.ts (1 test) 5ms
+ ✓ packages/framework/src/auth/return-to.unit.test.ts (2 tests) 5ms
+ ✓ packages/framework/src/check/migrations/exports.unit.test.ts (1 test) 5ms
+ ✓ packages/framework/src/sql/dialect.unit.test.ts (4 tests) 5ms
+ ✓ packages/framework/src/check/public.unit.test.ts (3 tests) 8ms
+ ✓ packages/framework/src/sql/expressions.unit.test.ts (2 tests) 5ms
+ ✓ packages/framework/src/check/resolve.unit.test.ts (3 tests) 4ms
+ ✓ packages/framework/src/sql/types.unit.test.ts (1 test) 3ms
+ ✓ packages/framework/src/core/types.unit.test.ts (1 test) 3ms
+
+ Test Files  111 passed (111)
+      Tests  1205 passed (1205)
+   Start at  00:12:24
+   Duration  78.54s (tests 77%, import 22%, transform 1%)
+
+    Isolate  111 workers spawned · ~148ms startup each (spawn + environment, per file)
+             at least ~5.31s faster with isolate: false — reuses workers across files instead of one per file
+
+JSON report written to /home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389/validation/local/phase-B/run-2/03-test-unit.vitest.json
+# end: 2026-10-20T00:13:43Z
+# exit code: 0
