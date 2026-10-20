@@ -77,6 +77,45 @@ describe("SKILL: size budgets and links", () => {
     expect(examples.filter((f) => !linkedExamples.has(f)).map(repoPath), "examples no reference links to").toEqual([]);
   });
 
+  // "Its examples" (E-T2, flag F1): every example that shows what a reference covers, not only
+  // one. Each row comes from skill.md §2 ("References cover", "Specific content the references
+  // carry", "Implementation") and from the files each example copies, never from the
+  // references' own text; ai/implementation/decisions/E-T2.md gives the reason for each row.
+  // A reference the design ties to no particular example has an empty row and keeps only the
+  // "at least one example" check above.
+  const ITS_EXAMPLES: Readonly<Record<string, readonly string[]>> = {
+    "configuration.md": ["configuration.md"],
+    "current-user.md": ["admin-and-current-user.md"],
+    "deploying.md": ["configuration.md", "tests.md"],
+    "files.md": ["files-tickets.md"],
+    "http-and-validation.md": ["endpoint-and-page.md"],
+    "kv.md": ["status-kv.md"],
+    "local-development.md": ["configuration.md", "endpoint-and-page.md"],
+    "log.md": ["notes-sql.md"],
+    "owner-tasks.md": ["configuration.md"],
+    "secrets.md": ["secrets.md"],
+    "sql-and-migrations.md": ["notes-sql.md"],
+    "testing.md": ["tests.md"],
+    "troubleshooting.md": [],
+  };
+
+  it(tag("SKILL-AC-001", "link check: the table of each reference's examples covers exactly the references CHECK names and names only existing examples"), () => {
+    expect(Object.keys(ITS_EXAMPLES).sort()).toEqual([...REFERENCE_FILES].sort());
+    const unknown = [...new Set(Object.values(ITS_EXAMPLES).flat())].filter((name) => !existsSync(join(EXAMPLES_DIR, name)));
+    expect(unknown, "examples named in the table that do not exist").toEqual([]);
+  });
+
+  it(tag("SKILL-AC-001", "link check: each reference links to every one of its examples"), () => {
+    const missing: string[] = [];
+    for (const ref of references) {
+      const linked = linkedFiles(ref);
+      for (const example of ITS_EXAMPLES[ref.slice(REFERENCE_DIR.length + 1)] ?? []) {
+        if (!linked.has(join(EXAMPLES_DIR, example))) missing.push(`${repoPath(ref)} does not link skill/examples/${example}`);
+      }
+    }
+    expect(missing, "missing links from a reference to one of its examples").toEqual([]);
+  });
+
   it(tag("SKILL-AC-001", "link check: every relative link in the skill's documents resolves to an existing file"), () => {
     const docs = filesUnder(SKILL_DIR).filter((f) => f.endsWith(".md"));
     const broken: string[] = [];
