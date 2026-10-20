@@ -151,3 +151,51 @@ The record was moved to `apps/demo/validation-evidence/local-3qs2wf6eexh09jl.jso
 ### Verification
 
 `validation/local/3qs2wf6eexh09jl.json` exists at the root and the compliance report tooling lists it; the next F-01 build commits its smoke record under `validation/local/` and raises no such entry.
+
+---
+
+## Review
+
+Independent review (prompt §8 step 2), branch `claude/implement-local-cloudflare-rc-f3-review` from `origin/claude/implement-local-cloudflare`. The reviewer did not diagnose these entries or write the framework, skill or demo. Nothing was changed except this section. No reproduction was re-run: each link was checked against the cited sources (prompt §3, §8, §9 F; `docs/components/skill.md`, DEC-0276; `docs/demo/demo-spec.md`; `docs/contracts/ts/testing.d.ts`, `files.d.ts`; `docs/components/core.md` CORE-REQ-005; `docs/components/check.md` CHECK-REQ-001, DEC-0180; the skill pages named; `ai/implementation/plan.md` F-01 "Owns"; `tests/compliance/tools/records.ts`; the demo's code and test), and the diagnosis's reproductions are consistent with them (plan §1 "Test economy").
+
+**Verdict: ACCEPTED, all four entries**, with the fix requirements below. No framework defect (a) and no builder error (d) is agreed.
+
+### Entry 1 — ACCEPTED
+
+- The scaffolder is not required to support this case. SKILL-REQ-005 and SKILL-AC-005 require only that scaffolding into a non-empty directory stops without changing it. DEC-0276 (accepted) says explicitly: "Scaffolding into a workspace member of this repository (e.g. `apps/demo`) is not supported by this minimal form", and leaves "renaming the package" to "the app agent or phase E". So the scaffolder's behaviour is (c), and the missing guidance is a (b) skill gap owned by E-01. Evidence 2 (root `workspaces` and `package-lock.json` already expect `demo`) and the DEC-0276 text together rule out a scaffolder change as the smallest fix (§3).
+- **Fix requirements:**
+  1. `skill/reference/local-development.md`, "Starting a new app": add the paragraph proposed in the record, with these corrections: (a) the excluded paths are everything `apps/template/.gitignore` lists (that includes Playwright output `test-results/`, `playwright-report/`, `blob-report/`, as DEC-0276 step 4 and `scaffold.mjs` exclude), not only the six named; (b) say the framework dependency keeps the template's exact pin (no `file:vendor` rewrite) — the copy already does, but the rule "never change framework version pins" must not look contradicted; (c) step 1 (`name` in `src/app.ts`) still applies.
+  2. Keep `apps/demo/package.json` `name: "demo"`.
+  3. Not required: telling standalone apps to rename their `package.json` `name` (harmless there, DEC-0276).
+  4. Verify with `tests/skill` (size budget PAR-071, links).
+
+### Entry 2 — ACCEPTED
+
+- "No per-operation failure injection" is consistent with the contracts: `testing.d.ts` `unavailable` is per capability, "every operation of each one named throws", and fixed in `TestAppOptions` at creation. No FILES, LOG, CORE, COMPL, E2E or DEMO requirement asks for per-operation injection (searched `simulat|fault|inject`; the only injection requirement is LOG-AC-001's log writer, already covered by `logWriter`).
+- No demo criterion requires a failed delete *of stored files*. DEMO-AC-003 asks for "a simulated file-deletion failure" producing a `warn`, verified by a local test (demo-spec line 72); DEMO-REQ-003 asks that "the failure is logged and the post is still deleted". The demo's test makes the files capability fail during the post's file-deletion step and asserts 204, 404 afterwards, and exactly one `warn`. In `removePhotoFiles` the per-name `files.delete`, the prefix `files.list` and its deletes share one `try/catch`, so a failure in any of them takes the asserted path. The reading is a fair one of "simulated file-deletion failure"; it is the step, not a particular call, that the requirement names. A switchable or per-operation hook would be new `TestAppOptions` contract surface no requirement asks for (§3).
+- **Fix requirements:**
+  1. `skill/reference/testing.md`, "In-process tests": add the record's sentence (`unavailable` holds for the whole test app from creation; no per-operation failure; to test a logged cleanup failure, make the capability unavailable and run the request that cleans up). Phrase the "one `try/catch` around the whole cleanup" part as how the template-style code makes that test meaningful, not as a new rule.
+  2. No framework or contract change; demo test unchanged.
+  3. Verify with `tests/skill`.
+
+### Entry 3 — ACCEPTED
+
+- The shared-code rule is grounded correctly, with one precision: the explicit rule is CHECK-REQ-001 (owner-approved, `docs/components/check.md`: shared code "imports only `zod` and other shared code"), applied by `allowed-imports` with "shared: none" (DEC-0180) because CORE-REQ-005's "Importable by" column (owner-approved) lists no subpath for shared code. The diagnostic text cites CORE-REQ-005, so the record's citation matches what the builder saw; both requirements are owner-approved, so relaxing them is not the smallest fix.
+- A framework-exported structural client type is ruled out: tickets are branded opaque types whose contents are "not part of the contract" (`files.d.ts`), and shared code could not import such a type anyway. The type parameter is the documentation-only fix. `DownloadTicket` is exported from `.` and `./client`, so the server and browser can both instantiate it.
+- **Fix requirements:**
+  1. Add the record's sentence to `skill/reference/http-and-validation.md` "Adding a route" step 1 (preferred, as that step causes the conflict), citing `allowed-imports` / CHECK-REQ-001 rather than only CORE-REQ-005. If it carries a code fragment it must type-check under the skill's example checks (SKILL-REQ-004).
+  2. Keep the demo's `Photo<T>` pattern. The `Awaited<ReturnType<…>>` simplification in `apps/demo/src/server/posts.ts` is optional and not part of this fix.
+  3. Verify with `tests/skill`.
+
+### Entry 4 — ACCEPTED
+
+- Agreed that the builder obeyed a brief that contradicted the plan: `plan.md` F-01 "Owns" includes `validation/local/<runId>.json` and `validation/local/<runId>/`, and `skill/reference/testing.md` line 8 places the record at the top of the git repository. `smoke` behaves as DEC-0275 specifies. The move to `apps/demo/validation-evidence/` hides the record from `readRecords` (`tests/compliance/tools/records.ts`, `join(root, "validation", target)`), so the workaround must not stay. Confirmed the moved files are `local-3qs2wf6eexh09jl.json` (runId `3qs2wf6eexh09jl`, commit `2778ee95…`) and `local-3qs2wf6eexh09jl/raw/{smoke.log,tests.json}`; `validation/local/` has no conflicting entry.
+- **Fix requirements (orchestrator):**
+  1. `git mv` both paths back to `validation/local/3qs2wf6eexh09jl.json` and `validation/local/3qs2wf6eexh09jl/` with contents unchanged; remove `apps/demo/validation-evidence/`.
+  2. Change the "Results" row of `apps/demo/BUILD-RECORD.md` (line 39) to point at `validation/local/3qs2wf6eexh09jl.json`, dropping the FRAMEWORK-ISSUE 4 reference.
+  3. The next F-01 brief states the plan's "Owns" line verbatim.
+  4. Verify that `readRecords(repoRoot)` returns the record without it in `skipped`.
+
+### Closing the entries
+
+After the fixes above land, remove entries 1–4 from `apps/demo/FRAMEWORK-ISSUE.md` (or mark them closed with the fixing commit), and per §9 F rebuild until no entry remains; the next F-01 build is the end-to-end check that none of the four is raised again.
