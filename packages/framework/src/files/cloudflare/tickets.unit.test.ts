@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readDownloadTicket, readUploadTicket } from "../tickets.js";
 import { expectedSignature } from "./sigv4-reference.test-support.js";
-import { createCloudflareTicketIssuer, type CloudflareTicketOptions } from "./tickets.js";
+import { createCloudflareTicketIssuer, createWorkerTicketIssuer, type CloudflareTicketOptions } from "./tickets.js";
 
 /** Generated per run: dummy identifiers and key pair, never real ones. */
 const accountId = crypto.randomUUID().replaceAll("-", "");
@@ -64,6 +64,26 @@ describe("Cloudflare upload tickets (DEC-0098, DEC-0160, FILES-REQ-003)", () => 
     await counting.upload("a", "text/plain");
     await counting.upload("a", "text/plain");
     expect(reads).toBe(2);
+  });
+});
+
+describe("the Worker's issuer reads the stage's R2 token from the framework-internal secrets (DEC-0100)", () => {
+  it("signs with frameworkR2AccessKeyId / frameworkR2SecretAccessKey, read per ticket", async () => {
+    const read: string[] = [];
+    const secrets: Record<string, string> = { frameworkR2AccessKeyId: credentials.accessKeyId, frameworkR2SecretAccessKey: credentials.secretAccessKey };
+    const tickets = createWorkerTicketIssuer({ accountId, bucket: "b" }, async (name) => (read.push(name), secrets[name] ?? ""));
+    const ticket = readDownloadTicket(await tickets.download("x"));
+    expect(new URL(ticket?.url ?? "").searchParams.get("X-Amz-Credential")?.startsWith(`${credentials.accessKeyId}/`)).toBe(true);
+    expect(new URL(ticket?.url ?? "").searchParams.get("X-Amz-Signature")).toBe(expectedSignature(ticket?.url ?? "", "GET", {}, credentials.secretAccessKey));
+    expect(read.sort()).toEqual(["frameworkR2AccessKeyId", "frameworkR2SecretAccessKey"]);
+  });
+
+  it("a missing secret's error reaches the caller unchanged", async () => {
+    const missing = new Error("unset");
+    const tickets = createWorkerTicketIssuer({ accountId, bucket: "b" }, async () => {
+      throw missing;
+    });
+    await expect(tickets.upload("x", "text/plain")).rejects.toBe(missing);
   });
 });
 

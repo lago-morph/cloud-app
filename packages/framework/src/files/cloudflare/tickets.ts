@@ -7,6 +7,7 @@
  * status null (DEC-0101); nothing here works around that. Workers-compatible (Web Crypto).
  */
 import { FrameworkError } from "../../core/errors.js";
+import { FRAMEWORK_SECRETS, type FrameworkSecretName } from "../../secrets/names.js";
 import type { TicketIssuer } from "../service.js";
 import { TICKET_LIFETIME_MS, type DownloadTicketData, type UploadTicketData } from "../tickets.js";
 import { downloadDisposition } from "./disposition.js";
@@ -84,4 +85,24 @@ export function createCloudflareTicketIssuer(options: CloudflareTicketOptions): 
       return { url, expiresAt: signedAt + TICKET_LIFETIME_MS };
     },
   };
+}
+
+/** Where the stage's bucket is; delivered to the Worker as deployment-time settings (CFG). */
+export interface R2BucketLocation {
+  readonly accountId: string;
+  readonly bucket: string;
+}
+
+/**
+ * The issuer a Cloudflare Worker uses (`StageOptions.tickets`): signs with the stage's R2 token,
+ * read from the framework-internal secrets on each ticket (DEC-0100).
+ */
+export function createWorkerTicketIssuer(location: R2BucketLocation, frameworkSecret: (name: FrameworkSecretName) => Promise<string>): CloudflareTicketIssuer {
+  return createCloudflareTicketIssuer({
+    ...location,
+    credentials: async () => ({
+      accessKeyId: await frameworkSecret(FRAMEWORK_SECRETS.r2AccessKeyId),
+      secretAccessKey: await frameworkSecret(FRAMEWORK_SECRETS.r2SecretAccessKey),
+    }),
+  });
 }
