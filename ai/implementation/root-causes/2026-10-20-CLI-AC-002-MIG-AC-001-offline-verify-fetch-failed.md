@@ -167,3 +167,28 @@ D-03's root-cause record (`2026-10-20-D-03-unit-timeouts-under-load.md`) noted `
 3. No retries, no swallowed `fetch failed`, and no test changes beyond the new test.
 4. Re-check: the record's verification steps 2–4, plus the stress check (step 3, or my `rc2/stress.sh` on the rebuilt `dist`: expect 0 throws and D1-time stalls < 2 s), plus `checker.unit.test.ts` in `npm run test:unit` (D-03's symptom).
 5. Optional, separate from this fix: `describeFailure` in `main.ts` could print `error.cause` too, which would have made this symptom diagnosable from the CLI output alone.
+
+## Fix
+
+Fixing subagent (prompt §8 step 3), after the review accepted the record. Branch `claude/implement-local-cloudflare-fix-c2`. Local only: no Cloudflare calls.
+
+**Change.** `packages/framework/src/check/migrations/checker.ts`, `runMigrationChecker`: the `Promise.all` was replaced by `const sqlite = await replay("sqlite", root); const postgres = await replay("postgres", root);`. The D1 platform proxy is therefore disposed (`replay`'s `finally`) before PGlite starts. The diagnostics order (sqlite, postgres, comparison) is unchanged. The header comment and a comment at the call explain why. No retries were added and no error is swallowed. `docs/components/check.md` says nothing about concurrency, so it was not changed.
+
+**Red → green.** A new test in `checker.unit.test.ts`, "replays the dialects one after the other: one database is closed before the other is opened". It wraps `openCheckDatabase` with `vi.mock` (by default it delegates to the real function, so the file's other tests still use real D1 and PGlite). The test then installs recording fakes and asserts the event order `open X, closed X, open Y, closed Y`. It uses no timing. Red on the old code (commit `4c5052d`): `open sqlite, open postgres, closed sqlite, closed postgres: expected 'open postgres' to be 'closed sqlite'`. Green after the fix (commit `30468c5`): all 10 tests in the file pass, including the CHECK-AC-004 cases on real databases.
+
+**Stress re-check.** Scratchpad `fixc2/` holds `make.mjs`, `stress.sh`, `mc.mjs` (the reviewer's `rc2/mc.mjs`) and `stress.log`. The instrumented copies are made from the rebuilt `dist` checker: `seq` is as shipped, and `par` is the old `Promise.all` line, kept as a same-load control. The run had 8 busy loops (`busy.sh`) for its whole length, on top of other agents' load: load average 31–37 on 4 CPUs, about 3× the reviewer's. It ran 6 rounds of 4 `seq` and 4 `par` processes at once, each a fresh process with one `runMigrationChecker` on `apps/template`.
+
+| mode | runs | throws | longest main-thread stall while D1 was open |
+|---|---|---|---|
+| seq (fix) | 24 | 0 | 0.83–2.14 s (overall stall, PGlite after D1 closed: 66–91 s) |
+| par (old code) | 24 | 0 | 66–96 s |
+
+With the fix, the PGlite stall no longer falls inside the D1 period. The D1-time stall stays well under workerd's ~5 s idle timeout. It went slightly over the reviewer's 2 s target (2.14 s at most) only because the load was about three times higher. The old code had no throws in this sample: the failure also needs a request in flight across the block (Review, link 1). Its D1-time stalls of more than a minute show that the exposure is still there in the old code.
+
+**Tests run.**
+- `npx vitest run --config vitest.integration.config.ts` on `check/migration-checker.test.ts`, `mig/generate.test.ts` and `cli/verify.test.ts`: 3 files, 21 tests passed.
+- `npm run verify`, online: passed (unit: 175 files, 1632 tests, including `checker.unit.test.ts`, which is D-03's symptom). The template and reference apps' `verify` passed.
+- `unshare -rn sh scripts/offline.sh npm run verify`, offline: passed, with the same counts.
+- `npm run compliance -- --target local --only CLI-AC-002,MIG-AC-001 --out <scratchpad>/fixc2/compl`: **2 passed**, 107 not-run (not selected). This includes `[CLI-AC-002] two consecutive verify runs with networking disabled give identical results`. Evidence: `fixc2/compl/validation/local/ccvhlbi0wynh6j6.json` (scratchpad, not committed).
+
+Still open for §8 step 4: the test runner's full `npm run compliance -- --target local` re-check (the record's Verification plan, step 4).
