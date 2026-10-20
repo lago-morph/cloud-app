@@ -145,3 +145,33 @@ This matches evidence 4. (Before the framework build, every test failed with "pa
    - `-t '\[(?:SEC-AC-001|SEC-AC-002)\]'` passes;
    - `--sequence.shuffle` with seeds 1–5 passes (seed 3 fails today).
 7. **The scan for the same pattern stays open.** A grep found module-level `let`/array state in 20 integration and criteria test files. Most are `beforeAll` fixtures, which are benign. Before the full rerun, the fixer or the test runner must check whether any of them is written by one tagged test and read by a differently tagged one, using the same per-file `-t` and shuffle runs.
+
+## Fix
+
+Fixer: test-case author (prompt §8 step 3); did not write the code under test, diagnose or review this record. Branch `claude/implement-local-cloudflare-fix-c5` from `origin/claude/implement-local-cloudflare`, after `npm ci` and `npm run build -w packages/framework`. Only `packages/framework/test/integration/secrets/cli.test.ts` changed.
+
+### Change
+- Module-level `app`, `errorResponses` and the file-wide `beforeAll` are gone. The header no longer says "run in order"; it says each test provisions what it reads.
+- **SEC-AC-004 and SEC-AC-003** each run in a fresh app (`withFreshApp`: `makeTempApp` + `remove()` in `finally`). SEC-AC-004 keeps the four rejected forms, the per-form "`.dev.vars` does not contain the value" check, and the stdin control (`dotenvValue(...) === other`) in the same app.
+- **SEC-AC-001 and SEC-AC-002** share `exercised()`, a memoised promise that whichever test runs first starts. In order it: creates its own app; runs `secrets set apiKey` with `secret` on stdin, throwing if the exit status is not 0; starts `dev`; records status, headers and body of `/api/secret`, `/api/secret/undeclared`, `/api/secret/missing` and `/api/throw/secret`; stops `dev` in `finally`. Nothing is caught. A rejection is cached, so every test that awaits it fails rather than skipping. `afterAll` removes the app only if it was created.
+- **Review point 1 (no assertion removed).** SEC-AC-001 keeps 200 with `{ value: secret }`, 500 with `SEC.UNDECLARED` and `SEC.MISSING`, empty `errorResponseViolations`, and the thrown 500. SEC-AC-002 keeps both builds (run after awaiting the fixture), `errorResponses.length` exactly 3, no response containing the value, no hit outside `.dev.vars`/`.wrangler/`, a `.logs/` `"error"` entry, an empty `git grep`, and `.dev.vars` containing the value.
+- **Review point 2 (no vacuous pass).** The 3 error responses come from the recorded fixture and are filtered to status ≥ 400, so an empty or partial record fails the count. The leak scan now asserts that the unfiltered `filesContaining(app.dir, secret)` result includes `.dev.vars` before it checks that the other hits are `[]`. So the scan itself proves it can see the value. The `.logs/` check scans the same app that `dev` ran in.
+
+### Red / green
+`npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/secrets/cli.test.ts …`
+
+| Run | Before | After |
+|---|---|---|
+| `-t '\[SEC-AC-002\]'` | 1 failed (`expected +0 to be 3`, `:127:35`), 3 skipped | 1 passed, 3 skipped |
+| `-t '\[SEC-AC-001\]'` | 1 failed (`expected 500 to be 200`, per review) | 1 passed, 3 skipped |
+| `-t '\[SEC-AC-003\]'` | — | 1 passed, 3 skipped |
+| `-t '\[SEC-AC-004\]'` | — | 1 passed, 3 skipped |
+| `-t '\[(?:SEC-AC-001\|SEC-AC-002)\]'` | — | 2 passed, 2 skipped |
+| unfiltered | 4 passed | 4 passed |
+| `--sequence.shuffle --sequence.seed=1…5` | seed 3: 2 failed (per diagnosis) | all five seeds: 4 passed |
+
+No `dev` process was left running after the runs. `npm run verify` passed.
+
+### Still open
+- §8 step 4 re-check by the test runner and the evaluator (the `--only` and full local runs listed under "Verification").
+- Review point 7: the scan of the other integration and criteria files for the same cross-tag pattern. This fix was limited to `cli.test.ts`.
