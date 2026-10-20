@@ -47,7 +47,7 @@ There is no severity filtering, no batching, no retention rule, and no per-app i
 Worker code cannot write files directly under workerd. Entries are therefore printed to the Worker's output as single marked lines — the marker `[prototype-framework:log] ` followed by the entry's JSON — and the CLI's `dev` command, which owns the Wrangler process, feeds that output through the framework's line capture, which appends each entry as a JSON line to `.logs/<yyyy-mm-dd>.log` (the entry's UTC day) and passes every other line on (DEC-0066, DEC-0130). `createTestApp` collects entries in memory and echoes each `error` entry to stderr as a JSON line when it is written; tests read them through `TestApp.logs()` (DEC-0131).
 
 ### Cloudflare
-An R2 binding to the shared log bucket. Each write is scheduled with the request's `waitUntil` so it does not delay the response.
+An R2 binding to the shared log bucket, named `LOGS` on the stage Worker. Each entry is one object (`application/json`) at the LOG-REQ-004 key, whose `<id>` is the request ID or, for an entry without one, a random UUID. Each write is scheduled with the request's `waitUntil` so it does not delay the response, and a failed write is dropped. Without a `LOGS` binding (a misconfigured Worker), entries are printed as the marked Worker output lines of the local runtime instead, and requests are unaffected (DEC-0323; code in `src/log/cloudflare/`).
 
 ### AWS
 An S3 `PutObject` to the shared log bucket using the Lambda role, which may only put objects there. A frozen Lambda would lose pending writes, so the runtime waits up to PAR-260 for them before completing a response.

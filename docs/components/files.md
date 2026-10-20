@@ -62,7 +62,7 @@ Unreachable storage MUST surface as `FILES.UNAVAILABLE`. When a browser transfer
 
 Fetch fresh download tickets with each listing; do not cache URLs.
 
-**Download names** (DEC-0313). A download is saved under the file's whole name: storage's response carries `Content-Disposition: attachment; filename*=UTF-8''<name>` (RFC 6266 / RFC 8187; every byte outside `attr-char` percent-encoded, `/` included), or `inline; filename*=…` for raster images. Nothing in the name is interpreted as a path; browsers replace unsafe characters when they save. One helper (`src/files/cloudflare/disposition.ts`) builds the value for every target. On Cloudflare the download ticket signs it as R2's `response-content-disposition`; it is `inline` only when the service passes the file's content type to the issuer, and `attachment` otherwise (DEC-PENDING-D-02-3).
+**Download names** (DEC-0313). A download is saved under the file's whole name: storage's response carries `Content-Disposition: attachment; filename*=UTF-8''<name>` (RFC 6266 / RFC 8187; every byte outside `attr-char` percent-encoded, `/` included), or `inline; filename*=…` for raster images. Nothing in the name is interpreted as a path; browsers replace unsafe characters when they save. One helper (`src/files/cloudflare/disposition.ts`) builds the value for every target. On Cloudflare the download ticket signs it as R2's `response-content-disposition`; it is `inline` only when the service passes the file's content type to the issuer, and `attachment` otherwise (DEC-0329).
 
 **Shared runtime shape** (DEC-0160, DEC-0162, DEC-0164):
 - One target-neutral service runs over the object store (the R2 Worker binding, locally and on Cloudflare), with a ticket issuer supplied by each target.
@@ -86,7 +86,7 @@ Implementation details (DEC-0161, DEC-0163):
 ### Cloudflare
 Server operations use the R2 Worker binding. Tickets are SigV4-signed URLs for R2's S3-compatible endpoint, created with aws4fetch (PAR-105), because the binding cannot sign URLs. The signing credentials are an R2 API token scoped to the stage's bucket. Provisioning creates it and stores it as a framework-internal Worker secret.
 
-Implementation details (DEC-0098…DEC-0100, DEC-PENDING-D-02-1…DEC-PENDING-D-02-4; code in `src/files/cloudflare/`):
+Implementation details (DEC-0098…DEC-0100, DEC-0327…DEC-0330; code in `src/files/cloudflare/`):
 - A ticket URL is path-style, `https://<account>.r2.cloudflarestorage.com/<bucket>/<key>`, with each `/`-separated segment of the name RFC 3986-encoded. URL parsers resolve `.` and `..` segments even when percent-encoded, so a name with such a segment is sent with every `/` as `%2F` (storage decodes it back to the same key); a name that is only `.` or `..` gets no ticket (`FILES.INVALID_NAME`).
 - Signing: aws4fetch, `service: "s3"`, `region: "auto"`, query signing with every passed header signed (`allHeaders`), and `X-Amz-Expires` = PAR-233 in seconds. An upload ticket signs `Content-Type` (`X-Amz-SignedHeaders=content-type;host`), so storage refuses another content type. A download ticket signs only `host`, plus the `response-content-disposition` query parameter, which names the file (see "Download names").
 - Credentials: the Worker secrets `frameworkR2AccessKeyId` and `frameworkR2SecretAccessKey`, read for each ticket. Provisioning derives them from the token it creates: access key ID = token `id`, secret access key = lowercase hex SHA-256 of token `value` (`s3CredentialsFromToken`).

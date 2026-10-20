@@ -5,7 +5,7 @@
  * by the exact pattern, then everything else of the stage, then a leftover listing. Shared
  * account resources and other stages are never touched. A test stage (`test-…`) is removed as
  * named. A production stage is removed only when `--confirm-production` repeats its name, so a
- * typo or a copied test command can never remove a production stage (DEC-PENDING-D-05-2).
+ * typo or a copied test command can never remove a production stage (DEC-0350).
  * After a removal with no leftovers, the stage's recorded deploy output
  * (`.framework/<target>/stages/<stage>.json`) is deleted (plan §5 "From phase C").
  * Exit 1 on any failure or leftover (CLI-REQ-003).

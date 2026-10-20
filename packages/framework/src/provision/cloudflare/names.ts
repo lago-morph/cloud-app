@@ -1,6 +1,6 @@
 /**
  * Physical names of a Cloudflare stage's resources (PROV §2 "Stage resources"; CF-REQ-002;
- * DEC-PENDING-D-03-1). Workers scripts, R2 buckets and account API tokens are named per
+ * DEC-0331). Workers scripts, R2 buckets and account API tokens are named per
  * account, not globally, so the names are fixed by the app and stage: every operation (stop,
  * start, secrets, removal, the leftover check) finds the stage's resources from the stage
  * name alone, also on a machine without local CLI state (PROV-AC-006). App names have no

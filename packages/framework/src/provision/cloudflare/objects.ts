@@ -3,7 +3,7 @@
  * bucket before removal (PROV §2 "Removal") and to delete the stage's SST state objects, which
  * `sst remove` leaves behind (DEC-0084). Request shapes as in spike A-01's `cleanup_state.py`
  * (`GET …/objects?per_page=1000`, `DELETE …/objects/<encoded key>`); the cursor fields
- * (`result_info.cursor`, `is_truncated`) are unverified live (DEC-PENDING-D-03-4).
+ * (`result_info.cursor`, `is_truncated`) are unverified live (DEC-0334).
  *
  * An error answer to a delete is not proof the object remains (a 502 was seen on a delete that
  * happened, A-03 `c19`): after deleting, the keys are listed again and only those still present

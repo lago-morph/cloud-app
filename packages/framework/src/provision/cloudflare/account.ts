@@ -5,7 +5,7 @@
  * - SST's state home, the R2 bucket `sst-state` (DEC-0084);
  * - the account's `workers.dev` subdomain (DEC-0086), the account setting that every stage's
  *   public origin is built from. Cloudflare keeps it; it is read from there on every deploy,
- *   never only recorded on the owner's machine (DEC-PENDING-D-03-3).
+ *   never only recorded on the owner's machine (DEC-0333).
  * Used by `setupAccount` (create when absent) and by the deploy preflight (inspect only),
  * through the per-target operations `inspectAccount` and `createSharedResources`.
  *
@@ -15,7 +15,7 @@
  * (HTTP 409) → it exists but this account does not own it (or its credentials cannot see it).
  * Every other answer is an error naming the bucket and the status; nothing is guessed.
  * These readings are not yet verified against the live API: D-RUN verifies them
- * (DEC-PENDING-D-03-4; the exact requests are listed there).
+ * (DEC-0334; the exact requests are listed there).
  */
 import type { SharedResource } from "../core/operations.js";
 import { describeFailure, resultOf, succeeded, type CloudflareApi } from "./api.js";
@@ -55,7 +55,7 @@ async function readSubdomain(api: CloudflareApi, accountId: string): Promise<str
   return typeof result?.subdomain === "string" && result.subdomain !== "" ? result.subdomain : undefined;
 }
 
-/** The subdomain `setup-account` registers on an account that has none (DEC-PENDING-D-03-3). */
+/** The subdomain `setup-account` registers on an account that has none (DEC-0333). */
 export const defaultSubdomain = (accountId: string): string => `pf-${accountId.slice(0, 12).toLowerCase()}`;
 
 async function registerSubdomain(api: CloudflareApi, accountId: string): Promise<void> {

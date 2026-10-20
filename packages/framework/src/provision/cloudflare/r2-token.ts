@@ -8,7 +8,7 @@
  *
  * Preflight cannot ask Cloudflare "may I create a token?" without creating one, so it checks
  * that the credential can read the token permission groups and the account's tokens, the reads
- * creation itself needs; a refusal names the permission (DEC-PENDING-D-03-5).
+ * creation itself needs; a refusal names the permission (DEC-0335).
  */
 import { createHash } from "node:crypto";
 import type { Stage } from "../core/operations.js";
