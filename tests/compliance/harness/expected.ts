@@ -48,7 +48,19 @@ export const PHASE_RULES: readonly NotRunRule[] = [
   { id: "E2E-007", targets: CLOUD, mode: "milestone", detail: GOOGLE_MOCKED },
   { id: "E2E-008", targets: CLOUD, mode: "milestone", detail: GOOGLE_MOCKED },
   { id: "CLI-AC-001", targets: CLOUD, mode: "automated", detail: GOOGLE_MOCKED },
+  // The demo is built in phase F (plan C-EV); the template part runs now. Phase F removes this rule when it adds the
+  // demo's [CHECK-AC-005] test. ai/implementation/root-causes/2026-10-20-E2E-004-coverage-and-not-run.md, Cause C (revised).
+  { id: "CHECK-AC-005", targets: ["local"], mode: "automated", part: "demo part", detail: "demo built in phase F (plan C-EV)" },
 ];
+
+/**
+ * Unit-level criteria (plan §10.3; decision draft ai/implementation/decisions/fix-c3.md): the
+ * criteria whose own text is stated over a unit test, hand-built inputs, stubbed cloud responses
+ * or injected failures. On local the driver also runs the unit layer for these IDs, and folds a
+ * unit test's outcome only into the unit-level IDs its title carries. Every other ID is
+ * evidenced by the integration and E2E layers only.
+ */
+export const UNIT_LEVEL: readonly string[] = ["CLI-AC-003", "COMPL-AC-002", "COMPL-AC-006", "COMPL-AC-007", "GOOGLE-AC-002", "PROV-AC-007"];
 
 function ruleMatches(rule: NotRunRule, id: string, target: Target, mode: RunMode): boolean {
   return (rule.id === "*" || rule.id === id) && rule.targets.includes(target) && (rule.mode === "any" || rule.mode === mode);

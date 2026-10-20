@@ -4,8 +4,9 @@
  * It records; it does not judge (prompt §7): only the evaluator's verdict counts as a pass.
  *
  * Cloud usage (plan "Cloud usage limits"): the driver selects only the tests tagged with an
- * expected ID (`-t` / `--grep`), runs each runner once, generates no data, and on a cloud
- * target uses one test stage for the whole run.
+ * expected ID (`-t` / `--grep`), runs each selected test layer once (selection.ts: on local
+ * also the unit layer, for the unit-level IDs only), generates no data, and on a cloud target
+ * uses one test stage for the whole run.
  */
 import {
   DirtyTreeError,
@@ -25,6 +26,7 @@ import { expectedCriteria, type ExpectedEntry } from "./expected.js";
 import { assertTestStage } from "./leftovers.js";
 import { grepPattern, parsePlaywrightJson, parseVitestJson } from "./reports.js";
 import { criterionResults, type TestOutcome } from "./results.js";
+import { idsFor, runnerSelection, scopeTests } from "./selection.js";
 
 export interface RunCall {
   readonly command: string;
@@ -75,7 +77,6 @@ export interface DriverResult {
   readonly recordPath?: string;
 }
 
-const SELF_TEST_CONFIG = "tests/compliance/harness/self-test/vitest.config.ts";
 const SELF_TEST_ID = "COMPL-AC-003";
 
 function firstLine(error: unknown): string {
@@ -194,50 +195,24 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
       }
 
       const env = childEnv(process.env, { target: args.target, runId, ...(stage === undefined ? {} : { stage }), ...(baseUrl === undefined ? {} : { baseUrl }) });
-      const pattern = grepPattern(toRun);
       const tmp = deps.tempDir();
-      const vitestJson = `${tmp}/vitest.json`;
-      const vitest = await deps.run({
-        command: "npx",
-        args: [
-          "vitest",
-          "run",
-          "--config",
-          args.selfTest ? SELF_TEST_CONFIG : "vitest.integration.config.ts",
-          ...(isCloud ? ["tests/compliance/criteria"] : []),
-          "-t",
-          pattern,
-          "--passWithNoTests",
-          "--reporter=default",
-          "--reporter=json",
-          `--outputFile.json=${vitestJson}`,
-        ],
-        cwd: deps.repoRoot,
-        env,
-      });
-      raw["vitest.log"] = vitest.output;
-      const vitestText = deps.readFile(vitestJson) ?? "";
-      raw["vitest.json"] = vitestText;
-      const parsedVitest = parseVitestJson(vitestText, deps.repoRoot);
-      outcomes.push(...parsedVitest.outcomes);
-      runErrors.push(...parsedVitest.errors);
-      exitStatus ||= vitest.status;
-
-      if (!args.selfTest) {
-        const playwrightJson = `${tmp}/playwright.json`;
-        const playwright = await deps.run({
-          command: "npx",
-          args: ["playwright", "test", "--project", "integration", "--project", "e2e", ...(isCloud ? ["tests/compliance/"] : []), "--grep", pattern, "--reporter=json", "--pass-with-no-tests"],
-          cwd: deps.repoRoot,
-          env: { ...env, PLAYWRIGHT_JSON_OUTPUT_NAME: playwrightJson },
-        });
-        raw["playwright.log"] = playwright.output;
-        const playwrightText = deps.readFile(playwrightJson) ?? "";
-        raw["playwright.json"] = playwrightText;
-        const parsedPlaywright = parsePlaywrightJson(playwrightText, "");
-        outcomes.push(...parsedPlaywright.outcomes);
-        runErrors.push(...parsedPlaywright.errors);
-        exitStatus ||= playwright.status;
+      for (const selection of runnerSelection({ target: args.target, selfTest: args.selfTest })) {
+        const ids = idsFor(selection, toRun);
+        if (ids.length === 0) continue;
+        const pattern = grepPattern(ids);
+        const jsonPath = `${tmp}/${selection.label}.json`;
+        const result =
+          selection.runner === "vitest"
+            ? await deps.run({ command: "npx", args: [...selection.args, "-t", pattern, "--passWithNoTests", "--reporter=default", "--reporter=json", `--outputFile.json=${jsonPath}`], cwd: deps.repoRoot, env })
+            : await deps.run({ command: "npx", args: [...selection.args, "--grep", pattern, "--reporter=json", "--pass-with-no-tests"], cwd: deps.repoRoot, env: { ...env, PLAYWRIGHT_JSON_OUTPUT_NAME: jsonPath } });
+        raw[`${selection.label}.log`] = result.output;
+        const text = deps.readFile(jsonPath) ?? "";
+        raw[`${selection.label}.json`] = text;
+        const parsed = selection.runner === "vitest" ? parseVitestJson(text, deps.repoRoot) : parsePlaywrightJson(text, "");
+        // A unit-layer test evidences only the unit-level IDs its title carries (plan §10.3).
+        outcomes.push(...scopeTests(selection, parsed.outcomes));
+        runErrors.push(...parsed.errors);
+        exitStatus ||= result.status;
       }
     } catch (error) {
       const reason = `not run: setting up the target failed: ${firstLine(error)}`;

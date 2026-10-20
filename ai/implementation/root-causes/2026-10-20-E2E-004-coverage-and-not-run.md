@@ -466,3 +466,43 @@ CHECK-AC-005 now carries the template test's tag, so without a part rule the who
 
 - `npm run verify`: exit 0, 1407 unit tests passed. Two earlier attempts failed on unrelated unit tests (PGlite/KV) that timed out at 5 s while the shared machine had a load average of about 20 on 4 cores. The failing tests differed between the two runs, and none of them are files this fix touches.
 - `npm run compliance -- --target local --only SKILL-AC-005,LOCAL-AC-001,CHECK-AC-005,E2E-001 --out <scratch>` from a clean tree at `c1c5ba9`: exit 0, "105 not-run, 4 passed". SKILL-AC-005 passed (both tests, about 33 s and 36 s), LOCAL-AC-001 and E2E-001 passed (the E2E-001 test, 4.6 min), and CHECK-AC-005 passed. CHECK-AC-005 is recorded as a whole criterion with part `""`, because the C-02 demo-part rule above is not there yet. This was an informational run outside the repository; its record is not committed.
+
+## Fix (A, B)
+
+Fixing subagent (prompt §8 step 3), branch `claude/implement-local-cloudflare-fix-c3`. It did not diagnose or review this record. Local only; no Cloudflare calls. Cause C is not handled here.
+
+**Changes.**
+- One shared selection: `tests/compliance/harness/selection.ts` (`runnerSelection`, `idsFor`, `scopeTests`, `uncovered`). It defines the driver's runner invocations per target: integration Vitest config (cloud: `tests/compliance/criteria`), on local the unit config limited to `UNIT_LEVEL`, and the Playwright `integration`/`e2e` projects (cloud: `tests/compliance/`).
+- B: `UNIT_LEVEL` in `harness/expected.ts` = CLI-AC-003, COMPL-AC-002, COMPL-AC-006, COMPL-AC-007, GOOGLE-AC-002, PROV-AC-007 (rationale per criterion text: decision draft `ai/implementation/decisions/fix-c3.md`, DEC-PENDING-fix-c3-1). COMPL-AC-001/-003 stay off (properties of a real run), as the Review required. `driver.ts` loops over `runnerSelection`. On local it runs `vitest.unit.config.ts -t <unit-level IDs to run>` once, or skips it when there are none, and keeps `raw/vitest-unit.{log,json}`. A unit outcome is folded only into the unit-level IDs its title carries (`TestOutcome.ids`, read by `criterionResults`).
+- A: `tests/compliance/tools/listing.ts` (`listSelection`, `listDriverTests`) lists the driver's selection through the runners: a collect-only Vitest run per config and `playwright test --list`. It writes to its own JSON file, never the run's `PLAYWRIGHT_JSON_OUTPUT_NAME`. `E2E-004.spec.ts` coverage part = `uncovered(expected, listDriverTests(target))`, with no source scan, and listing errors are appended to the message. `tools/report.ts` uses the same `listSelection` executor and keeps its source-scan supplement (DEC-0265). The assertion is unchanged (`toEqual([])`), so it is not weakened.
+- Docs: compliance.md "Driver" ("runs each selected test layer once … on local also the unit layer for the unit-level criteria only"), the plan §10.1 `npm run compliance` line, and the decision drafts DEC-PENDING-fix-c3-1 (supersedes "each runs once" in DEC-0261's first bullet) and -2 (DEC-0305's coverage wording).
+
+**Red.** On the current code, before the fix (`vitest run --config vitest.unit.config.ts` on the two files):
+- `selection.unit.test.ts` fails: there is no listing-based coverage (`./selection.js` is missing). Its first case also records that `scanSourceTags` over `kv.pglite.test.ts`, `kv/suite.ts`, `sql.pglite.test.ts` and `sql/suite.ts` finds neither KV-AC-001 nor SQL-AC-003.
+- `driver.unit.test.ts` "local: runs the unit config once for the unit-level IDs …" fails with `expected [] to have a length of 1 but got +0`: no unit call is made.
+
+**Green.** After the fix, `tests/compliance/harness/` has 14 files and 84 tests, all passing. They cover these cases:
+- KV/SQL runtime titles are covered.
+- `"[KV-AC-001]"` from `tags.unit.test.ts` covers nothing.
+- `[CLI-AC-002][COMPL-AC-007]` from a unit file counts only for COMPL-AC-007.
+- `--only` without a unit-level ID makes no unit call.
+- A cloud target makes no unit call.
+- Every `UNIT_LEVEL` ID is a Local criterion.
+
+**Run (informational).** `npm run compliance -- --target local --only E2E-004,KV-AC-001,SQL-AC-003,CLI-AC-003,COMPL-AC-001,PROV-AC-007 --out <scratch>`, commit `ec78fa51`, record `p4ttpgn37g0zxgb` (outside the repo, not committed). Results:
+- KV-AC-001, SQL-AC-003, CLI-AC-003 and PROV-AC-007 `passed`. `raw/vitest-unit.json` has 141 files collected and 9 tests executed.
+- COMPL-AC-001 is `not-run` ("no test tagged"), as decided.
+- E2E-004 is `failed`. Its coverage list went from 35 IDs to 21: CHECK-AC-005, COMPL-AC-001, COMPL-AC-003, DEMO-AC-001…011, E2E-002, LOCAL-AC-001, SKILL-AC-001…005.
+- No ID in that list is `passed` in the record.
+- The remainder is cause C, plus COMPL-AC-001/-003, which need run-level evidence (see the decision draft).
+
+**Side finding (not fixed; needs its own record).** In Playwright 1.64.1, `--project` is variadic. So the driver's cloud form `playwright test --project integration --project e2e tests/compliance/` fails with `Project(s) "tests/compliance/" not found` (reproduced with `--list`). This form was in `driver.ts` before this fix and is unchanged in `selection.ts`. Local runs are unaffected.
+
+**verify.** I ran `npm run verify` three times while the sandbox was under heavy load from concurrent sessions (load average 16–24 on 4 CPUs).
+- Build, typecheck and lint passed each time.
+- `test:unit` failed each time with 1–3 Vitest 5 s timeouts. They were in different files each run, all outside this fix's paths: `kv/service.unit.test.ts`, `sql/postgres.unit.test.ts` and `cli/verify/type-check.unit.test.ts`.
+- The same unit layer with `--testTimeout=60000` passed: 141 files, 1413 tests. The `apps/template` and `apps/reference` verify steps both exited 0.
+
+## Fix (C, phase rule)
+
+Branch `claude/implement-local-cloudflare-fix-c4` (fix-c3 merged): added `{ id: "CHECK-AC-005", targets: ["local"], mode: "automated", part: "demo part", detail: "demo built in phase F (plan C-EV)" }` to `PHASE_RULES` (`tests/compliance/harness/expected.ts`); red-green with a new case in `expected.unit.test.ts` (failed before: `notRunParts: []`; passes after, harness 85/85). `npm run verify` online and offline: exit 0. Informational run `--only E2E-004,CHECK-AC-005,KV-AC-001,CLI-AC-003` (record `9jeiggazoec19mr`, outside the repo): CHECK-AC-005 `passed` (part `""`, from the template test) plus `not-run` "demo part: demo built in phase F (plan C-EV)"; KV-AC-001 and CLI-AC-003 `passed`; E2E-004 `failed` with 18 IDs left in its coverage list: COMPL-AC-001, COMPL-AC-003 (run-level evidence, see the fix-c3 decision draft), DEMO-AC-001…011, E2E-002, SKILL-AC-001…004. CHECK-AC-005, LOCAL-AC-001 and SKILL-AC-005 are no longer listed. Phase F removes the rule when it adds the demo's `[CHECK-AC-005]` test.
