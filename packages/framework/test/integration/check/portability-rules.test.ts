@@ -158,12 +158,15 @@ describe("failing fixtures (apps/base + check/fail)", () => {
     });
   }
 
-  it("CHECK-AC-003 coverage: every rule has exactly one representative fixture (control)", () => {
+  // Tagged so the compliance driver runs it (E-T2, evaluation E flag F5): without it the per-rule
+  // CHECK-AC-003 tests above could silently skip a rule that has no representative fixture.
+  it(tag("CHECK-AC-003", "coverage: every shipped rule has exactly one representative fixture, so a per-rule diagnostic test exists for each (control)"), () => {
     const covered = [
-      ...RULES.filter((r) => RULE_FIXTURES.some((f) => f.rule === r && f.representative === true)),
+      ...RULE_FIXTURES.filter((f) => f.rule !== null && f.representative === true).map((f) => f.rule),
       ...OTHER_RULE_REPRESENTATIVES.map((f) => f.rule),
     ].sort();
-    expect(covered).toEqual([...ALL_RULES].sort());
+    expect(covered, "one representative per rule: no rule missing, none twice").toEqual([...ALL_RULES].sort());
+    expect(RULES.every((r) => ALL_RULES.includes(r)), "the framework rules are among ALL_RULES").toBe(true);
   });
 });
 

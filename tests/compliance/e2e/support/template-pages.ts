@@ -20,6 +20,7 @@ const greeting = process.argv[3] ?? "";
 if (appDir === undefined) throw new Error("usage: template-pages <appDir> <greeting>");
 
 const steps: { step: string; ok: boolean; detail?: string }[] = [];
+const pageErrors: string[] = [];
 const record = (step: string, ok: boolean, detail?: string): void => {
   steps.push(detail === undefined ? { step, ok } : { step, ok, detail });
 };
@@ -99,6 +100,9 @@ const browser = await chromium.launch();
 try {
   const context = await browser.newContext({ acceptDownloads: true });
   const page = await context.newPage();
+  // Uncaught exceptions in the template's client code (reported, for SKILL-AC-004's run of the
+  // client examples; E2E-001 reads only `steps`).
+  page.on("pageerror", (error) => pageErrors.push(error.message.split("\n")[0] ?? ""));
   const T = { timeout: 20_000 };
   await page.goto(dev.origin);
 
@@ -198,4 +202,4 @@ try {
   devOutput = await dev.stop();
 }
 const devFailed = /\bERROR\b|Uncaught/.test(devOutput) ? devOutput.split("\n").filter((l) => /\bERROR\b|Uncaught/.test(l)).slice(0, 5) : [];
-process.stdout.write(`E2E-001-RESULT ${JSON.stringify({ steps, devErrors: devFailed })}\n`);
+process.stdout.write(`E2E-001-RESULT ${JSON.stringify({ steps, devErrors: devFailed, pageErrors })}\n`);
