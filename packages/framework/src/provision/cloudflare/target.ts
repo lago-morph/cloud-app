@@ -53,7 +53,7 @@ export interface CloudflareTargetOptions {
   readonly env: Environment;
   /** The app directory; SST's app is written to `<appDir>/.framework/provision/cloudflare/`. */
   readonly appDir: string;
-  /** D-04's D1 operations. */
+  /** D-04's D1 operations: `d1DatabaseOperations({ api, accountId })`. */
   readonly databases: CloudflareDatabases;
   readonly files: CloudflareFilesProvisioning;
   /** The built Worker; required by `deployCode` only (the CLI builds before deploy). */
@@ -140,11 +140,11 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
     stopApp: (stage) => setRoute(api, accountId, stage, false),
     startApp: (stage) => setRoute(api, accountId, stage, true),
 
-    createDatabase: (stage, name) => databases.create(stage, name),
-    copyDatabase: (stage, from, name) => databases.copy(stage, from, name),
-    dropDatabase: (stage, database) => databases.drop(stage, database),
+    createDatabase: (stage, name) => databases.createDatabase(stage, name),
+    copyDatabase: (stage, from, name) => databases.copyDatabase(stage, from, name),
+    dropDatabase: (stage, database) => databases.dropDatabase(stage, database),
     migrationDatabase: (database) => databases.migrationDatabase(database),
-    checkMigratedDatabase: (input) => databases.check(input),
+    checkMigratedDatabase: (input) => databases.checkMigratedDatabase(input),
 
     checkHealth: (stage, deployed) =>
       checkStageHealth({
@@ -163,7 +163,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       const token = await findSigningToken(api, accountId, stage);
       if (token) resources.push({ kind: "R2 API token", id: token.id });
       for (const key of await stateObjects(stage)) resources.push({ kind: "SST state object", id: key });
-      return { resources, databases: await databases.list() };
+      return { resources, databases: await databases.listDatabases() };
     },
 
     async removeStage(stage) {

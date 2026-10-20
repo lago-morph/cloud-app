@@ -179,23 +179,23 @@ export class FakeDatabases implements CloudflareDatabases {
   readonly calls: string[] = [];
   private next = 1;
 
-  async list(): Promise<readonly ListedDatabase[]> {
+  async listDatabases(): Promise<readonly ListedDatabase[]> {
     this.calls.push("list");
     return [...this.dbs].map(([id, d]) => ({ id, name: d.name }));
   }
-  async create(_stage: unknown, name: string): Promise<StageDatabase> {
+  async createDatabase(_stage: unknown, name: string): Promise<StageDatabase> {
     this.calls.push(`create ${name}`);
     const id = `uuid-${this.next++}`;
     this.dbs.set(id, { name, recorded: new Set() });
     return { id, name, number: Number(/-db-(\d+)$/.exec(name)![1]) };
   }
-  async copy(_stage: unknown, from: StageDatabase, name: string): Promise<StageDatabase> {
+  async copyDatabase(_stage: unknown, from: StageDatabase, name: string): Promise<StageDatabase> {
     this.calls.push(`copy ${from.name} ${name}`);
     const id = `uuid-${this.next++}`;
     this.dbs.set(id, { name, recorded: new Set(this.dbs.get(from.id)!.recorded) });
     return { id, name, number: Number(/-db-(\d+)$/.exec(name)![1]) };
   }
-  async drop(_stage: unknown, database: StageDatabase): Promise<void> {
+  async dropDatabase(_stage: unknown, database: StageDatabase): Promise<void> {
     this.calls.push(`drop ${database.name}`);
     this.dbs.delete(database.id);
   }
@@ -207,7 +207,7 @@ export class FakeDatabases implements CloudflareDatabases {
       applyAtomically: async (migration: Migration) => void db.recorded.add(migration.id),
     };
   }
-  async check(): Promise<void> {
+  async checkMigratedDatabase(): Promise<void> {
     this.calls.push("check");
   }
 }
