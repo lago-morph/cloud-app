@@ -1,0 +1,11 @@
+{
+  // Unit-test fixture: local D1 bindings behind the fake D1 HTTP API (fake-d1-api.ts). Not deployed.
+  "name": "d1-unit-tests",
+  "compatibility_date": "2026-10-01",
+  "d1_databases": [
+    { "binding": "D0", "database_name": "d0", "database_id": "00000000-0000-0000-0000-0000000000d0" },
+    { "binding": "D1", "database_name": "d1", "database_id": "00000000-0000-0000-0000-0000000000d1" },
+    { "binding": "D2", "database_name": "d2", "database_id": "00000000-0000-0000-0000-0000000000d2" },
+    { "binding": "D3", "database_name": "d3", "database_id": "00000000-0000-0000-0000-0000000000d3" }
+  ]
+}
