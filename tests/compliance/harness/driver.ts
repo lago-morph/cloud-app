@@ -221,10 +221,20 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
       if (outcomes.length === 0) expected = expected.map((e) => (e.run && !blocked.has(e.id) ? { ...e, run: false, notRun: reason, notRunParts: [] } : e));
       exitStatus ||= 1;
     } finally {
-      if (local !== undefined) raw["dev.log"] = await local.stop();
+      if (local !== undefined) {
+        try {
+          raw["dev.log"] = await local.stop();
+        } catch (error) {
+          raw["dev.log"] = `dev stop failed: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`;
+          deps.log(`compliance: stopping dev failed: ${firstLine(error)} (raw/dev.log)`);
+          exitStatus ||= 1;
+        }
+      }
       if (ops !== undefined && deployed && stage !== undefined) await removeStage(ops, stage);
     }
   }
+  // A stage that could not be removed, or a leftover check that could not run, is a partial failure (CLI-REQ-003).
+  if (leftovers.length > 0) exitStatus ||= 1;
   if (runErrors.length > 0) raw["run-errors.log"] = `${runErrors.join("\n")}\n`;
 
   const results: EvidenceResult[] = criterionResults({ target: args.target, expected, outcomes, blocked });

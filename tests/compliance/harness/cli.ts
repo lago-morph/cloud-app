@@ -1,8 +1,9 @@
 /**
  * Entry point of `npm run compliance -- …` (launched by `run.mjs`). See `args.ts` for options.
  * Exit status: the test runners' status (0 when every executed test passed), 1 when setting up
- * the target failed, 2 when evidence was refused (working tree differs from the commit),
- * 64 for a usage error.
+ * the target failed, or when cleanup failed (dev did not stop, a stage could not be removed, or
+ * the leftover check could not run) after an otherwise successful run, 2 when evidence was
+ * refused (working tree differs from the commit), 64 for a usage error.
  */
 import { join } from "node:path";
 import { parseArgs } from "./args.js";

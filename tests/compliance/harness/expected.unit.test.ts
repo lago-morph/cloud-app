@@ -85,6 +85,14 @@ describe("[COMPL-AC-001] this phase's not-run rules (plan §8) against the docum
     });
   });
 
+  it("records the AWS-only parts of Local criteria (CORE-AC-006 AWS bundle, SQL-AC-006 Data API retry loop) as not-run on local", () => {
+    const local = new Map(expectedCriteria(real, "local", "automated").map((e) => [e.id, e]));
+    expect(local.get("CORE-AC-006")).toEqual({ id: "CORE-AC-006", run: true, parts: [""], notRunParts: [{ part: "AWS-bundle clause", detail: "AWS phase not started" }] });
+    expect(local.get("SQL-AC-006")).toEqual({ id: "SQL-AC-006", run: true, parts: [""], notRunParts: [{ part: "Data API retry-loop clause", detail: "AWS phase not started" }] });
+    const cf = new Map(expectedCriteria(real, "cloudflare", "automated").map((e) => [e.id, e]));
+    expect(cf.get("SQL-AC-006")?.notRunParts).toEqual([]);
+  });
+
   it("records every AWS criterion as not-run 'AWS phase not started', and Local criteria run locally", () => {
     const aws = expectedCriteria(real, "aws", "automated");
     expect(aws.length).toBeGreaterThan(50);
