@@ -89,3 +89,34 @@ Use the header rule, not a directory exclusion such as "skip `docs/decisions/`".
 4. **Red first, both readers.** (a) Add a test for `whereSets` on a fixture docs tree (a temp dir, not the real `docs/`) containing a criteria table plus a two-column `| COMPL-AC-002 | prose |` table elsewhere. It must fail on the current code with the `unexpected target` error. (b) Add a `catalogue.unit.test.ts` case on a fixture containing a criteria table plus a three-column ID table elsewhere. It must fail now with "defined twice". (c) For requirement 2, add a case where a malformed row inside a criteria table throws. All of these must pass after the fix.
 5. **Equivalence on the real docs.** After the fix, `readCatalogue(docs)` returns the same 140 IDs and the same `applies` as before. `whereSets(docs)` matches it per target and tier (local automated 109, as reproduced above with the log removed). The record's Verification steps stand, including loading `targets.test.ts` and re-running E-RUN's local compliance command.
 6. **No doc change is required.** DEC-0319's table stays as written. The fix subagent records the rule in the decision draft for the fix, because the driver's catalogue rule changes. Stating it in compliance.md "Driver" is left to the owner.
+
+## Fix
+
+Fix subagent (prompt §8 step 3), branch `claude/implement-local-cloudflare-fix-e2` from `origin/claude/implement-local-cloudflare` (`25eb37d`). Local only; no Cloudflare call. `tests/compliance/harness/driver.ts` not touched.
+
+**Change (Review fix requirements 1–3, 6).** Both readers now apply the stated rule. They are written separately, and the test still imports nothing from the harness:
+- `tests/compliance/harness/catalogue.ts` `readCatalogue`: `ROW` is gone. A criterion is a body row of a table whose header cells are exactly `ID | Criterion | Verifies | Where` (trimmed), with a `| --- |` separator row next. The table ends at the first line that does not start with `|`. The ID and Where cells are read by column index, and an escaped `\|` does not split a cell. Inside a criteria table, a row whose cell count differs from the header's, or whose ID cell is not `<AREA>-AC-NNN`, throws `<file>:<line>: …`. An `ID | Criterion …` header of any other shape, or one with no separator after it, also throws. Rows outside criteria tables are ignored. The scenario rule is unchanged.
+- `tests/compliance/criteria/compl/support.ts` `whereSets`: the same rule, implemented independently. It throws `<abs file>:<line>: …` in the same cases.
+- Decision draft `ai/implementation/decisions/fix-e2.md` (DEC-PENDING-fix-e2-1) records the rule. No doc change; DEC-0319 stays as written.
+
+**Red (`251737e`)**, requirement 4. New tests on temp-dir fixture trees:
+- `support.unit.test.ts`: a two-column `| COMPL-AC-002 | prose |` table, which failed with `unexpected target …`; three- and four-column ID tables under other headers, which were wrongly read; and four malformed cases (a non-ID first cell, too few cells, too many cells, and an `ID | Criterion | Verifies` header), none of which threw.
+- `catalogue.unit.test.ts`: two-, three- and four-column ID tables in `decisions/decision-log.md`, which failed with `KV-AC-001 is defined twice`; and the same malformed cases, none of which threw.
+
+All 11 new tests failed. The existing catalogue fixtures `cloudflare.md`, `aws.md` and `dup.md` gained the criteria-table header that the rule requires.
+
+**Green.** Both files now pass, 25/25. `npm run verify` exits 0: 176 test files and 1650 tests passed.
+
+**Equivalence on the real `docs/` (requirement 5).** I used the scratchpad scripts `e2/dump.ts` and `e2/summ.cjs`. The baseline is the pre-fix `readCatalogue(docs)`, plus the pre-fix `whereSets` on `docs/` with `decision-log.md` removed, because the pre-fix reader throws on the real tree. After the fix, both readers run on the real `docs/`:
+
+| | before | after |
+| --- | --- | --- |
+| catalogue IDs | 140 (124 AC, 16 E2E) | 140, identical list |
+| catalogue (id, where, source, applies) | — | identical |
+| whereSets automated local / cloudflare / aws | 109 / 70 / 74 | 109 / 70 / 74, identical sets |
+| whereSets milestone local / cloudflare / aws | 2 / 12 / 12 | 2 / 12 / 12, identical sets |
+| whereSets vs catalogue, per target and tier | equal | equal |
+
+**Run.** `npm run compliance -- --target local --only COMPL-AC-001,COMPL-AC-003,E2E-004 --out <scratchpad>/e2/run` gave: `106 not-run, 2 passed, 1 failed`, exit 1.
+- `targets.test.ts` now loads. Its two COMPL-AC-001 tests pass, and the five COMPL-AC-003 tests pass.
+- E2E-004 failed on its coverage part: "applicable on local but no tagged test in this target's suite: DEMO-AC-001 … DEMO-AC-011, E2E-002". Its record part passed. This failure is not caused by this fix. The catalogue is unchanged (table above), and `git grep` finds no test file tagged with any DEMO-AC ID or with E2E-002, so the coverage check is reporting a real gap in the test suite. The failure was hidden before because `targets.test.ts` failed to load first. It needs its own §8 diagnosis.
