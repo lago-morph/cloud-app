@@ -15,7 +15,7 @@
   ],
   "scripts": {
     "typecheck": "tsc -p packages/framework/tsconfig.json && tsc -p tsconfig.json && tsc -p tests/compliance/harness/tsconfig.json",
-    "lint": "eslint packages/framework/src packages/framework/bin",
+    "lint": "eslint packages/framework/src packages/framework/bin packages/framework/test",
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:integration": "npm run build -w packages/framework && vitest run --config vitest.integration.config.ts && playwright test --project integration --pass-with-no-tests",
     "test:e2e": "playwright test --project e2e",

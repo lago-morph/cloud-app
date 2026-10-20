@@ -7,7 +7,7 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   { ignores: ["**/dist/**", "**/node_modules/**"] },
   {
-    files: ["packages/framework/src/**/*.ts", "packages/framework/bin/**/*.js"],
+    files: ["packages/framework/src/**/*.ts", "packages/framework/bin/**/*.js", "packages/framework/test/**/*.ts"],
     extends: [tseslint.configs.recommended],
   },
   {
@@ -17,6 +17,16 @@ export default tseslint.config(
     rules: {
       "@typescript-eslint/no-unused-vars": "off",
       "@typescript-eslint/no-unused-expressions": "off",
+    },
+  },
+  {
+    // Test-author suites (C-INT): `_`-prefixed names are deliberately unused (stub parameters,
+    // fields dropped by a rest pattern), and `{}` is the empty configuration declaration passed to
+    // the framework's generics (`DefinedApp<{}, never>`), which `object` or `Record<...>` would change.
+    files: ["packages/framework/test/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_", ignoreRestSiblings: true }],
+      "@typescript-eslint/no-empty-object-type": ["error", { allowObjectTypes: "always" }],
     },
   },
 );

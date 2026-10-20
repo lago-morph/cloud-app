@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it } from "vitest";
 import { scaffold } from "./scaffold.mjs";
 
@@ -35,6 +36,7 @@ beforeEach(() => {
   writeFileSync(join(template, "src", "app.ts"), "export {};\n");
   writeFileSync(join(template, "node_modules", "x", "index.js"), "");
   writeFileSync(join(template, ".framework", "state"), "");
+  writeFileSync(join(template, ".gitignore"), ".dev.vars\n");
   writeFileSync(
     join(template, "package.json"),
     JSON.stringify({ name: "template", dependencies: { [PKG]: "0.1.0", hono: "4.13.13" } }, null, 2) + "\n",
@@ -94,5 +96,20 @@ describe("scaffold", () => {
     writeFileSync(join(target, "src", "app.ts"), "mine\n");
     await scaffold({ target, templateDir: template, tarball, version: "0.1.0", install, force: true });
     expect(readFileSync(join(target, "src", "app.ts"), "utf8")).toBe("export {};\n");
+  });
+
+  it("copies the template's .gitignore, so a scaffolded app never commits local state or dev secrets", async () => {
+    const target = join(root, "app");
+    await scaffold({ target, templateDir: template, tarball, version: "0.1.0", install });
+    expect(readFileSync(join(target, ".gitignore"), "utf8")).toBe(".dev.vars\n");
+    const real = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "..", "..", "apps", "template", ".gitignore"),
+      "utf8",
+    )
+      .split("\n")
+      .map((line) => line.trim().replace(/\/$/, ""));
+    for (const entry of [".dev.vars", ".framework", ".wrangler", ".logs", "node_modules"]) {
+      expect(real).toContain(entry);
+    }
   });
 });
