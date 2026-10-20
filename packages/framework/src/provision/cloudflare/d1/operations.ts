@@ -8,7 +8,9 @@
  * and uses `listDatabases()` for `StageResources.databases`. A `StageDatabase.id` is the D1 UUID.
  */
 import type { CloudflareApi } from "../account.js";
-import type { ListedDatabase, Stage, StageDatabase, TargetOperations } from "../../core/operations.js";
+import type { ListedDatabase, MigrationCheckInput, Stage, StageDatabase, TargetOperations } from "../../core/operations.js";
+import { checkMigrated } from "../../../mig/cloud/check.js";
+import { d1CheckReader } from "./check-reader.js";
 import { copyD1Database, DEFAULT_COPY_LIMITS, type CopyLimits } from "./copy.js";
 import { d1HttpMigrationDatabase } from "./migration-database.js";
 import { d1Client, D1RequestError, DATABASE_LIMIT_CODE, type D1Client } from "./client.js";
@@ -57,7 +59,6 @@ async function create(client: D1Client, name: string): Promise<StageDatabase> {
 export function d1DatabaseOperations(options: D1Options): D1DatabaseOperations {
   const client = d1Client(options.api, options.accountId);
   const limits: CopyLimits = { ...DEFAULT_COPY_LIMITS, ...options.limits };
-  const notYet = () => Promise.reject(new Error("not implemented"));
   return {
     createDatabase: (_stage: Stage, name: string) => create(client, name),
     async copyDatabase(_stage: Stage, from: StageDatabase, name: string) {
@@ -81,7 +82,15 @@ export function d1DatabaseOperations(options: D1Options): D1DatabaseOperations {
       }
     },
     migrationDatabase: (database: StageDatabase) => d1HttpMigrationDatabase(client, database.id),
-    checkMigratedDatabase: notYet,
+    async checkMigratedDatabase(input: MigrationCheckInput) {
+      const problems = await checkMigrated({
+        previous: d1CheckReader(client, input.previous.id),
+        next: d1CheckReader(client, input.next.id),
+        applied: input.applied,
+        migrations: input.migrations,
+      });
+      if (problems.length > 0) throw new Error(`database ${input.next.name}: ${problems.join("; ")}`);
+    },
     listDatabases: () => client.list(),
   };
 }

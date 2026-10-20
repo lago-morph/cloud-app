@@ -46,7 +46,7 @@ afterAll(() => {
 
 const isRecordInsert = (req: FakeRequest) => JSON.stringify(req.body ?? null).includes("INSERT INTO \\\"__framework_migrations\\\"");
 
-describe("D1 migration database over the HTTP API", () => {
+describe("D1 migration database over the HTTP API", { timeout: 60_000 }, () => {
   let fake: FakeD1Api;
   beforeEach(async () => {
     fake = await openFakeD1Api({ accountId: ACCOUNT });

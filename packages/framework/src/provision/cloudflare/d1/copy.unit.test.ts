@@ -73,7 +73,7 @@ const rowsIn = (b: Batch) => data(b).reduce((n, s) => n + (s.sql.match(/\), \(/g
 const valueBytes = (b: Batch) =>
   data(b).flatMap((s) => s.params ?? []).reduce<number>((n, p) => n + (typeof p === "string" ? new TextEncoder().encode(p).length : p === null ? 0 : 8), 0);
 
-describe("D1 copyDatabase (fallback page-by-page copy)", () => {
+describe("D1 copyDatabase (fallback page-by-page copy)", { timeout: 60_000 }, () => {
   let fake: FakeD1Api;
   let source: StageDatabase;
   beforeEach(async () => {

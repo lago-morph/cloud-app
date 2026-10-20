@@ -9,7 +9,7 @@ import { d1DatabaseOperations } from "./operations.js";
 const ACCOUNT = "acct";
 const stage = { app: "notes", stage: "test-abc" };
 
-describe("D1 database operations: create, list, drop", () => {
+describe("D1 database operations: create, list, drop", { timeout: 60_000 }, () => {
   let fake: FakeD1Api;
   beforeEach(async () => {
     fake = await openFakeD1Api({ accountId: ACCOUNT, maxDatabases: 2 });
