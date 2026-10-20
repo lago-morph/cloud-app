@@ -116,7 +116,7 @@ A case is `(services: CaseServices, input: unknown) => Promise<unknown>` with `C
 
 ## Client
 
-`GET /` (and any non-`/api` path) serves the client entry page. It shows the account section (`data-testid="account"`, buttons `login` / `logout`) and, for a logged-in user, a files section for E2E-009 and FILES-AC-003: a file input `data-testid="file-input"`, button `upload`, status text `upload-status` (`Uploaded.` when done), and one list item per file in `files-list`, each with an `<img data-testid="preview">` and a download link `data-testid="download"`, both using `downloadUrl`. Uploaded files go under `photos/<user id>/`.
+`GET /` (and any non-`/api` path) serves the client entry page. It shows the account section (`data-testid="account"`, buttons `login` / `logout`) and, for a logged-in user, a files section for E2E-009 and FILES-AC-003: a file input `data-testid="file-input"`, button `upload`, status text `upload-status` (`Uploaded.` when done), and one list item `data-testid="file"` per file in `files-list` (filled after each upload, before the status turns `Uploaded.`), each with an `<img data-testid="preview">` and a download link `data-testid="download"`, both using `downloadUrl`. Uploaded files go under `photos/<user id>/`.
 
 ## Configuration and secrets
 
