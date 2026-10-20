@@ -39,12 +39,12 @@
  * hooks and probes.
  */
 import { afterAll, describe, expect, it } from "vitest";
-import { CLOUD_WAITS, prerequisiteMissing, tag, target, waitFor } from "../../harness/index.js";
+import { CLOUD_WAITS, newTestStage, prerequisiteMissing, tag, target, waitFor } from "../../harness/index.js";
 import { cloudHooks as hooksFor } from "../_cloud/index.js";
 import { listStageResources, stageDatabases } from "../_cloud/stage-resources.js";
-import { scratchCopy } from "../core/support/processes.js";
+import { requireDatabaseRoom } from "../_cloud/d1.js";
+import { acquireLock, scratchCopy } from "../core/support/processes.js";
 import { isLocal, REFERENCE_DIR, uniqueValue } from "../core/support/repo.js";
-import { newTestStage } from "../../harness/index.js";
 import { healthStatus, restoreCommitted, runCli, sharedStage, tail, type CloudStage, type CommandResult } from "./support/stage.js";
 
 const RESTRICTED_TOKEN_ENV = "COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_R2_TOKEN_PERMISSION";
@@ -54,9 +54,13 @@ const PAST_PREFLIGHT = /\bstep\s*[2-6]\b|find the databases|long-lived infrastru
 /** Deploys a never-deployed stage of a scratch copy with an environment change; removes anything it created. */
 async function deployNewStage(env: { readonly unset?: readonly string[]; readonly env?: Readonly<Record<string, string>> }): Promise<{ result: CommandResult; left: string[]; stage: string }> {
   const t = target().target;
+  // A correct deploy creates nothing here; a defective one could create a database, so the
+  // further-stage lock and the database cap apply as for any further stage.
+  const release = await acquireLock("further-stage", 60 * 60_000);
   const copy = await scratchCopy(REFERENCE_DIR, "d-t1-prov002");
   const stage = newTestStage();
   try {
+    await requireDatabaseRoom(1, "PROV-AC-002 (stopped deploy)");
     const result = await runCli(["deploy", "--target", t, "--stage", stage], { cwd: copy.dir, timeoutMs: 10 * 60_000, ...env });
     const left = await listStageResources({ target: t, app: "reference", stage });
     if (left.length > 0) {
@@ -66,6 +70,7 @@ async function deployNewStage(env: { readonly unset?: readonly string[]; readonl
     return { result, left, stage };
   } finally {
     await copy.remove();
+    await release();
   }
 }
 
