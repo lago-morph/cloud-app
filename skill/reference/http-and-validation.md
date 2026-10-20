@@ -16,7 +16,7 @@ Server and shared code are type-checked against ES plus Web APIs only: no Node g
 
 ## Adding a route
 
-1. Declare the response type once in `src/shared/types.ts` (for example `export interface NoteList { readonly notes: readonly Note[] }`).
+1. Declare the response type once in `src/shared/types.ts` (for example `export interface NoteList { readonly notes: readonly Note[] }`). Shared code cannot name framework types such as ticket types (`allowed-imports`, CHECK-REQ-001), so give the shared type a type parameter (`interface Photo<T> { readonly ticket: T }`) and use `Photo<DownloadTicket>`, importing `type DownloadTicket` from `@lago-morph/prototype-framework` on the server and from `@lago-morph/prototype-framework/client` in the browser.
 2. Write a route module in `src/server/routes/<name>.ts` exporting `function <name>Routes(api: Hono<Env>): void`, with `import type { Hono } from "hono"` and `import type { Env } from "../env"`. `Env` comes from `src/server/env.ts`: `type Env = AppEnv<typeof config, (typeof secrets)[number]>`.
 3. Register it in `src/app.ts` inside `routes: (api) => { … }`.
 4. Paths are written without `/api`; the framework mounts every route under `/api`. `api.get("/notes", …)` answers `GET /api/notes`.

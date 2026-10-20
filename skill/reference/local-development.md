@@ -13,6 +13,8 @@ cd ../my-app
 
 The scaffolder copies `apps/template`, installs the framework at the template's exact version, and runs `npm install`. If the directory already has files it stops and changes nothing; pass `--force` only if you really mean to overwrite them.
 
+An app inside the framework repository (a folder already listed in the root `package.json` `workspaces`, such as `apps/demo`) is not supported by the scaffolder (DEC-0276); do not run it there. Instead copy `apps/template` to that folder without anything `apps/template/.gitignore` lists (`node_modules`, `dist`, `.framework`, `.wrangler`, `.logs`, `.dev.vars` and the Playwright output `test-results`, `playwright-report`, `blob-report`). Set `package.json` `name` to the folder name (every workspace needs its own name, and the root `package-lock.json` already lists it), and keep the template's exact pin of `@lago-morph/prototype-framework` (no `file:vendor` rewrite). Then run `npm ci` and `npm run build -w packages/framework` at the repository root. The steps below still apply, step 1 included.
+
 Then:
 
 1. Set the app's name in `src/app.ts` (`name: "myapp"`): lowercase letters and digits only, no hyphens, at most 20 characters (PAR-290). It is used in resource and log names.
