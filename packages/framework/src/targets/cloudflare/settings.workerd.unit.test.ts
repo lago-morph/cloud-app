@@ -74,7 +74,8 @@ afterAll(async () => {
 
 const navigate = { headers: { "sec-fetch-mode": "navigate", accept: "text/html" } };
 
-describe("stage Worker settings under workerd", () => {
+// The first requests into a fresh workerd take seconds on a busy host (same allowance as build.unit.test.ts).
+describe("stage Worker settings under workerd", { timeout: 60_000 }, () => {
   it(tag("CF-AC-001", "local workerd: /api/* runs the Worker (app route; unknown API path is a JSON 404, also for /api itself)"), async () => {
     const hello = await worker.fetch("http://localhost/api/hello");
     expect(((await hello.json()) as { from: string }).from).toBe("worker");

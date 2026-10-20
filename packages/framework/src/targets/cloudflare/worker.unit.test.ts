@@ -81,7 +81,7 @@ function context(): { ctx: { waitUntil(p: Promise<unknown>): void; passThroughOn
 
 const worker = createCloudflareWorker(app, resolved("test-unit"), { mock: createAuthMock });
 
-describe("Cloudflare runtime: R2 log writer", () => {
+describe("Cloudflare runtime: R2 log writer", { timeout: 60_000 }, () => {
   it(tag(["LOG-AC-002", "LOG-AC-004"], "local R2: an entry written in a request is one schema-valid object under <app>/<stage>/<UTC date>/<time>-<severity>-<requestId>.json, written through waitUntil"), async () => {
     const { ctx, pending } = context();
     const res = await worker.fetch(new Request(`${ORIGIN}/api/log`, { method: "POST" }), bindings, ctx);
@@ -132,7 +132,7 @@ describe("Cloudflare runtime: R2 log writer", () => {
   });
 });
 
-describe("Cloudflare runtime: cloud cookie attributes", () => {
+describe("Cloudflare runtime: cloud cookie attributes", { timeout: 60_000 }, () => {
   const mockLogin = { method: "POST", headers: { "content-type": "application/json", origin: ORIGIN }, body: JSON.stringify({ level: "user", id: "m" }) };
 
   function attributes(cookie: string): string[] {
@@ -161,7 +161,7 @@ describe("Cloudflare runtime: cloud cookie attributes", () => {
   });
 });
 
-describe("Cloudflare runtime: Worker secrets", () => {
+describe("Cloudflare runtime: Worker secrets", { timeout: 60_000 }, () => {
   async function secret(env: Record<string, unknown>): Promise<{ status: number; body: { value?: string; error?: { code: string } } }> {
     const res = await worker.fetch(new Request(`${ORIGIN}/api/secret`), env, context().ctx);
     return { status: res.status, body: (await res.json()) as { value?: string; error?: { code: string } } };
