@@ -70,3 +70,12 @@ Reasons, each re-checked on `origin/claude/implement-local-cloudflare`:
 - *Alternative correctly rejected.* Exporting `ApiErrorInit` from `./client` (Experiment B) would add a name not in `client.d.ts`, contradicting the hub's "exactly the names of client.d.ts" and needing a contract change.
 - *Test strength.* The test checks the AC text literally ("Every framework type appearing in a public signature can be imported from the subpath whose signatures use it"); the fix changes code only, so the test stays as strong as the criterion.
 - Minor, non-blocking: the record's remark that a non-exported alias "is not enough" is right in effect (tsc emits a non-exported local declaration into the `.d.ts`, which the walker would still report), but was not demonstrated; the fix does not rely on it.
+
+## Fix
+
+Fixer: fixing subagent (prompt §8 step 3); did not diagnose or review. Date: 2026-10-20. Local only, no Cloudflare calls. Branch `claude/implement-local-cloudflare-fix-core001` from `origin/claude/implement-local-cloudflare`.
+
+- **Commit:** `26b4305` — `packages/framework/src/http/client.ts` only: removed the exported `ApiErrorInit` interface; `ApiError`'s constructor now takes `init: ErrorOptions & { readonly code?: ErrorCode; readonly status?: number | null; readonly requestId?: string | null } = {}` (structurally identical; behaviour unchanged). No contract, test or other file changed.
+- **Red** (before the fix, after `npm ci && npm run build -w packages/framework`): `npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/core/types.test.ts` → `Tests 1 failed | 3 passed (4)`, failing "[CORE-AC-001] every framework type in a public signature is importable…" with `+ "@lago-morph/prototype-framework/client: ApiErrorInit (used by ApiError)"` — the recorded reason.
+- **Green** (after the fix and rebuild): same command → `Tests 4 passed (4)`; `grep -c ApiErrorInit packages/framework/dist/http/client.d.ts` → `0`; `grep -rn ApiErrorInit packages/framework/src` → no matches.
+- **Regression:** `npm run test:unit` → `Test Files 111 passed (111)`, `Tests 1201 passed (1201)`; `npm run verify` → `verify passed` (type checking, portability, migration checker, zod version, sqlite and postgres tests all passed).
