@@ -844,6 +844,7 @@ Use it; if Miniflare is imported directly, pin it to exactly the version Wrangle
 workerd; PAR-117). Miniflare's type declarations import `@cloudflare/workers-types`, so the framework adds it as
 a dev dependency at the matching version (PAR-118); it is never added to a `types` array, so app code stays free
 of workers-types (CHECK §2).
+Refined by DEC-0415 and DEC-0416 (the proxy is started with the dev registry turned off).
 
 ### DEC-0106 — PGlite harness uses a database created with C collation and C ctype
 Origin: ai-proposed · Status: accepted · Affects: SQL (sql.md §2 `containsText`, collation), MIG §2, B-05, B-06, B-16
@@ -3517,3 +3518,33 @@ Visible change: locally, a raster download opened in a new tab (the demo's `targ
 For the integrator: DEC-0313's status still reads "not yet implemented", which is stale (implemented by D-02, `disposition.ts`); mark it. Invalidations: none needed (`validation/invalidations.md` is empty and no milestone record exercising FILES downloads exists); if one is recorded before this merges, add a line for it (COMPL-REQ-006, adapter code).
 Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
 Item: fix-f04b.
+
+## Implementation phase: local and Cloudflare — dev-registry fixes (2026-10-20)
+
+Entries DEC-0415 and DEC-0416 were integrated by the integrator from the drafts of items fix-registry and fix-registry-2 (plan §10.4). Neither item made a Cloudflare call. No parameter changed. DEC-0416 moves DEC-0415's registry override into a shared helper; DEC-0415's content otherwise stays. Both refine DEC-0105, which is marked. LOCAL was added to check.md §3 "Uses" (DEC-0416, Placement); provisioning.md §3 lists no test dependencies, so `fake-d1-api.ts` needs no note there.
+
+### DEC-0415 — A test app never joins Wrangler's local dev registry
+Origin: ai-proposed · Status: accepted · Affects: DEC-0105, `docs/contracts/ts/testing.d.ts` ("fresh local storage"), core.md §2 "Testing", `packages/framework/src/testing/test-app.ts`, `packages/framework/src/testing/test-app.unit.test.ts`
+
+`createTestApp` starts its platform proxy with Miniflare's host-wide dev registry (`~/.config/.wrangler/registry`, or `WRANGLER_REGISTRY_PATH`) turned off. `getPlatformProxy` has no option for this, so `startPlatformProxy` sets `WRANGLER_REGISTRY_PATH=""` (which Miniflare treats as disabled) around only the synchronous `getPlatformProxy(...)` call, passes `remoteBindings: false` so that Wrangler reads the variable before its first `await`, and restores the previous value, or its absence, in `finally` before anything else runs. The proxy is still `getPlatformProxy` (DEC-0105); `remoteBindings: false` changes nothing for the generated D1 + R2 config, which has no remote bindings. `dev` and the other `getPlatformProxy` callers (`check/migrations/databases.ts`, `provision/cloudflare/d1/fake-d1-api.ts`) are unchanged; moving them to a shared helper is a separate follow-up item.
+
+Reasons: (1) a test app has no cross-Worker bindings, and the contract promises fresh, isolated local storage; joining the registry under the fixed name `test-app` was a hidden host-wide dependency. (2) With a live foreign `test-app` entry, a `Date` faked into the past (the documented expiry-test pattern) turned Miniflare's registration retry into a 1 ms loop of `TimeoutOverflowWarning`s, and a `Date` faked into the future deleted other processes' live entries. (3) A whole-process override would leak into `wrangler dev` children; bypassing `getPlatformProxy` would go against DEC-0105.
+
+Risk and guard: the fix depends on a Wrangler internal (the variable is read before the first `await` when remote bindings are off). The `describe("createTestApp and the dev registry")` tests fail if an upgrade moves that read, and they also assert that the variable is restored after `createTestApp`.
+
+Evidence: `ai/implementation/root-causes/2026-10-20-testing-dev-registry.md` (diagnosis, Review, and "Fix" with the red-green table): before the fix the three tests failed (own entry written; `expected 229 to be +0` warnings; both foreign entries deleted); after it they pass, with the existing `createTestApp` tests.
+Item: fix-registry.
+
+### DEC-0416 — One registry-free platform-proxy helper for the framework's in-process tools
+Origin: ai-proposed · Status: accepted · Affects: DEC-0105, DEC-0415, core.md §2 "Testing", `packages/framework/src/targets/local/platform-proxy.ts` (new), `packages/framework/src/testing/test-app.ts`, `packages/framework/src/check/migrations/databases.ts`, `packages/framework/src/provision/cloudflare/d1/fake-d1-api.ts`, and their unit tests
+
+The scoped `WRANGLER_REGISTRY_PATH=""` override of DEC-0415 moves out of `test-app.ts` into one shared helper, `startPlatformProxy<Env>(configPath)` in `src/targets/local/platform-proxy.ts`. It calls `getPlatformProxy({ configPath, persist: false, remoteBindings: false })` with the dev registry turned off only for the synchronous part of the call, and restores the previous value, or its absence, before any `await`. Three callers use it: `createTestApp`, the migration checker's local D1 (`check/migrations/databases.ts`, Worker name `migration-checker`, loaded lazily with `await import(...)` as `wrangler` was before), and the fake D1 HTTP API (`provision/cloudflare/d1/fake-d1-api.ts`, fixture name `d1-unit-tests`). `dev` (`src/cli/dev/*`) is unchanged: there, joining the registry is ordinary `wrangler dev` behaviour.
+
+Placement: the helper is the local target's emulated storage (LOCAL, local.md introduction: "local emulations of storage"), so it lives under `src/targets/local/`. It is an internal Node-only module, not on the `./targets/local` subpath (`public.ts`), and no Worker entry point imports it. `src/testing/` was the other option the plan named, but it is CORE's `./testing` harness, and the migration checker runs in app developers' `check` and `verify`, not in tests. CHECK's and PROV's design docs (§3 "Uses") do not list LOCAL; the integrator may add it to check.md §3 (PROV's only user is test support, `fake-d1-api.ts`).
+
+Reasons: (1) all three callers have no cross-Worker bindings, and each used a fixed Worker name, so two processes at once gave each other a 90 s registration retry, and a faked `Date` would give the 1 ms loop or the deletion of other processes' entries (root cause, Review §4). (2) One copy of a Wrangler-internal dependency, not three. (3) The checker is unchanged in behaviour: `remoteBindings: false` selects nothing for its D1-only config (`cli.js:185543-185545`).
+
+Risk and guard: as in DEC-0415, the helper depends on Wrangler reading the variable before its first `await`. Each caller has its own guard test, which fails if an upgrade moves the read: `describe("createTestApp and the dev registry")` (`test-app.unit.test.ts`, kept unchanged), `describe("sqlite check database and the dev registry")` (`databases.unit.test.ts`) and `describe("fake D1 HTTP API and the dev registry")` (`fake-d1-api.unit.test.ts`). The two new tests use a scratch registry through `vi.stubEnv` with two live foreign entries, and assert that no entry is written while the instance is live or after it closes, that the foreign entries survive, and that the variable equals the stubbed path after the open resolves. Neither caller runs under fake timers anywhere in the repository (grep for `useFakeTimers` and `setSystemTime`), so they use the real clock.
+
+Evidence: red, before the callers changed: each new test failed with the caller's own entry in the registry (`d1-unit-tests`, then `migration-checker`, each with `instanceId` and `debugPortAddress`). Green, after: the three files pass (31 tests). `~/.config/.wrangler/registry` was empty throughout.
+Item: fix-registry-2.

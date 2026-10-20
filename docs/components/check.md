@@ -87,7 +87,7 @@ Static rules cannot prove arbitrary behavior. They are narrow by design and are 
 
 ## 3. Uses
 
-CORE (export list), SQL (supported subset), MIG (migration rules), SKILL (reference names in diagnostics).
+CORE (export list), SQL (supported subset), MIG (migration rules), SKILL (reference names in diagnostics), LOCAL (registry-free platform proxy for the migration checker's local D1).
 
 ## 4. Acceptance criteria
 
