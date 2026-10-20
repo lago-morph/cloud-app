@@ -5,7 +5,8 @@
  *    neither (DEC-0145), so this is where edits and reordering are caught;
  * 2. both histories are applied — the framework's first, then the app's, one migration at a
  *    time, exactly as `dev` and `createTestApp` apply them — to fresh local D1 and PGlite
- *    databases, and the schema is introspected after each migration;
+ *    databases, and the schema is introspected after each migration. The dialects are
+ *    replayed one after the other (D1 first, closed before PGlite opens), never concurrently;
  * 3. each migration's schema effect must be a supported change of migrations.md §2, and it
  *    must not change data (`compare.ts`); hand-written files are judged like generated ones;
  * 4. after each pair the two dialects must have the same logical schema.
@@ -35,7 +36,12 @@ interface Replay {
 export async function runMigrationChecker(appDir: string): Promise<MigrationDiagnostic[]> {
   const out = checkMigrationFiles(appDir);
   const root = join(appDir, "migrations");
-  const [sqlite, postgres] = await Promise.all([replay("sqlite", root), replay("postgres", root)]);
+  // One after the other, never concurrently: PGlite's start-up blocks the main thread for
+  // seconds, and a D1 platform-proxy call in flight across that block fails on a keep-alive
+  // socket workerd has closed meanwhile (`fetch failed`). The D1 database is disposed before
+  // PGlite starts.
+  const sqlite = await replay("sqlite", root);
+  const postgres = await replay("postgres", root);
   out.push(...sqlite.diagnostics, ...postgres.diagnostics, ...compareReplays(sqlite, postgres));
   return out;
 }

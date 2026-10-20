@@ -5,7 +5,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { tag } from "../../../../../tests/support/tags.js";
 import { appSchema, generateMigrations } from "../../mig/generate.js";
 import { checksumOf } from "../../mig/history.js";
@@ -13,6 +13,13 @@ import { boolean, id, integer, ref, text } from "../../sql/columns.js";
 import { defineTable } from "../../sql/table.js";
 import type { AnyTable, ColumnBuilders } from "../../sql/types.js";
 import { runMigrationChecker } from "./checker.js";
+import { openCheckDatabase, type CheckDatabase } from "./databases.js";
+
+// The real databases by default; the replay-order test below swaps in recording fakes.
+vi.mock("./databases.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./databases.js")>();
+  return { ...real, openCheckDatabase: vi.fn(real.openCheckDatabase) };
+});
 
 const T = 120_000;
 const ADD_COPY_DROP = /add[\s,-]+copy[\s,-]+(?:and[\s-]+)?drop/i;
@@ -175,6 +182,41 @@ describe("migration checker", () => {
     },
     T,
   );
+
+  it("replays the dialects one after the other: one database is closed before the other is opened", async () => {
+    // A D1 call in flight while PGlite's start-up blocks the main thread fails on a socket that
+    // workerd closed meanwhile (root cause 2026-10-20-CLI-AC-002-MIG-AC-001), so the two
+    // replays must never overlap.
+    const events: string[] = [];
+    const fake = async (dialect: "sqlite" | "postgres"): Promise<CheckDatabase> => {
+      events.push(`open ${dialect}`);
+      await new Promise((resolve) => setImmediate(resolve));
+      const ids = new Set<string>();
+      return {
+        dialect,
+        migrations: {
+          dialect,
+          recordedIds: async () => new Set(ids),
+          applyAtomically: async (m) => {
+            ids.add(m.id);
+          },
+        },
+        introspect: async () => ({}),
+        close: async () => {
+          await new Promise((resolve) => setImmediate(resolve));
+          events.push(`closed ${dialect}`);
+        },
+      };
+    };
+    vi.mocked(openCheckDatabase).mockImplementationOnce(fake).mockImplementationOnce(fake);
+    const appDir = await generatedApp({ records: records() });
+    expect(await runMigrationChecker(appDir)).toEqual([]);
+    expect(events).toHaveLength(4);
+    for (let i = 0; i < events.length; i += 2) {
+      expect(events[i], events.join(", ")).toMatch(/^open /);
+      expect(events[i + 1], events.join(", ")).toBe(`closed ${events[i]?.slice(5)}`);
+    }
+  }, T);
 
   it("an app without migrations passes", async () => {
     const appDir = mkdtempSync(join(tmpdir(), "mig-checker-"));
