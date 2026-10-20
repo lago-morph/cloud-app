@@ -15,8 +15,8 @@
  * contacts the network. Not part of the package's public surface.
  */
 import { randomUUID } from "node:crypto";
-import { getPlatformProxy } from "wrangler";
 import type { D1Like, D1StatementLike } from "../../../mig/apply.js";
+import { startPlatformProxy } from "../../../targets/local/platform-proxy.js";
 import type { CloudflareApi } from "../account.js";
 
 type Method = Parameters<CloudflareApi>[0];
@@ -52,7 +52,8 @@ const fail = (status: number, code: number, message: string): FakeResponse => ({
 const ok = (result: unknown, extra: Record<string, unknown> = {}): FakeResponse => ({ status: 200, body: { success: true, errors: [], messages: [], result, ...extra } });
 
 export async function openFakeD1Api(options: { accountId: string; maxDatabases?: number }): Promise<FakeD1Api> {
-  const proxy = await getPlatformProxy<Record<string, BatchBinding>>({ configPath: new URL("./fixtures/wrangler.jsonc", import.meta.url).pathname, persist: false });
+  // Outside the dev registry; guarded by "fake D1 HTTP API and the dev registry" in fake-d1-api.unit.test.ts.
+  const proxy = await startPlatformProxy<Record<string, BatchBinding>>(new URL("./fixtures/wrangler.jsonc", import.meta.url).pathname);
   const pool = Object.keys(proxy.env)
     .sort()
     .map((k) => proxy.env[k] as BatchBinding);
