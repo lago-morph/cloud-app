@@ -423,7 +423,8 @@ export function learn(substitutions: Substitutions, recordedResponse: string, re
 
 function replaceAll(text: string, substitutions: Substitutions): string {
   let out = text;
-  for (const [from, to] of substitutions) {
+  // Longest first: a token may contain a shorter learned value (such as the post ID).
+  for (const [from, to] of [...substitutions].sort((a, b) => b[0].length - a[0].length)) {
     out = out.split(from).join(to);
     const encFrom = encodeURIComponent(from);
     if (encFrom !== from) out = out.split(encFrom).join(encodeURIComponent(to));
