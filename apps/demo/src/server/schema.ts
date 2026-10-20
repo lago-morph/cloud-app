@@ -1,27 +1,29 @@
-import { defineTable, id, integer, text, timestamp } from "@lago-morph/prototype-framework";
+import { defineTable, id, integer, ref, text, timestamp } from "@lago-morph/prototype-framework";
 
-/** One note per row, owned by the user who wrote it. */
-export const notes = defineTable(
-  "notes",
+/** A post (DEMO-REQ-001). `status` is "draft" or "published"; `authorId` is the author's user ID. */
+export const posts = defineTable(
+  "posts",
   {
     id: id(),
-    ownerId: text(),
-    text: text(),
+    authorId: text(),
+    title: text(),
+    body: text(),
+    status: text(),
     createdAt: timestamp(),
+    updatedAt: timestamp(),
   },
-  { indexes: [["ownerId", "createdAt"]] },
+  { indexes: [["status", "createdAt"], ["authorId", "createdAt"]] },
 );
 
-/** One row per finalized upload. The file is stored as `uploads/<ownerId>/<id>`; access comes from this row. */
-export const uploads = defineTable(
-  "uploads",
+/** One row per finalized photo (DEMO-REQ-003). The file is stored as `photos/<postId>/<id>`; access comes from the post. */
+export const photos = defineTable(
+  "photos",
   {
     id: id(),
-    ownerId: text(),
-    name: text(),
-    size: integer(),
+    postId: ref(() => posts.id),
     contentType: text(),
+    size: integer(),
     createdAt: timestamp(),
   },
-  { indexes: [["ownerId", "createdAt"]] },
+  { indexes: [["postId", "createdAt"]] },
 );

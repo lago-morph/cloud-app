@@ -1,6 +1,4 @@
 {
-  "postgres/0000_schema.sql": "1cdd662091bf84537de7e5f804214be5f5f99ed559ad2eec3e0ade8cea187f27",
-  "postgres/0001_schema.sql": "56a3e8e4e047ad3bb38c23ddb3c62dca9c968f4a345f5d80f17cc72750d38aef",
-  "sqlite/0000_schema.sql": "491c095df3b7a5c45ede491b87f59c9ae071ea6d95eb2ce22b04f21d79379074",
-  "sqlite/0001_schema.sql": "f7ae6312ede410f6ae792692d3743b0eccbee6c2aac003a26e99a6a87e8a831d"
+  "postgres/0000_schema.sql": "be34fdac69ae1549e43c02a510e5a2c76ebaf2d8d669163240d63146e9ae0623",
+  "sqlite/0000_schema.sql": "1f52733fe5126559d2e04bf404ba37f7328770a0d0b0265b5235199e09c243ec"
 }

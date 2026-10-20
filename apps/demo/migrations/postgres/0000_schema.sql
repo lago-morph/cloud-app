@@ -1,8 +1,25 @@
-CREATE TABLE "notes" (
+CREATE TABLE "posts" (
 	"id" text PRIMARY KEY NOT NULL,
-	"owner_id" text NOT NULL,
-	"text" text NOT NULL,
+	"author_id" text NOT NULL,
+	"title" text NOT NULL,
+	"body" text NOT NULL,
+	"status" text NOT NULL,
+	"created_at" bigint NOT NULL,
+	"updated_at" bigint NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "photos" (
+	"id" text PRIMARY KEY NOT NULL,
+	"post_id" text NOT NULL,
+	"content_type" text NOT NULL,
+	"size" integer NOT NULL,
 	"created_at" bigint NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX "notes_owner_id_created_at_idx" ON "notes" USING btree ("owner_id","created_at");
+ALTER TABLE "photos" ADD CONSTRAINT "photos_post_id_fk" FOREIGN KEY ("post_id") REFERENCES "public"."posts"("id") ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+CREATE INDEX "posts_status_created_at_idx" ON "posts" USING btree ("status","created_at");
+--> statement-breakpoint
+CREATE INDEX "posts_author_id_created_at_idx" ON "posts" USING btree ("author_id","created_at");
+--> statement-breakpoint
+CREATE INDEX "photos_post_id_created_at_idx" ON "photos" USING btree ("post_id","created_at");
