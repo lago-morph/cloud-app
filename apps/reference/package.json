@@ -3,6 +3,19 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "dev": "prototype-framework dev",
+    "verify": "prototype-framework verify",
+    "generate-migration": "prototype-framework generate-migration",
+    "build": "prototype-framework build",
+    "deploy": "prototype-framework deploy",
+    "smoke": "prototype-framework smoke",
+    "remove": "prototype-framework remove",
+    "secrets": "prototype-framework secrets",
+    "setup-account": "prototype-framework setup-account",
+    "certify-auth": "prototype-framework certify-auth",
+    "reset-local": "prototype-framework reset-local"
+  },
   "dependencies": {
     "@lago-morph/prototype-framework": "0.1.0",
     "zod": "4.6.7"
