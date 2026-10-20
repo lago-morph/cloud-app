@@ -139,7 +139,7 @@ So the scoped override works only with `remoteBindings: false`. Without it, wran
   - *Across processes:* in the past-clock loop, the only writes in the path are skipped. A foreign entry is unlinked only when it is stale, and under a past clock nothing is. Own entries are written only after a successful registration, which never happens while the loop runs. E1 left the planted entry byte-for-byte and mtime unchanged. So the loop does not change other processes' registries. (Link 5 is a separate effect, of a *future* clock.)
   - *In the same process:* the timer belongs to the Miniflare instance created under the faked clock. It is cleared at that app's dispose (`:131021-131025`), and other test apps in the fork have their own `DevRegistry`. The cost is CPU and file-system reads on the shared event loop. At load 0.24 the file's test time was 4.6 s with the loop (E1, 46 % of 9.97 s) against 4.5 s without it (E0, 54 % of 8.40 s), so no measurable effect.
   - I did not run it under load. Plan rule 8 limits repeat runs under load to cases where timing is the claimed cause, and it is not claimed here. Under heavy load the loop's share of CPU could grow. That remains a plausible but unmeasured risk, not part of this chain.
-- **Fix by unique Worker name** (reviewer option b). It removes the past-clock loop (E2 `past-unique`). But the app still writes into `~/.config` and opens the debug socket. And a future clock still deletes other processes' entries (E2 `future-other-unique`). Rejected.
+- **Fix by unique Worker name** (reviewer option b). It removes the past-clock loop (E2 `past-unique`). But the app still writes into the host registry (`~/.config/.wrangler/registry`) and opens the debug socket. And a future clock still deletes other processes' entries (E2 `future-other-unique`). Rejected.
 - **Fix by omitting `name`.** No entry is registered (E2 `unnamed`), but the registry stays enabled. `refresh()` still runs, and a future clock still deletes foreign entries (E2 `future-other-unnamed`). Rejected.
 - **Set `WRANGLER_REGISTRY_PATH=""` for the whole process** (for example at module load). That changes the environment of every later child process. `dev` tests spawn `wrangler dev` with `{ ...process.env }` (`runtime.ts:64`), so it would silently change `dev`'s behavior under test. Rejected.
 - **Bypass `getPlatformProxy`** and call `new Miniflare` without `unsafeDevRegistryPath`, or with `unsafeRegisterWorker: false`. It would work, but it means importing Miniflare directly, which DEC-0105 avoids. It needs a version pin (PAR-117), and it is a larger change than the defect needs. Not chosen.
@@ -183,7 +183,7 @@ In those callers, two processes at once give each other a 90 s retry timer. A fa
 
 ## Red test (fails today, deterministic, never touches the host registry)
 In `packages/framework/src/testing/test-app.unit.test.ts`, add a new `describe` (the 60 s timeout as in the existing block). Setup for each test:
-- Create a scratch registry with `mkdtempSync`, and point the variable at it with `vi.stubEnv("WRANGLER_REGISTRY_PATH", dir)` (cleanup: `vi.unstubAllEnvs()`, `vi.useRealTimers()`, `rmSync`). So today's code registers *there* and never in `~/.config`.
+- Create a scratch registry with `mkdtempSync`, and point the variable at it with `vi.stubEnv("WRANGLER_REGISTRY_PATH", dir)` (cleanup: `vi.unstubAllEnvs()`, `vi.useRealTimers()`, `rmSync`). So today's code registers *there* and never in the host registry, `~/.config/.wrangler/registry`.
 - Plant two live foreign entries with fresh real-time mtimes:
   - `test-app` = `{"instanceId":"foreign-process"}`;
   - `someone-elses-worker` = `{"instanceId":"foreign-process"}`.
@@ -200,7 +200,7 @@ Why this is deterministic:
 - The faked clocks are fixed dates months away. Today's code reads only the scratch directory.
 - After the fix, the registry is disabled (`isEnabled()` is false), so no registry file is read or written at all.
 
-Nothing depends on other processes or on the host's `~/.config`.
+Nothing depends on other processes or on the host registry. (The tests, like every wrangler import in this repository, still write wrangler's own log files to `~/.config/.wrangler/logs`. That write is unrelated to the registry and to this defect.)
 
 ## Verification plan
 1. **Red.** With only the test added, the new tests fail (cases 1 and 3 on the registry assertions, case 2 on the warning count). Run `npx vitest run --config vitest.unit.config.ts packages/framework/src/testing/test-app.unit.test.ts`.
@@ -285,3 +285,30 @@ I ran it alone with `npx vitest run --config vitest.unit.config.ts`.
 2. **Name the guard in the helper's comment.** It should say that the new `describe` in `test-app.unit.test.ts` is what fails if a wrangler upgrade moves the read after an `await`. A future reviewer should not delete it as redundant.
 3. **Narrow the record's `~/.config` wording.** "Never touches the host registry" is correct. "Nothing depends on the host's `~/.config`" is correct. But the tests, like every wrangler import here, still write `~/.config/.wrangler/logs`, so the record must not claim more than that.
 4. **Add the follow-up as a plan item**, as described in section 4. The orchestrator's planning subagent does this. It is not part of this fix.
+
+## Fix (fixing subagent, prompt §8 step 3)
+
+Author: fixing subagent. I did not find, diagnose or review this issue. Base: `a029c6c`. Branch `claude/implement-local-cloudflare-fix-registry`. Local runs only, with no Cloudflare calls. Decision draft: `ai/implementation/decisions/fix-registry.md` (DEC-PENDING-fix-registry-1).
+
+Applied as proposed, with Review required changes 1–3:
+- `packages/framework/src/testing/test-app.ts`: `startPlatformProxy` sets `WRANGLER_REGISTRY_PATH=""` around only the synchronous `getPlatformProxy(..., remoteBindings: false)` call, and restores the prior value (or its absence) in `finally`, before any `await`. Its comment names the guard tests (change 2).
+- `packages/framework/src/testing/test-app.unit.test.ts`: new `describe("createTestApp and the dev registry")` with the three cases of "Red test". Each uses a scratch registry through `vi.stubEnv` and asserts that `WRANGLER_REGISTRY_PATH` equals the stubbed path after `createTestApp` resolves (change 1).
+- This record: the `~/.config` wording is narrowed to the registry (change 3).
+- Not changed: `databases.ts` and `fake-d1-api.ts` (follow-up plan item, Review section 4), and `core.md` §2 (not in this fix's scope; the proposed sentence is left to the follow-up or the integrator).
+
+### Red-green
+
+Command: `npx vitest run --config vitest.unit.config.ts packages/framework/src/testing/test-app.unit.test.ts`. `~/.config/.wrangler/registry` was empty before and after every run.
+
+| Case | Red (test only, `a029c6c` code) | Green (with the fix) |
+|---|---|---|
+| Real clock, foreign `someone-elses-worker` only | fail: `expected { …(2) } to deeply equal { 'someone-elses-worker': … }` (app wrote its own `test-app` entry) | pass |
+| `Date` faked to 2026-03-01, foreign `test-app` + `someone-elses-worker` | fail: `expected 229 to be +0` (`TimeoutOverflowWarning`s) | pass, 0 warnings |
+| `Date` faked to 2027-01-01, same entries | fail: `expected {} to deeply equal { …(2) }` (both foreign entries deleted) | pass |
+| Existing `createTestApp` tests (20) | not run in red (`-t "dev registry"`) | pass |
+
+### Checks run
+- `vitest related --run --config vitest.unit.config.ts` on both changed files: 2 files, 24 tests passed, 0 `TimeoutOverflowWarning`s.
+- Unit suite `packages/framework/src/testing`: 3 files, 49 tests passed.
+- `npm run build -w packages/framework`, then `npm run typecheck` and `npm run lint`: both pass. (Without the build first, typecheck fails on `tests/compliance/e2e` imports of the built package; `npm run verify` builds first too.)
+- Integration (`vitest.integration.config.ts`), the 16 files under `packages/framework/test/integration` and `tests/compliance/criteria` that call `createTestApp`: the 9 framework suites all pass, 0 `TimeoutOverflowWarning`s. 11 tests in 4 compliance files fail only on their target-run parts, which need the compliance runner: 10 with `COMPLIANCE_BASE_URL is not set` and 1 with `PREREQUISITE MISSING` (reference app's `apiKey` in `.dev.vars`). Those parts do not call `createTestApp`. All the in-process tests in those files pass. Total 70 passed, 11 failed for that reason.

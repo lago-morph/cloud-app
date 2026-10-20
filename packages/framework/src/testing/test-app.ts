@@ -90,6 +90,27 @@ function proxyConfigPath(): string {
   return proxyConfig;
 }
 
+/**
+ * A test app never joins Miniflare's host-wide dev registry (~/.config/.wrangler/registry): it has
+ * no cross-Worker bindings, and joining it makes test apps in different processes interfere
+ * (root cause 2026-10-20-testing-dev-registry.md). getPlatformProxy has no option for this;
+ * Wrangler reads WRANGLER_REGISTRY_PATH (an empty value disables the registry) synchronously
+ * inside the call when remote bindings are off, so the override is restored before any await.
+ * Guard: the "createTestApp and the dev registry" tests in test-app.unit.test.ts fail if a
+ * Wrangler upgrade moves that read after an await; do not delete them as redundant.
+ */
+function startPlatformProxy(configPath: string) {
+  const had = Object.hasOwn(process.env, "WRANGLER_REGISTRY_PATH");
+  const prior = process.env.WRANGLER_REGISTRY_PATH;
+  process.env.WRANGLER_REGISTRY_PATH = "";
+  try {
+    return getPlatformProxy<{ DB: AnyD1Database & D1Like; FILES: FilesStore }>({ configPath, persist: false, remoteBindings: false });
+  } finally {
+    if (had) process.env.WRANGLER_REGISTRY_PATH = prior;
+    else delete process.env.WRANGLER_REGISTRY_PATH;
+  }
+}
+
 /** Generated migrations for app definitions run without committed ones, per process. */
 const generated = new WeakMap<object, Promise<string>>();
 
@@ -214,7 +235,7 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
   if (stub && options.user !== undefined) throw new Error("the user option needs the authentication mock; it cannot be combined with stubLoginProvider");
 
   const dialect = processDialect();
-  const proxy = await getPlatformProxy<{ DB: AnyD1Database & D1Like; FILES: FilesStore }>({ configPath: proxyConfigPath(), persist: false });
+  const proxy = await startPlatformProxy(proxyConfigPath());
   let pg: PGlite | undefined;
   try {
     if (dialect === "postgres") pg = await openPostgres();
