@@ -49,4 +49,12 @@ Requirements that need a cloud run (DEMO-AC-001…005, 007, 008, 009, 010 on clo
 
 ## Smoke runs
 
-Filled in after the run.
+- `smoke --target local --stage local` against `npm run dev`, commit `97dd0d7`: 7 passed, 0 failed. Evidence: `validation/local/g7586p3q4x45qyc.json` (repository root). The local log `.logs/2026-10-20.log` held the `posts` `info` entries for publish, unpublish and delete (DEMO-AC-008, local).
+
+## Framework issues
+
+None found: everything the spec needed was covered by the skill and the template, so no `FRAMEWORK-ISSUE.md` was created. Notes, not defects:
+
+- DEMO-AC-005 "survives logout and login" is exercised as a fresh session for the same user ID (`t.as(mockUsers.user(id))`), because testing.md says disposing an in-process test app disposes all of them, so an explicit logout mid-test is not available in-process.
+- DEMO-AC-006 (rebuild with a changed title) is tested through `createTestApp`'s `config` override of `siteTitle`, which is what the values file feeds at build time.
+- DEMO-AC-011's "every committed production values file" is checked by importing `config/cloudflare/prod.json` in `tests/config.test.ts`; a future production file must be added to that test.
