@@ -137,7 +137,8 @@ export function runCompliance(cwd: string, args: readonly string[]): NestedRun {
 }
 
 // ---------------------------------------------------------------------------------------------
-// The Where columns and lines (component criteria tables; e2e-scenarios.md "Where:" lines).
+// The Where columns and lines (component criteria tables, `| ID | Criterion | Verifies | Where |`;
+// e2e-scenarios.md "Where:" lines).
 
 export interface WhereSets {
   /** IDs run on every commit on each target (the automated tier). */
@@ -183,12 +184,39 @@ export function whereSets(docsDir: string = DOCS): WhereSets {
   const add = (id: string, where: string, file: string): void => {
     for (const { target, milestone: m } of readWhere(where, file)) (m ? milestone : automated)[target].add(id);
   };
+  // A criterion is a body row of a criteria table: header `| ID | Criterion | Verifies | Where |`,
+  // a `| --- |` separator next, ending at the first line not starting with `|`. Its ID and Where
+  // text come from those columns. Other tables are ignored; a malformed row inside a criteria
+  // table, or an `ID | Criterion` header of another shape, throws (no criterion is dropped
+  // silently). Root cause 2026-10-20-COMPL-AC-001-where-parser-decision-log, Review.
+  const columns = ["ID", "Criterion", "Verifies", "Where"];
+  const row = (line: string): string[] => line.trim().slice(1).replace(/(?<!\\)\|$/, "").split(/(?<!\\)\|/).map((c) => c.trim());
   for (const file of markdown(docsDir)) {
     let scenario: string | undefined;
-    for (const line of readFileSync(file, "utf8").split("\n")) {
-      const cells = line.startsWith("|") ? line.split("|").slice(1, -1).map((c) => c.trim()) : [];
-      const first = cells[0] ?? "";
-      if (/^[A-Z]+-AC-\d{3}$/.test(first)) add(first, cells[cells.length - 1] ?? "", file);
+    let table: string[] | undefined;
+    const lines = readFileSync(file, "utf8").split("\n");
+    for (let n = 0; n < lines.length; n++) {
+      const line = lines[n] ?? "";
+      const at = `${file}:${String(n + 1)}`;
+      if (!line.startsWith("|")) table = undefined;
+      else if (table !== undefined) {
+        const cells = row(line);
+        const id = cells[table.indexOf("ID")] ?? "";
+        if (cells.length !== table.length || !/^[A-Z]+-AC-\d{3}$/.test(id)) throw new Error(`${at}: malformed criteria row ${JSON.stringify(line)}`);
+        add(id, cells[table.indexOf("Where")] ?? "", file);
+        continue;
+      } else {
+        const cells = row(line);
+        if (cells[0] === "ID" && cells[1] === "Criterion") {
+          const separator = (lines[n + 1] ?? "").startsWith("|") ? row(lines[n + 1] ?? "") : [];
+          if (cells.join() !== columns.join() || separator.length !== columns.length || separator.some((c) => !/^:?-{3,}:?$/.test(c))) {
+            throw new Error(`${at}: a criteria table needs the header | ${columns.join(" | ")} | and a | --- | separator row`);
+          }
+          table = cells;
+          n++;
+          continue;
+        }
+      }
       const header = /^####\s+(E2E-\d{3})\b/.exec(line);
       if (header?.[1] !== undefined) scenario = header[1];
       const whereLine = /^Where:\s*(.+?)\s*$/.exec(line);
