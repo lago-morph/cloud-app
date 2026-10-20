@@ -32,8 +32,21 @@ describe("[E2E-004] coverage is computed from the runners' listing with the driv
     expect(local[1]?.onlyIds).toEqual(UNIT_LEVEL);
     expect(local[0]?.onlyIds).toBeUndefined();
     const cloud = runnerSelection({ target: "cloudflare" });
-    expect(cloud.map((s) => s.args.join(" "))).toEqual(["vitest run --config vitest.integration.config.ts tests/compliance/criteria", "playwright test --project integration --project e2e tests/compliance/"]);
+    expect(cloud.map((s) => s.args.join(" "))).toEqual(["vitest run --config vitest.integration.config.ts tests/compliance/criteria", "playwright test tests/compliance/ --project integration --project e2e"]);
     expect(runnerSelection({ target: "local", selfTest: true }).map((s) => s.args.join(" "))).toEqual(["vitest run --config tests/compliance/harness/self-test/vitest.config.ts"]);
+  });
+
+  it("Playwright's variadic --project never swallows a test path: paths come first (decision D-06-3)", () => {
+    for (const target of ["local", "cloudflare"] as const) {
+      for (const s of runnerSelection({ target }).filter((x) => x.runner === "playwright")) {
+        const first = s.args.indexOf("--project");
+        expect(first).toBeGreaterThan(0);
+        const tail = s.args.slice(first);
+        // After the first --project, only --project and its single value may appear.
+        tail.forEach((arg, i) => expect(i % 2 === 0 ? arg === "--project" : !arg.startsWith("-")).toBe(true));
+        expect(s.args.slice(2, first).every((a) => !a.startsWith("-"))).toBe(true);
+      }
+    }
   });
 
   it("a unit-layer test covers only unit-level IDs: the fixture literal [KV-AC-001] in tags.unit.test.ts covers nothing", () => {

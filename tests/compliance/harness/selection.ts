@@ -24,10 +24,12 @@ export interface RunnerSelection {
 export function runnerSelection(options: { readonly target: Target; readonly selfTest?: boolean }): RunnerSelection[] {
   if (options.selfTest === true) return [{ runner: "vitest", label: "vitest", args: ["vitest", "run", "--config", SELF_TEST_CONFIG] }];
   const isCloud = options.target !== "local";
+  // Playwright's `--project` is variadic: a path after it is read as a project name, so test
+  // paths come before the projects (decision D-06-3).
   return [
     { runner: "vitest", label: "vitest", args: ["vitest", "run", "--config", "vitest.integration.config.ts", ...(isCloud ? ["tests/compliance/criteria"] : [])] },
     ...(isCloud ? [] : [{ runner: "vitest" as const, label: "vitest-unit", args: ["vitest", "run", "--config", "vitest.unit.config.ts"], onlyIds: UNIT_LEVEL }]),
-    { runner: "playwright", label: "playwright", args: ["playwright", "test", "--project", "integration", "--project", "e2e", ...(isCloud ? ["tests/compliance/"] : [])] },
+    { runner: "playwright", label: "playwright", args: ["playwright", "test", ...(isCloud ? ["tests/compliance/"] : []), "--project", "integration", "--project", "e2e"] },
   ];
 }
 
