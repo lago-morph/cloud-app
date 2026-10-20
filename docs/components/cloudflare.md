@@ -33,7 +33,7 @@ Resources are created by SST (PAR-100) through its Cloudflare components, with r
 - the Worker runs first for `/api` and `/api/*`;
 - other paths go to static assets, with fallback to the entry page (`single-page-application`); a path such as `/apix` is a client path;
 - the bindings: D1 `DB` (the stage's current database), R2 `FILES` (the stage bucket) and R2 `LOGS` (the shared `prototype-logs` bucket). The bindings carry the database, bucket and log-bucket identifiers to the runtime;
-- framework variables (CFG): the plain-text `FRAMEWORK_PUBLIC_ORIGIN`, the stage's public origin (an `https` origin, checked when the settings are built). It is the only provisioning-derived value the runtime reads (DEC-PENDING-D-01-2);
+- framework variables (CFG): the plain-text `FRAMEWORK_PUBLIC_ORIGIN`, the stage's public origin (an `https` origin, checked when the settings are built). With it, `deploy` sets `FRAMEWORK_R2_ACCOUNT_ID` and `FRAMEWORK_FILES_BUCKET`, the account ID and stage bucket name the R2 transfer tickets address, read when a ticket is created (DEC-PENDING-D-01-2, DEC-PENDING-D-05-5);
 - secrets (SEC), set separately as `SECRET_<NAME>`. No variable or binding is ever named `SECRET_*`, because an upload that declares one replaces the secret (DEC-0087); building the settings refuses one with `CORE.MISCONFIGURED`.
 
 ### Runtime
