@@ -19,13 +19,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "author_name": {
-          "name": "author_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "title": {
           "name": "title",
           "type": "text",
@@ -102,8 +95,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "name": {
-          "name": "name",
+        "content_type": {
+          "name": "content_type",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -111,14 +104,7 @@
         },
         "size": {
           "name": "size",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "content_type": {
-          "name": "content_type",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -170,6 +156,6 @@
   "internal": {
     "indexes": {}
   },
-  "id": "8d03d124-4051-4126-acdb-ec0f9382f7ec",
+  "id": "28934838-e685-40ef-b063-4b616e64d66e",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }

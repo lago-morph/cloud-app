@@ -3,7 +3,7 @@ import { configInteger, configString, type AppEnv } from "@lago-morph/prototype-
 /** Non-secret configuration keys (DEMO-REQ-006); values per stage are in `config/`. */
 export const config = {
   siteTitle: configString({ default: "Photo board" }),
-  maxPhotosPerPost: configInteger({ default: 5 }),
+  maxPhotosPerPost: configInteger({ default: 3 }),
   shareLinkDays: configInteger({ default: 7 }),
 };
 

@@ -1,7 +1,6 @@
 CREATE TABLE "posts" (
 	"id" text PRIMARY KEY NOT NULL,
 	"author_id" text NOT NULL,
-	"author_name" text,
 	"title" text NOT NULL,
 	"body" text NOT NULL,
 	"status" text NOT NULL,
@@ -12,9 +11,8 @@ CREATE TABLE "posts" (
 CREATE TABLE "photos" (
 	"id" text PRIMARY KEY NOT NULL,
 	"post_id" text NOT NULL,
-	"name" text NOT NULL,
-	"size" double precision NOT NULL,
 	"content_type" text NOT NULL,
+	"size" integer NOT NULL,
 	"created_at" bigint NOT NULL
 );
 --> statement-breakpoint

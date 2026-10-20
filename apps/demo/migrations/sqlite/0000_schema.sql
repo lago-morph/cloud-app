@@ -1,7 +1,6 @@
 CREATE TABLE `posts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`author_id` text NOT NULL,
-	`author_name` text,
 	`title` text NOT NULL,
 	`body` text NOT NULL,
 	`status` text NOT NULL,
@@ -16,9 +15,8 @@ CREATE INDEX `posts_author_id_created_at_idx` ON `posts` (`author_id`,`created_a
 CREATE TABLE `photos` (
 	`id` text PRIMARY KEY NOT NULL,
 	`post_id` text NOT NULL,
-	`name` text NOT NULL,
-	`size` real NOT NULL,
 	`content_type` text NOT NULL,
+	`size` integer NOT NULL,
 	`created_at` integer NOT NULL,
 	FOREIGN KEY (`post_id`) REFERENCES `posts`(`id`) ON UPDATE no action ON DELETE no action
 );

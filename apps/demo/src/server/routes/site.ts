@@ -2,45 +2,46 @@ import { jsonBody, requireAdmin, requireUser, z } from "@lago-morph/prototype-fr
 import type { Hono } from "hono";
 import type { Banner, Preferences, Site } from "../../shared/types";
 import type { Env } from "../env";
-import { perPageSchema, readPerPage, writePerPage } from "../preferences";
+import { BANNER_KEY, preferenceKey, readPageSize } from "../posts";
 
-const BANNER_KEY = "site:banner";
-const bannerChange = z.object({ banner: z.string().trim().max(500).nullable() });
-const preferenceChange = z.object({ perPage: perPageSchema });
+const bannerRequest = z.object({ banner: z.string().trim().max(500).nullable() });
+const preferencesRequest = z.object({ pageSize: z.number().int().min(1).max(50) });
 
-/** Site settings (configuration, DEMO-REQ-006), the banner (KV, DEMO-REQ-004) and the per-user preference (KV, DEMO-REQ-005). */
+/** Site settings (configuration), the banner (KV, admin only) and each user's page size (KV). */
 export function siteRoutes(api: Hono<Env>): void {
   api.get("/site", async (c) => {
-    const result: Site = {
+    const body: Site = {
       title: c.var.config.get("siteTitle"),
       banner: await c.var.kv.get(BANNER_KEY),
       maxPhotosPerPost: c.var.config.get("maxPhotosPerPost"),
       shareLinkDays: c.var.config.get("shareLinkDays"),
     };
-    return c.json(result);
+    return c.json(body);
   });
 
-  // Sets the banner; null or blank clears it.
-  api.put("/banner", requireAdmin(), jsonBody(bannerChange), async (c) => {
+  // DEMO-REQ-004: an empty or null banner clears it.
+  api.put("/banner", requireAdmin(), jsonBody(bannerRequest), async (c) => {
     const { banner } = c.req.valid("json");
     if (banner === null || banner === "") {
       await c.var.kv.delete(BANNER_KEY);
     } else {
       await c.var.kv.put(BANNER_KEY, banner);
     }
-    const result: Banner = { banner: banner === "" ? null : banner };
-    return c.json(result);
+    c.var.log.write("banner", "info", `banner ${banner === null || banner === "" ? "cleared" : "set"} by ${c.var.user.id}`);
+    const body: Banner = { banner: banner === "" ? null : banner };
+    return c.json(body);
   });
 
+  // DEMO-REQ-005: the posts-per-page choice is kept per user ID, so it survives logout and login.
   api.get("/preferences", requireUser(), async (c) => {
-    const result: Preferences = { perPage: await readPerPage(c.var.kv, c.var.user) };
-    return c.json(result);
+    const body: Preferences = { pageSize: await readPageSize(c.var.kv, c.var.user.id) };
+    return c.json(body);
   });
 
-  api.put("/preferences", requireUser(), jsonBody(preferenceChange), async (c) => {
-    const { perPage } = c.req.valid("json");
-    await writePerPage(c.var.kv, c.var.user.id, perPage);
-    const result: Preferences = { perPage };
-    return c.json(result);
+  api.put("/preferences", requireUser(), jsonBody(preferencesRequest), async (c) => {
+    const { pageSize } = c.req.valid("json");
+    await c.var.kv.put(preferenceKey(c.var.user.id), JSON.stringify({ pageSize }));
+    const body: Preferences = { pageSize };
+    return c.json(body);
   });
 }

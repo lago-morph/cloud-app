@@ -2,7 +2,7 @@
 
 export type PostStatus = "draft" | "published";
 
-/** Site-wide settings everyone sees (DEMO-REQ-004, DEMO-REQ-006). */
+/** Site-wide settings every page shows (DEMO-REQ-004, DEMO-REQ-006). */
 export interface Site {
   readonly title: string;
   readonly banner: string | null;
@@ -17,7 +17,7 @@ export interface Banner {
 export interface PostSummary {
   readonly id: string;
   readonly title: string;
-  readonly authorName: string | null;
+  readonly authorId: string;
   readonly status: PostStatus;
   readonly createdAt: number;
   readonly updatedAt: number;
@@ -26,7 +26,7 @@ export interface PostSummary {
 export interface PostPage {
   readonly posts: readonly PostSummary[];
   readonly page: number;
-  readonly perPage: number;
+  readonly pageSize: number;
   readonly hasMore: boolean;
 }
 
@@ -34,33 +34,32 @@ export interface DraftList {
   readonly posts: readonly PostSummary[];
 }
 
-export interface Photo {
+/**
+ * A photo with a fresh download ticket. The ticket's type comes from the framework (`DownloadTicket`
+ * in the browser), which shared code may not import, so it is a type parameter here.
+ */
+export interface Photo<Ticket> {
   readonly id: string;
-  readonly name: string;
-  readonly size: number;
   readonly contentType: string;
+  readonly size: number;
+  readonly ticket: Ticket;
 }
 
-export interface PostDetail extends PostSummary {
+export interface PostDetail<Ticket> extends PostSummary {
   readonly body: string;
-  readonly photos: readonly Photo[];
-  /** Whether the caller may edit the post, add photos and create share links (the author, while a draft). */
-  readonly canEdit: boolean;
-  /** Whether the caller may delete the post. */
-  readonly canDelete: boolean;
-  /** Whether the caller may publish or unpublish the post (admins). */
-  readonly canModerate: boolean;
+  readonly photos: readonly Photo<Ticket>[];
 }
 
 export interface Created {
   readonly id: string;
 }
 
-export interface Preferences {
-  readonly perPage: number;
-}
-
 export interface ShareLink {
   readonly token: string;
+  readonly path: string;
   readonly expiresAt: number;
+}
+
+export interface Preferences {
+  readonly pageSize: number;
 }

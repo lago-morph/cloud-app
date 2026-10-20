@@ -2,57 +2,48 @@
 
 Suspected framework defects found while building this app. Each entry is reproducible; none was worked around. While an entry is open, the requirements it blocks are unfinished and the app is not done.
 
-## 1. Cloud targets cannot be verified: AWS is not built, and Cloudflare runs were out of scope for this build
+None of the entries below blocks a requirement. They are open because the skill or framework should change, not because the demo is unfinished.
 
-- **Status:** open
-- **Task attempted:** DEMO-REQ-010 / DEMO-AC-010: "The smoke test passes on local, Cloudflare, and AWS from one commit with no source changes"; the cloud column of DEMO-AC-001..009 and DEMO-AC-008 on cloud.
-- **Contract or reference consulted:** `skill/SKILL.md` (intro: "running on Cloudflare is not yet verified, and the AWS target is not built yet"; hard rule 4; "Done means"); `skill/reference/testing.md`, "The smoke test".
-- **Minimal reproduction:** `npx prototype-framework smoke --target aws --stage test-1` (no AWS target exists). Cloudflare: `npx prototype-framework deploy --target cloudflare --stage test-1` was not run, because this build was restricted to local work with no cloud calls.
-- **Observed code or diagnostic:** none run; the skill states the AWS target is not available in this phase.
-- **Expected:** a deployable AWS target and a Cloudflare test stage on which `smoke` can run.
-- **Workaround not taken:** claiming cloud support from the local smoke run, or simulating a cloud.
-- **Blocked requirements:** DEMO-REQ-010 (cloud parts), the cloud column of DEMO-AC-001..009. Local: `verify` passes and `smoke --target local` passed (8/8).
-
-## 2. Ticket wire form on cloud stages is undocumented, so the smoke test's direct upload/download is unverified there
-
-- **Status:** open
-- **Task attempted:** DEMO-AC-003 in the smoke test: upload a 20 MB JPEG and check it downloads byte-identical. Tests may not import `/client`, so they cannot use `uploadFile` / `downloadUrl`; they must send the ticket's request themselves.
-- **Contract or reference consulted:** `skill/reference/files.md` ("Return the ticket to the browser… Its contents are not yours to read or build"; "Testing"); `skill/reference/testing.md`, "The smoke test"; `skill/examples/tests.md` (`WireUploadTicket`, described only as "the in-process upload ticket's wire form").
-- **Minimal reproduction:** in a test, `POST /api/photos/<id>/download-ticket` → `{"ticket":{"url":"/api/__framework/fi…"}}` in-process and on local `dev`. Nothing documents the form on Cloudflare/AWS (absolute storage URL? extra headers? does `TestApp.request` accept an absolute URL on a connected stage?).
-- **Observed code or diagnostic:** in-process and `smoke --target local`: works with `{ url, method?, headers? }` sent through `t.request`. Cloud: unknown.
-- **Expected:** a documented, test-usable way to perform an upload and download from a ticket on every target (for example a `/testing` helper).
-- **Workaround not taken:** reading the framework source to learn the cloud ticket form. The smoke test sends absolute URLs with `fetch` and same-origin ones through `t.request`, a guess that is unverified on any cloud.
-- **Blocked requirements:** cloud verification of DEMO-AC-003 (together with entry 1).
-
-## 3. `id()` columns refuse non-UUID values with 400 `SQL.INVALID_VALUE`, which the references do not say
-
-- **Status:** open (documentation; not blocking)
-- **Task attempted:** DEMO-REQ-001: `GET /api/posts/:id` for an unknown ID.
-- **Contract or reference consulted:** `skill/reference/http-and-validation.md`, "Validating input": "Path parameters … are not validated for you; an ID that matches no row your caller may see is `HTTP.NOT_FOUND`"; `skill/reference/sql-and-migrations.md`, "Tables" (`id()`: "text from `newId()`"; "A value that breaks its column's rule is refused … with 400 `SQL.INVALID_VALUE`").
-- **Minimal reproduction:** `api.get("/posts/:id", async (c) => c.json(await c.var.sql.select({ id: posts.id }).from(posts).where(eq(posts.id, c.req.param("id")))))`, then in a test `await t.request("/api/posts/no-such-post")`; run `npx prototype-framework verify`.
-- **Observed code or diagnostic:** `expected '{"error":{"code":"SQL.INVALID_VALUE",…' to be …` (status 400, on both sqlite and postgres).
-- **Expected:** either the reference states that `id()` values must be UUIDs (so routes validate path IDs with `z.uuid()`), or a malformed ID in a `where` simply matches no row.
-- **Workaround not taken:** none needed beyond ordinary input validation: the app checks path IDs with `z.uuid()` and answers `HTTP.NOT_FOUND`.
-- **Blocked requirements:** none.
-
-## 4. Disposing an `as()` test app disposes the shared app
-
-- **Status:** open (documentation; not blocking)
-- **Task attempted:** DEMO-AC-005 in the smoke test: a second session of the same login (`base.as(mockUsers.user(id))`), disposed after use.
-- **Contract or reference consulted:** `skill/reference/testing.md`, "In-process tests" (`t.as(...)` "shares storage with `t`"; "`await t.dispose()` after each test … disposes every test app the test opened").
-- **Minimal reproduction:** `const a = base.as(mockUsers.user("x")); await a.dispose(); await base.request("/api/site");` under `npx prototype-framework verify`.
-- **Observed code or diagnostic:** `this test app was disposed` (on the next request through `base` / another view).
-- **Expected:** the reference says whether disposing a view ends only that view or the shared app.
-- **Workaround not taken:** none; the test simply does not dispose the extra view (it is ended with `base`).
-- **Blocked requirements:** none.
-
-## 5. `smoke` writes its evidence outside the app directory in this repository
+## 1. The scaffolder cannot be used for an app inside the framework repository, and copying the template breaks `npm ci`
 
 - **Status:** open (not blocking)
-- **Task attempted:** running `npx prototype-framework smoke --target local` in `apps/demo` while restricted to `apps/demo/**`.
-- **Contract or reference consulted:** `skill/reference/testing.md`, "What runs your tests" ("writes an evidence record to `validation/<target>/<runId>.json`", location not stated).
-- **Minimal reproduction:** `cd apps/demo && npx prototype-framework smoke --target local`.
-- **Observed code or diagnostic:** `smoke: evidence: validation/local/3nkk7am5tw9ehoh.json`, created at the repository root (`validation/local/3nkk7am5tw9ehoh.json` and `validation/local/3nkk7am5tw9ehoh/`), not under `apps/demo/`.
-- **Expected:** the reference names where the record is written relative to the app.
-- **Workaround not taken:** none; the record was moved out of the repository rather than committed outside `apps/demo`.
-- **Blocked requirements:** none (the local run's result is in `BUILD-RECORD.md`).
+- **Task attempted:** Start `apps/demo` from the template ("Starting a new app").
+- **Contract or reference consulted:** `skill/reference/local-development.md`, "Starting a new app"; `skill/templates/README.md`; `apps/template/README.md` §1 step 1.
+- **Minimal reproduction:** `skill/scripts/scaffold.mjs` rewrites the framework dependency to `file:vendor/<tarball>` and runs `npm install` inside the target. In this repository `apps/demo` is a root workspace, so that would add a nested install and change the dependency spec. Copying `apps/template` instead (keeping the exact pin, as the template README describes for the framework repository) and running `npm ci` at the repository root fails.
+- **Observed code or diagnostic:** `npm ci` → `npm error code EUSAGE … can only install with an existing package-lock.json`; with `--loglevel verbose`: `loadVirtual Error: must not have multiple workspaces with the same name … package 'template' has conflicts in … apps/template … apps/demo`.
+- **Expected:** The skill says how to start an app that lives inside the framework repository's workspaces, including that `package.json` `name` must change (it is not one of the pinned versions).
+- **Workaround not taken:** Did not edit the root `package.json` or `package-lock.json`, or install the framework from a tarball. Changed only `apps/demo/package.json` `name` to `demo`, which the skill does not forbid.
+- **Blocked requirements:** none.
+
+## 2. A test cannot make only a file deletion fail after files have been stored
+
+- **Status:** open (not blocking)
+- **Task attempted:** DEMO-AC-003, "In a local test, a simulated file-deletion failure produces a `warn` log entry."
+- **Contract or reference consulted:** `skill/reference/testing.md`, "In-process tests" (`unavailable`); `skill/reference/files.md`, "Testing".
+- **Minimal reproduction:** `createTestApp(app, { unavailable: ["files"] })` makes every file operation fail from the start, so no photo can be uploaded or finalized in that test app, and `t.as(...)` shares the same setting. There is no option to fail `files.delete` alone, or to turn a capability off after setup.
+- **Observed code or diagnostic:** In `tests/photos.test.ts` the failure is reached only through the cleanup's `files.list` of the post's prefix, on a post with no photos: the response is 204 and one `photos` `warn` entry reads `photo cleanup failed for deleted post <id>: FILES.UNAVAILABLE`. A post with stored photos whose deletion fails cannot be built in-process.
+- **Expected:** A way to simulate the failure of one operation (or to make a capability unavailable after setup), so the test can store photos and then have their deletion fail.
+- **Workaround not taken:** Did not wrap or mock `FilesService`, inject a fake into app code, or add a test-only route.
+- **Blocked requirements:** none. DEMO-AC-003's failure clause is tested, but only for the prefix-cleanup path.
+
+## 3. A download ticket cannot be described in a shared response type
+
+- **Status:** open (not blocking)
+- **Task attempted:** DEMO-REQ-003, returning each photo of a post with a fresh download ticket in a type shared by server and browser.
+- **Contract or reference consulted:** `skill/reference/http-and-validation.md`, "Where code goes" (shared code may import only `zod`) and "Adding a route" step 1; `skill/reference/files.md`, "Server operations" ("its contents are not yours to read or build").
+- **Minimal reproduction:** In `src/shared/types.ts`, `interface Photo { ticket: { url: string; expiresAt: number } }`, then on the server `const p: Photo = { …, ticket: await c.var.files.createDownloadTicket(name) }`; run `npx tsc -p tsconfig.json`.
+- **Observed code or diagnostic:** `error TS2739: Type 'DownloadTicket' is missing the following properties from type 'PhotoTicket': url, expiresAt`.
+- **Expected:** A documented way to put tickets in shared response types. The examples only type tickets inline in browser code (`{ ticket: DownloadTicket }`).
+- **Workaround not taken:** No cast or `any`. The shared types take the ticket type as a parameter (`Photo<Ticket>`); the server uses `Awaited<ReturnType<FilesService["createDownloadTicket"]>>` and the browser uses `DownloadTicket` from `/client`.
+- **Blocked requirements:** none.
+
+## 4. `smoke` writes its evidence record outside the app directory
+
+- **Status:** open (not blocking)
+- **Task attempted:** Run the local smoke test (DEMO-REQ-010) and keep its evidence with the app.
+- **Contract or reference consulted:** `skill/reference/testing.md`, "What runs your tests" (the evidence record goes to `validation/<target>/<runId>.json` at the top of the git repository).
+- **Minimal reproduction:** In `apps/demo`, with `dev` running: `npm -w apps/demo run smoke -- --target local`.
+- **Observed code or diagnostic:** `smoke: evidence: validation/local/3qs2wf6eexh09jl.json`, plus `validation/local/3qs2wf6eexh09jl/raw/`, written at the repository root. That is outside `apps/demo/`, the only place this build may change.
+- **Expected:** A way to keep an app's evidence inside the app directory when the app is not its own repository.
+- **Workaround not taken:** Did not change the smoke command. I moved the generated record unchanged to `apps/demo/validation-evidence/` and committed it there, so the root `validation/` is untouched.
+- **Blocked requirements:** none.

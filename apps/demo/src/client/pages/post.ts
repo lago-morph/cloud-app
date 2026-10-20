@@ -1,126 +1,124 @@
-import { api, downloadUrl, uploadFile, type DownloadTicket, type UploadTicket } from "@lago-morph/prototype-framework/client";
-import type { Photo, PostDetail, ShareLink, Site } from "../../shared/types";
-import { button, describeError, el, formatTime, link, section } from "../dom";
+import { api, downloadUrl, uploadFile, type CurrentUser, type DownloadTicket, type UploadTicket } from "@lago-morph/prototype-framework/client";
+import type { Photo, PostDetail, PostSummary, ShareLink } from "../../shared/types";
+import { button, describeError, el, section, when } from "../dom";
 
-const PHOTO_TYPES = ["image/jpeg", "image/png"];
+type Detail = PostDetail<DownloadTicket>;
 
-async function photoView(photo: Photo, share: string | null): Promise<HTMLElement> {
-  const figure = el("figure");
-  const { ticket } = await api<{ ticket: DownloadTicket }>(`/photos/${encodeURIComponent(photo.id)}/download-ticket`, {
-    method: "POST",
-    body: share === null ? {} : { share },
-  });
-  const img = el("img");
-  img.src = downloadUrl(ticket);
-  img.alt = photo.name;
-  img.style.maxWidth = "100%";
-  figure.append(img, el("figcaption", `${photo.name} (${String(photo.size)} bytes)`));
-  return figure;
+/** The post's title, text and photos; all user text is set as text, never HTML (DEMO-REQ-001, -003). */
+function render(post: Detail): HTMLElement {
+  const article = el("article");
+  article.append(el("h2", post.title));
+  const meta = el("p", `${post.status === "draft" ? "Draft" : "Published"} · created ${when(post.createdAt)} · by ${post.authorId}`);
+  meta.className = "meta";
+  article.append(meta, el("p", post.body));
+  for (const photo of post.photos) {
+    const img = el("img");
+    img.src = downloadUrl(photo.ticket);
+    img.alt = `Photo of ${post.title}`;
+    img.style.maxWidth = "100%";
+    article.append(img);
+  }
+  return article;
 }
 
-/** One post with its photos (DEMO-REQ-001, DEMO-REQ-003); with `share`, as seen through a share link (DEMO-REQ-007). */
-function render(page: HTMLElement, post: PostDetail, site: Site, share: string | null, reload: () => Promise<void>): void {
+/** The author's controls on their own draft: edit, add photos, share, delete. */
+function authorControls(post: Detail): HTMLElement {
+  const box = section("Edit draft");
   const message = el("p");
-  const head = el("h2", post.title);
-  const meta = el("p", `${post.status === "draft" ? "Draft" : "Published"} · by ${post.authorName ?? "someone"} · created ${formatTime(post.createdAt)} · updated ${formatTime(post.updatedAt)}`);
-  const body = el("p", post.body);
-  body.style.whiteSpace = "pre-wrap";
-  const gallery = el("div");
-  page.replaceChildren(head, meta, message, body, gallery);
-  void Promise.all(post.photos.map((p) => photoView(p, share)))
-    .then((views) => gallery.replaceChildren(...views))
+  const title = el("input");
+  title.value = post.title;
+  title.maxLength = 120;
+  const body = el("textarea");
+  body.value = post.body;
+  const picker = el("input");
+  picker.type = "file";
+  picker.accept = "image/jpeg,image/png";
+  const shareOut = el("p");
+  box.append(
+    title,
+    body,
+    button("Save", message, async () => {
+      await api<PostSummary>(`/posts/${post.id}`, { method: "PATCH", body: { title: title.value, body: body.value } });
+      window.location.reload();
+    }),
+    el("h3", "Photos (JPEG or PNG)"),
+    picker,
+    button("Upload photo", message, async () => {
+      const file = picker.files?.[0];
+      if (file === undefined) {
+        message.textContent = "Choose a photo first.";
+        return;
+      }
+      const { photoId, ticket } = await api<{ photoId: string; ticket: UploadTicket }>(`/posts/${post.id}/photos/upload-ticket`, {
+        method: "POST",
+        body: { contentType: file.type },
+      });
+      await uploadFile(ticket, file, {
+        onProgress: (p) => {
+          message.textContent = `Uploading… ${p.loaded} of ${p.total} bytes`;
+        },
+      });
+      await api<Photo<DownloadTicket>>(`/posts/${post.id}/photos/finalize`, { method: "POST", body: { photoId } });
+      window.location.reload();
+    }),
+    el("h3", "Share"),
+    button("Create share link", message, async () => {
+      const link = await api<ShareLink>(`/posts/${post.id}/share`, { method: "POST" });
+      shareOut.textContent = `${window.location.origin}${link.path} (valid until ${when(link.expiresAt)})`;
+    }),
+    shareOut,
+    message,
+  );
+  return box;
+}
+
+/** One post: published ones for everyone, drafts for their author and admins. */
+export function postPage(id: string, user: CurrentUser): HTMLElement {
+  const page = el("div");
+  const message = el("p");
+  page.append(message);
+  void api<Detail>(`/posts/${id}`)
+    .then((post) => {
+      page.replaceChildren(render(post));
+      const controls = el("p");
+      const isAuthor = user.level !== "anonymous" && user.id === post.authorId;
+      if (isAuthor && post.status === "draft") page.append(authorControls(post));
+      if (user.level === "admin") {
+        const action = post.status === "draft" ? "publish" : "unpublish";
+        controls.append(
+          button(action === "publish" ? "Publish" : "Unpublish", message, async () => {
+            await api<PostSummary>(`/posts/${post.id}/${action}`, { method: "POST" });
+            window.location.reload();
+          }),
+        );
+      }
+      if (user.level === "admin" || (isAuthor && post.status === "draft")) {
+        controls.append(
+          button("Delete post", message, async () => {
+            await api(`/posts/${post.id}`, { method: "DELETE" });
+            window.location.assign("/");
+          }),
+        );
+      }
+      page.append(controls, message);
+    })
     .catch((error: unknown) => {
       message.textContent = describeError(error);
     });
-
-  const path = `/posts/${encodeURIComponent(post.id)}`;
-  const actions = el("div");
-
-  if (post.canEdit) {
-    const titleInput = el("input");
-    titleInput.value = post.title;
-    titleInput.maxLength = 120;
-    const bodyInput = el("textarea");
-    bodyInput.value = post.body;
-    bodyInput.rows = 5;
-    const save = button("Save", message, async () => {
-      await api<PostDetail>(path, { method: "PATCH", body: { title: titleInput.value, body: bodyInput.value } });
-      await reload();
-    });
-    actions.append(el("h3", "Edit"), titleInput, el("br"), bodyInput, el("br"), save);
-
-    const picker = el("input");
-    picker.type = "file";
-    picker.accept = PHOTO_TYPES.join(",");
-    const progress = el("p");
-    const upload = button("Upload photo", message, async () => {
-      const file = picker.files?.[0];
-      if (file === undefined) throw new Error("Choose a JPEG or PNG file first.");
-      if (!PHOTO_TYPES.includes(file.type)) throw new Error("Only JPEG and PNG photos are accepted.");
-      const { id, ticket } = await api<{ id: string; ticket: UploadTicket }>(`${path}/photos/upload-ticket`, { method: "POST", body: { contentType: file.type } });
-      await uploadFile(ticket, file, {
-        onProgress: (p) => {
-          progress.textContent = `Uploading… ${String(p.loaded)} of ${String(p.total)} bytes`;
-        },
-      });
-      await api<Photo>(`${path}/photos/finalize`, { method: "POST", body: { id, name: file.name } });
-      progress.textContent = "Uploaded.";
-      await reload();
-    });
-    actions.append(el("h3", `Photos (${String(post.photos.length)} of at most ${String(site.maxPhotosPerPost)})`), picker, upload, progress);
-
-    const shareOut = el("p");
-    const shareButton = button("Create share link", message, async () => {
-      const { token, expiresAt } = await api<ShareLink>(`${path}/share`, { method: "POST" });
-      const url = `${window.location.origin}/shared/${encodeURIComponent(token)}`;
-      shareOut.replaceChildren(link(url, url), el("span", ` (valid until ${formatTime(expiresAt)})`));
-    });
-    actions.append(el("h3", "Share"), shareButton, shareOut);
-  }
-
-  if (post.canModerate) {
-    const action = post.status === "draft" ? "publish" : "unpublish";
-    actions.append(
-      el("h3", "Moderation"),
-      button(action === "publish" ? "Publish" : "Unpublish", message, async () => {
-        await api<PostDetail>(`${path}/${action}`, { method: "POST" });
-        await reload();
-      }),
-    );
-  }
-
-  if (post.canDelete) {
-    actions.append(
-      el("h3", "Delete"),
-      button("Delete post", message, async () => {
-        if (!window.confirm("Delete this post and its photos?")) return;
-        await api(path, { method: "DELETE" });
-        window.location.assign("/");
-      }),
-    );
-  }
-
-  page.append(actions, el("p"), link("Back to posts", "/"));
-}
-
-export function postPage(id: string, site: Site): HTMLElement {
-  const page = section("Post");
-  const load = async (): Promise<void> => {
-    render(page, await api<PostDetail>(`/posts/${encodeURIComponent(id)}`), site, null, load);
-  };
-  void load().catch((error: unknown) => {
-    page.replaceChildren(el("p", describeError(error)), link("Back to posts", "/"));
-  });
   return page;
 }
 
-export function sharedPage(token: string, site: Site): HTMLElement {
-  const page = section("Shared post");
-  const load = async (): Promise<void> => {
-    render(page, await api<PostDetail>(`/shared/${encodeURIComponent(token)}`), site, token, load);
-  };
-  void load().catch((error: unknown) => {
-    page.replaceChildren(el("p", describeError(error)), link("Back to posts", "/"));
-  });
+/** A draft opened through a share link: anyone with a valid link may view it (DEMO-REQ-007). */
+export function sharedPostPage(token: string): HTMLElement {
+  const page = el("div");
+  const message = el("p");
+  page.append(message);
+  void api<Detail>(`/shared/${encodeURIComponent(token)}`)
+    .then((post) => {
+      page.replaceChildren(render(post));
+    })
+    .catch((error: unknown) => {
+      message.textContent = describeError(error);
+    });
   return page;
 }

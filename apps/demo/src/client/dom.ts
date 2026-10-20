@@ -14,14 +14,14 @@ export function section(title: string): HTMLElement {
   return node;
 }
 
-/** A same-origin link handled by the client router. */
-export function link(text: string, href: string): HTMLAnchorElement {
-  const a = el("a", text);
-  a.href = href;
-  return a;
+/** A same-origin link; user text goes in as text only. */
+export function link(href: string, text: string): HTMLAnchorElement {
+  const node = el("a", text);
+  node.href = href;
+  return node;
 }
 
-/** A button that runs `action` and shows its failure in `message`. */
+/** A button that runs `action` and shows any failure in `message`. */
 export function button(text: string, message: HTMLElement, action: () => Promise<void>): HTMLButtonElement {
   const node = el("button", text);
   node.type = "button";
@@ -42,6 +42,7 @@ export function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function formatTime(ms: number): string {
+/** A timestamp for display. */
+export function when(ms: number): string {
   return new Date(ms).toLocaleString();
 }
