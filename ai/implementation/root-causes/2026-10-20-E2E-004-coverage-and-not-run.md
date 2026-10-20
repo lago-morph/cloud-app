@@ -502,3 +502,7 @@ Fixing subagent (prompt §8 step 3), branch `claude/implement-local-cloudflare-f
 - Build, typecheck and lint passed each time.
 - `test:unit` failed each time with 1–3 Vitest 5 s timeouts. They were in different files each run, all outside this fix's paths: `kv/service.unit.test.ts`, `sql/postgres.unit.test.ts` and `cli/verify/type-check.unit.test.ts`.
 - The same unit layer with `--testTimeout=60000` passed: 141 files, 1413 tests. The `apps/template` and `apps/reference` verify steps both exited 0.
+
+## Fix (C, phase rule)
+
+Branch `claude/implement-local-cloudflare-fix-c4` (fix-c3 merged): added `{ id: "CHECK-AC-005", targets: ["local"], mode: "automated", part: "demo part", detail: "demo built in phase F (plan C-EV)" }` to `PHASE_RULES` (`tests/compliance/harness/expected.ts`); red-green with a new case in `expected.unit.test.ts` (failed before: `notRunParts: []`; passes after, harness 85/85). `npm run verify` online and offline: exit 0. Informational run `--only E2E-004,CHECK-AC-005,KV-AC-001,CLI-AC-003` (record `9jeiggazoec19mr`, outside the repo): CHECK-AC-005 `passed` (part `""`, from the template test) plus `not-run` "demo part: demo built in phase F (plan C-EV)"; KV-AC-001 and CLI-AC-003 `passed`; E2E-004 `failed` with 18 IDs left in its coverage list: COMPL-AC-001, COMPL-AC-003 (run-level evidence, see the fix-c3 decision draft), DEMO-AC-001…011, E2E-002, SKILL-AC-001…004. CHECK-AC-005, LOCAL-AC-001 and SKILL-AC-005 are no longer listed. Phase F removes the rule when it adds the demo's `[CHECK-AC-005]` test.

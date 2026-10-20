@@ -134,3 +134,10 @@ not hit, including under the same load.
 - **Residual, not caused by this change:** the wall-clock assertions in `log/writer` (< 100 ms) and `log/request`
   (≤ 2,000 ms) are load-sensitive in their own right, and `testTimeout` does not affect them. If they fail under load,
   each needs its own §8 record.
+
+## Fix
+Fixing subagent (prompt §8 step 3), branch `claude/implement-local-cloudflare-fix-c4`; it did not write the record or this
+review. Applied the recommended change as written: `testTimeout: 30_000` in `vitest.unit.config.ts`, with a comment
+citing the D-04 record and this review. All per-test, hook and `describe` timeouts kept; no `hookTimeout`, `maxWorkers`
+or assertion change. `npm run verify` passed online and offline (`unshare -rn sh scripts/offline.sh npm run verify`),
+both exit 0, at load average 10–17 on 4 CPUs.
