@@ -2,7 +2,11 @@
  * AUTH-AC-001 (current user shape) and AUTH-AC-004 (route protection), local.
  * Source: docs/components/auth.md AUTH-REQ-001, AUTH-REQ-004; docs/contracts/ts/auth.d.ts, core.d.ts.
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, expectTypeOf, it } from "vitest";
+import { describeCompilerDiagnostics, typeErrors } from "../../fixtures/support/typecheck.js";
 import type { CurrentUser, LoggedInUser, RequestVars } from "../../../src/index.js";
 import { mockUsers } from "../../../src/testing/index.js";
 import { tag } from "../../../../../tests/support/tags.js";
@@ -25,6 +29,44 @@ describe("AUTH current user", () => {
     // behind requireUser()/requireAdmin() and `requireCurrentUser(c).id` with no assertion; this
     // file only type-checks if those reads compile.
   });
+
+  // B-T5 (flag F7): the expectTypeOf assertions above, and the reference routes' assertion-free
+  // ID reads in support.ts, are checked by running the compiler inside this Vitest run.
+  it(
+    tag("AUTH-AC-001", "type inspection is compiled: this file and the reference routes type-check, and wrong user shapes are rejected"),
+    () => {
+      const here = path.dirname(fileURLToPath(import.meta.url));
+      const self = fileURLToPath(import.meta.url);
+      const support = path.join(here, "support.ts");
+      // The reference handlers read the ID with no type assertion (the criterion's last clause).
+      const supportSource = readFileSync(support, "utf8");
+      for (const read of ["const id: string = c.var.user.id;", "const id: string = user.id;", "requireCurrentUser(c)"]) {
+        expect(supportSource, `support.ts reads the ID as \`${read}\``).toContain(read);
+      }
+      for (const line of supportSource.split("\n").filter((l) => /\.id\b/.test(l) && /c\.var\.user|user\.id/.test(l))) {
+        expect(line, "an ID read in support.ts uses a type assertion").not.toMatch(/\bas\s+[A-Z{]|!\s*[.;)]|<\w+>\s*c\.var/);
+      }
+      // Negative controls: an extra field, a missing field, or reading the ID without narrowing
+      // must each be a compile error.
+      const probe = path.join(here, "__b-t5-user-probe.ts");
+      const probeSource = [
+        `import { expectTypeOf } from "vitest";`,
+        `import type { CurrentUser, LoggedInUser } from "../../../src/index.js";`,
+        `declare const user: CurrentUser;`,
+        `export const a: string = user.id;`,
+        `expectTypeOf<LoggedInUser>().toEqualTypeOf<{ readonly level: "user" | "admin"; readonly id: string; readonly displayName: string | null; readonly email: string }>();`,
+        `expectTypeOf<LoggedInUser>().toEqualTypeOf<{ readonly level: "user" | "admin"; readonly id: string }>();`,
+        `expectTypeOf<keyof Extract<CurrentUser, { level: "anonymous" }>>().toEqualTypeOf<"level" | "id">();`,
+        ``,
+      ].join("\n");
+      const errors = typeErrors([self, support], { [probe]: probeSource });
+      const isProbe = (f: string): boolean => path.resolve(f) === path.resolve(probe);
+      expect(describeCompilerDiagnostics(errors.filter((e) => !isProbe(e.file))), "type errors in current-user.test.ts or support.ts").toBe("");
+      const probeLines = [...new Set(errors.filter((e) => isProbe(e.file)).map((e) => e.line))].sort((x, y) => x - y);
+      expect(probeLines, describeCompilerDiagnostics(errors)).toStrictEqual([4, 5, 6, 7]);
+    },
+    120_000,
+  );
 
   it(tag("AUTH-AC-001", "reference route dumping c.var.user shows only the specified fields at each access level"), async () => {
     const anonymous = await newApp({ user: mockUsers.anonymous });

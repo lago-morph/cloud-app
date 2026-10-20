@@ -2,6 +2,7 @@
  * The local target as the owner runs it: `npx <package> dev` and `reset-local` on a fixture
  * app (LOCAL-REQ-002, LOCAL-REQ-004). Fixture layer: `test/fixtures/local/app`.
  */
+import { createServer, type AddressInfo } from "node:net";
 import { networkInterfaces } from "node:os";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { tag } from "../../../../../tests/support/tags.js";
@@ -115,13 +116,41 @@ describe("consistent local origin (LOCAL-REQ-004)", () => {
     expect(sockets.some((s) => s.port === dev?.port), `the printed port is not among the dev listeners: ${JSON.stringify(sockets)}`).toBe(true);
     expect(sockets.filter((s) => !s.loopback), "listeners bound to a non-loopback address").toEqual([]);
 
+    // Non-loopback addresses of this machine: every non-internal IPv4 address, and IPv6 ones
+    // other than link-local (which need a zone). B-T5 (flag F5): the probe must run at least
+    // once, so a machine with no such address fails this test instead of passing vacuously.
     const external = Object.values(networkInterfaces())
       .flat()
-      .filter((i) => i !== undefined && !i.internal && i.family === "IPv4")
-      .map((i) => i?.address ?? "");
-    for (const address of external) {
-      for (const s of sockets) expect(await canConnect(address, s.port), `${address}:${s.port} accepted a connection`).toBe(false);
+      .filter((i) => i !== undefined && !i.internal && (i.family === "IPv4" || !/^fe80:/i.test(i.address)))
+      .map((i) => i?.address ?? "")
+      .filter((a) => a !== "");
+    expect(
+      external,
+      "no non-loopback address on this machine, so reachability on a non-loopback address cannot be checked; run this suite where a non-loopback interface exists (not inside `unshare -n`)",
+    ).not.toEqual([]);
+
+    // Positive control: a listener on all addresses is reachable on each probed address, so a
+    // `false` below means "not reachable", not "the probe cannot connect at all".
+    const control = createServer((socket) => socket.end());
+    await new Promise<void>((resolve) => control.listen(0, resolve));
+    try {
+      const controlPort = (control.address() as AddressInfo).port;
+      for (const address of external) {
+        expect(await canConnect(address, controlPort), `control: a wildcard listener is not reachable on ${address}`).toBe(true);
+      }
+    } finally {
+      await new Promise<void>((resolve) => control.close(() => resolve()));
     }
+
+    let probes = 0;
+    for (const address of external) {
+      for (const s of sockets) {
+        expect(await canConnect(address, s.port), `${address}:${s.port} accepted a connection`).toBe(false);
+        probes++;
+      }
+    }
+    expect(probes, `probed ${external.join(", ")} on ports ${sockets.map((s) => s.port).join(", ")}`).toBe(external.length * sockets.length);
+    expect(probes).toBeGreaterThan(0);
   });
 
   it(tag("LOCAL-AC-004", "a request with Host: evil.example is rejected"), async () => {

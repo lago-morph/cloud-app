@@ -6,6 +6,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { tag } from "../../../../../tests/support/tags.js";
 import { devFixtureFiles, listFiles, makeTempApp, runCli, stageConfig, type TempApp } from "../core/harness/harness.js";
@@ -105,24 +106,60 @@ describe("CFG-AC-004 secret locations", () => {
     ["unsetSecret", "SECRET_UNSET_SECRET"],
   ];
 
-  for (const [label, args] of [
-    ["local", LOCAL],
-    ["cloudflare test stage", cloudflare("test-bt1loc")],
+  /**
+   * config.md §2 Delivery (DEC-0063): the resolved configuration is embedded as a generated
+   * JavaScript module with no imports whose default export is the resolved configuration as
+   * JSON data; `ResolvedConfig` holds the deployment and each declared secret as
+   * `{ name, location }`. Finds every such module the build wrote, by importing each candidate
+   * module (no imports, a default export) and keeping those whose default export has the
+   * ResolvedConfig shape.
+   */
+  async function resolvedConfigs(dir: string): Promise<{ file: string; config: Record<string, unknown> }[]> {
+    const out: { file: string; config: Record<string, unknown> }[] = [];
+    for (const f of await listFiles(join(dir, ".framework"))) {
+      if (!/\.(m?js)$/.test(f)) continue;
+      const text = await readFile(f, "utf8");
+      if (!/\bexport\s+default\b/.test(text)) continue;
+      if (/^\s*import\b|\bimport\s*\(|\brequire\s*\(|^\s*export\s+[^;]*\bfrom\b/m.test(text)) continue;
+      let mod: unknown;
+      try {
+        mod = await import(`${pathToFileURL(f).href}?t=${String(Date.now())}`);
+      } catch {
+        continue; // not a plain data module (e.g. a Worker bundle needing its runtime)
+      }
+      const value: unknown = mod !== null && typeof mod === "object" ? Reflect.get(mod, "default") : undefined;
+      if (value === null || typeof value !== "object") continue;
+      if (!("secrets" in value) || !("deployment" in value) || !("values" in value)) continue;
+      out.push({ file: relative(dir, f), config: value as Record<string, unknown> });
+    }
+    return out;
+  }
+
+  for (const [label, args, target, stage] of [
+    ["local", LOCAL, "local", "local"],
+    ["cloudflare test stage", cloudflare("test-bt1loc"), "cloudflare", "test-bt1loc"],
   ] as const) {
     it(tag("CFG-AC-004", `the resolved configuration of a ${label} build lists every declared secret with its target location`), async () => {
       app = await fixture();
       const res = await runCli(args, { cwd: app.dir });
       expect(res.status, res.output).toBe(0);
-      const generated = await listFiles(join(app.dir, ".framework"));
-      expect(generated.length, "build wrote nothing under .framework/").toBeGreaterThan(0);
-      for (const [name, location] of SECRETS) {
-        const holders: string[] = [];
-        for (const f of generated) {
-          const text = await readFile(f, "utf8");
-          if (text.includes(name) && text.includes(location)) holders.push(relative(app.dir, f));
-        }
-        expect(holders, `${name} → ${location}`).not.toEqual([]);
-      }
+      const found = (await resolvedConfigs(app.dir)).filter(({ config }) => {
+        const d = config["deployment"];
+        return d !== null && typeof d === "object" && Reflect.get(d, "stage") === stage && Reflect.get(d, "target") === target;
+      });
+      expect(
+        found.map((f) => f.file),
+        `exactly one resolved-configuration module for ${target}/${stage} under .framework/`,
+      ).toHaveLength(1);
+      const secrets = found[0]?.config["secrets"];
+      expect(Array.isArray(secrets), `secrets in ${String(found[0]?.file)}: ${JSON.stringify(secrets)}`).toBe(true);
+      // Every declared secret, each exactly once, with its logical name and this target's location.
+      const entries = (secrets as unknown[]).map((e) => ({
+        name: e !== null && typeof e === "object" ? Reflect.get(e, "name") : undefined,
+        location: e !== null && typeof e === "object" ? Reflect.get(e, "location") : undefined,
+      }));
+      const byName = (a: { name: unknown }, b: { name: unknown }): number => String(a.name).localeCompare(String(b.name));
+      expect(entries.sort(byName)).toStrictEqual(SECRETS.map(([name, location]) => ({ name, location })).sort(byName));
     });
   }
 });

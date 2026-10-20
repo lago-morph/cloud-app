@@ -202,7 +202,15 @@ describe("CORE-REQ-005 export list", () => {
       });
       const result = await app.cli(["verify"]);
       expect(result.code, show(result)).not.toBe(0);
-      expect(diagnosticsFor(result.output, "aws-runtime.ts").length, show(result)).toBeGreaterThan(0);
+      // B-T5 (flag F8): the failure must be the portability rule that enforces CORE-REQ-005's
+      // "Importable by" column (check.md: allowed-imports rejects framework subpaths outside the
+      // importer's row), naming the subpath, not just any diagnostic (an unresolved-module type
+      // error alone would otherwise satisfy it while no ./targets/aws export exists).
+      const lines = diagnosticsFor(result.output, "aws-runtime.ts");
+      expect(
+        lines.some((l) => namesRule(l, "allowed-imports") && /targets\/aws/.test(l)),
+        `no allowed-imports diagnostic naming targets/aws for aws-runtime.ts\n${lines.join("\n")}\n${show(result)}`,
+      ).toBe(true);
     },
     TIMEOUT,
   );
