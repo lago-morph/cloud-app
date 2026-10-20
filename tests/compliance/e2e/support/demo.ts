@@ -255,47 +255,60 @@ function isAppApi(origin: string, request: Request): boolean {
   return url.origin === origin && url.pathname.startsWith("/api/") && !url.pathname.startsWith("/api/auth/") && !url.pathname.startsWith("/api/__framework/");
 }
 
-/** Records the app API requests (outside `/api/auth/*`) a page sends, with their responses. */
+/**
+ * Records the app API requests (outside `/api/auth/*`) a page sends, with their responses. The
+ * requests pass through `page.route` and `route.fetch()`, so a response body is kept even when the
+ * page navigates away as soon as it arrives (a create that opens the new post).
+ */
 export class Recorder {
-  private readonly done: Promise<Recorded>[] = [];
-  private readonly listener: (request: Request) => void;
-  private readonly started: (request: Request) => void;
-  /** App API requests sent so far, and how many of them were state-changing. */
+  private readonly done: Recorded[] = [];
+  private readonly pattern: string;
+  /** App API requests sent so far, how many of them were state-changing, and how many are still open. */
   sent = 0;
   mutationsSent = 0;
+  private open = 0;
 
-  constructor(
+  private constructor(
     private readonly page: Page,
-    private readonly origin: string,
+    origin: string,
   ) {
-    this.listener = (request) => {
-      if (!isAppApi(this.origin, request)) return;
-      this.done.push(
-        (async (): Promise<Recorded> => {
-          const response = await request.response();
-          const type = response?.headers()["content-type"] ?? "";
-          const text = response !== null && type.includes("json") ? await response.text().catch(() => "") : "";
-          const url = new URL(request.url());
-          const body = request.postData() ?? undefined;
-          const contentType = request.headers()["content-type"];
-          return { method: request.method(), path: `${url.pathname}${url.search}`, ...(body === undefined ? {} : { body }), ...(contentType === undefined ? {} : { contentType }), status: response?.status() ?? 0, response: text };
-        })(),
-      );
-    };
-    this.started = (request) => {
-      if (!isAppApi(this.origin, request)) return;
-      this.sent += 1;
-      if (request.method() !== "GET" && request.method() !== "HEAD") this.mutationsSent += 1;
-    };
-    page.on("request", this.started);
-    page.on("requestfinished", this.listener);
-    page.on("requestfailed", this.listener);
+    this.pattern = `${origin}/api/**`;
+  }
+
+  static async start(page: Page, origin: string): Promise<Recorder> {
+    const recorder = new Recorder(page, origin);
+    await page.route(recorder.pattern, async (route) => {
+      const request = route.request();
+      if (!isAppApi(origin, request)) {
+        await route.fallback();
+        return;
+      }
+      recorder.sent += 1;
+      if (request.method() !== "GET" && request.method() !== "HEAD") recorder.mutationsSent += 1;
+      recorder.open += 1;
+      const url = new URL(request.url());
+      const body = request.postData() ?? undefined;
+      const contentType = request.headers()["content-type"];
+      const base = { method: request.method(), path: `${url.pathname}${url.search}`, ...(body === undefined ? {} : { body }), ...(contentType === undefined ? {} : { contentType }) };
+      try {
+        const response = await route.fetch();
+        const text = await response.text();
+        recorder.done.push({ ...base, status: response.status(), response: (response.headers()["content-type"] ?? "").includes("json") ? text : "" });
+        await route.fulfill({ response, body: text }).catch(() => undefined);
+      } catch {
+        recorder.done.push({ ...base, status: 0, response: "" });
+        await route.abort().catch(() => undefined);
+      } finally {
+        recorder.open -= 1;
+      }
+    });
+    return recorder;
   }
 
   /**
    * Stops recording once every request sent has finished and the page has been quiet for a
    * moment (a click's API call starts asynchronously, after the click returns), and returns what
-   * was recorded, in the order sent.
+   * was recorded, in the order the responses arrived.
    */
   async stop(): Promise<Recorded[]> {
     let last = -1;
@@ -303,17 +316,15 @@ export class Recorder {
       .poll(
         async () => {
           await this.page.waitForLoadState("load").catch(() => undefined);
-          const quiet = this.done.length === this.sent && last === this.sent;
+          const quiet = this.open === 0 && last === this.sent;
           last = this.sent;
           return quiet;
         },
         { timeout: 60_000, intervals: [500] },
       )
       .toBe(true);
-    this.page.off("request", this.started);
-    this.page.off("requestfinished", this.listener);
-    this.page.off("requestfailed", this.listener);
-    return Promise.all(this.done);
+    await this.page.unroute(this.pattern);
+    return [...this.done];
   }
 }
 
@@ -322,7 +333,7 @@ export class Recorder {
  * `mutation`, first waits until the page has sent a state-changing request.
  */
 export async function record(page: Page, origin: string, action: () => Promise<void>, options: { readonly mutation?: boolean } = {}): Promise<Recorded[]> {
-  const recorder = new Recorder(page, origin);
+  const recorder = await Recorder.start(page, origin);
   await action();
   if (options.mutation === true) await expect.poll(() => recorder.mutationsSent, { message: "the page sends a state-changing API request", timeout: 30_000 }).toBeGreaterThan(0);
   return recorder.stop();
