@@ -35,6 +35,8 @@ One file under `tests/smoke/` runs both ways:
 
 Keep it short: the health route (`GET /api/__framework/health` answers 204), one open route, and one write-then-read per capability your app depends on. Use a fresh mock user per run (`` mockUsers.user(`smoke-${crypto.randomUUID()}`) ``) because stage data is kept between runs; do not assert totals that earlier runs would change. `logs()` is not available against a stage. Copy the template's file and change the routes ([examples/tests.md](../examples/tests.md)).
 
+`t.request` sends only to the app: a URL on any other origin is refused before anything is sent, on both test apps, so the stage's session cookie never leaves the stage. An upload or download ticket a route returns is JSON `{ url, method?, headers?, expiresAt }` on every target. Locally and in-process its `url` is a path on the app, sent with `t.request(url, { method, headers, body })`; on a cloud it is an absolute signed storage URL, sent with plain `fetch(url, { method: ticket.method ?? "GET", headers: ticket.headers, body })` and no cookie. Choose with `/^\/(?![\/\\])/.test(ticket.url) ? t.request(…) : fetch(…)`, so `//host` and `/\host` URLs go to `fetch` too. Behind a proxy, `smoke` needs `NODE_USE_ENV_PROXY=1` for that `fetch`.
+
 To run it on a cloud, deploy a test stage first, for example `npx prototype-framework deploy --target cloudflare --stage test-1`, then `npx prototype-framework smoke --target cloudflare --stage test-1`, and remove the stage afterwards ([deploying.md](deploying.md)). Test stages use `config/<target>/test.json` and the authentication mock and hold no real data.
 
 ## Failures

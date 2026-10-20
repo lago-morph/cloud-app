@@ -167,6 +167,60 @@ describe("connectTestStage (testing.d.ts; CLI-AC-005 local part)", () => {
     expect(stage.seen.length).toBe(before);
   });
 
+  describe("refuses URLs on any other origin before sending (root cause F-02 entry 2 revised)", () => {
+    const STAGE = "https://template-test-abc.sub.workers.dev";
+    const others = (seen: readonly Seen[]) => seen.filter((s) => new URL(s.url).origin !== STAGE || !s.url.startsWith(`${STAGE}/`));
+    const refused = /is not the app's origin \(https:\/\/template-test-abc\.sub\.workers\.dev\); the test app sends requests only to the app\. Send requests to other hosts, such as a cloud upload or download ticket's url, with fetch\./;
+
+    for (const [name, target, init] of [
+      ["an absolute URL on another host (an R2-style signed PUT)", "https://acct.r2.cloudflarestorage.com/bucket/key?X-Amz-Signature=x", { method: "PUT", body: "data" }],
+      ["a protocol-relative //host URL", "//other.example/p", {}],
+      ["the backslash form /\\host", "/\\other.example/p", { method: "POST", body: "{}" }],
+      ["http: on the stage's https host", "http://template-test-abc.sub.workers.dev/api/hello", {}],
+      ["a blob: URL whose origin is the stage's", "blob:https://template-test-abc.sub.workers.dev/x", {}],
+    ] as const) {
+      it(`refuses ${name}: nothing sent, no cookie or Origin leaves the stage, the jar stays the stage's`, async () => {
+        const stage = fakeStage();
+        const base = await connectWith(CLOUD, stage.fetch);
+        const admin = base.as(mockUsers.admin("a1"));
+        await admin.request("/api/warm");
+        const before = stage.seen.length;
+        await expect(admin.request(target, init as RequestInit)).rejects.toThrow(refused);
+        expect(stage.seen.length).toBe(before);
+        expect(others(stage.seen)).toEqual([]);
+        await admin.request("/api/after");
+        expect(stage.seen.at(-1)?.headers.get("cookie")).toBe("fw_session=s1");
+      });
+    }
+
+    it("refuses before logging in", async () => {
+      const stage = fakeStage();
+      const base = await connectWith(CLOUD, stage.fetch);
+      await expect(base.as(mockUsers.admin("a1")).request("//other.example/p")).rejects.toThrow(refused);
+      expect(stage.seen.map((s) => new URL(s.url).pathname)).toEqual(["/api/auth/me"]);
+    });
+
+    it("a redirect: \"follow\" request to a stage route answering 302 to another host reaches no other host", async () => {
+      const stage = fakeStage({ "PUT /redir": () => new Response(null, { status: 302, headers: { location: "https://other.example/x" } }) });
+      const base = await connectWith(CLOUD, stage.fetch);
+      const res = await base.as(mockUsers.admin("a1")).request("/redir", { method: "PUT", body: "x", redirect: "follow" });
+      expect(res.status).toBe(302);
+      expect(others(stage.seen)).toEqual([]);
+    });
+
+    it("accepts an absolute URL on the stage's own origin, normalized for case and default port", async () => {
+      const stage = fakeStage();
+      const base = await connectWith(CLOUD, stage.fetch);
+      const user = base.as(mockUsers.user("u"));
+      expect((await user.request(`${STAGE}/api/a`)).status).toBe(200);
+      expect((await user.request("HTTPS://TEMPLATE-TEST-ABC.sub.workers.dev:443/api/b")).status).toBe(200);
+      expect(stage.seen.slice(-2).map((s) => [s.url, s.headers.get("cookie")])).toEqual([
+        [`${STAGE}/api/a`, "fw_session=s1"],
+        [`${STAGE}/api/b`, "fw_session=s1"],
+      ]);
+    });
+  });
+
   it("logs() throws, naming where the entries are", async () => {
     const app = await connectWith(LOCAL, fakeStage().fetch);
     expect(() => app.logs()).toThrow(/not available on a connected stage.*log location.*smoke/);

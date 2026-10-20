@@ -11,7 +11,8 @@
  * Every request sends an explicit User-Agent (DEC-0089) and follows no redirect. State-changing
  * requests carry the stage's origin in `Origin` unless the caller sets one. Each identity from
  * `as(user)` logs in once through `POST /api/auth/mock-login`, on its first request, and keeps its
- * own session cookie. `dispose()` only logs out; stage data is kept.
+ * own session cookie. `dispose()` only logs out; stage data is kept. A URL on any origin but the
+ * stage's is refused before anything is sent (`appUrl`), so the jar and `Origin` never leave it.
  */
 import type { CurrentUser } from "../auth/public.js";
 import type { LogEntry } from "../log/entry.js";
@@ -57,6 +58,23 @@ export function readSmokeConnection(env: Readonly<Record<string, string | undefi
   return { target: v.target, stage: v.stage, baseUrl: v.baseUrl };
 }
 
+/**
+ * Resolves `path` against the app's origin and refuses, before anything is sent, a URL whose origin
+ * or protocol is not the app's: an absolute URL on another host, `//host`, `/\host`, `http:` on an
+ * `https` app's host, `blob:` (root cause F-02 entry 2 revised). Shared by both test apps.
+ */
+export function appUrl(path: string, appOrigin: string): URL {
+  const app = new URL(appOrigin);
+  const url = new URL(path, app);
+  if (url.origin !== app.origin || url.protocol !== app.protocol) {
+    const where = url.origin === app.origin ? `a ${url.protocol} URL` : url.origin;
+    throw new Error(
+      `request(${JSON.stringify(path)}): ${where} is not the app's origin (${app.origin}); the test app sends requests only to the app. Send requests to other hosts, such as a cloud upload or download ticket's url, with fetch.`,
+    );
+  }
+  return url;
+}
+
 /** "METHOD /path answered HTTP n, error code C, requestId R" (testing.d.ts). */
 async function unexpected(method: string, path: string, res: Response): Promise<string> {
   let code = "(none)";
@@ -85,11 +103,11 @@ interface Connection {
 
 /** One request with the User-Agent and no redirects; no answer becomes a message naming the URL. */
 async function send(c: Connection, path: string, init: RequestInit = {}): Promise<Response> {
+  const url = appUrl(path, c.origin).toString();
   const headers = new Headers(init.headers);
   headers.set("user-agent", SMOKE_USER_AGENT);
   const method = (init.method ?? "GET").toUpperCase();
   if (!SAFE_METHODS.has(method) && !headers.has("origin")) headers.set("origin", c.origin);
-  const url = new URL(path, c.origin).toString();
   try {
     return await c.fetch(url, { ...init, method, headers, redirect: "manual" });
   } catch (error) {
@@ -139,6 +157,7 @@ function connectedApp(c: Connection, user: CurrentUser | undefined): TestApp {
   const self: TestApp = {
     async request(path, init = {}) {
       if (disposed) throw new Error("this test app was disposed");
+      appUrl(path, c.origin); // before logging in, sending or touching the jar
       login ??= logIn();
       try {
         await login;
