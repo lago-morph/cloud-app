@@ -7,6 +7,7 @@ Read this when you write or fix app tests, write the smoke test, test time-depen
 - `npx prototype-framework verify` runs every `tests/**/*.test.ts` file (PAR-116) with Vitest twice, once on SQLite and once on Postgres, each in its own process, with 60 s test and hook timeouts. It fails if any test fails or if no test passed. Tests must need no network.
 - `npx prototype-framework smoke --target <t> --stage <s>` runs only `tests/smoke/**/*.test.ts`, against the running `dev` server (`--target local`) or against a deployed **test** stage (a stage whose name starts with `test-`). It refuses to run when tracked files differ from the last commit (the evidence record names the commit), writes an evidence record to `validation/<target>/<runId>.json` at the top of the git repository that holds the app (the app directory when the app is its own repository; commit the record with the run's commit), and prints the stage's log location for the day.
 - An app is not done on a cloud until its smoke test has passed on a deployed stage there.
+- Your tests and your smoke test reach the app only through its API; behaviour that exists only in the page (how text renders, the clipboard, an image displaying) is checked by the framework's browser tests, not the app's, so keep page text to `textContent` (`no-raw-html`), test the API side, and do not add a browser driver or raise this as a framework issue.
 
 ## In-process tests
 
