@@ -197,3 +197,171 @@ All alternatives the record lists are adequately ruled out by the cited evidence
    - Add a CHECK-AC-005 template-part test and a demo part rule.
    - Correct E9 and Cause C of this record for SKILL-AC-005.
 4. **Re-check:** a C-RUN from a clean tree in which the only "no test tagged" IDs are DEMO-*, SKILL-AC-001…004 and E2E-002, and E2E-004's coverage list equals exactly that set.
+
+## Cause C (revised)
+
+Revised by a diagnosing subagent (prompt §8 step 1) after the Review rejected Cause C in part. Like the original, it did not write the code or the tests. Local only; no Cloudflare calls. No code or tests changed. The original E9 and Cause C above are kept for history. Where they disagree with this section, this section replaces them. Checked on `origin/claude/implement-local-cloudflare` at `7416a75`, against the run record `validation/local/xc3s44jl2dbmqpv.json` and its `raw/`.
+
+### E9 (corrected)
+
+`grep -rnE <ID>` over `packages tests apps scripts skill` (`*.ts`, `*.mjs`; excluding `node_modules` and `dist`) gives these results.
+
+| ID | Hits | Where |
+|---|---|---|
+| SKILL-AC-001…004 | 0 | — |
+| **SKILL-AC-005** | **1** | `skill/scripts/scaffold.unit.test.ts:80`, `it("[SKILL-AC-005] scaffolding into a directory with existing files stops without changing them", …)` |
+| LOCAL-AC-001 | 0 | — |
+| CHECK-AC-005 | 0 | — |
+| E2E-002 | 0 | — |
+| DEMO-AC-001…011 | 1 | `tests/compliance/harness/catalogue.unit.test.ts:87` only. It checks that `DEMO-AC-011` is in the catalogue and is not a test of the criterion. |
+
+The original E9 was wrong about SKILL-AC-005: a tagged test exists. The run's own traceability report confirms this. `validation/local/phase-C-run/traceability.md:141` lists that test under SKILL-AC-005, next to the record result `not-run: no test tagged [SKILL-AC-005] ran on local`.
+
+The test is invisible to the record and to E2E-004 for two reasons:
+
+- **The driver never runs the unit config.** `vitest.unit.config.ts:6` includes `skill/scripts/**/*.unit.test.ts`, so `npm run test:unit` runs it. The driver runs only `vitest.integration.config.ts` and the Playwright projects (E6). This is Cause B's mechanism.
+- **The file is outside E2E-004's scan.** `suiteFiles` (`E2E-004.spec.ts:29-33`) scans only `tests/compliance` and `packages/framework/test/integration`, and it drops `*.unit.test.ts` files.
+
+Every `run: true` entry for these IDs in `raw/expected.json` has `parts: [""]` and `notRunParts: []`. There is no part rule for any of them, CHECK-AC-005 included.
+
+### Per ID
+
+#### SKILL-AC-005 — "Scaffolding into a directory with existing files stops without changing them." (skill.md:101, Where: Local; C-05 exit)
+
+**Existing test:** `scaffold.unit.test.ts:80`. It imports `scaffold()` from `scaffold.mjs` and calls it with these fakes:
+
+- a fixture template under `tmpdir()`, not `apps/template`;
+- a fake tarball file;
+- `version: "0.1.0"`;
+- a fake `install` that only records its argument.
+
+The target holds `src/app.ts` and `notes.txt`. The test asserts that the call rejects with `/not empty/`, that the target tree is byte-identical afterwards, and that `install` was not called.
+
+**Is it as strong as the criterion?** No.
+
+- The criterion is about the user-facing action, scaffolding with the real `skill/scripts/scaffold` command. The test does not run that command, and it uses neither the real template nor the real pack step.
+- Under the real command, more happens before or around `scaffold()`:
+  - it parses `argv` (`[--force]`);
+  - it runs `npm pack` in `packages/framework` (with `prepack`);
+  - it checks the version against the real template pin;
+  - it turns the rejection into `exit 1`.
+- None of that is exercised. A regression in any of those steps would not be caught. Examples: writing into the target before the check, or treating an unknown flag as `--force`.
+- Plan §10.3 says unit tests do not count as evidence on their own unless the criterion is a unit-level one. The criterion's text names no unit test or fake, so it is not unit-level. I agree with the Review.
+
+**Missing:** a test in the layer the driver runs, tagged `[SKILL-AC-005]`, that runs the real entry point.
+
+**Proposed fix (test author; owner C-T4 or the C-05 test author):**
+
+- Add `tests/compliance/criteria/skill/scaffold.test.ts`. `vitest.integration.config.ts` already includes `tests/compliance/criteria/**/*.test.ts`, so the driver and E2E-004 pick it up with no other change.
+- Steps:
+  1. Make a temporary target containing a clashing file (`src/app.ts` with `mine`) and a non-clashing file (`notes.txt`).
+  2. Snapshot the target: paths, contents and mtimes.
+  3. Run `node skill/scripts/scaffold <target>` with no `--force`, as E2E-001 already does in its `beforeAll`.
+  4. Assert exit status 1.
+  5. Assert that stderr names the target and says nothing was changed.
+  6. Assert that the snapshot is unchanged, with no `vendor/`, `package.json` or `node_modules`.
+- It needs no network: `npm pack` builds locally, and the refusal comes before `npm install`. It can run under `unshare -rn` to prove that.
+- Keep the unit test. It remains useful, but it is not the criterion's evidence.
+- Do not put SKILL-AC-005 on Cause B's unit-level list.
+
+#### LOCAL-AC-001 — "With networking to cloud providers blocked and no credentials present, a freshly scaffolded app runs and passes the verification command." (local.md:60, Where: Local)
+
+**Existing test:** the `E2E-001` test, `tests/compliance/e2e/E2E-001-E2E-003.spec.ts:76-136`, tagged only `tag("E2E-001", …)`. It covers each clause of the criterion:
+
+| Clause | Where the test covers it |
+|---|---|
+| No credentials present | `noCredentials()` (lines 38-48) drops `CLOUDFLARE_`, `CF_`, `AWS_`, `GOOGLE_`, `GCLOUD`, `CLOUDSDK_`, `AZURE_`, `SST_` and `COMPLIANCE_`. It also sets an empty `HOME` for every later step. |
+| Networking blocked | Every step after scaffolding runs in `offline()`, which is `unshare -rn` plus `scripts/offline.sh`. That allows no network at all, which is stronger than "cloud providers blocked". Lines 90-91 assert that `fetch('https://api.cloudflare.com/…')` fails. |
+| Freshly scaffolded | `beforeAll` (line 65) runs the real `skill/scripts/scaffold` into a new temp directory. |
+| Runs | `dev` serves the template pages, and lines 116-122 require exactly 7 steps, all `ok`, with status 0. |
+| Passes verify | `verify()` exits 0 (lines 133-135). |
+
+Scaffolding itself is online, because it needs the npm registry. The criterion does not require scaffolding to be offline: its conditions apply to the steps that run the app and verify it. So the test is as strong as the criterion, and stronger on network blocking. Nothing is missing except the tag.
+
+**Proposed fix:** change line 76 to `tag(["E2E-001", "LOCAL-AC-001"], "…")`. `tag()` accepts an array, as `kv/suite.ts:24` shows. No new test is needed.
+
+#### CHECK-AC-005 — "The template and demo pass all rules." (check.md:100, Where: Local; CHECK-REQ-005: "the template and demo code MUST pass")
+
+**Template part, existing test:** `packages/framework/test/integration/cli/verify.test.ts:58-67`, tagged `tag("CLI-AC-002", "verify passes on the template")`.
+
+- It copies `apps/template` (`FixtureApp.copyOf`), runs `verify` and asserts exit 0. This file is in the driver's integration config, and it ran.
+- `verify` applies all CHECK rules, as check.md §2 describes:
+  - the portability rules from the shipped configuration only (`runPortabilityRules`, check.md:67);
+  - the migration checker;
+  - the zod version check (check.md:61);
+  - the check that the app lint configuration does not weaken the rules (check.md:86).
+- E2E-001's `verify` on a scaffolded copy is a second instance of the same check.
+- So the template part has a test as strong as the criterion, but the test carries only `[CLI-AC-002]`.
+- B-EV (`ai/implementation/evaluations/B.md:119`) judged the template part `passed` from B-RUN exit-check logs, which are outside the driver. That is why C-RUN has no record of it.
+
+**Demo part, existing test:** none, and none is possible yet. `apps/demo/` contains only `package.json`. Plan C-EV assigns "CHECK-AC-005 (demo part)" to F-EV.
+
+**Missing:**
+
+1. The `[CHECK-AC-005]` tag on the template test.
+2. A part rule, so that the record says "template part passed; demo part not-run until F" instead of judging the whole criterion. With the tag but no rule, the whole criterion would be recorded `passed` from the template alone. That would overstate the evidence.
+
+**Proposed fix:**
+
+- **Test author:** change the template test's tag to `tag(["CLI-AC-002", "CHECK-AC-005"], "verify passes on the template")`. Running `verify` on the template checks exactly the template part.
+- **C-02:** add `{ id: "CHECK-AC-005", targets: ["local"], mode: "automated", part: "demo part", detail: "demo built in phase F (plan C-EV)" }` to `PHASE_RULES` (`tests/compliance/harness/expected.ts:38`).
+- The F-phase demo test then adds its own `[CHECK-AC-005]` test, which runs `verify` on `apps/demo`, and removes the rule.
+- The C-EV evaluator decides whether the tagged template test should be named in the evidence record's part. That is a judgment for §7, not for this record.
+
+#### E2E-002 — "One source, both clouds" (e2e-scenarios.md:23, Where: Local, cloud)
+
+**Existing test:** none.
+
+**As strong as the criterion?** There is no test to compare.
+
+**Missing:** the whole scenario. It needs the demo, whose smoke test (DEMO-REQ-010) does not exist yet.
+
+**Proposed fix:** none in phase C.
+
+- Plan C-EV assigns "E2E-002 (local part)" to F, and F-RUN runs the smoke on local and Cloudflare. Plan §8.2 marks the AWS stage `not-run`.
+- `not-run` ("no test tagged") is the expected outcome now. C-EV does not judge it.
+- The F test author writes it.
+
+#### SKILL-AC-001…004 (skill.md:97-100, Where: Local)
+
+**Existing tests:** none.
+
+**As strong as the criterion?** There is no test to compare.
+
+**Missing:** the tests, and also what they check: `skill/` holds only `scripts/`. The router, the references and the examples are written in phase E.
+
+**Proposed fix:** none in phase C. Plan C-EV assigns them to E-EV, and the E test authors write them. `not-run` is expected now and is not a defect.
+
+#### DEMO-AC-001…011 (demo-spec.md:76-86, Where: Local, or Local and cloud)
+
+**Existing tests:** none. The only hit is the catalogue unit test, which checks that the ID is in the catalogue and is not a test of the criterion.
+
+**As strong as the criterion?** There is no test to compare.
+
+**Missing:** the demo itself (`apps/demo/` holds only `package.json`), its smoke test, and the local-only tests named at demo-spec.md:72. Those cover DEMO-AC-006, DEMO-AC-011, the failure clause of DEMO-AC-003 and the expiry clause of DEMO-AC-007.
+
+**Proposed fix:** none in phase C. These belong to phase F. `not-run` is expected now and is not a defect.
+
+### Causal chain (revised)
+
+- **Two IDs are untagged, though they have tests as strong as the criterion:** LOCAL-AC-001 (E2E-001's test) and the template part of CHECK-AC-005 (`verify.test.ts:58`). Their tests run in the driver, but under other IDs' tags. So `criterionResults` finds no title containing the ID → `not-run` (symptom 2). The source scan finds no literal tag either → they appear in the coverage list (symptom 1). Also, the CHECK-AC-005 demo part has no part rule (`raw/expected.json`: `notRunParts: []`).
+- **SKILL-AC-005 has a tagged test that is too weak:** a unit test with fakes, in a layer the driver does not run and E2E-004 does not scan. → `not-run` and listed. Cause B does not fix it: B folds only criteria that are unit-level by their own text, and SKILL-AC-005 is not one.
+- **Not built yet:** E2E-002, SKILL-AC-001…004 and DEMO-AC-001…011 have no test because their components are built in phases E and F. → `not-run`, as plan C-EV and DEC-0305 anticipate. These are not defects.
+
+### Fix summary for C
+
+1. Tag the E2E-001 test also `[LOCAL-AC-001]`.
+2. Add a `[SKILL-AC-005]` integration-layer test that runs the real `skill/scripts/scaffold` into a non-empty directory and checks the exit status, the message and an unchanged tree.
+3. Tag `verify passes on the template` also `[CHECK-AC-005]`, and add the C-02 `PHASE_RULES` part rule for the demo part.
+4. Nothing for E2E-002, SKILL-AC-001…004 or DEMO-AC-*.
+
+### Verification for C
+
+- **Red, after fixes A and B and before C:** a C-RUN shows LOCAL-AC-001, SKILL-AC-005 and CHECK-AC-005 as `not-run: no test tagged`, and they appear in E2E-004's coverage list.
+- **Green, after C:** a C-RUN from a clean tree shows all of the following:
+  - LOCAL-AC-001 `passed`, from the E2E-001 test.
+  - SKILL-AC-005 `passed`, from the new integration test.
+  - CHECK-AC-005 `passed` for the template part, with the demo part `not-run` and detail "demo built in phase F".
+  - The only remaining "no test tagged" IDs are E2E-002, SKILL-AC-001…004 and DEMO-AC-001…011, and E2E-004's coverage list equals exactly that set.
+- **Check that the new SKILL-AC-005 test is not vacuous:** remove the non-empty check in `scaffold.mjs` temporarily. The test must fail on the changed tree or on the exit status. Then restore the check.
+- The evaluator (§7) confirms that each new tag's test asserts every clause of the criterion it now names.
