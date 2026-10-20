@@ -4,13 +4,6 @@
  */
 import { ERROR_CATALOGUE, type ErrorCode } from "../core/errors.js";
 
-/** Options for `ApiError` beyond the message; every field defaults to the "no response" values. */
-export interface ApiErrorInit extends ErrorOptions {
-  readonly code?: ErrorCode;
-  readonly status?: number | null;
-  readonly requestId?: string | null;
-}
-
 /** Error raised by every browser helper. `code` comes from the framework error catalogue. */
 export class ApiError extends Error {
   readonly code: ErrorCode;
@@ -19,7 +12,18 @@ export class ApiError extends Error {
   /** Null when the response did not come from the app. */
   readonly requestId: string | null;
 
-  constructor(message?: string, init: ApiErrorInit = {}) {
+  /**
+   * `init` fields default to the "no response" values. The type is inlined (not a named
+   * interface) so the public signature uses only names `./client` exports (CORE-AC-001).
+   */
+  constructor(
+    message?: string,
+    init: ErrorOptions & {
+      readonly code?: ErrorCode;
+      readonly status?: number | null;
+      readonly requestId?: string | null;
+    } = {},
+  ) {
     super(message, init.cause === undefined ? undefined : { cause: init.cause });
     this.name = "ApiError";
     this.code = init.code ?? "HTTP.NETWORK_ERROR";
