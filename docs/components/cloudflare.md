@@ -29,7 +29,7 @@ The Worker bundle MUST contain only Workers-compatible code. It MUST NOT include
 
 ## 2. Design
 
-Resources are created by SST (PAR-100) through its Cloudflare components, with raw Pulumi Cloudflare resources (PAR-108) only where SST has no component. Worker settings (built by `cloudflareWorkerSettings` in `src/targets/cloudflare/settings.ts`, which provisioning maps onto the SST Worker; `wranglerWorkerConfig` gives the same settings in Wrangler's form, DEC-PENDING-D-01-3):
+Resources are created by SST (PAR-100) through its Cloudflare components, with raw Pulumi Cloudflare resources (PAR-108) only where SST has no component. Worker settings (built by `cloudflareWorkerSettings` in `src/targets/cloudflare/settings.ts`, which provisioning maps onto the SST Worker, the static-asset settings through SST's Worker `assets` option `{ directory, notFoundHandling, runWorkerFirst }`, DEC-PENDING-D-06-1; `wranglerWorkerConfig` gives the same settings in Wrangler's form, DEC-PENDING-D-01-3):
 - the Worker runs first for `/api` and `/api/*`;
 - other paths go to static assets, with fallback to the entry page (`single-page-application`); a path such as `/apix` is a client path;
 - the bindings: D1 `DB` (the stage's current database), R2 `FILES` (the stage bucket) and R2 `LOGS` (the shared `prototype-logs` bucket). The bindings carry the database, bucket and log-bucket identifiers to the runtime;

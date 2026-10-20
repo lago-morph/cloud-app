@@ -56,7 +56,7 @@ describe("the SST app built from the app definition (PROV-REQ-001; cloudflare.md
     const worker = components[1]!;
     expect(worker.args.handler).toBe(code.bundle);
     expect(worker.args.url).toBe(true);
-    expect(worker.args.assets).toEqual({ directory: "/app/dist/client" });
+    expect(worker.args.assets).toEqual({ directory: "/app/dist/client", notFoundHandling: "single-page-application", runWorkerFirst: ["/api", "/api/*"] });
     expect(worker.args.environment).toEqual({ FRAMEWORK_DEPLOYMENT: "notes/test-abc", FRAMEWORK_PUBLIC_ORIGIN: "https://notes-test-abc.example.workers.dev" });
     expect(worker.transformed.scriptName).toBe("notes-test-abc");
     expect(worker.transformed.compatibilityDate).toBe("2026-10-01");
@@ -75,6 +75,17 @@ describe("the SST app built from the app definition (PROV-REQ-001; cloudflare.md
     expect(components[1]!.transformed.keepBindings).toEqual(["secret_text", "secret_key"]);
     expect(() => sstProgram({ stage, worker: { ...worker, code: { ...code, variables: { SECRET_API_KEY: "x" } } } })).toThrow(/SECRET_API_KEY.*would replace the Worker secret/);
     expect(() => sstProgram({ stage, worker: { ...worker, code: { ...code, logBucketBinding: "SECRET_LOGS" } } })).toThrow(/SECRET_LOGS/);
+  });
+
+  it("serves the built client as static assets with D-01's settings: entry-page fallback, the Worker first for /api and /api/* (CF-REQ-001; D-06-1)", async () => {
+    const { config, components } = evaluate(sstProgram(full));
+    await config.run();
+    expect(components[1]!.args.assets).toEqual({ directory: "/app/dist/client", notFoundHandling: "single-page-application", runWorkerFirst: ["/api", "/api/*"] });
+    const { assetsDirectory: _client, ...withoutClient } = code;
+    const noClient = evaluate(sstProgram({ stage, worker: { ...worker, code: withoutClient } }));
+    await noClient.config.run();
+    expect(noClient.components[1]!.args.assets).toBeUndefined();
+    expect(() => sstProgram({ stage, worker: { ...worker, publicOrigin: "https://notes-test-abc.example.workers.dev/path" } })).toThrow(/public origin/);
   });
 
   it("without a Worker (step 3 of a first deploy; remove) declares only the long-lived bucket", async () => {

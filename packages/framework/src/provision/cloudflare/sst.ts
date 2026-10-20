@@ -25,6 +25,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { BINDINGS } from "../../targets/cloudflare/bindings.js";
+import { cloudflareWorkerSettings } from "../../targets/cloudflare/settings.js";
 import type { Stage } from "../core/operations.js";
 import { LOG_BUCKET } from "./account.js";
 import { sstEnvironment, type Environment } from "./environment.js";
@@ -67,6 +68,23 @@ function refuseSecretNames(names: readonly string[]): void {
   }
 }
 
+/**
+ * SST's Worker `assets` argument from D-01's Worker settings (DEC-PENDING-D-06-1): the built
+ * client, entry-page fallback, the Worker first for `/api` and `/api/*`. SST 4.17.2 passes
+ * `notFoundHandling` and `runWorkerFirst` on as the script's `assets.config`.
+ */
+function workerAssets(stage: Stage, w: NonNullable<SstInput["worker"]>, directory: string) {
+  const { assets } = cloudflareWorkerSettings({
+    workerName: workerName(stage),
+    bundle: w.code.bundle,
+    assetsDirectory: directory,
+    publicOrigin: w.publicOrigin,
+    database: w.database,
+    filesBucket: filesBucketName(stage),
+  });
+  return { directory: assets.directory, notFoundHandling: assets.notFoundHandling, runWorkerFirst: [...assets.runWorkerFirst] };
+}
+
 /** The generated `sst.config.ts`. */
 export function sstProgram(input: SstInput): string {
   const w = input.worker;
@@ -74,7 +92,7 @@ export function sstProgram(input: SstInput): string {
     ? {
         name: workerName(input.stage),
         handler: w.code.bundle,
-        ...(w.code.assetsDirectory === undefined ? {} : { assets: { directory: w.code.assetsDirectory } }),
+        ...(w.code.assetsDirectory === undefined ? {} : { assets: workerAssets(input.stage, w, w.code.assetsDirectory) }),
         compatibilityDate: w.code.compatibilityDate,
         compatibilityFlags: [...(w.code.compatibilityFlags ?? [])],
         environment: { ...w.code.variables, [BINDINGS.publicOrigin]: w.publicOrigin },
