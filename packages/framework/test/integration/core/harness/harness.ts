@@ -117,7 +117,10 @@ export function baseAppFiles(name: string): FileTree {
       2,
     ),
     // The client entry page. Its location is not contracted (decision B-T1-4), so the page is
-    // written both at the app root and in src/client/.
+    // written both at the app root and in src/client/. Like apps/template, the page loads its
+    // script with the absolute URL /src/client/main.ts (the file below): Vite's dev server rewrites
+    // relative script URLs on SPA-fallback paths, so only an absolute URL is served byte-identically
+    // on deep links (HTTP-AC-001; root cause 2026-10-19-HTTP-AC-001).
     "index.html": CLIENT_PAGE,
     "src/client/index.html": CLIENT_PAGE,
     "src/client/main.ts": "export {};\n",
@@ -128,7 +131,7 @@ export function baseAppFiles(name: string): FileTree {
 export const CLIENT_MARKER = "bt1-client-entry-page";
 const CLIENT_PAGE = `<!doctype html>
 <html><head><meta charset="utf-8"><title>${CLIENT_MARKER}</title></head>
-<body><div id="app">${CLIENT_MARKER}</div><script type="module" src="./main.ts"></script></body></html>
+<body><div id="app">${CLIENT_MARKER}</div><script type="module" src="/src/client/main.ts"></script></body></html>
 `;
 
 /** A stage values file (stage-config.schema.json). */
