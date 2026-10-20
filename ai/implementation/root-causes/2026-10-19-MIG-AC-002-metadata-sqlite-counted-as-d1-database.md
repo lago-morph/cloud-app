@@ -77,3 +77,29 @@ Reasons:
 5. **Alternatives.** Leftover state, timing and a framework-made copy are ruled out with evidence (fresh `mkdtemp` dirs; the file persists after `dispose()`; the plain-wrangler reproduction). The diagnoser's confirming experiment (3/3 passing with only the filter changed) shows no second cause is hidden behind this one.
 
 Minor note, not a reason to reject: the wording "exactly one local D1 database file" comes from B-T2's merged draft inside DEC-0144 (decision-log.md:1127), not from DEC-0144's main paragraph. The record cites both, so this is fine.
+
+## Fix
+
+Author: test-case author (prompt §8 step 3); did not write the framework code, the diagnosis or the review. Date: 2026-10-20. No framework code changed.
+
+### What changed (commit `b6cfc80`, branch `claude/implement-local-cloudflare-fix-mig`)
+- `packages/framework/test/integration/mig/local-d1.ts`: `d1DatabaseFiles` skips files named exactly `metadata.sqlite` (constant `NAMESPACE_METADATA`, with a comment citing this record). Only that name is skipped. Every other `.sqlite` file under `.wrangler/…/d1/` still counts, including any `<64 hex>.sqlite` D1 database, so the check is no looser for real databases.
+- The test assertions are unchanged.
+
+### Red (before the fix, framework built, `origin/claude/implement-local-cloudflare` at `0d658e1`)
+`npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/mig/`: 4 failed, 2 passed. MIG-AC-002 and the first MIG-AC-003 test failed with `Error: expected exactly one local D1 database, found 2: …/d1/miniflare-D1DatabaseObject/9ba2b04b…4248.sqlite, …/d1/miniflare-D1DatabaseObject/metadata.sqlite`. The second MIG-AC-003 test failed with `depends on the previous test's version 2 deployment: expected undefined to be defined`. This matches the recorded symptom.
+
+### Green
+Same command with both fixes (this record and MIG-AC-001's): **6 passed (6)**, exit 0.
+
+### Mutation check (review point 4)
+Temporary edit to the MIG-AC-002 test, not committed and reverted with `git checkout`: after the second `dev` stopped, the real database file was copied under a 64-hex name in the same directory, and `expect(d1DatabaseFiles(dir)).toHaveLength(1)` was asserted. Output, verbatim:
+```
+MUTATION files: [
+  '/tmp/fw-b-t2-nI2icA/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/9ba2b04bf514d9facfd57ed57d849e77241a7adc99d1c1545d06688b43d84248.sqlite',
+  '/tmp/fw-b-t2-nI2icA/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff.sqlite'
+]
+AssertionError: expected [ …(2) ] to have a length of 1 but got 2
+      Tests  1 failed | 2 skipped (3)
+```
+So the corrected helper still detects a genuine second D1 database, and only `metadata.sqlite` is excluded. After the revert, `git status` was clean.
