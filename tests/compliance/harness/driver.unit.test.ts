@@ -267,3 +267,79 @@ describe("[COMPL-AC-004] cloud runs use a disposable test stage", () => {
     expect(recordOf(h).results.map((r) => r.id)).toEqual(["PROV-AC-003"]);
   });
 });
+
+// CLI-AC-003 (CLI-REQ-003) for the compliance runner: injected failures, including failures during cleanup (stopping
+// `dev`, removing the test stage, the leftover check), give a non-zero exit status that reflects the original failure.
+// Decision draft ai/implementation/decisions/C-T6.md.
+describe("[CLI-AC-003] compliance runner exit status under injected failures", () => {
+  const failingTest = vitestReport([{ title: "[KV-AC-001] put", status: "failed", message: "expected 200, got 500" }]);
+  const LOCAL = ["--target", "local", "--only", "KV-AC-001"];
+  const CLOUD = ["--target", "cloudflare", "--only", "KV-AC-001"];
+
+  it("[CLI-AC-003] local: a failing tagged test gives the runner's non-zero status, records the failure and still stops dev", async () => {
+    const h = harness({ vitest: failingTest, vitestStatus: 1 });
+    const result = await runCompliance(parseArgs(LOCAL), LOCAL, h.deps);
+    expect(result.exitStatus).toBe(1);
+    expect(recordOf(h).exitStatus).toBe(1);
+    expect(recordOf(h).results.find((r) => r.id === "KV-AC-001")).toEqual({ id: "KV-AC-001", status: "failed", detail: "1 of 1 tests failed: [KV-AC-001] put: expected 200, got 500" });
+    expect(h.events.at(-1)).toBe("stop dev");
+  });
+
+  it("[CLI-AC-003] local: a failing test whose cleanup (stopping dev) also fails keeps the original status and still writes the record", async () => {
+    const h = harness({ vitest: failingTest, vitestStatus: 1 });
+    const deps: DriverDeps = { ...h.deps, startLocal: () => Promise.resolve({ baseUrl: "http://localhost:5173", stop: () => Promise.reject(new Error("dev did not stop")) }) };
+    const result = await runCompliance(parseArgs(LOCAL), LOCAL, deps);
+    expect(result.exitStatus).toBe(1);
+    const record = recordOf(h);
+    expect(record.exitStatus).toBe(1);
+    expect(record.results.find((r) => r.id === "KV-AC-001")?.status).toBe("failed");
+    expect(JSON.stringify(h.written[0]?.raw ?? {})).toContain("dev did not stop");
+  });
+
+  it("[CLI-AC-003] cloud: a failing test whose stage removal fails keeps the original status, records leftovers and keeps the stage pending", async () => {
+    const h = harness({
+      vitest: failingTest,
+      vitestStatus: 1,
+      cloud: { remove: () => Promise.reject(new Error("remove refused")), listStageResources: () => Promise.resolve(["worker reference-test-abcdefghij12345"]) },
+    });
+    const result = await runCompliance(parseArgs(CLOUD), CLOUD, h.deps);
+    expect(result.exitStatus).toBe(1);
+    const record = recordOf(h);
+    expect(record.exitStatus).toBe(1);
+    expect(record.results.find((r) => r.id === "KV-AC-001")?.status).toBe("failed");
+    expect(record.leftovers).toEqual(["test-abcdefghij12345: worker reference-test-abcdefghij12345"]);
+    expect(h.written[0]?.raw?.["remove-test-abcdefghij12345.log"]).toContain("remove refused");
+    expect(h.pending.get("cloudflare")?.has("test-abcdefghij12345")).toBe(true);
+  });
+
+  it("[CLI-AC-003] cloud: a failed deploy whose removal and leftover check also fail keeps status 1 and the deploy failure as the reason", async () => {
+    const h = harness({
+      cloud: {
+        deploy: () => Promise.reject(new Error("deploy failed at step 3")),
+        remove: () => Promise.reject(new Error("remove refused")),
+        listStageResources: () => Promise.reject(new Error("listing refused")),
+      },
+    });
+    const result = await runCompliance(parseArgs(CLOUD), CLOUD, h.deps);
+    expect(result.exitStatus).toBe(1);
+    const record = recordOf(h);
+    expect(record.exitStatus).toBe(1);
+    expect(record.results.find((r) => r.id === "KV-AC-001")).toEqual({ id: "KV-AC-001", status: "not-run", detail: "not run: setting up the target failed: deploy failed at step 3" });
+    expect(record.leftovers).toEqual(["test-abcdefghij12345: leftover check failed: listing refused"]);
+    expect(h.pending.get("cloudflare")?.has("test-abcdefghij12345")).toBe(true);
+  });
+
+  it("[CLI-AC-003] cloud: passing tests whose stage cleanup fails (a partial failure) give a non-zero status", async () => {
+    const cases: Partial<CloudStageOps>[] = [
+      { remove: () => Promise.reject(new Error("remove refused")), listStageResources: () => Promise.resolve(["worker reference-test-abcdefghij12345"]) },
+      { listStageResources: () => Promise.reject(new Error("listing refused")) },
+    ];
+    for (const cloud of cases) {
+      const h = harness({ vitest: vitestReport([{ title: "[KV-AC-001] put", status: "passed" }]), cloud });
+      const result = await runCompliance(parseArgs(CLOUD), CLOUD, h.deps);
+      expect(recordOf(h).results.find((r) => r.id === "KV-AC-001")?.status).toBe("passed");
+      expect(result.exitStatus).not.toBe(0);
+      expect(recordOf(h).exitStatus).toBe(result.exitStatus);
+    }
+  });
+});

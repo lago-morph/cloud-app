@@ -51,6 +51,10 @@ export const PHASE_RULES: readonly NotRunRule[] = [
   // The demo is built in phase F (plan C-EV); the template part runs now. Phase F removes this rule when it adds the
   // demo's [CHECK-AC-005] test. ai/implementation/root-causes/2026-10-20-E2E-004-coverage-and-not-run.md, Cause C (revised).
   { id: "CHECK-AC-005", targets: ["local"], mode: "automated", part: "demo part", detail: "demo built in phase F (plan C-EV)" },
+  // Plan §8.2 AWS parts of Local criteria: there is no AWS bundle and no Data API adapter yet (C-local evaluation,
+  // Flag 2; ai/implementation/decisions/C-T6.md). The AWS phase removes these rules when it adds their tests.
+  { id: "CORE-AC-006", targets: ["local"], mode: "automated", part: "AWS-bundle clause", detail: AWS_NOT_STARTED },
+  { id: "SQL-AC-006", targets: ["local"], mode: "automated", part: "Data API retry-loop clause", detail: AWS_NOT_STARTED },
 ];
 
 /**
