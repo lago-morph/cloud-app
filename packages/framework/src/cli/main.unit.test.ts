@@ -25,13 +25,15 @@ describe("command dispatch (CLI-REQ-001, CLI-REQ-003)", () => {
     );
   });
 
-  it("commands not built in this phase fail with status 1 naming the missing prerequisite", async () => {
+  it("the cloud commands (D-05) are bound to their implementations, not the not-yet stub", async () => {
     for (const name of ["deploy", "remove", "setup-account", "certify-auth"]) {
       const io = captureIo();
-      expect(await runCommand([name, "--target", "cloudflare", "--stage", "test-x"], io), name).toBe(1);
-      expect(io.err, name).toMatch(/not available yet/);
-      expect(io.err, name).toMatch(/requires/);
+      expect(await runCommand([name, "--target", "nowhere"], io), name).toBe(2);
+      expect(io.err, name).not.toMatch(/not available yet/);
     }
+    const secrets = captureIo("/a", ["x"]);
+    expect(await runCommand(["secrets", "set", "apiKey", "--target", "cloudflare", "--stage", "Bad_Stage"], secrets)).toBe(2);
+    expect(secrets.err).not.toMatch(/not available yet/);
   });
 
   it("[CLI-AC-005] smoke is bound to the smoke runner, not the not-yet stub", async () => {

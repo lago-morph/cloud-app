@@ -5,12 +5,11 @@
  * do not import it, so production bundles contain no mock (CORE-REQ-006, PROV-REQ-005).
  *
  * Log entries go to the account's shared log bucket through the `LOGS` binding, each write
- * handed to the request's `waitUntil` (LOG-REQ-004). Phase-D part not built yet: the SigV4
- * ticket signer (D-02; until then creating a ticket is `CORE.MISCONFIGURED`).
+ * handed to the request's `waitUntil` (LOG-REQ-004). Transfer tickets are SigV4-signed R2 URLs
+ * (D-02) for the account and bucket the Worker variables name (`tickets.ts`).
  * Workers-compatible: no Node APIs.
  */
 import type { RuntimeContext } from "../../core/assemble.js";
-import { FrameworkError } from "../../core/errors.js";
 import type { DefinedApp } from "../../core/public.js";
 import type { ConfigDeclaration } from "../../config/public.js";
 import type { ResolvedConfig } from "../../config/resolve.js";
@@ -20,9 +19,9 @@ import { workerOutputSink } from "../../log/local.js";
 import { r2LogSink } from "../../log/cloudflare/sink.js";
 import { envSecretReader } from "../../secrets/service.js";
 import { FRAMEWORK_SECRETS, type FrameworkSecretName } from "../../secrets/names.js";
-import type { TicketIssuer } from "../../files/service.js";
 import { workerLogBucket, workerPublicOrigin, workerSecretValues, workerSql, workerStore, type WorkerHandler } from "./bindings.js";
 import { assembleStage } from "./stage.js";
+import { workerTicketIssuer } from "./tickets.js";
 
 export { createAuthMock } from "../../auth/mock.js";
 export type { WorkerHandler } from "./bindings.js";
@@ -31,16 +30,6 @@ export interface CloudflareWorkerOptions {
   /** Test stages only: the authentication mock's factory (`createAuthMock`). */
   readonly mock?: (options?: AuthMockOptions) => AuthMock;
 }
-
-/** Until D-02 builds the SigV4 signer, Cloudflare stages cannot issue transfer tickets. */
-const unsignedTickets: TicketIssuer = {
-  upload: async () => {
-    throw new FrameworkError("CORE.MISCONFIGURED", "file transfer tickets need the Cloudflare R2 signer, which this build does not include yet");
-  },
-  download: async () => {
-    throw new FrameworkError("CORE.MISCONFIGURED", "file transfer tickets need the Cloudflare R2 signer, which this build does not include yet");
-  },
-};
 
 export function createCloudflareWorker<C extends ConfigDeclaration, S extends string>(
   app: DefinedApp<C, S>,
@@ -58,7 +47,7 @@ export function createCloudflareWorker<C extends ConfigDeclaration, S extends st
     publicOrigin: (c: RuntimeContext) => workerPublicOrigin(c.env),
     sql: workerSql,
     store: workerStore,
-    tickets: () => unsignedTickets,
+    tickets: workerTicketIssuer,
     readSecret: (env) => envSecretReader(env, deployment.target),
     readFrameworkSecret: (env) => envSecretReader(env, deployment.target),
     secretValues: (c) => workerSecretValues(c.env),
