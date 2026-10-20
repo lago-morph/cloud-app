@@ -199,3 +199,17 @@ Independent review (prompt §8 step 2), branch `claude/implement-local-cloudflar
 ### Closing the entries
 
 After the fixes above land, remove entries 1–4 from `apps/demo/FRAMEWORK-ISSUE.md` (or mark them closed with the fixing commit), and per §9 F rebuild until no entry remains; the next F-01 build is the end-to-end check that none of the four is raised again.
+
+---
+
+## Fix (1–3)
+
+Branch `claude/implement-local-cloudflare-fix-f3` from `origin/claude/implement-local-cloudflare`. Documentation only; `apps/demo/` and entry 4 untouched. No Cloudflare calls.
+
+1. **Entry 1:** `skill/reference/local-development.md` "Starting a new app": a paragraph after the scaffolder text. An app inside this repository (a folder already in the root `workspaces`, such as `apps/demo`) is not supported by the scaffolder (DEC-0276); copy `apps/template` without everything `apps/template/.gitignore` lists (the six local paths plus Playwright output `test-results`, `playwright-report`, `blob-report`), set `package.json` `name` to the folder name, keep the template's exact framework pin (no `file:vendor` rewrite), run `npm ci` and `npm run build -w packages/framework` at the root; the numbered steps, step 1 included, still apply.
+2. **Entry 2:** `skill/reference/testing.md` "In-process tests", options bullet: failures are simulated per capability (`unavailable`, for the whole test app from creation), not per operation; to test a logged cleanup failure, make the capability unavailable and run the request that cleans up. The single `try/catch` is phrased as what makes that test meaningful in template-style code, not a new rule.
+3. **Entry 3:** `skill/reference/http-and-validation.md` "Adding a route" step 1: shared code cannot name framework types such as ticket types (`allowed-imports`, CHECK-REQ-001), so give the shared type a type parameter (`interface Photo<T> { readonly ticket: T }`) and use `Photo<DownloadTicket>`, importing `type DownloadTicket` from `@lago-morph/prototype-framework` (server) or `/client` (browser). Inline code only, no example block, so SKILL-REQ-004 is unaffected.
+
+Sizes (PAR-071, 12,000 bytes): `local-development.md` 4,983; `testing.md` 6,963; `http-and-validation.md` 9,576.
+
+Checks (plan §1 "Test economy", docs-only): `npm run typecheck` and `npm run lint` pass; `tests/skill` passes (unit config 6/6, integration config 6 files, 31/31).
