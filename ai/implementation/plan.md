@@ -429,6 +429,11 @@ Deps: C-EV.
 - **Deps:** fix-f04a and fix-f04b merged.
 - **Exit:** E2E-016 (review part) recorded with its blocking findings resolved, or new findings routed to owning items.
 
+### fix-registry-2 — Registry-free platform proxy for the migration checker and fake D1 API (follow-up)
+- Root cause: `ai/implementation/root-causes/2026-10-20-testing-dev-registry.md` (Review, required change 4). `check/migrations/databases.ts` and `provision/cloudflare/d1/fake-d1-api.ts` start `getPlatformProxy` the same way `createTestApp` did before fix-registry, so they join the machine-wide dev registry.
+- **Owns:** `FW/src/testing/test-app.ts` (moves the helper out), a new shared helper under `FW/src/testing/` or `FW/src/targets/local/`, `FW/src/check/migrations/databases.ts`, `FW/src/provision/cloudflare/d1/fake-d1-api.ts`, their unit tests, and the core.md sentence the record proposes. `FW/src/cli/dev/*` keeps the registry (normal `wrangler dev` behaviour).
+- Red-green: one red test per caller (`fake-d1-api.ts` first), using the scratch-registry pattern of fix-registry. Checks per §1 rule 1, plus the migration-checker offline run (rule 4).
+
 ### F-EV — Final evaluation
 - Judges DEMO-AC-001…-011 (local + Cloudflare; AWS parts not-run), CHECK-AC-005 (demo), E2E-002, E2E-004 (moved from C-EV, DEC-0391), E2E-015, E2E-016; then produces the full per-target status table of every `*-AC-*` and `E2E-*` (local, cloudflare, aws), confirming the §8 not-run lists, in `ai/implementation/evaluations/final.md`, and the generated release report (which must say "not working": AWS and Google certification outstanding, prompt §11).
 
