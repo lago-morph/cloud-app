@@ -75,3 +75,38 @@ Ownership note: `cloudflare.md` and `aws.md` are milestone-sensitive. COMPL-REQ-
 ## Evidence files
 
 All cited by path and line above. Commands: `git log -S "Portability note" -- docs/components`, `git show 7e73f85 --stat`, `git log -S "portability note" -- docs/acceptance/e2e-scenarios.md`, `git merge-base --is-ancestor 7e73f85 052b117`, `grep -n "^## " docs/components/*.md`.
+
+## Review
+
+Reviewer: independent root-cause reviewer (prompt §8 step 2). I did not diagnose this failure or write any of the documents or code involved. Read-only review at `78e8c7a`; no Cloudflare calls; no test suites (a docs finding has nothing to reproduce beyond the grep).
+
+**Verdict: agree-with-changes.** The cause, the chain and the docs-only fix are right. Four of the seven proposed note texts need corrections before they are written, and one citation is wrong.
+
+### What I checked independently
+
+- **Symptom.** `for f in docs/components/*.md; do grep -q '^## 5. Portability note' "$f" || echo "$f"; done` prints exactly `aws, check, cli, cloudflare, compliance, local, skill`; 12 of 19 documents have the heading. Confirmed.
+- **Requirement.** `docs/acceptance/e2e-scenarios.md:163-171` says "each component document has a portability note" with no exemption. `docs/architecture/component-map.md:34-50` lists LOCAL, CF, AWS, PROV, CHECK, CLI, COMPL and SKILL as components with documents under `docs/components/`, and `:7` names the target-enumerating places outside the capabilities. The reviewer did not read the requirement too broadly. Confirmed.
+- **Chain.** The ownership lines (`plan.md:172,186,193,242,301,363`) and the absence of any owner for `aws.md` (`plan.md` mentions it only at `:353`) are as stated. No item's Task names the note; F-04 (`plan.md:396-397`) is the first check. Links 1-4 hold.
+- **DEMO.** `component-map.md:51` does list DEMO as a component whose document is `docs/demo/demo-spec.md`, so the "not a component document" argument is weaker than the record says. I still accept leaving `demo-spec.md` out for R-01: the F-04 reviewer scoped check 1 to `docs/components/`, the demo is an app specification that is an E2E-015 input (editing it mid F-02 changes that scenario's inputs), and its portability is already enforced by CHECK and E2E-002. **Required:** F-04's re-review must state this scope ruling in `validation/reviews/E2E-016.md`, so the question is decided on the record rather than found again.
+- **COMPL-REQ-006 reading** (`docs/components/compliance.md:42`: "after a change to PROV, MIG, CF, AWS, or adapter code"). I agree that "code" qualifies the whole list, so a docs-only note invalidates no milestone record. It is also moot in practice: `validation/invalidations.md` has no entries, `validation/` holds no milestone evidence record (only local automated runs), and the one milestone item touched, E2E-016 (review part), is re-recorded by the re-review anyway. **No `validation/invalidations.md` entry** is needed. The fixer records the reading in its decision draft, as proposed.
+
+### Note texts against each document's content
+
+- **aws.md: accurate.** Lambda/CloudFront shape (`aws.md:3,12`), stage resources (`:22-31`), PROV §2 operations (`:49-59`). SYS-REQ-001/-003 (`docs/spec/system-spec.md:31-46`) say what the note says. The owner must still be assigned by a planning subagent (agree; scope rules ban AWS *code*, not design text).
+- **cloudflare.md: accurate.** The LOCAL sentence is correct, but cite its real basis: `local.md:41` (DEC-0039) and `local.md:48` (both Workers run `src/targets/cloudflare/stage.ts`). Optional: add that this sharing must not make the abstractions Cloudflare-centric (SYS-REQ-002), since that is the portability risk this document carries.
+- **local.md: needs changes.**
+  1. Wrong citation: the record cites `local.md:185-192`, but the file has 63 lines. The DEC-0039 text is `local.md:41-44` and the shared stage runtime is `local.md:48`.
+  2. Drop "Replacing Wrangler as the local runtime would change only this component and the local parts of FILES and LOG". Nothing in the document supports it. Wrangler's emulation (`getPlatformProxy`) is also used by the migration checker (`check.md:84`), `dev`'s migration step (`cli.md:93`), local SQL drivers (`sql.md:85`) and `createTestApp` (`local.md:50`).
+  3. Replace "so app code cannot tell it from a cloud target" with "the app source is the same as on a cloud target (SYS-REQ-001)". The mock, non-Secure cookies and same-origin transfers are visible differences (`local.md:41-44`, LOCAL-REQ-004).
+- **check.md: needs a change.** "The rules name no target" is false for `allowed-imports`. Its package list names `@cloudflare/`, `wrangler`, `miniflare`, `@aws-sdk/`, `sst`, `@pulumi/` and others (`packages/framework/src/check/rules/allowed-imports.ts:21-27`), and `HONO_PLATFORM` names `cloudflare-workers` and `aws-lambda` (`:30`). Reword the opening sentence to "The rules enforce one target-neutral surface (CORE-REQ-005's subpaths, SQL-REQ-002's subset); only `allowed-imports`' list of rejected platform packages and Hono platform modules names platforms." The rest is accurate.
+- **cli.md: needs a change.** "the cloud commands call PROV's, MIG's and SEC's per-target operations" is inaccurate. The per-target operations, including `setSecret` and `createDatabase`/`copyDatabase`/`dropDatabase`, are PROV §2's (`cli.md:89`: "through PROV's `setSecret`"; `aws.md:49-59`, `cloudflare.md:57-66`). Say "PROV's per-target operations (PROV §2)". Also, `build` is not target-free: its generated entry imports `<package>/targets/<target>` (`local.md:46`). Say that a new target adds its `--target` value and its build and deploy wiring. The `verify`/`dev`/`generate-migration`/`reset-local` sentence is accurate.
+- **compliance.md: needs a change.** "only the criteria's Where columns differ between targets" misstates COMPL-REQ-001 (`compliance.md:12`). Where columns belong to criteria, and per-target expectations exist where a criterion states them. Suggested: "The suite is one set of tests for every target (COMPL-REQ-001): the Where columns select the criteria that apply, and per-target expectations exist only where a criterion states them." Also add that a new target brings its own `prodcheck` stage and values file (COMPL-REQ-005, `compliance.md:61`) and its own component's criteria. Change "The tests do not change" to "Existing tests do not change". The `--target` and evidence-schema enumeration and the `listStageResources` leftover check are accurate (`:59,65`).
+- **skill.md: accurate.** Troubleshooting is per cloud (`skill.md:83`), owner tasks per SKILL-REQ-006, and the template README lists AWS-specific billing (`:95`). Optional: name the template README's billable-resources list explicitly.
+
+### Required changes before the fix
+
+1. Rewrite the local, check, cli and compliance notes as above, and correct the `local.md` citation.
+2. A planning subagent assigns `docs/components/aws.md` to an item's Owns line before the fix (as the record says).
+3. F-04's re-review records the DEMO scope ruling.
+
+Other parts stand: docs only; gate per plan §1 Test economy rule 2 (typecheck, lint, `tests/skill`); mechanical grep check; no invalidation entry; affected item E2E-016 (review part) only.
