@@ -365,3 +365,70 @@ Scaffolding itself is online, because it needs the npm registry. The criterion d
   - The only remaining "no test tagged" IDs are E2E-002, SKILL-AC-001…004 and DEMO-AC-001…011, and E2E-004's coverage list equals exactly that set.
 - **Check that the new SKILL-AC-005 test is not vacuous:** remove the non-empty check in `scaffold.mjs` temporarily. The test must fail on the changed tree or on the exit status. Then restore the check.
 - The evaluator (§7) confirms that each new tag's test asserts every clause of the criterion it now names.
+
+## Review (revised C)
+
+Independent reviewer (prompt §8 step 2). It did not diagnose this failure, write the revision, or write the code or tests. Local only; no Cloudflare calls. No code or tests changed. Checked on `origin/claude/implement-local-cloudflare` at `0f11f1e`, against `docs/components/{skill,local,check}.md`, `ai/implementation/plan.md` and the run record `validation/local/xc3s44jl2dbmqpv` with its `raw/`.
+
+**Verdict: Cause C (revised) ACCEPTED, with one condition on the SKILL-AC-005 test (below).** The corrected E9 fixes the defect the earlier Review found. Each per-ID finding matches the code and the criterion text. Fix C may go to step 3.
+
+### SKILL-AC-005 — ACCEPTED, with a condition
+
+- E9 is now correct. `skill/scripts/scaffold.unit.test.ts:80` carries the tag. It calls `scaffold()` with a fixture template, a fake tarball and a fake `install`. `vitest.integration.config.ts` includes neither `skill/**` nor any `*.unit.test.ts` file.
+- The record's reasons why that test is weaker than the criterion hold against `skill/scripts/scaffold`:
+  - argv parsing: an unknown flag gives exit 2; `--force` is detected with `args.includes`;
+  - `npm pack` with `prepack` (`npm run build`);
+  - the version is read from the real tarball and compared with the real template pin;
+  - a rejection becomes `exit 1` and is printed as `scaffold: …` on stderr.
+  
+  None of these runs in the unit test. skill.md:101 names no unit test or fake, so under plan §10.3 the unit test is not evidence. Keeping SKILL-AC-005 off Cause B's list is right.
+- The proposed test is placed correctly. `tests/compliance/criteria/**/*.test.ts` is in `vitest.integration.config.ts`, so the driver and the listing from fix A both see it. Plan E-T1 names `tests/skill/`, but no runner config includes that directory, and C-05's exit (plan.md:251) needs SKILL-AC-005 now. The placement in the record is the one that works.
+- For the case it builds, the proposed test is as strong as the criterion:
+  - It asserts exit status 1.
+  - It asserts a stderr message that names the target and says nothing was changed. This matters because `scaffold.mjs` checks the version pin *before* emptiness, and a pin mismatch also exits 1. Only the message tells the two apart.
+  - It asserts that paths, contents and mtimes are unchanged.
+  - It asserts that no `vendor/`, `package.json` or `node_modules` was created.
+- **Condition: the fixture is not enough for the criterion.** The criterion says a directory *with existing files* stops unchanged. The proposed fixture always includes a file that clashes with the template (`src/app.ts`). So a regression that refuses only on clashes, and still copies the template beside the user's files, would refuse on this fixture and pass. The test must also run on a target that holds only files the template does not have, for example `notes.txt` plus a dotfile such as `.keep`, and assert the same four things. The vacuity check should then remove the non-empty check, as the record says, and also try a clash-only variant of it.
+- The claim that the test "can run under `unshare -rn`" is plausible: `npm pack` of a local folder plus `tsc` needs no registry, and the refusal happens before `npm install`. It is not demonstrated in the record, though. Treat it as optional until the fix's red run shows it.
+
+### LOCAL-AC-001 — ACCEPTED (clause by clause)
+
+local.md:60 against `E2E-001-E2E-003.spec.ts`:
+
+- **"No credentials present":** `noCredentials()` (lines 34-45) drops the cloud and `COMPLIANCE_` prefixes. `offline()` passes it with an empty `offlineHome` as `HOME` (line 53). This applies to every step after scaffolding.
+- **"Networking to cloud providers blocked":** `offline()` is `unshare -rn sh scripts/offline.sh …`. Lines 90-91 assert that `fetch('https://api.cloudflare.com/client/v4/')` fails inside the namespace. This is stronger than the criterion.
+- **"Freshly scaffolded":** `beforeAll` (lines 59-67) runs the real `skill/scripts/scaffold` into a new `mkdtemp` directory and requires status 0.
+- **"Runs":** `secrets set` and the template-pages script run offline. Lines 116-119 require 7 steps, all `ok`, status 0, plus the request-scoped log entry.
+- **"Passes the verification command":** `verify()` runs offline and must exit 0 (lines 132-134).
+- Scaffolding uses the network, but the criterion's conditions are on running and verifying the app. LOCAL-REQ-001 ("running, testing, and verifying … MUST need no … network access to cloud services") reads the same way. `tag()` (`tests/support/tags.ts:18`) accepts an array, and this file imports it through `../harness/index.js`. So the proposed fix, a tag on line 76, is sufficient. The run's `raw/playwright.json` shows the `[E2E-001]` test passing.
+
+### CHECK-AC-005 template part — ACCEPTED (clause by clause); demo part not-run until F — ACCEPTED
+
+check.md:100 "The template and demo pass all rules" (CHECK-REQ-005), template part, against `packages/framework/test/integration/cli/verify.test.ts:58-67`:
+
+- **"The template":** `FixtureApp.copyOf(apps/template)`.
+- **"All rules":** `verifyCommand` (`src/cli/commands/verify.ts`) runs each of these, and any diagnostic fails it:
+  - `portabilityRules` = `check.runPortabilityRules` (`cli/wiring.ts:54`). That is `lintAppFiles` with the shipped configuration only, plus `checkAppLintConfig`, the CHECK-REQ-006 weakening check (`check/engine.ts:81-82`).
+  - `migrationChecker` = `runMigrationChecker`.
+  - The zod-version check.
+  - Type checking.
+- **"Pass":** `expect(result.code).toBe(0)`. `raw/vitest.json` records `[CLI-AC-002] verify passes on the template` `passed` in this run.
+- So `tag(["CLI-AC-002", "CHECK-AC-005"], …)` (same `tag()` signature) is correct and does not weaken anything.
+- The demo part: `apps/demo/` is only a `package.json`, and plan.md:265/380 assigns "CHECK-AC-005 (demo part)" to F-EV.
+- The proposed rule `{ id: "CHECK-AC-005", targets: ["local"], mode: "automated", part: "demo part", … }` fits `expectedCriteria` (`harness/expected.ts:62-71`). It gives `run: true, parts: [""]` and a `not-run` result `demo part: …` (`results.ts:88`). `checkRules` accepts it, because CHECK-AC-005 applies to local in the automated tier. AUTH-AC-009's rule already sets the precedent.
+- Note for §7: the passed result will carry part `""` (whole), not "template part". The record correctly leaves that judgment to the evaluator. The evaluator must not read that result as covering the demo.
+
+### E2E-002, SKILL-AC-001…004, DEMO-AC-* — ACCEPTED
+
+- plan.md:265 (C-EV) explicitly defers SKILL-AC-001…004, DEMO-AC-*, CHECK-AC-005 (demo part) and E2E-002 (local part) to E-EV and F-EV. plan.md:345/355/357/374/380 assign their tests and judgment to E and F.
+- `skill/` holds only `scripts/`, and `apps/demo/` holds only `package.json`.
+- `not-run` ("no test tagged") is the expected state, not a defect.
+
+### Causal chain and verification
+
+- Each link is backed by evidence:
+  - an untagged test that runs gives no title match, so the ID is `not-run` and is listed;
+  - a tagged unit test is outside both the driver's selection and the scan;
+  - components not yet built have no tests.
+- No alternative remains open.
+- The verification plan is sufficient once it includes the condition above: a SKILL-AC-005 run on a target with only non-clashing files.
