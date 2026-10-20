@@ -131,3 +131,77 @@ describe("Cloudflare runtime: R2 log writer", () => {
     await expect(Promise.all(pending)).resolves.toBeDefined();
   });
 });
+
+describe("Cloudflare runtime: cloud cookie attributes", () => {
+  const mockLogin = { method: "POST", headers: { "content-type": "application/json", origin: ORIGIN }, body: JSON.stringify({ level: "user", id: "m" }) };
+
+  function attributes(cookie: string): string[] {
+    return cookie.split(";").slice(1).map((part) => part.trim().split("=")[0]?.toLowerCase() ?? "");
+  }
+
+  it(tag("AUTH-AC-006", "unit (Cloudflare runtime): the session cookie is __Host-session, HttpOnly, SameSite=Lax, Secure, Path=/, host-only; logout clears it"), async () => {
+    const res = await worker.fetch(new Request(`${ORIGIN}/api/auth/mock-login`, mockLogin), bindings, context().ctx);
+    expect(res.status).toBe(204);
+    const cookie = res.headers.get("set-cookie") ?? "";
+    expect(cookie).toMatch(/^__Host-session=[^;]+; /);
+    expect(cookie).toMatch(/; Path=\/(;|$)/);
+    expect(cookie).toMatch(/; SameSite=Lax(;|$)/);
+    expect(attributes(cookie)).toEqual(expect.arrayContaining(["httponly", "secure", "max-age"]));
+    expect(attributes(cookie)).not.toContain("domain");
+    const session = cookie.split(";")[0] ?? "";
+
+    const me = await worker.fetch(new Request(`${ORIGIN}/api/auth/me`, { headers: { cookie: session } }), bindings, context().ctx);
+    expect(((await me.json()) as { level: string }).level).toBe("user");
+
+    const out = await worker.fetch(new Request(`${ORIGIN}/api/auth/logout`, { method: "POST", headers: { cookie: session, origin: ORIGIN } }), bindings, context().ctx);
+    const cleared = out.headers.get("set-cookie") ?? "";
+    expect(cleared).toMatch(/^__Host-session=; /);
+    expect(cleared).toMatch(/Max-Age=0/);
+    expect(attributes(cleared)).toEqual(expect.arrayContaining(["httponly", "secure"]));
+  });
+});
+
+describe("Cloudflare runtime: Worker secrets", () => {
+  async function secret(env: Record<string, unknown>): Promise<{ status: number; body: { value?: string; error?: { code: string } } }> {
+    const res = await worker.fetch(new Request(`${ORIGIN}/api/secret`), env, context().ctx);
+    return { status: res.status, body: (await res.json()) as { value?: string; error?: { code: string } } };
+  }
+
+  it(tag("SEC-AC-001", "unit (Cloudflare runtime): a declared secret is read from the Worker secret SECRET_<NAME>"), async () => {
+    expect(await secret(bindings)).toEqual({ status: 200, body: { value: "api-value" } });
+  });
+
+  it(tag("SEC-AC-005", "unit (Cloudflare runtime): values are not cached across requests; the next request sees a new value, and a deleted secret is SEC.MISSING"), async () => {
+    expect((await secret({ ...bindings, SECRET_API_KEY: "first" })).body.value).toBe("first");
+    expect((await secret({ ...bindings, SECRET_API_KEY: "second" })).body.value).toBe("second");
+    const { SECRET_API_KEY: _deleted, ...withoutSecret } = bindings;
+    const missing = await secret(withoutSecret);
+    expect(missing.status).toBe(500);
+    expect(missing.body.error?.code).toBe("SEC.MISSING");
+  });
+
+  it("an empty Worker secret counts as missing", async () => {
+    expect((await secret({ ...bindings, SECRET_API_KEY: "" })).body.error?.code).toBe("SEC.MISSING");
+  });
+
+  it(tag("SEC-AC-002", "unit (Cloudflare runtime): a secret value in an error message reaches neither the response nor the stored log entry"), async () => {
+    const leaky = defineApp({
+      name: "cfunit",
+      config: {},
+      secrets: ["apiKey"],
+      tables: {},
+      routes: (api) => {
+        api.get("/leak", async (c) => {
+          throw new Error(`leaking ${await c.var.secrets.get("apiKey")}`);
+        });
+      },
+    });
+    const { ctx, pending } = context();
+    const res = await createCloudflareWorker(leaky, resolved("test-leak")).fetch(new Request(`${ORIGIN}/api/leak`), bindings, ctx);
+    expect(await res.text()).not.toContain("api-value");
+    await Promise.all(pending);
+    const keys = (await proxy.env.LOGS.list({ prefix: "cfunit/test-leak/" })).objects.map((o) => o.key);
+    expect(keys.length).toBeGreaterThan(0);
+    for (const key of keys) expect(await (await proxy.env.LOGS.get(key))?.text()).not.toContain("api-value");
+  });
+});
