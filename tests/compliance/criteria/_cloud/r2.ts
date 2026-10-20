@@ -185,16 +185,32 @@ function xmlDecode(text: string): string {
   });
 }
 
+export interface ObjectInfo {
+  readonly key: string;
+  readonly etag: string;
+  readonly lastModified: string;
+  readonly size: number;
+}
+
 /** Every key in `bucket` starting with `prefix` (S3 ListObjectsV2), sorted; bounded. */
 export async function listKeys(bucket: string, prefix: string): Promise<string[]> {
-  const keys: string[] = [];
+  return (await listObjects(bucket, prefix)).map((o) => o.key);
+}
+
+/** Every object in `bucket` starting with `prefix`, with its ETag, last-modified time and size, sorted by key; bounded. */
+export async function listObjects(bucket: string, prefix: string): Promise<ObjectInfo[]> {
+  const objects: ObjectInfo[] = [];
   let token: string | undefined;
   for (let page = 0; page < MAX_PAGES; page += 1) {
     const query: Record<string, string> = { "list-type": "2", prefix, "max-keys": "1000", ...(token === undefined ? {} : { "continuation-token": token }) };
     const r = await s3Get(s3Path(bucket), query);
     if (r.status !== 200) throw new Error(`listing R2 bucket ${bucket} (prefix ${prefix}) failed: HTTP ${String(r.status)} ${/<Code>([^<]*)<\/Code>/.exec(r.text)?.[1] ?? ""}`.trim());
-    for (const m of r.text.matchAll(/<Key>([^<]*)<\/Key>/g)) keys.push(xmlDecode(m[1] ?? ""));
-    if (!/<IsTruncated>true<\/IsTruncated>/.test(r.text)) return keys.sort();
+    for (const m of r.text.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
+      const body = m[1] ?? "";
+      const field = (name: string): string => xmlDecode(new RegExp(`<${name}>([^<]*)</${name}>`).exec(body)?.[1] ?? "");
+      objects.push({ key: field("Key"), etag: field("ETag"), lastModified: field("LastModified"), size: Number(field("Size")) });
+    }
+    if (!/<IsTruncated>true<\/IsTruncated>/.test(r.text)) return objects.sort((x, y) => (x.key < y.key ? -1 : x.key > y.key ? 1 : 0));
     token = xmlDecode(/<NextContinuationToken>([^<]*)<\/NextContinuationToken>/.exec(r.text)?.[1] ?? "");
     if (token === "") throw new Error(`listing R2 bucket ${bucket}: truncated listing without a continuation token`);
   }

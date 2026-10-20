@@ -23,9 +23,10 @@
  * R2's S3 endpoint (plus the read-only token's own requests once per process). No D1 rows are
  * read or written.
  */
+import { createHash } from "node:crypto";
 import { prerequisiteMissing } from "../../harness/index.js";
 import { accountId, cfApi, cfList, cfOk, failure } from "./api.js";
-import { listKeys, STATE_BUCKET } from "./r2.js";
+import { bucketExists, LOG_BUCKET, listKeys, STATE_BUCKET } from "./r2.js";
 
 export interface StageRef {
   readonly app: string;
@@ -140,4 +141,18 @@ export async function listStageResources(input: { readonly target: string; reado
   if (input.target !== "cloudflare") return prerequisiteMissing(`no stage-resource probe for target ${input.target} (AWS phase not started)`);
   if (!input.stage.startsWith("test-")) throw new Error(`the stage-resource probe handles test stages only, not ${input.stage}`);
   return leftoverStrings(await stageResourceDetails(input));
+}
+
+/**
+ * The account-level shared resources (PROV-REQ-004, DEC-0084, DEC-0086): whether the shared log
+ * bucket and the state home exist, and a SHA-256 of the account's `workers.dev` subdomain (the
+ * subdomain is personal and never printed, DEC-0086). 3 Cloudflare API requests.
+ */
+export async function sharedResources(): Promise<{ logBucket: boolean; stateHome: boolean; subdomainSha256: string }> {
+  const sub = await cfOk<{ subdomain?: string }>("reading the account's workers.dev subdomain", "GET", `/accounts/${accountId()}/workers/subdomain`);
+  return {
+    logBucket: await bucketExists(LOG_BUCKET),
+    stateHome: await bucketExists(STATE_BUCKET),
+    subdomainSha256: createHash("sha256").update(sub.subdomain ?? "").digest("hex"),
+  };
 }
