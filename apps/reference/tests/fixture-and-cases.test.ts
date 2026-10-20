@@ -55,9 +55,10 @@ describe("migration data fixture", () => {
 });
 
 describe("case runner", () => {
-  it("has no sets until C-T2 registers them", async () => {
+  it("lists the sets C-T2 registered", async () => {
     const t = await open({ user: mockUsers.user("cases") });
-    expect(await (await t.request("/api/cases")).json()).toEqual({ sets: {} });
+    const listed: { sets: Record<string, string[]> } = await (await t.request("/api/cases")).json();
+    expect(Object.keys(listed.sets).sort()).toEqual(["kv", "mig", "sql"]);
     const res = await t.request("/api/cases/run", json("POST", { set: "none", name: "none" }));
     expect(res.status).toBe(404);
   });
