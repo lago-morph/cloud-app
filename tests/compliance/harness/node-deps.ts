@@ -12,6 +12,8 @@ import type { CloudStageOps, DriverDeps, LocalSession, PendingStages, RunCall } 
 import { REFERENCE_APP, stageLeftovers } from "./leftovers.js";
 import { waitFor } from "./wait.js";
 import type { TargetOperations } from "../../../packages/framework/src/provision/core/operations.js";
+import { cloudflareOperations } from "../../../packages/framework/src/cli/commands/deploy.js";
+import { cloudProcessProblems } from "../../../packages/framework/src/cli/commands/smoke-cloud.js";
 
 /** The origin `dev` prints once the client and `/api` answer (cli.md `dev`). */
 export function devOrigin(output: string): string | undefined {
@@ -126,12 +128,24 @@ function startReferenceDev(repoRoot: string): Promise<LocalSession> {
 }
 
 /**
- * The target's PROV operations (PROV §2), for the leftover check. The Cloudflare operations are
- * built in phase D (D-03); until they exist the check fails, and the driver records that
- * failure as a leftover entry instead of reading it as "no leftovers".
+ * The target's PROV operations (PROV §2), for the leftover check (compliance.md "Test stages":
+ * by exact name, using `listStageResources`). On Cloudflare these are the framework's own
+ * operations, wired exactly as `remove` wires them (D-05 `cloudflareOperations`; decision
+ * D-06-2). The check runs in the driver's process, so behind a proxy the driver itself must be
+ * started with `NODE_USE_ENV_PROXY=1` (DEC-0085); otherwise, and without credentials, this
+ * rejects before any request and the driver records the failure as a leftover entry instead
+ * of reading it as "no leftovers".
  */
-function targetOperations(target: Target): Promise<Pick<TargetOperations, "listStageResources">> {
-  return Promise.reject(new Error(`the ${target} per-target operations (listStageResources) are not built yet (D-03)`));
+export async function stageResourceOperations(
+  repoRoot: string,
+  target: Target,
+  options: { readonly env: Readonly<Record<string, string | undefined>>; readonly fetch?: typeof fetch },
+): Promise<Pick<TargetOperations, "listStageResources">> {
+  if (target !== "cloudflare") throw new Error(`the ${target} per-target operations (listStageResources) are not built (AWS phase not started)`);
+  const problems = cloudProcessProblems(options.env);
+  if (problems.length > 0) throw new Error(`the leftover check cannot reach Cloudflare: ${problems.join("; ")}`);
+  const make = cloudflareOperations({ env: options.env, requireCredentials: true, ...(options.fetch === undefined ? {} : { fetch: options.fetch }) });
+  return make({ appDir: join(repoRoot, "apps", REFERENCE_APP), target });
 }
 
 function cliStageOps(repoRoot: string, target: Target): CloudStageOps {
@@ -151,7 +165,7 @@ function cliStageOps(repoRoot: string, target: Target): CloudStageOps {
       return result.output;
     },
     async listStageResources(stage) {
-      return stageLeftovers(await targetOperations(target), { app: REFERENCE_APP, stage });
+      return stageLeftovers(await stageResourceOperations(repoRoot, target, { env: process.env }), { app: REFERENCE_APP, stage });
     },
   };
 }
