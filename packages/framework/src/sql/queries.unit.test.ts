@@ -210,6 +210,8 @@ describe.each([
     await expect(h.db.delete(p).where(eq(p.id, R1))).rejects.toMatchObject(conflict);
   });
 
+  // 30 s: open() in the body (a PGlite load or a whole workerd) is the behaviour under test; over 5 s on a loaded
+  // machine (ai/implementation/root-causes/2026-10-20-D-04-verify-unrelated-failures.md, Review (a)).
   it("a database that cannot be reached is SQL.UNAVAILABLE; a forced outage too", async () => {
     const other = await open();
     await other.close();
@@ -218,7 +220,7 @@ describe.each([
     await expect(other.db.select({ id: t.id }).from(t)).rejects.toMatchObject(unavailable);
     const forced = h.handle({ unavailable: true });
     await expect(forced.select({ id: t.id }).from(t)).rejects.toMatchObject(unavailable);
-  });
+  }, 30_000);
 
   describe("select forms through the handle", () => {
     it(tag("SQL-AC-003", "subqueries, select-only CTEs, joins and selectDistinct"), async () => {

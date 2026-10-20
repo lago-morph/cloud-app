@@ -17,6 +17,10 @@ import { asKvFailure, createKv } from "./service.js";
 
 const NO_APP_MIGRATIONS = "/nonexistent-kv-unit-test-migrations";
 
+/** 50–61 sequential puts, each a workerd/PGlite round trip; over 5 s on a loaded machine, by design
+ * (ai/implementation/root-causes/2026-10-20-D-04-verify-unrelated-failures.md, Review (a)). */
+const MANY_PUTS_TIMEOUT_MS = 30_000;
+
 interface Harness {
   /** A SQL handle over the database (options as an adapter would pass them). */
   handle(options?: SqlAdapterOptions): PortableDb;
@@ -143,7 +147,7 @@ describe.each([
     const exact = await kv.list("page/", { limit: 50 });
     expect(exact.items).toHaveLength(50);
     expect(exact.nextCursor).toBeNull();
-  });
+  }, MANY_PUTS_TIMEOUT_MS);
 
   it(tag(["KV-AC-003", "KV-AC-004"], "a cursor is valid only for its prefix"), async () => {
     for (let i = 0; i < 3; i++) await kv.put(`one/${i}`, "x");
@@ -160,7 +164,7 @@ describe.each([
     expect((await kv.list("n/", { limit: 0 })).items).toHaveLength(1);
     expect((await kv.list("n/", { limit: 2.7 })).items).toHaveLength(2);
     expect((await kv.list("n/", { limit: Number.NaN })).items).toHaveLength(20);
-  });
+  }, MANY_PUTS_TIMEOUT_MS);
 
   it(tag(["KV-AC-005", "KV-AC-004"], "a maximum page of maximum-size entries lists successfully"), async () => {
     const keys = Array.from({ length: 50 }, (_, i) => `max/${String(i).padStart(2, "0")}/`.padEnd(1024, "k"));
@@ -169,7 +173,7 @@ describe.each([
     const page = await kv.list("max/", { limit: 50 });
     expect(page.items.map((i) => i.key)).toEqual(keys);
     expect(page.nextCursor).not.toBeNull();
-  });
+  }, MANY_PUTS_TIMEOUT_MS);
 
   describe("storage that cannot be used", () => {
     const ops: Array<[string, (s: KvService) => Promise<unknown>]> = [

@@ -22,6 +22,10 @@ describe("PGlite harness (PAR-107, DEC-0106)", () => {
     }
   });
 
+  // The PGlite loads in the next two tests are the behaviour under test; over 5 s on a loaded machine
+  // (ai/implementation/root-causes/2026-10-20-D-04-verify-unrelated-failures.md, Review (a)).
+  const PGLITE_LOAD_TIMEOUT_MS = 30_000;
+
   it("gives every call its own empty database", async () => {
     const a = await openPostgres();
     const b = await openPostgres();
@@ -33,12 +37,12 @@ describe("PGlite harness (PAR-107, DEC-0106)", () => {
       await a.close();
       await b.close();
     }
-  });
+  }, PGLITE_LOAD_TIMEOUT_MS);
 
   it("a query on a closed harness database is SQL.UNAVAILABLE (SQL-REQ-006)", async () => {
     const pg = await openPostgres();
     const db = postgresDb(pg) as unknown as { select(): { from(t: unknown): Promise<unknown> } };
     await pg.close();
     await expect(db.select().from(frameworkTables("postgres").kv)).rejects.toMatchObject({ name: "FrameworkError", code: "SQL.UNAVAILABLE" });
-  });
+  }, PGLITE_LOAD_TIMEOUT_MS);
 });
