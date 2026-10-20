@@ -44,7 +44,7 @@ Never change state in a `GET` route. State-changing requests (`POST`, `PUT`, `PA
 - Query string: `queryParams(schema)`, then `c.req.valid("query")`. Each query value is one string (the first one given); use `z.coerce.number().int()` for numbers and `.optional()` for optional ones.
 - Import `z` from `@lago-morph/prototype-framework` in server code and from `zod` in shared or browser code; both are the same pinned version.
 - An invalid body or query answers 400 `HTTP.INVALID_INPUT` whose message names each failing field; the handler does not run. A JSON body over 1,000,000 bytes (PAR-200) answers 413 `HTTP.PAYLOAD_TOO_LARGE`. Large content goes through files, never through the API ([files.md](files.md)).
-- Path parameters (`api.get("/notes/:id", …)`, then `c.req.param("id")`) are not validated for you; an ID that matches no row your caller may see is `HTTP.NOT_FOUND`.
+- Path parameters (`api.get("/notes/:id", …)`, then `c.req.param("id")`) are not validated for you. IDs are UUIDs, and comparing an `id()` or `ref()` column with a value that is not one is 400 `SQL.INVALID_VALUE` ([sql-and-migrations.md](sql-and-migrations.md)). So check a path ID with `z.uuid().safeParse(c.req.param("id"))` before querying, and when it fails answer `HTTP.NOT_FOUND`, as for an ID that matches no row your caller may see.
 - Put length limits on every string (`z.string().min(1).max(500)`), and `.trim()` where blank input should be refused.
 
 ## Reporting errors

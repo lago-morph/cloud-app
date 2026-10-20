@@ -10,20 +10,20 @@ Define tables in `src/server/schema.ts` with `defineTable(name, columns, options
 
 | Helper | Holds |
 | --- | --- |
-| `id()` | The primary key: text from `newId()`. Exactly one per table. Never set it to anything else, never update it. |
+| `id()` | The primary key: lowercase UUID v4 text from `newId()`. Exactly one per table. Never set it to anything else, never update it. |
 | `text()` | Unicode text without NUL; compared by code point |
 | `integer()` | Signed 32-bit whole number |
 | `number()` | Finite double |
 | `timestamp()` | Epoch milliseconds (use `now()`) |
 | `boolean()` | `true` / `false` |
-| `ref(() => other.id)` | The `id` of a row in another table; that row cannot be deleted while referenced |
+| `ref(() => other.id)` | The `id` of a row in another table (UUID v4 text); that row cannot be deleted while referenced |
 
 - Columns are NOT NULL unless you call `.nullable()`. `.default(value)` takes a static value only. `.unique()` makes one column unique.
 - Options: `{ indexes: [["ownerId", "createdAt"]], uniques: [["postId", "label"]] }`, listing column keys.
 - Table names are lowercase snake_case (`notes`, `share_links`), not starting with `__framework_` or `sqlite_`. Column keys are lowerCamelCase (`createdAt` becomes `created_at`).
 - There is no JSON type: store structured data as text (`JSON.stringify`) and validate it with Zod when you read it.
 - Rows keyed by a user-supplied value: `id()` plus a unique `text()` column. Join tables: `id()` plus a `uniques` entry over their two `ref` columns.
-- A value that breaks its column's rule is refused before the database with 400 `SQL.INVALID_VALUE`.
+- A value that breaks its column's rule is refused before the database with 400 `SQL.INVALID_VALUE`, for writes and for comparisons alike: `eq(notes.id, "no-such-note")` is 400 `SQL.INVALID_VALUE`, not "no row", because the value is not a UUID. Validate IDs from requests with `z.uuid()` first ([http-and-validation.md](http-and-validation.md)).
 
 ## Queries
 
