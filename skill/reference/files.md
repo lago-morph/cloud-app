@@ -31,7 +31,7 @@ File content never passes through the API: the browser sends it to storage and f
 3. **The browser calls `uploadFile(ticket, file, { onProgress })`**.
 4. **A finalize route** (called by the browser after `uploadFile` resolves) calls `files.head(name)`, deletes the file with `files.delete(name)` if it is missing, too large, or of a type you do not accept, and only then creates the record that makes the file visible (for example an `attachments` row). Until then, nothing lists or links the file.
 
-The template's file routes ([examples/files-tickets.md](../examples/files-tickets.md)) show steps 1–3 with a per-user folder and a listing read straight from storage. The template has no record table for files, so it has no finalize route; when your files belong to records, add step 4 as described here.
+The template does all four steps: [examples/files-tickets.md](../examples/files-tickets.md) has the routes (an `uploads` table, `uploads/<userId>/<newId()>` names, a finalize route that rejects files over 10 MiB or of an unaccepted type with `HTTP.CONFLICT`) and the browser page, and [examples/tests.md](../examples/tests.md) has their tests. Copy it and change the limits and the record to fit your app.
 
 ## Downloads
 
@@ -55,7 +55,7 @@ Under `createTestApp`, tickets point to a local framework route, so routes that 
 
 ## Examples
 
-- [examples/files-tickets.md](../examples/files-tickets.md): upload and download tickets, the user's file list, and the browser page with progress.
+- [examples/files-tickets.md](../examples/files-tickets.md): the whole upload pattern: tickets, the finalize route with `head` and `delete`, a listing from records, and the browser page with progress.
 
 ## Stopping condition
 

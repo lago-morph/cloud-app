@@ -82,4 +82,10 @@ npm run remove -- --target cloudflare --stage prod --confirm-production prod
 
 On the free plan, D1 allows about 100,000 rows written per day per account. Keep test data to a few rows and remove test stages promptly.
 
-Stopping condition: stop when the stage is deployed and its smoke test passed, or it is stopped, started or removed with no leftovers printed. For a failure, go to [troubleshooting.md](troubleshooting.md).
+## Examples
+
+- [examples/tests.md](../examples/tests.md): the smoke test that `smoke` runs against a deployed test stage.
+
+## Stopping condition
+
+Stop reading when the stage is deployed and its smoke test passed, or it is stopped, started or removed with no leftovers printed. For a failure, go to [troubleshooting.md](troubleshooting.md).

@@ -1,6 +1,6 @@
 # Template app
 
-This is the smallest app built on the prototype framework. It uses each capability once: a database table (notes), key-value storage, file upload and download, a configuration value (`greeting`), one secret (`apiKey`), log entries, and the three access levels (anonymous, user, admin). The scaffolder copies this folder to start a new app. In a copied app, replace `template` below with the `name` in `src/app.ts`.
+This is the smallest app built on the prototype framework. It uses each capability once: database tables (notes, and one row per finalized upload), key-value storage, file upload with a finalize check and download, a configuration value (`greeting`), one secret (`apiKey`), a tested HMAC signing helper (`src/server/signing.ts`), log entries, and the three access levels (anonymous, user, admin). The scaffolder copies this folder to start a new app. In a copied app, replace `template` below with the `name` in `src/app.ts`.
 
 This page lists everything the owner does by hand, as copy-and-paste steps. Run the commands in a terminal, in this app's folder, on macOS or Linux with Node 22.22.0. Replace the `<…>` parts. Never paste a secret value into a command line, a committed file or a chat.
 

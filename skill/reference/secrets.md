@@ -26,20 +26,16 @@ A deploy's health check fails when any declared secret has no value, so a secret
 
 ## Signing and verifying with a secret (HMAC)
 
-Use the Web Crypto API (`crypto.subtle`), never `Buffer` or `node:crypto` (they fail type checking and `allowed-imports`). The steps for a signed token such as a share link:
+For a signed token such as a share link, copy the template's `src/server/signing.ts` and its tests from [examples/secrets.md](../examples/secrets.md). `signToken(key, subject, expiresAt)` returns `<subject>.<expiresAt>.<signature>`; `verifyToken(key, token)` returns the subject, or `null` for a tampered, wrongly keyed, malformed or expired token. It uses only `crypto.subtle` (HMAC-SHA-256, constant-time `verify`) and base64url through `btoa`/`atob`; never use `Buffer` or `node:crypto` (they fail type checking and `allowed-imports`).
 
 1. Declare a secret for the key (for example `shareKey`) and set a long random value (at least 32 bytes) on every stage.
-2. Import it: `crypto.subtle.importKey("raw", new TextEncoder().encode(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"])`.
-3. Sign the exact payload text (for example `<recordId>.<expiresAt>`) with `crypto.subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(payload))`.
-4. Encode the signature bytes as base64url without `Buffer`: build a binary string from the bytes, `btoa` it, then replace `+` with `-`, `/` with `_`, and strip trailing `=` (the reference app's `toBase64` in [examples/secrets.md](../examples/secrets.md) shows the first two steps).
-5. To verify, decode the base64url text back to bytes (reverse the replacements, re-pad, `atob`) and call `crypto.subtle.verify("HMAC", cryptoKey, signatureBytes, new TextEncoder().encode(payload))`; it compares in constant time. Treat malformed input as invalid rather than throwing.
-6. Check the expiry yourself (`now()` against the payload's time) and answer an invalid or expired token with `HTTP.NOT_FOUND`.
-
-The framework's examples do not yet include a tested HMAC helper; until they do, write it as above with unit tests for a valid token, a tampered token and an expired token (use the test runner's fake timers for expiry, see [testing.md](testing.md)).
+2. Pass `await c.var.secrets.get("shareKey")` as the key. Keep subjects free of `.` (use an `id()` value).
+3. Answer `null` from `verifyToken` with `HTTP.NOT_FOUND`, so an invalid link looks like a missing one.
+4. Test expiry with the test runner's fake timers, as `signing.test.ts` does (see [testing.md](testing.md)).
 
 ## Examples
 
-- [examples/secrets.md](../examples/secrets.md): declaring `apiKey`, an admin route that reports whether it is set without revealing it, and Web-API-only byte helpers with `crypto.subtle.digest`.
+- [examples/secrets.md](../examples/secrets.md): declaring `apiKey`, an admin route that reports whether it is set without revealing it, the tested HMAC token helper (`signing.ts` and its tests), and Web-API-only byte helpers with `crypto.subtle.digest`.
 
 ## Stopping condition
 

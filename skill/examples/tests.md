@@ -4,7 +4,7 @@ Every file below is copied unchanged from the framework's app template (`apps/te
 
 What it shows:
 
-- `tests/app.test.ts`: `createTestApp` per test with `dispose()` afterwards; `mockUsers` with `as()` and the `user` option; `config` and `secrets` options; asserting status codes, error codes and `logs()`.
+- `tests/app.test.ts`: `createTestApp` per test with `dispose()` afterwards; `mockUsers` with `as()` and the `user` option; `config` and `secrets` options; asserting status codes, error codes and `logs()`; an in-process upload sent with the local ticket's wire form, to test the finalize route (the HMAC tests are in [secrets.md](secrets.md)).
 - `tests/smoke/smoke.test.ts`: one file that runs in-process under `verify` and against a deployed test stage under `smoke` (`connectTestStage()`).
 - `vitest.config.ts`: the timeouts the template uses.
 - From the reference app, `tests/support.ts`: a shared `open()` helper that disposes test apps after each test.
@@ -93,22 +93,68 @@ describe("status (KV)", () => {
   });
 });
 
+/** The in-process upload ticket's wire form (files.md §2), so the test can send what `uploadFile` sends. */
+interface WireUploadTicket {
+  readonly url: string;
+  readonly method: string;
+  readonly headers: Record<string, string>;
+}
+
+async function upload(t: TestApp, contentType: string, bytes: Uint8Array<ArrayBuffer>): Promise<string> {
+  const res = await t.request("/api/files/upload-ticket", json("POST", { contentType }));
+  expect(res.status).toBe(200);
+  const { id, ticket }: { id: string; ticket: WireUploadTicket } = await res.json();
+  const put = await t.request(ticket.url, { method: ticket.method, headers: ticket.headers, body: bytes });
+  expect(put.status).toBeLessThan(300);
+  return id;
+}
+
 describe("files", () => {
-  it("lists no files at first and issues an upload ticket", async () => {
-    const t = await open({ user: mockUsers.user() });
-    const list: FileList = await (await t.request("/api/files")).json();
-    expect(list).toEqual({ files: [] });
-    const res = await t.request("/api/files/upload-ticket", json("POST", { name: "a.txt", contentType: "text/plain" }));
-    expect(res.status).toBe(200);
-    expect(await res.json()).toHaveProperty("ticket");
+  it("lists an upload only after finalize, and only to its owner", async () => {
+    const t = await open();
+    const alice = t.as(mockUsers.user("alice"));
+    const bob = t.as(mockUsers.user("bob"));
+    const id = await upload(alice, "text/plain", new TextEncoder().encode("hello"));
+    const before: FileList = await (await alice.request("/api/files")).json();
+    expect(before).toEqual({ files: [] });
+
+    const res = await alice.request("/api/files/finalize", json("POST", { id, name: "a.txt" }));
+    expect(res.status).toBe(201);
+    const after: FileList = await (await alice.request("/api/files")).json();
+    expect(after).toEqual({ files: [{ id, name: "a.txt", size: 5, contentType: "text/plain" }] });
+
+    const bobs: FileList = await (await bob.request("/api/files")).json();
+    expect(bobs).toEqual({ files: [] });
+    expect((await bob.request("/api/files/finalize", json("POST", { id, name: "a.txt" }))).status).toBe(404);
+    const theirs = await bob.request("/api/files/download-ticket", json("POST", { id }));
+    expect(theirs.status).toBe(404);
+    expect(await theirs.json()).toMatchObject({ error: { code: "HTTP.NOT_FOUND" } });
+    const mine = await alice.request("/api/files/download-ticket", json("POST", { id }));
+    expect(mine.status).toBe(200);
+    expect(await mine.json()).toHaveProperty("ticket");
   });
 
-  it("refuses a download ticket for a missing file and a name with a slash", async () => {
+  it("deletes an upload that is too large or of a type it does not accept", async () => {
     const t = await open({ user: mockUsers.user() });
-    const missing = await t.request("/api/files/download-ticket", json("POST", { name: "nope.txt" }));
+    const big = await upload(t, "text/plain", new Uint8Array(10 * 1024 * 1024 + 1));
+    const zip = await upload(t, "application/zip", new Uint8Array(4));
+    for (const id of [big, zip]) {
+      const res = await t.request("/api/files/finalize", json("POST", { id, name: "x" }));
+      expect(res.status).toBe(409);
+      expect(await res.json()).toMatchObject({ error: { code: "HTTP.CONFLICT" } });
+      // The upload is gone, so a second finalize finds nothing.
+      expect((await t.request("/api/files/finalize", json("POST", { id, name: "x" }))).status).toBe(404);
+    }
+    const list: FileList = await (await t.request("/api/files")).json();
+    expect(list).toEqual({ files: [] });
+  });
+
+  it("refuses to finalize a missing upload and a name with a slash", async () => {
+    const t = await open({ user: mockUsers.user() });
+    const missing = await t.request("/api/files/finalize", json("POST", { id: crypto.randomUUID(), name: "a.txt" }));
     expect(missing.status).toBe(404);
-    expect(await missing.json()).toMatchObject({ error: { code: "FILES.NOT_FOUND" } });
-    const slash = await t.request("/api/files/upload-ticket", json("POST", { name: "../x", contentType: "text/plain" }));
+    expect(await missing.json()).toMatchObject({ error: { code: "HTTP.NOT_FOUND" } });
+    const slash = await t.request("/api/files/finalize", json("POST", { id: crypto.randomUUID(), name: "../x" }));
     expect(slash.status).toBe(400);
   });
 });
