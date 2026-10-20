@@ -19,6 +19,7 @@ export interface Status {
 }
 
 export interface StoredFile {
+  readonly id: string;
   readonly name: string;
   readonly size: number;
   readonly contentType: string;

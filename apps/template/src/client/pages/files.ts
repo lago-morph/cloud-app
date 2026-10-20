@@ -1,8 +1,8 @@
 import { api, downloadUrl, uploadFile, type DownloadTicket, type UploadTicket } from "@lago-morph/prototype-framework/client";
-import type { FileList } from "../../shared/types";
+import type { FileList, StoredFile } from "../../shared/types";
 import { describeError, el, section } from "../dom";
 
-/** Upload a file and download your files (FILES, through tickets). */
+/** Upload a file, finalize it, and download your files (FILES, through tickets). */
 export function filesPage(): HTMLElement {
   const page = section("Files");
   const picker = el("input");
@@ -12,8 +12,8 @@ export function filesPage(): HTMLElement {
   const list = el("ul");
   page.append(picker, upload, message, list);
 
-  async function download(name: string): Promise<void> {
-    const { ticket } = await api<{ ticket: DownloadTicket }>("/files/download-ticket", { method: "POST", body: { name } });
+  async function download(id: string): Promise<void> {
+    const { ticket } = await api<{ ticket: DownloadTicket }>("/files/download-ticket", { method: "POST", body: { id } });
     window.open(downloadUrl(ticket), "_blank", "noopener");
   }
 
@@ -24,7 +24,7 @@ export function filesPage(): HTMLElement {
         const item = el("li", `${f.name} (${f.size} bytes) `);
         const button = el("button", "Download");
         button.addEventListener("click", () => {
-          void download(f.name).catch((error: unknown) => {
+          void download(f.id).catch((error: unknown) => {
             message.textContent = describeError(error);
           });
         });
@@ -42,14 +42,15 @@ export function filesPage(): HTMLElement {
     }
     message.textContent = "Uploading…";
     const contentType = file.type === "" ? "application/octet-stream" : file.type;
-    void api<{ ticket: UploadTicket }>("/files/upload-ticket", { method: "POST", body: { name: file.name, contentType } })
-      .then(({ ticket }) =>
-        uploadFile(ticket, file, {
+    void api<{ id: string; ticket: UploadTicket }>("/files/upload-ticket", { method: "POST", body: { contentType } })
+      .then(async ({ id, ticket }) => {
+        await uploadFile(ticket, file, {
           onProgress: (p) => {
             message.textContent = `Uploading… ${p.loaded} of ${p.total} bytes`;
           },
-        }),
-      )
+        });
+        return api<StoredFile>("/files/finalize", { method: "POST", body: { id, name: file.name } });
+      })
       .then(() => {
         message.textContent = "Uploaded.";
         return refresh();

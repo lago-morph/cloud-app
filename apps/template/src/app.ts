@@ -5,13 +5,13 @@ import { fileRoutes } from "./server/routes/files";
 import { helloRoutes } from "./server/routes/hello";
 import { noteRoutes } from "./server/routes/notes";
 import { statusRoutes } from "./server/routes/status";
-import { notes } from "./server/schema";
+import { notes, uploads } from "./server/schema";
 
 export const app = defineApp({
   name: "template",
   config,
   secrets,
-  tables: { notes },
+  tables: { notes, uploads },
   routes: (api) => {
     helloRoutes(api);
     noteRoutes(api);
