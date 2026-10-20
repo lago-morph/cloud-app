@@ -1,48 +1,49 @@
-import { FrameworkError, jsonBody, newId, now, requireUser, z } from "@lago-morph/prototype-framework";
+import { FrameworkError, count, eq, jsonBody, newId, now, requireUser, z, type PortableDb, type UploadTicket } from "@lago-morph/prototype-framework";
 import type { Hono } from "hono";
-import type { Photo } from "../../shared/types";
+import type { PhotoUpload, StoredPhoto } from "../../shared/types";
+import { ownDraft, parseId, photoName } from "../access";
 import type { Env } from "../env";
-import { ownDraft, photoCount, photoName, type Ticket } from "../posts";
 import { photos } from "../schema";
 
-const ACCEPTED_TYPES = ["image/jpeg", "image/png"] as const;
+const ACCEPTED_TYPES: readonly string[] = ["image/jpeg", "image/png"];
 
-const ticketRequest = z.object({ contentType: z.enum(ACCEPTED_TYPES) });
-const finalizeRequest = z.object({ photoId: z.uuid() });
+const ticketRequest = z.object({ contentType: z.enum(["image/jpeg", "image/png"]) });
+const finalizeRequest = z.object({ id: z.uuid() });
 
-/**
- * Photos (FILES, DEMO-REQ-003): the author of a draft asks for an upload ticket, the browser sends the
- * file straight to storage, and a finalize route checks it before its row makes it visible. No size limit
- * of our own: files go to storage directly, so any size the framework supports works.
- */
+async function photoCount(db: PortableDb, postId: string): Promise<number> {
+  const [row] = await db.select({ n: count() }).from(photos).where(eq(photos.postId, postId));
+  return row?.n ?? 0;
+}
+
+/** FILES: the author uploads photos to a draft with tickets; finalize checks each upload before it is shown. */
 export function photoRoutes(api: Hono<Env>): void {
   api.post("/posts/:id/photos/upload-ticket", requireUser(), jsonBody(ticketRequest), async (c) => {
-    const post = await ownDraft(c.var.sql, c.var.user, c.req.param("id"));
+    const post = await ownDraft(c.var.sql, c.var.user, parseId(c.req.param("id")));
     const max = c.var.config.get("maxPhotosPerPost");
     if ((await photoCount(c.var.sql, post.id)) >= max) throw new FrameworkError("HTTP.CONFLICT", `a post has at most ${max} photos`);
-    const photoId = newId();
-    const ticket = await c.var.files.createUploadTicket(photoName(post.id, photoId), { contentType: c.req.valid("json").contentType });
-    return c.json({ photoId, ticket });
+    const id = newId();
+    const ticket = await c.var.files.createUploadTicket(photoName(post.id, id), { contentType: c.req.valid("json").contentType });
+    const body: PhotoUpload<UploadTicket> = { id, ticket };
+    return c.json(body);
   });
 
-  api.post("/posts/:id/photos/finalize", requireUser(), jsonBody(finalizeRequest), async (c) => {
-    const post = await ownDraft(c.var.sql, c.var.user, c.req.param("id"));
-    const { photoId } = c.req.valid("json");
-    const file = await c.var.files.head(photoName(post.id, photoId));
+  // Called by the browser after `uploadFile` resolves. Nothing shows the photo until this creates its row.
+  api.post("/posts/:id/photos", requireUser(), jsonBody(finalizeRequest), async (c) => {
+    const post = await ownDraft(c.var.sql, c.var.user, parseId(c.req.param("id")));
+    const { id } = c.req.valid("json");
+    const file = await c.var.files.head(photoName(post.id, id));
     if (file === null) throw new FrameworkError("HTTP.NOT_FOUND", "no such upload");
-    const accepted: readonly string[] = ACCEPTED_TYPES;
-    if (!accepted.includes(file.contentType)) {
+    if (file.size === 0 || !ACCEPTED_TYPES.includes(file.contentType)) {
       await c.var.files.delete(file.name);
-      throw new FrameworkError("HTTP.CONFLICT", `photos must be one of: ${ACCEPTED_TYPES.join(", ")}`);
+      throw new FrameworkError("HTTP.CONFLICT", `photos must be non-empty and one of: ${ACCEPTED_TYPES.join(", ")}`);
     }
     const max = c.var.config.get("maxPhotosPerPost");
     if ((await photoCount(c.var.sql, post.id)) >= max) {
       await c.var.files.delete(file.name);
       throw new FrameworkError("HTTP.CONFLICT", `a post has at most ${max} photos`);
     }
-    await c.var.sql.insert(photos).values({ id: photoId, postId: post.id, contentType: file.contentType, size: file.size, createdAt: now() });
-    const ticket = await c.var.files.createDownloadTicket(file.name);
-    const result: Photo<Ticket> = { id: photoId, contentType: file.contentType, size: file.size, ticket };
-    return c.json(result, 201);
+    const row: StoredPhoto = { id, size: file.size, contentType: file.contentType };
+    await c.var.sql.insert(photos).values({ ...row, postId: post.id, createdAt: now() });
+    return c.json(row, 201);
   });
 }

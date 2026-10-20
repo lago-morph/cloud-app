@@ -1,64 +1,39 @@
-# Build record
+# Build record: apps/demo (photo board)
 
-- **Builder:** Claude Opus 5.5 (model ID `claude-opus-5-5`), running as a Claude Code agent. This is my best knowledge of which model I am.
+- **Builder:** Claude Opus 5.5 (model ID `claude-opus-5-5`), running as a Claude Code subagent.
 - **Date:** 2026-10-20
-- **Build round:** 2. I deleted the earlier `apps/demo/` without reading it and built this one from scratch.
-- **Branch:** `claude/implement-local-cloudflare-f-01b`, from `origin/claude/implement-local-cloudflare`.
+- **Build round:** 3 (the previous `apps/demo/` was deleted unread and rebuilt from scratch).
+- **Branch:** `claude/implement-local-cloudflare-f-01c`, from `origin/claude/implement-local-cloudflare`.
 
 ## Inputs read
 
-These are the only sources I read to learn the framework and the requirements:
-
-- `docs/demo/demo-spec.md`
 - `skill/SKILL.md`
-- `skill/reference/`: `local-development.md`, `testing.md`, `http-and-validation.md`, `sql-and-migrations.md`, `kv.md`, `files.md`, `secrets.md`, `configuration.md`, `current-user.md`, `log.md`, `troubleshooting.md`, and the first part of `deploying.md` (§1 and the start of §2)
-- `skill/examples/`: `tests.md`, `files-tickets.md`, `notes-sql.md`, `configuration.md`, `admin-and-current-user.md`
-- `skill/templates/`: `README.md`, `FRAMEWORK-ISSUE.md`, `production-stage.json`
-- `skill/scripts/scaffold` and `skill/scripts/scaffold.mjs`, to decide whether to use the scaffolder (FRAMEWORK-ISSUE 1)
-- `apps/template/`: every source file (`package.json`, `tsconfig.json`, `.gitignore`, `README.md`, `index.html`, `config/`, `src/**`, `tests/**`). I did not open the generated migration files directly; I saw them through `skill/examples/notes-sql.md`.
+- `skill/reference/`: `local-development.md`, `http-and-validation.md`, `sql-and-migrations.md`, `files.md`, `kv.md`, `secrets.md`, `configuration.md`, `current-user.md`, `log.md`, `testing.md`, `deploying.md`, `owner-tasks.md` (not read: `troubleshooting.md`)
+- `skill/examples/`: `files-tickets.md`, `tests.md`, `configuration.md`, `notes-sql.md`, `admin-and-current-user.md` (not read: `endpoint-and-page.md`, `status-kv.md`, `secrets.md`; their template sources were read directly)
+- `skill/templates/`: `README.md`, `production-stage.json`, `FRAMEWORK-ISSUE.md`
+- `apps/template/`: every source file (`src/**`, `tests/**`, `config/**`, `index.html`, `package.json`, `tsconfig.json`, `.gitignore`, `migrations/checksums.json`); of `README.md` only its headings (then deleted from the copy)
+- `docs/demo/demo-spec.md`
+- Incidental, outside the allowed inputs: one `grep` over the installed package's `node_modules/@lago-morph/prototype-framework/dist/index.d.ts` that printed its single SQL export line (`defineTable, id, text, integer, number, …`), and a directory listing of that package. Nothing else of the framework, `docs/`, `packages/`, `apps/reference/`, `ai/`, `tests/` or the old demo was read. Command output (verify, generate-migration, dev, smoke) was also seen.
 
-I did not read these skill files: `skill/reference/owner-tasks.md`, `skill/examples/endpoint-and-page.md`, `skill/examples/status-kv.md`, `skill/examples/secrets.md`, or the rest of `deploying.md`.
+## What was built
 
-Beyond those sources, I looked at three things only to run the tools: the root `package.json` `workspaces` list and the head of `package-lock.json` (to diagnose the `npm ci` failure in FRAMEWORK-ISSUE 1), and the framework's diagnostics and command output. I read nothing under `docs/` (other than the spec), `packages/`, `apps/reference/`, `ai/`, `tests/`, or the old demo.
+Copied `apps/template` per `local-development.md` (in-repo app, no scaffolder), named `demo`, replaced the template's routes/pages/tests:
 
-## How it was built
+- Tables `posts` and `photos` (`size` is `number()` so files over 2 GiB fit); migration `0000_schema` generated.
+- Routes: `/site`, `/banner` (admin, KV), `/preferences` (user, KV), `/posts` (paginated published list, page size from query or the user's preference), `/posts/mine`, `/admin/drafts`, `/posts/:id` (view, edit own draft, delete), `/posts/:id/publish|unpublish` (admin, logged `info`), `/posts/:id/share` and `/shared/:token` (HMAC links signed with secret `shareKey`, lifetime `shareLinkDays`), `/posts/:id/photos/upload-ticket` and finalize (JPEG/PNG, `maxPhotosPerPost`).
+- Deleting a post deletes photo rows and the post atomically, then every file under `photos/<postId>/`; a failure is logged at `warn` and the post stays deleted.
+- Config keys `siteTitle`, `maxPhotosPerPost`, `shareLinkDays`; `config/cloudflare/prod.json` sets `framework.users` (DEMO-REQ-011).
+- Browser: front page (published list with pager, new draft, my posts, admin drafts and banner), post page (photos, edit, upload, share, publish/delete), share page, account page (user ID with copy button, posts-per-page).
 
-1. I copied `apps/template` into `apps/demo` without build output or local state, renamed the package to `demo`, and ran `npm ci` and `npm run build -w packages/framework` at the repository root (template README §1).
-2. I replaced the template's code with the demo's code:
-   - tables `posts` and `photos`, with migration `0000_schema` generated by `generate-migration`;
-   - routes `site`, `posts`, `photos` and `share`;
-   - the HMAC helper `signing.ts`, copied unchanged from the template;
-   - browser pages: board, post, share view, drafts, account and admin.
-3. I wrote the tests and the smoke test, ran `verify`, and ran the local smoke test.
-
-## Results
+## Checks
 
 | Check | Result |
 | --- | --- |
-| `npx prototype-framework verify` | **passed**: type checking, portability rules, migration checker, zod version, and tests on SQLite (37 passed) and Postgres (37 passed) |
-| `smoke --target local` (against `dev`) | **passed**, 8 of 8, run `3qs2wf6eexh09jl` on commit `2778ee9`. The evidence is in `validation-evidence/` (FRAMEWORK-ISSUE 4) |
-| Smoke on Cloudflare (`test-*` stage) | **blocked**: this build was told to make no calls to Cloudflare or any cloud service |
-| Smoke on AWS | **not-run**: AWS phase not started |
+| `npx prototype-framework verify` | passed (37 tests on SQLite and on Postgres) |
+| `npx prototype-framework smoke --target local` | passed, 8 tests; evidence `validation/local/iz5xn8erxm3l5ne.json` |
+| Smoke on Cloudflare test stage | `blocked`: this build was instructed to make no cloud calls |
+| Smoke on AWS | `not-run`: AWS phase not started |
 
-## Acceptance criteria
+Acceptance criteria: AC-001..005, 007, 009 (HTTP side) covered by the smoke test and local tests; AC-003 failure clause, AC-006 (config override), AC-007 expiry (fake timers), AC-008 (`logs()`; local `.logs` also showed the entries), AC-011 (stub login provider and the prod values file) by local tests. AC-010 is unfinished (cloud runs above). Open framework issue: see `FRAMEWORK-ISSUE.md` #1 (no documented browser testing; copy button and in-page rendering not automatically verified).
 
-| ID | Local | Cloud |
-| --- | --- | --- |
-| DEMO-AC-001 | tested (`posts.test.ts`, smoke) | blocked / not-run |
-| DEMO-AC-002 | tested: every cell of the table for anonymous, user and admin (`posts.test.ts`, `site.test.ts`, `photos.test.ts`, `share.test.ts`, smoke) | blocked / not-run |
-| DEMO-AC-003 | tested: 20 MB JPEG byte-identical, the per-post maximum, deletion removes rows and files, `warn` on a cleanup failure (FRAMEWORK-ISSUE 2: covered only through the prefix-cleanup path) | blocked / not-run |
-| DEMO-AC-004 | tested | blocked / not-run |
-| DEMO-AC-005 | tested: a new session for the same user ID keeps the choice | blocked / not-run |
-| DEMO-AC-006 | tested in-process with a `config` override of `siteTitle`, which the page shows and uses as `document.title`. I did not run a rebuild with changed `config/local.json` | n/a (local only) |
-| DEMO-AC-007 | tested: altered links (`share.test.ts`, smoke), expiry with fake `Date` timers | blocked / not-run |
-| DEMO-AC-008 | tested with `logs()`. The local `dev` log `.logs/2026-10-20.log` had the `posts` `info` entries from the smoke run | blocked / not-run (compliance driver) |
-| DEMO-AC-009 | `/api/auth/me` ID tested. The account page shows the ID with a Copy button (`navigator.clipboard`); the button was not exercised in a browser | blocked / not-run |
-| DEMO-AC-010 | the local smoke test passes | blocked (Cloudflare) / not-run (AWS) |
-| DEMO-AC-011 | tested with the stub login provider (`users.test.ts`). `config/cloudflare/prod.json` sets `framework.users` (empty until the owner adds IDs; I tested that an empty list admits only admins) | n/a (local only) |
-
-## Unfinished
-
-- Cloudflare test-stage deploy and smoke: **blocked**, because no cloud calls were allowed in this build.
-- AWS: **not-run**, because the AWS phase has not started.
-- `config/cloudflare/prod.json` still needs the owner's Google client ID, admin IDs and user IDs.
-- FRAMEWORK-ISSUE.md has four open entries. None of them blocks a requirement.
+The app is therefore **not done**: cloud smoke runs and FRAMEWORK-ISSUE #1 remain.

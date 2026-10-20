@@ -1,41 +1,57 @@
-import { api, getCurrentUser, type CurrentUser } from "@lago-morph/prototype-framework/client";
-import type { Site } from "../shared/types";
+import { api, getCurrentUser, login, logout, type CurrentUser } from "@lago-morph/prototype-framework/client";
+import type { SiteInfo } from "../shared/types";
 import { describeError, el, link } from "./dom";
 import { accountPage } from "./pages/account";
-import { adminPage } from "./pages/admin";
-import { boardPage } from "./pages/board";
-import { draftsPage } from "./pages/drafts";
-import { postPage, sharedPostPage } from "./pages/post";
+import { homePage } from "./pages/home";
+import { postPage, sharedPage } from "./pages/post";
 
-/** Chooses the page from the path; every path outside /api serves this client. */
-function route(path: string, user: CurrentUser, site: Site): HTMLElement {
-  const post = /^\/post\/([0-9a-f-]{36})$/.exec(path);
-  if (post?.[1] !== undefined) return postPage(post[1], user);
-  const share = /^\/share\/([^/]+)$/.exec(path);
-  if (share?.[1] !== undefined) return sharedPostPage(decodeURIComponent(share[1]));
-  if (path === "/account") return accountPage(user);
-  if (path === "/drafts" && user.level !== "anonymous") return draftsPage(site);
-  if (path === "/admin" && user.level === "admin") return adminPage(site);
-  return boardPage(user);
-}
-
-async function start(root: HTMLElement): Promise<void> {
-  const [site, user] = await Promise.all([api<Site>("/site"), getCurrentUser()]);
-  document.title = site.title;
-  const header = el("header");
-  header.append(el("h1", site.title));
+function header(site: SiteInfo, user: CurrentUser): HTMLElement {
+  const top = el("header");
+  top.append(el("h1", site.title));
   if (site.banner !== null) {
     const banner = el("p", site.banner);
     banner.className = "banner";
-    header.append(banner);
+    banner.setAttribute("role", "status");
+    top.append(banner);
   }
   const nav = el("nav");
-  nav.append(link("/", "Board"), " · ");
-  if (user.level !== "anonymous") nav.append(link("/drafts", "My drafts"), " · ");
-  if (user.level === "admin") nav.append(link("/admin", "Admin"), " · ");
-  nav.append(link("/account", user.level === "anonymous" ? "Log in" : "Account"));
-  header.append(nav);
-  root.replaceChildren(header, route(window.location.pathname, user, site));
+  nav.append(link("/", "Posts"), document.createTextNode(" · "), link("/account", "Account"), document.createTextNode(" · "));
+  if (user.level === "anonymous") {
+    const button = el("button", "Log in");
+    button.addEventListener("click", () => login());
+    nav.append(button);
+  } else {
+    nav.append(document.createTextNode(`${user.displayName ?? user.id} (${user.level}) `));
+    const button = el("button", "Log out");
+    button.addEventListener("click", () => {
+      void logout().then(() => window.location.reload());
+    });
+    nav.append(button);
+  }
+  top.append(nav);
+  return top;
+}
+
+function loginError(): HTMLElement | null {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("authError") === null) return null;
+  return el("p", `Login failed (request ${params.get("requestId") ?? "unknown"}).`);
+}
+
+async function start(root: HTMLElement): Promise<void> {
+  const [site, user] = await Promise.all([api<SiteInfo>("/site"), getCurrentUser()]);
+  document.title = site.title;
+  root.replaceChildren(header(site, user));
+  const failed = loginError();
+  if (failed !== null) root.append(failed);
+
+  const path = window.location.pathname;
+  const postMatch = /^\/posts\/([0-9a-f-]{36})$/.exec(path);
+  const shareMatch = /^\/share\/([A-Za-z0-9_.-]+)$/.exec(path);
+  if (path === "/account") root.append(accountPage(user));
+  else if (postMatch?.[1] !== undefined) root.append(postPage(postMatch[1], user, site));
+  else if (shareMatch?.[1] !== undefined) root.append(sharedPage(shareMatch[1]));
+  else root.append(homePage(user));
 }
 
 const root = document.querySelector<HTMLElement>("#app");

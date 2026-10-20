@@ -14,23 +14,10 @@ export function section(title: string): HTMLElement {
   return node;
 }
 
-/** A same-origin link; user text goes in as text only. */
+/** A same-origin link whose text is set as text. */
 export function link(href: string, text: string): HTMLAnchorElement {
   const node = el("a", text);
   node.href = href;
-  return node;
-}
-
-/** A button that runs `action` and shows any failure in `message`. */
-export function button(text: string, message: HTMLElement, action: () => Promise<void>): HTMLButtonElement {
-  const node = el("button", text);
-  node.type = "button";
-  node.addEventListener("click", () => {
-    message.textContent = "";
-    void action().catch((error: unknown) => {
-      message.textContent = describeError(error);
-    });
-  });
   return node;
 }
 
@@ -42,7 +29,13 @@ export function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** A timestamp for display. */
-export function when(ms: number): string {
-  return new Date(ms).toLocaleString();
+/** Runs a promise and shows its failure in `message`. */
+export function report(message: HTMLElement, work: Promise<unknown>): void {
+  void work.catch((error: unknown) => {
+    message.textContent = describeError(error);
+  });
+}
+
+export function when(time: number): string {
+  return new Date(time).toLocaleString();
 }

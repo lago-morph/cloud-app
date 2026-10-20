@@ -2,49 +2,49 @@
   "tests": [
     {
       "file": "tests/smoke/smoke.test.ts",
-      "name": "the app is healthy",
+      "name": "the app is healthy and serves its configured site settings (DEMO-REQ-006)",
       "state": "passed",
       "errors": []
     },
     {
       "file": "tests/smoke/smoke.test.ts",
-      "name": "DEMO-REQ-006: anyone can read the configured site settings",
+      "name": "anonymous visitors see published posts newest first, with a <script> title as text (DEMO-AC-001)",
       "state": "passed",
       "errors": []
     },
     {
       "file": "tests/smoke/smoke.test.ts",
-      "name": "DEMO-REQ-001/002/008: drafts are private until an admin publishes; a <script> title stays text",
+      "name": "each permission is granted or refused by level (DEMO-AC-002)",
       "state": "passed",
       "errors": []
     },
     {
       "file": "tests/smoke/smoke.test.ts",
-      "name": "DEMO-REQ-003: a 20 MB JPEG round-trips byte-identical, the maximum holds, and deletion removes it",
+      "name": "a 20 MB JPEG uploads, displays and downloads byte-identical; the maximum holds; delete removes it (DEMO-AC-003)",
       "state": "passed",
       "errors": []
     },
     {
       "file": "tests/smoke/smoke.test.ts",
-      "name": "DEMO-REQ-004: an admin's banner is shown to everyone; a user cannot set it",
+      "name": "an admin's banner is shown to anonymous visitors (DEMO-AC-004)",
       "state": "passed",
       "errors": []
     },
     {
       "file": "tests/smoke/smoke.test.ts",
-      "name": "DEMO-REQ-005: the posts-per-page choice survives logout and login",
+      "name": "the posts-per-page choice survives logout and login (DEMO-AC-005)",
       "state": "passed",
       "errors": []
     },
     {
       "file": "tests/smoke/smoke.test.ts",
-      "name": "DEMO-REQ-007: a share link shows the draft to anyone; an altered link is refused",
+      "name": "a share link shows the draft to anyone; an altered link is refused (DEMO-AC-007)",
       "state": "passed",
       "errors": []
     },
     {
       "file": "tests/smoke/smoke.test.ts",
-      "name": "DEMO-REQ-009: /api/auth/me reports the user ID the account page shows",
+      "name": "the account's ID is the one /api/auth/me reports (DEMO-AC-009)",
       "state": "passed",
       "errors": []
     }

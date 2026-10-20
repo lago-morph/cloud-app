@@ -18,6 +18,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "author_name": {
+          "name": "author_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "title": {
           "name": "title",
           "type": "text",
@@ -116,15 +122,15 @@
           "primaryKey": false,
           "notNull": true
         },
-        "content_type": {
-          "name": "content_type",
-          "type": "text",
+        "size": {
+          "name": "size",
+          "type": "double precision",
           "primaryKey": false,
           "notNull": true
         },
-        "size": {
-          "name": "size",
-          "type": "integer",
+        "content_type": {
+          "name": "content_type",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -191,6 +197,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "4aef6d93-3533-4714-b98f-5946424123e1",
+  "id": "f8b32b39-a98e-4280-a63c-8b28e6a31a9a",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }

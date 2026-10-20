@@ -2,8 +2,7 @@
 
 export type PostStatus = "draft" | "published";
 
-/** Site-wide settings every page shows (DEMO-REQ-004, DEMO-REQ-006). */
-export interface Site {
+export interface SiteInfo {
   readonly title: string;
   readonly banner: string | null;
   readonly maxPhotosPerPost: number;
@@ -14,52 +13,64 @@ export interface Banner {
   readonly banner: string | null;
 }
 
+export interface Preferences {
+  readonly perPage: number;
+}
+
 export interface PostSummary {
   readonly id: string;
   readonly title: string;
   readonly authorId: string;
+  readonly authorName: string | null;
   readonly status: PostStatus;
   readonly createdAt: number;
   readonly updatedAt: number;
 }
 
+export interface Post extends PostSummary {
+  readonly body: string;
+}
+
 export interface PostPage {
   readonly posts: readonly PostSummary[];
   readonly page: number;
-  readonly pageSize: number;
+  readonly perPage: number;
   readonly hasMore: boolean;
 }
 
-export interface DraftList {
+export interface PostList {
   readonly posts: readonly PostSummary[];
 }
 
-/**
- * A photo with a fresh download ticket. The ticket's type comes from the framework (`DownloadTicket`
- * in the browser), which shared code may not import, so it is a type parameter here.
- */
-export interface Photo<Ticket> {
+/** A photo with a fresh download ticket; `T` is the framework's `DownloadTicket` type on each side. */
+export interface Photo<T> {
   readonly id: string;
-  readonly contentType: string;
   readonly size: number;
-  readonly ticket: Ticket;
+  readonly contentType: string;
+  readonly ticket: T;
 }
 
-export interface PostDetail<Ticket> extends PostSummary {
-  readonly body: string;
-  readonly photos: readonly Photo<Ticket>[];
+export interface PostDetail<T> {
+  readonly post: Post;
+  readonly photos: readonly Photo<T>[];
 }
 
-export interface Created {
+export interface PhotoUpload<T> {
   readonly id: string;
+  readonly ticket: T;
+}
+
+export interface StoredPhoto {
+  readonly id: string;
+  readonly size: number;
+  readonly contentType: string;
 }
 
 export interface ShareLink {
   readonly token: string;
-  readonly path: string;
   readonly expiresAt: number;
 }
 
-export interface Preferences {
-  readonly pageSize: number;
+export interface Created {
+  readonly id: string;
 }
