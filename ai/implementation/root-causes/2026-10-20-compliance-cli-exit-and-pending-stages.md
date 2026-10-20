@@ -293,3 +293,25 @@ Applied verbatim, with my temp tests present: `npx vitest run --config vitest.un
    - new `tests/compliance/harness/cli.unit.test.ts`: usage → 64 and `runCompliance` not called; resolved status passed through (include 2); `Error` rejection → 1 with message on stderr; non-Error rejection → 1; `nodeDeps` throwing → 1.
    - in `driver.unit.test.ts`, using `harness()`: A (own stage: one record, exit 1, KV-AC-001 `passed`, `raw["pending-stages.log"]` contains the error); B (stale stage: deploy and tests run, KV-AC-001 `passed`, no `driver-error.log`, exit 1 returned and in record); D (failing run with runner status 3 + own-stage write failure: one record, exit 3, KV-AC-001 `failed`).
 5. Re-check per §8 step 4: the full `tests/compliance/harness/` unit run and the harness `tsc` check.
+
+---
+
+## Fix
+
+Fixer: fixing subagent (prompt §8 step 3). I did not diagnose or review this record. Branch `claude/implement-local-cloudflare-fix-c7`, from `origin/claude/implement-local-cloudflare`. Local only; no Cloudflare calls. I did not touch `catalogue.ts` or `criteria/compl/support.ts` (another fix is editing them).
+
+### Red (commit `8494630`, tests only)
+- New `tests/compliance/harness/cli.unit.test.ts`, `[CLI-AC-003]`: usage errors (`--target nowhere`, `--bogus`) → 64 and `runCompliance` not called; resolved status 0/1/2/3 passed through; `Error` rejection → 1 with `compliance: <message>` on stderr; non-Error rejection (`"boom"`) → 1; `nodeDeps` throwing → 1.
+- `driver.unit.test.ts`, in the `[CLI-AC-003]` block, using `harness()` with a throwing `pendingStages.remove`: A (own stage: one record, exit 1, KV-AC-001 `passed`, `raw["pending-stages.log"]` holds `EACCES`); B (stale stage: deploy and vitest run, KV-AC-001 `passed`, no `driver-error.log`, exit 1 returned and in the record); D (failing run with runner status 3: one record, exit 3, KV-AC-001 `failed`).
+- On the unfixed code: `Tests 6 failed | 22 passed (28)`. The 3 cli failures were `expected 64 to be 1`. A and D rejected with `EACCES`. B failed because the events stopped after `run run, run run, remove …, pending- … THROW` (no deploy). The controls passed.
+
+### Green (commit `7261e64`)
+- `cli.ts`: the F1 diff as given. `nodeDeps(repoRoot)` stays in the second `try`. The header now lists "the pending-stage list could not be updated" among the cleanup failures, and "when the runner failed unexpectedly (the message is printed)" under 1.
+- `driver.ts`: the F2 diff in `removeStage` only, as given. `pendingStages.add` is not guarded.
+- `docs/components/compliance.md` Driver paragraph: "…, a `dev` that did not stop, or a pending-stage list that could not be updated makes the run exit non-zero …".
+
+### Re-check
+- `npx vitest run --config vitest.unit.config.ts tests/compliance/harness/` → `Test Files 15 passed (15)`, `Tests 103 passed (103)`.
+- `tsc -p tests/compliance/harness/tsconfig.json --noEmit`: no errors in `cli.ts`, `driver.ts` or the tests (only the existing TS2307 errors for the unbuilt framework package).
+- `npm run verify` → exit 0 (root unit: `176 files, 1652 tests passed`; template and reference `verify passed`).
+- `npm run compliance -- --target local --only CLI-AC-003 --out <scratch dir outside the repo>` → CLI-AC-003 `passed` (108 others `not-run`, not selected), record written. The run exit status was 1. The cause was the integration layer: `tests/compliance/criteria/compl/targets.test.ts` failed to load with `unexpected target "…names a unit test." in Where …` from `docs/decisions/decision-log.md` (raw `run-errors.log`). That is the catalogue Where-parsing problem the concurrent catalogue fix owns. It is not caused by this change.
