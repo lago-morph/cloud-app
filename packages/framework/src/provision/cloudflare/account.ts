@@ -6,7 +6,7 @@
  * `createSharedResources`. D-03 adds the state home (`sst-state`, DEC-0084) and the
  * `workers.dev` subdomain (DEC-0086) here.
  *
- * Ownership (DEC-PENDING-C-03-4): R2 bucket names are scoped to an account, so the bucket is
+ * Ownership (DEC-0270): R2 bucket names are scoped to an account, so the bucket is
  * read through this account's API path. Found → owned; Cloudflare's "not found" (HTTP 404)
  * → absent; refused (HTTP 403), or a creation that conflicts with an existing bucket
  * (HTTP 409) → it exists but this account does not own it (or its credentials cannot see it).

@@ -8,7 +8,7 @@
  *
  * Step 4 on a stage's first database (created in step 3 of this run) applies the migrations
  * in place: there is no running app and no data to preserve, so there is nothing to stop or
- * copy (DEC-PENDING-C-03-2). Otherwise pending migrations run MIG-REQ-006 steps 1–5: stop,
+ * copy (DEC-0268). Otherwise pending migrations run MIG-REQ-006 steps 1–5: stop,
  * copy into `<app>-<stage>-db-<n+1>`, migrate, check, delete the old database; steps 5 and 6
  * of this sequence then deploy the code against the new database and start the app.
  */

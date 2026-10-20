@@ -1,45 +1,10 @@
-# Decision drafts — C-T1 (compliance criteria: core, http, log, config, secrets, cli)
+# Decision drafts — C-T1
 
-Tests: `tests/compliance/criteria/{core,http,log,config,secrets,cli}/`; shared support in `tests/compliance/criteria/core/support/`. Written from the criteria, the contracts and `apps/reference/ROUTES.md`.
+Integrated by C-INT into `docs/decisions/decision-log.md` (phase C section). Assigned IDs:
 
-### DEC-PENDING-C-T1-1 — Run prerequisites: the test secret's value
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SEC-AC-001, SEC-AC-002, HTTP-AC-002, CORE-AC-002, C-RUN, D-RUN, C-02 driver
+- C-T1-1 → DEC-0277
+- C-T1-2 → DEC-0278
+- C-T1-3 → DEC-0279 (merged with C-T4-7)
+- C-T1-4 → DEC-0280
 
-Criteria that need the reference app's test secret `apiKey` to have a known value read it from its SEC-REQ-003 location: locally `SECRET_API_KEY` in `apps/reference/.dev.vars` (`dev` does not reload `.dev.vars` while running, so the runner sets it *before* the run with `npm run secrets -- set apiKey --target local --stage local` in `apps/reference`, value on stdin; a long random value of letters and digits). A cloud store cannot be read back, so on a cloud the runner sets the value on the run stage and passes it to the tests in `COMPLIANCE_SECRET_API_KEY` (the driver does not do this yet: a D item must add it, or the runner exports it). Without a value (or one under 12 characters) the tests report a missing prerequisite (`blocked`), never pass. CORE-AC-002's health check reports `SEC.MISSING` the same way.
-
-### DEC-PENDING-C-T1-2 — Clauses that change a stage run on scratch copies and further stages
-Origin: ai-proposed · Status: accepted · Affects: CFG-AC-003, SEC-AC-001, SEC-AC-003, SEC-AC-005, LOG-AC-004, CLI-AC-001, CLI-AC-004, CLI-AC-005, COMPL-REQ-003
-
-The driver records evidence only from an unmodified working tree, so no test edits a tracked file. Clauses that edit committed files or need a deployment without the secret run on a scratch copy of the app outside the repository (`node_modules` linked to the workspace's), with its own `dev`: CFG-AC-003 (edit `config/local.json` while `dev` runs, then restart), SEC-AC-001 "without a value" (a copy with no `.dev.vars` value), SEC-AC-003 local (`secrets set` into the copy's `.dev.vars`), CLI-AC-001/-004/-005 (template copy; a git repository of its own so `smoke` can record evidence from a clean tree there). Scratch `dev` sessions are serialised by a cross-process lock. On a cloud, clauses that set or delete secrets or remove a stage run on one further `test-<random>` stage (`newTestStage()`) deployed from a scratch copy and removed in `finally`, serialised across files by a lock (at most one further stage at a time; with the run stage that is ≤ 2 D1 databases, plan "Cloud usage limits"). A further stage's first deploy that stops naming unset secrets is followed by `secrets set` and a second deploy (PROV §2). One file (`secrets/further-stage.test.ts`) holds SEC-AC-001 (cloud missing clause), SEC-AC-003 (cloud), SEC-AC-005, LOG-AC-004 (removal clause), CLI-AC-004 (cloud) on one shared further stage; CLI-AC-005 deploys the template to its own further stage.
-
-### DEC-PENDING-C-T1-3 — Cloud test hooks interface for D-T2
-Origin: ai-proposed · Status: accepted · Affects: D-T2, LOG-AC-002, LOG-AC-004, LOG-AC-005, SEC-AC-002, SEC-AC-003, SEC-AC-005
-
-Cloud stores are reached through `tests/compliance/criteria/_cloud/index.ts` (D-T2 owns it), which must export `cloudHooks(target: string): CloudHooks | Promise<CloudHooks>` with the interface in `core/support/stores.ts`: `deleteSecret({app, stage}, name)`, `secretLocations({app, stage})` (e.g. `["SECRET_API_KEY"]`), `logBucketExists()`, `listLogKeys(prefix)`, `readLogObject(key)`. The module is loaded at run time; while it is absent the tests report a missing prerequisite. Stored-entry lookups by request ID read only the objects whose key ends with `-<requestId>.json`; SEC-AC-002 reads all of the run stage's entries for today and yesterday.
-
-### DEC-PENDING-C-T1-4 — Readings of criteria
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: the IDs named
-
-- **CORE-AC-002:** per target: `apps/reference/src` is unmodified (git status empty), `build --target <t> --stage <s>` of a copy succeeds, and the run's deployment serves `/`, `/api/ref/deployment` = `{app, stage}` and health 204. The AWS part is the AWS phase.
-- **CORE-AC-003:** forwarding headers (`X-Forwarded-*`, `Forwarded`, `X-Original-Host`, `X-Host`) must leave `deployment` identical; a forged `Host` may be refused before the app (local `dev` answers 403 unless Host is exact; a cloud routes by Host), and when the app answers, the identity is unchanged.
-- **HTTP-AC-002:** "the request's ID" is checked as a UUID unique to each response (the request ID is never read from request headers, core.md §2, so there is no client-side ID to compare); its log correlation is LOG-AC-002. `AUTH.LOGIN_FAILED` (400) has no route (DEC-0168, ROUTES.md) and is listed as an explicit exclusion, so any new catalogue code without a route fails the test. The `*.UNAVAILABLE` codes and `SEC.MISSING` are raised in-process with `createTestApp` locally (as ROUTES.md drives those routes); on a cloud `SEC.MISSING` is checked on the further stage after deleting the secret; the `*.UNAVAILABLE` codes have no cloud trigger, so HTTP-AC-002's cloud evidence does not cover them.
-- **HTTP-AC-003:** "before the handler runs" = a body of exactly PAR-200 bytes reaches the echo handler (200) while PAR-200 + 1 is 413 `HTTP.PAYLOAD_TOO_LARGE`; and the KV write route given an oversized or schema-invalid body answers the framework's code (not `KV.VALUE_TOO_LARGE`) and stores nothing. Bodies are sent with `Content-Length` (no chunked case).
-- **HTTP-AC-004:** Playwright loads `/` and a deep link on the deployed client; every request to `/api` is same-origin, no `OPTIONS` request is seen, and the page loads nothing cross-origin.
-- **LOG-AC-001:** the criterion's case is in-process ("on Cloudflare only the local case applies"), so the test runs `createTestApp` with `logWriter: "failing"` / `"never-completing"` on every target the criterion runs on; growth = median of three requests minus the in-memory writer's median, ≤ PAR-260.
-- **LOG-AC-004:** the outside-request clause is reported `blocked`: no reference route and no app-facing API writes an entry outside a request (see "Missing fixture" below).
-- **LOG-AC-005, SEC-AC-002 (stub code), CFG-AC-005 (stub login), HTTP-AC-002 (outage codes):** clauses the criterion states "locally" are registered only on local runs (a test that is not registered adds no `not-run` entry on a cloud).
-- **CFG-AC-003:** on every target `/api/ref/config` equals the committed file for the target and stage over the declared defaults listed in ROUTES.md. "Next build" locally = the next `dev` start (dev builds at start and does not rebuild while running).
-- **CFG-AC-004, CFG-AC-005 (deployed lists):** the resolved configuration is read from the build output (`.framework/<target>/`, the generated module with no imports whose default export holds `deployment` and `secrets`; its file name is not contracted): the run's own build output when it is for the run's stage, else a fresh `build` of a copy. With the authentication mock a deployed stage cannot show its admin/users lists through a login (the mock's level is used directly, AUTH-REQ-009), so "reports exactly its committed `framework.admins` and `framework.users`" is checked on the deployment's resolved configuration.
-- **SEC-AC-001:** "is returned" is checked by the SHA-256 that `/api/ref/secret` returns (the reference app never returns the value).
-- **SEC-AC-002:** the repository scan is `git grep --untracked` (tracked and untracked, not ignored, files); the build output is the app's `.framework/` (or a fresh build); browser assets are the entry page and every same-origin script, style and static import reachable from it (≤ 200); stored entries are the deployment's entries of today and yesterday (UTC). The session-cookie and ticket-URL needles come from a session and two tickets created by the test.
-- **SEC-AC-005:** asserted as written: the *next* request after `secrets set`, and after the deletion, must show the change. DEC-0092 observed a short delay after a Cloudflare secret update, so this may fail on Cloudflare; it is not weakened (SEC-AC-003's cloud test polls, as DEC-0092 says).
-- **CLI-AC-001:** both forms are `npx --no @lago-morph/prototype-framework <command>` and `npm run --silent <command> -- …` in a template copy. Local commands must succeed (`dev`: serves the client on its printed origin; `smoke`: against a running `dev`). `deploy`, `remove`, `setup-account`, `certify-auth` are run with `--target local` so a local run creates no cloud resources: "runs" there means the package dispatches them (no unknown-command answer, not status 127) and both forms give the same status. Their real (cloud) runs are CLI-AC-001's cloud part, which is not-run in this phase.
-- **CLI-AC-004:** locally, every output of the CLI-AC-001 runs (both forms, `dev` and `smoke` included) is scanned for the test secret set there and for the framework's generated development secrets in `.dev.vars`; on a cloud, the outputs of the further stage's deploy, `secrets set` and `remove`. The driver's own raw output is scanned by the runner (plan §10.6).
-- **CLI-AC-005:** `smoke` must exit 0, write exactly one schema-valid record (`validateEvidence`) under the copy's `validation/<target>/` with `exitStatus` 0 and no non-passed result, and print the log location for the day: locally `.logs/<yyyy-mm-dd>.log`, on a cloud `<app>/<stage>/<yyyy>/<mm>/<dd>/`.
-
-### Missing reference-app fixture (for C-01 or a follow-up)
-LOG-AC-004 "one written outside a request has a random final part": needs a way for the reference app to make the framework write a log entry outside an HTTP request on a deployed stage (no app-facing API exists for this: `LogService` is per request). Until a fixture exists (or the criterion is revised), that clause is `blocked`.
-
-## Parameter changes
-
-None.
+Parameter changes: none.

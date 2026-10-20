@@ -9,7 +9,7 @@
  *    and `FRAMEWORK_PUBLIC_ORIGIN`, capturing its log lines into `.logs/`;
  * 5. start Vite on `localhost` (loopback) with `/api` proxied to Wrangler and a `Host` check,
  *    and print `http://localhost:<port>`, the one origin of the client and `/api`, recording it
- *    in `.framework/local/dev-server.json` for `smoke --target local` (DEC-PENDING-C-04-1);
+ *    in `.framework/local/dev-server.json` for `smoke --target local` (DEC-0272);
  * 6. on Ctrl-C (SIGINT/SIGTERM) remove the record, stop both and exit 0; if Wrangler stops on
  *    its own, remove the record and exit 1.
  */

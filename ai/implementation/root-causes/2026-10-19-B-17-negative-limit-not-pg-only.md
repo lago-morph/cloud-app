@@ -48,14 +48,14 @@ Reviewer: independent root-cause reviewer (prompt §8 step 2); did not diagnose,
    The `limit(1)` control shows limits are otherwise sent. The SQLite builder drops it too, so neither dialect ever sees `LIMIT -1`.
 2. *So the fixture's query returns every row on both dialects and its test passes on both.* Follows from 1: the fixture (`test/fixtures/cli/pg-only/src/app.ts.fixture`, `GET /items`) passes `-1` straight to `.limit()`, and the fixture test expects 2 rows. The framework SQL layer does not touch limit/offset (`grep -i "limit\|offset" src/sql/*.ts`: only PAR-215 result-size and identifier-length hits).
 3. *`verify` really runs a Postgres process.* `src/cli/verify/tests.ts:87` spawns a child per dialect with `PROTOTYPE_FRAMEWORK_DIALECT: dialect`; the record's evidence 1 (LOCAL-AC-003 DISTINCT fixture failing `verify`, which can fail only on Postgres) shows it takes effect. Enough to rule out "Postgres process missing".
-4. *DEC-PENDING-B-T4-7's premise is the defect.* It says `.limit(-1)` gives Postgres "LIMIT must not be negative". Postgres does reject it (record evidence 2, raw SQL), but via Drizzle the clause is never sent, so the fixture is not a Postgres-only failure.
+4. *DEC-0239's premise is the defect.* It says `.limit(-1)` gives Postgres "LIMIT must not be negative". Postgres does reject it (record evidence 2, raw SQL), but via Drizzle the clause is never sent, so the fixture is not a Postgres-only failure.
 
 ### Alternatives
 - *`verify` should catch this some other way.* Ruled out by the text. CLI-REQ-002 says `verify` runs type checking, the portability rules, the migration checker and the app's tests on both dialects, and fails if any step fails. CLI-AC-002 says it "fails on … a Postgres-only failure". LOCAL-REQ-003/LOCAL-AC-003 say the Postgres-dialect check is done by running the tests on each dialect. Nothing requires `verify` to flag a query that behaves the same on both dialects. Here the app behaves identically on both, so there is no Postgres-only failure for `verify` to find. Exiting 0 is correct.
 - *A framework bug (wrapper rewriting the limit).* Ruled out by link 2 and by the plain-Drizzle probe.
 
 ### Fix
-The fix is correct: it changes the fixture, which is where the cause is (a wrong test input, not a CLI defect), and it correctly re-records DEC-PENDING-B-T4-7. It does not weaken the test, because the assertions (non-zero exit, output names the fixture test) stay the same. Notes on the candidates:
+The fix is correct: it changes the fixture, which is where the cause is (a wrong test input, not a CLI defect), and it correctly re-records DEC-0239. It does not weaken the test, because the assertions (non-zero exit, output names the fixture test) stay the same. Notes on the candidates:
 - `offset(-1)` meets the requirements. The probe shows Drizzle sends it. Its guard is `offset ? …`, and -1 is truthy:
   ```
   pg limit(10).offset(-1) {"sql":"… limit $1 offset $2","params":[10,-1]} -> error: … | cause: OFFSET must not be negative
@@ -67,7 +67,7 @@ The fix is correct: it changes the fixture, which is where the cause is (a wrong
 ### What a corrected fixture must exhibit
 1. It uses only supported, type-correct framework/Drizzle API, so type check, portability rules and the migration check all pass. Prove this with a passing `verify` run on the same app minus the failing test, or by asserting that the output has no type-check or CHECK diagnostic.
 2. Drizzle sends the offending construct to the database. Show this with `toSQL()`: the clause and its parameter are present.
-3. On local D1 (the real `sqlite` test process, not `node:sqlite`) the fixture test passes. On PGlite the query raises a Postgres error and the fixture test fails. Show both with a probe and record them in DEC-PENDING-B-T4-7.
+3. On local D1 (the real `sqlite` test process, not `node:sqlite`) the fixture test passes. On PGlite the query raises a Postgres error and the fixture test fails. Show both with a probe and record them in DEC-0239.
 4. `verify` exits non-zero and its output names the fixture test. Recommended, to keep the test as strong as "Postgres-only": also assert from the output that the `sqlite` test process passed and the `postgres` one failed. Neither the current test nor the LOCAL-AC-003 test checks this, so a fixture that fails on both dialects would also satisfy them.
 
 ## Fix
@@ -119,4 +119,6 @@ Author: test-case author (prompt §8 step 3); did not write the CLI code, the di
 - `npm run build -w packages/framework`, then `npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/cli/verify.test.ts`: 12/12 passed
 
 ### Open item
-DEC-PENDING-B-T4-7 (`ai/implementation/decisions/B-T4.md`) still describes `.limit(-1)` and says the dialect is not separately asserted. It needs re-recording to `.limit(10).offset(-1)`, with the evidence above and the per-dialect assertions. It was left untouched because this fix was limited to the fixture, the test and this record.
+DEC-0239 (`ai/implementation/decisions/B-T4.md`) still describes `.limit(-1)` and says the dialect is not separately asserted. It needs re-recording to `.limit(10).offset(-1)`, with the evidence above and the per-dialect assertions. It was left untouched because this fix was limited to the fixture, the test and this record.
+
+Closed by C-INT (2026-10-20): DEC-0311 records the corrected fixture and its per-dialect assertions; DEC-0239 is marked accordingly.
