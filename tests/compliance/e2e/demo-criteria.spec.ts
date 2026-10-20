@@ -1,8 +1,9 @@
 /**
- * Demo criteria DEMO-AC-002, -004, -005, -007, -008 and -011 (docs/demo/demo-spec.md §2),
- * checked against the running demo in Chromium, and in-process (`createTestApp`) for the clauses
- * the specification gives to local tests: the expiry clause of DEMO-AC-007 (with a shifted
- * clock, the stand-in for the test runner's fake timers) and DEMO-AC-011 (the stub login
+ * Demo criteria DEMO-AC-002, -004, -005, -007, -008 and -011, and DEMO-AC-003's file-deletion
+ * failure clause (docs/demo/demo-spec.md §2), checked against the running demo in Chromium, and
+ * in-process (`createTestApp`) for the clauses the specification gives to local tests: the expiry
+ * clause of DEMO-AC-007 (with a shifted clock, the stand-in for the test runner's fake timers),
+ * DEMO-AC-003's failure clause (`unavailable: ["files"]`) and DEMO-AC-011 (the stub login
  * provider).
  *
  * Written from the specification, not from the demo's code (tests/compliance/e2e/support/demo.ts
@@ -641,6 +642,71 @@ test(tag("DEMO-AC-008", "publishing a post and deleting it through the page each
 });
 
 // ---------------------------------------------------------------------------------------------
+
+/** Component codes the framework writes its own entries under (the catalogue's code prefixes, LOG-REQ-005). */
+const FRAMEWORK_COMPONENTS = new Set(["AUTH", "CFG", "CORE", "FILES", "HTTP", "KV", "LOG", "SEC", "SQL"]);
+
+if (local()) {
+  // DEMO-AC-003's clause "In a local test, a simulated file-deletion failure produces a `warn` log
+  // entry" (DEMO-REQ-003: "If deleting a file fails, the failure is logged and the post is still
+  // deleted"; demo-spec "photo-cleanup failures at `warn`"). The failure is simulated the way the
+  // framework's testing contract offers (testing.d.ts `unavailable`; skill/reference/testing.md:
+  // "make the capability unavailable and run the request that cleans up"): in-process with
+  // `unavailable: ["files"]`, the post's deletion is replayed, and `TestApp.logs()` is read.
+  test(tag("DEMO-AC-003", "file-deletion failure clause (local, in-process with files unavailable): deleting a post still deletes it, and the demo writes a warn entry during that request"), async ({ browser }) => {
+    test.setTimeout(5 * 60_000);
+    const o = origin();
+    const sfx = randomSuffix(4);
+    const authorId = `demo-ac003w-user-${sfx}`;
+    const author = await session(browser, o, "user", authorId);
+    const title = `AC003 cleanup fails ${sfx}`;
+    let created = false;
+    let app: TestApp | undefined;
+    try {
+      // Learn the requests from the running demo: create a draft, read it, delete it through the page.
+      const createRec = theMutation(await record(author.page, o, async () => void (await createDraftAndOpen(author.page, title))), "creating a draft");
+      created = true;
+      const postUrl = author.page.url();
+      const reads = await postDataRequests(author, postUrl, title);
+      await openSettled(author.page, postUrl);
+      const deleteRec = await act(author, ASSUMED.deleteButton, "deleting the post");
+      created = false;
+
+      // The same requests in-process, with file storage unavailable.
+      const { name: appName } = await demoDefinition();
+      app = await demoTestApp({ unavailable: ["files"] });
+      const asAuthor = app.as(mockUsers.user(authorId));
+      const subs: Substitutions = new Map();
+      const made = await replayInProcess(asAuthor, createRec);
+      expectAllowed(made, "in-process: create the draft");
+      learn(subs, createRec.response, made.text);
+      for (const read of reads) {
+        const r = await replayInProcess(asAuthor, substitute(read, subs));
+        expectAllowed(r, `in-process: the author reads the draft (${read.path})`);
+        expect(r.text, "in-process: the draft is there before the delete").toContain(title);
+      }
+
+      const before = app.logs().length;
+      const deleted = await replayInProcess(asAuthor, substitute(deleteRec, subs));
+      const during = app.logs().slice(before);
+      expectAllowed(deleted, "in-process with files unavailable: deleting the post still succeeds");
+      for (const read of reads) {
+        const r = await replayInProcess(asAuthor, substitute(read, subs));
+        expect(r.status, `in-process: reading after the delete answers without a server error (${read.path})`).toBeLessThan(500);
+        expect(r.text, `in-process: the deleted post is gone (${read.path} answered ${String(r.status)})`).not.toContain(title);
+      }
+      const warnings = during.filter((e) => e.severity === "warn" && e.app === appName && e.requestId !== undefined && !FRAMEWORK_COMPONENTS.has(e.component));
+      expect(
+        warnings.length,
+        `the demo writes a warn entry for the failed file deletion during the delete request; entries written then:\n${during.map((e) => `${e.severity} ${e.component}: ${e.message}`).join("\n")}`,
+      ).toBeGreaterThan(0);
+    } finally {
+      if (app !== undefined) await app.dispose();
+      if (created) await deleteAsAdmin(author, author.page.url());
+      await closeAll(author);
+    }
+  });
+}
 
 if (local()) {
   test(tag("DEMO-AC-011", "every committed production values file sets framework.users; in-process with the stub login provider, a login on the users list creates a draft and a login on neither list is refused with 401 and sees only published posts"), async ({ browser }) => {
