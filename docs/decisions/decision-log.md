@@ -2147,6 +2147,7 @@ Origin: ai-proposed · Status: accepted (assumption under the owner's instructio
 Criteria that need the reference app's test secret `apiKey` to have a known value read it from its SEC-REQ-003 location: locally `SECRET_API_KEY` in `apps/reference/.dev.vars` (`dev` does not reload `.dev.vars` while running, so the runner sets it *before* the run with `npm run secrets -- set apiKey --target local --stage local` in `apps/reference`, value on stdin; a long random value of letters and digits). A cloud store cannot be read back, so on a cloud the runner sets the value on the run stage and passes it to the tests in `COMPLIANCE_SECRET_API_KEY` (the driver does not do this yet: a D item must add it, or the runner exports it). Without a value (or one under 12 characters) the tests report a missing prerequisite (`blocked`), never pass. CORE-AC-002's health check reports `SEC.MISSING` the same way.
 
 C-INT: the driver passing `COMPLIANCE_SECRET_API_KEY` on a cloud run is assigned to D-T2/D-05 in the plan (§5 "From phase C").
+Integrator note: done by D-07; see DEC-0398.
 Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
 Item: C-T1.
 
@@ -3006,6 +3007,7 @@ Origin: ai-proposed · Status: accepted · Affects: D-05, D-RUN, C-02 driver, DE
 - **Driver leftover check still a stub.** `tests/compliance/harness/node-deps.ts` `targetOperations()` rejects until it is wired to D-03's Cloudflare `TargetOperations`. Until then COMPL-AC-004's token clause fails ("leftover check failed"), correctly.
 - **C-T4 hook signatures already match.** `listLogEntries` and `listStageResources` match C-T4's expected signatures (`e2e/support/cloud.ts`), so no C-T4 follow-up is needed.
 Integrator note: the second bullet is resolved by DEC-0357 (the driver's leftover check now uses the framework's `listStageResources`). The first bullet (apiKey generation, `secrets set` on the run stage, `COMPLIANCE_SECRET_API_KEY`, redaction; DEC-0277) is still open: no harness file sets `COMPLIANCE_SECRET_API_KEY`.
+Integrator note (final): the first bullet is closed by DEC-0398 (D-07).
 Item: D-T.
 
 ### DEC-0367 — Examples are whole files copied unchanged from the template and the reference app
@@ -3165,6 +3167,7 @@ Origin: ai-proposed · Status: accepted · Affects: SKILL-AC-001
 - "Each reference links to its examples": every reference links to at least one existing example (skill.md §2: "links to at least one example"), and every example is linked from some reference.
 - The link check also requires every relative link in any `skill/**/*.md` to resolve to an existing file (anchors are not checked).
 Item: E-T1.
+Proposed strengthening of the third bullet: DEC-0403 (status `proposed`, plan §11 Q9).
 
 ### DEC-0387 — Readings of SKILL-AC-002
 Origin: ai-proposed · Status: accepted · Affects: SKILL-AC-002
@@ -3187,7 +3190,7 @@ Origin: ai-proposed · Status: accepted · Affects: SKILL-AC-004
 - "CI type-checks and runs every example": CI is the framework's root `npm run verify`, which must run both apps' `verify`; `verify` type-checks only `src/` and `tests/` and runs `tests/**/*.test.ts` (cli.md §2, PAR-116), so every TypeScript source must lie there and every test source match that glob. Non-TypeScript sources (SQL, HTML, JSON) need only exist in those apps.
 - "Runs ... the template": the test runs `npm --workspace <app> run verify` for `apps/template` and `apps/reference` and requires exit 0 (needs the framework built, as the driver and `test:integration` do).
 Item: E-T1.
-Refined by DEC-0392.
+Refined by DEC-0392. Proposed extensions: DEC-0404, DEC-0405 (status `proposed`, plan §11 Q9).
 
 ### DEC-0390 — `apps/template` and `apps/reference` have no `vitest.config.ts`
 Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SKILL-AC-004, SKILL-REQ-004, PROV-AC-001 (reading in `tests/compliance/criteria/prov/template-deploy.test.ts`), decision-log entries at lines 1564 and 1599 (their mentions of "the template's `vitest.config.ts`" are now historical)
@@ -3237,3 +3240,257 @@ Reason: apps have no browser tests by design. Playwright is scoped to browser-le
 Root cause and review (ACCEPTED, fix amended): `ai/implementation/root-causes/2026-10-20-F-02-round-3-demo-issues.md`.
 Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
 Item: fix-f4a (docs).
+
+## Implementation phase: local and Cloudflare — follow-ups after phase E, phase F demo checks (2026-10-20)
+
+Entries DEC-0394 to DEC-0412 were integrated by the final integrator from the drafts of items C-T6, D-07, E-04, E-T2, fix-e2, fix-f1 and fix-f4b (plan §10.4). None of these items made a Cloudflare call. No parameter changed. The E-T2 entries (DEC-0403 to DEC-0407) keep the status `proposed` that their draft gave them; their acceptance is open (plan §11 Q9).
+
+### DEC-0394 — Level and placement of the runner's CLI-AC-003 tests
+Origin: ai-proposed · Status: accepted · Affects: CLI-AC-003, tests/compliance/harness/driver.unit.test.ts
+
+CLI-AC-003 speaks of *injected* failures, and it is in the driver's `UNIT_LEVEL` list, so the tests are unit tests of `runCompliance` with fake `DriverDeps` (the existing `harness()` fake in `driver.unit.test.ts`; no network, no Cloudflare). They are in a new `[CLI-AC-003]` describe block of that file, each title tagged `[CLI-AC-003]`, so the local run's unit layer folds them into CLI-AC-003 only. "The compliance runner's cleanup" is read as: stopping `dev` (local), removing the test stage, and the leftover check (cloud).
+Item: C-T6.
+
+### DEC-0395 — Readings of "non-zero exit statuses that reflect the original failure"
+Origin: ai-proposed · Status: accepted · Affects: CLI-AC-003
+
+- A failing tagged test: the run exits with the test runner's status (1 in the fake), and the record's `exitStatus` equals it.
+- An original failure plus a failing cleanup: the exit status is still the original one (1), the record is still written, the original failure stays the recorded reason, and the cleanup failure is reported (raw remove log, `leftovers`, stage kept in the pending list).
+- A cleanup failure after tests that all passed is a partial failure (CLI-REQ-003: "including partial failures"; `remove` with leftovers exits 1), so the run must exit non-zero. The exact value is not fixed by the criterion; the test asserts non-zero and that the record's `exitStatus` matches the process status.
+Item: C-T6.
+
+### DEC-0396 — Two tests failed against the driver; driver fixed, tests unskipped
+Origin: ai-proposed · Status: accepted (resolved by the driver fix) · Affects: CLI-AC-003, tests/compliance/harness/driver.ts, tests/compliance/harness/cli.ts
+
+The C-T6 test author found two `[CLI-AC-003]` tests failing and committed them as `it.skip` (the author does not change the code under test, prompt §7):
+
+1. Local: when `dev`'s `stop()` rejected after a failing test, `runCompliance` threw out of its `finally` block. No record was written and `cli.ts` exited 64 (usage-error status), losing the original status 1.
+2. Cloud: when every test passed but stage removal failed (leftovers remained) or the leftover check failed, the run exited 0.
+
+Root cause and fix: `ai/implementation/root-causes/2026-10-20-CLI-AC-003-driver-cleanup-failures.md` (Review: ACCEPTED; Fix section). The driver now guards `local.stop()` (error text in raw `dev.log`, `exitStatus ||= 1`) and, after cleanup, sets `exitStatus ||= 1` when `leftovers` is non-empty, which includes a leftover check that could not run. `||=` keeps an earlier non-zero (original) status. Both tests are unskipped with no other test change; no `it.skip` remains in the harness tests. The `cli.ts` header and the Driver paragraph of `docs/components/compliance.md` state the rule. Cloud runs must be started with `NODE_USE_ENV_PROXY=1` in this sandbox (DEC-0357), or the leftover check cannot run and every cloud run correctly exits 1.
+
+Open follow-ups from the review (not done here): F1, `cli.ts` gives the usage status 64 to any runtime exception from `runCompliance`; F2, `deps.pendingStages.remove` in `removeStage` is unguarded, so a failure to persist the pending list stops the record from being written.
+Item: C-T6.
+
+### DEC-0397 — AWS not-run parts for CORE-AC-006 and SQL-AC-006
+Origin: ai-proposed · Status: accepted · Affects: CORE-AC-006, SQL-AC-006, tests/compliance/harness/expected.ts
+
+`PHASE_RULES` gains two part rules on `local`, automated tier, detail `AWS phase not started` (plan §8.2), shaped like CHECK-AC-005's demo part: CORE-AC-006 part "AWS-bundle clause" (no AWS bundle yet) and SQL-AC-006 part "Data API retry-loop clause" (the Data API adapter is AWS code, not built). Only `local`: the SQL-AC-006 clause is stated as local and deterministic, and CORE-AC-006 is Local only; on Cloudflare SQL-AC-006 has no not-run part. The AWS phase removes both rules when it adds their tests.
+Item: C-T6.
+
+### DEC-0398 — The driver deploys, sets `apiKey` through `secrets set`, and deploys again
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: DEC-0277, DEC-0366, compliance.md "Driver", `tests/compliance/harness/{driver,node-deps,env}.ts`, SEC-AC-001, SEC-AC-002, HTTP-AC-002, CORE-AC-002, D-RUN
+
+- **When.** Only for a run stage the driver deploys itself (cloud target, no `--base-url`). Local runs are unchanged: the value stays in `apps/reference/.dev.vars`, set by the operator (DEC-0277). A cloud pass on a given `--base-url` (the MIG pass, DEC-0355) generates and sets nothing; an exported `COMPLIANCE_SECRET_API_KEY` still passes through there as before.
+- **Sequence.** `deploy` → generate → `secrets set apiKey --target <cloud> --stage <stage>` → `deploy` again. The first deploy of a new stage stops after step 5 with "required secrets are not set: apiKey" and the app stopped (provision core `checkSecretsAfterFirstCode`); the CLI wrapper recognises that output (or the preflight's "secret <name> is not set (set it with secrets set)") and rejects with `SecretsNotSetError`, which the driver accepts; any other deploy failure propagates unchanged (no retry, no secret). The second deploy always runs, also when the first one succeeded (a reused `--stage` that already had a value): it starts the stopped app and its health check passes only on the version that has the new secret, which is simpler and safer than relying on the secret PUT's own version roll-out (DEC-0092: a few seconds' delay).
+- **Value.** 32 characters from `[A-Za-z0-9]`, `crypto.randomInt` per character (≥ 12 as `testSecretValue()` needs). Generated in the driver process per run, held only in memory.
+- **Setting it.** The framework's own path (D-05, DEC-0354): `npx prototype-framework secrets set apiKey …` in `apps/reference`, the value written to the process's standard input, never an argument. Its output (which never contains the value, CLI-REQ-004) is kept as `raw/secrets-set.log`, redacted again defensively. `CloudStageOps.setSecret` is optional in the interface so cleanup-only operation objects (COMPL-AC-004's test) need not provide it; the driver fails the setup with a clear message if a deploying target lacks it.
+- **Handing it to the tests.** `COMPLIANCE_SECRET_API_KEY` in the environment of the vitest and Playwright processes only (`env.ts` `ENV.testSecret`, `childEnv({ testSecret })`); the build and typecheck processes do not get it.
+- **Never logged or committed.** The value is added to the evidence writer's redactions (`<test-secret>`) before it is set, so a failure after that point still redacts; the writer applies them to the record and every raw file. The driver's own output lines go through the same redactions (this also applies the existing account-subdomain redaction to them). The live echo of a process given values to hide (the test runners, `secrets set`) is written a line at a time with the values replaced, so a value split across two output chunks is still hidden.
+- **Raw files.** `deploy.log` (first deploy), `secrets-set.log`, `redeploy.log`.
+- **Check.** `driver.unit.test.ts` "[COMPL-AC-004] the test secret on a cloud run stage": the real evidence writer, into a temp root, with a fake test run that prints the value in its output and its failure message: no written file contains the value, the raw log shows `<test-secret>`, and no driver log line contains it; plus no command line carries it and the build/typecheck environment lacks it. `node-deps.unit.test.ts`: the generator's form, the unset-secrets recognition, standard input plus line-wise echo redaction on a real child process, and the request count below.
+
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Item: D-07.
+
+### DEC-0399 — Extra Cloudflare API requests per run stage
+Origin: ai-proposed · Status: accepted · Affects: plan §1 "Cloud usage limits", §5 D-RUN estimate
+
+Relative to the driver before D-07 (one `deploy`, which on a new stage stopped on the unset secret), per run stage:
+- `secrets set apiKey`: **1** request (`PUT …/workers/scripts/<worker>/secrets`), counted on D-03's fake account through `cloudflareOperations` (`node-deps.unit.test.ts`; building the operations makes none).
+- second `deploy`: ≈ **16** framework requests + 2 SST runs (30–60 each, unmeasured) + 3 D1 requests, D-05's count on the fakes (plan §5 D-RUN "Command sequence per stage").
+- Total ≈ **17 framework requests + 2 SST runs (≈ 77–137 requests)**; the secret step writes no D1 rows (the redeploy's D1 rows are within D-05's per-stage "< 60 rows written"). These steps were already in the plan's per-stage estimate (≈ 215–370 requests), so that estimate is unchanged.
+
+Item: D-07.
+
+### DEC-0400 — Owner steps use existing commands for the app name and for checking a values file
+Origin: ai-proposed · Status: accepted · Affects: SKILL-REQ-006, prompt §3, README §1/§6/§8, owner-tasks §1/§5/§6, troubleshooting (top), deploying §4
+
+The framework has no command that prints the app's name or creates or edits a stage's values file, and none is added (no new CLI features). Instead:
+- the app's name comes from `build --target local --stage local`, which already prints `built <app> for target …`: `APP=$(npm run --silent build -- --target local --stage local | sed -n 's/^built \([^ ]*\) for .*/\1/p')`. It builds only into the git-ignored `.framework/` and makes no network call (checked in a network namespace);
+- after creating or editing `config/cloudflare/<stage>.json`, the owner runs `npm run build -- --target cloudflare --stage "$STAGE"`, which rejects invalid JSON and undeclared keys (checked locally, no network). It does not check that `framework.google.clientId` is present; `deploy` does.
+Item: E-04.
+
+### DEC-0401 — Values file created and edited by pasted `node -e` one-liners
+Origin: ai-proposed · Status: accepted · Affects: SKILL-REQ-006, README §6/§8, owner-tasks §5/§6
+
+The production values file is written by a `node -e` one-liner that takes the Client ID as an argument (no heredoc, because indentation inside Markdown list items would break the `EOF` terminator on copy). Admin and user IDs are added or removed by one `node -e` one-liner with `OP=add|remove` and `LIST=admins|users`, which de-duplicates and then prints the file. This replaces the JSON fragment the owner had to merge by hand. Node is already required. `skill/templates/production-stage.json` is left for agents; owner pages do not need it. Commands were tested on a scratch copy.
+Item: E-04.
+
+### DEC-0402 — Explicit git lines, `STAGE` variable, extracted subdomain, unverified labels
+Origin: ai-proposed · Status: accepted · Affects: SKILL-REQ-006, prompt §11, README, owner-tasks, deploying, troubleshooting, SKILL.md, files.md
+
+- Every "commit" step now gives `git add …` and `git commit -m …` lines (`git add -A` for app changes; `.gitignore` keeps `.dev.vars`, `.logs/` and `.framework/` out).
+- The stage name is set once as `STAGE=…` and used as `"$STAGE"` (and `"$APP-$STAGE"` for the Worker name).
+- The `workers.dev` subdomain is extracted from the API response with the same `node -e` JSON pattern the log commands use, and the callback URL is printed with `echo`.
+- The sandbox-only proxy-token note is removed from troubleshooting §1.
+- Every Cloudflare dashboard menu path is labelled "not yet verified".
+- owner-tasks §1 and README §1 end the repository-root block with `cd apps/template`.
+- F8: `SKILL.md` now says apps are *designed* to run on Cloudflare and AWS, that only local runs are verified, and that the AWS target is not built yet; `files.md`'s Cloudflare platform note and troubleshooting's two Cloudflare-specific table cells are marked not yet verified.
+
+Sizes after the change (PAR-071, 12,000 bytes): owner-tasks ≈ 10.0 kB, troubleshooting ≈ 10.4 kB; SKILL.md within PAR-070. No example block changed.
+Item: E-04.
+
+### DEC-0403 — SKILL-AC-001: "each reference links to its examples" means every example tied to it (F1)
+Origin: ai-proposed · Status: proposed · Affects: SKILL-AC-001, DEC-0386 (third bullet strengthened)
+
+DEC-0386 read "its examples" as "at least one example". The criterion says *its* examples (plural, possessive): each reference must link every example that shows what it covers. `tests/skill/budgets-and-links.test.ts` now holds a table of each reference's examples, keyed by exactly `REFERENCE_FILES`, and requires every link in it. The "at least one" and "every example linked from somewhere" checks remain. Each row comes from skill.md §2 and from the files each example copies, not from the references' text:
+
+| Reference | Its examples | Reason |
+| --- | --- | --- |
+| configuration | configuration | the only example of configuration keys and values files |
+| current-user | admin-and-current-user | the only example of levels, `getCurrentUser`, `requireUser`/`requireAdmin`/`requireCurrentUser` |
+| deploying | configuration, tests | design "Deploying": test stages use `config/<target>/test.json` (copied only in configuration.md); design "Testing": the smoke test against a deployed test stage (tests.md) |
+| files | files-tickets | design "Implementation": `files-tickets.md` copies the finalize route "and the references point there" |
+| http-and-validation | endpoint-and-page | design "HTTP and validation": `Hono<Env>` from `env.ts`, response types in `src/shared/`, `api<T>` in browser code; all shown there |
+| kv | status-kv | the only example using `c.var.kv` |
+| local-development | configuration, endpoint-and-page | `config/local.json` (configuration.md) and the `index.html` and client entry `dev` serves (endpoint-and-page.md) |
+| log | notes-sql | the only example writing a log entry (`c.var.log.write`) |
+| owner-tasks | configuration | copy-ID steps put IDs in `config/<target>/<stage>.json`, copied only in configuration.md |
+| secrets | secrets | design "Implementation": `secrets.md` copies the HMAC helper and "the references point there" |
+| sql-and-migrations | notes-sql | the only example of tables and generated migrations |
+| testing | tests | the only example of `createTestApp` and the smoke test |
+| troubleshooting | (none) | the design ties no example to it; the "at least one" check still applies |
+
+Result: **fails today**: `skill/reference/deploying.md does not link skill/examples/configuration.md`. That is a skill gap, not fixed here (test-author item). Fix: add the link in `deploying.md` (E-04 or a docs fix item).
+Integrator note: item fix-e3 added that link (root cause `ai/implementation/root-causes/2026-10-20-SKILL-AC-001-deploying-missing-example-link.md`, Fix section), on the precondition that this entry is accepted; the status is left as drafted.
+Item: E-T2.
+
+### DEC-0404 — SKILL-AC-004: the template's browser examples are run (F2)
+Origin: ai-proposed · Status: proposed · Affects: SKILL-AC-004, DEC-0389
+
+"CI type-checks and runs every example." Examples copy `apps/template/index.html`, `src/client/main.ts`, `src/client/dom.ts` and `src/client/pages/{account,admin,files,notes,status}.ts`. No app test executes them; the app tests reach server routes only. New `tests/skill/example-pages.test.ts` (integration layer, so the driver runs it):
+- a static check: every example source that is an `index.html` or under `src/client/` must be loaded by the template's `index.html` (its module script, then the relative non-type imports). So the run covers each one, and a new browser example outside that graph fails;
+- a run: a scratch copy of `apps/template` (greeting set, `apiKey` set with `secrets set`) is served with `dev` and driven in Chromium by `tests/compliance/e2e/support/template-pages.ts`, the same driver E2E-001 uses. That covers the greeting, log in and out, Notes, Status (kept after reload), Files upload and download, and the admin secret check. All 7 steps must pass, with no uncaught page exception. The driver now also reports `pageErrors` (Playwright `pageerror`). E2E-001 reads only `steps`, so it is unaffected.
+
+Server-side example files are executed by the apps' `verify` tests, which load `src/app.ts` and so every route module. No per-file coverage check was added: the criterion asks that the examples run, and module load plus the route tests meets that.
+
+The run is not in root `npm run verify`. Putting it there needs a wiring line outside test files, in root `package.json` `verify`: append `&& vitest run --config vitest.integration.config.ts tests/skill/example-pages.test.ts`. It needs the framework built (verify builds it first) and Chromium (`/opt/pw-browsers`). It takes about 20 s. Not applied: changing root scripts is shared configuration (plan §1 rule 1 then requires a full `verify`), so it is left to the orchestrator.
+Integrator note: item fix-e3 has since appended that line to root `verify` and ran full `verify` online and offline (same root-cause record, Fix item 2); the status is left as drafted.
+Item: E-T2.
+
+### DEC-0405 — SKILL-AC-004: the byte-for-byte example check runs in root `verify` (F3)
+Origin: ai-proposed · Status: proposed · Affects: SKILL-AC-004, DEC-0384
+
+`tests/skill/examples.test.ts` was split into two files:
+- `tests/skill/example-copies.unit.test.ts` holds the file-only checks: markers, no `apps/demo/`, byte-for-byte equality, sources inside what `verify` covers, and the root `verify` wiring. The unit include glob `tests/**/*.unit.test.ts` collects it, so `npm run test:unit` and therefore root `npm run verify` run it. The integration glob `tests/skill/**/*.test.ts` also collects it, so the driver's integration run still evidences SKILL-AC-004 from it. The driver's unit run is limited to `UNIT_LEVEL` and ignores it. No configuration changed. A new tagged test asserts this wiring: root `verify` runs `test:unit`, which uses `vitest.unit.config.ts`, which includes `tests/**/*.unit.test.ts`.
+- `tests/skill/examples.test.ts` keeps only the two apps' `verify` runs (minutes long). Root `verify` runs those apps' `verify` itself.
+Item: E-T2.
+
+### DEC-0406 — CHECK-AC-003 covers the five migration-checker rule IDs (F4)
+Origin: ai-proposed · Status: proposed · Affects: CHECK-AC-003, DEC-0187
+
+"Every rule's diagnostic" includes the migration checker's five rule IDs (check.md §2). New `packages/framework/test/integration/check/migration-diagnostics.test.ts` runs the real `verify` on three fixture apps (`apps/base` + `mig/base`; three apps so that one break cannot hide another). For each rule it requires a line in the check.md §2 layout carrying that rule ID, a message that names the construct (the location prefix is excluded), and a `skill/reference/*.md` that exists:
+- `migration-checksums`: a comment appended to a generated migration; the message names that migration.
+- `migration-history`: a pair numbered two past the last, recorded in checksums; the message names the file.
+- `migration-dialects`: a column added to one dialect only, checksum kept; the message names the column.
+- `migration-supported-changes`: a column renamed by hand in both dialects; the message names the file and both columns.
+- `migration-apply`: an `ALTER TABLE` on a missing table; the message names the file and the missing table.
+
+All 5 pass.
+Item: E-T2.
+
+### DEC-0407 — The CHECK-AC-003 coverage control is tagged and checks "exactly one" (F5)
+Origin: ai-proposed · Status: proposed · Affects: CHECK-AC-003
+
+The control in `portability-rules.test.ts` is now tagged `[CHECK-AC-003]`, so the driver runs it. It was untagged and showed as `skipped`. Before, it mapped `RULES` through `some(...)`, so a rule with two representative fixtures passed. Now it lists every representative fixture's rule, plus the other representatives, and requires that list sorted to equal `ALL_RULES`. So each rule has exactly one, none missing and none twice. It passes.
+Item: E-T2.
+
+### DEC-0408 — A criterion is defined only by a row of a `| ID | Criterion | Verifies | Where |` table
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: COMPL-REQ-001, COMPL-REQ-002, COMPL-AC-001, compliance.md "Driver", DEC-0319
+
+Before this decision the driver's catalogue (`tests/compliance/harness/catalogue.ts`) took any `| <AREA>-AC-NNN | … |` row of three or more cells anywhere under `docs/` as a definition, with its last cell as the Where text, and the COMPL test's independent reader (`tests/compliance/criteria/compl/support.ts` `whereSets`) took such a row of any width. DEC-0319's two-column table of criterion IDs in the decision log broke the test's reader; a three-column one would have broken the driver ("defined twice"). `docs/CONVENTIONS.md` does not define the criteria table format; every defining document uses the same header, which COMPL-AC-001 ("the criteria's "Where" columns") relies on.
+
+Rule (both readers, implemented separately; the test shares no code with the harness):
+- A row defines a criterion only when it is a body row of a table whose header row has the cells `ID`, `Criterion`, `Verifies`, `Where`, in that order (compared after trimming), with a `| --- |` separator row next. The table ends at the first line that does not start with `|`.
+- The ID and the Where text are read from the `ID` and `Where` columns by index. An escaped `\|` inside a cell does not split it.
+- Inside a criteria table, a body row whose cell count differs from the header's, or whose ID cell is not `<AREA>-AC-NNN`, throws with the file and line. A header row whose first two cells are `ID | Criterion` but which is not exactly that header with a separator next also throws. Rows outside criteria tables are ignored, whatever their width.
+- Scenarios are unchanged: a `#### E2E-nnn` heading followed by a `Where:` line.
+
+On the real `docs/` both readers give the same 140 IDs (124 criteria, 16 scenarios) and the same per-target, per-tier sets as before the change. No doc change: DEC-0319's table stays as written. Stating the rule in compliance.md "Driver" is left to the owner.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Item: fix-e2 (root cause 2026-10-20-COMPL-AC-001-where-parser-decision-log).
+
+### DEC-0409 — `TestApp.dispose` states that in-process views share disposal
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: `docs/contracts/ts/testing.d.ts` (`TestApp.dispose` doc comment), DEC-0193, `skill/reference/testing.md`
+
+No type or behaviour change. The doc comment on `dispose` now states the behaviour DEC-0193 and `test-app.ts` already have: in-process, the original test app and every test app made from it with `as` share one app, so disposing any of them disposes all and later requests through any of them reject; on a connected stage it only logs that test app out and stage data is kept. Changing in-process behaviour (making a view's `dispose` a no-op) is not proposed; it would need its own decision.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Item: fix-f1 (root cause 2026-10-20-F-02-round-1-demo-issues, entry 4).
+
+### DEC-0410 — The spec finds the demo through `COMPLIANCE_DEMO_BASE_URL`, or starts it locally
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: COMPL (compliance driver usage), DEMO, plan F-03
+
+The driver starts or deploys the reference app only, and `COMPLIANCE_BASE_URL` names that app. The spec therefore does not use the harness `baseURL`. It works out the demo's origin like this:
+- If `COMPLIANCE_DEMO_BASE_URL` is set, the spec uses that origin, on any target.
+- If it is unset and the target is `local`, a `beforeAll` copies `apps/demo` to the git-ignored `.framework/e2e/demo-pages-<random>/`, the same way `support/apps.ts` copies apps for other E2E specs. It starts `dev` there with `support/process.ts` `startDev` and stops it in `afterAll`. Each run starts from fresh local state, and the tree stays clean (the driver's evidence check).
+- If it is unset on a cloud target, every test calls `prerequisiteMissing`, so the criteria are recorded `blocked` with a reason, never passed or `not-run`.
+
+**No driver or harness wiring was needed.** The driver passes its whole environment to Playwright (`childEnv`), so the variable reaches the spec unchanged. F-03 runs the spec against the demo's `test-` stage before it removes that stage:
+`COMPLIANCE_DEMO_BASE_URL=<demo stage origin> npm run compliance -- --target cloudflare --base-url <demo stage origin> --only DEMO-AC-001,DEMO-AC-003,DEMO-AC-009`
+With `--base-url`, the driver deploys no reference stage. The cloud cost is two posts, four photo, publish and delete calls, and one about 24 MB R2 object, which is deleted. That is tens of D1 rows. The F-03 estimate rules still apply.
+Item: fix-f4b.
+
+### DEC-0411 — Selectors come from the demo specification, not the round-3 demo
+Origin: ai-proposed · Status: accepted (assumption; owner review open) · Affects: DEMO, COMPL
+
+The demo is rebuilt from its specification every round (round 4 is in progress), so the spec uses no demo API route, element ID or class name. It drives the page only through:
+- the framework's routes `/api/auth/mock-login` (identities, on local and `test-` stages) and `/api/auth/me`;
+- controls found by role and accessible name, with tolerant patterns.
+
+**Assumed accessible names** (the `ASSUMED_*` constants in the spec). The demo specification requires these controls but does not name them:
+
+| Control | Role | Name pattern |
+| --- | --- | --- |
+| title field | textbox | `/title/i` |
+| text field (optional) | textbox | `/text\|body\|content\|message/i` |
+| create button | button | `/create\|new (draft\|post)\|add (draft\|post)\|submit\|save draft/i` |
+| attach button (optional; clicked if present) | button | `/attach\|upload\|add photo/i` |
+| publish button | button | `/^publish\b/i` |
+| delete button (cleanup only) | button | `/delete/i` |
+| account link (optional; followed if present) | link | `/account/i` |
+| account heading | heading | `/account/i` |
+| copy button | button | `/copy/i` |
+
+**Assumed page flow:**
+- The draft form is on the front page `/`.
+- After creating a draft, the app either goes to the post or lists it as a link named by its title. The spec opens it through that link.
+- The file picker for photos is on the post page.
+- Published posts are listed on `/` as links named by their titles.
+
+**One structural selector:** `input[type="file"]`, because a file picker has no required accessible name.
+
+**How each clause is checked:**
+- The title check looks for elements whose whole text is the title (`getByText(…, { exact: true })`), in any role.
+- The photo check scans `document.images` for an image whose natural size is the photo's 3600×2400, then repeats the check on a fresh load of the post.
+
+The round-3 demo matches all of these. The round-4 demo has no account link, so that link is now optional and the account heading and displayed ID are asserted instead (root cause `2026-10-20-demo-ac-009.md`); the whole spec passes against round 4 locally. The whole spec must still be re-checked against the deployed round-4 demo before the F-03 run.
+Item: fix-f4b.
+
+### DEC-0412 — What each test asserts
+Origin: ai-proposed · Status: accepted (assumption; owner review open) · Affects: DEMO-AC-001, DEMO-AC-003, DEMO-AC-009
+
+**DEMO-AC-001.**
+- An admin creates a draft through the page. The title is `Hello <script>window.demoPagesXss<id>=1</script> <id>`. The specification lets admins create drafts and publish any post, so no user's draft has to be reached by an admin.
+- On the author's post page, then in an anonymous visitor's list on `/`, then on the visitor's view of the post, the spec checks:
+  - an element shows exactly the literal title as its rendered text;
+  - that element has no child elements;
+  - no `script` element contains the marker;
+  - `window[marker]` is undefined.
+- The post is deleted through the page afterwards.
+
+**DEMO-AC-003.**
+- The browser encodes a random-pixel 3600×2400 baseline JPEG at quality 1. It is about 24.5 MB, and the test requires at least 20 MiB, so it counts as 20 MB under either reading. It also checks the `FFD8FF` signature.
+- The JPEG is attached through the post page's file picker.
+- Pass: an image on the post is `complete` with natural size 3600×2400, so `naturalWidth` > 0. This holds both after the upload and on a fresh load of the post.
+- The download and byte-identity clause is left to the smoke test and is not claimed here.
+
+**DEMO-AC-009.**
+- Clipboard read and write are granted for the demo origin, and a sentinel is written to the clipboard first.
+- The user opens `/` and reaches the account page through the page's own link if it has one; otherwise the account page must be shown on `/` (round 4 shows it inline on every page). Root cause: `ai/implementation/root-causes/2026-10-20-demo-ac-009.md`.
+- The test asserts more than the link: the account heading (`/account/i`) is visible, and the ID that `/api/auth/me` returns is visible as an element's exact text ("The account page shows the same ID as `/api/auth/me`").
+- The user then clicks the copy button.
+- Pass: the clipboard then holds exactly the `id` that `/api/auth/me` returns, which is the ID given to the mock login.
+
+The tests are independent: no serial mode, so one test failing does not skip the others. The file is named without a scenario ID and is tagged only DEMO-AC-001, DEMO-AC-003 and DEMO-AC-009, not E2E-015.
+Item: fix-f4b.

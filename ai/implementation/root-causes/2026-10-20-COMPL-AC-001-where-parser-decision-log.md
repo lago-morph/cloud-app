@@ -97,7 +97,7 @@ Fix subagent (prompt §8 step 3), branch `claude/implement-local-cloudflare-fix-
 **Change (Review fix requirements 1–3, 6).** Both readers now apply the stated rule. They are written separately, and the test still imports nothing from the harness:
 - `tests/compliance/harness/catalogue.ts` `readCatalogue`: `ROW` is gone. A criterion is a body row of a table whose header cells are exactly `ID | Criterion | Verifies | Where` (trimmed), with a `| --- |` separator row next. The table ends at the first line that does not start with `|`. The ID and Where cells are read by column index, and an escaped `\|` does not split a cell. Inside a criteria table, a row whose cell count differs from the header's, or whose ID cell is not `<AREA>-AC-NNN`, throws `<file>:<line>: …`. An `ID | Criterion …` header of any other shape, or one with no separator after it, also throws. Rows outside criteria tables are ignored. The scenario rule is unchanged.
 - `tests/compliance/criteria/compl/support.ts` `whereSets`: the same rule, implemented independently. It throws `<abs file>:<line>: …` in the same cases.
-- Decision draft `ai/implementation/decisions/fix-e2.md` (DEC-PENDING-fix-e2-1) records the rule. No doc change; DEC-0319 stays as written.
+- Decision draft `ai/implementation/decisions/fix-e2.md` (DEC-0408) records the rule. No doc change; DEC-0319 stays as written.
 
 **Red (`251737e`)**, requirement 4. New tests on temp-dir fixture trees:
 - `support.unit.test.ts`: a two-column `| COMPL-AC-002 | prose |` table, which failed with `unexpected target …`; three- and four-column ID tables under other headers, which were wrongly read; and four malformed cases (a non-ID first cell, too few cells, too many cells, and an `ID | Criterion | Verifies` header), none of which threw.
