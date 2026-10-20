@@ -59,4 +59,25 @@ Author: diagnosing subagent (prompt §8 step 1; did not write the code or the te
 3. FILES-AC-003, FILES-AC-006 and E2E-009 (same-origin transfers through `dev`) still pass; `npm run verify` passes.
 
 ## Review
-(to be written by the reviewer)
+
+**Verdict: ACCEPTED.** Reviewer: independent subagent (prompt §8 step 2). It did not diagnose this failure or write the code or tests, and it changed no code or tests. Reviewed on branch `claude/implement-local-cloudflare-rc-c1-review` (base `be0cfe6`), Vite 8.3.4, wrangler 4.149.0.
+
+**Reproduction.** `npm run compliance -- --target local --only FILES-AC-004,AUTH-AC-007` (dummy `apiKey` set through `npm run secrets`) failed FILES-AC-004's browser part with the same output as the Symptom: the foreign upload was stored and the download returned `ok: true`.
+
+**Links checked against the source.**
+- Link 1: `startClient` (`runtime.ts` lines 121–130) sets no `cors`. Vite's defaults (`node.js` line 25196) are `cors: { origin: defaultAllowedOrigins }`, and line 804 has the loopback regex. Confirmed.
+- Link 2: at `node.js` 25084–25085, the `cors` middleware is installed right after `rejectInvalidRequestMiddleware`. That is before `hostValidationMiddleware`, before the plugin `configureServer` middlewares (including `dev`'s host check) and before `proxyMiddleware` (25098–25101). So it handles `/api/*` and answers preflights itself. Confirmed.
+- Links 3–4: the diagnosis's live curl results and its cors-only toggle experiment isolate the Vite layer. My own experiment repeated the result with the fix in place (below).
+
+**Alternatives.** I agree they are ruled out. The Worker route (`files/local/route.ts`) states and implements "no CORS headers". The headers are absent when requests go straight to wrangler. The test's unrelated origin `http://127.0.0.1:<port>` differs from `http://localhost:<dev port>` by host, so it is a different origin, and the spec (files.md §2 Local, FILES-AC-004, DEC-0006) forbids it from using the route.
+
+**Fix addresses the cause.** `cors: false` makes Vite skip that middleware (`if (cors !== false)`), so the layer that adds the headers is removed. Nothing is masked in the test.
+
+**Side effects checked.** `server.cors` is read only at line 25085 and, for `vite preview`, at line 35633. I ran `dev` with `cors: false` and `changeOrigin: true`, patched into the gitignored `dist/` only; the source was not changed, and I rebuilt afterwards. Results:
+- **Same-origin traffic.** All 9 compliance browser specs pass, including FILES-AC-004's browser part, FILES-AC-003 (4 tests plus expired-ticket), FILES-AC-006, HTTP-AC-004 (no preflight, same-origin) and E2E-009 (20 MB and 100 MB photos). A curl ticket upload followed by a read-back returns 200 with the stored bytes. CORS does not apply to same-origin requests, so nothing `dev` needs is affected.
+- **HMR.** Vite's WebSocket `shouldHandle` checks `allowedHosts` and the HMR token, not `cors`. In Chromium, `ws://localhost:<port>/?token=…` connected and the console showed `[vite] connected.`
+- **Preflight from `http://127.0.0.1:1234`.** It now gets the Worker's `405` with no `Access-Control-*` headers. A `PUT` with a bad token gets `403` with no `Access-Control-*` or `Vary` headers.
+- **Host check.** `Host: evil.example:<port>` still gets 403 on `/` and on `/api/*`.
+- **Side benefit.** With the default `cors`, a preflight was answered before the host check ran. With `cors: false`, every request reaches the host check.
+
+**Verification plan.** Adequate. It has a red-green `dev`-level test, the compliance rerun and same-origin regressions. The red test should also check that `OPTIONS` is no longer answered by Vite, for example that the status is not 204 and there is no `Access-Control-Allow-*` header.

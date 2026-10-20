@@ -62,4 +62,29 @@ Simulated fix (wrangler of the live `dev` called with `Host: 127.0.0.1:44991`, w
 3. Regression: compliance on `local` for AUTH-AC-006/-009, HTTP-AC-001, FILES-AC-003/-004/-006, E2E-009 and `npm run smoke` against `dev` still pass (cookies, login redirects, transfers through the changed proxy); `npm run verify` passes.
 
 ## Review
-(to be written by the reviewer)
+
+**Verdict: ACCEPTED.** Reviewer: independent subagent (prompt §8 step 2). It did not diagnose this failure or write the code or tests, and it changed no code or tests. Reviewed on branch `claude/implement-local-cloudflare-rc-c1-review` (base `be0cfe6`), Vite 8.3.4, wrangler 4.149.0.
+
+**Reproduction.** The same compliance command failed `[AUTH-AC-007] through the deployed router: … wrong Origin …` with `status 200, code none` (expected 403). The other 3 AUTH-AC-007 tests passed.
+
+**Links checked against the source.**
+- Link 1: `runtime.ts` line 129 uses `changeOrigin: false`. Vite's http-proxy sets `outgoing.headers.host` only when `changeOrigin` is true (`node.js` line 18988). Vite rewrites `Origin` only for WebSocket upgrades with `rewriteWsOrigin` (`rewriteOriginHeader`, lines 19899–19910, hooked on `proxyReqWs` only), so the HTTP `Origin` passes through unchanged. Confirmed.
+- Link 2: in wrangler's `ProxyWorker.js` `processQueue`, `outerUrl = new URL(request.url)` and `innerUrl = urlFromParts(overrides ?? {}, request.url)`. `rewriteUrlRelatedHeaders(headers, outerUrl, innerUrl)` then calls `rewriteUrlInHeaderValue`. That function compares only `url.host`, never the scheme, and substitutes `to.origin`, which is `http:`. The pre-filter `value.includes(from.host)` is case-sensitive. Confirmed exactly as described.
+- Links 3–4: `auth/runtime.ts` line 130 compares the received `origin` header strictly against `new URL(FRAMEWORK_PUBLIC_ORIGIN).origin`. Since the header arrives already rewritten, the 200 follows.
+
+**Alternatives.** I agree they are ruled out. Vite does not touch the HTTP `Origin` (code above). The Worker's comparison is strict (code and in-process tests). The test is right, because AUTH-REQ-007 requires equality with the public origin. A Worker-side fix cannot work, because the Worker never sees the original header.
+
+**Fix addresses the cause.** With `changeOrigin: true`, `Host` and therefore `outerUrl` become `127.0.0.1:<worker port>`. The rewrite then fires only for header URLs naming the Worker's own loopback address. Experiment against `dev` running both proposed changes, patched into the gitignored `dist/` only (source untouched, rebuilt afterwards):
+- The compliance `forgery.test.ts` passes 4/4.
+- With a real session cookie: `Origin` `http://localhost:<port>` gets 200. `https://localhost:<port>`, `HTTP://LOCALHOST:<port>`, `http://localhost:1`, `http://127.0.0.1:<worker port>`, `https://127.0.0.1:<worker port>`, `https://evil.example`, `null` and a missing `Origin` all get 403 `AUTH.REQUEST_FORGERY`. The `https://127.0.0.1:<worker>` value would be rewritten to `http://127.0.0.1:<worker>`, which still is not the public origin, so the residual rewrite cannot produce an accept.
+
+**Side effects checked.**
+- **LOCAL-AC-004 Host check.** `hostValidationMiddleware` and `dev`'s `configureServer` host-check middleware are installed before `proxyMiddleware` (`node.js` 25087–25101). They read the incoming request's `Host`; `changeOrigin` changes only the outgoing proxy request. Live, `Host: evil.example:<port>` got 403 on `/api/levels/user` and on `/`. The proxy has no `ws: true`, so `/api` upgrades are not proxied in either setting.
+- **Public origin the framework sees.** `originOf` uses `FRAMEWORK_PUBLIC_ORIGIN`, not `Host`. The only use of `c.req.url` is `searchParams` in the callback (`auth/runtime.ts` line 174). The Worker's `request.url` / `MF-Original-URL` host changes to `127.0.0.1:<worker port>`, but nothing reads its host.
+- **Login, callback and cookies.** `callbackUrl` is built from the public origin. `GET /api/auth/login?returnTo=/x` returned 302 `Location: /x` with `session_local=…; Path=/; HttpOnly; SameSite=Lax` and no `Domain`. With no `Domain`, wrangler's Set-Cookie `Domain=` rewrite has nothing to change, and the browser scopes the cookie to `localhost:<port>`. `/api/auth/me` returned the session user, and logout returned 204 and cleared the cookie. Response-header rewriting is a no-op both before and after the change, because `innerUrl` and `outerUrl` share a host when there are no overrides.
+- **Local file-transfer route.** Tickets are relative paths (`files/local/tickets.ts` lines 43 and 48). The ticket upload and read-back worked by curl, and all FILES and E2E-009 browser specs passed through the changed proxy.
+- **Worker logs.** Entries carry method and the route path (`log/request.ts` line 12, `http/errors.ts`), not host or URL. After the run, no entry in `apps/reference/.logs/` contained the Worker's `127.0.0.1:<port>`.
+- **Other compliance tests run against this `dev`.** Of the auth/http/files/log vitest criteria, 42 passed. 3 failed for unrelated reasons: FILES-AC-005 is a Cloud-only criterion that the harness does not select for `local`, and the 2 LOG-AC-004 tests raise `PREREQUISITE MISSING` for D-T2 hooks.
+- **Not run by this review.** `npm run smoke` and the full `npm run verify`.
+
+**Verification plan.** Adequate. Its regression list, especially `npm run smoke` against `dev` and `npm run verify`, should be run by the fixer and evaluator. The red-green test should post through a running `dev`, not straight to wrangler.
