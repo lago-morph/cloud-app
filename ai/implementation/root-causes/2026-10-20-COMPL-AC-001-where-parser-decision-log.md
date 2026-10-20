@@ -55,3 +55,37 @@ No doc change is needed. Optionally, compliance.md "Driver" could state that cri
 - `node --experimental-strip-types` with the scratchpad `repro.ts` on the real `docs/`: both readers succeed. With `compare.ts`: 140 entries and 0 differences per target and tier, the same as with the decision log removed (item 6).
 - `npx vitest run --config vitest.integration.config.ts tests/compliance/criteria/compl/targets.test.ts` loads the file and runs its tests.
 - Re-run E-RUN's local compliance command. The driver must not exit 1 for a suite load failure.
+
+## Review
+
+Reviewer: independent root-cause reviewer (prompt §8 step 2). I did not diagnose this failure or write the driver, the C-T5 tests or DEC-0319. No code, test or doc was changed. No Cloudflare call was made.
+
+**Verdict: ACCEPTED**, subject to the fix requirements below. They tighten the proposed fix; they do not change the cause.
+
+### Links checked
+- **Symptom → module-load failure.** `targets.test.ts:22` calls `const where = whereSets();` inside the `describe` callback, which runs during collection. A throw there fails the whole file. Confirmed.
+- **Link 1 (`f42b382` brings the table into `docs/`).** `git log -S'lost its tag as untested." Names'` lists `ec78fa5` and `f42b382` (plus this record's own commit, `ab50ab0`). `1b2577e` is an ancestor of `f42b382`. `grep "^| [A-Z]*-AC-[0-9]\{3\} |"` over `docs/` finds 130 rows: 124 sit directly under one of the 20 `| ID | Criterion | Verifies | Where |` headers (checked with awk, counting a table from its header to the first line that does not start with `|`), and the other 6 are DEC-0319's rows at decision-log.md:2493–2498. No other stray criterion-ID rows exist anywhere in `docs/`. Confirmed.
+- **Links 2–3 (the test's reader takes the last cell of any width; `readWhere` throws).** I reproduced this independently. I extracted `markdown`/`readWhere`/`whereSets` verbatim from `support.ts` and copied `catalogue.ts` verbatim to `scratchpad/rv/`, then ran them with `node --experimental-strip-types`:
+
+  | docs tree | `whereSets` | `readCatalogue` |
+  | --- | --- | --- |
+  | branch HEAD | throws `decision-log.md: unexpected target "\"a unit test of the report generator …` | OK, 140 |
+  | HEAD, DEC-0319 rows widened to 3 columns | throws `unexpected target "extra"` | throws `COMPL-AC-002 is defined twice: in components/compliance.md and decisions/decision-log.md` |
+  | HEAD without decision-log.md | OK (local automated 109) | OK, 140 |
+
+  This confirms the record's items 3, 5 and 7. The driver skips the rows today only because `ROW` needs at least three cells.
+- **Alternatives.** "The entry is malformed" is correctly ruled out. Nothing in CONVENTIONS forbids a decision from tabulating the IDs it affects (§3), and DEC-0319's `Affects:` list names them. Flakiness is ruled out because the result is a pure function of the docs tree. The driver/test divergence is correctly described as one shared latent defect.
+
+### Is the header rule correct per CONVENTIONS.md?
+`docs/CONVENTIONS.md` does **not** define the format of an acceptance-criterion table. §2 defines only the ID format, §3 the `Verifies:` link, and §7 the document set. So the rule is not "per CONVENTIONS"; it is the **de facto format of every defining document**, which COMPL-AC-001 ("the criteria's "Where" columns and the scenarios' "Where" lines") and compliance.md "Driver" ("from the Where columns and lines") rely on. The record's item 4 says this accurately. The rule finds every criterion: all 124 criterion rows are under the header, and none are elsewhere (link 1 check). Together with the 16 scenarios that makes 140, the same as the driver's catalogue. e2e-scenarios.md has no criteria tables: it defines scenarios as `#### E2E-nnn` headings with a `Where:` line (its preamble, line 10), so the header rule does not touch it. The scenario rule must be kept separately, as the record proposes. CONVENTIONS §7 independently supports the scope: criteria live in the component design documents and `demo/`, scenarios in `acceptance/`, and `decisions/decision-log.md` holds "all recorded decisions", not criteria.
+
+### Header rule or directory exclusion?
+Use the header rule, not a directory exclusion such as "skip `docs/decisions/`". An exclusion fixes only this instance. A component design document, `parameters.md` or a plan under `docs/` can tabulate criterion IDs just as well. compliance.md already names many IDs in prose, and a table there would break both readers again. The header rule ties recognition to what makes a row a definition: a row of a criteria table with a Where column. Do not add a directory allowlist on top. It would duplicate the rule and could silently drop a new defining document.
+
+### Fix requirements (binding on the fix subagent)
+1. **One stated rule, two independent implementations.** A row defines a criterion only when it is a body row of a table whose header row has the cells `ID`, `Criterion`, `Verifies`, `Where`, in that order, compared cell by cell after trimming, with the `| --- |` separator row next. The table ends at the first line that does not start with `|`. Take the ID from the `ID` cell and the Where text from the `Where` column by index, not from "the last cell". Implement this in `support.ts` `whereSets` and in `catalogue.ts` `readCatalogue` separately. The test must still share no code with the harness.
+2. **No silent drops.** Silently losing a criterion is worse than the current throw. In both readers, a body row inside a recognised criteria table whose first cell is not `<AREA>-AC-NNN`, or whose cell count differs from the header's, must throw with the file and line. A header row whose first two cells are `ID | Criterion` but which lacks the `Where` column must also throw. Rows outside criteria tables are ignored, whatever their width.
+3. **Scenarios unchanged.** Keep the `#### E2E-nnn` + `Where:` rule as it is. It is not affected by this fault. (Optional hardening, not required: the same latent class exists if a decision ever quotes a `#### E2E-` heading. If it is hardened, both readers must do it the same way.)
+4. **Red first, both readers.** (a) Add a test for `whereSets` on a fixture docs tree (a temp dir, not the real `docs/`) containing a criteria table plus a two-column `| COMPL-AC-002 | prose |` table elsewhere. It must fail on the current code with the `unexpected target` error. (b) Add a `catalogue.unit.test.ts` case on a fixture containing a criteria table plus a three-column ID table elsewhere. It must fail now with "defined twice". (c) For requirement 2, add a case where a malformed row inside a criteria table throws. All of these must pass after the fix.
+5. **Equivalence on the real docs.** After the fix, `readCatalogue(docs)` returns the same 140 IDs and the same `applies` as before. `whereSets(docs)` matches it per target and tier (local automated 109, as reproduced above with the log removed). The record's Verification steps stand, including loading `targets.test.ts` and re-running E-RUN's local compliance command.
+6. **No doc change is required.** DEC-0319's table stays as written. The fix subagent records the rule in the decision draft for the fix, because the driver's catalogue rule changes. Stating it in compliance.md "Driver" is left to the owner.
