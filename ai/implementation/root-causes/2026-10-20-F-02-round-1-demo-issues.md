@@ -328,3 +328,43 @@ Red-green (prompt §8 step 3). B-16 path set for code and contract; E-01 for the
 ### Verification
 
 The new unit tests in `connect.unit.test.ts` and `test-app.unit.test.ts` fail before the change (the request reaches the other origin, as in evidence 1–2) and pass after. Then the framework's `src/testing` unit tests, typecheck and lint (the contract file is type-checked), and `tests/skill` for the skill edits (plan §1 Test economy: only the affected tests). Cloud confirmation of the ticket form remains F-03 / D-RUN, recorded as in entry 1.
+
+## Review (entry 2 revised)
+
+Independent review (prompt §8 step 2) by a subagent that did not diagnose the failure, write the framework, or write the earlier review. Branch `claude/implement-local-cloudflare-rc-f2-review` from `origin/claude/implement-local-cloudflare`. Local only; nothing changed except this section.
+
+**Verdict: ACCEPTED**, with the additions below made part of the fix.
+
+### Links checked
+
+- **Evidence 3 (connected code path)** holds against `connect.ts` as it stands: `request` adds `cookieHeader(jar)` (line 151) and calls `storeCookies` on every response (line 153); `send` adds `Origin` (line 91) and resolves `new URL(path, c.origin)` (line 92) with no origin check. Login, logout and probe use fixed relative paths.
+- **Evidence 1** reproduced once with a minimal script (Node 22 `--experimental-strip-types` importing `connect.ts` directly; recording `fetch`; stage `https://app-test-x.sub.workers.dev`; `as(admin)`; every call `PUT` with `redirect: "follow"`):
+  ```
+  PUT https://other.example/a cookie=__Host-session=SECRET origin=https://app-test-x.sub.workers.dev redirect=manual
+  PUT http://app-test-x.sub.workers.dev/b cookie=__Host-session=SECRET; evil=1 origin=https://app-test-x.sub.workers.dev redirect=manual
+  PUT https://other.example/c cookie=__Host-session=SECRET; evil=1 ...      <- path "/\other.example/c"
+  PUT https://app-test-x.sub.workers.dev/redir ... redirect=manual           -> 302 returned, not followed
+  PUT https://app-test-x.sub.workers.dev/same ...                            <- "HTTPS://APP-TEST-X.sub.workers.dev:443/same"
+  ```
+  This confirms the record and adds two cases it does not name: `http:` to the stage's own host sends the session cookie in cleartext (the record's red test (iii) covers it), and `/\other.example/c` leaves the stage, because WHATWG URL parsing treats `\` as `/` for `http(s)`.
+- **Evidence 4 (in-process)** holds: `test-app.ts` builds `new Request(new URL(path, TEST_APP_ORIGIN), …)` with no check, and `TEST_APP_ORIGIN` is `http://localhost:8787`.
+- **Evidence 5** citations check out: `testing.d.ts` `request` says "Sends a request to the app's API"; auth.md line 37 (Secure and host-only on cloud, stateless sessions) and the `__Host-session` paragraph; files.md §2 lines 69 (ticket JSON), 90 (absolute R2 URL), 91 (SigV4 query signing, no cookie needed).
+- **Evidence 6** holds: the demo's `send` (smoke.test.ts lines 36–39) uses `/^https?:\/\//`, so `//host` and `/\host` tickets would go through `t.request`.
+- **Alternatives** are adequately ruled out. Per-host cookie scoping would leave the two `TestApp` implementations disagreeing; a prefix test misses `//host` and `/\host`; refusing on the resolved origin is the right cut.
+
+### Redirects
+
+- Connected: `send` spreads `init` first and then sets `redirect: "manual"`, so a caller's `redirect: "follow"` is overridden (confirmed above: the 302 is returned, nothing follows it). A stage redirect to another host therefore never carries the jar. No change needed; the red test should keep asserting this (a `redirect: "follow"` request to a stage route answering 302 to another host reaches no other host).
+- In-process: `shared.fetch` is the app's own handler; nothing follows redirects.
+- Plain `fetch` for tickets (the skill's route) follows redirects by default, but it carries no cookie or `Origin` from the test app, only the ticket's own headers (`Content-Type`), so a storage redirect leaks nothing.
+
+### Same-origin requests
+
+The fix compares `URL.origin`, which normalizes case and default ports (`HTTPS://HOST:443/x` resolves to the stage origin above), so relative paths and absolute same-origin URLs are unaffected. Login, logout, the probe and `loginWithStub` use same-origin paths and are unaffected.
+
+### Fix requirements (in addition to the record's proposed fix)
+
+1. **The check compares the resolved URL, not the string**: refuse unless `new URL(path, appOrigin)` has `origin === appOrigin` **and** `protocol` equal to the app's protocol. The protocol check closes `blob:https://<stage>/x`, whose `origin` equals the stage origin (it fails in `fetch` without network traffic today, but it is not "the app's API" and should get the same clear error on both test apps).
+2. **Red tests add `"/\\other.example/p"`** (backslash form) on both test apps, and on the connected app a `redirect: "follow"` request to a same-origin route answering 302 to another host, asserting no request reached another origin. The in-process test also covers the `https://localhost:8787` scheme mismatch.
+3. **The skill's discriminator must not misroute the backslash form**: use `/^\/(?![\/\\])/.test(ticket.url) ? t.request(…) : fetch(…)` (or equivalent) instead of `startsWith("/") && !startsWith("//")`. With the fix a misrouted URL is refused loudly rather than leaked, so this is a correctness requirement for the example, not a security one.
+4. Everything else in the record's "Proposed fix" and "Verification" stands as written (check in both `request` and `send`, thrown before login, before sending and before touching the jar; shared error text; contract sentence in `testing.d.ts` together with entry 4's `dispose` sentence; skill E-01 edits; demo not a fix requirement on F-01).
