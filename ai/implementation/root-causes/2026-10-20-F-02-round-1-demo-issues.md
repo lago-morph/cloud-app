@@ -383,3 +383,30 @@ Branch `claude/implement-local-cloudflare-fix-f1` from `origin/claude/implement-
 | 5 | `skill/reference/testing.md` and `skill/reference/deploying.md`: the evidence record goes to `validation/<target>/` at the top of the git repository that holds the app (the app directory when the app is its own repository) and is committed with the run's commit. `ai/implementation/plan.md` F-01 "Owns": adds the `validation/local/<runId>.json` and `validation/local/<runId>/` that its own `smoke --target local` run writes. |
 
 Red-green: these are documentation-only changes, so there is no failing test to write first (plan §1 "Test economy" rule 2). Checks: typecheck, lint, `tests/skill`. Sizes after the change: `SKILL.md` 7,068 bytes (PAR-070 8,000); `testing.md` 5,840, `deploying.md` 6,490, `sql-and-migrations.md` 9,277, `http-and-validation.md` 9,208 (PAR-071 12,000).
+
+---
+
+## Fix (entry 2)
+
+Fixing subagent (prompt §8 step 3), which did not write the framework, diagnose or review. Branch `claude/implement-local-cloudflare-fix-f2` from `origin/claude/implement-local-cloudflare` at `65b52f0`. Local only; no Cloudflare calls.
+
+### Change
+
+- `packages/framework/src/testing/connect.ts`: new exported `appUrl(path, appOrigin)` resolves `new URL(path, appOrigin)` and throws unless the result's `origin` **and** `protocol` equal the app's (review requirement 1). Error text: `request("<path>"): <origin> is not the app's origin (<app origin>); the test app sends requests only to the app. Send requests to other hosts, such as a cloud upload or download ticket's url, with fetch.` (for a same-origin URL of another protocol, such as `blob:`, `<origin>` reads `a blob: URL`). `request` calls it before logging in, sending or touching the jar; `send` uses it to build the URL, so login, logout and the probe go through the same check. `redirect: "manual"` is unchanged.
+- `packages/framework/src/testing/test-app.ts`: `request` calls `appUrl(path, TEST_APP_ORIGIN)` before building the `Request` (shared helper and text). `loginWithStub` passes same-origin paths and is unaffected.
+- `docs/contracts/ts/testing.d.ts` `request` doc comment: the record's sentence, naming `//host`, `/\host`, another protocol and `blob:`. No type change. Entry 4's `dispose` sentence was not in this fix's assignment and is not made here.
+- `skill/reference/testing.md` "The smoke test": `t.request` sends only to the app; the ticket JSON `{ url, method?, headers?, expiresAt }`; same-origin path via `t.request`, cloud absolute signed URL via plain `fetch` with no cookie; discriminator `/^\/(?![\/\\])/.test(ticket.url)` (review requirement 3); `NODE_USE_ENV_PROXY=1` behind a proxy. The record's `skill/reference/files.md` and `skill/examples/tests.md` edits were not in this assignment (parallel docs fix fix-f1).
+
+### Red, then green
+
+Tests added: `connect.unit.test.ts` "refuses URLs on any other origin before sending" — as `admin` on a `https` stage: R2-style signed `PUT`, `//other.example/p`, `/\other.example/p`, `http:` on the stage host, `blob:https://<stage>/x` (each: rejects with the error, no new request sent, no request to another origin, a later `/api/…` sends only `fw_session=s1`); refusal before mock-login; `redirect: "follow"` to a stage route answering 302 to another host reaches no other host; absolute same-origin URLs (including `HTTPS://…:443`) accepted with the session. `test-app.unit.test.ts`: other host, `//host`, `/\host`, `https://localhost:8787`, `blob:http://localhost:8787/…` rejected; a refused `POST //other.example/api/notes` inserts nothing (next same-origin POST counts 1); `http://localhost:8787` and `HTTP://LOCALHOST:8787` accepted.
+
+- Red (fix reverted, `npx vitest run --config vitest.unit.config.ts packages/framework/src/testing`): `7 failed | 39 passed (46)` — the five connected refusal cases, refusal-before-login, and the in-process case, each `promise resolved "Response { status: 200 … }" instead of rejecting` (the request reached the other origin, or the app answered it). The redirect and same-origin-accept tests passed before the fix, as the review predicted (they guard behaviour that must not change).
+- Green: `46 passed (46)`.
+
+### Checks (plan §1 Test economy)
+
+- `vitest related` on `connect.ts`, `test-app.ts`: 13 files, 135 passed.
+- `npm run build -w packages/framework`, `npm run typecheck`, `npm run lint`: pass.
+- `packages/framework/test/integration/local` and `tests/skill`: 34 passed, 1 failed — `[SKILL-AC-004] no example is derived from apps/demo/`: `skill/examples/configuration.md` blocks equal `apps/demo/config/*.json`, and `skill/examples/secrets.md` blocks equal `apps/demo/src/server/signing.ts` and `apps/demo/tests/signing.test.ts`. None of those files is touched here; the failure is pre-existing and outside this fix.
+- Compliance, `--target local` (evidence written under the scratchpad, not `validation/`): FILES-AC-001 passed; CORE-AC-002 and SEC-AC-001 passed after setting the reference app's local test secret (`npm run secrets -- set apiKey --target local --stage local`, gitignored `.dev.vars`; first run was `blocked` on it); SKILL-AC-004 failed for the pre-existing reason above.
