@@ -3224,3 +3224,16 @@ Residual limit: demo code first copied into `apps/template` or `apps/reference` 
 Root cause and review (ACCEPTED): `ai/implementation/root-causes/2026-10-20-SKILL-AC-004-demo-overlap.md`.
 Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
 Item: fix-e4 (test author, §8 step 3).
+
+### DEC-0393 — In-page clauses of DEMO-AC-001, -003 and -009 are verified by a compliance-layer browser spec, not by the demo's smoke test
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: DEMO, COMPL, SKILL (DEMO-AC-001, DEMO-AC-003, DEMO-AC-009, DEMO-REQ-010, demo-spec §2 preamble, `skill/reference/testing.md`, plan §7 F-03)
+
+The demo-spec §2 preamble says the smoke test (DEMO-REQ-010) covers each criterion on a deployed stage except those it lists; the in-page clauses of DEMO-AC-001 ("renders as text"), DEMO-AC-003 ("displays") and DEMO-AC-009 ("the copy button copies it") are not in that list. This entry records a deviation from that preamble; `docs/demo/demo-spec.md` itself is not edited, because it is one of the fresh F-01 builder's three inputs (E2E-015) and states how binding criteria are verified.
+
+Rule: those in-page clauses are verified by a compliance-layer Playwright spec, `tests/compliance/e2e/demo-pages.spec.ts` (tagged exactly DEMO-AC-001, DEMO-AC-003, DEMO-AC-009; outside `apps/demo/**`), locally against the demo under `dev` and on Cloudflare against the F-03 `test-` stage before it is removed; the AWS part is `not-run` under plan §8.2 only. The demo's smoke test covers their API side, and DEMO-REQ-010's "exercises each requirement" is read as met by that API-side exercise. The ACs and DEMO-REQ-010 are unchanged.
+
+Reason: apps have no browser tests by design. Playwright is scoped to browser-level compliance tests (PAR-114, compliance.md); it is not an app dependency; SKILL.md hard rule 1 limits what `tests/**` may import; and `verify` and `smoke` run only Vitest `*.test.ts` files over HTTP (PAR-116, cli.md). The demo's smoke test therefore cannot cover page-only behaviour, and the demo builder correctly raised this as FRAMEWORK-ISSUE #1 instead of working around it. `skill/reference/testing.md` now states, app-generically, that an app's tests and smoke test reach it through its API and that page-only behaviour is checked by the framework's browser tests.
+
+Root cause and review (ACCEPTED, fix amended): `ai/implementation/root-causes/2026-10-20-F-02-round-3-demo-issues.md`.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Item: fix-f4a (docs).

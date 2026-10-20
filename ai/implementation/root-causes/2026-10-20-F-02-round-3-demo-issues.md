@@ -91,3 +91,11 @@ The builder grepped the installed package's `dist/index.d.ts` once and printed i
    - Red-green non-vacuity: show each assertion fails on a scratch copy with the feature broken (`innerHTML` for a title; clipboard write stubbed; image `src` broken), and passes on the unchanged demo. The runner commits the evidence; F-EV judges it.
 4. **Round 4:** the fresh rebuild must not raise this issue; FRAMEWORK-ISSUE #1 closes only after items 1–3 are in and the new spec passes against the rebuilt demo locally (Cloudflare at F-03).
 5. **Incidental `node_modules` grep:** agreed as a minor, disclosed deviation for F-EV to note; no change required.
+
+## Fix (docs)
+
+- **Writer:** fix subagent, branch `claude/implement-local-cloudflare-fix-f4a`; did not diagnose or review this, or write the demo. No Cloudflare calls.
+- **Item 1:** `docs/demo/demo-spec.md` unchanged. Added DEC-0393 (`ai-proposed`, owner review open, under the owner's "Do not stop and ask me questions" instruction; Affects DEMO, COMPL, SKILL) recording that the in-page clauses of DEMO-AC-001, -003 and -009 are verified by `tests/compliance/e2e/demo-pages.spec.ts` locally and on the Cloudflare `test-` stage, the smoke test covers the API side, and why (apps have no browser tests by design; PAR-114). Listed in plan §11 item 5 (Phase F).
+- **Item 2:** one app-generic sentence added to `skill/reference/testing.md` "What runs your tests" (7,325 bytes, within PAR-071).
+- **Not done here:** item 3 (the spec and the F-03 step in `plan.md`), written by a separate test-case author.
+- **Checks (plan §1 "Test economy", docs-only):** typecheck, lint, `tests/skill`.
