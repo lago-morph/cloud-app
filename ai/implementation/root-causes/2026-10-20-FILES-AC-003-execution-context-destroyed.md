@@ -151,3 +151,44 @@ Considered, and not proposed as the main fix:
 
 - Run 2: `validation/local/zcvgtq52o8niagx/raw/{playwright.log,playwright.json,dev.log,vitest.json}` and `validation/local/phase-C-run-2/`.
 - Diagnosis scratch, not committed: `/tmp/claude-0/-home-user-cloud-app/b6482c07-38ed-5065-a51e-6194e2f52fc3/scratchpad/diag-c4/`. It holds `dev1.log`–`dev4.log`, `.diag-repro.mjs`, `.diag-repro2.mjs`, `.diag-loop.mjs`, and the rerun record `1owr20jbxay0luf/` with its `raw/dev.log` (`DEBUG=vite:hmr,vite:deps,vite:ws`).
+
+## Review
+
+Reviewer: independent root-cause reviewer (prompt §8 step 2). I did not diagnose this failure or write the code or tests involved. Branch `claude/implement-local-cloudflare-rc-c4-review` from `origin/claude/implement-local-cloudflare`. Local only; no Cloudflare calls. The `dev` server I started was stopped.
+
+**Verdict: ACCEPTED.** The fix is the one proposed (in `dev`), with one implementation detail made exact below. No test change is needed or wanted.
+
+### Links checked myself
+
+- **Link 1 (Vite watches the linked framework's real path).** `node_modules/@lago-morph/prototype-framework -> ../../packages/framework` (workspace symlink). `startClient` in `packages/framework/src/cli/dev/runtime.ts` sets no `resolve.preserveSymlinks` and no `server.watch`, so Vite resolves the import to `packages/framework/dist/...`. Vite 8.3.4's `resolveChokidarOptions` (`node_modules/vite/dist/node/chunks/node.js` ~16836) ignores only `**/.git/**`, `**/node_modules/**`, `**/test-results/**` and the cache dir, then appends the user's `ignored`. A real path outside `node_modules` is watched; in an installed app the same files are under `node_modules` and ignored. Confirmed.
+- **Links 2–5 (crawl, rebuild, buffered `full-reload`, first client gets it).** Reproduced on this branch with the real `dev` of `apps/reference` (`DEBUG=vite:hmr`) and a bare HMR WebSocket client (`vite-hmr` protocol):
+  - control: `npm run build -w packages/framework` with nothing fetched, then connect → only `{"type":"connected"}`;
+  - `curl /` (200), rebuild → six `[file change] …/packages/framework/dist/...` lines; then connect → `{"type":"connected"}` followed by `{"type":"full-reload","triggeredBy":"…/packages/framework/dist/client/index.js","path":"*"}`;
+  - a second client then gets only `connected` (the buffer is one-shot, delivered to the first client).
+  - Buffering code: node.js lines 24719–24724 (`full-reload` with `!wss.clients.size` → `bufferedMessage`) and 24694–24696 (sent on connect). Confirmed.
+- **Link 3 source.** `skill/scripts/scaffold` runs `npm pack` in `packages/framework`; `packages/framework/package.json` has `"prepack": "npm run build"` (`tsc -p tsconfig.build.json`), which rewrites every `dist` file. SKILL-AC-005 (`tests/compliance/criteria/skill/scaffold.test.ts`) runs that real script; so does E2E-001 (`tests/compliance/e2e/E2E-001-E2E-003.spec.ts`), in the Playwright phase. The compliance harness starts one reference `dev` for both phases (`tests/compliance/harness/node-deps.ts` `startReferenceDev`). Confirmed.
+- **Link 6 (reload during `addScriptTag` gives this exact error)** and run 2's double `/api/auth/me` (E1): I did not re-run E6 in a browser. The record's timing experiment plus the frame sequence I reproduced are enough: a `location.reload()` during `addScriptTag` is the documented cause of "Execution context was destroyed … because of a navigation", and E7 shows the test passing when nothing is buffered.
+- **Alternatives.** The record rules out app navigation, optimizer reloads, WebSocket ping-reloads, the `cors`/proxy change and D-02, each with evidence. I also checked that wrangler does not restart the Worker on the `dist` rebuild (no restart lines in my `dev` log), so the Worker side is not a second path.
+
+### Where the defect is: `dev`, not the test
+
+- **The test is not doing anything wrong.** Rebuilding `dist` is inherent to the real scaffolder (DEC-0049: installation is verified from an `npm pack` tarball; SKILL-AC-005 and E2E-001 must use the real `skill/scripts/scaffold`). Any developer who runs the scaffolder in this repo while `dev` runs gets the same reload. The rebuild produces the same content from the same source; only `dev` reacts to it.
+- **Test-side options are worse and incomplete:**
+  - *Pack from a copy:* the scaffolder resolves `packages/framework` from its own location, so this means changing the scaffolder or copying the repo. Either way the test stops exercising the real scaffolder.
+  - *Skip the prepack build:* that weakens SKILL-AC-005 and E2E-001 (stale or missing `dist` in the tarball), which §8 forbids.
+  - *Run SKILL-AC-005 in its own pass:* this does not cover E2E-001. E2E-001 packs during the Playwright phase while other workers have reference pages open, and record E7 shows the live reload of every open page at 09:57:37. Fixing the tests would mean serialising every packing test against every browser test, which treats the symptom.
+- **Can the reload hit other tests?** Yes, as long as `dev` watches the framework dir: any browser test on the reference app that is mid-`evaluate`/`addScriptTag` when either packing test runs, and the first browser page after any vitest-phase pack. The `dev` fix removes all of these at once. Test-side fixes would each remove one trigger.
+- **Is ignoring the framework dir correct product behaviour?** Yes. `docs/components/local.md` §`dev` promises no live reload of the framework, and an installed app (the product's real case) never watches it, because it lives under `node_modules`. The change only makes the monorepo match what users get. The cost is that framework edits in this repo take effect after a `dev` restart, the same as reinstalling a package.
+
+### Exact fix
+
+In `packages/framework/src/cli/dev/runtime.ts`, `startClient`, add `server.watch.ignored` for the framework package's own root, resolved from the running module:
+- walk up from `dirname(fileURLToPath(import.meta.url))` to the directory holding the framework's `package.json`;
+- take its `realpathSync`;
+- pass `watch: { ignored: [(p) => p === pkgRoot || p.startsWith(pkgRoot + sep)] }`.
+
+Prefer a function matcher over a `${pkgRoot}/**` glob, so that glob metacharacters in a checkout path cannot break the match. Vite appends this to its defaults, so `node_modules`, `.git` and the cache dir stay ignored. Nothing else changes; no test is changed or weakened.
+
+Verification as in the record: a red integration test first (fetch `/`, rebuild or rewrite a `dist/client/*.js`, then the first page sees one navigation and no `full-reload` frame), then the E5 repeat, then a full local compliance run with the `apiKey` secret set. Also check for the live form: with a reference page open, run the scaffolder, and the page must not reload.
+
+Side note (not part of this cause, no change asked): Vite also logs `[file change]` for `apps/reference/.wrangler/state/**`. No client module matches those files, so they cause no reload today.
