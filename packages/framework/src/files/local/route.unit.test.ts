@@ -109,14 +109,14 @@ describe("local transfer route: downloads (FILES-REQ-003, files.md §2 Local)", 
     },
   );
 
-  it.each(["image/jpeg", "image/gif", "image/webp", "image/avif", "image/bmp"])("raster image type %s is served as an attachment, named after the file (DEC-0313, DEC-PENDING-fix-f04b-1)", async (contentType) => {
+  it.each(["image/jpeg", "image/gif", "image/webp", "image/avif", "image/bmp"])("raster image type %s is served as an attachment, named after the file (DEC-0313, DEC-0414)", async (contentType) => {
     const { app, files } = setup();
     await files.put("i", new Uint8Array([1]), { contentType });
     const res = await app.request(urlOf(await files.createDownloadTicket("i")));
     expect(res.headers.get("Content-Disposition")).toBe("attachment; filename*=UTF-8''i");
   });
 
-  it("a raster image downloads with the same Content-Disposition on local and Cloudflare (DEC-0313, DEC-PENDING-fix-f04b-1)", async () => {
+  it("a raster image downloads with the same Content-Disposition on local and Cloudflare (DEC-0313, DEC-0414)", async () => {
     const { app, store, files } = setup();
     await files.put("p.png", new Uint8Array([137, 80, 78, 71]), { contentType: "image/png" });
     const local = (await app.request(urlOf(await files.createDownloadTicket("p.png")))).headers.get("Content-Disposition");

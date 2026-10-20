@@ -62,7 +62,7 @@ Unreachable storage MUST surface as `FILES.UNAVAILABLE`. When a browser transfer
 
 Fetch fresh download tickets with each listing; do not cache URLs.
 
-**Download names** (DEC-0313, DEC-PENDING-fix-f04b-1). A download is saved under the file's whole name: storage's response carries `Content-Disposition: attachment; filename*=UTF-8''<name>` (RFC 6266 / RFC 8187; every byte outside `attr-char` percent-encoded, `/` included) for every content type, raster images included, on every target. Images still display through `<img src>`, which ignores the header. Nothing in the name is interpreted as a path; browsers replace unsafe characters when they save. One helper (`src/files/cloudflare/disposition.ts`) builds the value for every target. On Cloudflare the download ticket signs it as R2's `response-content-disposition`.
+**Download names** (DEC-0313, DEC-0414). A download is saved under the file's whole name: storage's response carries `Content-Disposition: attachment; filename*=UTF-8''<name>` (RFC 6266 / RFC 8187; every byte outside `attr-char` percent-encoded, `/` included) for every content type, raster images included, on every target. Images still display through `<img src>`, which ignores the header. Nothing in the name is interpreted as a path; browsers replace unsafe characters when they save. One helper (`src/files/cloudflare/disposition.ts`) builds the value for every target. On Cloudflare the download ticket signs it as R2's `response-content-disposition`.
 
 **Shared runtime shape** (DEC-0160, DEC-0162, DEC-0164):
 - One target-neutral service runs over the object store (the R2 Worker binding, locally and on Cloudflare), with a ticket issuer supplied by each target.

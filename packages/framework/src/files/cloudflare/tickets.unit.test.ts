@@ -102,7 +102,7 @@ describe("Cloudflare download tickets (DEC-0098, DEC-0160, DEC-0313)", () => {
     expect(ticket?.url).not.toContain(credentials.secretAccessKey);
   });
 
-  it("a raster image is named as an attachment, like every other download (DEC-PENDING-fix-f04b-1)", async () => {
+  it("a raster image is named as an attachment, like every other download (DEC-0414)", async () => {
     const image = new URL(readDownloadTicket(await issuer().download("p.png"))?.url ?? "");
     expect(image.searchParams.get("response-content-disposition")).toBe("attachment; filename*=UTF-8''p.png");
   });
