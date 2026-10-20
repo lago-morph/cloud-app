@@ -8,13 +8,16 @@
  * 4. start Wrangler on a loopback port with the local bundle, the persisted state, `.dev.vars`
  *    and `FRAMEWORK_PUBLIC_ORIGIN`, capturing its log lines into `.logs/`;
  * 5. start Vite on `localhost` (loopback) with `/api` proxied to Wrangler and a `Host` check,
- *    and print `http://localhost:<port>`, the one origin of the client and `/api`;
- * 6. on Ctrl-C (SIGINT/SIGTERM) stop both and exit 0; if Wrangler stops on its own, exit 1.
+ *    and print `http://localhost:<port>`, the one origin of the client and `/api`, recording it
+ *    in `.framework/local/dev-server.json` for `smoke --target local` (DEC-PENDING-C-04-1);
+ * 6. on Ctrl-C (SIGINT/SIGTERM) remove the record, stop both and exit 0; if Wrangler stops on
+ *    its own, remove the record and exit 1.
  */
 import { MigrationFailedError } from "../../mig/apply.js";
 import { describeFailure } from "../failure.js";
 import { parseOptions } from "../args.js";
 import { EXIT, type CliIo, type Command } from "../io.js";
+import { clearDevServer, recordDevServer } from "./smoke.js";
 import { clientRoot, devPaths, LOOPBACK, wranglerDevArgs } from "../dev/plan.js";
 
 export interface WorkerProcess {
@@ -70,8 +73,10 @@ export function devCommand(deps: DevDeps): Command {
       throw error;
     }
     io.stdout(`\n  ${app} is running at ${origin}/  (client and /api; Ctrl-C stops)\n\n`);
+    recordDevServer(appDir, origin);
 
     const outcome = await Promise.race([deps.stopRequested().then(() => ({ kind: "stop" as const })), worker.exited.then((status) => ({ kind: "exited" as const, status }))]);
+    clearDevServer(appDir);
     let cleanupError: unknown;
     for (const step of [() => client.close(), () => worker.stop()]) {
       try {

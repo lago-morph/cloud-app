@@ -26,12 +26,18 @@ describe("command dispatch (CLI-REQ-001, CLI-REQ-003)", () => {
   });
 
   it("commands not built in this phase fail with status 1 naming the missing prerequisite", async () => {
-    for (const name of ["deploy", "remove", "setup-account", "certify-auth", "smoke"]) {
+    for (const name of ["deploy", "remove", "setup-account", "certify-auth"]) {
       const io = captureIo();
       expect(await runCommand([name, "--target", "cloudflare", "--stage", "test-x"], io), name).toBe(1);
       expect(io.err, name).toMatch(/not available yet/);
       expect(io.err, name).toMatch(/requires/);
     }
+  });
+
+  it("[CLI-AC-005] smoke is bound to the smoke runner, not the not-yet stub", async () => {
+    const io = captureIo();
+    expect(await runCommand(["smoke", "--target", "nowhere"], io)).toBe(2);
+    expect(io.err).not.toMatch(/not available yet/);
   });
 
   it("a command that throws exits 1 with the error's message, never 0", async () => {

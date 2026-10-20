@@ -23,13 +23,16 @@ function notYet(prerequisite: string): Command {
   };
 }
 
+/** `smoke` (C-04), loaded when it runs so other commands never load Vitest's Node API. */
+const smokeBinding: Command = async (args, io) => (await (await import("./commands/smoke.js")).smokeBinding())(args, io);
+
 const COMMANDS: Readonly<Record<string, Entry>> = {
   dev: { summary: "run the app locally on http://localhost:<port>", run: devBinding },
   verify: { summary: "the pre-completion verification (offline)", run: verifyBinding },
   "generate-migration": { summary: "generate-migration [--name <slug>]: the next migration pair from the table definitions", run: generateMigrationBinding },
   build: { summary: "build --target <t> --stage <s>: build a deployment without deploying it", run: buildBinding },
   deploy: { summary: "deploy --target <t> --stage <s>: deploy a stage", run: notYet("the Cloudflare provisioning operations (work item D-05)") },
-  smoke: { summary: "smoke --target <t> --stage <s>: run the app's smoke tests against a stage", run: notYet("the smoke runner (work items C-04, D-05)") },
+  smoke: { summary: "smoke --target <t> --stage <s>: run the app's smoke tests against a stage", run: smokeBinding },
   remove: { summary: "remove --target <t> --stage <s>: remove a stage", run: notYet("the Cloudflare provisioning operations (work item D-05)") },
   secrets: { summary: "secrets set <name> --target <t> --stage <s>: set a secret from standard input", run: secretsBinding },
   "setup-account": { summary: "setup-account --target <t>: one-time account setup", run: notYet("the Cloudflare provisioning operations (work item D-05)") },
