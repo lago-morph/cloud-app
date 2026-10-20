@@ -38,3 +38,27 @@ Re-run `npm run verify` and the offline form at normal load; both must be green.
 ## Integrator note (2026-10-20, appended; the text above is unchanged)
 
 This record's Review was left pending. The same cause (unit-test timeouts when the host is loaded) is covered by `2026-10-20-D-04-verify-unrelated-failures.md`, whose Review is ACCEPTED. Its fix is recorded in `2026-10-20-verify-fixes.md`, and the global unit-test timeout in `2026-10-20-global-unit-timeout-review.md`. Read those for the reviewed causal chain and the fix.
+
+## Review (independent reviewer, prompt §8 step 2, 2026-10-20)
+
+**Verdict: ACCEPTED.** This covers the cause and the decision to rely on the D-04 fix. The reviewer did not write this record, D-04, or any of the fixes. Branch `claude/implement-local-cloudflare-rc-final-review`, from `origin/claude/implement-local-cloudflare` `7f8c5c0`. I checked the code and the committed evidence. No test suite was run for this record.
+
+Reasons:
+- **The evidence supports every link.**
+  - Every failure is the 5 s default ("Test timed out in 5000ms"). None is an assertion failure.
+  - The same files pass when run alone, and the set of failing tests changes between runs.
+  - The load was about 7 times the CPU count, and `ps` showed other worktrees' processes.
+  - The same chain was reproduced on its own and accepted in `2026-10-20-D-04-verify-unrelated-failures.md` (Review) and in `2026-10-20-global-unit-timeout-review.md`. There, under artificial load, the same tests pass when only the limit is raised.
+- **A D-01 regression is ruled out.** The D-01 merge `b3aa9a1` touches nothing under `src/kv/`, `src/sql/`, `src/cli/verify/` or `src/evidence/` (`git diff --stat b3aa9a1^1 b3aa9a1`). The record's own "not proven" point stays open: D-01's workerd suites may add CPU load in the same run. That does not matter for the fix, which works whoever adds the load.
+- **The fix covers every test this record names, and weakens none.**
+  - The global limit is `vitest.unit.config.ts:12`, `testTimeout: 30_000` (commit `9755706`). The named tests also have their own limits:
+    - `kv/service.unit.test.ts:22,150,167,176` (`MANY_PUTS_TIMEOUT_MS`, which covers "limit above PAR-222");
+    - `sql/postgres.unit.test.ts:27,40` ("gives every call its own empty database");
+    - `sql/queries.unit.test.ts:223` ("cannot be reached");
+    - `cli/verify/type-check.unit.test.ts:24,32,41,46` (the type-check timeout in the offline addendum).
+  - D-01's own workerd suite has `{ timeout: 60_000 }` at `targets/cloudflare/settings.workerd.unit.test.ts:78`. That matches the existing workerd allowance.
+  - The offline `evidence/writer.unit.test.ts` failures in the addendum were fixed by making the test hermetic, not by relaxing it. See `HERMETIC_GIT_ENV` at `evidence/writer.unit.test.ts:15` (commit `9d866f4`). The red and green runs are in `2026-10-20-verify-fixes.md`.
+  - No assertion changed. The timing tests measure time themselves and do not depend on `testTimeout`. This was checked in `2026-10-20-global-unit-timeout-review.md`, "Does a global 30 s timeout weaken any test?". A real hang still fails, after 30 s instead of 5 s.
+- **Verification.** With the D-04 fix, a full `npm run verify` passed both online and offline (`2026-10-20-verify-fixes.md`, and "Fix" in `2026-10-20-global-unit-timeout-review.md`). This record's own re-run at 05:07 UTC was also green.
+
+Required follow-up: none for this record. `2026-10-20-verify-fixes.md` lists two more load-sensitive tests. The global 30 s limit covers them.
