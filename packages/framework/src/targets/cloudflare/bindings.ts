@@ -22,6 +22,9 @@ export const BINDINGS = Object.freeze({
   /** R2 write binding to the account's shared log bucket (`prototype-logs`, LOG-REQ-004). */
   logs: "LOGS",
   publicOrigin: "FRAMEWORK_PUBLIC_ORIGIN",
+  /** Cloudflare only: the account ID and stage bucket name the R2 transfer tickets address (D-02, D-05). */
+  r2AccountId: "FRAMEWORK_R2_ACCOUNT_ID",
+  filesBucket: "FRAMEWORK_FILES_BUCKET",
 } as const);
 
 function binding(env: Env, name: string, what: string): unknown {
