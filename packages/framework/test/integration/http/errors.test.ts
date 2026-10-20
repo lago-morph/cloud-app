@@ -23,6 +23,10 @@ import {
   seenRequestIds,
 } from "../core/harness/reference-app.js";
 
+function escapeRe(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 let app: TestApp | undefined;
 afterEach(async () => {
   await app?.dispose();
@@ -181,9 +185,25 @@ describe("HTTP-AC-007 server errors are logged", () => {
     return { res, requestId: body.error.requestId, entries };
   }
 
+  /** The name and message of the error a /caught/<what> twin route caught (reference-app.ts). */
+  async function caught(t: TestApp, what: string): Promise<{ name: string; message: string }> {
+    const res = await t.request(`/api/caught/${what}`);
+    expect(res.status, `/api/caught/${what}`).toBe(200);
+    const body = (await res.json()) as { caught: { name: string; message: string } | null };
+    expect(body.caught, `/api/caught/${what} caught nothing`).not.toBeNull();
+    return body.caught as { name: string; message: string };
+  }
+
   function expectOneEntry(
     result: { res: Response; requestId: string; entries: LogEntry[] },
-    expected: { method: string; path: string; code: string; status: number; contains?: (string | RegExp)[] },
+    expected: {
+      method: string;
+      path: string;
+      code: string;
+      status: number;
+      underlying: { name: string; message: string };
+      contains?: (string | RegExp)[];
+    },
   ): void {
     const label = `${expected.method} ${expected.path}`;
     expect(result.res.status, label).toBe(expected.status);
@@ -193,8 +213,13 @@ describe("HTTP-AC-007 server errors are logged", () => {
     expect(entry.message, label).toContain(expected.method);
     expect(entry.message, label).toContain(expected.path);
     expect(entry.message, label).toContain(expected.code);
-    // The underlying error's name, message and stack.
-    expect(entry.message, label).toMatch(/\w*Error\b/);
+    // The underlying error's own name (as a whole token, so "Error" is not satisfied by
+    // "FrameworkError"), its message, and a stack (B-T5, flag F12).
+    expect(expected.underlying.name, `${label}: the caught twin route reported no error name`).not.toBe("");
+    expect(entry.message, `${label}: error name ${expected.underlying.name}`).toMatch(
+      new RegExp(`(^|[^\\w$])${escapeRe(expected.underlying.name)}([^\\w$]|$)`),
+    );
+    expect(entry.message, `${label}: error message`).toContain(expected.underlying.message);
     expect(entry.message, label).toMatch(STACK_FRAME);
     for (const c of expected.contains ?? []) {
       if (typeof c === "string") expect(entry.message, label).toContain(c);
@@ -204,55 +229,65 @@ describe("HTTP-AC-007 server errors are logged", () => {
 
   it(tag("HTTP-AC-007", "CORE.INTERNAL leaves exactly one error entry with method, route path, code, error name, message and stack"), async () => {
     app = await createRefApp();
+    const underlying = await caught(app, "plain");
     expectOneEntry(await errorEntriesOf(app, "/api/throw/plain"), {
       method: "GET",
       path: "/api/throw/plain",
       code: "CORE.INTERNAL",
       status: 500,
-      contains: [PLAIN_ERROR_MESSAGE, /\bError\b/],
+      underlying,
+      contains: [PLAIN_ERROR_MESSAGE],
     });
   });
 
   it(tag("HTTP-AC-007", "CORE.MISCONFIGURED leaves exactly one error entry with method, route path, code, error name, message and stack"), async () => {
     app = await createRefApp();
+    const underlying = await caught(app, "misconfigured");
     expectOneEntry(await errorEntriesOf(app, "/api/throw/misconfigured"), {
       method: "GET",
       path: "/api/throw/misconfigured",
       code: "CORE.MISCONFIGURED",
       status: 500,
+      underlying,
       contains: ["bt1 misconfigured"],
     });
   });
 
   it(tag("HTTP-AC-007", "CFG.UNDECLARED_KEY leaves exactly one error entry naming the key"), async () => {
     app = await createRefApp();
+    const underlying = await caught(app, "config-undeclared");
     expectOneEntry(await errorEntriesOf(app, "/api/config/undeclared"), {
       method: "GET",
       path: "/api/config/undeclared",
       code: "CFG.UNDECLARED_KEY",
       status: 500,
+      underlying,
       contains: ["bt1UndeclaredKey"],
     });
   });
 
   it(tag("HTTP-AC-007", "SEC.MISSING leaves exactly one error entry naming the secret"), async () => {
     app = await createRefApp();
+    const underlying = await caught(app, "secret-missing");
     expectOneEntry(await errorEntriesOf(app, "/api/secret-missing"), {
       method: "GET",
       path: "/api/secret-missing",
       code: "SEC.MISSING",
       status: 500,
+      underlying,
       contains: [/unsetSecret|SECRET_UNSET_SECRET/],
     });
   });
 
   it(tag("HTTP-AC-007", "with unavailable: [\"sql\"], SQL.UNAVAILABLE leaves exactly one error entry"), async () => {
     app = await createRefApp({ unavailable: ["sql"] });
+    const underlying = await caught(app, "sql-items");
     expectOneEntry(await errorEntriesOf(app, "/api/sql/items"), {
       method: "GET",
       path: "/api/sql/items",
       code: "SQL.UNAVAILABLE",
       status: 503,
+      underlying,
     });
   });
 

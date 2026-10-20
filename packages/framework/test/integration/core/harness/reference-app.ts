@@ -155,6 +155,39 @@ export function referenceApp(): DefinedApp<RefConfig, RefSecrets> {
         ran("echo-large");
         return c.json({ length: c.req.valid("json").pad.length });
       });
+
+      // B-T5 (HTTP-AC-007, flag F12): the same failing operations as /throw/plain,
+      // /throw/misconfigured, /config/undeclared, /secret-missing and /sql/items, caught here so
+      // the test learns the underlying error's own name and message and can require exactly
+      // those in the log entry of the uncaught request.
+      const describeCaught = (err: unknown): { name: string; message: string } =>
+        err instanceof Error ? { name: err.name, message: err.message } : { name: typeof err, message: String(err) };
+      api.get("/caught/:what", async (c) => {
+        try {
+          switch (c.req.param("what")) {
+            case "plain":
+              throw new Error(PLAIN_ERROR_MESSAGE);
+            case "misconfigured":
+              throw new FrameworkError("CORE.MISCONFIGURED", "bt1 misconfigured");
+            case "config-undeclared": {
+              const read = c.var.config.get as (key: string) => unknown;
+              read.call(c.var.config, "bt1UndeclaredKey");
+              break;
+            }
+            case "secret-missing":
+              await c.var.secrets.get("unsetSecret");
+              break;
+            case "sql-items":
+              await c.var.sql.select().from(items);
+              break;
+            default:
+              return c.json({ caught: null }, 404);
+          }
+        } catch (err) {
+          return c.json({ caught: describeCaught(err) });
+        }
+        return c.json({ caught: null });
+      });
     },
   });
   return cached;

@@ -17,13 +17,15 @@ import {
   type RunResult,
 } from "../../fixtures/support/app.js";
 import {
+  ALL_RULES,
   OTHER_CHECK_FIXTURES,
+  OTHER_RULE_REPRESENTATIVES,
   RULES,
   RULE_FIXTURES,
   TYPE_ESCAPE_FIXTURES,
   baseName,
+  type AnyRuleName,
   type FailingFixture,
-  type RuleName,
 } from "../../fixtures/support/check-catalog.js";
 
 const SETUP_TIMEOUT = 900_000;
@@ -41,14 +43,18 @@ function escapeRe(s: string): string {
  * next diagnostic) names the construct, the rule, and a skill reference that exists in
  * `skill/`.
  */
-function actionableDiagnostic(lines: readonly string[], fixture: FailingFixture, rule: RuleName): boolean {
+function actionableDiagnostic(
+  lines: readonly string[],
+  fixture: Pick<FailingFixture, "file" | "construct">,
+  rule: AnyRuleName,
+): boolean {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? "";
     if (!namesRule(line, rule)) continue;
     const segment = [line];
     for (let j = i + 1; j < lines.length; j++) {
       const next = lines[j] ?? "";
-      if (RULES.some((r) => namesRule(next, r)) || isTypeScriptError(next)) break;
+      if (ALL_RULES.some((r) => namesRule(next, r)) || isTypeScriptError(next)) break;
       segment.push(next);
     }
     const text = segment.join("\n");
@@ -133,6 +139,32 @@ describe("failing fixtures (apps/base + check/fail)", () => {
       ).toBe(true);
     });
   }
+
+  // The remaining rules of check.md §2: no-raw-html, no-suppression-comments and the
+  // typescript-eslint type-escape bans (B-T5, evaluation flag F2).
+  for (const fixture of OTHER_RULE_REPRESENTATIVES) {
+    const rule = fixture.rule;
+    it(tag("CHECK-AC-003", `the ${rule} diagnostic names the construct, the rule and an existing skill reference`), () => {
+      expect(result.code, show(result)).not.toBe(0);
+      const lines = diagnosticsFor(result.output, baseName(fixture.file));
+      expect(
+        lines.some((l) => namesRule(l, rule)),
+        `no ${rule} diagnostic names ${fixture.file}\n${lines.join("\n")}\n${show(result)}`,
+      ).toBe(true);
+      expect(
+        actionableDiagnostic(lines, fixture, rule),
+        `no ${rule} diagnostic for ${fixture.file} names ${String(fixture.construct)} and an existing skill/reference/*.md\n${lines.join("\n")}\n${show(result)}`,
+      ).toBe(true);
+    });
+  }
+
+  it("CHECK-AC-003 coverage: every rule has exactly one representative fixture (control)", () => {
+    const covered = [
+      ...RULES.filter((r) => RULE_FIXTURES.some((f) => f.rule === r && f.representative === true)),
+      ...OTHER_RULE_REPRESENTATIVES.map((f) => f.rule),
+    ].sort();
+    expect(covered).toEqual([...ALL_RULES].sort());
+  });
 });
 
 describe("passing fixtures (apps/base + check/pass)", () => {

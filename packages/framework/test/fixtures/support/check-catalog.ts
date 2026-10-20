@@ -166,6 +166,48 @@ export const TYPE_ESCAPE_FIXTURES: readonly FailingFixture[] = [
   { file: s("te-eslint-disable-next-line"), rule: null, what: "an eslint-disable-next-line comment" },
 ];
 
+/**
+ * CHECK-AC-003 covers every rule's diagnostic (check.md §2 "Shipped configuration"): besides the
+ * ten CHECK-REQ-001 rules in RULES, the framework's `no-raw-html` and `no-suppression-comments`,
+ * and the type-escape bans taken from typescript-eslint (`no-explicit-any`,
+ * `consistent-type-assertions`, `no-non-null-assertion`). Rule names are matched as whole
+ * tokens, so `@typescript-eslint/no-explicit-any` names `no-explicit-any`.
+ */
+export type OtherRuleName =
+  | "no-raw-html"
+  | "no-suppression-comments"
+  | "no-explicit-any"
+  | "consistent-type-assertions"
+  | "no-non-null-assertion";
+
+export type AnyRuleName = RuleName | OtherRuleName;
+
+/** Every rule whose diagnostic CHECK-AC-003 judges (12 framework rules + 3 type-escape bans). */
+export const ALL_RULES: readonly AnyRuleName[] = [
+  ...RULES,
+  "no-raw-html",
+  "no-suppression-comments",
+  "no-explicit-any",
+  "consistent-type-assertions",
+  "no-non-null-assertion",
+];
+
+/** A representative fixture per rule outside RULES, with the construct its diagnostic must name. */
+export interface ReferenceFixture {
+  readonly file: string;
+  readonly rule: OtherRuleName;
+  readonly what: string;
+  readonly construct: readonly RegExp[];
+}
+
+export const OTHER_RULE_REPRESENTATIVES: readonly ReferenceFixture[] = [
+  { file: c("html-inner"), rule: "no-raw-html", what: "an innerHTML write in browser code", construct: [/innerHTML/] },
+  { file: s("te-ts-ignore"), rule: "no-suppression-comments", what: "a @ts-ignore comment", construct: [/@ts-ignore/] },
+  { file: s("te-any-param"), rule: "no-explicit-any", what: "an any-typed parameter", construct: [/\bany\b/] },
+  { file: s("te-as-unknown-as"), rule: "consistent-type-assertions", what: "an `as unknown as` cast", construct: [/\bas\b|type assertion/i] },
+  { file: s("te-non-null"), rule: "no-non-null-assertion", what: "a non-null assertion (`!`)", construct: [/non-null/i] },
+];
+
 export function baseName(file: string): string {
   return file.slice(file.lastIndexOf("/") + 1);
 }

@@ -14,6 +14,7 @@ import ts from "typescript";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type { DownloadTicket, UploadTicket } from "../../../src/index.js";
 import { tag } from "../../../../../tests/support/tags.js";
+import { describeCompilerDiagnostics, typeErrors } from "../../fixtures/support/typecheck.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const frameworkRoot = path.resolve(here, "../../..");
@@ -131,4 +132,40 @@ describe("FILES app-facing types", () => {
     ];
     expect(typeof readUrl).toBe("function");
   });
+
+  // B-T5 (flag F7): the type assertions above are only real if the compiler checks them; this
+  // test runs the compiler on this file (framework project settings) inside the Vitest run.
+  it(
+    tag("FILES-AC-004", "tickets are opaque: the compiler accepts this file's ticket type assertions and rejects reading ticket fields"),
+    () => {
+      const self = fileURLToPath(import.meta.url);
+      // Negative controls in the same program: reading any field of a ticket, or treating it as
+      // a string or a plain object, is a compile error; an empty `keyof` would also make the
+      // `keyof … = "url"` lines fail.
+      const probe = path.join(here, "__b-t5-ticket-probe.ts");
+      const probeSource = [
+        `import type { DownloadTicket, UploadTicket } from "../../../src/index.js";`,
+        `declare const upload: UploadTicket;`,
+        `declare const download: DownloadTicket;`,
+        `export const a = upload.url;`,
+        `export const b = upload.headers;`,
+        `export const c = download.url;`,
+        `export const d = download.expiresAt;`,
+        `export const e: string = upload;`,
+        `export const f: string = download;`,
+        `export const g: keyof UploadTicket = "url";`,
+        `export const h: keyof DownloadTicket = "url";`,
+        ``,
+      ].join("\n");
+      const errors = typeErrors([self], { [probe]: probeSource });
+      const own = errors.filter((e) => path.resolve(e.file) === path.resolve(self));
+      expect(describeCompilerDiagnostics(own), "type errors in this file (its expectTypeOf / @ts-expect-error assertions)").toBe("");
+      const other = errors.filter((e) => path.resolve(e.file) !== path.resolve(self) && path.resolve(e.file) !== path.resolve(probe));
+      expect(describeCompilerDiagnostics(other)).toBe("");
+      const probeLines = new Set(errors.filter((e) => path.resolve(e.file) === path.resolve(probe)).map((e) => e.line));
+      // Lines 4–11 of the probe are each rejected.
+      expect([...probeLines].sort((x, y) => x - y), describeCompilerDiagnostics(errors)).toStrictEqual([4, 5, 6, 7, 8, 9, 10, 11]);
+    },
+    120_000,
+  );
 });
