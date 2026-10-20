@@ -47,8 +47,8 @@ The stage's public origin is its `workers.dev` URL. It is computed before deploy
 
 ### Deploy mechanics
 
-How this target implements the per-target operations (PROV §2, Per-target operations):
-- **`setupAccount`** creates the shared R2 log bucket (LOG §2) and the provisioning tool's state home on Cloudflare, checks that this account owns them, and registers and records the `workers.dev` subdomain as above.
+How this target implements the per-target operations (PROV §2, Per-target operations). The stage's resources have fixed names (DEC-0331): the Worker script `<app>-<stage>`, the R2 bucket `<app>-<stage>-files` and the R2 signing token `<app>-<stage>-files-signing`; databases follow MIG's `<app>-<stage>-db-<n>`.
+- **`setupAccount`** creates the shared R2 log bucket (LOG §2) and the provisioning tool's state home on Cloudflare, checks that this account owns them, and registers and records the `workers.dev` subdomain as above. Cloudflare holds the subdomain, so it is read again on every deploy; on an account without one, `setup-account` registers `pf-<first 12 characters of the account ID>` (DEC-0333).
 - **`deploy`** runs SST with the Worker settings above. The current D1 database is an input; it is not in the provisioning tool's state.
 - **`setSecret`** sets the Worker secret `SECRET_<NAME>` (SEC-REQ-003) through the Cloudflare API.
 - **`stopApp`** turns off the stage Worker's public address (its `workers.dev` route) through the Cloudflare API. **`startApp`** turns it back on. The Worker is never deleted, so its secrets and bindings survive a stop (DEC-0078). The provisioning tool does not undo a change made outside its state, so the start is always an explicit CLI call, made on every deploy (PROV-REQ-002 step 6) and after a failed migration or check (MIG-REQ-003).

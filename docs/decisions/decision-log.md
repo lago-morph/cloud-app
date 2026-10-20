@@ -2871,7 +2871,7 @@ The leftover-check note above was done by D-06 (DEC-0357). Edits outside D-05's 
 Item: D-05.
 
 ### DEC-0356 — Static assets of the generated SST Worker come from D-01's settings
-Origin: ai-proposed · Status: accepted (unverified live; DEC-0334 item 6) · Affects: CF-REQ-001, CF-AC-001, cloudflare.md §2, DEC-0325, DEC-0336 (closes its "Static-asset settings" open item), `provision/cloudflare/sst.ts`
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open; unverified live, DEC-0334 item 6) · Affects: CF-REQ-001, CF-AC-001, cloudflare.md §2, DEC-0325, DEC-0336 (closes its "Static-asset settings" open item), `provision/cloudflare/sst.ts`
 
 When the built code has an assets directory, `sstProgram` builds `cloudflareWorkerSettings` (D-01) from the stage's inputs (Worker name, bundle, assets directory, public origin, database, files bucket) and passes its `assets` to `sst.cloudflare.Worker` as `assets: { directory, notFoundHandling: "single-page-application", runWorkerFirst: ["/api", "/api/*"] }`. Without an assets directory (an app with no `index.html`, DEC-0351) there is no `assets` and the Worker answers every path, as before. Building the settings also applies D-01's checks (an `https` public origin without a path; no `SECRET_*` names).
 
