@@ -383,7 +383,7 @@ Deps: C-EV.
 ### F-01 — Demo build (fresh agent)
 - **Task:** A subagent with no other context builds `apps/demo/` from **only** `skill/`, `apps/template/`, and `docs/demo/demo-spec.md` (E2E-015). It records its model and inputs in `apps/demo/BUILD-RECORD.md`, raises any framework/skill defect in `apps/demo/FRAMEWORK-ISSUE.md` per the skill's rules, writes the demo's tests and smoke test, and passes `verify`.
 - **Read:** only the three inputs above.
-- **Owns:** `apps/demo/**`.
+- **Owns:** `apps/demo/**`, plus the `validation/local/<runId>.json` and `validation/local/<runId>/` that its own `smoke --target local` run writes (commit them with the run's commit).
 - **Deps:** E-EV.
 - **Exit:** `verify` passes in `apps/demo`, or open `FRAMEWORK-ISSUE.md` entries exist.
 

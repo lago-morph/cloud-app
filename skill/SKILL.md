@@ -25,6 +25,7 @@ Read this page, then only the references your task needs (task map below).
 
    Use [templates/FRAMEWORK-ISSUE.md](templates/FRAMEWORK-ISSUE.md).
 7. **After recording an entry**, stop work on the blocked requirement; continue only work that does not depend on it; report the issue and the list of unfinished requirements to the user; and do not declare the app done.
+8. **A target this phase cannot reach is not a framework issue.** The AWS target is not built yet, and Cloudflare runs may be paused (for example while a cloud quota is used up). Do not add a `FRAMEWORK-ISSUE.md` entry for that. In your build record, list each requirement or check that needs such a run as unfinished: `not-run` for AWS ("AWS phase not started"), `blocked` with the stated reason for paused Cloudflare runs.
 
 ## Task map
 
@@ -70,4 +71,4 @@ The scaffolder (`skill/scripts/scaffold <dir>`) copies `apps/template`; [templat
 
 ## Done means
 
-`npx prototype-framework verify` passes; every requirement is implemented and tested; for each cloud you claim, the smoke test passed on a deployed test stage there; and `FRAMEWORK-ISSUE.md` has no open entry blocking a requirement.
+`npx prototype-framework verify` passes; every requirement is implemented and tested; for each cloud you claim, the smoke test passed on a deployed test stage there; and `FRAMEWORK-ISSUE.md` has no open entry blocking a requirement. Runs on a target this phase cannot reach are listed as unfinished (`not-run` or `blocked`, hard rule 8), not raised as issues.

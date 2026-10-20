@@ -368,3 +368,18 @@ The fix compares `URL.origin`, which normalizes case and default ports (`HTTPS:/
 2. **Red tests add `"/\\other.example/p"`** (backslash form) on both test apps, and on the connected app a `redirect: "follow"` request to a same-origin route answering 302 to another host, asserting no request reached another origin. The in-process test also covers the `https://localhost:8787` scheme mismatch.
 3. **The skill's discriminator must not misroute the backslash form**: use `/^\/(?![\/\\])/.test(ticket.url) ? t.request(…) : fetch(…)` (or equivalent) instead of `startsWith("/") && !startsWith("//")`. With the fix a misrouted URL is refused loudly rather than leaked, so this is a correctness requirement for the example, not a security one.
 4. Everything else in the record's "Proposed fix" and "Verification" stands as written (check in both `request` and `send`, thrown before login, before sending and before touching the jar; shared error text; contract sentence in `testing.d.ts` together with entry 4's `dispose` sentence; skill E-01 edits; demo not a fix requirement on F-01).
+
+---
+
+## Fix (1, 3, 4, 5)
+
+Branch `claude/implement-local-cloudflare-fix-f1` from `origin/claude/implement-local-cloudflare`. Documentation only; local only; no Cloudflare calls. Entry 2 is not touched here (re-diagnosis, separate fix). No example changed, so every example stays byte-identical to its source.
+
+| # | Change |
+| --- | --- |
+| 1 | `skill/SKILL.md`: new hard rule 8 — a target this phase cannot reach (AWS not built; Cloudflare runs paused) is not a framework issue; no `FRAMEWORK-ISSUE.md` entry; the builder lists the affected requirements and checks as unfinished in the build record (`not-run`, "AWS phase not started"; `blocked` with the stated reason for paused Cloudflare runs). "Done means" points to it. |
+| 3 | `skill/reference/sql-and-migrations.md`: `id()` / `ref()` values are lowercase UUID v4 text; the column rule applies to comparisons as well as writes (`eq(notes.id, "no-such-note")` is 400 `SQL.INVALID_VALUE`); validate request IDs with `z.uuid()`. `skill/reference/http-and-validation.md`: check a path ID with `z.uuid().safeParse(c.req.param("id"))` before querying and answer `HTTP.NOT_FOUND` when it fails. |
+| 4 | `docs/contracts/ts/testing.d.ts`: `dispose` doc comment only (no type change): in-process, the original and its `as` test apps share one app, so disposing any disposes all; on a connected stage it only logs that test app out. Decision draft `ai/implementation/decisions/fix-f1.md` (DEC-PENDING-fix-f1-1). `skill/reference/testing.md`: the same rule after the `as` bullet; dispose only at the end of the test. The entry-2 fix edits the `request` comment of the same interface, on different lines. |
+| 5 | `skill/reference/testing.md` and `skill/reference/deploying.md`: the evidence record goes to `validation/<target>/` at the top of the git repository that holds the app (the app directory when the app is its own repository) and is committed with the run's commit. `ai/implementation/plan.md` F-01 "Owns": adds the `validation/local/<runId>.json` and `validation/local/<runId>/` that its own `smoke --target local` run writes. |
+
+Red-green: these are documentation-only changes, so there is no failing test to write first (plan §1 "Test economy" rule 2). Checks: typecheck, lint, `tests/skill`. Sizes after the change: `SKILL.md` 7,068 bytes (PAR-070 8,000); `testing.md` 5,840, `deploying.md` 6,490, `sql-and-migrations.md` 9,277, `http-and-validation.md` 9,208 (PAR-071 12,000).

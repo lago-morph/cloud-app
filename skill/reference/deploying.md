@@ -32,7 +32,7 @@ git commit -m "Changes before the smoke test"
 npm run smoke -- --target cloudflare --stage "$STAGE"
 ```
 
-`smoke` writes an evidence record under `validation/cloudflare/` and prints the day's log location. Only claim that the app works on Cloudflare after `smoke` has passed there.
+`smoke` writes an evidence record under `validation/cloudflare/` at the top of the git repository that holds the app (the app directory when the app is its own repository; commit it with the run's commit) and prints the day's log location. Only claim that the app works on Cloudflare after `smoke` has passed there.
 
 ## 3. Deploy a production stage
 

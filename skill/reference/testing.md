@@ -5,7 +5,7 @@ Read this when you write or fix app tests, write the smoke test, test time-depen
 ## What runs your tests
 
 - `npx prototype-framework verify` runs every `tests/**/*.test.ts` file (PAR-116) with Vitest twice, once on SQLite and once on Postgres, each in its own process, with 60 s test and hook timeouts. It fails if any test fails or if no test passed. Tests must need no network.
-- `npx prototype-framework smoke --target <t> --stage <s>` runs only `tests/smoke/**/*.test.ts`, against the running `dev` server (`--target local`) or against a deployed **test** stage (a stage whose name starts with `test-`). It refuses to run when tracked files differ from the last commit (the evidence record names the commit), writes an evidence record to `validation/<target>/<runId>.json`, and prints the stage's log location for the day.
+- `npx prototype-framework smoke --target <t> --stage <s>` runs only `tests/smoke/**/*.test.ts`, against the running `dev` server (`--target local`) or against a deployed **test** stage (a stage whose name starts with `test-`). It refuses to run when tracked files differ from the last commit (the evidence record names the commit), writes an evidence record to `validation/<target>/<runId>.json` at the top of the git repository that holds the app (the app directory when the app is its own repository; commit the record with the run's commit), and prints the stage's log location for the day.
 - An app is not done on a cloud until its smoke test has passed on a deployed stage there.
 
 ## In-process tests
@@ -14,7 +14,7 @@ Import from `@lago-morph/prototype-framework/testing` (only in `tests/**`):
 
 - `await createTestApp(app, options?)` starts your app in the test process with fresh, empty storage and migrations applied. Options: `user` (identity for every request, default anonymous), `config` (override declared values; `framework` takes `{ admins?, users? }`), `secrets` (values), `unavailable` (e.g. `["sql"]`: every operation of that capability fails with its `*.UNAVAILABLE` code), `stubLoginProvider` (see [current-user.md](current-user.md)).
 - `await t.request("/api/notes", init?)` sends a request and returns a `Response`. Include `/api` in the path. For JSON bodies set `headers: { "content-type": "application/json" }` and `body: JSON.stringify(…)`. State-changing requests get the right `Origin` automatically.
-- `t.as(mockUsers.user("alice"))` returns a test app that sends requests as Alice and shares storage with `t`; use two of them to test that one user cannot see another's data. `mockUsers.admin(id?)` and `mockUsers.anonymous` likewise.
+- `t.as(mockUsers.user("alice"))` returns a test app that sends requests as Alice and shares storage with `t`; use two of them to test that one user cannot see another's data. `mockUsers.admin(id?)` and `mockUsers.anonymous` likewise. In-process, `t` and every test app made from it with `as` share one app: disposing any of them disposes all, and later requests through any of them throw. Dispose them only at the end of the test, as the examples do. On a deployed stage, disposing one only logs it out.
 - `t.logs()` returns the log entries written so far ([log.md](log.md)).
 - `await t.dispose()` after each test (an `afterEach` that disposes every test app the test opened, as in the examples).
 

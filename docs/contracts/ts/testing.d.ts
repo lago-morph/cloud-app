@@ -77,7 +77,12 @@ export interface TestApp {
    * requests. Optional `stubFailure` makes the stub's login fail in the named way.
    */
   loginWithStub(subject: string, options?: { readonly displayName?: string; readonly stubFailure?: "refused" | "replayed" }): Promise<void>;
-  /** Discards all state created by this test app. On a connected stage it only logs out; stage data is kept. */
+  /**
+   * Discards all state created by this test app. In-process, the original and every test
+   * app made from it with `as` share one app: disposing any of them disposes all, and later
+   * requests through any of them reject. On a connected stage it only logs that test app
+   * out; stage data is kept.
+   */
   dispose(): Promise<void>;
 }
 
