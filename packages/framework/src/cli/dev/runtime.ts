@@ -5,9 +5,11 @@
  * (PAR-113) in this process. Node only.
  */
 import { spawn } from "node:child_process";
+import { existsSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { connect, createServer as createNetServer } from "node:net";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { buildApp } from "../../build/build.js";
 import { d1MigrationDatabase, migrateLocal, type D1Like } from "../../mig/apply.js";
 import { ensureDevSecrets } from "../../secrets/local.js";
@@ -98,8 +100,20 @@ const startWorker: DevDeps["startWorker"] = async ({ appDir, args, port, io }) =
   return worker;
 };
 
+/** The real path of this framework package's root: the nearest directory above this module with a package.json. */
+function frameworkRoot(): string {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  while (!existsSync(join(dir, "package.json"))) {
+    const parent = dirname(dir);
+    if (parent === dir) throw new Error("prototype-framework: package root not found");
+    dir = parent;
+  }
+  return realpathSync(dir);
+}
+
 const startClient: DevDeps["startClient"] = async ({ root, port, apiTarget, cacheDir }) => {
   const { createServer } = await import("vite");
+  const pkgRoot = frameworkRoot();
   const server = await createServer({
     configFile: false,
     root,
@@ -133,6 +147,12 @@ const startClient: DevDeps["startClient"] = async ({ root, port, apiTarget, cach
       // host (it turns `Origin: https://localhost:<port>` into `http://…`, defeating AUTH-REQ-007).
       // Vite's host check above still runs on the browser's Host before the proxy (LOCAL-REQ-004).
       proxy: { "^/api(/|$|\\?)": { target: apiTarget, changeOrigin: true } },
+      // Do not watch the framework's own files. An installed app has it under node_modules, which Vite
+      // ignores; in this monorepo it is a workspace link Vite resolves to packages/framework, and a rebuild
+      // of its dist (the scaffolder's `npm pack` → prepack) would reload every page, or buffer a reload for
+      // the next one. A function, not a glob, so glob characters in the checkout path cannot break it.
+      // Vite appends this to its defaults (.git, node_modules, the cache dir).
+      watch: { ignored: [(p: string) => p === pkgRoot || p.startsWith(pkgRoot + sep)] },
     },
   });
   await server.listen();
