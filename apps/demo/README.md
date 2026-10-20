@@ -1,6 +1,6 @@
-# Template app
+# Photo board demo
 
-This is the smallest app built on the prototype framework. It uses each capability once: database tables (notes, and one row per finalized upload), key-value storage, file upload with a finalize check and download, a configuration value (`greeting`), one secret (`apiKey`), a tested HMAC signing helper (`src/server/signing.ts`), log entries, and the three access levels (anonymous, user, admin). The scaffolder copies this folder to start a new app. A copied app has its own name: §1 step 2 prints it into `APP`, and the commands below use `$APP`. Where an address below says `template`, read the app's name instead.
+A small shared photo board built on the prototype framework from `docs/demo/demo-spec.md` (DEMO-REQ-001 to DEMO-REQ-011): posts with drafts and publishing (SQL), JPEG and PNG photos uploaded directly to storage with tickets (FILES), a site banner and a per-user page size (KV), the site title, photo limit and share-link lifetime from configuration, share links signed with the `shareKey` secret, `info`/`warn` log entries, and the three access levels. The app name is `demo`. Where an address below says `template`, read `demo` instead.
 
 This page lists everything the owner does by hand, as copy-and-paste steps. Run the commands in a terminal, in this app's folder, on macOS or Linux with Node 22.22.0. Replace the `<…>` parts. Never paste a secret value into a command line, a committed file or a chat.
 
@@ -20,9 +20,9 @@ This page lists everything the owner does by hand, as copy-and-paste steps. Run 
    ```sh
    APP=$(npm run --silent build -- --target local --stage local | sed -n 's/^built \([^ ]*\) for .*/\1/p'); echo "$APP"
    ```
-3. Set the local value of the app's secret, which the admin page checks. `npm run dev` creates only the framework's own development keys, not the app's secrets. Run the command, paste any value, press Enter, then press Ctrl-D:
+3. Set the local value of the app's secret, which signs share links. `npm run dev` creates only the framework's own development keys, not the app's secrets. Run the command, paste any value, press Enter, then press Ctrl-D:
    ```sh
-   npm run secrets -- set apiKey --target local --stage local
+   npm run secrets -- set shareKey --target local --stage local
    ```
    The value is stored in `.dev.vars`, which git ignores.
 4. Start the app, and open the address it prints (`http://localhost:<port>/`):
@@ -86,7 +86,7 @@ npm run deploy -- --target cloudflare --stage "$STAGE"
 On the first deploy, `deploy` stops after creating the Worker and names the secrets that are not set yet. Set each one, paste the value, press Enter, then press Ctrl-D. Then deploy again:
 
 ```sh
-npm run secrets -- set apiKey --target cloudflare --stage "$STAGE"
+npm run secrets -- set shareKey --target cloudflare --stage "$STAGE"
 npm run deploy -- --target cloudflare --stage "$STAGE"
 ```
 
@@ -138,7 +138,7 @@ The file's `"values"` may also set the app's configuration keys, for example `"g
 STAGE=prod
 npm run deploy -- --target cloudflare --stage "$STAGE"
 npm run secrets -- set frameworkGoogleClientSecret --target cloudflare --stage "$STAGE"
-npm run secrets -- set apiKey --target cloudflare --stage "$STAGE"
+npm run secrets -- set shareKey --target cloudflare --stage "$STAGE"
 npm run deploy -- --target cloudflare --stage "$STAGE"
 ```
 
