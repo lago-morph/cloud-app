@@ -1,23 +1,21 @@
 import { api } from "@lago-morph/prototype-framework/client";
-import type { Banner, Site } from "../../shared/types";
-import { button, el, section } from "../dom";
+import type { SecretCheck } from "../../shared/types";
+import { describeError, el, section } from "../dom";
 
-/** Admins only: set or clear the site banner (DEMO-REQ-004). The server guard is the protection. */
-export function adminPage(site: Site): HTMLElement {
-  const page = section("Site banner");
-  const input = el("input");
-  input.maxLength = 500;
-  input.value = site.banner ?? "";
-  input.placeholder = "Banner message";
+/** Admins only: check that the app's secret is set (never shows its value). */
+export function adminPage(): HTMLElement {
+  const page = section("Admin");
+  const check = el("button", "Check secret");
   const message = el("p");
-  const save = button("Set banner", message, async () => {
-    await api<Banner>("/banner", { method: "PUT", body: { banner: input.value } });
-    window.location.reload();
+  page.append(check, message);
+  check.addEventListener("click", () => {
+    void api<SecretCheck>("/admin/secret")
+      .then(({ configured }) => {
+        message.textContent = configured ? "The secret apiKey is set." : "The secret apiKey is empty.";
+      })
+      .catch((error: unknown) => {
+        message.textContent = describeError(error);
+      });
   });
-  const clear = button("Clear banner", message, async () => {
-    await api<Banner>("/banner", { method: "PUT", body: { banner: null } });
-    window.location.reload();
-  });
-  page.append(input, save, clear, message);
   return page;
 }

@@ -2,8 +2,8 @@
   "version": "6",
   "dialect": "sqlite",
   "tables": {
-    "posts": {
-      "name": "posts",
+    "notes": {
+      "name": "notes",
       "columns": {
         "id": {
           "name": "id",
@@ -12,36 +12,15 @@
           "notNull": true,
           "autoincrement": false
         },
-        "author_id": {
-          "name": "author_id",
+        "owner_id": {
+          "name": "owner_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "author_name": {
-          "name": "author_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "body": {
-          "name": "body",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
+        "text": {
+          "name": "text",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -53,109 +32,19 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
         }
       },
       "indexes": {
-        "posts_status_created_at_idx": {
-          "name": "posts_status_created_at_idx",
+        "notes_owner_id_created_at_idx": {
+          "name": "notes_owner_id_created_at_idx",
           "columns": [
-            "status",
-            "created_at"
-          ],
-          "isUnique": false
-        },
-        "posts_author_id_created_at_idx": {
-          "name": "posts_author_id_created_at_idx",
-          "columns": [
-            "author_id",
+            "owner_id",
             "created_at"
           ],
           "isUnique": false
         }
       },
       "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "photos": {
-      "name": "photos",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "post_id": {
-          "name": "post_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "size": {
-          "name": "size",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "content_type": {
-          "name": "content_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "photos_post_id_created_at_idx": {
-          "name": "photos_post_id_created_at_idx",
-          "columns": [
-            "post_id",
-            "created_at"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "photos_post_id_fk": {
-          "name": "photos_post_id_fk",
-          "tableFrom": "photos",
-          "tableTo": "posts",
-          "columnsFrom": [
-            "post_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -170,6 +59,6 @@
   "internal": {
     "indexes": {}
   },
-  "id": "8d03d124-4051-4126-acdb-ec0f9382f7ec",
+  "id": "574e1a0c-bd4c-4ab9-9d2e-bf6c5e1dcced",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }

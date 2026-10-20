@@ -14,34 +14,10 @@ export function section(title: string): HTMLElement {
   return node;
 }
 
-/** A same-origin link handled by the client router. */
-export function link(text: string, href: string): HTMLAnchorElement {
-  const a = el("a", text);
-  a.href = href;
-  return a;
-}
-
-/** A button that runs `action` and shows its failure in `message`. */
-export function button(text: string, message: HTMLElement, action: () => Promise<void>): HTMLButtonElement {
-  const node = el("button", text);
-  node.type = "button";
-  node.addEventListener("click", () => {
-    message.textContent = "";
-    void action().catch((error: unknown) => {
-      message.textContent = describeError(error);
-    });
-  });
-  return node;
-}
-
 /** A readable message for a failed call, including the request ID to look up in the log. */
 export function describeError(error: unknown): string {
   if (error instanceof ApiError) {
     return error.requestId === null ? `${error.code}: ${error.message}` : `${error.code}: ${error.message} (request ${error.requestId})`;
   }
   return error instanceof Error ? error.message : String(error);
-}
-
-export function formatTime(ms: number): string {
-  return new Date(ms).toLocaleString();
 }

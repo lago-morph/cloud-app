@@ -1,21 +1,23 @@
 import { defineApp } from "@lago-morph/prototype-framework";
 import { config, secrets } from "./server/env";
-import { photoRoutes } from "./server/routes/photos";
-import { postRoutes } from "./server/routes/posts";
-import { shareRoutes } from "./server/routes/share";
-import { siteRoutes } from "./server/routes/site";
-import { photos, posts } from "./server/schema";
+import { adminRoutes } from "./server/routes/admin";
+import { fileRoutes } from "./server/routes/files";
+import { helloRoutes } from "./server/routes/hello";
+import { noteRoutes } from "./server/routes/notes";
+import { statusRoutes } from "./server/routes/status";
+import { notes, uploads } from "./server/schema";
 
 export const app = defineApp({
-  name: "demo",
+  name: "template",
   config,
   secrets,
-  tables: { posts, photos },
+  tables: { notes, uploads },
   routes: (api) => {
-    siteRoutes(api);
-    postRoutes(api);
-    photoRoutes(api);
-    shareRoutes(api);
+    helloRoutes(api);
+    noteRoutes(api);
+    statusRoutes(api);
+    fileRoutes(api);
+    adminRoutes(api);
   },
 });
 
