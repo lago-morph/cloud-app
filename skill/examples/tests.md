@@ -4,7 +4,7 @@ Every file below is copied unchanged from the framework's app template (`apps/te
 
 What it shows:
 
-- `tests/app.test.ts`: `createTestApp` per test with `dispose()` afterwards; `mockUsers` with `as()` and the `user` option; `config` and `secrets` options; asserting status codes, error codes and `logs()`; an in-process upload sent with the local ticket's wire form, to test the finalize route (the HMAC tests are in [secrets.md](secrets.md)).
+- `tests/app.test.ts`: `createTestApp` per test with `dispose()` afterwards; `mockUsers` with `as()` and the `user` option; `config` and `secrets` options; asserting status codes, error codes and `logs()`; an in-process upload sent with the ticket's wire form, to test the finalize route (the form is the same on every target; only `url` differs: here a path on the app, sent with `t.request`; on a cloud an absolute storage URL, which tests send with plain `fetch`, never a test helper, see "The smoke test" in [testing.md](../reference/testing.md)) (the HMAC tests are in [secrets.md](secrets.md)).
 - `tests/smoke/smoke.test.ts`: one file that runs in-process under `verify` and against a deployed test stage under `smoke` (`connectTestStage()`).
 - From the reference app, `tests/support.ts`: a shared `open()` helper that disposes test apps after each test.
 

@@ -21,7 +21,7 @@ File content never passes through the API: the browser sends it to storage and f
 - Names are opaque text: non-empty, at most 1,024 UTF-8 bytes (PAR-230), no control characters; otherwise 400 `FILES.INVALID_NAME`. A `/` in a name is just a character; nothing is a path.
 - A list cursor works only with the prefix it came from; otherwise 400 `FILES.INVALID_CURSOR`.
 - Unreachable storage is 503 `FILES.UNAVAILABLE` (logged by the framework).
-- Return the ticket to the browser as JSON (`return c.json({ ticket })`). Its contents are not yours to read or build.
+- Return the ticket to the browser as JSON (`return c.json({ ticket })`). In app code its contents are not yours to read or build; tests may read it (see Testing).
 - A ticket can be used repeatedly until it expires after 15 minutes (PAR-233), and only for its own operation and name.
 
 ## The safe upload pattern
@@ -51,7 +51,8 @@ Platform note (not yet verified on Cloudflare in this phase: seen in a spike, no
 
 ## Testing
 
-Under `createTestApp`, tickets point to a local framework route, so routes that issue tickets can be tested in-process: an upload ticket request answers 200 with a `ticket`, and a download ticket for a missing file answers 404 `FILES.NOT_FOUND`. `unavailable: ["files"]` makes every operation fail with `FILES.UNAVAILABLE`. See [testing.md](testing.md).
+Under `createTestApp`, tickets point to a local framework route, so routes that issue tickets can be tested in-process: an upload ticket request answers 200 with a `ticket`, and a download ticket for a missing file answers 404 `FILES.NOT_FOUND`. `unavailable: ["files"]` makes every operation fail with `FILES.UNAVAILABLE`.
+The ticket is the same JSON on every target: `{ url, method?, headers?, expiresAt }`. Only `url` differs: a path on the app locally and in-process, an absolute signed storage URL on a cloud. A test that sends a ticket itself (as the smoke test does on a stage) sends a path on the app with `t.request`, and an absolute storage URL with plain `fetch(url, { method, headers, body })`, never through `t.request` or another test helper: the test app refuses other origins, so the stage's session cookie never reaches storage. See "The smoke test" in [testing.md](testing.md).
 
 ## Examples
 
