@@ -1,7 +1,7 @@
 import { FrameworkError, count, eq, jsonBody, newId, now, requireUser, z, type PortableDb } from "@lago-morph/prototype-framework";
 import type { Hono } from "hono";
 import type { Photo } from "../../shared/types";
-import { canView, editablePost, findPost, photoFileName } from "../access";
+import { canView, editablePost, findPost, isRowId, photoFileName } from "../access";
 import type { Env } from "../env";
 import { photos } from "../schema";
 import { verifyToken } from "../signing";
@@ -59,6 +59,7 @@ export function photoRoutes(api: Hono<Env>): void {
 
   // Anyone who may see the post gets a ticket; so does the holder of a valid share link for it.
   api.post("/photos/:id/download-ticket", jsonBody(downloadRequest), async (c) => {
+    if (!isRowId(c.req.param("id"))) throw new FrameworkError("HTTP.NOT_FOUND", "no such photo");
     const [photo] = await c.var.sql
       .select({ id: photos.id, postId: photos.postId })
       .from(photos)

@@ -1,4 +1,4 @@
-import { FrameworkError, asc, eq, type CurrentUser, type PortableDb } from "@lago-morph/prototype-framework";
+import { FrameworkError, asc, eq, z, type CurrentUser, type PortableDb } from "@lago-morph/prototype-framework";
 import type { Photo, PostDetail, PostStatus, PostSummary } from "../shared/types";
 import { photos, posts } from "./schema";
 
@@ -58,7 +58,15 @@ export function canDelete(post: PostRow, user: CurrentUser): boolean {
   return canEdit(post, user) || user.level === "admin";
 }
 
+const rowId = z.uuid();
+
+/** Whether a path parameter can be a row ID at all; anything else matches no row. */
+export function isRowId(value: string): boolean {
+  return rowId.safeParse(value).success;
+}
+
 export async function findPost(db: PortableDb, id: string): Promise<PostRow | null> {
+  if (!isRowId(id)) return null;
   const [row] = await db.select(postColumns).from(posts).where(eq(posts.id, id)).limit(1);
   return row ?? null;
 }
