@@ -33,3 +33,9 @@ export function setupAccountCommand(deps: SetupAccountDeps): Command {
     return (await runSetupAccount(deps.operations({ appDir: io.cwd, target: target as Target }), io)).status;
   };
 }
+
+/** `setup-account` bound to the target's operations from the process environment. */
+export async function setupAccountBinding(env: ProcessEnvironment = process.env): Promise<Command> {
+  const { cloudflareOperations } = await import("./deploy.js");
+  return setupAccountCommand({ env, operations: cloudflareOperations({ env, requireCredentials: true }) });
+}

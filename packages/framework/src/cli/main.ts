@@ -15,28 +15,35 @@ export interface Entry {
   readonly run: Command;
 }
 
-/** A command whose implementation belongs to a later work item: fails naming what it needs. */
-function notYet(prerequisite: string): Command {
-  return async (_args, io) => {
-    io.stderr(`this command is not available yet: it requires ${prerequisite}\n`);
-    return EXIT.failed;
-  };
-}
+/** A command loaded when it runs, so one command never loads another's tooling. */
+const lazy =
+  (load: () => Promise<Command>): Command =>
+  async (args, io) =>
+    (await load())(args, io);
 
-/** `smoke` (C-04), loaded when it runs so other commands never load Vitest's Node API. */
-const smokeBinding: Command = async (args, io) => (await (await import("./commands/smoke.js")).smokeBinding())(args, io);
+/** `smoke` (C-04; never loads Vitest's Node API for other commands), with the cloud process check (D-05) in front. */
+const smokeBinding: Command = lazy(async () => {
+  const [{ smokeBinding: smoke }, { withCloudProcessCheck }] = await Promise.all([import("./commands/smoke.js"), import("./commands/smoke-cloud.js")]);
+  return withCloudProcessCheck(await smoke());
+});
+
+/** The cloud commands (D-05). */
+const deployBinding: Command = lazy(async () => (await import("./commands/deploy.js")).deployBinding());
+const removeBinding: Command = lazy(async () => (await import("./commands/remove.js")).removeBinding());
+const setupAccountBinding: Command = lazy(async () => (await import("./commands/setup-account.js")).setupAccountBinding());
+const certifyAuthBinding: Command = lazy(async () => (await import("./commands/certify-auth.js")).certifyAuthBinding());
 
 const COMMANDS: Readonly<Record<string, Entry>> = {
   dev: { summary: "run the app locally on http://localhost:<port>", run: devBinding },
   verify: { summary: "the pre-completion verification (offline)", run: verifyBinding },
   "generate-migration": { summary: "generate-migration [--name <slug>]: the next migration pair from the table definitions", run: generateMigrationBinding },
   build: { summary: "build --target <t> --stage <s>: build a deployment without deploying it", run: buildBinding },
-  deploy: { summary: "deploy --target <t> --stage <s>: deploy a stage", run: notYet("the Cloudflare provisioning operations (work item D-05)") },
+  deploy: { summary: "deploy --target <t> --stage <s>: deploy a stage", run: deployBinding },
   smoke: { summary: "smoke --target <t> --stage <s>: run the app's smoke tests against a stage", run: smokeBinding },
-  remove: { summary: "remove --target <t> --stage <s>: remove a stage", run: notYet("the Cloudflare provisioning operations (work item D-05)") },
+  remove: { summary: "remove --target <t> --stage <s> [--confirm-production <s>]: remove a stage", run: removeBinding },
   secrets: { summary: "secrets set <name> --target <t> --stage <s>: set a secret from standard input", run: secretsBinding },
-  "setup-account": { summary: "setup-account --target <t>: one-time account setup", run: notYet("the Cloudflare provisioning operations (work item D-05)") },
-  "certify-auth": { summary: "certify-auth --target <t> --stage <s>: guided login-provider certification", run: notYet("a deployed production stage with a Google client (work item D-05)") },
+  "setup-account": { summary: "setup-account --target <t>: one-time account setup", run: setupAccountBinding },
+  "certify-auth": { summary: "certify-auth --target <t> --stage <s>: guided login-provider certification", run: certifyAuthBinding },
   "reset-local": { summary: "clear local state (local D1, R2 and .logs/)", run: resetLocalBinding },
 };
 

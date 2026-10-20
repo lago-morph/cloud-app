@@ -29,4 +29,12 @@ describe("cloud commands' process environment (DEC-0085, DEC-0107)", () => {
     expect(await smoke(["--target=local"], captureIo())).toBe(0);
     expect(ran).toBe(true);
   });
+
+  it("an unknown or missing target is passed through, so smoke reports the usage error itself", async () => {
+    let runs = 0;
+    const smoke = withCloudProcessCheck(async () => (runs++, 2), { HTTPS_PROXY: "http://proxy:1" });
+    expect(await smoke(["--target", "nowhere"], captureIo())).toBe(2);
+    expect(await smoke([], captureIo())).toBe(2);
+    expect(runs).toBe(2);
+  });
 });

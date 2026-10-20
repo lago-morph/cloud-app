@@ -10,7 +10,7 @@
  * records (`recordDeployOutput`, DEC-0272). This module only adds the process check in front.
  */
 import { checkStageName, type Target } from "../../core/identity.js";
-import { parseTargetStage, UsageError } from "../args.js";
+import { parseTargetStage, TARGETS, UsageError } from "../args.js";
 import { describeFailure } from "../failure.js";
 import { EXIT, type CliIo, type Command } from "../io.js";
 
@@ -39,7 +39,7 @@ export function targetArgument(args: readonly string[]): string | undefined {
 export function withCloudProcessCheck(command: Command, env: ProcessEnvironment = process.env): Command {
   return async (args, io) => {
     const target = targetArgument(args);
-    if (target !== undefined && target !== "local") {
+    if (target !== undefined && target !== "local" && (TARGETS as readonly string[]).includes(target)) {
       const problems = cloudProcessProblems(env);
       if (problems.length > 0) {
         io.stderr(`smoke: ${problems.join("; ")}\n`);

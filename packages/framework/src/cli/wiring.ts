@@ -34,10 +34,16 @@ export const generateMigrationBinding: Command = lazy(async () => {
 export const resetLocalBinding: Command = lazy(async () => (await import("./commands/reset-local.js")).resetLocalCommand());
 
 export const secretsBinding: Command = lazy(async () => {
-  const [{ secretsCommand }, { loadApp }, { setLocalSecret }] = await Promise.all([import("./commands/secrets.js"), import("../build/load.js"), import("../secrets/local.js")]);
+  const [{ secretsCommand }, { loadApp }, { setLocalSecret }, { cloudSecretsBinding }] = await Promise.all([
+    import("./commands/secrets.js"),
+    import("../build/load.js"),
+    import("../secrets/local.js"),
+    import("./commands/secrets-cloud.js"),
+  ]);
   return secretsCommand({
     loadDeclaredSecrets: async (appDir) => (await loadApp(appDir)).definition.secrets,
     setLocalSecret,
+    cloud: cloudSecretsBinding(),
   });
 });
 

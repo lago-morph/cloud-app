@@ -116,3 +116,43 @@ export function certifyAuthCommand(deps: CertifyAuthDeps): Command {
     return outcome.record.exitStatus === 0 ? EXIT.ok : EXIT.failed;
   };
 }
+
+/** `certify-auth` bound to the recorded deploy output, the stage's values file, git and the evidence writer. */
+export async function certifyAuthBinding(env: ProcessEnvironment = process.env): Promise<Command> {
+  const [{ loadApp }, { createDeployment }, { nodeFileReader, resolveStageConfig }, evidence, { readDeployedOrigin }, { execFileSync }, { readFileSync }] = await Promise.all([
+    import("../../build/load.js"),
+    import("../../core/identity.js"),
+    import("../../config/files.js"),
+    import("../../evidence/public.js"),
+    import("./smoke.js"),
+    import("node:child_process"),
+    import("node:fs"),
+  ]);
+  const frameworkVersion = (): string | undefined => {
+    try {
+      return (JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf8")) as { version?: string }).version;
+    } catch {
+      return undefined;
+    }
+  };
+  return certifyAuthCommand({
+    env,
+    deployedOrigin: readDeployedOrigin,
+    googleClientId: async (appDir, target, stage) => {
+      const { definition } = await loadApp(appDir);
+      const deployment = createDeployment({ app: definition.name, stage, target });
+      return resolveStageConfig(deployment, { config: definition.config, secrets: definition.secrets }, nodeFileReader(appDir)).google?.clientId;
+    },
+    repo: (appDir) => {
+      const root = execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: appDir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+      return { root, git: evidence.gitState(root) };
+    },
+    writeEvidence: evidence.writeEvidence,
+    newRunId: () => evidence.newRunId(),
+    now: () => new Date(),
+    versions: () => {
+      const version = frameworkVersion();
+      return { node: process.version, ...(version === undefined ? {} : { "@lago-morph/prototype-framework": version }) };
+    },
+  });
+}

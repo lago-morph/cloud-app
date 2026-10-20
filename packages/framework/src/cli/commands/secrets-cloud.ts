@@ -28,16 +28,34 @@ export interface CloudSecrets {
   set(appDir: string, target: Target, stage: string, name: string, value: string): Promise<string>;
 }
 
+function refuse(env: ProcessEnvironment, stage: string, io: { stderr(text: string): void }): number | undefined {
+  checkedStage(stage);
+  return refuseUnreachableCloud("secrets set", env, io);
+}
+
+async function setWith(deps: Omit<CloudSecretsDeps, "env">, appDir: string, target: Target, stage: string, name: string, value: string): Promise<string> {
+  const app = await deps.appName(appDir);
+  await deps.operations({ appDir, target }).setSecret({ app, stage }, name, value);
+  return `${secretLocation(target, name)} (a Worker secret of stage ${stage})`;
+}
+
 export function cloudSecrets(deps: CloudSecretsDeps): CloudSecrets {
   return {
-    refuse(_target, stage, io) {
-      checkedStage(stage);
-      return refuseUnreachableCloud("secrets set", deps.env, io);
-    },
-    async set(appDir, target, stage, name, value) {
-      const app = await deps.appName(appDir);
-      await deps.operations({ appDir, target }).setSecret({ app, stage }, name, value);
-      return `${secretLocation(target, name)} (a Worker secret of stage ${stage})`;
+    refuse: (_target, stage, io) => refuse(deps.env, stage, io),
+    set: (...args) => setWith(deps, ...args),
+  };
+}
+
+/**
+ * The real cloud store: the app loader and the target's operations from the process
+ * environment, loaded only when a cloud secret is set (a local `secrets set` loads none of it).
+ */
+export function cloudSecretsBinding(env: ProcessEnvironment = process.env): CloudSecrets {
+  return {
+    refuse: (_target, stage, io) => refuse(env, stage, io),
+    async set(...args) {
+      const [{ loadApp }, { cloudflareOperations }] = await Promise.all([import("../../build/load.js"), import("./deploy.js")]);
+      return setWith({ appName: async (appDir) => (await loadApp(appDir)).definition.name, operations: cloudflareOperations({ env, requireCredentials: true }) }, ...args);
     },
   };
 }
