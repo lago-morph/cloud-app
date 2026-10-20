@@ -10,14 +10,12 @@
  * (`.framework/<target>/stages/<stage>.json`) is deleted (plan §5 "From phase C").
  * Exit 1 on any failure or leftover (CLI-REQ-003).
  */
-import { checkStageName, type Target } from "../../core/identity.js";
+import type { Target } from "../../core/identity.js";
 import { runRemove } from "../../provision/core/remove.js";
 import type { TargetOperations } from "../../provision/core/operations.js";
 import { parseOptions, TARGETS, UsageError } from "../args.js";
-import { describeFailure } from "../failure.js";
 import { EXIT, type Command } from "../io.js";
-import { refuseUnreachableCloud } from "./deploy.js";
-import type { ProcessEnvironment } from "./smoke-cloud.js";
+import { checkedStage, refuseUnreachableCloud, type ProcessEnvironment } from "./smoke-cloud.js";
 
 export interface RemoveDeps {
   readonly env: ProcessEnvironment;
@@ -29,16 +27,6 @@ export interface RemoveDeps {
 }
 
 const CONFIRM = "confirm-production";
-
-/** A stage name checked against PAR-291, as a usage error (the name is the owner's own input). */
-export function checkedStage(stage: string): string {
-  try {
-    checkStageName(stage);
-  } catch (error) {
-    throw new UsageError(describeFailure(error));
-  }
-  return stage;
-}
 
 function parseRemoveOptions(args: readonly string[]): { target: Target; stage: string } {
   const options = parseOptions(args, ["target", "stage", CONFIRM]);

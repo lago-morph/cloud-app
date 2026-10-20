@@ -9,9 +9,7 @@
 import { secretLocation } from "../../config/secret-locations.js";
 import type { Target } from "../../core/identity.js";
 import type { TargetOperations } from "../../provision/core/operations.js";
-import { refuseUnreachableCloud } from "./deploy.js";
-import { checkedStage } from "./remove.js";
-import type { ProcessEnvironment } from "./smoke-cloud.js";
+import { checkedStage, refuseUnreachableCloud, type ProcessEnvironment } from "./smoke-cloud.js";
 
 export interface CloudSecretsDeps {
   readonly env: ProcessEnvironment;

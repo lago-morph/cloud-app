@@ -9,7 +9,10 @@
  * `smoke --target <cloud>` is C-04's command; its stage form reads the base URL that `deploy`
  * records (`recordDeployOutput`, DEC-0272). This module only adds the process check in front.
  */
-import { EXIT, type Command } from "../io.js";
+import { checkStageName, type Target } from "../../core/identity.js";
+import { parseTargetStage, UsageError } from "../args.js";
+import { describeFailure } from "../failure.js";
+import { EXIT, type CliIo, type Command } from "../io.js";
 
 export type ProcessEnvironment = Readonly<Record<string, string | undefined>>;
 
@@ -45,4 +48,30 @@ export function withCloudProcessCheck(command: Command, env: ProcessEnvironment 
     }
     return command(args, io);
   };
+}
+
+/** Parses `--target <cloud> --stage <s>`; `local` is refused (shared by deploy, remove, secrets). */
+export function parseCloudTargetStage(command: string, args: readonly string[]): { readonly target: Target; readonly stage: string } {
+  const parsed = parseTargetStage(args);
+  if (parsed.target === "local") throw new UsageError(`${command} works on cloud targets; locally the app runs with dev (npm run dev)`);
+  return parsed;
+}
+
+/** Prints the process problems of a cloud command and returns 1, or returns undefined when there are none. */
+export function refuseUnreachableCloud(command: string, env: ProcessEnvironment, io: Pick<CliIo, "stderr">): number | undefined {
+  const problems = cloudProcessProblems(env);
+  if (problems.length === 0) return undefined;
+  io.stderr(`${command} failed: ${problems.join("; ")}\n`);
+  return EXIT.failed;
+}
+
+
+/** A stage name checked against PAR-291, as a usage error (the name is the owner's own input). */
+export function checkedStage(stage: string): string {
+  try {
+    checkStageName(stage);
+  } catch (error) {
+    throw new UsageError(describeFailure(error));
+  }
+  return stage;
 }

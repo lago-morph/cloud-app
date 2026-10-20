@@ -21,9 +21,7 @@ import type { EvidencePaths, GitState, Redaction, WriteEvidenceInput } from "../
 import { certifyAuth } from "../../google/certify.js";
 import { describeFailure } from "../failure.js";
 import { EXIT, type Command } from "../io.js";
-import { parseCloudTargetStage, refuseUnreachableCloud } from "./deploy.js";
-import { checkedStage } from "./remove.js";
-import type { ProcessEnvironment } from "./smoke-cloud.js";
+import { checkedStage, parseCloudTargetStage, refuseUnreachableCloud, type ProcessEnvironment } from "./smoke-cloud.js";
 
 export interface CertifyAuthDeps {
   readonly env: ProcessEnvironment;

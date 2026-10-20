@@ -12,8 +12,7 @@ import { runSetupAccount } from "../../provision/core/setup-account.js";
 import type { TargetOperations } from "../../provision/core/operations.js";
 import { parseOptions, TARGETS, UsageError } from "../args.js";
 import { EXIT, type Command } from "../io.js";
-import { refuseUnreachableCloud } from "./deploy.js";
-import type { ProcessEnvironment } from "./smoke-cloud.js";
+import { refuseUnreachableCloud, type ProcessEnvironment } from "./smoke-cloud.js";
 
 export interface SetupAccountDeps {
   readonly env: ProcessEnvironment;
