@@ -48,6 +48,9 @@ export const PHASE_RULES: readonly NotRunRule[] = [
   { id: "E2E-007", targets: CLOUD, mode: "milestone", detail: GOOGLE_MOCKED },
   { id: "E2E-008", targets: CLOUD, mode: "milestone", detail: GOOGLE_MOCKED },
   { id: "CLI-AC-001", targets: CLOUD, mode: "automated", detail: GOOGLE_MOCKED },
+  // The demo is built in phase F (plan C-EV); the template part runs now. Phase F removes this rule when it adds the
+  // demo's [CHECK-AC-005] test. ai/implementation/root-causes/2026-10-20-E2E-004-coverage-and-not-run.md, Cause C (revised).
+  { id: "CHECK-AC-005", targets: ["local"], mode: "automated", part: "demo part", detail: "demo built in phase F (plan C-EV)" },
 ];
 
 /**

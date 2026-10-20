@@ -75,6 +75,16 @@ describe("[COMPL-AC-001] this phase's not-run rules (plan §8) against the docum
     expect(cfm.get("PROV-AC-003")?.run).toBe(true);
   });
 
+  it("records CHECK-AC-005's demo part as not-run on local until phase F, and runs its template part", () => {
+    const local = new Map(expectedCriteria(real, "local", "automated").map((e) => [e.id, e]));
+    expect(local.get("CHECK-AC-005")).toEqual({
+      id: "CHECK-AC-005",
+      run: true,
+      parts: [""],
+      notRunParts: [{ part: "demo part", detail: "demo built in phase F (plan C-EV)" }],
+    });
+  });
+
   it("records every AWS criterion as not-run 'AWS phase not started', and Local criteria run locally", () => {
     const aws = expectedCriteria(real, "aws", "automated");
     expect(aws.length).toBeGreaterThan(50);
