@@ -257,3 +257,74 @@ Checked: `test-app.ts` gives every view one `Shared`, and each view's `dispose` 
 ### Entry 5 — ACCEPTED
 
 Checked: `smoke.ts` `repo` (lines 327–330) uses `git rev-parse --show-toplevel` from the app directory. DEC-0275 says "in the git repository that holds the app". `skill/reference/testing.md` line 8 and `deploying.md` line 35 do not say where the record goes relative to the app. Plan F-01 "Owns: `apps/demo/**`" excludes `validation/`. Fix as proposed: both skill pages, and the plan's F-01 "Owns" extended to its own `validation/local/<runId>.json` and `<runId>/` (orchestrator).
+
+---
+
+## Entry 2 (revised) — the test apps send stage credentials to any host the caller names
+
+Re-diagnosis after the review's rejection (prompt §8 step 1), by a diagnosing subagent that did not write the framework, on branch `claude/implement-local-cloudflare-diag-f2` from `origin/claude/implement-local-cloudflare` at `12a9d8c`. Local only; no Cloudflare calls. No code, contract, skill or demo changed. One throwaway unit test (`packages/framework/src/testing/zz-diag-f2.unit.test.ts`, deleted, never committed) was run with `npx vitest run` in `packages/framework` after `npm ci`. The original entry 2 above is kept; its documentation findings (its evidence 1, 2, 4 and 5) still hold and are carried into this entry.
+
+**Classification: (a) framework defect** in `FW/src/testing/connect.ts` and `FW/src/testing/test-app.ts`, plus contract imprecision in `docs/contracts/ts/testing.d.ts` (all B-16's path set), together with the (b) skill gap of the original entry. Cloud verification of the ticket form stays (c) (entry 1).
+
+### Symptom
+
+`TestApp.request(path)` accepts an absolute URL (`https://other.host/...`) or a protocol-relative one (`//other.host/...`). On a connected stage it sends that request to the other host with the stage's session cookie, the stage's `Origin` and the smoke User-Agent, and it stores the other host's `Set-Cookie` in the jar it sends to the stage. In-process, it silently routes the same URL into the app.
+
+### Evidence
+
+1. **Reproduction, connected** (`connectWith` with a recording `fetch`; target `cloudflare`, stage `test-x`, base URL `https://app-test-x.sub.workers.dev`; mock-login answers `Set-Cookie: __Host-session=SECRET; Path=/; Secure; HttpOnly`; any other origin answers 200 with `Set-Cookie: storage=evil; Path=/`). Calls through `base.as(mockUsers.admin("a1"))`: a `PUT` to an R2-style signed URL, then `request("//other.example/p")`, then `request("/api/hello")`. Recorded requests, verbatim:
+   ```
+   SEEN GET https://app-test-x.sub.workers.dev/api/auth/me cookie=null origin=null ua="prototype-framework-smoke/0.1.0"
+   SEEN POST https://app-test-x.sub.workers.dev/api/auth/mock-login cookie=null origin="https://app-test-x.sub.workers.dev" ua="prototype-framework-smoke/0.1.0"
+   SEEN PUT https://acct.r2.cloudflarestorage.com/bucket/key?X-Amz-Signature=x cookie="__Host-session=SECRET" origin="https://app-test-x.sub.workers.dev" ua="prototype-framework-smoke/0.1.0"
+   SEEN GET https://other.example/p cookie="__Host-session=SECRET; storage=evil" origin=null ua="prototype-framework-smoke/0.1.0"
+   SEEN GET https://app-test-x.sub.workers.dev/api/hello cookie="__Host-session=SECRET; storage=evil" origin=null ua="prototype-framework-smoke/0.1.0"
+   ```
+   Line 3: an admin session cookie and the stage `Origin` went to storage. Line 4: a protocol-relative path left the stage, carrying the session and the cookie storage planted. Line 5: the planted cookie is now sent to the stage. This matches the reviewer's independent reproduction.
+2. **Reproduction, in-process** (`createTestApp` over a one-route app, run from an empty temporary directory; `t.as(mockUsers.admin("a1")).request("https://acct.r2.cloudflarestorage.com/api/echo")`, the route echoing `c.req.url` and `c.var.user`):
+   ```
+   INPROC 200 {"url":"https://acct.r2.cloudflarestorage.com/api/echo","user":{"level":"admin","id":"a1","displayName":null}}
+   ```
+   Nothing leaves the process, but the app answers, as the admin, a request addressed to storage. A test that passes an absolute URL therefore "works" under `verify` and talks to a third party on a stage.
+3. **Code path, connected** (`packages/framework/src/testing/connect.ts`):
+   - `request` (line 151) adds `cookieHeader(jar)` to every request without looking at the target.
+   - `send` (line 91) adds `Origin: c.origin` to every state-changing request; line 92 builds `new URL(path, c.origin)`. By WHATWG URL resolution an absolute URL or a `//host` reference replaces the base's origin, so the request goes to that host.
+   - `request` (line 153) calls `storeCookies(jar, res)` on every response, so another host's `Set-Cookie` enters the jar and is sent to the stage on every later request.
+   - The login (`logIn`), logout (`dispose`) and probe (`connectWith`) use fixed relative paths and are not affected.
+4. **Code path, in-process** (`packages/framework/src/testing/test-app.ts`): `request` builds `new Request(new URL(path, TEST_APP_ORIGIN), …)` (line 165) and hands it to the in-process Hono app (`shared.fetch`), which routes on the path alone; the fixed identity from `as` applies (line 170). There is no origin check.
+5. **Contract and design.** `docs/contracts/ts/testing.d.ts` `request`: "Sends a request to the app's API". A request to storage is not one. `docs/components/auth.md` line 37: on cloud targets the session cookie is "Secure and host-only" (`__Host-session`, line 74), so a browser never sends it to another host; the connected test app's jar has no host scoping at all, which breaks the rule the cookie's own attributes express. `docs/components/files.md` §2 lines 69 and 90: a cloud ticket `url` is an absolute R2 URL, `https://<account>.r2.cloudflarestorage.com/<bucket>/<key>`, so following a ticket is exactly the case that triggers the defect; storage needs no cookie (SigV4 query signing, line 91).
+6. **Current exposure.** The demo's smoke test sends absolute ticket URLs with plain `fetch` (`apps/demo/tests/smoke/smoke.test.ts` `send`, lines 36–39), so no leak happens today. Its `^https?:\/\/` test would still route a `//host` URL through `t.request`; after the fix that becomes a clear error instead of a leak. The skill documents neither rule (original entry, evidence 2).
+
+### Cause chain
+
+`send` resolves the caller's string against the stage origin with `new URL`, which lets an absolute or protocol-relative URL replace the origin (evidence 3; observed in evidence 1) → `request` and `send` add the stage's session cookie and `Origin` without checking the target origin (evidence 3; evidence 1 lines 3–4) → the credential reaches the other host, and `storeCookies` keeps that host's `Set-Cookie` in the stage jar (evidence 1 line 5). In-process the same URL is routed into the app (evidence 2, 4), so the two `TestApp` implementations disagree and nothing under `verify` reveals the problem. The contract says only "the app's API" without saying what happens to other URLs, and the skill is silent (evidence 5–6), so a test author who follows an upload ticket with `t.request` on a cloud stage triggers it.
+
+### Impact
+
+- An app smoke test that follows a cloud upload or download ticket through `t.request` sends the stage's session cookie (any mock-login level, including `admin`; sessions are stateless and stay valid until expiry, auth.md line 37) and the stage `Origin` to R2, or to whatever host a ticket or response names. Anyone who can read that host's request logs can replay the session against the stage until it expires.
+- Any host reached that way can plant cookies that the test app then sends to the stage, which can change what later stage requests do.
+- The same test passes in-process and behaves differently on a stage, defeating the point of `verify` before `smoke`.
+- Scope: test stages (`test-` prefix, enforced by `connectWith`) and the local `dev` server; other stages are refused. A test session is still a credential on a reachable stage.
+
+### Alternatives ruled out
+
+- **The recording `fetch` exaggerates.** Node's `fetch` (undici) has no cookie jar and sends an explicitly set `Cookie` header as given; `connect.ts` relies on exactly this to authenticate against the stage, and local `smoke` runs pass that way. It also sends to whatever URL it is given; `redirect: "manual"` only stops redirects. So the real `fetch` sends what the recorder saw.
+- **Documentation-only fix** (the original entry). Rejected by the review and here: the jar must stay on the stage origin whatever the caller does, and the contract already says "the app's API".
+- **Scoping cookies per host instead of refusing** (no cookie or `Origin` to other hosts, a per-host jar). This would make `request` a general HTTP client on a stage, while in-process it cannot reach other hosts at all (it routes into the app), so the two implementations would still disagree. Refusing gives the same loud result on both.
+- **Blocking only strings that start with `https?://`.** Misses `//host/path` (evidence 1 line 4) and other forms that `new URL` resolves to another origin. The check must compare the resolved URL's origin.
+
+### Proposed fix
+
+Red-green (prompt §8 step 3). B-16 path set for code and contract; E-01 for the skill.
+
+1. **Red, connected** (`packages/framework/src/testing/connect.unit.test.ts`): on an app from `as(user)`, `request` with (i) an absolute URL on another origin (an R2-style signed `PUT`), (ii) `//other.example/p`, (iii) `http://` to the stage's host when the stage is `https` (a different origin). Each rejects with the error below; the fake `fetch` saw no request to any other origin; no cookie or `Origin` reached another host; a later `request("/api/…")` sends only the stage's cookies. And (iv) an absolute URL on the stage's own origin is accepted.
+2. **Red, in-process** (`packages/framework/src/testing/test-app.unit.test.ts`): `request` with (i) and (ii) rejects with the same error and the app receives no request; a URL on `TEST_APP_ORIGIN` is accepted.
+3. **Green, `connect.ts`:** `request` resolves `new URL(path, c.origin)` and, when its `origin` is not `c.origin`, throws before logging in, before sending and before touching the jar. Put the same check in `send`, so no caller of `send` can reach another host. Error text (one helper shared with `test-app.ts`): `request("<path>"): <origin> is not the app's origin (<app origin>); the test app sends requests only to the app. Send requests to other hosts, such as a cloud upload or download ticket's url, with fetch.`
+4. **Green, `test-app.ts`:** the same check in `request` against `TEST_APP_ORIGIN`, before building the `Request`. `loginWithStub` passes a same-origin path and is unaffected.
+5. **Contract, `docs/contracts/ts/testing.d.ts` `request`:** add "`path` is a path on the app's origin, or a URL on that origin; a URL on any other origin is refused before anything is sent, on both test apps. Send requests to other hosts, such as a cloud ticket's `url`, with `fetch`." Make this edit in the same change as entry 4's `dispose` sentence (review note on entry 4).
+6. **Skill (E-01),** the original entry's documentation fix with this rule. `skill/reference/testing.md` "The smoke test": the ticket a route returns is JSON `{ url, method?, headers?, expiresAt }` on every target; locally and in-process `url` is a same-origin path, sent with `t.request(url, { method, headers, body })`; on a cloud it is an absolute signed storage URL, sent with plain `fetch(url, { method: ticket.method ?? "GET", headers: ticket.headers, body })` and no cookie, because `t.request` refuses it. Show the choice as `ticket.url.startsWith("/") && !ticket.url.startsWith("//") ? t.request(…) : fetch(…)`. Behind a proxy, `smoke` already needs `NODE_USE_ENV_PROXY=1`. `skill/reference/files.md` "Testing" points to that paragraph and qualifies line 24 ("not yours to read or build") as applying to app code; the `skill/examples/tests.md` `WireUploadTicket` caption says the form is the same on every target.
+7. The demo's smoke `send` (`apps/demo/tests/smoke/smoke.test.ts` lines 36–39) stays valid; the next F-01 build may adopt the skill's test. Not a fix requirement on F-01.
+
+### Verification
+
+The new unit tests in `connect.unit.test.ts` and `test-app.unit.test.ts` fail before the change (the request reaches the other origin, as in evidence 1–2) and pass after. Then the framework's `src/testing` unit tests, typecheck and lint (the contract file is type-checked), and `tests/skill` for the skill edits (plan §1 Test economy: only the affected tests). Cloud confirmation of the ticket form remains F-03 / D-RUN, recorded as in entry 1.
