@@ -19,7 +19,7 @@ interface Harness {
   readonly pending: Map<string, Set<string>>;
 }
 
-function harness(options: { dirty?: string[]; vitest?: string; vitestStatus?: number; cloud?: Partial<CloudStageOps>; pending?: string[] } = {}): Harness {
+function harness(options: { dirty?: string[]; vitest?: string; vitestStatus?: number; unitVitest?: string; catalogue?: CatalogueEntry[]; cloud?: Partial<CloudStageOps>; pending?: string[] } = {}): Harness {
   const calls: RunCall[] = [];
   const written: WriteEvidenceInput[] = [];
   const logs: string[] = [];
@@ -30,7 +30,7 @@ function harness(options: { dirty?: string[]; vitest?: string; vitestStatus?: nu
   const deps: DriverDeps = {
     repoRoot: "/repo",
     git,
-    catalogue: () => CATALOGUE,
+    catalogue: () => options.catalogue ?? CATALOGUE,
     newRunId: () => "abcdefghij12345",
     now: () => new Date("2026-10-20T10:00:00.000Z"),
     versions: () => ({ "@lago-morph/prototype-framework": "0.1.0", node: "v22.22.0" }),
@@ -39,7 +39,9 @@ function harness(options: { dirty?: string[]; vitest?: string; vitestStatus?: nu
     run: (call) => {
       calls.push(call);
       events.push(`run ${call.args[0] ?? call.command}`);
-      if (call.args[0] === "vitest") files.set("/tmp/run/vitest.json", options.vitest ?? vitestReport([]));
+      const outputFile = call.args.find((a) => a.startsWith("--outputFile.json="))?.slice("--outputFile.json=".length);
+      const unit = call.args.includes("vitest.unit.config.ts");
+      if (call.args[0] === "vitest" && outputFile !== undefined) files.set(outputFile, unit ? (options.unitVitest ?? vitestReport([])) : (options.vitest ?? vitestReport([])));
       if (call.args[0] === "playwright") files.set("/tmp/run/playwright.json", JSON.stringify({ suites: [], errors: [] }));
       return Promise.resolve({ status: call.args[0] === "vitest" ? (options.vitestStatus ?? 0) : 0, output: `${call.args[0] ?? ""} output` });
     },
@@ -162,6 +164,43 @@ describe("[COMPL-AC-003] compliance driver records", () => {
     expect(h.calls).toEqual([]);
     expect(recordOf(h).results.every((r) => r.status === "not-run" && r.detail === "AWS phase not started")).toBe(true);
     expect(result.exitStatus).toBe(0);
+  });
+});
+
+// Root cause 2026-10-20-E2E-004-coverage-and-not-run, cause B: unit-level criteria reach the record.
+describe("[COMPL-AC-003] unit-level criteria", () => {
+  const catalogue = [entry("KV-AC-001", "Local, cloud"), entry("COMPL-AC-007", "Local"), entry("CLI-AC-002", "Local")];
+  const unitReport = vitestReport([
+    { title: "[COMPL-AC-007] lowest-numbered database is current", status: "passed" },
+    { title: 'test tags > rejects the malformed ID "[KV-AC-001]"', status: "passed" },
+    { title: "[CLI-AC-002][COMPL-AC-007] a unit test also tagged with a non-unit-level ID", status: "passed" },
+  ]);
+
+  it("local: runs the unit config once for the unit-level IDs and folds only those IDs", async () => {
+    const h = harness({ catalogue, unitVitest: unitReport });
+    await runCompliance(parseArgs(["--target", "local"]), [], h.deps);
+    const units = h.calls.filter((c) => c.args.includes("vitest.unit.config.ts"));
+    expect(units).toHaveLength(1);
+    const pattern = new RegExp(units[0]?.args[units[0].args.indexOf("-t") + 1] ?? "");
+    expect(pattern.test("[COMPL-AC-007] x")).toBe(true);
+    expect(pattern.test("[KV-AC-001] x")).toBe(false);
+    expect(pattern.test("[CLI-AC-002] x")).toBe(false);
+    expect(h.events).toEqual(["run run", "run run", "start dev", "run vitest", "run vitest", "run playwright", "stop dev"]);
+    expect(recordOf(h).results).toEqual([
+      { id: "CLI-AC-002", status: "not-run", detail: "no test tagged [CLI-AC-002] ran on local" },
+      { id: "COMPL-AC-007", status: "passed" },
+      { id: "KV-AC-001", status: "not-run", detail: "no test tagged [KV-AC-001] ran on local" },
+    ]);
+    expect(Object.keys(h.written[0]?.raw ?? {})).toEqual(expect.arrayContaining(["vitest-unit.json", "vitest-unit.log"]));
+  });
+
+  it("no unit call when no unit-level ID is to be run, and none on a cloud target", async () => {
+    const h = harness({ catalogue, unitVitest: unitReport });
+    await runCompliance(parseArgs(["--target", "local", "--only", "KV-AC-001"]), [], h.deps);
+    expect(h.calls.filter((c) => c.args.includes("vitest.unit.config.ts"))).toEqual([]);
+    const c = harness({ catalogue: [...catalogue, entry("GOOGLE-AC-002", "Local, cloud")], unitVitest: unitReport });
+    await runCompliance(parseArgs(["--target", "cloudflare"]), [], c.deps);
+    expect(c.calls.filter((call) => call.args.includes("vitest.unit.config.ts"))).toEqual([]);
   });
 });
 
