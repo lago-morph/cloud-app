@@ -10,7 +10,7 @@ const PREFIX = "test-";
 export const RUN_ID_LENGTH = STAGE_NAME_MAX_LENGTH - PREFIX.length;
 
 /** Fills a buffer with random bytes; defaults to the Web Crypto CSPRNG. */
-export type RandomSource = (buffer: Uint8Array) => Uint8Array;
+export type RandomSource = (buffer: Uint8Array<ArrayBuffer>) => Uint8Array;
 
 const cryptoSource: RandomSource = (buffer) => crypto.getRandomValues(buffer);
 // Largest multiple of the alphabet size that fits a byte: bytes at or above it are discarded,

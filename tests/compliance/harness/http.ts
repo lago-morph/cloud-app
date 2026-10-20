@@ -31,7 +31,7 @@ export interface HttpResponse {
 export interface RequestOptions {
   /** Sent as a JSON body with `Content-Type: application/json`. */
   readonly json?: unknown;
-  readonly body?: string | Uint8Array;
+  readonly body?: string | Uint8Array<ArrayBuffer>;
   readonly headers?: Readonly<Record<string, string>>;
   /** `Origin` header: default the base URL's origin on state-changing methods; `false` omits it. */
   readonly origin?: string | false;
@@ -110,7 +110,7 @@ export function createClient(options: ClientOptions): ComplianceClient {
       const originHeader = opts.origin ?? (SAFE.has(upper) ? false : origin);
       if (originHeader !== false) headers.set("origin", originHeader);
       if (jar.size > 0) headers.set("cookie", [...jar].map(([k, v]) => `${k}=${v}`).join("; "));
-      let body: string | Uint8Array | undefined = opts.body;
+      let body: string | Uint8Array<ArrayBuffer> | undefined = opts.body;
       if (opts.json !== undefined) {
         body = JSON.stringify(opts.json);
         if (!headers.has("content-type")) headers.set("content-type", "application/json");

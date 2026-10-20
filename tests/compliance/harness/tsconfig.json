@@ -1,0 +1,5 @@
+{
+  // Compliance harness and tools (C-02): Node tooling lib set. `npx tsc -p tests/compliance/harness/tsconfig.json`.
+  "extends": "../../../tsconfig.node.json",
+  "include": ["./**/*.ts", "../tools/**/*.ts"]
+}
