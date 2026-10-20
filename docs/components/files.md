@@ -62,7 +62,7 @@ Unreachable storage MUST surface as `FILES.UNAVAILABLE`. When a browser transfer
 
 Fetch fresh download tickets with each listing; do not cache URLs.
 
-**Download names** (DEC-0313). A download is saved under the file's whole name: storage's response carries `Content-Disposition: attachment; filename*=UTF-8''<name>` (RFC 6266 / RFC 8187; every byte outside `attr-char` percent-encoded, `/` included), or `inline; filename*=…` for raster images. Nothing in the name is interpreted as a path; browsers replace unsafe characters when they save. One helper (`src/files/cloudflare/disposition.ts`) builds the value for every target. On Cloudflare the download ticket signs it as R2's `response-content-disposition`; it is `inline` only when the service passes the file's content type to the issuer, and `attachment` otherwise (DEC-0329).
+**Download names** (DEC-0313, DEC-PENDING-fix-f04b-1). A download is saved under the file's whole name: storage's response carries `Content-Disposition: attachment; filename*=UTF-8''<name>` (RFC 6266 / RFC 8187; every byte outside `attr-char` percent-encoded, `/` included) for every content type, raster images included, on every target. Images still display through `<img src>`, which ignores the header. Nothing in the name is interpreted as a path; browsers replace unsafe characters when they save. One helper (`src/files/cloudflare/disposition.ts`) builds the value for every target. On Cloudflare the download ticket signs it as R2's `response-content-disposition`.
 
 **Shared runtime shape** (DEC-0160, DEC-0162, DEC-0164):
 - One target-neutral service runs over the object store (the R2 Worker binding, locally and on Cloudflare), with a ticket issuer supplied by each target.
@@ -73,13 +73,13 @@ Fetch fresh download tickets with each listing; do not cache URLs.
 **Cross-origin configuration.** The bucket's CORS policy (the rules a browser checks before cross-origin requests) is set by provisioning. It allows `PUT` and `GET` from the stage's public origin only, with the `Content-Type` request header. App code and app configuration never touch it.
 
 ### Local
-Server operations use the local R2 emulation through its Worker binding. Tickets point to a same-origin framework route, `/api/__framework/files/*`, which checks an HMAC-signed ticket and streams the body to or from local storage. Its responses always carry `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`, and a download carries the named `Content-Disposition` above (`attachment` for content types other than raster images), so uploaded HTML or SVG never runs as the app's origin. There is no cross-origin traffic and no use of Wrangler's experimental local S3 endpoint.
+Server operations use the local R2 emulation through its Worker binding. Tickets point to a same-origin framework route, `/api/__framework/files/*`, which checks an HMAC-signed ticket and streams the body to or from local storage. Its responses always carry `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`, and a download carries the named `Content-Disposition: attachment` above, so uploaded HTML or SVG never runs as the app's origin. There is no cross-origin traffic and no use of Wrangler's experimental local S3 endpoint.
 
 Implementation details (DEC-0161, DEC-0163):
 - A local ticket's URL is the relative path `/api/__framework/files/<token>`. The token is base64url JSON of operation, name, content type (uploads) and expiry time, followed by `.` and its HMAC-SHA-256 signature. The signing key is the framework-internal local secret that `dev` generates into `.dev.vars` (SEC).
 - The route accepts `PUT` with an upload ticket and `GET` with a download ticket. An upload must send exactly the ticket's `Content-Type`.
 - A ticket that is malformed, tampered with, expired, used for the other operation, or used with a different content type gets an empty 403. A download of a file deleted after the ticket was issued gets an empty 404. These refusals are not logged, so ticket URLs never reach the log.
-- The route sends no CORS headers, so other origins cannot use it. "Raster images" means `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/avif` and `image/bmp`.
+- The route sends no CORS headers, so other origins cannot use it.
 - The route reads an upload body completely before storing it. R2's binding accepts only streams of known length, and a request body in the Node process of `createTestApp` is not one. This is local only, so the limit is the machine's memory, not a framework limit.
 - The route, its tickets and the key's name live only in `src/files/local/`. Nothing else in FILES imports them, so cloud bundles can leave them out (CORE-REQ-006).
 

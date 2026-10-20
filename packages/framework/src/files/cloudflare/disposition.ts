@@ -1,7 +1,8 @@
 /**
  * The `Content-Disposition` of a download (DEC-0313): the file is named after its whole name
- * with RFC 6266 / RFC 8187 `filename*=UTF-8''…`, `attachment` for everything but raster images,
- * which stay `inline` so they show in a tab. Shared by the local transfer route and the
+ * with RFC 6266 / RFC 8187 `filename*=UTF-8''…`, always `attachment`, for every content type
+ * (DEC-PENDING-fix-f04b-1, superseding DEC-0313's raster `inline`). Images still display through `<img src>`,
+ * which ignores the header. Shared by the local transfer route and the
  * Cloudflare download ticket (R2's `response-content-disposition`). Workers- and browser-
  * compatible; no local-only names (CORE-REQ-006).
  */
@@ -19,14 +20,6 @@ function encodeExtValue(text: string): string {
   return out;
 }
 
-/** Raster image types a browser renders without running content; served inline (files.md §2 Local). */
-export const RASTER_IMAGES: ReadonlySet<string> = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif", "image/bmp"]);
-
-/** True when `contentType`'s media type (parameters and case ignored) is a raster image. */
-export function isRasterImage(contentType: string): boolean {
-  return RASTER_IMAGES.has((contentType.split(";")[0] ?? "").trim().toLowerCase());
-}
-
-export function downloadDisposition(name: string, contentType: string): string {
-  return `${isRasterImage(contentType) ? "inline" : "attachment"}; filename*=UTF-8''${encodeExtValue(name)}`;
+export function downloadDisposition(name: string): string {
+  return `attachment; filename*=UTF-8''${encodeExtValue(name)}`;
 }

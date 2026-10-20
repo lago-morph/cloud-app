@@ -48,13 +48,10 @@ function keyPath(name: string): string {
   return segments.some((s) => DOT_SEGMENT.test(s)) ? encodeSegment(name) : segments.map(encodeSegment).join("/");
 }
 
-/**
- * The Cloudflare issuer. `download` also takes the file's content type, which chooses
- * `inline` or `attachment` (DEC-0313); without it the download is an attachment.
- */
+/** The Cloudflare issuer. A download is always an `attachment` named after the file (DEC-0313, DEC-PENDING-fix-f04b-1). */
 export interface CloudflareTicketIssuer extends TicketIssuer {
   upload(name: string, contentType: string): Promise<UploadTicketData>;
-  download(name: string, contentType?: string): Promise<DownloadTicketData>;
+  download(name: string): Promise<DownloadTicketData>;
 }
 
 export function createCloudflareTicketIssuer(options: CloudflareTicketOptions): CloudflareTicketIssuer {
@@ -77,10 +74,10 @@ export function createCloudflareTicketIssuer(options: CloudflareTicketOptions): 
       const url = await sign("PUT", `${base}${keyPath(name)}`, signedAt, headers);
       return { url, method: "PUT", headers, expiresAt: signedAt + TICKET_LIFETIME_MS };
     },
-    async download(name, contentType) {
+    async download(name) {
       const signedAt = now();
       // R2's S3 GetObject override names the saved file; it is a signed query parameter.
-      const query = new URLSearchParams({ "response-content-disposition": downloadDisposition(name, contentType ?? "") });
+      const query = new URLSearchParams({ "response-content-disposition": downloadDisposition(name) });
       const url = await sign("GET", `${base}${keyPath(name)}?${query.toString()}`, signedAt);
       return { url, expiresAt: signedAt + TICKET_LIFETIME_MS };
     },
