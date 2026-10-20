@@ -1,0 +1,129 @@
+{
+  "steps": [
+    {
+      "step": "anonymous-load",
+      "h1": "Hello",
+      "body": "HelloAccountYou are not logged in.Log in"
+    },
+    {
+      "step": "login-button",
+      "url": "http://localhost:40027/",
+      "account": "Logged in as mock-user (user)."
+    },
+    {
+      "step": "notes-add",
+      "items": [
+        "10/20/2026, 12:31:54 AM: b-run note 1792456314301"
+      ]
+    },
+    {
+      "step": "status-save-reload",
+      "value": "b-run status 1792456314411"
+    },
+    {
+      "step": "files-upload",
+      "message": "Uploaded.",
+      "items": [
+        "b-run.txt (33 bytes) Download"
+      ]
+    },
+    {
+      "step": "files-download-button",
+      "downloadEventOn": "opener",
+      "urlPath": "/api/__framework/files/<ticket>",
+      "failure": null,
+      "savedLength": 33,
+      "uploadedLength": 33,
+      "bytesEqual": true
+    },
+    {
+      "step": "files-download-fetch",
+      "ticketStatus": 200,
+      "status": 200,
+      "contentType": "text/plain",
+      "matches": true
+    },
+    {
+      "step": "user-has-no-admin-section",
+      "adminSections": 0
+    },
+    {
+      "step": "admin-secret-as-user",
+      "status": 403,
+      "body": "{\"error\":{\"code\":\"AUTH.FORBIDDEN\",\"message\":\"this route requires an admin\",\"requestId\":\"8a1e9079-5f96-4f85-a48d-f7dbff2ff49f\"}}"
+    },
+    {
+      "step": "mock-login-admin",
+      "status": 204
+    },
+    {
+      "step": "admin-account",
+      "account": "Logged in as B-RUN Admin (admin)."
+    },
+    {
+      "step": "admin-check-secret",
+      "message": "The secret apiKey is set."
+    },
+    {
+      "step": "logout-button",
+      "body": "HelloAccountYou are not logged in.Log in"
+    },
+    {
+      "step": "deep-link",
+      "status": 200,
+      "hasAppRoot": true
+    }
+  ],
+  "apiResponses": [
+    "GET /api/hello -> 200",
+    "GET /api/auth/me -> 200",
+    "GET /api/auth/login -> 302",
+    "GET /api/hello -> 200",
+    "GET /api/auth/me -> 200",
+    "GET /api/files -> 200",
+    "GET /api/notes -> 200",
+    "GET /api/status -> 200",
+    "POST /api/notes -> 201",
+    "GET /api/notes -> 200",
+    "PUT /api/status -> 200",
+    "GET /api/hello -> 200",
+    "GET /api/auth/me -> 200",
+    "GET /api/notes -> 200",
+    "GET /api/files -> 200",
+    "GET /api/status -> 200",
+    "POST /api/files/upload-ticket -> 200",
+    "PUT /api/__framework/files/eyJvIjoidXBsb2FkIiwibiI6InVzZXJzL21vY2stdXNlci9iLXJ1bi50eHQiLCJ0IjoidGV4dC9wbGFpbiIsImUiOjE3OTI0NTcyMTQ2NDF9.jTJLAfBNY5Bbd6I044FPe8wAFN1c5oZeoPa4cfjVPj0 -> 200",
+    "GET /api/files -> 200",
+    "POST /api/files/download-ticket -> 200",
+    "POST /api/files/download-ticket -> 200",
+    "GET /api/__framework/files/eyJvIjoiZG93bmxvYWQiLCJuIjoidXNlcnMvbW9jay11c2VyL2ItcnVuLnR4dCIsImUiOjE3OTI0NTcyMTQ4MzN9.oXegpQNckKQe2V04Sh8qGnfAsG8gAY45HSi5hvyFUB8 -> 200",
+    "GET /api/admin/secret -> 403",
+    "POST /api/auth/mock-login -> 204",
+    "GET /api/hello -> 200",
+    "GET /api/auth/me -> 200",
+    "GET /api/notes -> 200",
+    "GET /api/files -> 200",
+    "GET /api/status -> 200",
+    "GET /api/admin/secret -> 200",
+    "POST /api/auth/logout -> 204",
+    "GET /api/hello -> 200",
+    "GET /api/auth/me -> 200",
+    "GET /api/hello -> 200",
+    "GET /api/auth/me -> 200"
+  ],
+  "console": [
+    "debug: [vite] connecting...",
+    "debug: [vite] connected.",
+    "debug: [vite] connecting...",
+    "debug: [vite] connected.",
+    "debug: [vite] connecting...",
+    "debug: [vite] connected.",
+    "error: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "debug: [vite] connecting...",
+    "debug: [vite] connected.",
+    "debug: [vite] connecting...",
+    "debug: [vite] connected.",
+    "debug: [vite] connecting...",
+    "debug: [vite] connected."
+  ]
+}

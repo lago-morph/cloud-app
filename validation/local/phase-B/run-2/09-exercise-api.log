@@ -1,0 +1,123 @@
+$ cd /home/user/cloud-app/.claude/worktrees/agent-a0cf9fa37f79e1389
+$ bash validation/local/phase-B/run-2/exercise/exercise-api.sh 40027
+# start: 2026-10-20T00:31:40Z
+$ curl http://localhost:40027/
+HTTP 200 content-type=text/html
+<!doctype html>
+<html lang="en">
+  <head>
+    <script type="module" src="/@vite/client"></script>
+
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>template</title>
+  </head>
+  <body>
+    <main id="app"></main>
+    <script type="module" src="/src/client/main.ts"></script>
+  </body>
+</html>
+
+
+$ curl http://localhost:40027/api/hello
+HTTP 200 content-type=application/json
+{"greeting":"Hello"}
+
+$ curl http://localhost:40027/api/auth/me -b /tmp/tmp.AOhyEKmzHE -c /tmp/tmp.AOhyEKmzHE
+HTTP 200 content-type=application/json
+{"level":"anonymous"}
+
+$ curl http://localhost:40027/api/notes -b /tmp/tmp.AOhyEKmzHE -c /tmp/tmp.AOhyEKmzHE
+HTTP 401 content-type=application/json
+{"error":{"code":"AUTH.UNAUTHENTICATED","message":"this route requires a logged-in user","requestId":"e32aadda-ff35-44c6-8b4d-d148ddadea41"}}
+
+$ curl http://localhost:40027/api/__framework/health
+HTTP 204 content-type=
+
+
+$ curl http://localhost:40027/some/deep/link
+HTTP 200 content-type=text/html
+<!doctype html>
+<html lang="en">
+  <head>
+    <script type="module" src="/@vite/client"></script>
+
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>template</title>
+  </head>
+  <body>
+    <main id="app"></main>
+    <script type="module" src="/src/client/main.ts"></script>
+  </body>
+</html>
+
+
+$ curl http://localhost:40027/ -H Host: evil.example:40027
+HTTP 403 content-type=text/plain
+Blocked request. This host ("evil.example") is not allowed.
+To allow this host, add "evil.example" to `server.allowedHosts` in vite.config.js.
+
+$ curl http://localhost:40027/ -H Host: 127.0.0.1:40027
+HTTP 403 content-type=text/plain; charset=utf-8
+Forbidden: this dev server only answers requests for localhost:40027
+
+
+$ curl -X POST http://localhost:40027/api/auth/mock-login -H Origin: http://localhost:40027 -H content-type: application/json -d {"level":"user","id":"b-run-user","displayName":"B-RUN User"} -b /tmp/tmp.AOhyEKmzHE -c /tmp/tmp.AOhyEKmzHE
+HTTP 204 content-type=
+
+
+$ curl http://localhost:40027/api/auth/me -b /tmp/tmp.AOhyEKmzHE -c /tmp/tmp.AOhyEKmzHE
+HTTP 200 content-type=application/json
+{"level":"user","id":"b-run-user","displayName":"B-RUN User"}
+
+$ curl -X POST http://localhost:40027/api/notes -H Origin: http://localhost:40027 -H content-type: application/json -d {"text":"note via curl"} -b /tmp/tmp.AOhyEKmzHE -c /tmp/tmp.AOhyEKmzHE
+HTTP 201 content-type=application/json
+{"id":"d395ba9d-184f-4a74-ba7b-1f55dad7028a"}
+
+$ curl http://localhost:40027/api/notes -b /tmp/tmp.AOhyEKmzHE -c /tmp/tmp.AOhyEKmzHE
+HTTP 200 content-type=application/json
+{"notes":[{"id":"d395ba9d-184f-4a74-ba7b-1f55dad7028a","text":"note via curl","createdAt":1792456301041}]}
+
+$ curl -X POST http://localhost:40027/api/notes -H Origin: http://evil.example -H content-type: application/json -d {"text":"forged"} -b /tmp/tmp.AOhyEKmzHE -c /tmp/tmp.AOhyEKmzHE
+HTTP 403 content-type=application/json
+{"error":{"code":"AUTH.REQUEST_FORGERY","message":"a state-changing request with a session came from another origin","requestId":"9f3b38b1-76a1-4a91-9104-f06554dd737c"}}
+
+$ curl -X PUT http://localhost:40027/api/status -H Origin: http://localhost:40027 -H content-type: application/json -d {"status":"busy via curl"} -b /tmp/tmp.AOhyEKmzHE -c /tmp/tmp.AOhyEKmzHE
+HTTP 200 content-type=application/json
+{"status":"busy via curl"}
+
+$ curl http://localhost:40027/api/status -b /tmp/tmp.AOhyEKmzHE -c /tmp/tmp.AOhyEKmzHE
+HTTP 200 content-type=application/json
+{"status":"busy via curl"}
+
+$ curl -X POST http://localhost:40027/api/files/upload-ticket -H Origin: http://localhost:40027 -H content-type: application/json -d {"name":"curl.txt","contentType":"text/plain"} -b /tmp/tmp.AOhyEKmzHE -c /tmp/tmp.AOhyEKmzHE
+HTTP 200 content-type=application/json
+{"ticket":{"url":"/api/__framework/files/eyJvIjoidXBsb2FkIiwibiI6InVzZXJzL2ItcnVuLXVzZXIvY3VybC50eHQiLCJ0IjoidGV4dC9wbGFpbiIsImUiOjE3OTI0NTcyMDEyMDF9.VtuaNz8BeaIrNgHX3vzCk4Sw1hrbgKaN30yY_CKjlOc","method":"PUT","headers":{"Content-Type":"text/plain"},"expiresAt":1792457201201}}
+
+$ curl http://localhost:40027/api/files -b /tmp/tmp.AOhyEKmzHE -c /tmp/tmp.AOhyEKmzHE
+HTTP 200 content-type=application/json
+{"files":[]}
+
+$ curl http://localhost:40027/api/admin/secret -b /tmp/tmp.AOhyEKmzHE -c /tmp/tmp.AOhyEKmzHE
+HTTP 403 content-type=application/json
+{"error":{"code":"AUTH.FORBIDDEN","message":"this route requires an admin","requestId":"24290ba3-5063-4c1c-9109-89ee4ef88474"}}
+
+$ curl -X POST http://localhost:40027/api/auth/mock-login -H Origin: http://localhost:40027 -H content-type: application/json -d {"level":"admin","id":"b-run-admin"} -b /tmp/tmp.AOhyEKmzHE -c /tmp/tmp.AOhyEKmzHE
+HTTP 204 content-type=
+
+
+$ curl http://localhost:40027/api/admin/secret -b /tmp/tmp.AOhyEKmzHE -c /tmp/tmp.AOhyEKmzHE
+HTTP 200 content-type=application/json
+{"configured":true}
+
+$ curl -X POST http://localhost:40027/api/auth/logout -H Origin: http://localhost:40027 -b /tmp/tmp.AOhyEKmzHE -c /tmp/tmp.AOhyEKmzHE
+HTTP 204 content-type=
+
+
+$ curl http://localhost:40027/api/auth/me -b /tmp/tmp.AOhyEKmzHE -c /tmp/tmp.AOhyEKmzHE
+HTTP 200 content-type=application/json
+{"level":"anonymous"}
+
+# end: 2026-10-20T00:31:41Z
+# exit code: 0
