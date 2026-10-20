@@ -126,7 +126,13 @@ const startClient: DevDeps["startClient"] = async ({ root, port, apiTarget, cach
       port,
       strictPort: true,
       allowedHosts: [],
-      proxy: { "^/api(/|$|\\?)": { target: apiTarget, changeOrigin: false } },
+      // No CORS headers: Vite's default reflects any loopback origin and answers preflights itself,
+      // letting other local pages use the app's routes (files.md §2 Local, DEC-0006).
+      cors: false,
+      // The Worker's own Host, so wrangler's dev proxy does not rewrite header URLs naming the browser's
+      // host (it turns `Origin: https://localhost:<port>` into `http://…`, defeating AUTH-REQ-007).
+      // Vite's host check above still runs on the browser's Host before the proxy (LOCAL-REQ-004).
+      proxy: { "^/api(/|$|\\?)": { target: apiTarget, changeOrigin: true } },
     },
   });
   await server.listen();
