@@ -8,20 +8,28 @@ Commands run in a terminal, in the app's directory, on macOS or Linux with Node 
 
 ## 1. Before anything else (once per checkout)
 
-In this repository the framework is built from source. Run this at the repository root:
+In this repository the framework is built from source. Run this at the repository root. The last line goes back to the app's directory (here the template's), where every later command runs:
 
 ```sh
 npm ci
 npm run build -w packages/framework
+cd apps/template
 ```
 
-An app made with the scaffolder already has the built framework. There, run `npm install` once.
+An app made with the scaffolder already has the built framework. There, run `npm install` once in the app's directory.
+
+Some steps need the app's name in `APP` and the stage's name in `STAGE`. Set them once in each new terminal (`<stage>` is for example `test-abc` or `prod`):
+
+```sh
+APP=$(npm run --silent build -- --target local --stage local | sed -n 's/^built \([^ ]*\) for .*/\1/p'); echo "$APP"
+STAGE='<stage>'
+```
 
 ## 2. Cloudflare account and API token (once)
 
 1. Sign up or log in at https://dash.cloudflare.com.
-2. Copy your **Account ID**. Open Account home, choose your account, and copy the Account ID shown on its overview page.
-3. Create an **account API token**. Go to Manage Account → Account API Tokens → Create Token → Create Custom Token. Give it a name, such as `prototype-framework`. Add these **Account** permissions:
+2. Copy your **Account ID**. Open Account home, choose your account, and copy the Account ID shown on its overview page. The dashboard menu names in this page are **not yet verified**.
+3. Create an **account API token**. Go to Manage Account → Account API Tokens → Create Token → Create Custom Token (not yet verified). Give it a name, such as `prototype-framework`. Add these **Account** permissions:
    - Workers Scripts: Edit (the stage Workers, their secrets, the `workers.dev` address);
    - Workers R2 Storage: Edit (the log bucket, the deploy-state bucket, each stage's file bucket);
    - D1: Edit (each stage's database);
@@ -57,7 +65,7 @@ A secret is read from standard input. Run the command, paste the value, press En
   The value goes into `.dev.vars`, which git ignores. Restart `npm run dev` after you set it.
 - **Cloudflare:** a stage's secrets live on its Worker, so the stage must have been deployed once. The first `deploy` stops and names the secrets that are not set yet. Set each one, then run `deploy` again:
   ```sh
-  npm run secrets -- set apiKey --target cloudflare --stage <stage>
+  npm run secrets -- set apiKey --target cloudflare --stage "$STAGE"
   ```
   Not yet verified on Cloudflare in this phase.
 
@@ -65,47 +73,49 @@ A secret is read from standard input. Run the command, paste the value, press En
 
 Test stages and local development use a built-in mock login and need none of this. These steps are **not yet verified on Cloudflare in this phase**; no Google client exists yet.
 
-1. Find your `workers.dev` subdomain. It is the `<subdomain>` in your stage address:
+1. With `APP` and `STAGE` set (§1), print your `workers.dev` subdomain and the stage's callback URL:
    ```sh
-   curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain"
+   SUB=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);if(!r.success){console.error(JSON.stringify(r.errors));process.exit(1)}console.log(r.result.subdomain)})'); echo "$SUB"
+   echo "https://$APP-$STAGE.$SUB.workers.dev/api/auth/callback"
    ```
-   The stage's callback URL is `https://<app>-<stage>.<subdomain>.workers.dev/api/auth/callback`. For example: app `template`, stage `prod`.
 2. Open https://console.cloud.google.com, then create or choose a project.
 3. Go to Google Auth Platform (older consoles call it "OAuth consent screen"). Set an app name and a support email. Choose the **External** audience. While the app is in **Testing**, only the Google accounts you add as test users can log in. The framework asks only for `openid` and `profile`.
 4. Go to Clients (or APIs & Services → Credentials), then Create client (or Create credentials → OAuth client ID). Choose the application type **Web application**. Under **Authorized redirect URIs**, add the callback URL from step 1. Add one URL per production stage. Create the client.
-5. Copy the **Client ID** into the stage's values file `config/cloudflare/<stage>.json`, under `framework.google.clientId` (§6 shows the whole file). The client ID is not a secret. Commit the file.
+5. Create the stage's values file `config/cloudflare/$STAGE.json` with the **Client ID**, which is not a secret. Paste the Client ID into the first line, then run all the lines. `build` checks the file; it must print `built …`. Then the file is committed. (Run this only once per stage: it replaces the file, and with it any admins and users.)
+   ```sh
+   CLIENT_ID='<paste the Client ID>'
+   mkdir -p config/cloudflare
+   node -e 'require("fs").writeFileSync(process.argv[1],JSON.stringify({values:{},framework:{google:{clientId:process.argv[2]},admins:[]}},null,2)+"\n")' "config/cloudflare/$STAGE.json" "$CLIENT_ID"
+   npm run build -- --target cloudflare --stage "$STAGE"
+   git add "config/cloudflare/$STAGE.json"
+   git commit -m "Add the values file of stage $STAGE"
+   ```
+   `"values"` may also set the app's configuration keys; ask the app's developer which.
 6. After the stage's first deploy, set the **Client secret** as a secret, never in a file:
    ```sh
-   npm run secrets -- set frameworkGoogleClientSecret --target cloudflare --stage <stage>
+   npm run secrets -- set frameworkGoogleClientSecret --target cloudflare --stage "$STAGE"
    ```
-7. Run `deploy` again. It prints `Google callback URL to register: …`, which must match step 4 exactly.
+7. Run `npm run deploy -- --target cloudflare --stage "$STAGE"` again. It prints `Google callback URL to register: …`, which must match step 4 exactly.
 
 ## 6. Admins and allowed users
 
 These steps work only on a production stage, which uses Google. Every person's user ID is shown at `/api/auth/me`.
 
-1. The person opens `https://<app>-<stage>.<subdomain>.workers.dev`, logs in, then opens `https://<app>-<stage>.<subdomain>.workers.dev/api/auth/me`.
+1. The person opens the stage's address (the one `deploy` printed, `https://<app>-<stage>.<subdomain>.workers.dev`), logs in, then opens that address followed by `/api/auth/me`.
 2. They copy the value of `"id"`. If they are shown `"level":"anonymous"` with an `"unlistedId"`, they copy that value instead. It looks like `u_` followed by 26 letters and digits. They send it to the owner.
-3. The owner adds it to `config/cloudflare/<stage>.json`:
-   - add it to `"admins"` to make the person an admin;
-   - add it to `"users"` to let a known person in. While `"users"` is present, anyone on neither list is anonymous. Without `"users"`, any Google account that logs in counts as a user. Admins need not also be in `"users"`.
-   ```json
-   {
-     "values": {},
-     "framework": {
-       "google": { "clientId": "<paste the Client ID from §5 step 5>" },
-       "admins": ["<user ID>"],
-       "users": ["<user ID>", "<another user ID>"]
-     }
-   }
-   ```
-4. Commit, then deploy again:
+3. The owner adds it to `config/cloudflare/$STAGE.json`, with `STAGE` set (§1). Set `LIST=admins` to make the person an admin, or `LIST=users` to let a known person in. While `"users"` is present, anyone on neither list is anonymous. Without `"users"`, any Google account that logs in counts as a user. Admins need not also be in `"users"`. Paste the ID into the first line, then run both lines; the last command prints the file:
    ```sh
-   git add config/cloudflare/<stage>.json && git commit -m "Update admins and users"
-   npm run deploy -- --target cloudflare --stage <stage>
+   ID='<user ID>'; LIST=admins; OP=add
+   node -e 'const fs=require("fs"),[f,op,list,id]=process.argv.slice(1),c=JSON.parse(fs.readFileSync(f,"utf8")),l=(c.framework[list]??[]).filter(x=>x!==id);c.framework[list]=op==="add"?[...l,id]:l;fs.writeFileSync(f,JSON.stringify(c,null,2)+"\n")' "config/cloudflare/$STAGE.json" "$OP" "$LIST" "$ID" && cat "config/cloudflare/$STAGE.json"
    ```
-
-Removing an ID and deploying again takes the access away.
+   To take access away, run the same two lines with `OP=remove`.
+4. Check the file, commit it, then deploy again:
+   ```sh
+   npm run build -- --target cloudflare --stage "$STAGE"
+   git add "config/cloudflare/$STAGE.json"
+   git commit -m "Update admins and users"
+   npm run deploy -- --target cloudflare --stage "$STAGE"
+   ```
 
 ## 7. Cost
 
