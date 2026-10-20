@@ -45,7 +45,7 @@ To run it on a cloud, deploy a test stage first, for example `npx prototype-fram
 
 ## Examples
 
-- [examples/tests.md](../examples/tests.md): the template's app tests and smoke test, its Vitest configuration, and the reference app's shared test helper.
+- [examples/tests.md](../examples/tests.md): the template's app tests and smoke test, and the reference app's shared test helper.
 
 ## Stopping condition
 

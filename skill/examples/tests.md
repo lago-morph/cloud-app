@@ -6,7 +6,6 @@ What it shows:
 
 - `tests/app.test.ts`: `createTestApp` per test with `dispose()` afterwards; `mockUsers` with `as()` and the `user` option; `config` and `secrets` options; asserting status codes, error codes and `logs()`; an in-process upload sent with the local ticket's wire form, to test the finalize route (the HMAC tests are in [secrets.md](secrets.md)).
 - `tests/smoke/smoke.test.ts`: one file that runs in-process under `verify` and against a deployed test stage under `smoke` (`connectTestStage()`).
-- `vitest.config.ts`: the timeouts the template uses.
 - From the reference app, `tests/support.ts`: a shared `open()` helper that disposes test apps after each test.
 
 ## `apps/template/tests/app.test.ts`
@@ -246,23 +245,6 @@ it("a user can set and read their status", async () => {
   expect(put.status).toBe(200);
   const body: Status = await (await user.request("/api/status")).json();
   expect(body.status).toBe("smoking");
-});
-```
-
-## `apps/template/vitest.config.ts`
-
-<!-- example-source: apps/template/vitest.config.ts -->
-```ts
-import { defineConfig } from "vitest/config";
-
-// App tests (PAR-116 glob). Opening the in-process Postgres for the first time in a test
-// process takes several seconds, so tests and hooks get more than the default 5 s.
-export default defineConfig({
-  test: {
-    include: ["tests/**/*.test.ts"],
-    testTimeout: 60_000,
-    hookTimeout: 60_000,
-  },
 });
 ```
 
