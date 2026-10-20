@@ -68,3 +68,7 @@ All capability components, PROV.
 | CF-AC-001 | A deployed test stage serves the client and the API from one origin, and unknown API paths return JSON 404s. | CF-REQ-001 | Cloud |
 | CF-AC-002 | Two stages of one app have disjoint databases, buckets, credentials, and secrets; both write to the shared log bucket. | CF-REQ-002 | Cloud |
 | CF-AC-003 | Bundle inspection finds none of the excluded modules. | CF-REQ-003 | Local |
+
+## 5. Portability note
+
+This component is where Cloudflare names belong: the Worker, D1, R2, Worker secrets and the `workers.dev` origin stay here and in each capability's Cloudflare adapter, never in app-facing contracts. A new target is a sibling component with its own runtime shape, stage resources and PROV §2 per-target operations, plus the shared places the component map lists (§1); this component does not change. LOCAL uses this component's adapters and runs its stage runtime, `src/targets/cloudflare/stage.ts` (LOCAL §2, DEC-0039), so a change here is also a change to LOCAL.

@@ -99,3 +99,7 @@ CORE (export list), SQL (supported subset), MIG (migration rules), SKILL (refere
 | CHECK-AC-004 | Mismatched dialect histories, an edited applied migration, and each unsupported change (a NOT NULL column without a static default added to an existing table, a column type change, a rename) fail the checker, each unsupported change with a diagnostic naming the add-copy-drop pattern. Each supported change in MIG §2 passes. | CHECK-REQ-004 | Local |
 | CHECK-AC-005 | The template and demo pass all rules. | CHECK-REQ-005 | Local |
 | CHECK-AC-006 | An app lint configuration that turns off a framework rule makes `verify` fail. | CHECK-REQ-006 | Local |
+
+## 5. Portability note
+
+The rules enforce one target-neutral surface (CORE-REQ-005's subpaths, SQL-REQ-002's subset); only `allowed-imports`' list of rejected platform packages and Hono platform modules names platforms. A new target adds its platform SDK, driver and Hono adapter packages to that list; its target subpath needs no new rule, because app code may import only the framework subpaths of its CORE-REQ-005 row. The migration checker compares the two supported dialects; a target with a third dialect would add one history and one database to it (CHECK-REQ-004).

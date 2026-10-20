@@ -82,3 +82,7 @@ Every capability and target component, CLI, PROV.
 | COMPL-AC-006 | The release report for a commit says "works" only when every automated criterion and scenario passed on every applicable target for that commit and every milestone item has a valid record. A commit with one `not-run` automated criterion, or with a certification invalidated by a recorded entry, is reported as not working. The report lists the commits that touched GOOGLE or login-provider interface files since the last certification. | COMPL-REQ-006 | Local |
 | COMPL-AC-007 | A unit test of deploy database discovery against a fake target shows that the lowest-numbered existing stage database is taken as current and every higher-numbered one is deleted and reported. | PROV-REQ-002 | Local |
 | COMPL-AC-008 | On each cloud, a deploy stopped at the abort point after the database copy, and one stopped after the code deploy, are each followed by a successful re-run that leaves the stage with one database and the app answering. | PROV-REQ-002 | Cloud (milestone) |
+
+## 5. Portability note
+
+The suite is one set of tests for every target (COMPL-REQ-001): the Where columns select the criteria that apply, and per-target expectations exist only where a criterion states them. A new target adds its value to the driver's `--target` and to the evidence schema's `target` enumeration (component map §1), brings its own `prodcheck` stage and values file (COMPL-REQ-005) and its own component's criteria, and its leftover check uses that target's `listStageResources` (PROV §2). Existing tests do not change.

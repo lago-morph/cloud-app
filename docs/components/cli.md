@@ -107,3 +107,7 @@ LOCAL, CHECK, PROV, MIG, SEC, GOOGLE, CORE (`connectTestStage`), COMPL (evidence
 | CLI-AC-003 | Injected failures in `deploy`, `remove` and the compliance runner, including a failure during cleanup, yield non-zero exit statuses that reflect the original failure. | CLI-REQ-003 | Local |
 | CLI-AC-004 | A scan of the output of every command in a full test run finds no test secret values. | CLI-REQ-004 | Local, cloud |
 | CLI-AC-005 | `smoke` runs the template's `tests/smoke/**` against the running `dev` server and against a deployed test stage, writes an evidence record, and prints the stage's log location for the day. | CLI-REQ-001 | Local, cloud |
+
+## 5. Portability note
+
+The command table (CLI-REQ-001) does not change for a new target: `--target <t>` selects it, and the cloud commands call PROV's per-target operations (PROV §2). A new target adds its `--target` value and its build and deploy wiring: the target entry point that `build` generates, and the cloud commands' calls for that target. `verify`, `dev`, `generate-migration` and `reset-local` are local and offline, so they do not change.

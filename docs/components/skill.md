@@ -107,3 +107,7 @@ CORE (export list), CHECK, CLI, and the contracts of every capability.
 | SKILL-AC-004 | CI type-checks and runs every example and the template. No example file is derived from `apps/demo/`. | SKILL-REQ-004 | Local |
 | SKILL-AC-005 | Scaffolding into a directory with existing files stops without changing them. | SKILL-REQ-005 | Local |
 | SKILL-AC-006 | Following only the documented owner steps, a tester sets up an account, deploys with a `framework.users` list that omits them and is anonymous after login, adds their ID to `framework.users` and becomes `user`, then becomes admin, and removes the stage. | SKILL-REQ-006 | Cloud (milestone) |
+
+## 5. Portability note
+
+The skill teaches only the public exports and target-neutral rules. Only the owner tasks and troubleshooting have steps for each cloud (SKILL-REQ-006, §2 Troubleshooting), and the template README's list of what stays billable while idle names cloud resources. A new target adds its steps there and its entries in that README list; the router, the other references, the examples and the template's code do not change.
