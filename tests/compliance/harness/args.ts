@@ -1,6 +1,6 @@
 /**
  * `npm run compliance -- --target <local|cloudflare|aws> [--stage <s>] [--milestone]
- *   [--base-url <url>] [--only <ID,…>] [--blocked <ID,…>=<reason>]… [--out <dir>] [--self-test]`
+ *   [--base-url <url>] [--only <ID,…>] [--blocked <ID,…|*>=<reason>]… [--out <dir>] [--self-test]`
  */
 import type { Target } from "./catalogue.js";
 
@@ -13,7 +13,7 @@ export interface ComplianceArgs {
   readonly baseUrl?: string;
   /** Run only these IDs; every other expected ID is recorded `not-run`. */
   readonly only?: readonly string[];
-  /** IDs whose prerequisite is missing, with the reason; their tests are not run. */
+  /** IDs whose prerequisite is missing, with the reason; their tests are not run. Key `*`: every ID. */
   readonly blocked: ReadonlyMap<string, string>;
   /** Directory that receives `validation/`; default the repository root. */
   readonly out?: string;
@@ -21,6 +21,8 @@ export interface ComplianceArgs {
 }
 
 const ID = /^(?:[A-Z]+-AC|E2E)-\d{3}$/;
+/** `--blocked '*=<reason>'`: every criterion the run would execute is blocked (for example the cloud's database is unavailable). */
+export const ALL = "*";
 
 function ids(text: string, option: string): string[] {
   const list = text.split(",").map((s) => s.trim()).filter((s) => s !== "");
@@ -59,7 +61,8 @@ export function parseArgs(argv: readonly string[]): ComplianceArgs {
   for (const spec of values.get("--blocked") ?? []) {
     const eq = spec.indexOf("=");
     if (eq <= 0 || spec.slice(eq + 1).trim() === "") throw new Error(`--blocked ${spec}: use --blocked <ID>[,<ID>…]=<reason>`);
-    for (const id of ids(spec.slice(0, eq), "--blocked")) blocked.set(id, spec.slice(eq + 1).trim());
+    const which = spec.slice(0, eq).trim();
+    for (const id of which === ALL ? [ALL] : ids(which, "--blocked")) blocked.set(id, spec.slice(eq + 1).trim());
   }
   const only = one("--only");
   const baseUrl = one("--base-url");

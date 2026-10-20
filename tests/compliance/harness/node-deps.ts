@@ -9,7 +9,9 @@ import { dirname, join } from "node:path";
 import { gitState, newRunId, writeEvidence } from "../../../packages/framework/src/evidence/public.js";
 import { readCatalogue, type Target } from "./catalogue.js";
 import type { CloudStageOps, DriverDeps, LocalSession, PendingStages, RunCall } from "./driver.js";
+import { REFERENCE_APP, stageLeftovers } from "./leftovers.js";
 import { waitFor } from "./wait.js";
+import type { TargetOperations } from "../../../packages/framework/src/provision/core/operations.js";
 
 /** The origin `dev` prints once the client and `/api` answer (cli.md `dev`). */
 export function devOrigin(output: string): string | undefined {
@@ -123,6 +125,15 @@ function startReferenceDev(repoRoot: string): Promise<LocalSession> {
   });
 }
 
+/**
+ * The target's PROV operations (PROV §2), for the leftover check. The Cloudflare operations are
+ * built in phase D (D-03); until they exist the check fails, and the driver records that
+ * failure as a leftover entry instead of reading it as "no leftovers".
+ */
+function targetOperations(target: Target): Promise<Pick<TargetOperations, "listStageResources">> {
+  return Promise.reject(new Error(`the ${target} per-target operations (listStageResources) are not built yet (D-03)`));
+}
+
 function cliStageOps(repoRoot: string, target: Target): CloudStageOps {
   const cli = (args: string[]): Promise<{ status: number; output: string }> =>
     runProcess({ command: "npx", args: ["prototype-framework", ...args], cwd: join(repoRoot, "apps", "reference"), env: { ...(process.env as Record<string, string>), NODE_USE_ENV_PROXY: "1" } });
@@ -139,8 +150,8 @@ function cliStageOps(repoRoot: string, target: Target): CloudStageOps {
       if (result.status !== 0) throw new Error(`remove --target ${target} --stage ${stage} failed with status ${String(result.status)}\n${result.output.slice(-2000)}`);
       return result.output;
     },
-    listStageResources() {
-      return Promise.reject(new Error(`listStageResources for ${target} is not wired into the compliance driver yet (PROV per-target operations; D-03/D-05)`));
+    async listStageResources(stage) {
+      return stageLeftovers(await targetOperations(target), { app: REFERENCE_APP, stage });
     },
   };
 }

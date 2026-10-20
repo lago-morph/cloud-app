@@ -88,7 +88,9 @@ describe("[COMPL-AC-003] compliance driver records", () => {
   it("local: starts dev, runs only the expected tagged tests, and writes a schema-valid record", async () => {
     const h = harness({ vitest: vitestReport([{ title: "[KV-AC-001] put", status: "passed" }, { title: "[CLI-AC-002] verify fails", status: "failed", message: "HTTP check failed: GET /x → status 500, code CORE.INTERNAL, requestId r1 (expected status 200)" }]), vitestStatus: 1 });
     const result = await runCompliance(parseArgs(["--target", "local"]), ["--target", "local"], h.deps);
-    expect(h.events).toEqual(["start dev", "run run", "run vitest", "run playwright", "stop dev"]);
+    // The framework is built before dev starts; the typecheck output is evidence for type-only assertions (B-EV F7).
+    expect(h.events).toEqual(["run run", "run run", "start dev", "run vitest", "run playwright", "stop dev"]);
+    expect(h.calls.filter((c) => c.command === "npm").map((c) => c.args)).toEqual([["run", "build", "-w", "packages/framework"], ["run", "typecheck"]]);
     const vitest = h.calls.find((c) => c.args[0] === "vitest");
     const pattern = vitest?.args[vitest.args.indexOf("-t") + 1] ?? "";
     expect(new RegExp(pattern).test("[KV-AC-001] x")).toBe(true);
@@ -105,8 +107,25 @@ describe("[COMPL-AC-003] compliance driver records", () => {
       { id: "KV-AC-001", status: "passed" },
       { id: "KV-AC-002", status: "not-run", detail: "no test tagged [KV-AC-002] ran on local" },
     ]);
-    expect(Object.keys(h.written[0]?.raw ?? {}).sort()).toEqual(["build.log", "dev.log", "expected.json", "playwright.json", "playwright.log", "vitest.json", "vitest.log"]);
+    expect(Object.keys(h.written[0]?.raw ?? {}).sort()).toEqual(["build.log", "dev.log", "expected.json", "playwright.json", "playwright.log", "typecheck.log", "vitest.json", "vitest.log"]);
     expect(result.exitStatus).toBe(1);
+  });
+
+  it("a failed typecheck still runs the tests and makes the exit status non-zero; a failed build runs nothing", async () => {
+    const h = harness({ vitest: vitestReport([{ title: "[KV-AC-001] put", status: "passed" }]) });
+    const run = h.deps.run;
+    const failing = { ...h.deps, run: (c: RunCall) => (c.args[1] === "typecheck" ? (h.calls.push(c), Promise.resolve({ status: 2, output: "error TS2322" })) : run(c)) };
+    const result = await runCompliance(parseArgs(["--target", "local", "--only", "KV-AC-001"]), [], failing);
+    expect(recordOf(h).results.find((r) => r.id === "KV-AC-001")).toEqual({ id: "KV-AC-001", status: "passed" });
+    expect(h.written[0]?.raw?.["typecheck.log"]).toBe("error TS2322");
+    expect(result.exitStatus).toBe(2);
+
+    const b = harness();
+    const brun = b.deps.run;
+    const broken = { ...b.deps, run: (c: RunCall) => (c.args[1] === "build" ? (b.calls.push(c), Promise.resolve({ status: 1, output: "build error" })) : brun(c)) };
+    await runCompliance(parseArgs(["--target", "local", "--only", "KV-AC-001"]), [], broken);
+    expect(b.events).toEqual([]);
+    expect(recordOf(b).results.find((r) => r.id === "KV-AC-001")).toEqual({ id: "KV-AC-001", status: "not-run", detail: "not run: setting up the target failed: framework build failed with status 1" });
   });
 
   it("records a deliberately omitted criterion (--only) as not-run with the reason, and --blocked as blocked", async () => {
@@ -123,6 +142,20 @@ describe("[COMPL-AC-003] compliance driver records", () => {
     ]);
   });
 
+  it("--blocked '*=<reason>' records every criterion it would run as blocked with that detail, and deploys and runs nothing", async () => {
+    const reason = "Cloudflare D1 unavailable: the account's daily D1 row limit is exhausted (Phase A spikes)";
+    const h = harness();
+    const result = await runCompliance(parseArgs(["--target", "cloudflare", "--blocked", `*=${reason}`]), [], h.deps);
+    expect(h.calls).toEqual([]);
+    expect(h.events).toEqual([]);
+    expect(recordOf(h).results).toEqual([
+      { id: "CLI-AC-001", status: "not-run", detail: "Google login mocked for this phase" },
+      { id: "KV-AC-001", status: "blocked", detail: reason },
+      { id: "KV-AC-002", status: "blocked", detail: reason },
+    ]);
+    expect(result.exitStatus).toBe(0);
+  });
+
   it("runs nothing when nothing is to be run (aws in this phase): every criterion not-run", async () => {
     const h = harness();
     const result = await runCompliance(parseArgs(["--target", "aws"]), [], h.deps);
@@ -136,7 +169,7 @@ describe("[COMPL-AC-004] cloud runs use a disposable test stage", () => {
   it("deploys test-<runId>, passes NODE_USE_ENV_PROXY, removes the stage, and redacts the account subdomain", async () => {
     const h = harness({ vitest: vitestReport([{ title: "[KV-AC-001] put", status: "passed" }]) });
     await runCompliance(parseArgs(["--target", "cloudflare"]), ["--target", "cloudflare"], h.deps);
-    expect(h.events).toEqual(["pending+ test-abcdefghij12345", "deploy test-abcdefghij12345", "run run", "run vitest", "run playwright", "remove test-abcdefghij12345", "pending- test-abcdefghij12345"]);
+    expect(h.events).toEqual(["run run", "run run", "pending+ test-abcdefghij12345", "deploy test-abcdefghij12345", "run vitest", "run playwright", "remove test-abcdefghij12345", "pending- test-abcdefghij12345"]);
     const vitest = h.calls.find((c) => c.args[0] === "vitest");
     expect(vitest?.env.NODE_USE_ENV_PROXY).toBe("1");
     expect(vitest?.env.COMPLIANCE_STAGE).toBe("test-abcdefghij12345");
@@ -164,8 +197,16 @@ describe("[COMPL-AC-004] cloud runs use a disposable test stage", () => {
   it("cleans up a stage left by an interrupted earlier run, and reports what remains", async () => {
     const h = harness({ pending: ["test-old000000000001"], cloud: { listStageResources: (s) => Promise.resolve(s === "test-old000000000001" ? ["r2-token test-old000000000001"] : []) } });
     await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], h.deps);
-    expect(h.events[0]).toBe("remove test-old000000000001");
+    expect(h.events.filter((e) => /^(remove|deploy) /.test(e))).toEqual(["remove test-old000000000001", "deploy test-abcdefghij12345", "remove test-abcdefghij12345"]);
     expect(recordOf(h).leftovers).toEqual(["test-old000000000001: r2-token test-old000000000001"]);
+  });
+
+  it("never removes a pending stage that is not a test stage (prodcheck)", async () => {
+    const h = harness({ pending: ["prodcheck"] });
+    await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], h.deps);
+    expect(h.events.filter((e) => e.includes("prodcheck"))).toEqual([]);
+    expect(recordOf(h).leftovers).toEqual([]);
+    expect(h.logs.join("\n")).toMatch(/prodcheck.*test stages only/);
   });
 
   it("a leftover check that cannot run is recorded, never read as no leftovers", async () => {

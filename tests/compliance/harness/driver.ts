@@ -18,10 +18,11 @@ import {
   type Redaction,
   type WriteEvidenceInput,
 } from "../../../packages/framework/src/evidence/public.js";
-import type { ComplianceArgs } from "./args.js";
+import { ALL, type ComplianceArgs } from "./args.js";
 import type { CatalogueEntry, Target } from "./catalogue.js";
 import { childEnv } from "./env.js";
 import { expectedCriteria, type ExpectedEntry } from "./expected.js";
+import { assertTestStage } from "./leftovers.js";
 import { grepPattern, parsePlaywrightJson, parseVitestJson } from "./reports.js";
 import { criterionResults, type TestOutcome } from "./results.js";
 
@@ -86,11 +87,20 @@ function select(args: ComplianceArgs, deps: DriverDeps): ExpectedEntry[] {
   if (args.selfTest) return [{ id: SELF_TEST_ID, run: true, parts: [""], notRunParts: [] }];
   const expected = expectedCriteria(deps.catalogue(), args.target, args.milestone ? "milestone" : "automated").sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const ids = new Set(expected.map((e) => e.id));
-  for (const id of [...(args.only ?? []), ...args.blocked.keys()]) {
+  for (const id of [...(args.only ?? []), ...[...args.blocked.keys()].filter((k) => k !== ALL)]) {
     if (!ids.has(id)) deps.log(`compliance: note: ${id} is not expected on ${args.target} in this tier; ignored`);
   }
   const only = args.only === undefined ? undefined : new Set(args.only);
   return expected.map((e) => (e.run && only !== undefined && !only.has(e.id) ? { ...e, run: false, notRun: "not selected for this run (--only)", notRunParts: [] } : e));
+}
+
+/** The operator's `--blocked` list with `*` expanded to every criterion the run would execute. */
+function expandBlocked(given: ReadonlyMap<string, string>, expected: readonly ExpectedEntry[]): ReadonlyMap<string, string> {
+  const all = given.get(ALL);
+  if (all === undefined) return given;
+  const out = new Map(expected.filter((e) => e.run).map((e) => [e.id, all]));
+  for (const [id, reason] of given) if (id !== ALL) out.set(id, reason);
+  return out;
 }
 
 function subdomainRedaction(baseUrl: string): Redaction[] {
@@ -112,7 +122,8 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
   const runId = deps.newRunId();
   const isCloud = args.target !== "local";
   let expected = select(args, deps);
-  const toRun = expected.filter((e) => e.run && !args.blocked.has(e.id)).map((e) => e.id);
+  const blocked = expandBlocked(args.blocked, expected);
+  const toRun = expected.filter((e) => e.run && !blocked.has(e.id)).map((e) => e.id);
   const raw: Record<string, string> = { "expected.json": `${JSON.stringify(expected, null, 2)}\n` };
   const leftovers: string[] = [];
   const redactions: Redaction[] = [];
@@ -133,6 +144,12 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
   };
   const removeStage = async (ops: CloudStageOps, name: string): Promise<void> => {
     try {
+      assertTestStage(name);
+    } catch (error) {
+      deps.log(`compliance: not removing ${name}: ${firstLine(error)}`);
+      return;
+    }
+    try {
       raw[`remove-${name}.log`] = await ops.remove(name);
     } catch (error) {
       raw[`remove-${name}.log`] = `remove failed: ${error instanceof Error ? error.message : String(error)}\n`;
@@ -146,6 +163,18 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
     let deployed = false;
     let baseUrl = args.baseUrl;
     try {
+      if (!args.selfTest) {
+        // The CLI that starts `dev` or deploys runs from the built framework, so build first.
+        const toolEnv = childEnv(process.env, { target: args.target, runId });
+        const build = await deps.run({ command: "npm", args: ["run", "build", "-w", "packages/framework"], cwd: deps.repoRoot, env: toolEnv });
+        raw["build.log"] = build.output;
+        if (build.status !== 0) throw new Error(`framework build failed with status ${String(build.status)}`);
+        // Evidence for assertions only the compiler checks (expectTypeOf, @ts-expect-error; B-EV F7).
+        const typecheck = await deps.run({ command: "npm", args: ["run", "typecheck"], cwd: deps.repoRoot, env: toolEnv });
+        raw["typecheck.log"] = typecheck.output;
+        if (typecheck.status !== 0) deps.log(`compliance: npm run typecheck failed with status ${String(typecheck.status)} (raw/typecheck.log)`);
+        exitStatus ||= typecheck.status;
+      }
       if (isCloud) {
         ops = deps.cloud(args.target);
         // An interrupted earlier run left these stages: remove them first (COMPL-REQ-004).
@@ -167,11 +196,6 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
       const env = childEnv(process.env, { target: args.target, runId, ...(stage === undefined ? {} : { stage }), ...(baseUrl === undefined ? {} : { baseUrl }) });
       const pattern = grepPattern(toRun);
       const tmp = deps.tempDir();
-      if (!args.selfTest) {
-        const build = await deps.run({ command: "npm", args: ["run", "build", "-w", "packages/framework"], cwd: deps.repoRoot, env });
-        raw["build.log"] = build.output;
-        if (build.status !== 0) throw new Error(`framework build failed with status ${String(build.status)}`);
-      }
       const vitestJson = `${tmp}/vitest.json`;
       const vitest = await deps.run({
         command: "npx",
@@ -219,7 +243,7 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
       const reason = `not run: setting up the target failed: ${firstLine(error)}`;
       deps.log(`compliance: ${reason}`);
       raw["driver-error.log"] = `${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`;
-      if (outcomes.length === 0) expected = expected.map((e) => (e.run && !args.blocked.has(e.id) ? { ...e, run: false, notRun: reason, notRunParts: [] } : e));
+      if (outcomes.length === 0) expected = expected.map((e) => (e.run && !blocked.has(e.id) ? { ...e, run: false, notRun: reason, notRunParts: [] } : e));
       exitStatus ||= 1;
     } finally {
       if (local !== undefined) raw["dev.log"] = await local.stop();
@@ -228,7 +252,7 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
   }
   if (runErrors.length > 0) raw["run-errors.log"] = `${runErrors.join("\n")}\n`;
 
-  const results: EvidenceResult[] = criterionResults({ target: args.target, expected, outcomes, blocked: args.blocked });
+  const results: EvidenceResult[] = criterionResults({ target: args.target, expected, outcomes, blocked });
   const record: EvidenceRecord = {
     runId,
     commit,

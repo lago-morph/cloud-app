@@ -33,6 +33,7 @@ describe("compliance command options", () => {
       ["SQL-AC-003", "D1 unavailable: daily row limit exhausted"],
       ["FILES-AC-005", "R2 token missing"],
     ]);
+    expect([...parseArgs(["--target", "cloudflare", "--blocked", "*=D1 unavailable"]).blocked]).toEqual([["*", "D1 unavailable"]]);
     expect(() => parseArgs(["--target", "local", "--blocked", "KV-AC-001"])).toThrow(/--blocked/);
     expect(() => parseArgs(["--target", "local", "--blocked", "kv=x"])).toThrow(/not a criterion/);
   });
