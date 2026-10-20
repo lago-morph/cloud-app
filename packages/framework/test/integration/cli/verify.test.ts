@@ -56,7 +56,7 @@ function normalise(output: string, dir: string): string {
 
 describe("verify on the template", () => {
   it(
-    tag("CLI-AC-002", "verify passes on the template"),
+    tag(["CLI-AC-002", "CHECK-AC-005"], "verify passes on the template"),
     async () => {
       const app = await FixtureApp.copyOf(join(REPO_ROOT, "apps", "template"));
       apps.push(app);

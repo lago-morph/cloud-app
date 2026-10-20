@@ -73,7 +73,7 @@ test.afterAll(() => {
   if (root !== undefined) rmSync(root, { recursive: true, force: true });
 });
 
-test(tag("E2E-001", "a scaffolded app installs the framework from a packed tarball at an exact version, imports every public subpath, works through the template's pages under dev, and passes verify, with no credentials and no network"), async () => {
+test(tag(["E2E-001", "LOCAL-AC-001"], "a scaffolded app installs the framework from a packed tarball at an exact version, imports every public subpath, works through the template's pages under dev, and passes verify, with no credentials and no network"), async () => {
   test.setTimeout(30 * 60_000);
 
   // 1. The framework comes from an `npm pack` tarball at the template's exact version.

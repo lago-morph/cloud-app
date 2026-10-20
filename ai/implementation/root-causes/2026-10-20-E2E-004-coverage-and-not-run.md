@@ -432,3 +432,37 @@ check.md:100 "The template and demo pass all rules" (CHECK-REQ-005), template pa
   - components not yet built have no tests.
 - No alternative remains open.
 - The verification plan is sufficient once it includes the condition above: a SKILL-AC-005 run on a target with only non-clashing files.
+
+## Fix (C)
+
+Test author (prompt §8 step 3), who did not write the scaffolder, the diagnosis or the reviews. Local only; no Cloudflare calls. Branch `claude/implement-local-cloudflare-fix-c3c` from `origin/claude/implement-local-cloudflare`. Only test files changed; no assertion changed in an existing test; `PHASE_RULES` / `expected.ts` not touched (another fix edits driver files).
+
+### Changes
+
+1. **New `tests/compliance/criteria/skill/scaffold.test.ts`, two `[SKILL-AC-005]` tests** (local target only, `isLocal()`; included by `vitest.integration.config.ts`). Each runs the real `node skill/scripts/scaffold <target>` (no `--force`) and asserts: exit status 1; stderr contains `scaffold: target directory <target> is not empty` and `nothing was changed` (which tells the refusal apart from a version-pin mismatch, which also exits 1); no `Scaffolded` on stdout; a snapshot of every path, kind, content and mtime is unchanged; no `vendor/`, `package.json` or `node_modules` was created. Fixtures (the Review's condition):
+   - **clash:** `src/app.ts` (`mine`, also in the template) and `notes.txt`;
+   - **no clash:** only `notes.txt`, `.keep` and `mine/plan.md`, none of which the template has.
+   The unit test in `skill/scripts/scaffold.unit.test.ts` is kept and unchanged.
+2. **`tests/compliance/e2e/E2E-001-E2E-003.spec.ts:76`:** `tag("E2E-001", …)` → `tag(["E2E-001", "LOCAL-AC-001"], …)`.
+3. **`packages/framework/test/integration/cli/verify.test.ts:59`:** `tag("CLI-AC-002", …)` → `tag(["CLI-AC-002", "CHECK-AC-005"], …)`.
+
+### Red / green (the new SKILL-AC-005 tests)
+
+Temporary local mutations of `skill/scripts/scaffold.mjs`, never committed; the file was restored from a copy and `git status` was clean afterwards.
+
+| `scaffold.mjs` variant | clash fixture | no-clash fixture |
+|---|---|---|
+| refuses only when a top-level target entry also exists in the template (clash-only) | passed | **failed**: `exit 0`, expected 1 (the template was copied beside the user's files) |
+| non-empty check removed (`if (false)`) | **failed**: `exit 0` | **failed**: `exit 0` |
+| real (committed) | passed | passed |
+
+So the clash fixture alone (the original proposal and the unit test's fixture) would not catch the clash-only regression; the no-clash fixture does.
+
+### Open for C-02 (driver files; not done here)
+
+CHECK-AC-005 now carries the template test's tag, so without a part rule the whole criterion is recorded `passed` from the template alone. C-02 must add `{ id: "CHECK-AC-005", targets: ["local"], mode: "automated", part: "demo part", detail: "demo built in phase F (plan C-EV)" }` to `PHASE_RULES` (`tests/compliance/harness/expected.ts`), as the revised Cause C proposes. Until then the evaluator must not read the CHECK-AC-005 result as covering the demo.
+
+### Results
+
+- `npm run verify`: exit 0, 1407 unit tests passed. Two earlier attempts failed on unrelated unit tests (PGlite/KV) that timed out at 5 s while the shared machine had a load average of about 20 on 4 cores. The failing tests differed between the two runs, and none of them are files this fix touches.
+- `npm run compliance -- --target local --only SKILL-AC-005,LOCAL-AC-001,CHECK-AC-005,E2E-001 --out <scratch>` from a clean tree at `c1c5ba9`: exit 0, "105 not-run, 4 passed". SKILL-AC-005 passed (both tests, about 33 s and 36 s), LOCAL-AC-001 and E2E-001 passed (the E2E-001 test, 4.6 min), and CHECK-AC-005 passed. CHECK-AC-005 is recorded as a whole criterion with part `""`, because the C-02 demo-part rule above is not there yet. This was an informational run outside the repository; its record is not committed.
