@@ -69,3 +69,22 @@ Reasons:
    - **generate.test.** It never calls `/seed`. It only generates migrations and runs `verify`. MIG-AC-001 (one new migration per dialect; an edited migration makes the checker fail) and DEC-0223's control run are judged exactly as before, and the control run must still exit 0 on a now spec-compliant app. A compliant fixture is required for the control to be meaningful: a control that fails for an unrelated reason cannot isolate the edit.
    - **deploy-local (MIG-AC-002/-003).** The seed's IDs matter there. That suite uses `P1`/`P2`/`C1–C3` for `DATA_V1`/`DATA_V2` (`apps.ts:72–100`) and at `deploy-local.test.ts:200`, and `/fix-codes` targets parent 2 by a literal. The proposed fix keeps those tests as strong only if the expected data is built from the IDs the seed returns. Children a and b must still reference parent 1 and child c parent 2, so "every row and reference preserved" is still checked exactly. Sort order must not depend on random UUIDs: sort expected rows by `id` the same way, or order by `name`/`label`. The implementer should also assert that the seed returned five distinct IDs.
 5. **The fix addresses the cause** (a fixture that breaks a spec rule), not the symptom. No framework change, and no rule relaxation.
+
+## Fix
+
+Author: test-case author (prompt §8 step 3); did not write the framework code, the diagnosis or the review. Date: 2026-10-20. No framework code changed.
+
+### What changed (commit `b6cfc80`, branch `claude/implement-local-cloudflare-fix-mig`)
+- `packages/framework/test/integration/mig/apps.ts`:
+  - `/seed` creates the five IDs with `const p1 = newId()` and so on (the rule traces `const` bindings to the framework's `newId`). It inserts them with the same parent/child links as before (children a and b → parent one, c → parent two) and returns `{ parents: [p1, p2], children: [c1, c2, c3] }` (200).
+  - `/fix-codes` takes parent two's ID in its JSON body through `jsonBody(z.object({ parentId: z.string() }))`. A `where` value, which the rule does not cover. A first attempt used `as` on `c.req.json()` and was rejected by `verify` (`@typescript-eslint/consistent-type-assertions`), so the app uses the framework's validator, as the template app does.
+  - `/data` orders by `parents.name` / `children.label` instead of `id`. These values are unique, and their order is the same as the old fixed IDs' order, so the expected arrays are unchanged in order and do not depend on random UUIDs.
+  - The `P1/P2/C1–C3` constants and `DATA_V1/DATA_V2` are replaced by `seedIds(body)` and `dataV1(ids)` / `dataV2(ids)`. `seedIds` throws unless the response holds exactly 2 parent and 3 child IDs, all UUID v4 and all five distinct (review point 4).
+- `packages/framework/test/integration/mig/deploy-local.test.ts`: a `seed()` helper expects status 200 and returns `seedIds(...)`. Every `toEqual(DATA_V1/DATA_V2)` is now `toEqual(dataV1(ids)/dataV2(ids))`. The final v3 expectation uses `ids.parents[0]/[1]`, and `/fix-codes` sends `{ parentId: ids.parents[1] }`. The second MIG-AC-003 test also asserts that the previous test's `ids` are defined. No assertion was removed or loosened. The snapshot comparisons (schema, rows, record, foreign-key check) are unchanged.
+- `generate.test.ts` is unchanged. It uses `APP_V1`, which now passes `framework-ids`.
+
+### Red (before the fix, framework built, `0d658e1`)
+MIG-AC-001 failed with `AssertionError: verify must pass before the edit:`. Control `verify` printed exactly five `prototype-framework/framework-ids` errors at `src/app.ts:19,20,23,24,25` for the literal seed IDs, then `verify failed: portability rules`. This matches the recorded symptom.
+
+### Green
+`npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/mig/` with both fixes: **6 passed (6)**, exit 0. MIG-AC-001 passing means the control `verify` exited 0 (all steps, including portability rules), and `verify` failed after the edit and named the edited migration, as the test asserts. Intermediate evidence: with the `as` cast, the control `verify` printed `portability rules: 1 problem` (consistent-type-assertions) and no `framework-ids` problem. This confirms the five `framework-ids` problems were gone.
