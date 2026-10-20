@@ -1,8 +1,12 @@
 /**
  * The catalogue of acceptance criteria and E2E scenarios, read from the documents
- * (COMPL-REQ-001, COMPL-REQ-002). Component criteria are table rows whose first cell is the ID
- * and whose last cell is the "Where" column; scenarios are `#### E2E-nnn` headers followed by a
- * `Where:` line (e2e-scenarios.md preamble).
+ * (COMPL-REQ-001, COMPL-REQ-002). Component criteria are the body rows of criteria tables: tables
+ * whose header row is `| ID | Criterion | Verifies | Where |`, with a `| --- |` separator row
+ * next, ending at the first line that does not start with `|`. The ID and the Where text are read
+ * from their columns. Rows outside criteria tables are ignored, whatever their width; a malformed
+ * row inside one, or an `ID | Criterion` header without that shape, throws with file and line
+ * (root cause 2026-10-20-COMPL-AC-001-where-parser-decision-log, DEC-PENDING-fix-e2-1).
+ * Scenarios are `#### E2E-nnn` headers followed by a `Where:` line (e2e-scenarios.md preamble).
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -28,7 +32,11 @@ export interface CatalogueEntry {
   readonly applies: Applicability;
 }
 
-const ROW = /^\|\s*((?:[A-Z]+-AC)-\d{3})\s*\|.*\|\s*([^|]*?)\s*\|\s*$/;
+const CRITERIA_HEADER: readonly string[] = ["ID", "Criterion", "Verifies", "Where"];
+const ID_COLUMN = CRITERIA_HEADER.indexOf("ID");
+const WHERE_COLUMN = CRITERIA_HEADER.indexOf("Where");
+const CRITERION_ID = /^[A-Z]+-AC-\d{3}$/;
+const SEPARATOR_CELL = /^:?-{3,}:?$/;
 const SCENARIO = /^####\s+(E2E-\d{3})\b/;
 const WHERE_LINE = /^Where:\s*(.+?)\s*$/;
 
@@ -77,6 +85,16 @@ export function parseWhere(where: string, source: string): Applicability {
   return result;
 }
 
+/** The trimmed cells of a table row; an escaped `\|` inside a cell does not split it. */
+function tableCells(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/(?<!\\)\|$/, "")
+    .split(/(?<!\\)\|/)
+    .map((cell) => cell.trim());
+}
+
 function markdownFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -99,9 +117,33 @@ export function readCatalogue(docsDir: string): CatalogueEntry[] {
     const source = relative(docsDir, file).split("\\").join("/");
     const lines = readFileSync(file, "utf8").split("\n");
     let scenario: string | undefined;
-    for (const line of lines) {
-      const row = ROW.exec(line);
-      if (row?.[1] !== undefined && row[2] !== undefined) add(row[1], row[2], source);
+    let inCriteriaTable = false;
+    for (let index = 0; index < lines.length; index++) {
+      const line = lines[index] ?? "";
+      const at = `${source}:${String(index + 1)}`;
+      if (inCriteriaTable && !line.startsWith("|")) inCriteriaTable = false;
+      if (inCriteriaTable) {
+        const cells = tableCells(line);
+        const id = cells[ID_COLUMN] ?? "";
+        if (cells.length !== CRITERIA_HEADER.length) throw new Error(`${at}: a criteria table row has ${String(cells.length)} cells, not ${String(CRITERIA_HEADER.length)}`);
+        if (!CRITERION_ID.test(id)) throw new Error(`${at}: a criteria table row's ID cell ${JSON.stringify(id)} is not a criterion ID`);
+        add(id, cells[WHERE_COLUMN] ?? "", source);
+        continue;
+      }
+      if (line.startsWith("|")) {
+        const cells = tableCells(line);
+        if (cells[0] === CRITERIA_HEADER[0] && cells[1] === CRITERIA_HEADER[1]) {
+          if (cells.join("|") !== CRITERIA_HEADER.join("|")) throw new Error(`${at}: a criteria table header must be | ${CRITERIA_HEADER.join(" | ")} |`);
+          const next = lines[index + 1] ?? "";
+          const separator = next.startsWith("|") ? tableCells(next) : [];
+          if (separator.length !== CRITERIA_HEADER.length || !separator.every((cell) => SEPARATOR_CELL.test(cell))) {
+            throw new Error(`${at}: a criteria table header is not followed by a | --- | separator row`);
+          }
+          inCriteriaTable = true;
+          index++;
+          continue;
+        }
+      }
       const header = SCENARIO.exec(line);
       if (header?.[1] !== undefined) {
         scenario = header[1];

@@ -22,8 +22,8 @@ describe("[COMPL-AC-001] criteria catalogue from the documents", () => {
       "Mentions KV-AC-009 in prose, which is not a definition.",
     ].join("\n"),
   );
-  writeFileSync(join(fixture, "components", "cloudflare.md"), "| CF-AC-001 | x | CF-REQ-001 | Cloud |\n");
-  writeFileSync(join(fixture, "components", "aws.md"), "| AWS-AC-001 | x | AWS-REQ-001 | Cloud |\n");
+  writeFileSync(join(fixture, "components", "cloudflare.md"), "| ID | Criterion | Verifies | Where |\n| --- | --- | --- | --- |\n| CF-AC-001 | x | CF-REQ-001 | Cloud |\n");
+  writeFileSync(join(fixture, "components", "aws.md"), "| ID | Criterion | Verifies | Where |\n| --- | --- | --- | --- |\n| AWS-AC-001 | x | AWS-REQ-001 | Cloud |\n");
   writeFileSync(
     join(fixture, "acceptance", "e2e-scenarios.md"),
     ["#### E2E-001 — New app", "Verifies: SYS-REQ-022", "Where: Local", "", "#### E2E-007 — Admin", "Verifies: x", "Where: Local; cloud (milestone)"].join("\n"),
@@ -50,9 +50,60 @@ describe("[COMPL-AC-001] criteria catalogue from the documents", () => {
   });
 
   it("refuses a document that defines one ID twice", () => {
-    writeFileSync(join(fixture, "components", "dup.md"), "| KV-AC-001 | again | KV-REQ-001 | Local |\n");
+    writeFileSync(join(fixture, "components", "dup.md"), "| ID | Criterion | Verifies | Where |\n| --- | --- | --- | --- |\n| KV-AC-001 | again | KV-REQ-001 | Local |\n");
     expect(() => readCatalogue(fixture)).toThrow(/KV-AC-001 is defined twice/);
     rmSync(join(fixture, "components", "dup.md"));
+  });
+
+  // Root cause 2026-10-20-COMPL-AC-001-where-parser-decision-log.md, Review: fix requirements 1–4.
+  it("ignores two-, three- and four-column tables of criterion IDs outside criteria tables", () => {
+    const before = readCatalogue(fixture);
+    mkdirSync(join(fixture, "decisions"));
+    writeFileSync(
+      join(fixture, "decisions", "decision-log.md"),
+      [
+        "### DEC-0319 — x",
+        "| ID | Why unit-level (criterion text) |",
+        "| --- | --- |",
+        '| KV-AC-001 | "A unit test of the report generator shows a criterion whose test has lost its tag as untested." Names a unit test. |',
+        "",
+        "| ID | Change | Note |",
+        "| --- | --- | --- |",
+        "| KV-AC-001 | x | Cloud |",
+        "",
+        "| ID | Why | Note | Where |",
+        "| --- | --- | --- | --- |",
+        "| KV-AC-002 | x | y | Cloud |",
+        "| KV-AC-003 | x | y | Local |",
+      ].join("\n"),
+    );
+    try {
+      expect(readCatalogue(fixture)).toEqual(before);
+    } finally {
+      rmSync(join(fixture, "decisions"), { recursive: true });
+    }
+  });
+
+  it.each([
+    ["a body row whose first cell is not a criterion ID", "| KV-AC-003 | x | KV-REQ-003 | Local |\n| note | x | y | Local |", /bad\.md:4/],
+    ["a body row with fewer cells than the header", "| KV-AC-003 | x | Local |", /bad\.md:3/],
+    ["a body row with more cells than the header", "| KV-AC-003 | x | y | z | Local |", /bad\.md:3/],
+  ])("refuses %s inside a criteria table, naming file and line", (_name, body, message) => {
+    writeFileSync(join(fixture, "components", "bad.md"), `| ID | Criterion | Verifies | Where |\n| --- | --- | --- | --- |\n${body}\n`);
+    try {
+      expect(() => readCatalogue(fixture)).toThrow(message);
+    } finally {
+      rmSync(join(fixture, "components", "bad.md"));
+    }
+  });
+
+  it("refuses an ID | Criterion header without the Where column, naming file and line", () => {
+    writeFileSync(join(fixture, "components", "bad.md"), "Intro.\n| ID | Criterion | Verifies |\n| --- | --- | --- |\n| KV-AC-003 | x | Local |\n");
+    try {
+      expect(() => readCatalogue(fixture)).toThrow(/bad\.md:2/);
+    } finally {
+      rmSync(join(fixture, "components", "bad.md"));
+    }
   });
 });
 
