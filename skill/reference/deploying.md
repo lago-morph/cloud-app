@@ -99,6 +99,7 @@ On the free plan, D1 allows about 100,000 rows written per day per account. Keep
 ## Examples
 
 - [examples/tests.md](../examples/tests.md): the smoke test that `smoke` runs against a deployed test stage.
+- [examples/configuration.md](../examples/configuration.md): the template's values file for Cloudflare test stages (`config/cloudflare/test.json`); a production stage needs its own `config/cloudflare/<stage>.json` in the same place.
 
 ## Stopping condition
 
