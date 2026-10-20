@@ -209,3 +209,79 @@ Nothing depends on other processes or on the host's `~/.config`.
 4. **Plan §1 "Test economy" rule 1.** Run `vitest related packages/framework/src/testing/test-app.ts`, then `npm run typecheck` and `npm run lint`. The fix touches no CLI, `dev` or network code, so it needs no offline run (rule 4).
 
 ## Review
+
+Reviewer: independent root-cause reviewer (prompt §8 step 2). I did not find, diagnose or write this code. Base: `a7c3375`. Installed (from `npm ci` in my worktree, which matches `package-lock.json`): wrangler `4.149.0`, miniflare `5.20261006.1-alpha`. I made no Cloudflare calls and ran no full suite. I made one red run and one green run of a temporary probe test (described below), then deleted the probe and the temporary fix. Nothing but this section is committed.
+
+### Verdict: ACCEPTED, with the required changes below
+
+The evidence supports every link. The alternatives are properly ruled out. The fix removes the cause (the test app joining a host-wide registry), not the symptom (the warnings).
+
+### 1. The causal chain, checked link by link against the installed code
+- **Link 1 holds.** `test-app.ts:84` sets the name `test-app`, and `:217` calls `getPlatformProxy({ configPath, persist: false })`. `cli.js:376537` returns `unsafeDevRegistryPath: getRegistryPath()`. `cli.js:25329-25334` defaults that to `<global config>/registry`.
+- **Link 2 holds.**
+  - `getEnvironmentVariableFactory` (`cli.js:25148-25169`) tests `variableName in process.env` on every call, and `getProcessEnv` (`:25171-25174`) returns the raw value with no `choices`. So `""` is passed through unchanged.
+  - Miniflare treats `""` as disabled (`index.js:131052-131054`).
+  - Miniflare takes the path only from options: `DevRegistry` is built from `#sharedOpts.unsafeDevRegistryPath` (`:133287-133294`, `:134909-134915`). Its own `getDefaultDevRegistryPath()` (`:131270`, which reads `MINIFLARE_REGISTRY_PATH`) and its copy of the wrangler `getRegistryPath` factory (`:90913`) have **no callers** inside miniflare (grep). Only wrangler reads the variable.
+- **Link 3 holds.** `registerWorker` (`:131103-131130`) unlinks only stale entries. For a live foreign entry it schedules `setTimeout(…, max(1, mtime + 90 000 − Date.now()))`, and the retry calls `registerWorker` again. `WORKER_STALE_MS = 9e4` (`:130935`).
+- **Link 4 holds.** Same code. Under a past clock the delay is above 2³¹−1, so Node clamps it to 1 ms. Reproduced: **208** `TimeoutOverflowWarning`s in one probe case (below).
+- **Link 5 holds.** `getWorkerRegistry` (`:131238-131247`) unlinks every entry whose mtime is older than `Date.now() − staleMs`, whoever owns it. Reproduced: under a 2027 clock, both planted foreign entries were gone while the app was live (below).
+- **Link 6 holds.** The record's E0/E1 contrast, a planted entry against no planted entry, is the right control. No other explanation of the per-seed variation survives.
+
+### 2. Is the fix safe?
+- **The override really is synchronous all the way to the read.** `getPlatformProxy` (`cli.js:376408-376438`) runs this, with no `await` before the read when `remoteBindings === false`:
+  1. `readConfig(...)`, which is synchronous;
+  2. the skipped `if (… options.remoteBindings !== false)` branch;
+  3. the call `getMiniflareOptionsFromConfig(...)`.
+
+  `getMiniflareOptionsFromConfig` is `async`, but its body (`:376440-376538`) contains no `await` (grep over `:376445-376515` finds none). An async function runs synchronously up to its first `await`, so `getRegistryPath()` at `:376537` runs before `getPlatformProxy` returns its promise. The read value is then held in the options object, and `new Miniflare(...)` at `:376425` reads only that object, never the variable.
+- **No concurrent code can see the empty value.**
+  - *Within one process:* no other JavaScript, timer, I/O callback or microtask can run between the set and the `finally`, because the window contains no `await` and no yield. Concurrent `createTestApp` calls therefore each run their own whole window one after another. Neither sees the other's `""`, and each restores the outer value.
+  - *Child processes:* none is spawned inside the window, so none inherits `""`.
+  - *Vitest workers:* both configs use `pool: "forks"` (`vitest.unit.config.ts:7`, `vitest.integration.config.ts:9`), so each worker has its own `process.env`. Under a `threads` pool, Node gives each worker a copy of `process.env` unless `SHARE_ENV` is used, so the fix would still be safe.
+  - *Throws:* a synchronous throw cannot escape the `try`, because `getPlatformProxy` is `async` and reports errors by rejecting.
+  - *Probe result:* the variable was the stubbed scratch path again right after `await createTestApp(...)` (green run).
+- **`remoteBindings: false` breaks nothing the contract promises.**
+  - `testing.d.ts:93` promises "In-process app with fresh local storage". Nothing in that file mentions remote bindings (grep `remote|registry|Cloudflare|network`).
+  - The proxy config is generated by the framework, never by app developers (`test-app.ts:76-91`). It declares D1 and R2 without `remote`.
+  - `pickRemoteBindings` (`cli.js:185535-185541`) selects only `remote: true` bindings or types with no local simulator, so for this config it selects none. `maybeStartOrUpdateRemoteProxySession` then returns `null` (`:185544`).
+  - So the option changes no behaviour, and it guarantees a test app can never open a remote session.
+- **There is no cleaner supported option.**
+  - `GetPlatformProxyOptions` (`cli.d.ts:3393-3437`) has only `environment`, `configPath`, `envFiles`, `persist` and `remoteBindings`.
+  - `disableDevRegistry` (`cli.d.ts:87,753`; `cli.js:374941`) exists only for `unstable_dev` and `startWorker`.
+  - `unstable_getMiniflareWorkerOptions` together with a hand-built `new Miniflare` would avoid the env var. But it bypasses `getPlatformProxy`, which goes against DEC-0105 and needs a miniflare pin, as the record says.
+  - A runner-level `test.env` or globalSetup would cover only this repository's runners. `createTestApp` is a public API that runs in app developers' runners, so the harness must handle this itself.
+  - The env-var scoping is therefore the smallest correct fix. Its dependence on a wrangler internal is real, and the red tests guard it (next section).
+
+### 3. The red tests, run once each way
+I wrote a temporary probe, `src/testing/registry-probe.unit.test.ts`, with the record's three cases as specified:
+- scratch registry through `vi.stubEnv`;
+- planted live foreign entries;
+- a `process.on("warning")` counter;
+- a snapshot of each entry's mtime and content, taken while the app was live.
+
+I ran it alone with `npx vitest run --config vitest.unit.config.ts`.
+- **Red, on `a7c3375` as it stands:** 3 of 3 failed, each for the predicted reason:
+  - real clock: the snapshot gained the app's own `test-app` entry;
+  - past clock: `expected 208 to be +0`;
+  - future clock: `expected {} to deeply equal {…(2)}`, so both foreign entries were deleted.
+- **Green, with the record's `startPlatformProxy` pasted in:** that file plus `test-app.unit.test.ts` gave `Tests 23 passed (23)`. The variable was restored afterwards.
+- **Determinism.** The pass and fail conditions depend only on the entries planted in the scratch directory and on fixed faked dates. The warning is emitted on the first `registerWorker` during `getPlatformProxy`'s own `await mf.getBindings()`, so it has been counted before `createTestApp` resolves. Nothing depends on other processes.
+- **`~/.config`.** `~/.config/.wrangler/registry` stayed empty through both runs. But each vitest run that imports wrangler **writes a new `~/.config/.wrangler/logs/wrangler-*.log`**. Its content is the "Proxy environment variables detected" warning. One such file appeared even in an early probe run that failed before `createTestApp` reached `getPlatformProxy`, so it is wrangler's logger and not the registry. That is a pre-existing write that is unrelated to this defect, and the fix does not need to address it. The record's claim should be narrowed accordingly (required change 3).
+
+### 4. Follow-up scope
+- **Keep the follow-ups out of this item.** Agreed with the record, for these reasons:
+  - Neither caller has a symptom.
+  - Both have different owners: `check/` and `provision/`.
+  - `migration-checker` (`databases.ts:55-67`) runs in app developers' `check` with a real clock, where joining the registry is ordinary wrangler behaviour. Its only cost is a 90 s retry timer that `dispose` clears.
+- **Do not lose them.** The orchestrator should add one plan item, "registry-free `getPlatformProxy` helper", that:
+  - moves the scoped override into one shared module, so there are not three copies of a wrangler-internal dependency;
+  - uses it in `databases.ts` and `fake-d1-api.ts:55`;
+  - adds the same probe-style guard for each caller.
+
+  `fake-d1-api.ts` is test-only and runs in parallel forks under fixed names, so it has the same cross-process retry behaviour today. It should be the first of the two to move.
+
+### Required changes (for the fixing subagent, not a reason to re-diagnose)
+1. **Assert the restore in the red tests.** After `createTestApp` resolves, `process.env.WRANGLER_REGISTRY_PATH` must equal the stubbed scratch path. This guards the "restore before awaiting" half of the fix, which the registry assertions alone do not.
+2. **Name the guard in the helper's comment.** It should say that the new `describe` in `test-app.unit.test.ts` is what fails if a wrangler upgrade moves the read after an `await`. A future reviewer should not delete it as redundant.
+3. **Narrow the record's `~/.config` wording.** "Never touches the host registry" is correct. "Nothing depends on the host's `~/.config`" is correct. But the tests, like every wrangler import here, still write `~/.config/.wrangler/logs`, so the record must not claim more than that.
+4. **Add the follow-up as a plan item**, as described in section 4. The orchestrator's planning subagent does this. It is not part of this fix.
