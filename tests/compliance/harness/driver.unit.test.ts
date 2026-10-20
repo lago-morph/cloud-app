@@ -329,6 +329,54 @@ describe("[CLI-AC-003] compliance runner exit status under injected failures", (
     expect(h.pending.get("cloudflare")?.has("test-abcdefghij12345")).toBe(true);
   });
 
+  // Root cause 2026-10-20-compliance-cli-exit-and-pending-stages (F2): a failed pending-stage list write.
+  const failingPendingRemove = (h: Harness): DriverDeps => ({
+    ...h.deps,
+    pendingStages: {
+      ...h.deps.pendingStages,
+      remove: (_t, s) => {
+        h.events.push(`pending- ${s} THROW`);
+        throw new Error("EACCES: permission denied, open '.framework/compliance/pending-stages.json'");
+      },
+    },
+  });
+
+  it("[CLI-AC-003] cloud: the run's own stage is removed but the pending-stage list cannot be updated: the record is still written, exit 1", async () => {
+    const h = harness({ vitest: vitestReport([{ title: "[KV-AC-001] put", status: "passed" }]) });
+    const result = await runCompliance(parseArgs(CLOUD), CLOUD, failingPendingRemove(h));
+    expect(h.written).toHaveLength(1);
+    const record = recordOf(h);
+    expect(record.results.find((r) => r.id === "KV-AC-001")?.status).toBe("passed");
+    expect(result.exitStatus).toBe(1);
+    expect(record.exitStatus).toBe(1);
+    expect(record.leftovers).toEqual([]);
+    expect(h.written[0]?.raw?.["pending-stages.log"]).toContain("EACCES");
+    expect(h.logs.join("\n")).toMatch(/test-abcdefghij12345 was removed, but the pending-stage list could not be updated/);
+  });
+
+  it("[CLI-AC-003] cloud: a stale stage is removed but the pending-stage list cannot be updated: the stage is still deployed and tested, exit 1", async () => {
+    const h = harness({ pending: ["test-oldoldoldold123"], vitest: vitestReport([{ title: "[KV-AC-001] put", status: "passed" }]) });
+    const result = await runCompliance(parseArgs(CLOUD), CLOUD, failingPendingRemove(h));
+    expect(h.events).toEqual(expect.arrayContaining(["remove test-oldoldoldold123", "deploy test-abcdefghij12345", "run vitest"]));
+    expect(h.written).toHaveLength(1);
+    const record = recordOf(h);
+    expect(record.results.find((r) => r.id === "KV-AC-001")?.status).toBe("passed");
+    expect(h.written[0]?.raw?.["driver-error.log"]).toBeUndefined();
+    expect(h.written[0]?.raw?.["pending-stages.log"]).toContain("test-oldoldoldold123: could not update the pending-stage list: EACCES");
+    expect(result.exitStatus).toBe(1);
+    expect(record.exitStatus).toBe(1);
+  });
+
+  it("[CLI-AC-003] cloud: a failing test run (runner status 3) whose pending-stage list update also fails keeps status 3", async () => {
+    const h = harness({ vitest: failingTest, vitestStatus: 3 });
+    const result = await runCompliance(parseArgs(CLOUD), CLOUD, failingPendingRemove(h));
+    expect(h.written).toHaveLength(1);
+    const record = recordOf(h);
+    expect(record.results.find((r) => r.id === "KV-AC-001")?.status).toBe("failed");
+    expect(result.exitStatus).toBe(3);
+    expect(record.exitStatus).toBe(3);
+  });
+
   it("[CLI-AC-003] cloud: passing tests whose stage cleanup fails (a partial failure) give a non-zero status", async () => {
     const cases: Partial<CloudStageOps>[] = [
       { remove: () => Promise.reject(new Error("remove refused")), listStageResources: () => Promise.resolve(["worker reference-test-abcdefghij12345"]) },
