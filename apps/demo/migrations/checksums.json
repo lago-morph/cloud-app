@@ -1,0 +1,4 @@
+{
+  "postgres/0000_schema.sql": "acf3a476a52c7a795d54f2b4cb43de0ea47e71c3ae1d2ceed6b1141d9a7d5171",
+  "sqlite/0000_schema.sql": "02d636270123f21cc45fb6eca1812ce0ce31729e1e03f9625ab331773168756d"
+}
