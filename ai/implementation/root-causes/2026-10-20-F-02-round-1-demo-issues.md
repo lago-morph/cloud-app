@@ -187,3 +187,73 @@ Designed location is the git repository root (evidence 1–2) → in this monore
 ### Verification
 
 `tests/skill`, typecheck, lint; the next F-01 build's commit contains `validation/local/<runId>.json` for its smoke run.
+
+---
+
+## Review
+
+Independent root-cause review (prompt §8 step 2), branch `claude/implement-local-cloudflare-rc-f1-review` from `origin/claude/implement-local-cloudflare`. The reviewer did not diagnose these entries or write the framework, skill or demo. Local only; no Cloudflare calls. One throwaway unit test (`packages/framework/src/testing/zz-rc-review.unit.test.ts`, deleted, never committed) was run once with `npx vitest run` in `packages/framework` after `npm ci`. Nothing else was changed.
+
+| # | Verdict | Change to the record |
+| --- | --- | --- |
+| 1 | ACCEPTED | The skill clarification becomes required |
+| 2 | **REJECTED** | A framework defect (a) in `connect.ts` was missed; re-diagnose (§8 step 1) |
+| 3 | ACCEPTED | — |
+| 4 | ACCEPTED | — |
+| 5 | ACCEPTED | — |
+
+### Entry 1 — ACCEPTED, with one change
+
+Evidence checked: `args.ts` `TARGETS` is `["local", "cloudflare"]`; prompt §4 "Do not build: the AWS adapters, the AWS target, or AWS provisioning"; plan §8.2 (line 410, detail "AWS phase not started"; line 413 lists "DEMO-AC-010 (AWS)"); plan F-EV (line 400) "AWS parts not-run"; DEC-0317 (decision-log line 2459) is `accepted`, not superseded, and holds every D1-dependent Cloudflare run; `validation/` holds only `local/` and `invalidations.md`. The recording is right:
+
+- AWS: DEMO-AC-010 (AWS clause) and the AWS run of every cloud DEMO criterion are `not-run`, detail exactly "AWS phase not started".
+- Cloudflare: F-03's, not F-01's. While DEC-0317 holds, `blocked` with detail exactly "D1 daily row limit exhausted by phase A spikes on 2026-10-19; re-run after reset" (driver `--blocked`, DEC-0261). They must not be recorded `not-run`: they are blocked by an owner direction, not out of phase scope.
+
+Change: the `skill/SKILL.md` clarification is **required**, not optional. Prompt §9 F says every `FRAMEWORK-ISSUE.md` entry is a defect to fix in the framework or the skill and the build repeats "until none remain". Without the clarification a fresh builder following hard rule 6 raises the same entry again, so the loop cannot end. Fix requirement (E-01): `skill/SKILL.md` ("Done means" or hard rule 6/7) states that a target this phase cannot reach (AWS not built; Cloudflare runs not part of the build) is listed as unfinished in the build record and is not a framework issue. Verification: `tests/skill`, and the next F-01 build raises no such entry.
+
+### Entry 2 — REJECTED: there is a framework defect (a) in `connect.ts`
+
+The record notices that `TestApp.request` on a connected stage "would send the app's session cookie to storage" and treats it as a documentation gap. It is a framework defect: the connected test app sends the stage's credentials to any host the caller names.
+
+**Reproduction** (throwaway unit test using `connectWith` with a recording `fetch`; stage `https://app-test-x.sub.workers.dev`, target `cloudflare`, mock-login sets `fw_session=SECRET`; any other host answers with `Set-Cookie: storage=evil`). Calls through `base.as(mockUsers.user("u1"))`:
+
+```
+PUT https://acct.r2.cloudflarestorage.com/bucket/key?...  cookie: "fw_session=SECRET"                origin: "https://app-test-x.sub.workers.dev"
+GET https://other.example/p   (from "//other.example/p")  cookie: "fw_session=SECRET; storage=evil"  origin: null
+GET https://app-test-x.sub.workers.dev/api/hello          cookie: "fw_session=SECRET; storage=evil"  origin: null
+```
+
+**Cause** (`packages/framework/src/testing/connect.ts`):
+
+1. `send` (line 92) builds `new URL(path, c.origin)`. An absolute URL, or a protocol-relative one like `//other.example/p`, replaces the stage origin, so the request goes to that host.
+2. `request` (lines 149–151) adds the jar's cookies (the stage session cookie) whatever the URL's host. `send` (line 91) also adds the stage's `Origin`.
+3. `storeCookies` (line 153) puts the foreign host's `Set-Cookie` into the same jar, and every later request sends it to the stage. A third-party host can therefore plant cookies on the app's session.
+
+**Why this is a defect, not only a documentation gap:** `docs/contracts/ts/testing.d.ts` lines 57–61 define `request(path)` as "Sends a request to the app's API". Sending to another host breaks that contract. A test session cookie on a `test-` stage is still a credential: a mock-login session of any level, including `admin`, on a reachable stage. A cookie jar that sends credentials to any host and accepts cookies from any host is the defect, whatever the skill says. The in-process `createTestApp` (`test-app.ts` lines 158–169) routes any URL, absolute or not, to the in-process app and never leaves the process. So the two `TestApp` implementations disagree here too, and an absolute URL that "works" in-process silently goes to a third party on a stage.
+
+**Revised classification:** (a) framework defect in `FW/src/testing/connect.ts` plus contract imprecision in `testing.d.ts` (both B-16's path set, plan line 186), together with the (b) skill gap the record already describes. The cloud verification of the ticket form remains (c) (entry 1).
+
+**Fix requirements** (red-green, prompt §8 step 3):
+
+1. Red: a test in `packages/framework/src/testing/connect.unit.test.ts` that calls `request` on a connected app logged in through `as(user)` with (i) an absolute URL on another origin, (ii) a protocol-relative `//host/path`, and asserts that it rejects, that the fake `fetch` saw no such request, and that no cookie or `Origin` reached the other host. It also asserts that a `Set-Cookie` from a non-stage response never enters the jar (moot once (i)–(ii) are refused, but the test pins it).
+2. Green, `connect.ts`: `request` (and the `send` it uses) refuses any `path` whose resolved origin is not the stage origin, before sending anything. The error names the URL and says to send requests to other hosts, such as signed storage URLs, with plain `fetch`, never through the test app. An absolute URL on the stage's own origin may be accepted. `connectWith`'s probe and the login/logout paths keep working unchanged.
+3. Same check in `test-app.ts` `request` (refuse a URL whose origin is not `TEST_APP_ORIGIN`), so in-process and connected runs fail the same way. Otherwise a test passes under `verify` and fails on a stage. Unit test in `test-app.unit.test.ts`.
+4. `testing.d.ts` `request` doc: "`path` is a path on the app's origin (or a URL on that origin); any other origin is refused. Send requests to other hosts with `fetch`."
+5. The skill changes the record proposes still apply, with this rule. In `skill/reference/testing.md`, same-origin ticket `url` → `t.request`, absolute storage `url` → plain `fetch`, which `t.request` refuses. The demo's current split (`apps/demo/tests/smoke/smoke.test.ts` lines 36–39) already does this and stays valid.
+6. Not a fix: documenting "do not pass absolute URLs" alone. The cookie jar must stay on the stage origin regardless of the caller.
+
+Verification: the new unit tests fail before and pass after. Then the framework's `testing` unit tests, typecheck and lint, and `tests/skill` for the skill edits (plan §1 Test economy: only the affected tests).
+
+The rest of entry 2 holds: files.md lines 69/79/90–91 describe the form, the skill covers only the in-process form, and the proxy note is right. The re-diagnosis needs to add the defect above and its fix. The documentation part can be carried over unchanged.
+
+### Entry 3 — ACCEPTED
+
+Checked: `sql/values.ts` lines 45–47 and the `UUID_V4` regex (lowercase v4) raise `SQL.INVALID_VALUE` in the encoder. `docs/components/sql.md` line 81 says "for writes and for comparisons alike". `skill/reference/sql-and-migrations.md` line 13 ("text from `newId()`") and `http-and-validation.md` line 47 (an unmatched path ID is `HTTP.NOT_FOUND`) are silent or misleading. The behaviour is deliberate: identical cross-dialect results. Alternative ruled out: a framework change would contradict sql.md. Fix as proposed: both skill pages, documentation only, with `z.uuid().safeParse` and then `HTTP.NOT_FOUND`.
+
+### Entry 4 — ACCEPTED
+
+Checked: `test-app.ts` gives every view one `Shared`, and each view's `dispose` is `() => shared.dispose()` (line 200). `connect.ts` gives each view its own `disposed` flag and jar (lines 121–124, 163–170). The `testing.d.ts` `dispose` doc does not say which views end. Fix as proposed (contract sentence in `testing.d.ts`, B-16; matching sentence in `skill/reference/testing.md`, E-01). Changing DEC-0193 behaviour is rightly not proposed without a decision. Note for the fixer: the entry-2 fix touches the same contract interface, so make both contract edits in one change.
+
+### Entry 5 — ACCEPTED
+
+Checked: `smoke.ts` `repo` (lines 327–330) uses `git rev-parse --show-toplevel` from the app directory. DEC-0275 says "in the git repository that holds the app". `skill/reference/testing.md` line 8 and `deploying.md` line 35 do not say where the record goes relative to the app. Plan F-01 "Owns: `apps/demo/**`" excludes `validation/`. Fix as proposed: both skill pages, and the plan's F-01 "Owns" extended to its own `validation/local/<runId>.json` and `<runId>/` (orchestrator).
