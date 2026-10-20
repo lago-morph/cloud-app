@@ -49,10 +49,13 @@ export interface WorkerCode {
 
 export interface SstInput {
   readonly stage: Stage;
-  readonly publicOrigin: string;
-  /** The current database; absent in step 3 of a first deploy (then only the bucket is declared). */
-  readonly database?: { readonly id: string; readonly name: string };
-  readonly code?: WorkerCode;
+  /** The stage's Worker; absent when only the long-lived bucket is declared (step 3 of a first deploy, remove). */
+  readonly worker?: {
+    readonly publicOrigin: string;
+    /** The current database: an input, never in SST's state. */
+    readonly database: { readonly id: string; readonly name: string };
+    readonly code: WorkerCode;
+  };
 }
 
 /** The SST component that holds the long-lived infrastructure (step 3's `--target`). */
@@ -66,22 +69,22 @@ function refuseSecretNames(names: readonly string[]): void {
 
 /** The generated `sst.config.ts`. */
 export function sstProgram(input: SstInput): string {
-  const worker =
-    input.database && input.code
-      ? {
-          name: workerName(input.stage),
-          handler: input.code.bundle,
-          ...(input.code.assetsDirectory === undefined ? {} : { assets: { directory: input.code.assetsDirectory } }),
-          compatibilityDate: input.code.compatibilityDate,
-          compatibilityFlags: [...(input.code.compatibilityFlags ?? [])],
-          environment: { ...input.code.variables, [BINDINGS.publicOrigin]: input.publicOrigin },
-          bindings: [
-            { type: "d1", name: BINDINGS.database, id: input.database.id },
-            { type: "r2_bucket", name: BINDINGS.files, bucketName: filesBucketName(input.stage) },
-            { type: "r2_bucket", name: input.code.logBucketBinding, bucketName: LOG_BUCKET },
-          ],
-        }
-      : undefined;
+  const w = input.worker;
+  const worker = w
+    ? {
+        name: workerName(input.stage),
+        handler: w.code.bundle,
+        ...(w.code.assetsDirectory === undefined ? {} : { assets: { directory: w.code.assetsDirectory } }),
+        compatibilityDate: w.code.compatibilityDate,
+        compatibilityFlags: [...(w.code.compatibilityFlags ?? [])],
+        environment: { ...w.code.variables, [BINDINGS.publicOrigin]: w.publicOrigin },
+        bindings: [
+          { type: "d1", name: BINDINGS.database, id: w.database.id },
+          { type: "r2_bucket", name: BINDINGS.files, bucketName: filesBucketName(input.stage) },
+          { type: "r2_bucket", name: w.code.logBucketBinding, bucketName: LOG_BUCKET },
+        ],
+      }
+    : undefined;
   if (worker) refuseSecretNames([...Object.keys(worker.environment), ...worker.bindings.map((b) => b.name)]);
   const data = { app: input.stage.app, provider: CLOUDFLARE_PROVIDER, filesBucket: filesBucketName(input.stage), worker };
   return `/// <reference path="./.sst/platform/config.d.ts" />

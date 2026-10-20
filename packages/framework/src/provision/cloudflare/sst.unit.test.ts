@@ -16,7 +16,8 @@ const code = {
   logBucketBinding: "LOGS",
 };
 
-const full: SstInput = { stage, publicOrigin: "https://notes-test-abc.example.workers.dev", database: { id: "d1-uuid", name: "notes-test-abc-db-1" }, code };
+const worker = { publicOrigin: "https://notes-test-abc.example.workers.dev", database: { id: "d1-uuid", name: "notes-test-abc-db-1" }, code };
+const full: SstInput = { stage, worker };
 
 /**
  * Runs the generated `sst.config.ts` against stand-ins for SST's globals, the way SST evaluates
@@ -72,18 +73,18 @@ describe("the SST app built from the app definition (PROV-REQ-001; cloudflare.md
     const { config, components } = evaluate(sstProgram(full));
     await config.run();
     expect(components[1]!.transformed.keepBindings).toEqual(["secret_text", "secret_key"]);
-    expect(() => sstProgram({ ...full, code: { ...code, variables: { SECRET_API_KEY: "x" } } })).toThrow(/SECRET_API_KEY.*would replace the Worker secret/);
-    expect(() => sstProgram({ ...full, code: { ...code, logBucketBinding: "SECRET_LOGS" } })).toThrow(/SECRET_LOGS/);
+    expect(() => sstProgram({ stage, worker: { ...worker, code: { ...code, variables: { SECRET_API_KEY: "x" } } } })).toThrow(/SECRET_API_KEY.*would replace the Worker secret/);
+    expect(() => sstProgram({ stage, worker: { ...worker, code: { ...code, logBucketBinding: "SECRET_LOGS" } } })).toThrow(/SECRET_LOGS/);
   });
 
-  it("without a database (step 3 of a first deploy) declares only the long-lived bucket", async () => {
-    const { config, components } = evaluate(sstProgram({ stage, publicOrigin: full.publicOrigin }));
+  it("without a Worker (step 3 of a first deploy; remove) declares only the long-lived bucket", async () => {
+    const { config, components } = evaluate(sstProgram({ stage }));
     await config.run();
     expect(components.map((c) => c.name)).toEqual(["Files"]);
   });
 
   it("a variable that is not a string literal-safe value is embedded as JSON, never as code", async () => {
-    const { config, components } = evaluate(sstProgram({ ...full, code: { ...code, variables: { X: '"; process.exit(1); "' } } }));
+    const { config, components } = evaluate(sstProgram({ stage, worker: { ...worker, code: { ...code, variables: { X: '"; process.exit(1); "' } } } }));
     await config.run();
     expect((components[1]!.args.environment as Record<string, string>).X).toBe('"; process.exit(1); "');
   });
@@ -130,7 +131,7 @@ describe("running SST (DEC-0107)", () => {
     mkdirSync(join(dir, ".sst", "platform"), { recursive: true });
     const lines = Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\n");
     await expect(runSst(exec(1, `${lines}\n✕ Failed: boom`), { dir, env: {}, stage }, "deploy")).rejects.toThrow(/sst deploy --stage test-abc failed \(exit 1\):[\s\S]*✕ Failed: boom/);
-    const error = await runSst(exec(1, `${lines}\n✕ Failed: boom`), { dir, env: {}, stage }, "deploy").catch((e: unknown) => e as Error);
+    const error = await runSst(exec(1, `${lines}\n✕ Failed: boom`), { dir, env: {}, stage }, "deploy").then(() => new Error("no rejection"), (e: unknown) => e as Error);
     expect(error.message).not.toContain("line 0\n");
   });
 

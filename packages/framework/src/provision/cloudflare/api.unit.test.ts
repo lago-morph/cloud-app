@@ -39,7 +39,7 @@ describe("the real Cloudflare API seam (DEC-0271, DEC-0107)", () => {
 
   it("a request that gets no response throws a message naming the method and path, never the token", async () => {
     const f = stubFetch(() => Promise.reject(new TypeError("fetch failed")));
-    const error = await createCloudflareApi({ token: "sekret-token-value", fetch: f })("DELETE", "/accounts/a/tokens/1").catch((e: unknown) => e as Error);
+    const error = await createCloudflareApi({ token: "sekret-token-value", fetch: f })("DELETE", "/accounts/a/tokens/1").then(() => new Error("no rejection"), (e: unknown) => e as Error);
     expect(error.message).toMatch(/DELETE \/accounts\/a\/tokens\/1.*no response.*fetch failed/);
     expect(error.message).not.toContain("sekret-token-value");
   });

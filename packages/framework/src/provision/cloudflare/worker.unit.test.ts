@@ -30,7 +30,7 @@ describe("Worker secrets on Cloudflare (SEC-REQ-003; cloudflare.md `setSecret`)"
 
   it("a failure names the secret and the Worker but never the value; a missing Worker says to deploy first", async () => {
     const failing = stubApi({ [`PUT ${SCRIPT}/secrets`]: err(500, 10013, "internal") });
-    const e1 = await setSecret(failing, ACCOUNT, stage, "apiKey", "value-123").catch((e: unknown) => e as Error);
+    const e1 = await setSecret(failing, ACCOUNT, stage, "apiKey", "value-123").then(() => new Error("no rejection"), (e: unknown) => e as Error);
     expect(e1.message).toMatch(/setting secret apiKey on Worker notes-test-abc failed: HTTP 500/);
     expect(e1.message).not.toContain("value-123");
     const missing = stubApi({ [`PUT ${SCRIPT}/secrets`]: err(404, 10007, "This Worker does not exist on your account.") });
