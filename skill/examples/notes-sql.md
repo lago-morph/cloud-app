@@ -4,7 +4,7 @@ Every file below is copied unchanged from the framework's app template (`apps/te
 
 What it shows:
 
-- `schema.ts`: one table with `id()`, an owner column, an index that matches the query.
+- `schema.ts`: tables with `id()`, an owner column, and an index that matches the query (`uploads` belongs to [files-tickets.md](files-tickets.md)).
 - `routes/notes.ts`: `requireUser()` on each route, `jsonBody` with a Zod schema, a `select` ordered by `desc(createdAt), desc(id)` (a total order) with `limit`, an `insert` with `newId()` and `now()`, and `c.var.log.write`.
 - `pages/notes.ts`: the browser page for it.
 - The generated migrations for both dialects (made by `generate-migration`, never edited).
@@ -14,7 +14,7 @@ What it shows:
 
 <!-- example-source: apps/template/src/server/schema.ts -->
 ```ts
-import { defineTable, id, text, timestamp } from "@lago-morph/prototype-framework";
+import { defineTable, id, integer, text, timestamp } from "@lago-morph/prototype-framework";
 
 /** One note per row, owned by the user who wrote it. */
 export const notes = defineTable(
@@ -23,6 +23,20 @@ export const notes = defineTable(
     id: id(),
     ownerId: text(),
     text: text(),
+    createdAt: timestamp(),
+  },
+  { indexes: [["ownerId", "createdAt"]] },
+);
+
+/** One row per finalized upload. The file is stored as `uploads/<ownerId>/<id>`; access comes from this row. */
+export const uploads = defineTable(
+  "uploads",
+  {
+    id: id(),
+    ownerId: text(),
+    name: text(),
+    size: integer(),
+    contentType: text(),
     createdAt: timestamp(),
   },
   { indexes: [["ownerId", "createdAt"]] },
