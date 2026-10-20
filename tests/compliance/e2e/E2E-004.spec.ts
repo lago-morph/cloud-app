@@ -9,40 +9,42 @@
  * can see: the record is written after every test has finished. So this test checks, inside
  * the run, the part a test can check — the suite this run executes covers every criterion and
  * scenario applicable on this target and tier (each has at least one tagged test that this
- * target's run selects), and the evidence writer validates records against the schema — and
+ * target's run selects, as the driver's runners list them), and the evidence writer validates records against the schema — and
  * the pass part ("every applicable criterion passed; the record is valid") is read by the
  * evaluator from the same run's evidence record (ai/implementation/decisions/C-T4.md). The
  * AWS run is not run in this phase ("AWS phase not started").
  */
 import { readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join } from "node:path";
 import { EVIDENCE_SCHEMA, validateEvidence } from "../../../packages/framework/src/evidence/public.js";
 import { readCatalogue } from "../harness/catalogue.js";
 import { expectedCriteria } from "../harness/expected.js";
 import { tag, target } from "../harness/index.js";
 import { expect, test } from "../harness/playwright.js";
-import { scanSourceTags } from "../tools/traceability.js";
+import { uncovered } from "../harness/selection.js";
+import { listDriverTests } from "../tools/listing.js";
 import { REPO_ROOT } from "./support/process.js";
-import { listFiles } from "./support/scan.js";
 
-/** Test files the driver runs on a target (driver.ts: on a cloud only `tests/compliance/`). */
-function suiteFiles(targetName: string): string[] {
-  const roots = targetName === "local" ? [join(REPO_ROOT, "tests", "compliance"), join(REPO_ROOT, "packages", "framework", "test", "integration")] : [join(REPO_ROOT, "tests", "compliance")];
-  const skip = new Set(["node_modules", "harness", "tools", "test-results"]);
-  return roots.flatMap((r) => listFiles(r, skip)).filter((f) => /\.(?:test|spec)\.ts$/.test(f) && !/\.unit\.test\.ts$/.test(f) && !/\.selftest\.ts$/.test(f));
-}
+// The coverage part lists every test of the driver's selection through the runners (collect
+// only, no test body runs): Vitest's collection of the integration and unit configs takes a while.
+const LISTING_TIMEOUT_MS = 10 * 60_000;
 
 test(tag("E2E-004", "coverage part: every criterion and scenario applicable on this target has a tagged test in the suite this run executes"), () => {
+  test.setTimeout(LISTING_TIMEOUT_MS);
   const t = target();
   const catalogue = readCatalogue(join(REPO_ROOT, "docs"));
   const expected = expectedCriteria(catalogue, t.target, "automated").filter((e) => e.run);
   expect(expected.length, "criteria expected on this target").toBeGreaterThan(50);
-  const tagged = new Map<string, string[]>();
-  for (const file of suiteFiles(t.target)) {
-    for (const id of scanSourceTags(readFileSync(file, "utf8"))) tagged.set(id, [...(tagged.get(id) ?? []), relative(REPO_ROOT, file)]);
-  }
-  const untested = expected.map((e) => e.id).filter((id) => !tagged.has(id));
-  expect(untested, `applicable on ${t.target} but no tagged test in this target's suite:\n${untested.join("\n")}`).toEqual([]);
+  // Exactly the tests the driver's runners select on this target, as the runners name them
+  // (harness/selection.ts, shared with the driver): titles built at run time count, and a
+  // unit-layer test counts only for the unit-level IDs it carries.
+  const listing = listDriverTests(t.target, { root: REPO_ROOT });
+  const untested = uncovered(
+    expected.map((e) => e.id),
+    listing.tests,
+  );
+  const problems = listing.errors.length === 0 ? "" : `\n(listing problems: ${listing.errors.join("; ")})`;
+  expect(untested, `applicable on ${t.target} but no tagged test in this target's suite:\n${untested.join("\n")}${problems}`).toEqual([]);
 });
 
 test(tag("E2E-004", "record part: the evidence writer accepts a record of this target and rejects an invalid one"), () => {

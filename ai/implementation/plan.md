@@ -439,7 +439,7 @@ Test authors in B2 run until their suites are complete; their suites are expecte
 - `npm run test:unit` — `FW/src/**/*.unit.test.ts` and tool unit tests; no network; red-green TDD per behaviour (prompt §6).
 - `npm run test:integration` — `FW/test/integration/**` in-process with real local dependencies (Miniflare/workerd D1, R2; PGlite; local file system), plus `tests/compliance/criteria/**` against `--target` (default `local`).
 - `npm run test:e2e` — `tests/compliance/e2e/**` against `--target`.
-- `npm run compliance -- --target <t> [--stage <s>] [--milestone]` — runs the integration + E2E layers for the target and writes evidence.
+- `npm run compliance -- --target <t> [--stage <s>] [--milestone]` — runs the integration + E2E layers for the target (on local also the unit layer, for the unit-level criteria of §10.3 only; DEC-PENDING-fix-c3-1) and writes evidence.
 - `npm run verify` — framework self-checks plus `npx <package> verify` in `apps/template` and `apps/reference`. Run before returning any item.
 - The test runner and file glob are PAR-116 (chosen by A-10).
 
