@@ -1,0 +1,133 @@
+/**
+ * The Cloudflare runtime's own parts (D-01), run in-process against local D1 and R2 bindings
+ * from Wrangler's getPlatformProxy (DEC-0105), as workerd passes them in `env`: the R2 log
+ * writer to the shared log bucket binding, Worker-secret reading per request, and the cloud
+ * cookie attributes. No Cloudflare account is contacted.
+ */
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { getPlatformProxy } from "wrangler";
+import { tag } from "../../../../../tests/support/tags.js";
+import { defineApp } from "../../index.js";
+import { createDeployment } from "../../core/identity.js";
+import type { ResolvedConfig } from "../../config/resolve.js";
+import { isLogEntry } from "../../log/entry.js";
+import { d1MigrationDatabase, migrateLocal, type D1Like } from "../../mig/apply.js";
+import { createAuthMock, createCloudflareWorker } from "./public.js";
+import { BINDINGS } from "./bindings.js";
+
+const app = defineApp({
+  name: "cfunit",
+  config: {},
+  secrets: ["apiKey"],
+  tables: {},
+  routes: (api) => {
+    api.post("/log", async (c) => {
+      c.var.log.write("APP", "warn", "from the route");
+      return c.json({ requestId: c.var.requestId });
+    });
+    api.get("/secret", async (c) => c.json({ value: await c.var.secrets.get("apiKey") }));
+  },
+});
+
+function resolved(stage: string): ResolvedConfig {
+  return { deployment: createDeployment({ app: "cfunit", stage, target: "cloudflare" }), values: {}, admins: [], secrets: [{ name: "apiKey", location: "SECRET_API_KEY" }] };
+}
+
+interface R2Like {
+  list(options?: { prefix?: string }): Promise<{ objects: { key: string; httpMetadata?: { contentType?: string } }[] }>;
+  get(key: string): Promise<{ text(): Promise<string>; httpMetadata?: { contentType?: string } } | null>;
+}
+
+type Proxy = Awaited<ReturnType<typeof getPlatformProxy<{ DB: D1Like; LOGS: R2Like }>>>;
+let proxy: Proxy;
+let bindings: Record<string, unknown>;
+const ORIGIN = "https://cfunit-test-unit.example.workers.dev";
+
+beforeAll(async () => {
+  const dir = mkdtempSync(join(tmpdir(), "d01-cf-"));
+  const configPath = join(dir, "wrangler.jsonc");
+  writeFileSync(
+    configPath,
+    JSON.stringify({
+      name: "cfunit",
+      compatibility_date: "2026-10-01",
+      d1_databases: [{ binding: "DB", database_name: "cf", database_id: "00000000-0000-0000-0000-000000000000" }],
+      r2_buckets: [
+        { binding: "FILES", bucket_name: "cfunit-files" },
+        { binding: BINDINGS.logs, bucket_name: "prototype-logs" },
+      ],
+    }),
+  );
+  proxy = await getPlatformProxy<{ DB: D1Like; LOGS: R2Like }>({ configPath, persist: false });
+  await migrateLocal(d1MigrationDatabase(proxy.env.DB), join(dir, "migrations"));
+  bindings = {
+    ...proxy.env,
+    FRAMEWORK_PUBLIC_ORIGIN: ORIGIN,
+    SECRET_API_KEY: "api-value",
+    SECRET_FRAMEWORK_SESSION_KEY: "s".repeat(43),
+  };
+}, 60_000);
+afterAll(async () => {
+  await proxy.dispose();
+});
+
+function context(): { ctx: { waitUntil(p: Promise<unknown>): void; passThroughOnException(): void; props: object }; pending: Promise<unknown>[] } {
+  const pending: Promise<unknown>[] = [];
+  return { pending, ctx: { waitUntil: (p) => void pending.push(p), passThroughOnException: () => undefined, props: {} } };
+}
+
+const worker = createCloudflareWorker(app, resolved("test-unit"), { mock: createAuthMock });
+
+describe("Cloudflare runtime: R2 log writer", () => {
+  it(tag(["LOG-AC-002", "LOG-AC-004"], "local R2: an entry written in a request is one schema-valid object under <app>/<stage>/<UTC date>/<time>-<severity>-<requestId>.json, written through waitUntil"), async () => {
+    const { ctx, pending } = context();
+    const res = await worker.fetch(new Request(`${ORIGIN}/api/log`, { method: "POST" }), bindings, ctx);
+    expect(res.status).toBe(200);
+    const { requestId } = (await res.json()) as { requestId: string };
+    expect(pending.length).toBeGreaterThan(0);
+    await Promise.all(pending);
+    const listed = await proxy.env.LOGS.list({ prefix: "cfunit/test-unit/" });
+    const keys = listed.objects.map((o) => o.key).filter((k) => k.endsWith(`-warn-${requestId}.json`));
+    expect(keys).toHaveLength(1);
+    const key = keys[0] ?? "";
+    const object = await proxy.env.LOGS.get(key);
+    const entry = JSON.parse((await object?.text()) ?? "null") as Record<string, unknown>;
+    expect(isLogEntry(entry)).toBe(true);
+    expect(entry).toMatchObject({ app: "cfunit", stage: "test-unit", target: "cloudflare", component: "APP", severity: "warn", message: "from the route", requestId });
+    const iso = new Date(String(entry.time)).toISOString();
+    expect(key).toBe(`cfunit/test-unit/${iso.slice(0, 4)}/${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(11, 13)}${iso.slice(14, 16)}${iso.slice(17, 19)}.${iso.slice(20, 23)}-warn-${requestId}.json`);
+    expect(object?.httpMetadata?.contentType).toBe("application/json");
+  });
+
+  it(tag("LOG-AC-005", "local R2: an uncaught plain Error leaves a framework error entry in the log bucket"), async () => {
+    const failing = defineApp({
+      name: "cfunit",
+      config: {},
+      secrets: [],
+      tables: {},
+      routes: (api) => {
+        api.get("/boom", () => {
+          throw new Error("plain failure");
+        });
+      },
+    });
+    const { ctx, pending } = context();
+    const res = await createCloudflareWorker(failing, resolved("test-boom")).fetch(new Request(`${ORIGIN}/api/boom`), bindings, ctx);
+    expect(res.status).toBe(500);
+    const { error } = (await res.json()) as { error: { requestId: string } };
+    await Promise.all(pending);
+    const keys = (await proxy.env.LOGS.list({ prefix: "cfunit/test-boom/" })).objects.map((o) => o.key);
+    expect(keys.filter((k) => k.endsWith(`-error-${error.requestId}.json`))).toHaveLength(1);
+  });
+
+  it(tag("LOG-AC-001", "unit (Cloudflare runtime): a log bucket whose writes fail does not fail the request"), async () => {
+    const failingBucket = { put: () => Promise.reject(new Error("r2 down")) };
+    const { ctx, pending } = context();
+    const res = await worker.fetch(new Request(`${ORIGIN}/api/log`, { method: "POST" }), { ...bindings, [BINDINGS.logs]: failingBucket }, ctx);
+    expect(res.status).toBe(200);
+    await expect(Promise.all(pending)).resolves.toBeDefined();
+  });
+});

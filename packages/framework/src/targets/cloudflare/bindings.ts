@@ -9,6 +9,7 @@ import type { RuntimeEnv } from "../../core/assemble.js";
 import { FrameworkError } from "../../core/errors.js";
 import type { FilesStore } from "../../files/service.js";
 import type { LogService } from "../../log/public.js";
+import type { LogBucket } from "../../log/cloudflare/sink.js";
 import { sqliteDb } from "../../sql/d1.js";
 import type { PortableDb } from "../../sql/types.js";
 
@@ -18,6 +19,8 @@ type Env = RuntimeEnv["Bindings"];
 export const BINDINGS = Object.freeze({
   database: "DB",
   files: "FILES",
+  /** R2 write binding to the account's shared log bucket (`prototype-logs`, LOG-REQ-004). */
+  logs: "LOGS",
   publicOrigin: "FRAMEWORK_PUBLIC_ORIGIN",
 } as const);
 
@@ -37,6 +40,12 @@ export function workerSql(env: Env, log: LogService): { readonly sql: PortableDb
 
 export function workerStore(env: Env): FilesStore {
   return binding(env, BINDINGS.files, "R2") as FilesStore;
+}
+
+/** The shared log bucket's write binding, or undefined when the Worker has none (LOG never fails the caller). */
+export function workerLogBucket(env: Env): LogBucket | undefined {
+  const value = env[BINDINGS.logs];
+  return value === undefined || value === null ? undefined : (value as LogBucket);
 }
 
 /** The public origin from the Worker variable set at deploy (or by `dev`). */
