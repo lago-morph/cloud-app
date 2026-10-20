@@ -92,6 +92,14 @@ This section is informative. It collects the operations each target implements f
 | `createDatabase`, `copyDatabase`, `dropDatabase` | Deploy steps 2–4 (MIG) | Manage the CLI-owned databases. |
 | `listStageResources` | Deploy step 2, `remove`, COMPL leftover check | Lists the stage's resources by exact identifier and the stage's databases by the exact database pattern. |
 
+**Implementation** (`src/provision/core/`, DEC-PENDING-C-03-1…-5). The deploy, remove and setup-account sequences are target-neutral (`deploy.ts`, `remove.ts`, `setup-account.ts`) and call one interface, `TargetOperations` in `operations.ts`, which each target implements; the core never branches on the target. It refines the table above:
+- `setupAccount` is split into `inspectAccount` (each shared resource `owned`, `absent` or `foreign`; reads only) and `createSharedResources` (creates the absent ones and records the account settings). The core refuses before any change when one is `foreign`, creates only absent ones, and so changes nothing on a second run. The deploy preflight uses `inspectAccount` too: `foreign` and `absent` both stop the deploy, the latter telling the owner to run `setup-account`.
+- `deploy` is split into `deployInfrastructure` (step 3) and `deployCode` (step 5, returns the public origin). `preflight` returns the target's missing prerequisites by name; `checkHealth` performs step 7; `listSetSecrets` returns `null` while the stage's runtime does not exist, which defers the secret check to right after step 5.
+- `migrationDatabase` gives MIG's record and atomic per-file application on one database (the same `MigrationDatabase` interface the local applier uses), and `checkMigratedDatabase` is MIG step 4's check.
+- `remove` is split: the core deletes the databases that match the exact pattern, then calls `removeStage` for everything else, then lists the stage's resources again and reports each leftover.
+
+On a stage's first database (created in step 3 of the same run) the migrations are applied in place: no app is running and there is no data, so there is nothing to stop or copy. A failure while cleaning up after a failure (deleting the new database, restarting the previous version) is printed as well but never replaces the original failure or its exit status. The runner-only abort points are `after-copy` and `after-code`, a deploy request option that the CLI sets only for the compliance runner. `fake-target.ts` is an in-memory target for unit tests.
+
 ## 3. Uses
 
 CFG, SEC, MIG, LOG, CF, AWS, CLI.
