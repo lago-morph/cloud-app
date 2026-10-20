@@ -9,11 +9,11 @@
  * test sources for tags. It builds the framework first.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { readCatalogue } from "../harness/catalogue.js";
-import { parsePlaywrightJson, parseVitestJson } from "../harness/reports.js";
+import type { RunnerSelection } from "../harness/selection.js";
+import { listSelection } from "./listing.js";
 import { readRecords } from "./records.js";
 import { LOGIN_PROVIDER_PATHS, parseInvalidations, releaseReport, renderRelease } from "./release.js";
 import { buildTraceability, renderTraceability, scanSourceTags, type ListedTest } from "./traceability.js";
@@ -26,20 +26,6 @@ const option = (name: string): string | undefined => {
 };
 const sh = (cmd: string, args: string[]): string => execFileSync(cmd, args, { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "inherit"] });
 
-/** Like `sh`, but returns stdout also when the command exits non-zero (a listing with load errors). */
-const shTolerant = (cmd: string, args: string[]): string => {
-  try {
-    return sh(cmd, args);
-  } catch (error) {
-    const stdout = (error as { stdout?: unknown }).stdout;
-    process.stderr.write(`report: ${cmd} ${args.join(" ")} exited non-zero; using its partial listing\n`);
-    return typeof stdout === "string" ? stdout : "";
-  }
-};
-
-/** A test-name filter no test title matches. */
-const COLLECT_ONLY = "^COLLECT-ONLY: no test matches this$";
-
 // Test sources scanned for tags next to the runners' listings.
 const SOURCE_DIRS = ["packages/framework/test/integration", "tests/compliance/criteria", "tests/compliance/e2e", "apps/reference/src/server/cases"];
 
@@ -51,24 +37,17 @@ function sourceFiles(dir: string): string[] {
 function listTests(): ListedTest[] {
   sh("npm", ["run", "build", "-w", "packages/framework"]);
   const tests: ListedTest[] = [];
-  // `vitest list` (5.0.5) misses suites registered after a top-level `await import(...)`; a run
-  // whose name filter matches nothing collects every file (no hook or test body runs) and
-  // reports every test as skipped with its full title.
-  const dir = mkdtempSync(join(tmpdir(), "traceability-"));
-  try {
-    for (const config of ["vitest.unit.config.ts", "vitest.integration.config.ts"]) {
-      const out = join(dir, `${config}.json`);
-      shTolerant("npx", ["vitest", "run", "--config", config, "-t", COLLECT_ONLY, "--passWithNoTests", "--reporter=json", `--outputFile=${out}`]);
-      const parsed = parseVitestJson(existsSync(out) ? readFileSync(out, "utf8") : "", root);
-      for (const error of parsed.errors) process.stderr.write(`report: vitest (${config}): ${error}\n`);
-      tests.push(...parsed.outcomes.map((o) => ({ title: o.title, file: o.file })));
-    }
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
+  // Every layer's tests, with every tag (the unit layer included; the driver's narrower selection is listing.ts `listDriverTests`).
+  const all: RunnerSelection[] = [
+    { runner: "vitest", label: "vitest-unit", args: ["vitest", "run", "--config", "vitest.unit.config.ts"] },
+    { runner: "vitest", label: "vitest-integration", args: ["vitest", "run", "--config", "vitest.integration.config.ts"] },
+    { runner: "playwright", label: "playwright", args: ["playwright", "test"] },
+  ];
+  for (const selection of all) {
+    const listing = listSelection(selection, { root });
+    for (const error of listing.errors) process.stderr.write(`report: ${error}\n`);
+    tests.push(...listing.tests);
   }
-  const listed = parsePlaywrightJson(shTolerant("npx", ["playwright", "test", "--list", "--reporter=json"]), "");
-  for (const error of listed.errors) process.stderr.write(`report: playwright listing: ${error}\n`);
-  tests.push(...listed.outcomes.map((o) => ({ title: o.title, file: o.file })));
   for (const file of SOURCE_DIRS.flatMap((d) => sourceFiles(join(root, d)))) {
     const ids = scanSourceTags(readFileSync(file, "utf8"));
     if (ids.length > 0) tests.push({ title: `(tags in source) ${ids.map((id) => `[${id}]`).join("")}`, file: relative(root, file).split("\\").join("/") });

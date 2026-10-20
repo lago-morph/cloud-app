@@ -19,6 +19,8 @@ export interface TestOutcome {
   readonly status: "passed" | "failed" | "skipped";
   /** First failure message, for failed tests. */
   readonly message?: string;
+  /** The IDs this outcome may evidence, when narrower than its title's tags (unit layer: unit-level IDs only). */
+  readonly ids?: readonly string[];
 }
 
 export interface CriterionResultsInput {
@@ -48,7 +50,7 @@ function isBlocked(outcome: TestOutcome): boolean {
 
 export function criterionResults(input: CriterionResultsInput): EvidenceResult[] {
   const results: EvidenceResult[] = [];
-  const tagged = input.outcomes.map((outcome) => ({ outcome, ids: new Set(parseTags(outcome.title)) }));
+  const tagged = input.outcomes.map((outcome) => ({ outcome, ids: new Set(outcome.ids ?? parseTags(outcome.title)) }));
   for (const entry of input.expected) {
     if (!entry.run) {
       results.push({ id: entry.id, status: "not-run", detail: entry.notRun ?? "not run" });
