@@ -5,7 +5,7 @@ description: Build, test and deploy small web apps on the portable prototype fra
 
 # Building apps on the prototype framework
 
-Apps are small (one or a few users, little data) and run unchanged locally, on Cloudflare and on AWS. The framework gives each request handler SQL, KV, files, configuration, secrets, a log and the current user; app code never sees which cloud it runs on. Package: `@lago-morph/prototype-framework` (server code), `/client` (browser code), `/testing` (tests). Commands: `npx prototype-framework <command>`, also `npm run <command>`.
+Apps are small (one or a few users, little data) and are designed to run unchanged locally, on Cloudflare and on AWS. In this phase only local runs are verified: running on Cloudflare is not yet verified, and the AWS target is not built yet. The framework gives each request handler SQL, KV, files, configuration, secrets, a log and the current user; app code never sees which cloud it runs on. Package: `@lago-morph/prototype-framework` (server code), `/client` (browser code), `/testing` (tests). Commands: `npx prototype-framework <command>`, also `npm run <command>`.
 
 Read this page, then only the references your task needs (task map below).
 

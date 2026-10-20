@@ -2,7 +2,11 @@
 
 Read this when a request failed and you have its `requestId`, a deploy or `remove` failed, a login failed, or a `verify` diagnostic pointed you here.
 
-Commands run in the app directory. `<app>` is the `name` in `src/app.ts` (the template's is `template`); `<stage>` is the stage name, for example `test-abc` or `prod`.
+Commands run in the app directory. `<stage>` is the stage name, for example `test-abc` or `prod`. `<app>` is the app's name (the template's is `template`). This command prints it and keeps it in `APP`:
+
+```sh
+APP=$(npm run --silent build -- --target local --stage local | sed -n 's/^built \([^ ]*\) for .*/\1/p'); echo "$APP"
+```
 
 ## 1. Find the log entry for a request
 
@@ -29,12 +33,12 @@ Entries are objects in the account's shared R2 bucket `prototype-logs`, one per 
 
 The date and time are UTC. `smoke` prints today's prefix.
 
-**Dashboard (no setup).** Open Storage & databases → R2 → `prototype-logs`. Then open the folders `<app>` / `<stage>` / year / month / day. The file name ends in the request ID. Open the file and choose Download to read it.
+**Dashboard (no setup; these menu names are not yet verified).** Open Storage & databases → R2 → `prototype-logs`. Then open the folders `<app>` / `<stage>` / year / month / day. The file name ends in the request ID. Open the file and choose Download to read it.
 
 **Command line, with the API token from [owner-tasks.md](owner-tasks.md) §2.** `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` must be set in the shell. These commands are **not yet verified on Cloudflare in this phase**. List one day's keys:
 
 ```sh
-APP=template; STAGE=test-abc; DAY=$(date -u +%Y/%m/%d)
+STAGE='<stage>'; DAY=$(date -u +%Y/%m/%d)
 curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
   "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets/prototype-logs/objects?per_page=1000&prefix=$APP/$STAGE/$DAY/" \
   | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);if(!r.success){console.error(JSON.stringify(r.errors));process.exit(1)}for(const o of r.result)console.log(o.key)})'
@@ -48,9 +52,7 @@ curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
   "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets/prototype-logs/objects/$(node -p 'encodeURIComponent(process.argv[1])' "$KEY")"
 ```
 
-If the sandbox's proxy injects the Cloudflare token itself, set `CLOUDFLARE_API_TOKEN` to any placeholder word. The proxy replaces the header.
-
-**S3-compatible CLI (optional).** First create a read-only R2 token. Open R2 → Manage R2 API tokens → Create API token. Choose the permission **Object Read only**, and apply it to the bucket `prototype-logs` only. Copy the Access Key ID and the Secret Access Key. Then run:
+**S3-compatible CLI (optional).** First create a read-only R2 token. Open R2 → Manage R2 API tokens (menu names not yet verified) → Create API token. Choose the permission **Object Read only**, and apply it to the bucket `prototype-logs` only. Copy the Access Key ID and the Secret Access Key. Then run:
 
 ```sh
 export AWS_ACCESS_KEY_ID='<Access Key ID>' AWS_SECRET_ACCESS_KEY='<Secret Access Key>' AWS_DEFAULT_REGION=auto
@@ -66,7 +68,7 @@ Not yet verified on Cloudflare in this phase.
 - Check the day: keys use **UTC** dates. Near midnight, also list the previous or next day.
 - Some failures happen before the app writes anything: a Worker that does not start, a misconfigured binding, a platform error page. For these, watch the Worker's own output while you reproduce the request:
   ```sh
-  npx wrangler tail <app>-<stage> --format pretty
+  npx wrangler tail "$APP-$STAGE" --format pretty
   ```
   It needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` set. Not yet verified on Cloudflare in this phase.
 - If entries are printed as lines starting `[prototype-framework:log]` in `wrangler tail`, the Worker has no `LOGS` binding. Run `deploy` again.
@@ -80,14 +82,14 @@ Each code's meaning, HTTP status and whether it is retryable are in the framewor
 | --- | --- | --- |
 | `CORE.INTERNAL` | An uncaught error in app code | Find the log entry. It has the error's name, message and stack. |
 | `CORE.MISCONFIGURED` | Invalid configuration or wiring, for example a production stage without `framework.google.clientId` | Fix `config/<target>/<stage>.json`, then deploy again. |
-| `SEC.MISSING` | A declared secret has no value in this stage | Set it (see [owner-tasks.md](owner-tasks.md) §4). On Cloudflare, the next request sees it. |
+| `SEC.MISSING` | A declared secret has no value in this stage | Set it (see [owner-tasks.md](owner-tasks.md) §4). On Cloudflare, the next request sees it (not yet verified). |
 | `SEC.UNDECLARED`, `CFG.UNDECLARED_KEY` | The code reads a name that `src/server/env.ts` does not declare | Declare it, or fix the name. |
 | `SQL.UNAVAILABLE`, `KV.UNAVAILABLE`, `FILES.UNAVAILABLE`, `SEC.UNAVAILABLE` | Storage was not reachable in time. On Cloudflare's free plan, the D1 daily limit may be used up | Retry later. Check D1 usage in the dashboard. |
 | `SQL.RESULT_TOO_LARGE` | A query returns too much | Paginate the query. |
 | `AUTH.UNAUTHENTICATED` / `AUTH.FORBIDDEN` | Not logged in / not admin or not allowed | See §3 and the admin steps in [owner-tasks.md](owner-tasks.md) §6. |
 | `AUTH.REQUEST_FORGERY` | A POST/PUT/PATCH/DELETE with a session came from another origin | Use the stage's own URL, not a copy behind another host. |
 | `HTTP.NETWORK_ERROR` | The browser got no framework response | Check that the stage is started and the URL is right. |
-| `FILES.TRANSFER_FAILED` | A direct upload or download failed or its ticket expired | Request a new ticket and retry. On Cloudflare an expired ticket shows status null (DEC-0101). |
+| `FILES.TRANSFER_FAILED` | A direct upload or download failed or its ticket expired | Request a new ticket and retry. On Cloudflare an expired ticket shows status null (DEC-0101; not yet verified). |
 
 ## 3. Login failures
 
