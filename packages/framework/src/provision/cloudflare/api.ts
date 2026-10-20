@@ -1,5 +1,5 @@
 /**
- * The Cloudflare API seam (DEC-0271) and its real implementation (DEC-0107; DEC-PENDING-D-03-2).
+ * The Cloudflare API seam (DEC-0271) and its real implementation (DEC-0107; DEC-0332).
  *
  * Every Cloudflare operation of the target goes through one `CloudflareApi` function, so unit
  * tests stub it and no other module handles a credential. The real one sends the token from

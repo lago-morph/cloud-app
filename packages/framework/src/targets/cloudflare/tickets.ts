@@ -2,7 +2,7 @@
  * The Cloudflare stage's transfer-ticket issuer (`StageOptions.tickets`): D-02's
  * `createWorkerTicketIssuer`, addressed by the account ID and stage bucket name that `deploy`
  * delivers as the plain-text Worker variables `FRAMEWORK_R2_ACCOUNT_ID` and
- * `FRAMEWORK_FILES_BUCKET` (DEC-PENDING-D-05-5). The variables are read when a ticket is
+ * `FRAMEWORK_FILES_BUCKET` (DEC-0353). The variables are read when a ticket is
  * created, so a Worker without them still serves every other request; creating a ticket then
  * fails with `CORE.MISCONFIGURED`. Workers-compatible.
  */
