@@ -34,3 +34,7 @@ Re-run `npm run verify` and the offline form at normal load; both must be green.
 ## Re-runs (verification)
 - ~05:07 UTC, `npm run verify` (load ≈ 14): exit 0; 145 files, 1433 tests passed.
 - ~05:15 UTC, offline `npm run verify`: 1424 passed, 9 failed, all in `evidence/writer.unit.test.ts` with the git-signing error above; no timeouts. The `/root/.gitconfig` sets `commit.gpgsign true` with `gpg.ssh.program /tmp/code-sign`, which needs the loopback service outside the namespace.
+
+## Integrator note (2026-10-20, appended; the text above is unchanged)
+
+This record's Review was left pending. The same cause (unit-test timeouts when the host is loaded) is covered by `2026-10-20-D-04-verify-unrelated-failures.md`, whose Review is ACCEPTED. Its fix is recorded in `2026-10-20-verify-fixes.md`, and the global unit-test timeout in `2026-10-20-global-unit-timeout-review.md`. Read those for the reviewed causal chain and the fix.

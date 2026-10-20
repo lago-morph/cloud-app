@@ -2474,7 +2474,7 @@ Item: C-INT.
 
 ## Implementation phase: local and Cloudflare — phase C follow-ups, phase D Cloudflare, phase E skill (2026-10-20)
 
-Entries DEC-0319 to DEC-0390 were integrated by the C/D/E integrator from the drafts of items fix-c3, C-T5, D-01…D-06, D-T1/D-T2, E-01…E-03, E-T1 and fix-e1 (plan §10.4). No Cloudflare call was made by any of these items: everything cloud-side is verified offline against fakes and is confirmed live by D-RUN once the D1 stop (DEC-0317) ends. No parameter changed.
+Entries DEC-0319 to DEC-0391 were integrated by the C/D/E integrator from the drafts of items fix-c3, C-T5, D-01…D-06, D-T1/D-T2, E-01…E-03, E-T1 and fix-e1 (plan §10.4), and DEC-0391 from the C-EV evaluation. No Cloudflare call was made by any of these items: everything cloud-side is verified offline against fakes and is confirmed live by D-RUN once the D1 stop (DEC-0317) ends. No parameter changed.
 
 ### DEC-0319 — The driver also runs the unit layer on local, for an explicit list of unit-level criteria only
 Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: COMPL-REQ-003, COMPL-REQ-006, COMPL-AC-002, COMPL-AC-006, COMPL-AC-007, GOOGLE-AC-002, PROV-AC-007, CLI-AC-003, plan §10.1, §10.3, compliance.md "Driver", DEC-0261 (supersedes its first bullet's "each runs once" for the local unit layer)
@@ -3203,3 +3203,10 @@ So both files are deleted. This also settles the record's Observation: the templ
 Not changed: the decision log text (history) and the PROV-AC-001 reading comment, which still list `vitest.config.ts` as permitted metadata; permitting a file that is absent is harmless. The owner may trim both.
 Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
 Item: fix-e1.
+
+### DEC-0391 — E2E-004 is judged at F-EV, not at C-EV
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: E2E-004, DEC-0305, DEC-0320, plan §4 C-EV, §7 F-EV, §11 Q1, `ai/implementation/evaluations/C-local.md` (flag 3)
+
+The C-EV evaluation (`ai/implementation/evaluations/C-local.md`) recorded E2E-004 `failed` on local in run 3: its coverage part (DEC-0305, DEC-0320) reports DEMO-AC-001…-011 and E2E-002 as having no tagged test, and its pass part needs every other applicable result passed. Those criteria belong to the demo, built in phase F, so E2E-004 cannot pass before then; the root cause is accepted (`ai/implementation/root-causes/2026-10-20-E2E-004-coverage-and-not-run.md`, cause C revised). Plan C-EV listed E2E-004 as a phase C item, which was inconsistent with §11 Q1. Rule: E2E-004 is removed from C-EV's list and judged at F-EV, after the demo's tests exist. Its test is unchanged; it keeps running and reporting `failed` until then (never skipped). Owner: accept the move, or narrow E2E-004's coverage part to the components built so far.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Item: C/D/E integrator (from the C-EV evaluation's flag 3).
