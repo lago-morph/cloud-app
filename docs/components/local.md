@@ -61,3 +61,7 @@ All capability components, CLI.
 | LOCAL-AC-002 | Each capability's local acceptance criteria pass, data survives a restart of `dev`, and the reset command clears it. | LOCAL-REQ-002 | Local |
 | LOCAL-AC-003 | A query that works on SQLite but not on Postgres makes the verification command fail. | LOCAL-REQ-003 | Local |
 | LOCAL-AC-004 | Login and API calls work at `http://localhost:<port>`; cloud builds reject the local cookie settings. The dev servers are not reachable on a non-loopback address, and a request with `Host: evil.example` is rejected. | LOCAL-REQ-004 | Local |
+
+## 5. Portability note
+
+LOCAL uses the Cloudflare adapters and stage runtime (DEC-0039), with only the local differences listed in §2; the app source is the same as on a cloud target (SYS-REQ-001). A new cloud target does not change LOCAL, and the Postgres harness stays as it is, because `verify` already runs the app tests once per supported dialect (LOCAL-REQ-003).
