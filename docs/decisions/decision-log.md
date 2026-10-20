@@ -3187,6 +3187,7 @@ Origin: ai-proposed · Status: accepted · Affects: SKILL-AC-004
 - "CI type-checks and runs every example": CI is the framework's root `npm run verify`, which must run both apps' `verify`; `verify` type-checks only `src/` and `tests/` and runs `tests/**/*.test.ts` (cli.md §2, PAR-116), so every TypeScript source must lie there and every test source match that glob. Non-TypeScript sources (SQL, HTML, JSON) need only exist in those apps.
 - "Runs ... the template": the test runs `npm --workspace <app> run verify` for `apps/template` and `apps/reference` and requires exit 0 (needs the framework built, as the driver and `test:integration` do).
 Item: E-T1.
+Refined by DEC-0392.
 
 ### DEC-0390 — `apps/template` and `apps/reference` have no `vitest.config.ts`
 Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SKILL-AC-004, SKILL-REQ-004, PROV-AC-001 (reading in `tests/compliance/criteria/prov/template-deploy.test.ts`), decision-log entries at lines 1564 and 1599 (their mentions of "the template's `vitest.config.ts`" are now historical)
@@ -3210,3 +3211,16 @@ Origin: ai-proposed · Status: accepted (assumption under the owner's instructio
 The C-EV evaluation (`ai/implementation/evaluations/C-local.md`) recorded E2E-004 `failed` on local in run 3: its coverage part (DEC-0305, DEC-0320) reports DEMO-AC-001…-011 and E2E-002 as having no tagged test, and its pass part needs every other applicable result passed. Those criteria belong to the demo, built in phase F, so E2E-004 cannot pass before then; the root cause is accepted (`ai/implementation/root-causes/2026-10-20-E2E-004-coverage-and-not-run.md`, cause C revised). Plan C-EV listed E2E-004 as a phase C item, which was inconsistent with §11 Q1. Rule: E2E-004 is removed from C-EV's list and judged at F-EV, after the demo's tests exist. Its test is unchanged; it keeps running and reporting `failed` until then (never skipped). Owner: accept the move, or narrow E2E-004's coverage part to the components built so far.
 Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
 Item: C/D/E integrator (from the C-EV evaluation's flag 3).
+
+### DEC-0392 — SKILL-AC-004: a demo file equal to a block's verified template or reference source is not derivation
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SKILL-AC-004, DEC-0389, `tests/skill/example-copies.unit.test.ts`
+
+Replaces the last sentence of DEC-0389's first bullet ("No block may equal a non-empty `apps/demo/` file.") with: "No block may equal a non-empty `apps/demo/` file unless its marker names a file of `apps/template` or `apps/reference` that exists and that the block also equals byte for byte." The marker must be present and directly adjacent, and its path must pass the plain-path and app checks; a block with no marker, or with an invalid or missing source, is still reported when it equals a demo file. The rest of DEC-0389 is unchanged.
+
+Reason: the demo is built by copying the template (DEC-0054, prompt §9 F, `apps/demo/BUILD-RECORD.md`), so template files it keeps unchanged (the empty config files, `src/server/signing.ts`, `tests/signing.test.ts`) are byte-identical to example blocks that were copied from the template hours before the demo existed. The old proxy reported those six legitimate copies; byte equality with a demo file is not evidence of derivation when the bytes are also the block's verified source. Code taken from a demo-only file, or from a demo file that diverged from the template, is still caught (by this clause and by the byte-for-byte test).
+
+Residual limit: demo code first copied into `apps/template` or `apps/reference` and then into an example cannot be detected from bytes; any byte-equality proxy either misses it or also flags legitimate copies. That route requires changing a verified app, which that app's `verify` and review own.
+
+Root cause and review (ACCEPTED): `ai/implementation/root-causes/2026-10-20-SKILL-AC-004-demo-overlap.md`.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Item: fix-e4 (test author, §8 step 3).

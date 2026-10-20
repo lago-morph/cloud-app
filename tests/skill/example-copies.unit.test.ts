@@ -8,7 +8,10 @@
  * each app's `verify`, which the framework's CI (root `npm run verify`) runs. So this checks:
  * - every code block of every example is such a byte-for-byte copy (no unchecked code);
  * - every source is in `apps/template` or `apps/reference`, none under `apps/demo/`, and no block
- *   equals a file of `apps/demo/`;
+ *   equals a file of `apps/demo/` unless it also equals its declared `apps/template`/`apps/reference`
+ *   source (DEC-0392, refining DEC-0389: the demo is built by copying the template, so a template
+ *   file it kept unchanged is not evidence of derivation; the block's marker must be present and
+ *   directly adjacent, name a plain path in one of those apps, and the file must exist);
  * - every TypeScript source is in what `verify` type-checks (`src/`, `tests/`, CLI §2), and every
  *   test source matches the test glob `verify` runs (PAR-116 `tests/**\/*.test.ts`);
  * - root `verify` runs both apps' `verify`.
@@ -81,7 +84,17 @@ describe("SKILL: examples are copies of verified template and reference code", (
       else if (appOf(norm) === undefined) bad.push(`${c.example}:${c.line}: source ${c.source} is not in apps/template or apps/reference`);
     }
     const demoFiles = filesUnder(join(REPO_ROOT, "apps", "demo")).filter((f) => statSync(f).size > 0);
+    // DEC-0392: a block equal to a demo file is exempt only when it is also a verified copy of its
+    // declared template or reference source (valid adjacent marker, existing file, same bytes).
+    const verifiedCopy = (c: Copy): boolean => {
+      if (c.source === null || !c.adjacent) return false;
+      const norm = normalize(c.source).split("\\").join("/");
+      if (norm !== c.source || norm.startsWith("/") || norm.includes("..") || appOf(norm) === undefined) return false;
+      const file = join(REPO_ROOT, norm);
+      return existsSync(file) && statSync(file).isFile() && sameBytes(c.body, file);
+    };
     for (const c of all) {
+      if (verifiedCopy(c)) continue;
       for (const demo of demoFiles) {
         if (c.body.trim() !== "" && sameBytes(c.body, demo)) bad.push(`${c.example}:${c.line}: block equals ${repoPath(demo)}`);
       }
