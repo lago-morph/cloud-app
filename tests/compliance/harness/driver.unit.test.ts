@@ -1,0 +1,189 @@
+import { describe, expect, it } from "vitest";
+import { validateEvidence, type EvidenceRecord, type GitState, type WriteEvidenceInput } from "../../../packages/framework/src/evidence/public.js";
+import { parseArgs } from "./args.js";
+import { parseWhere, type CatalogueEntry } from "./catalogue.js";
+import { runCompliance, type CloudStageOps, type DriverDeps, type RunCall } from "./driver.js";
+
+const entry = (id: string, where: string, source = "components/x.md"): CatalogueEntry => ({ id, where, source, applies: parseWhere(where, source) });
+const CATALOGUE = [entry("KV-AC-001", "Local, cloud"), entry("KV-AC-002", "Local, cloud"), entry("CLI-AC-002", "Local"), entry("CLI-AC-001", "Local, cloud"), entry("PROV-AC-003", "Cloud (milestone)")];
+
+const vitestReport = (tests: { title: string; status: string; message?: string }[]): string =>
+  JSON.stringify({ testResults: [{ name: "/repo/tests/compliance/criteria/a.test.ts", status: "passed", assertionResults: tests.map((t) => ({ ancestorTitles: [], title: t.title, status: t.status, failureMessages: t.message === undefined ? [] : [t.message] })) }] });
+
+interface Harness {
+  readonly deps: DriverDeps;
+  readonly calls: RunCall[];
+  readonly written: WriteEvidenceInput[];
+  readonly logs: string[];
+  readonly events: string[];
+  readonly pending: Map<string, Set<string>>;
+}
+
+function harness(options: { dirty?: string[]; vitest?: string; vitestStatus?: number; cloud?: Partial<CloudStageOps>; pending?: string[] } = {}): Harness {
+  const calls: RunCall[] = [];
+  const written: WriteEvidenceInput[] = [];
+  const logs: string[] = [];
+  const events: string[] = [];
+  const pending = new Map<string, Set<string>>([["cloudflare", new Set(options.pending ?? [])]]);
+  const git: GitState = { commit: () => "c0ffee", changedTrackedFiles: () => options.dirty ?? [] };
+  const files = new Map<string, string>();
+  const deps: DriverDeps = {
+    repoRoot: "/repo",
+    git,
+    catalogue: () => CATALOGUE,
+    newRunId: () => "abcdefghij12345",
+    now: () => new Date("2026-10-20T10:00:00.000Z"),
+    versions: () => ({ "@lago-morph/prototype-framework": "0.1.0", node: "v22.22.0" }),
+    tempDir: () => "/tmp/run",
+    readFile: (path) => files.get(path),
+    run: (call) => {
+      calls.push(call);
+      events.push(`run ${call.args[0] ?? call.command}`);
+      if (call.args[0] === "vitest") files.set("/tmp/run/vitest.json", options.vitest ?? vitestReport([]));
+      if (call.args[0] === "playwright") files.set("/tmp/run/playwright.json", JSON.stringify({ suites: [], errors: [] }));
+      return Promise.resolve({ status: call.args[0] === "vitest" ? (options.vitestStatus ?? 0) : 0, output: `${call.args[0] ?? ""} output` });
+    },
+    startLocal: () => {
+      events.push("start dev");
+      return Promise.resolve({ baseUrl: "http://localhost:5173", stop: () => (events.push("stop dev"), Promise.resolve("dev log")) });
+    },
+    cloud: () => ({
+      deploy: (stage) => (events.push(`deploy ${stage}`), Promise.resolve({ baseUrl: "https://reference-test.owner-sub.workers.dev", output: "deployed" })),
+      remove: (stage) => (events.push(`remove ${stage}`), Promise.resolve("removed")),
+      listStageResources: () => Promise.resolve([]),
+      ...options.cloud,
+    }),
+    pendingStages: {
+      list: (t) => [...(pending.get(t) ?? [])],
+      add: (t, s) => (events.push(`pending+ ${s}`), pending.get(t)?.add(s)),
+      remove: (t, s) => (events.push(`pending- ${s}`), pending.get(t)?.delete(s)),
+    },
+    writeEvidence: (input) => {
+      const errors = validateEvidence(JSON.parse(JSON.stringify(input.record)));
+      if (errors.length > 0) throw new Error(errors.join("\n"));
+      written.push(input);
+      return { recordPath: `/repo/validation/${input.record.target}/${input.record.runId}.json`, rawDir: "/raw" };
+    },
+    log: (line) => logs.push(line),
+  };
+  return { deps, calls, written, logs, events, pending };
+}
+
+const recordOf = (h: Harness): EvidenceRecord => {
+  const input = h.written[0];
+  if (input === undefined) throw new Error("no evidence written");
+  return input.record;
+};
+
+describe("[COMPL-AC-003] compliance driver records", () => {
+  it("refuses to run or record from a working tree with a modified tracked file", async () => {
+    const h = harness({ dirty: ["packages/framework/src/kv/public.ts"] });
+    const result = await runCompliance(parseArgs(["--target", "local"]), ["--target", "local"], h.deps);
+    expect(result.exitStatus).toBe(2);
+    expect(h.calls).toEqual([]);
+    expect(h.written).toEqual([]);
+    expect(h.logs.join("\n")).toMatch(/refusing to record evidence.*packages\/framework\/src\/kv\/public\.ts/);
+  });
+
+  it("local: starts dev, runs only the expected tagged tests, and writes a schema-valid record", async () => {
+    const h = harness({ vitest: vitestReport([{ title: "[KV-AC-001] put", status: "passed" }, { title: "[CLI-AC-002] verify fails", status: "failed", message: "HTTP check failed: GET /x → status 500, code CORE.INTERNAL, requestId r1 (expected status 200)" }]), vitestStatus: 1 });
+    const result = await runCompliance(parseArgs(["--target", "local"]), ["--target", "local"], h.deps);
+    expect(h.events).toEqual(["start dev", "run run", "run vitest", "run playwright", "stop dev"]);
+    const vitest = h.calls.find((c) => c.args[0] === "vitest");
+    const pattern = vitest?.args[vitest.args.indexOf("-t") + 1] ?? "";
+    expect(new RegExp(pattern).test("[KV-AC-001] x")).toBe(true);
+    expect(new RegExp(pattern).test("[PROV-AC-003] x")).toBe(false);
+    expect(vitest?.env.COMPLIANCE_BASE_URL).toBe("http://localhost:5173");
+    expect(vitest?.env.COMPLIANCE_TARGET).toBe("local");
+    expect(vitest?.env.NODE_USE_ENV_PROXY).toBeUndefined();
+    const record = recordOf(h);
+    expect(record).toMatchObject({ runId: "abcdefghij12345", commit: "c0ffee", target: "local", command: "npm run compliance -- --target local", exitStatus: 1 });
+    expect(record.stage).toBeUndefined();
+    expect(record.results).toEqual([
+      { id: "CLI-AC-001", status: "not-run", detail: "no test tagged [CLI-AC-001] ran on local" },
+      { id: "CLI-AC-002", status: "failed", detail: "1 of 1 tests failed: [CLI-AC-002] verify fails: HTTP check failed: GET /x → status 500, code CORE.INTERNAL, requestId r1 (expected status 200)" },
+      { id: "KV-AC-001", status: "passed" },
+      { id: "KV-AC-002", status: "not-run", detail: "no test tagged [KV-AC-002] ran on local" },
+    ]);
+    expect(Object.keys(h.written[0]?.raw ?? {}).sort()).toEqual(["build.log", "dev.log", "expected.json", "playwright.json", "playwright.log", "vitest.json", "vitest.log"]);
+    expect(result.exitStatus).toBe(1);
+  });
+
+  it("records a deliberately omitted criterion (--only) as not-run with the reason, and --blocked as blocked", async () => {
+    const h = harness({ vitest: vitestReport([{ title: "[KV-AC-001] put", status: "passed" }]) });
+    await runCompliance(parseArgs(["--target", "local", "--only", "KV-AC-001,KV-AC-002", "--blocked", "KV-AC-002=prerequisite x missing"]), [], h.deps);
+    const vitest = h.calls.find((c) => c.args[0] === "vitest");
+    const pattern = new RegExp(vitest?.args[vitest.args.indexOf("-t") + 1] ?? "");
+    expect(pattern.test("[KV-AC-002] y")).toBe(false);
+    expect(recordOf(h).results).toEqual([
+      { id: "CLI-AC-001", status: "not-run", detail: "not selected for this run (--only)" },
+      { id: "CLI-AC-002", status: "not-run", detail: "not selected for this run (--only)" },
+      { id: "KV-AC-001", status: "passed" },
+      { id: "KV-AC-002", status: "blocked", detail: "prerequisite x missing" },
+    ]);
+  });
+
+  it("runs nothing when nothing is to be run (aws in this phase): every criterion not-run", async () => {
+    const h = harness();
+    const result = await runCompliance(parseArgs(["--target", "aws"]), [], h.deps);
+    expect(h.calls).toEqual([]);
+    expect(recordOf(h).results.every((r) => r.status === "not-run" && r.detail === "AWS phase not started")).toBe(true);
+    expect(result.exitStatus).toBe(0);
+  });
+});
+
+describe("[COMPL-AC-004] cloud runs use a disposable test stage", () => {
+  it("deploys test-<runId>, passes NODE_USE_ENV_PROXY, removes the stage, and redacts the account subdomain", async () => {
+    const h = harness({ vitest: vitestReport([{ title: "[KV-AC-001] put", status: "passed" }]) });
+    await runCompliance(parseArgs(["--target", "cloudflare"]), ["--target", "cloudflare"], h.deps);
+    expect(h.events).toEqual(["pending+ test-abcdefghij12345", "deploy test-abcdefghij12345", "run run", "run vitest", "run playwright", "remove test-abcdefghij12345", "pending- test-abcdefghij12345"]);
+    const vitest = h.calls.find((c) => c.args[0] === "vitest");
+    expect(vitest?.env.NODE_USE_ENV_PROXY).toBe("1");
+    expect(vitest?.env.COMPLIANCE_STAGE).toBe("test-abcdefghij12345");
+    expect(vitest?.args).toContain("tests/compliance/criteria");
+    const record = recordOf(h);
+    expect(record.stage).toBe("test-abcdefghij12345");
+    expect(record.leftovers).toEqual([]);
+    expect(record.results.find((r) => r.id === "CLI-AC-001")).toEqual({ id: "CLI-AC-001", status: "not-run", detail: "Google login mocked for this phase" });
+    expect(h.written[0]?.redactions).toContainEqual({ value: "owner-sub", replacement: "<account-subdomain>" });
+  });
+
+  it("a failed deploy runs no tests, records the reason, still removes the stage, and lists leftovers", async () => {
+    const h = harness({
+      cloud: { deploy: () => Promise.reject(new Error("deploy failed at step 3\nmore")), listStageResources: () => Promise.resolve(["worker reference-test-abcdefghij12345"]) },
+    });
+    const result = await runCompliance(parseArgs(["--target", "cloudflare"]), [], h.deps);
+    expect(h.calls.filter((c) => c.args[0] === "vitest")).toEqual([]);
+    const record = recordOf(h);
+    expect(record.results.find((r) => r.id === "KV-AC-001")).toEqual({ id: "KV-AC-001", status: "not-run", detail: "not run: setting up the target failed: deploy failed at step 3" });
+    expect(record.leftovers).toEqual(["test-abcdefghij12345: worker reference-test-abcdefghij12345"]);
+    expect(h.pending.get("cloudflare")?.has("test-abcdefghij12345")).toBe(true);
+    expect(result.exitStatus).toBe(1);
+  });
+
+  it("cleans up a stage left by an interrupted earlier run, and reports what remains", async () => {
+    const h = harness({ pending: ["test-old000000000001"], cloud: { listStageResources: (s) => Promise.resolve(s === "test-old000000000001" ? ["r2-token test-old000000000001"] : []) } });
+    await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], h.deps);
+    expect(h.events[0]).toBe("remove test-old000000000001");
+    expect(recordOf(h).leftovers).toEqual(["test-old000000000001: r2-token test-old000000000001"]);
+  });
+
+  it("a leftover check that cannot run is recorded, never read as no leftovers", async () => {
+    const h = harness({ cloud: { listStageResources: () => Promise.reject(new Error("listStageResources is not available")) } });
+    await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], h.deps);
+    expect(recordOf(h).leftovers).toEqual(["test-abcdefghij12345: leftover check failed: listStageResources is not available"]);
+  });
+
+  it("with --stage and --base-url uses that stage as is: no deploy, no removal", async () => {
+    const h = harness();
+    await runCompliance(parseArgs(["--target", "cloudflare", "--stage", "test-given", "--base-url", "https://x.y.workers.dev"]), [], h.deps);
+    expect(h.events.filter((e) => /deploy|remove/.test(e))).toEqual([]);
+    expect(recordOf(h).stage).toBe("test-given");
+  });
+
+  it("milestone runs expect only milestone items", async () => {
+    const h = harness();
+    await runCompliance(parseArgs(["--target", "cloudflare", "--milestone"]), [], h.deps);
+    expect(recordOf(h).results.map((r) => r.id)).toEqual(["PROV-AC-003"]);
+  });
+});
