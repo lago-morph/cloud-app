@@ -120,3 +120,43 @@ Reviewer: independent root-cause reviewer (prompt §8 step 2). It did not diagno
    - State the residual limit, demo code laundered through a verified app, and that the apps' `verify` and review own it.
    - Cite this record.
    - Add a one-line pointer on DEC-0389 ("Refined by DEC-0392"). Leave DEC-0389's text otherwise unchanged.
+
+## Fix
+
+Fixer: test-case author (prompt §8 step 3). It did not write the skill, the demo, this diagnosis or its review. Branch `claude/implement-local-cloudflare-fix-e4`, from `origin/claude/implement-local-cloudflare`. Checks follow plan §1 "Test economy" for a test-only item: typecheck, lint and the changed test.
+
+### Red
+Before any edit, `npx vitest run --config vitest.unit.config.ts tests/skill/example-copies.unit.test.ts` gave `1 failed | 5 passed (6)`, with exactly the six `block equals apps/demo/...` items of the Symptom section.
+
+### Change (requirements 2–4 and 7)
+- **`tests/skill/example-copies.unit.test.ts`, second test only.** Before the demo-equality loop, a block is skipped only when it is a verified copy. That means all of these hold:
+  - its marker is present and directly adjacent;
+  - the path passes the existing plain-path checks and is in `apps/template` or `apps/reference`;
+  - the declared file exists;
+  - `sameBytes(block, declared source)` holds.
+
+  Every other block is still checked against every non-empty demo file, with the message `block equals <demo path>`. That covers blocks with no marker, a non-adjacent marker, an invalid or missing source, or bytes that differ from the source. The first loop, the other five tests, `support.ts`, the skill examples and all apps are unchanged. Nothing is skipped or deleted.
+- **Header comment.** The bullet now reads "no block equals a file of `apps/demo/` unless it also equals its declared `apps/template`/`apps/reference` source" and cites DEC-0392 and DEC-0389.
+- **`docs/decisions/decision-log.md`.** New entry DEC-0392 (ai-proposed, accepted, owner review open). It gives the replacement sentence, the reason and the residual limit, and cites this record. DEC-0389 gains only the line "Refined by DEC-0392."
+
+### Negative controls (requirement 5)
+Each control added a temporary `skill/examples/zz-control.md` holding one fenced block, ran the single-file command, then deleted the file. Nothing was committed. Afterwards `git status` showed only the intended edits.
+- **(a)** Bytes of `apps/demo/src/server/access.ts` under the marker `apps/template/src/server/access.ts`. Result: `2 failed | 4 passed`.
+  - Demo clause: `zz-control.md:4: block equals apps/demo/src/server/access.ts`
+  - Byte-for-byte test: `zz-control.md:4: apps/template/src/server/access.ts does not exist`
+- **(b)** The same bytes with no marker. Result: `2 failed | 4 passed`.
+  - Demo clause: `zz-control.md:3: block equals apps/demo/src/server/access.ts`
+  - Unmarked-block test: `zz-control.md:3`
+- **(c)** A block under the marker `apps/demo/src/server/access.ts`. Result: `1 failed | 5 passed`.
+  - First loop: `zz-control.md:4: source apps/demo/src/server/access.ts is under apps/demo/`
+  - Demo clause: `zz-control.md:4: block equals apps/demo/src/server/access.ts`
+- **(d)** Bytes of `apps/demo/src/app.ts` under the marker `apps/template/src/app.ts`. Result: `2 failed | 4 passed`.
+  - Demo clause: `zz-control.md:4: block equals apps/demo/src/app.ts`
+  - Byte-for-byte test: `zz-control.md:4: differs from apps/template/src/app.ts`
+
+### Green (requirement 6)
+- The single-file command gives `6 passed (6)`.
+- `npm run lint` passes.
+- `npm run typecheck` passes once the framework is built (`npm run -w packages/framework build`). Without `dist/`, three compliance e2e files cannot resolve the package. That failure is unrelated to this change.
+
+The test runner and the evaluator re-run SKILL-AC-004 next (§8 step 4).
