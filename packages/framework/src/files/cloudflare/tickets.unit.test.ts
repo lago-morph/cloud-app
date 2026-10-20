@@ -89,7 +89,7 @@ describe("the Worker's issuer reads the stage's R2 token from the framework-inte
 
 describe("Cloudflare download tickets (DEC-0098, DEC-0160, DEC-0313)", () => {
   it("is { url, expiresAt }: a GET URL signing host only, naming the file through response-content-disposition", async () => {
-    const ticket = readDownloadTicket(await issuer().download("photos/ä b.pdf", "application/pdf"));
+    const ticket = readDownloadTicket(await issuer().download("photos/ä b.pdf"));
     expect(ticket).toBeDefined();
     expect(Object.keys(ticket ?? {}).sort()).toEqual(["expiresAt", "url"]);
     expect(ticket?.expiresAt).toBe(NOW + 15 * 60 * 1000);
@@ -102,10 +102,8 @@ describe("Cloudflare download tickets (DEC-0098, DEC-0160, DEC-0313)", () => {
     expect(ticket?.url).not.toContain(credentials.secretAccessKey);
   });
 
-  it("a raster image is named inline; without a known content type the download is an attachment", async () => {
-    const image = new URL(readDownloadTicket(await issuer().download("p.png", "image/png"))?.url ?? "");
-    expect(image.searchParams.get("response-content-disposition")).toBe("inline; filename*=UTF-8''p.png");
-    const unknown = new URL(readDownloadTicket(await issuer().download("p.png"))?.url ?? "");
-    expect(unknown.searchParams.get("response-content-disposition")).toBe("attachment; filename*=UTF-8''p.png");
+  it("a raster image is named as an attachment, like every other download (DEC-PENDING-fix-f04b-1)", async () => {
+    const image = new URL(readDownloadTicket(await issuer().download("p.png"))?.url ?? "");
+    expect(image.searchParams.get("response-content-disposition")).toBe("attachment; filename*=UTF-8''p.png");
   });
 });

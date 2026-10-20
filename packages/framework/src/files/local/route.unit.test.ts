@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RuntimeEnv } from "../../core/assemble.js";
+import { createCloudflareTicketIssuer } from "../cloudflare/tickets.js";
 import { fakeStore, type FakeStore } from "../fake-store.test-support.js";
 import { createFilesService } from "../service.js";
 import { registerLocalTransferRoute } from "./route.js";
@@ -91,7 +92,7 @@ describe("local transfer route: downloads (FILES-REQ-003, files.md §2 Local)", 
     const res = await app.request(urlOf(await files.createDownloadTicket("p.png")));
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("image/png");
-    expect(res.headers.get("Content-Disposition")).toBe("inline; filename*=UTF-8''p.png");
+    expect(res.headers.get("Content-Disposition")).toBe("attachment; filename*=UTF-8''p.png");
     expectSafeHeaders(res);
     expect(Array.from(new Uint8Array(await res.arrayBuffer()))).toEqual([137, 80, 78, 71]);
   });
@@ -108,11 +109,29 @@ describe("local transfer route: downloads (FILES-REQ-003, files.md §2 Local)", 
     },
   );
 
-  it.each(["image/jpeg", "image/gif", "image/webp", "image/avif", "image/bmp"])("raster image type %s is served inline, named after the file (DEC-0313)", async (contentType) => {
+  it.each(["image/jpeg", "image/gif", "image/webp", "image/avif", "image/bmp"])("raster image type %s is served as an attachment, named after the file (DEC-0313, DEC-PENDING-fix-f04b-1)", async (contentType) => {
     const { app, files } = setup();
     await files.put("i", new Uint8Array([1]), { contentType });
     const res = await app.request(urlOf(await files.createDownloadTicket("i")));
-    expect(res.headers.get("Content-Disposition")).toBe("inline; filename*=UTF-8''i");
+    expect(res.headers.get("Content-Disposition")).toBe("attachment; filename*=UTF-8''i");
+  });
+
+  it("a raster image downloads with the same Content-Disposition on local and Cloudflare (DEC-0313, DEC-PENDING-fix-f04b-1)", async () => {
+    const { app, store, files } = setup();
+    await files.put("p.png", new Uint8Array([137, 80, 78, 71]), { contentType: "image/png" });
+    const local = (await app.request(urlOf(await files.createDownloadTicket("p.png")))).headers.get("Content-Disposition");
+    // The Cloudflare path: the same store behind the service, with a Cloudflare issuer and dummy credentials.
+    const cloudflare = createFilesService({
+      store,
+      tickets: createCloudflareTicketIssuer({
+        accountId: "acct",
+        bucket: "bucket",
+        credentials: async () => ({ accessKeyId: "dummy-id", secretAccessKey: "dummy-secret" }),
+        now: () => Date.parse("2026-10-20T00:00:00Z"),
+      }),
+    });
+    const signed = new URL(urlOf(await cloudflare.createDownloadTicket("p.png"))).searchParams.get("response-content-disposition");
+    expect({ local, cloudflare: signed }).toEqual({ local: "attachment; filename*=UTF-8''p.png", cloudflare: "attachment; filename*=UTF-8''p.png" });
   });
 
   it("a download is saved under the whole file name, percent-encoded, never the ticket token (DEC-0313)", async () => {

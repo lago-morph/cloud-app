@@ -36,7 +36,7 @@ The template does all four steps: [examples/files-tickets.md](../examples/files-
 ## Downloads
 
 - Each time you list files for the browser, fetch fresh download tickets (or fetch one when the user clicks). Never store or cache download URLs: they expire.
-- The browser uses `downloadUrl(ticket)` as a link, in `window.open`, or as `<img src>`. A download is saved under the file's whole name; raster images (`image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/avif`, `image/bmp`) are shown inline.
+- The browser uses `downloadUrl(ticket)` as a link, in `window.open`, or as `<img src>`. A download is saved under the file's whole name (`attachment`); show images with `<img src>`.
 - **File content reaches the browser only through `downloadUrl`.** Never return `files.get` content from an API route: large files would fail on some clouds. Use `files.get` only to process a file on the server.
 
 ## Browser helpers
