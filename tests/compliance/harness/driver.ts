@@ -155,7 +155,15 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
     } catch (error) {
       raw[`remove-${name}.log`] = `remove failed: ${error instanceof Error ? error.message : String(error)}\n`;
     }
-    if (await checkLeftovers(ops, name)) deps.pendingStages.remove(args.target, name);
+    if (await checkLeftovers(ops, name)) {
+      try {
+        deps.pendingStages.remove(args.target, name);
+      } catch (error) {
+        raw["pending-stages.log"] = `${raw["pending-stages.log"] ?? ""}${name}: could not update the pending-stage list: ${error instanceof Error ? error.message : String(error)}\n`;
+        deps.log(`compliance: ${name} was removed, but the pending-stage list could not be updated: ${firstLine(error)} (raw/pending-stages.log)`);
+        exitStatus ||= 1;
+      }
+    }
   };
 
   if (toRun.length > 0) {
