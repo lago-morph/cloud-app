@@ -1,39 +1,52 @@
-# Build record: apps/demo (photo board)
+# Build record — demo (photo board)
 
-- **Builder:** Claude Opus 5.5 (model ID `claude-opus-5-5`), running as a Claude Code subagent.
+- **Builder:** Claude Opus 5.5 (model ID `claude-opus-5-5`), as best I know, running as a Claude Code subagent.
 - **Date:** 2026-10-20
-- **Build round:** 3 (the previous `apps/demo/` was deleted unread and rebuilt from scratch).
-- **Branch:** `claude/implement-local-cloudflare-f-01c`, from `origin/claude/implement-local-cloudflare`.
+- **Build round:** 4
+- **Branch:** `claude/implement-local-cloudflare-f-01d` (from `origin/claude/implement-local-cloudflare`)
+- **How built:** the previous `apps/demo/` was deleted without being read, and the app was rebuilt from scratch by copying `apps/template` as `skill/reference/local-development.md` ("Starting a new app", app inside the framework repository) prescribes.
 
 ## Inputs read
 
-- `skill/SKILL.md`
-- `skill/reference/`: `local-development.md`, `http-and-validation.md`, `sql-and-migrations.md`, `files.md`, `kv.md`, `secrets.md`, `configuration.md`, `current-user.md`, `log.md`, `testing.md`, `deploying.md`, `owner-tasks.md` (not read: `troubleshooting.md`)
-- `skill/examples/`: `files-tickets.md`, `tests.md`, `configuration.md`, `notes-sql.md`, `admin-and-current-user.md` (not read: `endpoint-and-page.md`, `status-kv.md`, `secrets.md`; their template sources were read directly)
-- `skill/templates/`: `README.md`, `production-stage.json`, `FRAMEWORK-ISSUE.md`
-- `apps/template/`: every source file (`src/**`, `tests/**`, `config/**`, `index.html`, `package.json`, `tsconfig.json`, `.gitignore`, `migrations/checksums.json`); of `README.md` only its headings (then deleted from the copy)
-- `docs/demo/demo-spec.md`
-- Incidental, outside the allowed inputs: one `grep` over the installed package's `node_modules/@lago-morph/prototype-framework/dist/index.d.ts` that printed its single SQL export line (`defineTable, id, text, integer, number, …`), and a directory listing of that package. Nothing else of the framework, `docs/`, `packages/`, `apps/reference/`, `ai/`, `tests/` or the old demo was read. Command output (verify, generate-migration, dev, smoke) was also seen.
+Only these, and nothing else in the repository about how the framework works:
+
+- `docs/demo/demo-spec.md` (whole file).
+- `skill/SKILL.md` (whole file).
+- `skill/reference/`: `local-development.md`, `http-and-validation.md`, `sql-and-migrations.md`, `files.md`, `kv.md`, `secrets.md`, `configuration.md`, `current-user.md`, `log.md`, `testing.md`, `deploying.md` (whole files). Not read: `troubleshooting.md`, `owner-tasks.md`.
+- `skill/examples/`: only the parts copied from `apps/reference` (the template parts duplicate files read directly): `notes-sql.md` (from the template schema to the end, including `evolution.ts`), `configuration.md` (reference `env.ts` and `config/local.json`), `admin-and-current-user.md` (reference `levels.ts`), `tests.md` (reference `tests/support.ts`), `secrets.md` (reference `encoding.ts`).
+- `skill/templates/`: `README.md`, `FRAMEWORK-ISSUE.md`, `production-stage.json`.
+- `apps/template/`: every file except the Postgres migrations and the `meta/` snapshots (`package.json`, `.gitignore`, `README.md`, `tsconfig.json`, `index.html`, `config/local.json`, `config/cloudflare/test.json`, all of `src/`, all of `tests/`, `migrations/sqlite/*.sql`, `migrations/checksums.json`).
+- Incidentally, as the local-development steps required: the `workspaces` list of the root `package.json` and the `apps/demo` entry of the root `package-lock.json` (to confirm the workspace exists), and the output of `npm ci`, `npm run build -w packages/framework`, `tsc`, `generate-migration`, `verify`, `secrets set`, `dev` and `smoke`. `git status` printed the old demo's file names when staging the deletion; their contents were not read.
 
 ## What was built
 
-Copied `apps/template` per `local-development.md` (in-repo app, no scaffolder), named `demo`, replaced the template's routes/pages/tests:
+| Requirement | Where | Tests |
+| --- | --- | --- |
+| DEMO-REQ-001 Posts | `src/server/routes/posts.ts`, `src/server/posts.ts`, `posts` table | `tests/app.test.ts` "posts", smoke |
+| DEMO-REQ-002 Who may do what | guards + `loadVisiblePost` / `loadOwnDraft` | "permissions", smoke |
+| DEMO-REQ-003 Photos | `src/server/routes/photos.ts` (ticket → upload → finalize), `deletePost` | "photos" (20 MB JPEG, max, delete, warn on cleanup failure), smoke |
+| DEMO-REQ-004 Banner | `src/server/routes/site.ts` (KV `site:banner`) | "site banner", smoke |
+| DEMO-REQ-005 Preference | `src/server/preferences.ts`, `/api/preferences` (KV `pref:<userId>:pageSize`) | "posts-per-page preference", smoke |
+| DEMO-REQ-006 Configuration | `siteTitle`, `maxPhotosPerPost`, `shareLinkDays` in `src/server/env.ts`; `/api/site` | "configuration" (config override stands in for a rebuild with a changed values file) |
+| DEMO-REQ-007 Share links | `src/server/routes/share.ts`, template `signing.ts`, secret `shareKey` | "share links" (altered, expired with fake timers), smoke |
+| DEMO-REQ-008 Log | `posts` info entries for publish/unpublish/delete; `photos` warn on cleanup failure | "permissions", "photos" |
+| DEMO-REQ-009 Account page | `src/client/pages/account.ts` (ID + copy button) | "account" (API side; the clipboard is page-only behaviour, testing.md) |
+| DEMO-REQ-010 Everywhere | one source; `tests/smoke/smoke.test.ts` | smoke |
+| DEMO-REQ-011 Users list | `config/cloudflare/prod.json` sets `framework.users` | `tests/config.test.ts`, "users list" (stub login provider) |
 
-- Tables `posts` and `photos` (`size` is `number()` so files over 2 GiB fit); migration `0000_schema` generated.
-- Routes: `/site`, `/banner` (admin, KV), `/preferences` (user, KV), `/posts` (paginated published list, page size from query or the user's preference), `/posts/mine`, `/admin/drafts`, `/posts/:id` (view, edit own draft, delete), `/posts/:id/publish|unpublish` (admin, logged `info`), `/posts/:id/share` and `/shared/:token` (HMAC links signed with secret `shareKey`, lifetime `shareLinkDays`), `/posts/:id/photos/upload-ticket` and finalize (JPEG/PNG, `maxPhotosPerPost`).
-- Deleting a post deletes photo rows and the post atomically, then every file under `photos/<postId>/`; a failure is logged at `warn` and the post stays deleted.
-- Config keys `siteTitle`, `maxPhotosPerPost`, `shareLinkDays`; `config/cloudflare/prod.json` sets `framework.users` (DEMO-REQ-011).
-- Browser: front page (published list with pager, new draft, my posts, admin drafts and banner), post page (photos, edit, upload, share, publish/delete), share page, account page (user ID with copy button, posts-per-page).
+`config/cloudflare/prod.json` comes from `skill/templates/production-stage.json`; the owner fills in the Google client ID and the admin and user IDs before a production deploy.
 
 ## Checks
 
 | Check | Result |
 | --- | --- |
-| `npx prototype-framework verify` | passed (37 tests on SQLite and on Postgres) |
-| `npx prototype-framework smoke --target local` | passed, 8 tests; evidence `validation/local/iz5xn8erxm3l5ne.json` |
-| Smoke on Cloudflare test stage | `blocked`: this build was instructed to make no cloud calls |
+| `npx prototype-framework verify` | passed (type checking, portability rules, migration checker, zod version, tests on SQLite and Postgres) |
+| `npx prototype-framework smoke --target local` | see "Smoke runs" below |
+| Smoke on Cloudflare (`test-*` stage) | `blocked`: no cloud calls are allowed in this build round (task rule: local only) |
 | Smoke on AWS | `not-run`: AWS phase not started |
 
-Acceptance criteria: AC-001..005, 007, 009 (HTTP side) covered by the smoke test and local tests; AC-003 failure clause, AC-006 (config override), AC-007 expiry (fake timers), AC-008 (`logs()`; local `.logs` also showed the entries), AC-011 (stub login provider and the prod values file) by local tests. AC-010 is unfinished (cloud runs above). Open framework issue: see `FRAMEWORK-ISSUE.md` #1 (no documented browser testing; copy button and in-page rendering not automatically verified).
+Requirements that need a cloud run (DEMO-AC-001…005, 007, 008, 009, 010 on cloud) are unfinished for the clouds, as listed above.
 
-The app is therefore **not done**: cloud smoke runs and FRAMEWORK-ISSUE #1 remain.
+## Smoke runs
+
+Filled in after the run.

@@ -18,12 +18,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "author_name": {
-          "name": "author_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "title": {
           "name": "title",
           "type": "text",
@@ -77,11 +71,17 @@
           "method": "btree",
           "with": {}
         },
-        "posts_author_id_created_at_idx": {
-          "name": "posts_author_id_created_at_idx",
+        "posts_author_id_status_created_at_idx": {
+          "name": "posts_author_id_status_created_at_idx",
           "columns": [
             {
               "expression": "author_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -122,9 +122,15 @@
           "primaryKey": false,
           "notNull": true
         },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "size": {
           "name": "size",
-          "type": "double precision",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
@@ -197,6 +203,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "f8b32b39-a98e-4280-a63c-8b28e6a31a9a",
+  "id": "996aeb11-df84-4755-871c-2c2c954bb885",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }

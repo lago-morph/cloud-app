@@ -1,8 +1,7 @@
-import { api, login, type CurrentUser } from "@lago-morph/prototype-framework/client";
-import type { Preferences } from "../../shared/types";
-import { el, report, section } from "../dom";
+import { login, logout, type CurrentUser } from "@lago-morph/prototype-framework/client";
+import { el, section } from "../dom";
 
-/** The logged-in user's ID with a copy button (for the admin list), and the posts-per-page preference. */
+/** Login and logout, and the user's ID with a copy button so the owner can list it (DEMO-REQ-009). */
 export function accountPage(user: CurrentUser): HTMLElement {
   const page = section("Account");
   if (user.level === "anonymous") {
@@ -12,7 +11,7 @@ export function accountPage(user: CurrentUser): HTMLElement {
     page.append(button);
     return page;
   }
-
+  page.append(el("p", `Logged in as ${user.displayName ?? user.id} (${user.level}).`));
   const idLine = el("p", "Your user ID: ");
   const id = el("code", user.id);
   id.id = "user-id";
@@ -24,37 +23,15 @@ export function accountPage(user: CurrentUser): HTMLElement {
         copied.textContent = " Copied.";
       },
       () => {
-        copied.textContent = " Copy failed: select the ID and copy it by hand.";
+        copied.textContent = " Could not copy; select the ID instead.";
       },
     );
   });
   idLine.append(id, " ", copy, copied);
-  page.append(idLine, el("p", `Level: ${user.level}`));
-
-  const label = el("label", "Posts per page: ");
-  const perPage = el("input");
-  perPage.type = "number";
-  perPage.min = "1";
-  perPage.max = "50";
-  label.append(perPage);
-  const save = el("button", "Save");
-  const message = el("p");
-  page.append(label, save, message);
-
-  save.addEventListener("click", () => {
-    message.textContent = "";
-    report(
-      message,
-      api<Preferences>("/preferences", { method: "PUT", body: { perPage: Number(perPage.value) } }).then(() => {
-        message.textContent = "Saved.";
-      }),
-    );
+  const out = el("button", "Log out");
+  out.addEventListener("click", () => {
+    void logout().then(() => window.location.reload());
   });
-  report(
-    message,
-    api<Preferences>("/preferences").then((prefs) => {
-      perPage.value = String(prefs.perPage);
-    }),
-  );
+  page.append(idLine, out);
   return page;
 }
