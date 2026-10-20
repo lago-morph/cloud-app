@@ -1,0 +1,784 @@
+{
+  "config": {
+    "argv": [
+      "/opt/node22/bin/node",
+      "/home/user/cloud-app/.claude/worktrees/agent-a79710ad924a1aa8e/node_modules/.bin/playwright",
+      "test",
+      "--project",
+      "integration",
+      "--project",
+      "e2e",
+      "--grep",
+      "\\[(?:DEMO-AC-001|DEMO-AC-002|DEMO-AC-003|DEMO-AC-004|DEMO-AC-005|DEMO-AC-006|DEMO-AC-007|DEMO-AC-008|DEMO-AC-009|DEMO-AC-010|DEMO-AC-011|E2E-002|E2E-004)\\]",
+      "--reporter=json",
+      "--pass-with-no-tests"
+    ],
+    "configFile": "/home/user/cloud-app/.claude/worktrees/agent-a79710ad924a1aa8e/playwright.config.ts",
+    "rootDir": "/home/user/cloud-app/.claude/worktrees/agent-a79710ad924a1aa8e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 2
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-a79710ad924a1aa8e/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "integration",
+        "name": "integration",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-a79710ad924a1aa8e",
+        "testIgnore": [],
+        "testMatch": [
+          "packages/framework/test/integration/**/*.spec.ts",
+          "tests/compliance/criteria/**/*.spec.ts"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-a79710ad924a1aa8e/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "e2e",
+        "name": "e2e",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-a79710ad924a1aa8e/tests/compliance/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "filteredProjects": [
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-a79710ad924a1aa8e/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "name": "integration",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-a79710ad924a1aa8e",
+        "snapshotDir": "/home/user/cloud-app/.claude/worktrees/agent-a79710ad924a1aa8e",
+        "testIgnore": [],
+        "testMatch": [
+          "packages/framework/test/integration/**/*.spec.ts",
+          "tests/compliance/criteria/**/*.spec.ts"
+        ],
+        "timeout": 30000,
+        "use": {
+          "browserName": "chromium"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "integration"
+      },
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-a79710ad924a1aa8e/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "name": "e2e",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-a79710ad924a1aa8e/tests/compliance/e2e",
+        "snapshotDir": "/home/user/cloud-app/.claude/worktrees/agent-a79710ad924a1aa8e/tests/compliance/e2e",
+        "testIgnore": [],
+        "testMatch": "**/*.spec.ts",
+        "timeout": 30000,
+        "use": {
+          "browserName": "chromium"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "e2e"
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "default",
+    "updateSourceMethod": "patch",
+    "version": "1.64.1",
+    "workers": 2,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "tests/compliance/e2e/demo-criteria.spec.ts",
+      "file": "tests/compliance/e2e/demo-criteria.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[DEMO-AC-002] each cell of the permissions table with mock identities (anonymous, user, another user, admin): permitted actions succeed through the page, forbidden ones are refused by the app and change nothing",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 34514,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T19:27:04.721Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "7dfa15f81d16dda24a6d-398e2160cb85797f0151",
+          "file": "tests/compliance/e2e/demo-criteria.spec.ts",
+          "line": 139,
+          "column": 1
+        },
+        {
+          "title": "[DEMO-AC-004] a banner an admin sets through the page appears at the top of the page for anonymous visitors; a user's attempt to set it is refused and changes nothing",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 300000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5835,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T19:27:49.485Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "7dfa15f81d16dda24a6d-035573a27614bea27b80",
+          "file": "tests/compliance/e2e/demo-criteria.spec.ts",
+          "line": 332,
+          "column": 1
+        },
+        {
+          "title": "[DEMO-AC-005] a user's posts-per-page choice, made through the page, is still the choice after logging out and in again (same browser and a new one); another user keeps the default",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 300000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6721,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T19:27:55.350Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "7dfa15f81d16dda24a6d-82b51f35a535cf2729bf",
+          "file": "tests/compliance/e2e/demo-criteria.spec.ts",
+          "line": 368,
+          "column": 1
+        },
+        {
+          "title": "[DEMO-AC-007] a share link created through the page shows the draft to an anonymous visitor; the same link with one character altered is refused and shows nothing of the draft",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 300000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5419,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T19:28:02.101Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "7dfa15f81d16dda24a6d-6aae9dabb86ebdc9ae67",
+          "file": "tests/compliance/e2e/demo-criteria.spec.ts",
+          "line": 453,
+          "column": 1
+        },
+        {
+          "title": "[DEMO-AC-007] expiry clause (local, in-process with a moved clock): with the share-link lifetime configured to 1 day, a link opens after 12 hours and is refused after 2 days",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 300000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5176,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T19:28:07.559Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "7dfa15f81d16dda24a6d-ce77ad7fc253404be638",
+          "file": "tests/compliance/e2e/demo-criteria.spec.ts",
+          "line": 514,
+          "column": 3
+        },
+        {
+          "title": "[DEMO-AC-008] publishing a post and deleting it through the page each produce an info entry of the demo, written during that request, in the target's log",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 360000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 12971,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T19:28:12.765Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "7dfa15f81d16dda24a6d-29307314ebfef747ba30",
+          "file": "tests/compliance/e2e/demo-criteria.spec.ts",
+          "line": 600,
+          "column": 1
+        },
+        {
+          "title": "[DEMO-AC-011] every committed production values file sets framework.users; in-process with the stub login provider, a login on the users list creates a draft and a login on neither list is refused with 401 and sees only published posts",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 360000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7177,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T19:28:25.755Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "7dfa15f81d16dda24a6d-1b484ca536e037288279",
+          "file": "tests/compliance/e2e/demo-criteria.spec.ts",
+          "line": 646,
+          "column": 3
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/demo-local.spec.ts",
+      "file": "tests/compliance/e2e/demo-local.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[DEMO-AC-006] changing the site title in the values file and rebuilding (restarting dev) changes the title the page displays",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 20400,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T19:27:04.617Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d33819c5c7410c8dec06-72a51fc500108de7afbe",
+          "file": "tests/compliance/e2e/demo-local.spec.ts",
+          "line": 19,
+          "column": 3
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/demo-pages.spec.ts",
+      "file": "tests/compliance/e2e/demo-pages.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[DEMO-AC-001] a post title containing <script>…</script> shows as literal text to its author and, published, to an anonymous visitor in the list and on the post; no script element is added and the script does not run",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 240000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 2597,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T19:27:25.244Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9f7dc3aab52ef27785ad-b459c08bcb551d5c4f10",
+          "file": "tests/compliance/e2e/demo-pages.spec.ts",
+          "line": 162,
+          "column": 1
+        },
+        {
+          "title": "[DEMO-AC-003] a JPEG of at least 20 MB attached through the page displays: an image on the post is complete with naturalWidth > 0, at the photo's size",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 900000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 15629,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T19:27:36.022Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9f7dc3aab52ef27785ad-3d32aa5c1c6854e853a0",
+          "file": "tests/compliance/e2e/demo-pages.spec.ts",
+          "line": 230,
+          "column": 1
+        },
+        {
+          "title": "[DEMO-AC-009] with clipboard permissions granted, the account page's copy button puts exactly the /api/auth/me user ID on the clipboard",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 402,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T19:27:51.681Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9f7dc3aab52ef27785ad-185e016b52d9a294e368",
+          "file": "tests/compliance/e2e/demo-pages.spec.ts",
+          "line": 262,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/E2E-002.spec.ts",
+      "file": "tests/compliance/e2e/E2E-002.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[E2E-002][DEMO-AC-010] local part: the demo's smoke test passes locally against dev, from a copy identical to the commit's apps/demo (no source changes)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 1500000,
+              "annotations": [
+                {
+                  "type": "commit",
+                  "description": "ed1f51bf65a8383137490d5875382ac9b17e5a66"
+                },
+                {
+                  "type": "apps/demo tree",
+                  "description": "6dcb8f41c576ad77b7a37604496cdba8992f4413"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 22803,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    },
+                    {
+                      "buffer": ""
+                    }
+                  ],
+                  "retry": 0,
+                  "startTime": "2026-10-20T19:27:52.374Z",
+                  "annotations": [
+                    {
+                      "type": "commit",
+                      "description": "ed1f51bf65a8383137490d5875382ac9b17e5a66"
+                    },
+                    {
+                      "type": "apps/demo tree",
+                      "description": "6dcb8f41c576ad77b7a37604496cdba8992f4413"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ad1a3242baf10630d172-9b7c6b9afe662643ceaf",
+          "file": "tests/compliance/e2e/E2E-002.spec.ts",
+          "line": 34,
+          "column": 3
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/E2E-004.spec.ts",
+      "file": "tests/compliance/e2e/E2E-004.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[E2E-004] coverage part: every criterion and scenario applicable on this target has a tagged test in the suite this run executes",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 114949,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T19:28:15.209Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c7890dfde9f6f90e5b52-6da7b6a3efa59baef18e",
+          "file": "tests/compliance/e2e/E2E-004.spec.ts",
+          "line": 32,
+          "column": 1
+        },
+        {
+          "title": "[E2E-004] record part: the evidence writer accepts a record of this target and rejects an invalid one",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 14,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T19:30:10.183Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c7890dfde9f6f90e5b52-f169a49cf7dfed4d9239",
+          "file": "tests/compliance/e2e/E2E-004.spec.ts",
+          "line": 50,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-20T19:26:48.564Z",
+    "duration": 201819.629,
+    "expected": 14,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}
