@@ -32,7 +32,8 @@ The demo is rebuilt from its specification every round (round 4 is in progress),
 | attach button (optional; clicked if present) | button | `/attach\|upload\|add photo/i` |
 | publish button | button | `/^publish\b/i` |
 | delete button (cleanup only) | button | `/delete/i` |
-| account link | link | `/account/i` |
+| account link (optional; followed if present) | link | `/account/i` |
+| account heading | heading | `/account/i` |
 | copy button | button | `/copy/i` |
 
 **Assumed page flow:**
@@ -47,7 +48,7 @@ The demo is rebuilt from its specification every round (round 4 is in progress),
 - The title check looks for elements whose whole text is the title (`getByText(…, { exact: true })`), in any role.
 - The photo check scans `document.images` for an image whose natural size is the photo's 3600×2400, then repeats the check on a fresh load of the post.
 
-The round-3 demo matches all of these. The whole spec must be re-checked against the round-4 demo before the F-03 run.
+The round-3 demo matches all of these. The round-4 demo has no account link, so that link is now optional and the account heading and displayed ID are asserted instead (root cause `2026-10-20-demo-ac-009.md`); the whole spec passes against round 4 locally. The whole spec must still be re-checked against the deployed round-4 demo before the F-03 run.
 Item: fix-f4b.
 
 ### DEC-PENDING-fix-f4b-3 — What each test asserts
@@ -70,7 +71,9 @@ Origin: ai-proposed · Status: accepted (assumption; owner review open) · Affec
 
 **DEMO-AC-009.**
 - Clipboard read and write are granted for the demo origin, and a sentinel is written to the clipboard first.
-- The user reaches the account page through the page's own link and clicks the copy button.
+- The user opens `/` and reaches the account page through the page's own link if it has one; otherwise the account page must be shown on `/` (round 4 shows it inline on every page). Root cause: `ai/implementation/root-causes/2026-10-20-demo-ac-009.md`.
+- The test asserts more than the link: the account heading (`/account/i`) is visible, and the ID that `/api/auth/me` returns is visible as an element's exact text ("The account page shows the same ID as `/api/auth/me`").
+- The user then clicks the copy button.
 - Pass: the clipboard then holds exactly the `id` that `/api/auth/me` returns, which is the ID given to the mock login.
 
 The tests are independent: no serial mode, so one test failing does not skip the others. The file is named without a scenario ID and is tagged only DEMO-AC-001, DEMO-AC-003 and DEMO-AC-009, not E2E-015.

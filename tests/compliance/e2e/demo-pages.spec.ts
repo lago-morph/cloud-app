@@ -46,6 +46,7 @@ const ASSUMED_ATTACH_BUTTON = /attach|upload|add photo/i;
 const ASSUMED_PUBLISH_BUTTON = /^publish\b/i;
 const ASSUMED_DELETE_BUTTON = /delete/i;
 const ASSUMED_ACCOUNT_LINK = /account/i;
+const ASSUMED_ACCOUNT_HEADING = /account/i;
 const ASSUMED_COPY_BUTTON = /copy/i;
 
 const MIB = 1024 * 1024;
@@ -270,9 +271,16 @@ test(tag("DEMO-AC-009", "with clipboard permissions granted, the account page's 
     const { id } = (await me.json()) as { id: string };
     expect(id).toBe(`demo-pages-copy-${suffix}`);
 
-    // The account page, reached through the page's own navigation.
+    // The account page, reached through the page's own link if it has one; otherwise it is shown on `/`.
     await page.goto("/");
-    await page.getByRole("link", { name: ASSUMED_ACCOUNT_LINK }).first().click({ timeout: 30_000 });
+    const accountLink = page.getByRole("link", { name: ASSUMED_ACCOUNT_LINK });
+    if ((await accountLink.count()) > 0) {
+      await accountLink.first().click();
+      await page.waitForLoadState("load");
+    }
+    await expect(page.getByRole("heading", { name: ASSUMED_ACCOUNT_HEADING }).first()).toBeVisible({ timeout: 30_000 });
+    // The account page shows the same ID as /api/auth/me.
+    await expect(page.getByText(id, { exact: true }).first()).toBeVisible({ timeout: 30_000 });
     const copy = page.getByRole("button", { name: ASSUMED_COPY_BUTTON });
     await expect(copy.first()).toBeVisible({ timeout: 30_000 });
     // Something else on the clipboard first, so only the copy button can put the ID there.
