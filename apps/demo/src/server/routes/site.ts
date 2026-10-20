@@ -1,58 +1,48 @@
-import { jsonBody, requireAdmin, requireUser, z, type KvService } from "@lago-morph/prototype-framework";
+import { jsonBody, requireAdmin, requireUser, z } from "@lago-morph/prototype-framework";
 import type { Hono } from "hono";
-import type { Banner, Preferences, SiteInfo } from "../../shared/types";
+import type { Banner, Preferences, Site } from "../../shared/types";
 import type { Env } from "../env";
+import { pageSizeFor, pageSizeKey, pageSizeSchema } from "../preferences";
 
 const BANNER_KEY = "site:banner";
-const DEFAULT_PER_PAGE = 10;
 
-const bannerInput = z.object({ banner: z.string().trim().max(300) });
-const preferencesInput = z.object({ perPage: z.number().int().min(1).max(50) });
-const storedPerPage = z.coerce.number().int().min(1).max(50);
+const bannerChange = z.object({ message: z.string().trim().min(1).max(200).nullable() });
+const preferencesChange = z.object({ pageSize: pageSizeSchema });
 
-function perPageKey(userId: string): string {
-  return `pref:${userId}:perPage`;
-}
-
-/** The user's stored posts-per-page choice, or `fallback`. */
-export async function readPerPage(kv: KvService, userId: string, fallback: number): Promise<number> {
-  const stored = await kv.get(perPageKey(userId));
-  if (stored === null) return fallback;
-  const parsed = storedPerPage.safeParse(stored);
-  return parsed.success ? parsed.data : fallback;
-}
-
-/** Configuration and KV: the site title and banner, and each user's posts-per-page preference. */
+/** Configuration, the site banner (KV, DEMO-REQ-004) and the posts-per-page preference (KV, DEMO-REQ-005). */
 export function siteRoutes(api: Hono<Env>): void {
   api.get("/site", async (c) => {
-    const body: SiteInfo = {
+    const body: Site = {
       title: c.var.config.get("siteTitle"),
-      banner: await c.var.kv.get(BANNER_KEY),
       maxPhotosPerPost: c.var.config.get("maxPhotosPerPost"),
-      shareLinkDays: c.var.config.get("shareLinkDays"),
+      banner: await c.var.kv.get(BANNER_KEY),
     };
     return c.json(body);
   });
 
-  // An empty banner clears it.
-  api.put("/banner", requireAdmin(), jsonBody(bannerInput), async (c) => {
-    const { banner } = c.req.valid("json");
-    if (banner === "") await c.var.kv.delete(BANNER_KEY);
-    else await c.var.kv.put(BANNER_KEY, banner);
-    c.var.log.write("site", "info", banner === "" ? "banner cleared" : "banner set");
-    const body: Banner = { banner: banner === "" ? null : banner };
+  api.get("/banner", async (c) => {
+    const body: Banner = { message: await c.var.kv.get(BANNER_KEY) };
+    return c.json(body);
+  });
+
+  api.put("/banner", requireAdmin(), jsonBody(bannerChange), async (c) => {
+    const { message } = c.req.valid("json");
+    if (message === null) await c.var.kv.delete(BANNER_KEY);
+    else await c.var.kv.put(BANNER_KEY, message);
+    c.var.log.write("site", "info", `banner ${message === null ? "cleared" : "set"} by ${c.var.user.id}`);
+    const body: Banner = { message };
     return c.json(body);
   });
 
   api.get("/preferences", requireUser(), async (c) => {
-    const body: Preferences = { perPage: await readPerPage(c.var.kv, c.var.user.id, DEFAULT_PER_PAGE) };
+    const body: Preferences = { pageSize: await pageSizeFor(c.var.kv, c.var.user) };
     return c.json(body);
   });
 
-  api.put("/preferences", requireUser(), jsonBody(preferencesInput), async (c) => {
-    const { perPage } = c.req.valid("json");
-    await c.var.kv.put(perPageKey(c.var.user.id), String(perPage));
-    const body: Preferences = { perPage };
+  api.put("/preferences", requireUser(), jsonBody(preferencesChange), async (c) => {
+    const { pageSize } = c.req.valid("json");
+    await c.var.kv.put(pageSizeKey(c.var.user.id), String(pageSize));
+    const body: Preferences = { pageSize };
     return c.json(body);
   });
 }

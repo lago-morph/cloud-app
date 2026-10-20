@@ -7,7 +7,7 @@ export const config = {
   shareLinkDays: configInteger({ default: 7 }),
 };
 
-/** Secret names; values are set with `secrets set <name>`, never committed. `shareKey` signs share links. */
+/** Secret names; values are set with `secrets set <name>`, never committed. `shareKey` signs share links (DEMO-REQ-007). */
 export const secrets = ["shareKey"] as const;
 
 /** The Hono environment every route module takes: `Hono<Env>`. */
