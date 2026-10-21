@@ -5,11 +5,13 @@
  * 2. generate missing development-only framework secrets into `.dev.vars`;
  * 3. apply pending migrations to the persisted local D1 database; a failing migration ends
  *    `dev` with status 1 before anything is served (MIG-REQ-003 local reading);
- * 4. start Wrangler on a loopback port with the local bundle, the persisted state, `.dev.vars`
- *    and `FRAMEWORK_PUBLIC_ORIGIN`, capturing its log lines into `.logs/`;
- * 5. start Vite on `localhost` (loopback) with `/api` proxied to Wrangler and a `Host` check,
- *    and print `http://localhost:<port>`, the one origin of the client and `/api`, recording it
- *    in `.framework/local/dev-server.json` for `smoke --target local` (DEC-0272);
+ * 4. start Vite on a free loopback port with a `Host` check (a bind lost to another socket is
+ *    retried at most 3 times, on Vite's own `EADDRINUSE` only);
+ * 5. start Wrangler on loopback port 0 (Worker and inspector) with the local bundle, the persisted
+ *    state, `.dev.vars` and `FRAMEWORK_PUBLIC_ORIGIN`, capturing its log lines into `.logs/`; point
+ *    Vite's `/api` proxy at the port Wrangler reports, and print `http://localhost:<port>`, the one
+ *    origin of the client and `/api`, recording it in `.framework/local/dev-server.json` for
+ *    `smoke --target local` (DEC-0272);
  * 6. on Ctrl-C (SIGINT/SIGTERM) remove the record, stop both and exit 0; if Wrangler stops on
  *    its own, remove the record and exit 1.
  */
@@ -21,26 +23,65 @@ import { clearDevServer, recordDevServer } from "./smoke.js";
 import { clientRoot, devPaths, LOOPBACK, wranglerDevArgs } from "../dev/plan.js";
 
 export interface WorkerProcess {
+  /** The loopback port Wrangler's Worker is bound to (it binds port 0 itself). */
+  readonly port: number;
   /** Resolves with Wrangler's exit status when it ends. */
   readonly exited: Promise<number | null>;
   stop(): Promise<void>;
 }
 
 export interface ClientServer {
+  /** The loopback port the client server is bound to. */
+  readonly port: number;
+  /** Points the `/api` proxy at the Worker; until then `/api` answers 503. */
+  proxyApiTo(target: string): void;
   close(): Promise<void>;
 }
+
+/**
+ * The client server's bind failed with Vite's own structured `EADDRINUSE`: the port Vite picked
+ * for port 0 was taken before Vite bound it. `original` is the error Vite failed with.
+ */
+export class ClientPortInUseError extends Error {
+  constructor(
+    readonly port: number | undefined,
+    readonly original: Error,
+  ) {
+    super(original.message);
+    this.name = "ClientPortInUseError";
+  }
+}
+
+/** Attempts at starting the client server when its port is taken (MIG-AC-002 root cause review, reason 4). */
+export const CLIENT_START_ATTEMPTS = 3;
 
 export interface DevDeps {
   build(appDir: string): Promise<{ readonly app: string }>;
   ensureDevSecrets(appDir: string): Promise<readonly string[]>;
   /** Applies pending migrations to the persisted local D1; resolves to the IDs applied. */
   migrate(appDir: string): Promise<readonly string[]>;
-  freePort(): Promise<number>;
-  /** Starts Wrangler and resolves once it accepts requests. */
-  startWorker(options: { readonly appDir: string; readonly args: readonly string[]; readonly port: number; readonly io: CliIo }): Promise<WorkerProcess>;
-  startClient(options: { readonly appDir: string; readonly root: string; readonly port: number; readonly apiTarget: string; readonly cacheDir: string }): Promise<ClientServer>;
+  /** Starts Wrangler on port 0 and resolves once it accepts requests on the port it reports. */
+  startWorker(options: { readonly appDir: string; readonly args: readonly string[]; readonly io: CliIo }): Promise<WorkerProcess>;
+  /** Starts Vite on a free loopback port; rejects with `ClientPortInUseError` when that port was taken. */
+  startClient(options: { readonly appDir: string; readonly root: string; readonly cacheDir: string }): Promise<ClientServer>;
   /** Resolves when the owner asks `dev` to stop (Ctrl-C). */
   stopRequested(): Promise<void>;
+}
+
+/** Starts the client server, retrying only on its own structured port-in-use failure, at most `CLIENT_START_ATTEMPTS` times. */
+async function startClientServer(deps: DevDeps, appDir: string, io: CliIo): Promise<ClientServer> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await deps.startClient({ appDir, root: clientRoot(appDir), cacheDir: devPaths(appDir).viteCache });
+    } catch (error) {
+      if (!(error instanceof ClientPortInUseError)) throw error;
+      if (attempt >= CLIENT_START_ATTEMPTS) throw error.original;
+      io.stderr(
+        `dev: client port ${error.port === undefined ? "(unknown)" : String(error.port)} was taken before Vite could bind it (EADDRINUSE); ` +
+          `retrying on a fresh port (attempt ${String(attempt + 1)} of ${String(CLIENT_START_ATTEMPTS)})\n`,
+      );
+    }
+  }
 }
 
 export function devCommand(deps: DevDeps): Command {
@@ -60,18 +101,19 @@ export function devCommand(deps: DevDeps): Command {
       return EXIT.failed;
     }
 
-    const clientPort = await deps.freePort();
-    const workerPort = await deps.freePort();
-    const inspectorPort = await deps.freePort();
-    const origin = `http://localhost:${String(clientPort)}`;
-    const worker = await deps.startWorker({ appDir, port: workerPort, io, args: wranglerDevArgs({ appDir, port: workerPort, inspectorPort, publicOrigin: origin }) });
-    let client: ClientServer;
+    // No port is picked and released before its bind (2026-10-20-mig-ac-002-workerd-crash.md): Vite
+    // binds first, so its port is known for FRAMEWORK_PUBLIC_ORIGIN; Wrangler then binds port 0 for
+    // the Worker and the inspector and reports the Worker's port.
+    const client = await startClientServer(deps, appDir, io);
+    const origin = `http://localhost:${String(client.port)}`;
+    let worker: WorkerProcess;
     try {
-      client = await deps.startClient({ appDir, root: clientRoot(appDir), port: clientPort, apiTarget: `http://${LOOPBACK}:${String(workerPort)}`, cacheDir: devPaths(appDir).viteCache });
+      worker = await deps.startWorker({ appDir, io, args: wranglerDevArgs({ appDir, publicOrigin: origin }) });
     } catch (error) {
-      await worker.stop();
+      await client.close();
       throw error;
     }
+    client.proxyApiTo(`http://${LOOPBACK}:${String(worker.port)}`);
     io.stdout(`\n  ${app} is running at ${origin}/  (client and /api; Ctrl-C stops)\n\n`);
     recordDevServer(appDir, origin);
 

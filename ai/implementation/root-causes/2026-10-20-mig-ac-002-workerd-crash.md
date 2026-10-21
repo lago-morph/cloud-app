@@ -11,7 +11,7 @@ Scratch files are outside the repo, in `/tmp/claude-0/-home-user-cloud-app/b6482
 A different subagent must review this record.
 
 ## Symptom
-The full local compliance run `r5nndia2aediccu` (at `760e7b7`) failed one test: `tests/compliance/criteria/mig/deploys.test.ts:109`, "[MIG-AC-002] a second deployment with no changes …". The message, from `raw/vitest.json`, is cut to the last 1500 characters by the test (`result.output.slice(-1500)`):
+The full local compliance run `r5nndia2aediccu` (at `760e7b7`) failed one test: `tests/compliance/criteria/mig/deploys.test.ts:109`, "[MIG-AC-002] a second deployment with no changes …". The message, from `raw/vitest.json`, is cut to the last 1500 characters by the test (`result.output.slice(-1500)`, at `deploys.test.ts:109`):
 
 ```
 AssertionError: no-change deploy failed (status 1): cloud-app/…/workerd-linux-64/bin/workerd@5a404cd …/workerd@2159d90 …/workerd@215cd18 …/workerd@21430f2 …/workerd@2143108 …/workerd@5b18586 …/workerd@2143154 /lib/x86_64-linux-gnu/libc.so.6@2a1c9 /lib/x86_64-linux-gnu/libc.so.6@2a28a …/workerd@2143024
@@ -122,7 +122,7 @@ That is about 1.3·10⁻⁴ per unrelated port-0 bind. Each `dev` start leaves t
    - Not proven for this run: which socket held the port. No per-port record of the run exists.
 3. **workerd then throws `bind(): Address already in use` inside `Server::run`, prints a kj fatal with this exact frame chain, and exits before announcing ports.** Wrangler reports `ERR_RUNTIME_FAILURE` with the raw stack and exits 1. Its log file is cut off in the bindings table. Evidence: F2 (frame-identical tail, same wrangler output shape) and F3.
    - **Not proven:** that the first, cut-off line in the failing run was `bind(): Address already in use`. The ten visible frames are the common path of *any* fatal kj exception or crash signal that ends `Server::run` on the main thread (F1). They show that workerd died at startup in its main event loop. On their own they do not show that the error was a bind failure.
-4. **`dev` sees wrangler exit before the port accepts, and returns status 1 with "wrangler exited with status 1 before serving"** (`runtime.ts:87-89`). The test asserts `result.ok` and fails, keeping only the last 1500 characters. Evidence: the failure message.
+4. **`dev` sees wrangler exit before the port accepts, and returns status 1 with "wrangler exited with status 1 before serving"** (`runtime.ts:91-92` at `760e7b7`; corrected from `:87-89`, which is `stop()`). The test asserts `result.ok` and fails, keeping only the last 1500 characters (`result.output.slice(-1500)` at `deploys.test.ts:109`). Evidence: the failure message.
 
 ## Alternatives ruled out (and what is not)
 - **fix-registry, fix-registry-2, the platform-proxy helper, the migration checker or the fake D1 API — ruled out.** None of them runs in a local deploy (F4).
@@ -140,7 +140,7 @@ That is about 1.3·10⁻⁴ per unrelated port-0 bind. Each `dev` start leaves t
    - Red test (unit, `dev.unit.test.ts` with fake deps): a `startWorker` that fails once with the F2 text, then serves. Today `dev` returns failure; after the fix it serves on the second set of ports, and a non-bind early exit still fails at once.
    - Integration red test: `freePort` injected to return, on the first call, a port held by a listening socket. Today `dev` exits 1; after the fix it serves.
    - The client port (Vite, `strictPort: true`) has the same window. Treat it the same way, with Vite's `EADDRINUSE`.
-2. **Test diagnostics (test author):** `tests/compliance/criteria/mig/support/stage.ts` should keep the evidence a failure needs. On a failed deploy, the assertion message should carry the first `*** ` fatal line (or "Runtime stderr:" block) of the output, plus its tail, instead of only `slice(-1500)`. This does not weaken the assertion. It makes link 3 provable if the failure ever recurs.
+2. **Test diagnostics (test author):** the deploy assertions (`deploys.test.ts:80, 109, 138, 166, 190`, and `support/stage.ts:245`; corrected: the `slice(-1500)` is in `deploys.test.ts`, not in `support/stage.ts`) should keep the evidence a failure needs. On a failed deploy, the assertion message should carry the first `*** ` fatal line (or "Runtime stderr:" block) of the output, plus its tail, instead of only `slice(-1500)`. This does not weaken the assertion. It makes link 3 provable if the failure ever recurs.
 
 ## Verification plan
 - Red-green for part 1 as above. Then `vitest related` on the changed files, `npm run typecheck`, `npm run lint`, the CLI/dev integration suite, and `--only MIG-AC-002` once on local, as plan §1 "Test economy" item 1 allows. The change touches `dev`, so also an offline run (§1 item 4).
@@ -239,3 +239,36 @@ The record's own design for the worker port had these properties, except the fre
 4. **Verification:**
    - as the record's plan, with the retry expectations replaced by: no `dev` start passes a pre-picked worker or inspector port;
    - the next full local run under the `MINIFLARE_WORKERD_PATH` wrapper, if the runner agrees.
+
+## Fix
+
+Fixer: a third subagent (prompt §8 step 3). I did not write the diagnosis or the review. Base: `2e33dc5`. No Cloudflare call was made. Decision draft: `ai/implementation/decisions/fix-mig002.md` (DEC-PENDING-fix-mig002-1, which updates DEC-0204's "Ports are free loopback ports picked at start").
+
+Changes, as the Review required:
+1. **No pre-picked worker or inspector port.**
+   - Wrangler is started with `--port 0 --inspector-port 0`. Both IPs stay `127.0.0.1`.
+   - It has an `ipc` stdio channel. `dev` takes the Worker's port from `DEV_SERVER_READY` (`plan.ts` `devServerReadyPort`), or else from the `Ready on http://127.0.0.1:<port>` line (`readyLinePort`).
+   - `freePort` is removed from `dev`'s dependencies.
+2. **Client port.**
+   - Vite now starts first, on port 0, so its bound port is the public origin that Wrangler gets. The `/api` proxy target is set once Wrangler reports its port, and `/api` answers 503 until then.
+   - Vite 8.3.4's port 0 is not race-free by itself: `httpServerStart` uses `getAvailableEphemeralPort`, a pick-then-release (`vite/dist/node/chunks/node.js:14687-14696`). So the Review's bounded retry applies to the client port only:
+     - It triggers only on the structured `EADDRINUSE` code from the http server's `"error"` event, never on output text.
+     - At most 3 attempts in all. Each retry is printed to stderr with the port and the attempt.
+     - After the last attempt, `dev` fails with Vite's original error and exits 1.
+     - Nothing else is re-run: no build, secrets or migrations, and Wrangler is not started yet.
+3. **The inspector stays enabled and on loopback** (cli.md:93). In one local `dev` run of a scratch `apps/reference`, every listener of the process group was on `127.0.0.1`. `GET /json/version` answered `wrangler/v4.149.0` on one listener (the inspector proxy) and `workerd` on another.
+4. **Diagnostics.**
+   - `failureOutput()` in `mig/support/stage.ts` keeps the first `*** ` fatal line and the first `Runtime stderr:` block, followed by the tail.
+   - It is used at `deploys.test.ts:80, 109, 138, 166, 190` and at `stage.ts:245` (the restart message). Only the messages change; every assertion is unchanged.
+5. **Still unproven:** that the failure in `r5nndia2aediccu` was a bind error (link 3). It stays open until a recurrence's first fatal line is kept, which `failureOutput` now does.
+
+### Red-green
+
+| Test | Red (code at `2e33dc5`) | Green (fix) |
+|---|---|---|
+| `test/integration/local/dev.test.ts` "serves even when every port freePort returns is taken by another socket before dev binds it" (holds three picked ports, injects them as `freePort`) | failed: `dev ended before serving: Error: Port 39191 is already in use` | passed: `dev` serves on ports it bound itself; `/api/hello` 200; exit 0 |
+| `plan.unit.test.ts` "[LOCAL-AC-004] runs wrangler on loopback only …" | failed: the args held the picked ports | passed: `--port 0`, `--inspector-port 0` |
+| `plan.unit.test.ts` "passes --port 0 and --inspector-port 0 on loopback …" | failed: `expected 'undefined' to be '0'` | passed |
+| `plan.unit.test.ts` "reads the Worker's bound port from wrangler's IPC DEV_SERVER_READY message" | failed: `devServerReadyPort is not a function` | passed |
+| `plan.unit.test.ts` "falls back to wrangler's `Ready on …` line" | failed: `readyLinePort is not a function` | passed |
+| `dev.unit.test.ts` client-retry tests (3); `runtime.unit.test.ts` EADDRINUSE tests (3); `failure-output.unit.test.ts` (3) | new behaviour | passed |

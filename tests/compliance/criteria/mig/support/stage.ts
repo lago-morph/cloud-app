@@ -66,6 +66,34 @@ export function frameworkMigrations(): string[] {
   return sqlFiles(join(REPO_ROOT, "packages/framework/migrations/sqlite"));
 }
 
+/**
+ * A failed deploy's output for an assertion message: the first workerd fatal line (`*** …`, e.g.
+ * `*** Fatal uncaught kj::Exception: … bind(): Address already in use`) and the first
+ * `Runtime stderr:` block, when the output has them and they are not already in the tail, then the
+ * last `tailChars` characters. A bare tail lost exactly that line in the MIG-AC-002 failure of
+ * run r5nndia2aediccu (ai/implementation/root-causes/2026-10-20-mig-ac-002-workerd-crash.md).
+ */
+export function failureOutput(output: string, tailChars = 1500): string {
+  const tail = output.slice(-tailChars);
+  const head = output.slice(0, Math.max(0, output.length - tailChars));
+  const lines = head.split("\n");
+  const kept: string[] = [];
+  const fatal = lines.find((l) => /^(\[wrangler\] )?\*\*\* /.test(l));
+  if (fatal !== undefined) kept.push(fatal.slice(0, 2000));
+  const runtime = lines.findIndex((l) => l.includes("Runtime stderr:"));
+  if (runtime >= 0) {
+    const block: string[] = [];
+    for (const l of lines.slice(runtime, runtime + 20)) {
+      if (block.length > 0 && l.trim() === "") break;
+      block.push(l.slice(0, 2000));
+    }
+    const text = block.join("\n");
+    if (fatal === undefined || !text.includes(fatal.slice(0, 2000))) kept.push(text);
+  }
+  if (kept.length === 0) return tail;
+  return `${kept.join("\n")}\n[…]\n${tail}`;
+}
+
 function sqlFiles(dir: string): string[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
@@ -242,7 +270,7 @@ function localStage(): StageUnderTest {
         // Local reading of "the old app answers again" (DEC-0144): serve the previous version's sources.
         applyVersion(dir, previous);
         const restarted = await serve();
-        if (!restarted.ok) throw new Error(`the previous version did not start again after the failed deploy:\n${restarted.output.slice(-2000)}`);
+        if (!restarted.ok) throw new Error(`the previous version did not start again after the failed deploy:\n${failureOutput(restarted.output, 2000)}`);
         return result;
       } finally {
         await settle(running, controller);
