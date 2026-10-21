@@ -272,3 +272,11 @@ Changes, as the Review required:
 | `plan.unit.test.ts` "reads the Worker's bound port from wrangler's IPC DEV_SERVER_READY message" | failed: `devServerReadyPort is not a function` | passed |
 | `plan.unit.test.ts` "falls back to wrangler's `Ready on …` line" | failed: `readyLinePort is not a function` | passed |
 | `dev.unit.test.ts` client-retry tests (3); `runtime.unit.test.ts` EADDRINUSE tests (3); `failure-output.unit.test.ts` (3) | new behaviour | passed |
+
+### Checks (at `86f3928`, plan §1 Test economy rules 1 and 4)
+- `vitest related` on the changed files: 6 files, 39 tests passed. CLI unit suite (`packages/framework/src/cli`): 22 files, 132 tests passed.
+- `npm run typecheck` (after the framework build) and `npm run lint`: clean.
+- Integration, CLI and local `dev` suites (`test/integration/cli`, `test/integration/local`): 2 files, 17 tests passed.
+- Offline (`unshare -rn sh scripts/offline.sh`), local `dev` suite: 4 passed. 1 failed by design: LOCAL-AC-004's non-loopback probe asserts that a non-loopback interface exists, and its message says not to run it inside `unshare -n`.
+- Compliance driver, local, run once: `--only MIG-AC-002,CLI-AC-002,LOCAL-AC-001,LOCAL-AC-002,LOCAL-AC-004,CLI-AC-005,MIG-AC-003,AUTH-AC-007`. Result: 8 passed, 101 not-run, exit 0 (evidence `j0ih5bvz19eyec6`, kept in scratch only). The added IDs are the other criteria that start `dev` or depend on its `/api` proxy.
+- Still open (Review, Required change 4): the next phase-end full local run, under the `MINIFLARE_WORKERD_PATH` wrapper if the runner agrees.
