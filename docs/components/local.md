@@ -36,7 +36,7 @@ Local URLs MUST use the hostname `localhost`. Local dev servers MUST listen on t
 
 ## 2. Design
 
-`dev` (CLI) starts Wrangler (PAR-101) with the generated local entry point, and Vite with a proxy for `/api`. It applies pending migrations, generates missing development-only secrets, and captures log lines into `.logs/`. When stopped, it stops both processes. Local state lives in `.wrangler/` (Wrangler's own) and `.logs/`. The Postgres harness is PGlite (PAR-107), used by the test runner in-process. The dialect is fixed for each test-runner process, so `verify` runs the suite once per dialect.
+`dev` (CLI) starts Vite with a proxy for `/api`, then Wrangler (PAR-101) with the generated local entry point; each binds a loopback port itself and `dev` reads the real port back (DEC-0417). It applies pending migrations, generates missing development-only secrets, and captures log lines into `.logs/`. When stopped, it stops both processes. Local state lives in `.wrangler/` (Wrangler's own) and `.logs/`. The Postgres harness is PGlite (PAR-107), used by the test runner in-process. The dialect is fixed for each test-runner process, so `verify` runs the suite once per dialect.
 
 The local target uses the Cloudflare adapters wherever possible (DEC-0039), with these local-only differences:
 - the mock in place of a real provider;
