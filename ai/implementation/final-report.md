@@ -1,11 +1,11 @@
 # Final report: local and Cloudflare phase (interim)
 
-Date: 2026-10-20. Base: `origin/claude/implement-local-cloudflare` at `faced8b`. Pull request: https://github.com/lago-morph/cloud-app/pull/5.
+Date: 2026-10-21 (first written 2026-10-20 at `faced8b`). Base: `origin/claude/implement-local-cloudflare` at `c016e7e`. Pull request: https://github.com/lago-morph/cloud-app/pull/5.
 
 **Status: interim.** Local work is complete. Cloudflare testing is stopped, and the Cloudflare checks have not run. This report is written from committed files only. No test suite was run and no Cloudflare call was made for it.
 
-**Overall verdict: "not working"** (COMPL-REQ-006, prompt §11). Release report: `validation/release/2026-10-20-903d0f9.md`.
-- **Local:** 110 of 110 IDs passed.
+**Overall verdict: "not working"** (COMPL-REQ-006, prompt §11). Release report: `validation/release/2026-10-21-c016e7e.md`.
+- **Local:** 110 of 110 IDs passed (full run `pzeugkxrk1xcu2w` at `a5b2164`). MIG-AC-002 failed once in the run before it; the cause is unproven (§6.5, U1).
 - **Cloudflare:** no criterion has passed. 73 are `blocked` and 8 are `not-run` (Google).
 - **AWS:** not started.
 - **Google:** the real Google login is not certified.
@@ -26,7 +26,7 @@ Date: 2026-10-20. Base: `origin/claude/implement-local-cloudflare` at `faced8b`.
 
 ## 2. Checks
 
-Source: `ai/implementation/evaluations/final.md` (F-EV2, base `903d0f9`). Local evidence R3 is `validation/local/q3qgbyunuxaz1fw.json` at `26128b1`: one full, unfiltered run with exit 0.
+Source: `ai/implementation/evaluations/final.md` (F-EV3, base `c016e7e`). Local evidence R4 is `validation/local/pzeugkxrk1xcu2w.json` at `a5b2164` (logs in `validation/local/final-local-4/`): one full, unfiltered run with exit 0. The base differs from `a5b2164` only in `validation/`.
 
 | Target | Applicable | passed | failed | blocked | not-run |
 | --- | --- | --- | --- | --- | --- |
@@ -35,9 +35,10 @@ Source: `ai/implementation/evaluations/final.md` (F-EV2, base `903d0f9`). Local 
 | aws | 85 | 0 | 0 | 0 | 85 (AWS phase not started) |
 
 Notable entries:
-- **R3:** 109 of the local IDs passed in R3. The 110th, E2E-015, is a milestone judged from BUILD-RECORD plus R3.
-- **R3 layer counts:** Playwright 42/42. Integration 564 passed and 18 skipped (16 Cloud-only tests and 2 untagged controls, G4). Unit-level criteria 53 passed.
-- **Batch verify BV2** (`validation/local/batch-verify-2/`, `1487c7d`): online and offline, exit 0. Unit 1687/1687, template 18/18, reference 52/52 per dialect.
+- **R4:** 109 of the local IDs passed in R4. The 110th, E2E-015, is a milestone judged from BUILD-RECORD plus R4.
+- **R4 layer counts:** Playwright 42/42, 0 flaky. Integration 586 tests: 564 passed and 22 skipped. The 22 are 16 Cloud-only tests, the 2 untagged controls (G4), and 4 untagged regression tests added by fix-mig002 (one `dev.test.ts` port test, O2, and three `failure-output.unit.test.ts` tests, which passed in BV4). None was skipped to obtain a pass: they are left out by the driver's ID filter, and every tagged MIG-AC-002 test ran and passed. Unit-level criteria 53 passed.
+- **Batch verify BV4** (`validation/local/batch-verify-4/`, `a5b2164`, the same commit as R4): online and offline, exit 0. Unit 1706/1706, template 18/18, reference 52/52 per dialect, skill example pages 2/2.
+- **MIG-AC-002 failed once**, in the previous full run R3b (`validation/local/r5nndia2aediccu.json`, `760e7b7`, 108 passed, 1 failed, exit 1): the no-change deploy's `dev` start died with a workerd fatal at startup, and the first line of the error was cut off. The cause is **unproven**. A confirmed `dev` port race of the same signature was fixed (fix-mig002, DEC-0417), the test messages now keep the first fatal line, and MIG-AC-002 passed in R4. Open item U1 (§6.5).
 - **DEMO-AC-003:** `passed`, with the weak assertion W5 still open (owner question Q10).
 - **E2E-002, E2E-004, DEMO-AC-010:** only their local parts pass. The scenarios are not met until the Cloudflare and AWS runs pass.
 - **E2E-015, E2E-016:** judged `passed` on local, but neither has a milestone evidence record (G5). The release report therefore cannot see them.
@@ -83,8 +84,8 @@ These are the records in `ai/implementation/root-causes/`. Verdicts are read fro
 | 2026-10-20 CLI-AC-002-MIG-AC-001-offline-verify-fetch-failed | The migration checker opens both dialect databases at once, giving `fetch failed` offline | accepted |
 | 2026-10-20 CLI-AC-003-driver-cleanup-failures | A failing `dev` stop throws out of the driver, and a failed cleanup exits 0 | accepted-with-changes ("ACCEPTED, with the fix requirements below") |
 | 2026-10-20 COMPL-AC-001-where-parser-decision-log | The Where reader parses a decision-log table as criteria rows | accepted-with-changes ("ACCEPTED, subject to the fix requirements") |
-| 2026-10-20 D-01-unit-timeouts-under-host-load | Unit-test timeouts when the host is loaded | **not reviewed** (Review pending; integrator note points to the D-04 record) |
-| 2026-10-20 D-03-unit-timeouts-under-load | Unit-test timeouts under load | **not reviewed** (Review pending; integrator note points to the D-04 record) |
+| 2026-10-20 D-01-unit-timeouts-under-host-load | Unit-test timeouts when the host is loaded | accepted (Review added in `8f3ab0f`; the D-04 fix covers every named test) |
+| 2026-10-20 D-03-unit-timeouts-under-load | Unit-test timeouts under load | accepted (Review added in `8f3ab0f`; the D-04 fix covers every named test) |
 | 2026-10-20 D-04-verify-unrelated-failures | Unit timeouts under load and a non-hermetic evidence-writer test | accepted-with-changes (fix made concrete; fix in `2026-10-20-verify-fixes.md`) |
 | 2026-10-20 E2E-004-coverage-and-not-run | Coverage from a source scan, unit-level IDs missing from the record, missing tags | accepted-with-changes (A accepted; B with conditions; C rejected in part, then the revised C accepted with a condition) |
 | 2026-10-20 F-02-round-1-demo-issues | Five demo `FRAMEWORK-ISSUE.md` entries | accepted-with-changes (entry 2 rejected, re-diagnosed, then accepted with additions) |
@@ -101,16 +102,20 @@ These are the records in `ai/implementation/root-causes/`. Verdicts are read fro
 | 2026-10-20 e2e-016-r01-portability-notes | Seven component documents have no portability note | accepted-with-changes ("agree-with-changes") |
 | 2026-10-20 e2e-016-r06-raster-inline-disposition | Raster images download `inline`, and local and Cloudflare differ | accepted-with-changes ("agree-with-changes") |
 | 2026-10-20 global-unit-timeout-review | Review of the change to a global unit timeout (a review document, not a diagnosis) | accepted |
-| 2026-10-20 test-order-dependence-scan | Scan for order-dependent tests: no failures, one `sessions.test.ts` timer-overflow observation | **not reviewed** (the record asks for an independent review; none is committed) |
+| 2026-10-20 test-order-dependence-scan | Scan for order-dependent tests: no failures, one `sessions.test.ts` timer-overflow observation | accepted-with-changes (Review added in `8f3ab0f`: main result accepted with its limits; the observation is a real defect with a different cause, which led to the testing-dev-registry record) |
+| 2026-10-20 mig-ac-002-workerd-crash | MIG-AC-002 failed in R3b: the no-change deploy's `dev` start died with a workerd fatal at startup. Diagnosed as `dev`'s pick-then-release port race | **not accepted as the proven cause** of that failure (the first fatal line was cut off). Accepted in part: (A) the port race is a proven latent defect, to be fixed race-free; (B) the diagnostic change. Fixed by fix-mig002 (DEC-0417); the cause of the R3b failure stays open (U1) |
+| 2026-10-20 testing-dev-registry | `createTestApp` joined the host-wide Miniflare dev registry under a fixed name, so test apps interfered across processes | accepted-with-changes ("ACCEPTED, with the required changes below"). Fixed by fix-registry (DEC-0415) and fix-registry-2 (DEC-0416) |
 | 2026-10-20 verify-fixes | The Fix section for the D-04 record (a fix log, not a diagnosis) | n/a (covered by the D-04 Review) |
 
-**Records without a committed review:**
-- D-01-unit-timeouts-under-host-load and D-03-unit-timeouts-under-load. Their Reviews are "pending", and the cause is covered by the accepted D-04 record.
-- test-order-dependence-scan. Its scan is partial (55 of 84 files not run), and the `sessions.test.ts` observation is open.
+**Records without a committed review:** none. The D-01, D-03 and order-scan Reviews landed in `8f3ab0f`.
+
+**Still open from these records:**
+- mig-ac-002-workerd-crash: the cause of the R3b failure is unproven (§6.5, U1). Its integration regression test has no runner output (O2).
+- test-order-dependence-scan: the scan covers 29 of 84 integration files (O3, optional).
 
 ## 5. Decisions and design documents
 
-**Decision-log entries added in this run:** DEC-0083…DEC-0414, 332 entries, with no gaps.
+**Decision-log entries added in this run:** DEC-0083…DEC-0417, 335 entries, with no gaps.
 
 | Phase (decision-log heading) | Range | Count |
 | --- | --- | --- |
@@ -120,8 +125,15 @@ These are the records in `ai/implementation/root-causes/`. Verdicts are read fro
 | C follow-ups, D Cloudflare, E skill | DEC-0319…DEC-0393 | 75 |
 | Follow-ups after E, F demo checks | DEC-0394…DEC-0412 | 19 |
 | F-04 fixes for E2E-016 | DEC-0413…DEC-0414 | 2 |
+| dev-registry fixes (fix-registry, fix-registry-2) | DEC-0415…DEC-0416 | 2 |
+| `dev` port binding fix (fix-mig002) | DEC-0417 | 1 |
 
-**Entries marked "owner review open":** 172 in total.
+The three new entries, all `accepted` and none marked "owner review open":
+- **DEC-0415:** a test app never joins Wrangler's local dev registry (refines DEC-0105).
+- **DEC-0416:** one registry-free platform-proxy helper (`targets/local/platform-proxy.ts`) for `createTestApp`, the migration checker and the fake D1 API, each with a guard test.
+- **DEC-0417:** `dev` binds its ports itself: Vite first on port 0, then Wrangler on port 0 for the Worker and the inspector, with the real ports read back; a bounded retry on Vite's structured `EADDRINUSE` only (refines DEC-0204).
+
+**Entries marked "owner review open":** 172 in total (unchanged; DEC-0415…DEC-0417 add none).
 
 | Phase | Entries |
 | --- | --- |
@@ -140,17 +152,17 @@ Some entries are marked "owner decision outstanding" instead: DEC-0101 (Q4), DEC
 | --- | --- |
 | `docs/components/auth.md` | 12 |
 | `docs/components/aws.md` | 4 (portability note only) |
-| `docs/components/check.md` | 25 |
-| `docs/components/cli.md` | 24 |
+| `docs/components/check.md` | 27 |
+| `docs/components/cli.md` | 24 (DEC-0417 rewrote one line of the `dev` bullet) |
 | `docs/components/cloudflare.md` | 25 |
 | `docs/components/compliance.md` | 8 |
 | `docs/components/config.md` | 10 |
-| `docs/components/core.md` | 6 |
+| `docs/components/core.md` | 8 |
 | `docs/components/files.md` | 26 |
 | `docs/components/google.md` | 8 |
 | `docs/components/http.md` | 10 |
 | `docs/components/kv.md` | 6 |
-| `docs/components/local.md` | 10 |
+| `docs/components/local.md` | 12 |
 | `docs/components/log.md` | 8 |
 | `docs/components/migrations.md` | 29 |
 | `docs/components/provisioning.md` | 10 |
@@ -160,10 +172,10 @@ Some entries are marked "owner decision outstanding" instead: DEC-0101 (Q4), DEC
 | `docs/contracts/ts/index.d.ts` | 2 (contract) |
 | `docs/contracts/ts/sql.d.ts` | 36 (contract, DEC-0103) |
 | `docs/contracts/ts/testing.d.ts` | 25 (contract) |
-| `docs/decisions/decision-log.md` | 2936 |
+| `docs/decisions/decision-log.md` | 2990 |
 | `docs/parameters/parameters.md` | 25 |
 
-In total, 24 files changed: 3230 insertions and 69 deletions.
+In total, 24 files changed: 3287 insertions and 72 deletions. Since the first version of this report, `core.md` §2 "Testing" (DEC-0415/0416), `check.md` §3 "Uses" (DEC-0416), `cli.md` §2 and `local.md` §2 (DEC-0417) changed.
 
 ## 6. Open items and owner actions
 
@@ -247,6 +259,9 @@ Every AWS entry is `not-run` ("AWS phase not started"): 85 IDs, including AWS-AC
 
 | Item | What | What to do |
 | --- | --- | --- |
+| **U1** | **The cause of MIG-AC-002's failure in R3b (`r5nndia2aediccu`, `760e7b7`) is unproven.** The visible workerd frames fit a port-bind error but also any other startup fatal or crash signal; the first line was cut off, and the run was not repeated. The port race was fixed as a confirmed defect (DEC-0417), and MIG-AC-002 passed in R4. One clean run cannot confirm the cause. | Agent work, no owner action. **Evidence that would settle it:** the first fatal line of workerd's stderr from a recurrence. The MIG deploy messages now keep it (`failureOutput`), so any recurrence in a later full run is self-diagnosing; or a runner can do the next full local run under the root-cause record's `MINIFLARE_WORKERD_PATH` wrapper, which stores every workerd's full stderr and arguments. A fatal that is not `bind(): Address already in use` sends the record back to §8 step 1. |
+| O2 | fix-mig002's integration regression test (`test/integration/local/dev.test.ts`, "serves even when every port freePort returns is taken …") is untagged and not in `verify`, so no committed runner output covers it; only the fixer's red-green does. | Agent work: run it in the next batch, or tag it. No owner action. |
+| O3 | The order-dependence scan covers 29 of 84 integration files. | Optional: the shuffle runs the accepted record names (`kv/*`, `sql/*`, `files/server-operations`, `local/dev`). No owner action. |
 | W1 | DEMO-AC-001 "paginated": only the page size is shown. | Optional: a test author adds a check of the next page. No owner action. |
 | W2 | The smoke-test clauses of DEMO-AC-001 and -003 count through E2E-002's tag. | None (accepted). |
 | W3 | DEMO-AC-008 matches its `info` entry by time window and requestId, not by message. | Optional test strengthening. No owner action. |
@@ -255,7 +270,7 @@ Every AWS entry is `not-run` ("AWS phase not started"): 85 IDs, including AWS-AC
 | G4 | The untagged controls for CFG-AC-002 and CORE-AC-007 are filtered out of driver runs. | Optional: tag them. No owner action. |
 | G5 | E2E-015 and E2E-016 (review part) have no milestone evidence record, and the Cloudflare `blocked` set has no record. | Agent work: record the milestones with `npm run compliance -- --target local --milestone`, or write a record for the review. Record the `blocked` set once a `--blocked` run is confirmed to make no Cloudflare request (DEC-0261). No owner action. |
 
-Also open, though minor: O1, the edited `expected.unit.test.ts`, has no runner output. The next batch `verify` covers it.
+Closed since the first version of this report: O1 (`expected.unit.test.ts` ran in BV3 and BV4), and the missing Reviews of the D-01, D-03 and order-scan records (`8f3ab0f`).
 
 ## 7. Costs
 
