@@ -2,14 +2,86 @@
  * The local target as the owner runs it: `npx <package> dev` and `reset-local` on a fixture
  * app (LOCAL-REQ-002, LOCAL-REQ-004). Fixture layer: `test/fixtures/local/app`.
  */
-import { createServer, type AddressInfo } from "node:net";
+import { createServer, type AddressInfo, type Server } from "node:net";
 import { networkInterfaces } from "node:os";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { tag } from "../../../../../tests/support/tags.js";
+// The compiled package, as the CLI binary runs it (DEC-0111): the fixture app's build loads the
+// framework from dist/, and a second copy of the framework from src/ would not share its config keys.
+import { devCommand } from "../../../dist/cli/commands/dev.js";
+import { realDevDeps } from "../../../dist/cli/dev/runtime.js";
+import { captureIo } from "../../../dist/cli/io.test-support.js";
 import { FixtureApp } from "../../fixtures/support/app.js";
 import { canConnect, http, listeningSockets, startDev, type DevServer } from "../../fixtures/support/dev.js";
 
 const TIMEOUT = 900_000;
+
+describe("dev picks no port before binding it (MIG-AC-002 root cause, 2026-10-20-mig-ac-002-workerd-crash.md)", () => {
+  let app: FixtureApp | undefined;
+  const held: Server[] = [];
+
+  afterAll(async () => {
+    for (const s of held) await new Promise<void>((resolve) => s.close(() => resolve()));
+    await app?.dispose();
+  });
+
+  it(
+    "serves even when every port freePort returns is taken by another socket before dev binds it",
+    async () => {
+      app = await FixtureApp.create({ layers: ["apps/base", "local/app"] });
+      // Three ports picked the way dev's former `freePort` picked them (listen on port 0, read the
+      // port, close), each then held by another listening socket: the state when another process
+      // takes a picked port before the server binds it (record F2). A dev that still picks its
+      // client, Worker and inspector ports gets exactly these through `freePort`; a dev that lets
+      // each server bind port 0 itself never gets a port that is in use.
+      const heldPorts: number[] = [];
+      for (let i = 0; i < 3; i++) {
+        const pick = createServer();
+        await new Promise<void>((resolve) => pick.listen(0, "127.0.0.1", () => resolve()));
+        const port = (pick.address() as AddressInfo).port;
+        await new Promise<void>((resolve) => pick.close(() => resolve()));
+        const holder = createServer((socket) => socket.destroy());
+        await new Promise<void>((resolve, reject) => {
+          holder.once("error", reject);
+          holder.listen(port, "127.0.0.1", () => resolve());
+        });
+        held.push(holder);
+        heldPorts.push(port);
+      }
+      let next = 0;
+      const freePort = async (): Promise<number> => heldPorts[next++ % heldPorts.length] ?? 0;
+      let stop!: () => void;
+      const stopped = new Promise<void>((resolve) => (stop = resolve));
+      const deps = { ...realDevDeps(), freePort, stopRequested: () => stopped };
+      const io = captureIo(app.dir);
+      let finished: number | Error | undefined;
+      const running = devCommand(deps)([], io).then(
+        (code) => (finished = code),
+        (error: unknown) => (finished = error instanceof Error ? error : new Error(String(error))),
+      );
+      const deadline = Date.now() + 240_000;
+      let port: number | undefined;
+      while (port === undefined && finished === undefined && Date.now() < deadline) {
+        const m = /http:\/\/localhost:(\d+)/.exec(io.out);
+        if (m) port = Number(m[1]);
+        else await new Promise((r) => setTimeout(r, 200));
+      }
+      try {
+        expect(finished, `dev ended before serving:\n${String(finished)}\n${io.out}\n${io.err}`).toBeUndefined();
+        expect(port, `dev printed no URL in time:\n${io.out}\n${io.err}`).toBeDefined();
+        expect(heldPorts, "dev was served on a port another socket holds").not.toContain(port);
+        const hello = await http(port ?? 0, "/api/hello");
+        expect(hello.status, hello.body).toBe(200);
+        expect(JSON.parse(hello.body)).toEqual({ greeting: "hello" });
+      } finally {
+        stop();
+        await running;
+      }
+      expect(finished, io.err).toBe(0);
+    },
+    TIMEOUT,
+  );
+});
 
 describe("local state (LOCAL-REQ-002)", () => {
   let app: FixtureApp | undefined;

@@ -11,7 +11,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { tag, type ComplianceClient } from "../../harness/index.js";
-import { createStage, frameworkMigrations, type StageUnderTest } from "./support/stage.js";
+import { createStage, failureOutput, frameworkMigrations, type StageUnderTest } from "./support/stage.js";
 
 const STEP_MS = 1_800_000;
 /** Writes attempted while the schema-changing deploy runs (MIG-AC-006): bounded, a handful of rows. */
@@ -77,7 +77,7 @@ describe("MIG: initial and unchanged deployments, a failing data-dependent migra
 
   it(tag("MIG-AC-002", "initial deployment creates the schema, the app answers, and the record lists every migration once"), async () => {
     const result = await stage.deploy("v1");
-    expect(result.ok, `initial deploy failed (status ${String(result.status)}): ${result.output.slice(-1500)}`).toBe(true);
+    expect(result.ok, `initial deploy failed (status ${String(result.status)}): ${failureOutput(result.output)}`).toBe(true);
     const tables = (await stage.query("SELECT name FROM sqlite_master WHERE type = 'table'")).map((r) => String(r["name"]));
     expect(tables).toEqual(expect.arrayContaining(["authors", "posts", "tags", "blobs", "parents", "children", "__framework_kv", "__framework_migrations"]));
     await expectRecord(stage);
@@ -106,7 +106,7 @@ describe("MIG: initial and unchanged deployments, a failing data-dependent migra
         await new Promise((r) => setTimeout(r, PROBE_INTERVAL_MS));
       }
     });
-    expect(result.ok, `no-change deploy failed (status ${String(result.status)}): ${result.output.slice(-1500)}`).toBe(true);
+    expect(result.ok, `no-change deploy failed (status ${String(result.status)}): ${failureOutput(result.output)}`).toBe(true);
     expect(await snapshot(stage), "every table, every row and the migration record (incl. applied times) are unchanged").toEqual(before);
     expect(await stage.databases()).toEqual(databasesBefore);
     await expectAnswering(stage, "v1");
@@ -135,7 +135,7 @@ describe("MIG: initial and unchanged deployments, a failing data-dependent migra
     const user = await stage.user();
     expect(user.expectStatus(await user.post("/api/cases/run", { set: "mig", name: "relabelDuplicate" }), 200).json()).toEqual({ outcome: "value", value: { changed: 1 } });
     const result = await stage.deploy("unique-fail");
-    expect(result.ok, `re-run failed (status ${String(result.status)}): ${result.output.slice(-1500)}`).toBe(true);
+    expect(result.ok, `re-run failed (status ${String(result.status)}): ${failureOutput(result.output)}`).toBe(true);
     await expectAnswering(stage, "unique-fail");
     expect(await dump(stage)).toEqual({
       ...loaded,
@@ -163,7 +163,7 @@ describe("MIG: a schema-changing deployment with data, writes, a secret and a se
     stage = createStage();
     await stage.setSecret("apiKey", secret);
     const result = await stage.deploy("v1");
-    if (!result.ok) throw new Error(`deploying version 1 failed (status ${String(result.status)}): ${result.output.slice(-1500)}`);
+    if (!result.ok) throw new Error(`deploying version 1 failed (status ${String(result.status)}): ${failureOutput(result.output)}`);
     session = await stage.user();
     meBefore = session.expectStatus(await session.get("/api/ref/me"), 200).json();
     expect(meBefore).toMatchObject({ user: { level: "user" } });
@@ -187,7 +187,7 @@ describe("MIG: a schema-changing deployment with data, writes, a secret and a se
         await new Promise((r) => setTimeout(r, WRITER_INTERVAL_MS));
       }
     });
-    expect(result.ok, `schema-changing deploy failed (status ${String(result.status)}): ${result.output.slice(-1500)}`).toBe(true);
+    expect(result.ok, `schema-changing deploy failed (status ${String(result.status)}): ${failureOutput(result.output)}`).toBe(true);
     deployed = true;
     await expectAnswering(stage, "v2");
     expect(await dump(stage)).toEqual({
