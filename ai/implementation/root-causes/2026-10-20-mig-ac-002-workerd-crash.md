@@ -242,7 +242,7 @@ The record's own design for the worker port had these properties, except the fre
 
 ## Fix
 
-Fixer: a third subagent (prompt §8 step 3). I did not write the diagnosis or the review. Base: `2e33dc5`. No Cloudflare call was made. Decision draft: `ai/implementation/decisions/fix-mig002.md` (DEC-PENDING-fix-mig002-1, which updates DEC-0204's "Ports are free loopback ports picked at start").
+Fixer: a third subagent (prompt §8 step 3). I did not write the diagnosis or the review. Base: `2e33dc5`. No Cloudflare call was made. Decision draft: `ai/implementation/decisions/fix-mig002.md` (DEC-0417, which updates DEC-0204's "Ports are free loopback ports picked at start").
 
 Changes, as the Review required:
 1. **No pre-picked worker or inspector port.**
