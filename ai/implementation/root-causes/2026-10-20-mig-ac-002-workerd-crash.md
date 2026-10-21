@@ -147,3 +147,95 @@ That is about 1.3·10⁻⁴ per unrelated port-0 bind. Each `dev` start leaves t
 - The next phase-end full local compliance run, under the `MINIFLARE_WORKERD_PATH` wrapper if the runner agrees, so that any workerd fatal is kept in full. Pass: MIG-AC-002 passes. If any `dev` start hits a bind collision, the retry shows in its output and the run still passes. If a fatal that is not a bind failure appears, this record goes back to step 1 with that line.
 
 ## Review
+
+Reviewer: independent subagent (prompt §8 step 2). I did not diagnose this failure or write the code or tests. Base `dbe03f7`. No Cloudflare call was made, no suite was run, and the failure was not reproduced again. One local experiment (E1 below) was run with `wrangler dev --local`. Scratch: `/tmp/claude-0/-home-user-cloud-app/b6482c07-38ed-5065-a51e-6194e2f52fc3/scratchpad/rc-mig002-review/` (`port0.mjs`, `app/`). Wrangler line numbers are in `node_modules/wrangler/wrangler-dist/cli.js` of wrangler `4.149.0`.
+
+### Verdict
+**Not accepted as the proven root cause of the failure in `r5nndia2aediccu`.** Accepted in two narrower parts:
+- **(A) A proven latent defect, to be fixed now.** `dev`'s pick-then-release port selection can make `dev` exit 1 with this exact frame chain. The code (`runtime.ts:27-37`, `dev.ts:63-67`) and the deterministic reproduction (F2) prove it. It may be fixed now as its own finding, under its own red test. **The fix must not be the proposed retry.** See "Required changes" 1.
+- **(B) The diagnostic change (fix part 2), to be done now** as the evidence step that can settle this failure. Its target file must be corrected (Required change 2).
+
+The question "what killed workerd in `r5nndia2aediccu`" stays open. Close it only with the first fatal line of a recurrence. If a later full run fails MIG-AC-002, or any `dev` start, with a fatal that is not `bind(): Address already in use`, that goes back to §8 step 1.
+
+### Reasons
+
+**1. The evidence does not support every link (§8.2).** The record says so itself.
+- Link 2 (another socket took the port) has no evidence from this run: no per-port record exists. F7 and F8 show only that it is possible: about 0.1–0.65 % per freed port under the stated loads.
+- Link 3 (the fatal was a bind error) is explicitly "not proven". The ten visible frames are workerd's generic top-level path (F1), shared by any kj fatal and by `*** Received signal`. The record leaves the signal alternative open (record line 133).
+- The missing first line cannot be recovered:
+  - wrangler's log file is cut off for this error (F3);
+  - `dev`'s `.logs/` holds only marked entries (`cli/dev/logs.ts:3`);
+  - the scratch app is deleted after the run (`mig/support/stage.ts:81`, `:266`).
+
+  So more diagnosis now cannot close the gap. The honest result is the split verdict above. Adopting the cause as proven would be the guess §8 forbids.
+
+**2. Alternatives the record did not address (I checked these):**
+- **Other `dev` instances or fixed ports in the same run: ruled out.**
+  - `grep` over `tests/`, `packages/framework/test`, `packages/framework/src` (non-unit) finds no fixed listening port. Every `listen` is on port 0 (`tests/compliance/criteria/files/browser.ts:185,251`, `compl/evidence.test.ts:116`, `test/integration/files/browser-harness.ts:54`, `test/integration/local/dev.test.ts:135`).
+  - Every `dev` (the driver's run-stage `dev`, `mig/deploy-local`, the MIG stage) passes explicit `--port`/`--inspector-port` from `freePort()` (`plan.ts:40-42`). So wrangler's fixed defaults (8787/9229 via `memoizeGetPort`, cli.js:211733-211734, :212070, :212125) are never used.
+  - `TEST_APP_ORIGIN` `localhost:8787` (`testing/test-app.ts:69`) is a virtual origin and opens no socket.
+  - wrangler's own user-worker inspector is `inspectorPort: 0` (cli.js:370060).
+- **The inspector port: covered.** F2 shows a held `--inspector-port` gives the same fatal, and the proposed fix includes it.
+- **Not considered: a freed port with TIME_WAIT entries.** `freePort()`'s Node `listen` sets `SO_REUSEADDR`, so it may hand back a port that still has TIME_WAIT connections. If workerd's bind (`kj-rs-io/ffi.rs`) does not set `SO_REUSEADDR`, that bind fails without any concurrent process. This was not tested. It is in the same pick-then-release class and is removed by the same race-free fix. It is one more reason not to depend on "a fresh pick will be free".
+- **Minor citation errors:**
+  - Link 4's throw is at `runtime.ts:91-92`, not `:87-89` (that is `stop()`).
+  - The `slice(-1500)` is at `deploys.test.ts:109`, not in `support/stage.ts`.
+
+**3. A retry is not the right fix: a race-free fix exists in wrangler 4.149.0 (verified).**
+- wrangler passes `--port 0` and `--inspector-port 0` through unchanged: `??` keeps 0 (cli.js:374922-374931, :212070, :212125). The proxy workerd and the inspector then bind port 0 themselves, so the kernel never gives them a port that is in use.
+- The bound port comes back two ways:
+  - wrangler sends `{"event":"DEV_SERVER_READY","ip","port"}` over Node IPC when spawned with an `ipc` channel (cli.js:374832-374843; `!args.onReady` holds for the CLI);
+  - wrangler also prints `Ready on http://127.0.0.1:<port>`.
+- **E1** (`port0.mjs`, one run, `--local`, the same arguments as `dev` except ports 0, `stdio: [..., "ipc"]`) printed:
+  ```
+  IPC: {"event":"DEV_SERVER_READY","ip":"127.0.0.1","port":44443}
+  accepts on IPC port: true
+  [wrangler:info] Ready on http://127.0.0.1:44443
+  ```
+- Removing the window removes the cause. A retry shrinks the failure rate but keeps the race, and it needs output-text matching on an unstable message (F2 notes miniflare's own `ERR_ADDRESS_IN_USE` text already does not match this workerd).
+- **The client (Vite) port has the same window, and it is wider.** Vite binds after wrangler is ready, several seconds after `freePort()`, and `strictPort: true` (`runtime.ts:141`). It is not what failed here, but it must be fixed in the same change.
+  - The constraint is that `FRAMEWORK_PUBLIC_ORIGIN` needs the client port before wrangler starts (`dev.ts:66-67`). The race-free option is to start Vite first on port 0, read `server.httpServer.address()`, and late-bind the `/api` proxy target once wrangler reports its port.
+  - If that is impractical, a bounded retry for the client port only is acceptable, because Vite fails in-process with a structured `EADDRINUSE` before anything is served. It must meet the conditions in point 4.
+- **Inspector "on loopback" is still required** (`docs/components/cli.md:93`). `--inspector-ip 127.0.0.1` stays. The fixer must confirm the inspector is still enabled with `--inspector-port 0`: wrangler itself uses 0 to mean "enabled, any port" (cli.js:370058-370061), but E1 did not probe it. The decision-log text "Ports are free loopback ports picked at start" (decision-log.md:1572) needs a one-line update. This is an implementation detail, not a requirement change.
+
+**4. If any retry remains (client port only), it must not hide real failures.**
+- Retry only on a structured bind error for that port (Vite's `EADDRINUSE`). Do not match free text from wrangler, workerd or app output.
+- Use at most 3 attempts, with fresh ports each time.
+- Print each retry to stderr, naming the port and the attempt.
+- After the last attempt, fail with the original error and exit 1.
+- Re-run nothing else (build, secrets, migrations).
+- Any other early exit fails at once, as today.
+
+The record's own design for the worker port had these properties, except the free-text match. Under Required change 1 the worker port has no retry at all.
+
+**5. The diagnostic change is acceptable.**
+- It changes only the message argument of `expect(result.ok, msg).toBe(true)`. The assertion, its subject and its expected value are unchanged, so nothing is weakened.
+- It is needed because the current `slice(-1500)` is exactly what destroyed the evidence.
+
+**6. Red tests: sound in principle, and they need adjusting to the race-free fix.**
+- A unit test with fake deps (`commands/dev.unit.test.ts`, the fakes at `:24-25`) is deterministic and makes no network call.
+- The integration test with a held port is deterministic, because the test itself holds the port. It runs `wrangler dev --local`, which makes no Cloudflare call. The update-check line (record line 19) goes to the npm registry, not Cloudflare.
+- Under Required change 1 the red test becomes: inject a `freePort` that returns a port held by a listening socket. Today `dev` passes it to wrangler and exits 1 (F2). After the fix, `dev` does not hand wrangler a pre-picked port and serves.
+- Add a unit assertion that `wranglerDevArgs` passes `--port 0 --inspector-port 0` and that `startWorker` takes the port from `DEV_SERVER_READY`. Update `plan.unit.test.ts:24-33`.
+
+**7. "Not caused by fix-registry or fix-registry-2" is correct.**
+- `git diff --stat 26128b1 760e7b7 -- packages apps tests package.json package-lock.json` lists only the seven files in F4.
+- `git diff --quiet 26128b1 760e7b7 -- packages/framework/src/cli packages/framework/src/build packages/framework/src/mig packages/framework/src/secrets tests/compliance/criteria/mig apps/reference package-lock.json` exits 0. So `dev`, its build, secrets and migration code, the MIG test and support files, the reference app and the lockfile (wrangler and workerd) are byte-identical at both commits.
+- `platform-proxy.ts` (new) is imported only by `testing/test-app.ts`, `check/migrations/databases.ts` and `provision/cloudflare/d1/fake-d1-api.ts`, none of which `dev` loads. Its only side effect on other processes is fewer sockets (the record's line 129), which cannot raise the collision rate.
+
+### Required changes
+1. **Fix (A) race-free, not by retry, for the worker and inspector ports.**
+   - Spawn wrangler with `--port 0 --inspector-port 0` (loopback IPs unchanged) and an `ipc` stdio channel.
+   - Take the worker port from `DEV_SERVER_READY` (fallback: the `Ready on` line). Then point Vite's `/api` proxy at it.
+   - Confirm the inspector is still enabled on loopback.
+   - For the client port, either start Vite first on port 0 (preferred), or use a bounded retry on Vite's `EADDRINUSE` only, under the conditions in reason 4.
+   - Update decision-log.md:1572 ("Ports are free loopback ports picked at start").
+   - Red-green as in reason 6. No Cloudflare calls.
+2. **Fix (B): put the diagnostic in the right place.**
+   - Add a helper in `tests/compliance/criteria/mig/support/stage.ts` that formats a failed result: the first `*** ` line or `Runtime stderr:` block, if any, plus the tail.
+   - Use it at `deploys.test.ts:80, 109, 138, 166, 190` and `stage.ts:245`.
+   - Change messages only. No assertion changes.
+3. **Correct the citations:** link 4 is `runtime.ts:91-92`; the slice is at `deploys.test.ts:109`. Also record that the "this failure was a bind error" link remains unproven, pending a recurrence's first line.
+4. **Verification:**
+   - as the record's plan, with the retry expectations replaced by: no `dev` start passes a pre-picked worker or inspector port;
+   - the next full local run under the `MINIFLARE_WORKERD_PATH` wrapper, if the runner agrees.
