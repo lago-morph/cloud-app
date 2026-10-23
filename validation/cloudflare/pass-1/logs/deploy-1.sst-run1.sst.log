@@ -1,0 +1,36 @@
+time=2026-10-23T17:28:15.293Z level=INFO msg="checking for pulumi" path=/root/.config/sst/bin/pulumi
+time=2026-10-23T17:28:15.538Z level=INFO msg="checking for bun" path=/root/.config/sst/bin/bun
+time=2026-10-23T17:28:15.543Z level=INFO msg="initializing project" version=4.17.2
+time=2026-10-23T17:28:15.543Z level=INFO msg="esbuild building" out=/home/user/cloud-app/.claude/worktrees/agent-af2f11f9eb1f320c7/apps/reference/.framework/provision/cloudflare/.sst/platform/sst.config.1792776495543.mjs
+time=2026-10-23T17:28:15.548Z level=INFO msg="esbuild built" outfile=/home/user/cloud-app/.claude/worktrees/agent-af2f11f9eb1f320c7/apps/reference/.framework/provision/cloudflare/.sst/platform/sst.config.1792776495543.mjs
+time=2026-10-23T17:28:15.548Z level=INFO msg="evaluating config"
+time=2026-10-23T17:28:15.667Z level=INFO msg="config evaluated"
+time=2026-10-23T17:28:15.667Z level=INFO msg="checking platform"
+time=2026-10-23T17:28:15.667Z level=INFO msg="checking provider" name=cloudflare version=6.15.0 compare=6.15.0
+time=2026-10-23T17:28:15.667Z level=INFO msg="loading home"
+time=2026-10-23T17:28:15.667Z level=INFO msg="cloudflare account selected" account=<ACCOUNT>
+time=2026-10-23T17:28:16.169Z level=INFO msg="found existing bucket" bucket=sst-state
+time=2026-10-23T17:28:16.169Z level=INFO msg="loaded config" app=reference stage=test-ycfmck8n9jis0gb
+time=2026-10-23T17:28:16.170Z level=INFO msg="initializing ui" isTTY=false
+time=2026-10-23T17:28:16.170Z level=INFO msg="server port assigned" port=13557
+time=2026-10-23T17:28:16.170Z level=INFO msg="running stack command" service=project.run cmd=deploy
+time=2026-10-23T17:28:16.170Z level=INFO msg="INFO locking app=reference stage=test-ycfmck8n9jis0gb"
+time=2026-10-23T17:28:16.170Z level=INFO msg="INFO getting data key=lock app=reference stage=test-ycfmck8n9jis0gb"
+time=2026-10-23T17:28:16.171Z level=INFO msg=starting service=server
+time=2026-10-23T17:28:16.172Z level=INFO msg=server service=server addr=0.0.0.0:13557
+time=2026-10-23T17:28:16.173Z level=INFO msg="server ready to accept connections" service=server
+time=2026-10-23T17:28:18.757Z level=INFO msg="INFO putting update app=reference stage=test-ycfmck8n9jis0gb"
+time=2026-10-23T17:28:20.445Z level=INFO msg="INFO getting passphrase app=reference stage=test-ycfmck8n9jis0gb"
+time=2026-10-23T17:28:21.262Z level=INFO msg="INFO passphrase not found, setting passphrase app=reference stage=test-ycfmck8n9jis0gb"
+time=2026-10-23T17:28:22.729Z level=INFO msg="INFO pulling state app=reference stage=test-ycfmck8n9jis0gb out=/home/user/cloud-app/.claude/worktrees/agent-af2f11f9eb1f320c7/apps/reference/.framework/provision/cloudflare/.sst/pulumi/<UPDATE-ID>/.pulumi/stacks/reference/test-ycfmck8n9jis0gb.json"
+time=2026-10-23T17:28:24.773Z level=INFO msg="got previous deployment" service=project.run updateID=<UPDATE-ID>
+time=2026-10-23T17:28:24.773Z level=INFO msg="esbuild building" out=/home/user/cloud-app/.claude/worktrees/agent-af2f11f9eb1f320c7/apps/reference/.framework/provision/cloudflare/.sst/platform/sst.config.1792776502729.mjs
+time=2026-10-23T17:28:24.907Z level=INFO msg="esbuild built" outfile=/home/user/cloud-app/.claude/worktrees/agent-af2f11f9eb1f320c7/apps/reference/.framework/provision/cloudflare/.sst/platform/sst.config.1792776502729.mjs
+time=2026-10-23T17:28:24.920Z level=INFO msg="built sst.config.ts" service=project.run updateID=<UPDATE-ID> to=/home/user/cloud-app/.claude/worktrees/agent-af2f11f9eb1f320c7/apps/reference/.framework/provision/cloudflare/.sst/platform/sst.config.1792776502729.mjs
+time=2026-10-23T17:28:24.926Z level=INFO msg="tracked files" service=project.run updateID=<UPDATE-ID>
+time=2026-10-23T17:28:24.926Z level=INFO msg="INFO getting data key=secret app=reference stage=_fallback"
+time=2026-10-23T17:28:24.926Z level=INFO msg="INFO getting data key=secret app=reference stage=test-ycfmck8n9jis0gb"
+time=2026-10-23T17:28:26.468Z level=INFO msg="INFO unlocking app=reference stage=test-ycfmck8n9jis0gb"
+time=2026-10-23T17:28:27.719Z level=INFO msg="shutting down server" service=server
+time=2026-10-23T17:28:27.719Z level=INFO msg="server done" service=server
+time=2026-10-23T17:28:27.719Z level=ERROR msg="exited with error" err=<nil>
