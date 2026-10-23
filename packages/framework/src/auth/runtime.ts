@@ -1,0 +1,202 @@
+/**
+ * AUTH's runtime parts for `assembleApp` (core.md §2 "Runtime assembly"): the current-user
+ * middleware, the request forgery check, and the `/api/auth/*` routes. Framework-internal; the
+ * target runtimes (B-16) call `createAuthParts` and register `routes` inside the assembler's
+ * `frameworkRoutes` slot. Workers-compatible.
+ */
+import type { Hono, MiddlewareHandler } from "hono";
+import type { RuntimeContext, RuntimeEnv } from "../core/assemble.js";
+import { FrameworkError } from "../core/errors.js";
+import type { Deployment } from "../core/identity.js";
+import { FRAMEWORK_SECRETS } from "../secrets/names.js";
+import { deferredCheck } from "../core/deferred.js";
+import { clearCookie, cookieSettings, readCookie, setCookie, type CookieSettings } from "./cookies.js";
+import { evaluateLogin, type AccessLists } from "./levels.js";
+import type { LoginProvider, ProviderContext, ProviderIdentity } from "./login-provider.js";
+import { MOCK_DEFAULT_IDS } from "./mock-ids.js";
+import type { AuthMock } from "./mock.js";
+import type { CurrentUser } from "./public.js";
+import { sanitizeReturnTo } from "./return-to.js";
+import { SESSION_LIFETIME_SECONDS, issueSession, readSession, type SessionData } from "./session.js";
+import { LOGIN_LIFETIME_SECONDS, issueTransaction, readTransaction } from "./transaction.js";
+import { deriveUserId } from "./user-id.js";
+
+export interface AuthOptions {
+  readonly deployment: Deployment;
+  /** The deployment's resolved public origin (never request headers), e.g. `http://localhost:8787`. */
+  readonly publicOrigin: string | ((c: RuntimeContext) => string);
+  /** The stage's `framework` configuration (CFG's resolved `admins`, `users`, `google`). */
+  readonly framework: AccessLists & { readonly google?: { readonly clientId: string } };
+  /** Reads a framework-internal secret (SEC) for this request: the session key and provider secrets. */
+  readonly secret: (c: RuntimeContext, name: string) => Promise<string>;
+  /** The stage's login provider: GOOGLE in production, the stub in some tests. */
+  readonly provider?: LoginProvider;
+  /** The authentication mock: only locally and on test stages. */
+  readonly mock?: AuthMock;
+  /** Cookie settings; default: the cloud settings. The local runtime passes `LOCAL_COOKIES`; non-Secure settings on a cloud target are CORE.MISCONFIGURED. */
+  readonly cookies?: CookieSettings;
+}
+
+export interface AuthParts {
+  readonly currentUser: MiddlewareHandler<RuntimeEnv>;
+  readonly forgeryCheck: MiddlewareHandler<RuntimeEnv>;
+  /** Registers `/auth/*` on the framework's `/api` router. */
+  readonly routes: (api: Hono<RuntimeEnv>) => void;
+}
+
+const ANONYMOUS: CurrentUser = Object.freeze({ level: "anonymous" });
+const STATE_CHANGING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/** Dotted-path read for the provider's `getConfig` (e.g. `framework.google.clientId`). */
+function lookup(root: unknown, key: string): unknown {
+  let value = root;
+  for (const part of key.split(".")) {
+    if (typeof value !== "object" || value === null || !Object.hasOwn(value, part)) return undefined;
+    value = (value as Record<string, unknown>)[part];
+  }
+  return value;
+}
+
+/**
+ * The wiring checks for AUTH (also callable by the build): the mock is allowed only locally and on
+ * test stages (AUTH-REQ-009), and the local cookie settings only on the local target
+ * (LOCAL-REQ-004). Throws CORE.MISCONFIGURED; returns the cookie settings.
+ */
+export function checkAuthSettings(options: Pick<AuthOptions, "deployment" | "mock" | "cookies">): CookieSettings {
+  const { deployment } = options;
+  if (options.mock !== undefined && deployment.target !== "local" && !deployment.isTestStage) {
+    throw new FrameworkError("CORE.MISCONFIGURED", `the authentication mock is not allowed on production stage "${deployment.stage}"`);
+  }
+  return cookieSettings(deployment.target, options.cookies);
+}
+
+export function createAuthParts(options: AuthOptions): AuthParts {
+  const cookies = deferredCheck(() => checkAuthSettings(options));
+  const { mock } = options;
+  /** `/api/auth/me` alone reports the ID of a login that `framework.users` makes anonymous. */
+  const unlisted = new WeakMap<Request, string>();
+
+  function originOf(c: RuntimeContext): string {
+    const configured = typeof options.publicOrigin === "string" ? options.publicOrigin : options.publicOrigin(c);
+    return new URL(configured).origin;
+  }
+
+  function sessionKey(c: RuntimeContext): Promise<string> {
+    return options.secret(c, FRAMEWORK_SECRETS.sessionKey);
+  }
+
+  async function issueSessionCookie(c: RuntimeContext, data: SessionData): Promise<string> {
+    const token = await issueSession(await sessionKey(c), data, Date.now());
+    return setCookie(cookies(), cookies().session, token, SESSION_LIFETIME_SECONDS);
+  }
+
+  /** AUTH-REQ-008: the callback URL comes from the resolved public origin, never from request headers. */
+  function providerContext(c: RuntimeContext): ProviderContext {
+    const config = { framework: options.framework };
+    return {
+      callbackUrl: `${originOf(c)}/api/auth/callback`,
+      getSecret: (name) => options.secret(c, name),
+      getConfig: (key) => lookup(config, key),
+    };
+  }
+
+  async function identify(c: RuntimeContext): Promise<CurrentUser> {
+    const fixed = mock?.fixedUser(c);
+    if (fixed !== undefined) return fixed;
+    const token = readCookie(c.req.header("cookie"), cookies().session);
+    if (token === undefined) return ANONYMOUS;
+    const key = await options.secret(c, FRAMEWORK_SECRETS.sessionKey);
+    const data = await readSession(key, token, Date.now());
+    if (data === undefined) return ANONYMOUS;
+    if (data.mockLevel !== undefined) {
+      return mock === undefined ? ANONYMOUS : { level: data.mockLevel, id: data.id, displayName: data.displayName };
+    }
+    const evaluated = evaluateLogin(data, options.framework);
+    if (evaluated.unlistedId !== undefined) unlisted.set(c.req.raw, evaluated.unlistedId);
+    return evaluated.user;
+  }
+
+  return {
+    currentUser: async (c, next) => {
+      cookies();
+      c.set("user", await identify(c));
+      await next();
+    },
+    forgeryCheck: async (c, next) => {
+      // AUTH-REQ-007, DEC-0072: Origin must equal the public origin on a state-changing request
+      // that carries a session (any session cookie, valid or not, or the mock's fixed login).
+      if (STATE_CHANGING.has(c.req.method)) {
+        const carriesSession = readCookie(c.req.header("cookie"), cookies().session) !== undefined || c.var.user.level !== "anonymous";
+        if (carriesSession && c.req.header("origin") !== originOf(c)) {
+          throw new FrameworkError("AUTH.REQUEST_FORGERY", "a state-changing request with a session came from another origin");
+        }
+      }
+      await next();
+    },
+    routes: (api) => {
+      api.use("/auth/*", async (c, next) => {
+        await next();
+        c.res.headers.set("Cache-Control", "no-store");
+      });
+
+      api.get("/auth/login", async (c) => {
+        const returnTo = sanitizeReturnTo(c.req.query("returnTo"));
+        const { provider } = options;
+        if (provider === undefined) {
+          if (mock === undefined) throw new FrameworkError("CORE.MISCONFIGURED", "no login provider is configured for this deployment");
+          // Mock only: log in as the mock's default user (local development and test stages).
+          c.header("Set-Cookie", await issueSessionCookie(c, { id: MOCK_DEFAULT_IDS.user, displayName: null, mockLevel: "user" }), { append: true });
+          return c.redirect(returnTo, 302);
+        }
+        const begun = await provider.beginLogin(providerContext(c));
+        const key = await sessionKey(c);
+        const tx = await issueTransaction(key, { state: begun.transactionState, returnTo }, Date.now());
+        // A new login replaces any login in progress (same cookie name).
+        c.header("Set-Cookie", setCookie(cookies(), cookies().login, tx, LOGIN_LIFETIME_SECONDS), { append: true });
+        return c.redirect(begun.redirectUrl, 302);
+      });
+
+      api.get("/auth/callback", async (c) => {
+        // The transaction is spent whatever happens.
+        c.header("Set-Cookie", clearCookie(cookies(), cookies().login), { append: true });
+        const failed = (reason: string) => {
+          c.var.log.write("AUTH", "warn", `login failed: ${reason}`);
+          const query = new URLSearchParams({ authError: "login_failed", requestId: c.var.requestId });
+          return c.redirect(`/?${query.toString()}`, 302);
+        };
+        const token = readCookie(c.req.header("cookie"), cookies().login);
+        const key = await sessionKey(c);
+        const tx = token === undefined ? undefined : await readTransaction(key, token, Date.now());
+        const { provider } = options;
+        if (tx === undefined || provider === undefined) return failed("transaction missing or expired");
+        let identity: ProviderIdentity;
+        try {
+          identity = await provider.completeLogin(providerContext(c), new URL(c.req.url).searchParams, tx.state);
+        } catch (thrown) {
+          if (thrown instanceof FrameworkError && thrown.code === "AUTH.LOGIN_FAILED") return failed(thrown.message);
+          throw thrown;
+        }
+        const id = await deriveUserId(provider.id, identity.subject);
+        c.header("Set-Cookie", await issueSessionCookie(c, { id, displayName: identity.displayName }), { append: true });
+        return c.redirect(tx.returnTo, 302);
+      });
+
+      api.post("/auth/logout", (c) => {
+        c.header("Set-Cookie", clearCookie(cookies(), cookies().session), { append: true });
+        return c.body(null, 204);
+      });
+
+      mock?.registerRoutes(api, {
+        issue: issueSessionCookie,
+        clear: () => clearCookie(cookies(), cookies().session),
+      });
+
+      api.get("/auth/me", (c) => {
+        const id = unlisted.get(c.req.raw);
+        const body = id === undefined ? c.var.user : { level: "anonymous", unlistedId: id };
+        c.header("Cache-Control", "no-store");
+        return c.json(body);
+      });
+    },
+  };
+}
