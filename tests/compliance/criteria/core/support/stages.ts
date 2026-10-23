@@ -4,11 +4,14 @@
  * stage is never changed under the other criteria (compliance.md "Test stages": stage-lifecycle
  * criteria create and remove their own stages).
  *
- * Cloud usage (plan "Cloud usage limits"): one further stage at a time across all test files
- * (cross-process lock), removed in `finally`; no data is generated.
+ * Cloud usage (plan "Cloud usage limits"): the shared stage guards (`takeStageRoom`: the D1
+ * stop of DEC-0317, the cross-process further-stage lock, and room for one more D1 database
+ * under DEC-0318's cap), so one further stage at a time across all test files; removed in
+ * `finally`; no data is generated. The lock is released on every path, including a failed copy.
  */
 import { newTestStage } from "../../../harness/index.js";
-import { acquireLock, cli, scratchCopy, type CommandResult, type ScratchApp } from "./processes.js";
+import { takeStageRoom } from "../../prov/support/stage.js";
+import { cli, scratchCopy, type CommandResult, type ScratchApp } from "./processes.js";
 import { runDeployment } from "./repo.js";
 
 export interface FurtherStage {
@@ -45,42 +48,57 @@ export async function withFurtherStage<T>(
 ): Promise<T> {
   const run = runDeployment();
   if (!run.isCloud) throw new Error("further stages are for cloud targets only");
-  const release = await acquireLock("further-stage", 60 * 60_000);
-  const copy = await scratchCopy(appDir, label, options);
-  const stageName = newTestStage();
-  const outputs: CommandResult[] = [];
-  const timeoutMs = 20 * 60_000;
-  const runCli = async (args: string[], stdin?: string): Promise<CommandResult> => {
-    const r = await cli(args, { cwd: copy.dir, timeoutMs, ...(stdin === undefined ? {} : { stdin }), env: { NODE_USE_ENV_PROXY: "1" } });
-    outputs.push(r);
-    return r;
-  };
-  let removed: CommandResult | undefined;
-  const remove = async (): Promise<CommandResult> => {
-    removed ??= await runCli(["remove", "--target", run.target, "--stage", stageName]);
-    return removed;
-  };
-  const setSecret = (name: string, value: string): Promise<CommandResult> => runCli(["secrets", "set", name, "--target", run.target, "--stage", stageName], `${value}\n`);
+  const release = await takeStageRoom(1, `a further ${label} stage`);
+  let copy: ScratchApp | undefined;
   try {
-    let deployed = await runCli(["deploy", "--target", run.target, "--stage", stageName]);
-    if (deployed.status !== 0 && Object.keys(secrets).some((name) => deployed.output.includes(name))) {
-      for (const [name, value] of Object.entries(secrets)) {
-        const set = await setSecret(name, value);
-        if (set.status !== 0) throw new Error(`secrets set ${name} on further stage ${stageName} failed with status ${String(set.status)}:\n${set.output.slice(-2000)}`);
+    const app = await scratchCopy(appDir, label, options);
+    copy = app;
+    const stageName = newTestStage();
+    const outputs: CommandResult[] = [];
+    const timeoutMs = 20 * 60_000;
+    let deployAttempted = false;
+    const runCli = async (args: string[], stdin?: string): Promise<CommandResult> => {
+      const r = await cli(args, { cwd: app.dir, timeoutMs, ...(stdin === undefined ? {} : { stdin }), env: { NODE_USE_ENV_PROXY: "1" } });
+      outputs.push(r);
+      return r;
+    };
+    let removed: CommandResult | undefined;
+    const remove = async (): Promise<CommandResult> => {
+      removed ??= await runCli(["remove", "--target", run.target, "--stage", stageName]);
+      return removed;
+    };
+    const setSecret = (name: string, value: string): Promise<CommandResult> => runCli(["secrets", "set", name, "--target", run.target, "--stage", stageName], `${value}\n`);
+    const deploy = (): Promise<CommandResult> => {
+      deployAttempted = true;
+      return runCli(["deploy", "--target", run.target, "--stage", stageName]);
+    };
+    try {
+      let deployed = await deploy();
+      if (deployed.status !== 0 && Object.keys(secrets).some((name) => deployed.output.includes(name))) {
+        for (const [name, value] of Object.entries(secrets)) {
+          const set = await setSecret(name, value);
+          if (set.status !== 0) throw new Error(`secrets set ${name} on further stage ${stageName} failed with status ${String(set.status)}:\n${set.output.slice(-2000)}`);
+        }
+        deployed = await deploy();
       }
-      deployed = await runCli(["deploy", "--target", run.target, "--stage", stageName]);
+      if (deployed.status !== 0) throw new Error(`deploy of a further stage ${stageName} failed with status ${String(deployed.status)}:\n${deployed.output.slice(-2000)}`);
+      const baseUrl = deployOrigin(deployed.output);
+      if (baseUrl === undefined) throw new Error(`deploy of further stage ${stageName} printed no workers.dev origin`);
+      return await body({ app: label, stage: stageName, target: run.target, baseUrl, copy: app, outputs, setSecret, remove });
+    } finally {
+      if (deployAttempted) {
+        const r = await remove();
+        if (r.status !== 0) {
+          // Leftovers are reported by the driver's leftover check only for the run stage; name these here.
+          process.stderr.write(`[c-t1] removing further stage ${stageName} failed (status ${String(r.status)}); it may be left over:\n${r.output.slice(-2000)}\n`);
+        }
+      }
     }
-    if (deployed.status !== 0) throw new Error(`deploy of a further stage ${stageName} failed with status ${String(deployed.status)}:\n${deployed.output.slice(-2000)}`);
-    const baseUrl = deployOrigin(deployed.output);
-    if (baseUrl === undefined) throw new Error(`deploy of further stage ${stageName} printed no workers.dev origin`);
-    return await body({ app: label, stage: stageName, target: run.target, baseUrl, copy, outputs, setSecret, remove });
   } finally {
-    const r = await remove();
-    await copy.remove();
-    await release();
-    if (r.status !== 0) {
-      // Leftovers are reported by the driver's leftover check only for the run stage; name these here.
-      process.stderr.write(`[c-t1] removing further stage ${stageName} failed (status ${String(r.status)}); it may be left over:\n${r.output.slice(-2000)}\n`);
+    try {
+      await copy?.remove();
+    } finally {
+      await release();
     }
   }
 }

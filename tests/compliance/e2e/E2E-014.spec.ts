@@ -27,7 +27,7 @@ import { join } from "node:path";
 import { CLOUD_WAITS, client, createClient, REFERENCE_APP, tag, target, waitFor } from "../harness/index.js";
 import { expect, test } from "../harness/playwright.js";
 import { crawlAssets, filesWithValue, repositoryFiles } from "./support/assets.js";
-import { copyApp, deployStage, randomSuffix, removeDir, setSecret } from "./support/apps.js";
+import { copyApp, randomSuffix, removeDir, setSecret, setSecretThenDeploy } from "./support/apps.js";
 import { cloudLogEntries, utcDay } from "./support/cloud.js";
 import { REFERENCE_DIR, REPO_ROOT, startDev, type DevServer } from "./support/process.js";
 import { listFiles, sha256Hex } from "./support/scan.js";
@@ -79,9 +79,8 @@ if (target().target !== "local") {
     const value = freshSecret();
     const from = new Date();
 
-    // Set the secret with the CLI, then deploy.
-    await setSecret(REFERENCE_DIR, t.target, stage, "apiKey", value);
-    const deployed = await deployStage(REFERENCE_DIR, t.target, stage, { apiKey: value });
+    // Set the secret with the CLI, then deploy (after the D1 stop, DEC-0317: a deploy uses D1).
+    const deployed = await setSecretThenDeploy(REFERENCE_DIR, t.target, stage, "apiKey", value);
     await exerciseSecret(deployed.origin, value);
 
     const repo = filesWithValue(repositoryFiles(REPO_ROOT), value, REPO_ROOT);
