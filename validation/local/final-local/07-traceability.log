@@ -1,4 +1,0 @@
-# uptime before: 2026-10-20T18:53:34Z  18:53:34 up 16:19,  0 user,  load average: 3.57, 3.30, 3.82
-$ node tests/compliance/tools/report.mjs traceability --out validation/local/final-local/traceability.md
-# exit code: 0
-# uptime after: 2026-10-20T18:55:35Z  18:55:35 up 16:21,  0 user,  load average: 3.69, 3.43, 3.80

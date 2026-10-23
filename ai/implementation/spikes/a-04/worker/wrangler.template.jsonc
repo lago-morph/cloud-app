@@ -1,9 +1,0 @@
-{
-  "name": "spikeqgbznvyy-a04-worker",
-  "main": "index.js",
-  "compatibility_date": "2026-10-01",
-  "workers_dev": true,
-  "preview_urls": false,
-  "vars": { "SPIKE_VAR": "plain-var-a04" },
-  "kv_namespaces": [{ "binding": "KV", "id": "__KV_ID__" }]
-}

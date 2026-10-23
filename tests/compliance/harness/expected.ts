@@ -49,13 +49,13 @@ export const PHASE_RULES: readonly NotRunRule[] = [
   { id: "E2E-008", targets: CLOUD, mode: "milestone", detail: GOOGLE_MOCKED },
   { id: "CLI-AC-001", targets: CLOUD, mode: "automated", detail: GOOGLE_MOCKED },
   // Plan §8.2 AWS parts of Local criteria: there is no AWS bundle and no Data API adapter yet (C-local evaluation,
-  // Flag 2; ai/implementation/decisions/C-T6.md). The AWS phase removes these rules when it adds their tests.
+  // Flag 2; DEC-0397). The AWS phase removes these rules when it adds their tests.
   { id: "CORE-AC-006", targets: ["local"], mode: "automated", part: "AWS-bundle clause", detail: AWS_NOT_STARTED },
   { id: "SQL-AC-006", targets: ["local"], mode: "automated", part: "Data API retry-loop clause", detail: AWS_NOT_STARTED },
 ];
 
 /**
- * Unit-level criteria (plan §10.3; decision draft ai/implementation/decisions/fix-c3.md): the
+ * Unit-level criteria (plan §10.3; DEC-0319, decision log Item: fix-c3): the
  * criteria whose own text is stated over a unit test, hand-built inputs, stubbed cloud responses
  * or injected failures. On local the driver also runs the unit layer for these IDs, and folds a
  * unit test's outcome only into the unit-level IDs its title carries. Every other ID is

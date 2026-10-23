@@ -8,7 +8,7 @@
  * - Hooks owned by D-T2 under `tests/compliance/criteria/_cloud/` (plan §5 "Phase D test-case
  *   authors"): the log-bucket listing and the stage-resource probe. Until a hook exists, a test
  *   that needs it reports a missing prerequisite (`blocked`), never a pass. The expected hook
- *   interfaces are recorded in ai/implementation/decisions/C-T4.md.
+ *   interfaces are recorded in DEC-0279, DEC-0302…DEC-0310 (docs/decisions/decision-log.md, Item: C-T4).
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";

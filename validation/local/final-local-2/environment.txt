@@ -1,8 +1,0 @@
-SHA (HEAD at start and during the driver run): 26128b1fd0ec90e14b55c7055b6f5bb1f3d736af
-branch: claude/implement-local-cloudflare-final-local-2 (from origin/claude/implement-local-cloudflare)
-tracked tree at start: clean (git status --porcelain empty)
-node v22.22.0
-npm 10.9.4
-Linux vm 6.18.44-fc-v139 #1 SMP PREEMPT_DYNAMIC x86_64 GNU/Linux
-CPUs: 4
-Cloudflare: no calls made (local only); COMPLIANCE_DEMO_BASE_URL and COMPLIANCE_CLOUDFLARE_D1 unset; NODE_USE_ENV_PROXY not set (final-local did not use it)

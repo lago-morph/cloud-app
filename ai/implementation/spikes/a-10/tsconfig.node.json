@@ -1,6 +1,0 @@
-{
-  // Framework / test lib set: Node types allowed.
-  "extends": "./tsconfig.json",
-  "compilerOptions": { "types": ["node"] },
-  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts", "vite.config.ts", "playwright.config.ts", "e2e/**/*.ts", "eslint.config.ts"]
-}

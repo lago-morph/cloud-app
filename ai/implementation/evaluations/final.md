@@ -1,6 +1,6 @@
 # F-EV: Final evaluation (local and Cloudflare phase)
 
-**Update 3 (F-EV3), 2026-10-21.** This file replaces F-EV2 (`27b4366`, base `903d0f9`), which is in git history; F-EV2 itself replaced the first F-EV (`b53f841`). Since F-EV2, new §8 cycles have landed (the reviews of the D-01, D-03 and order-scan records; fix-registry and fix-registry-2; fix-mig002), and two more full local runs were recorded: one failed MIG-AC-002 (final-local-3), and the next passed everything (final-local-4). This update re-bases the local column on final-local-4, records the MIG-AC-002 failure and its outcome, and updates the open items. The Cloudflare and AWS columns are unchanged.
+**Update 3 (F-EV3), 2026-10-21.** This file replaces F-EV2 (`27b4366`, base `903d0f9`), which is in git history; F-EV2 itself replaced the first F-EV (`b53f841`). Since F-EV2, new §8 cycles have landed (the reviews of the D-01, D-03 and order-scan records; fix-registry and fix-registry-2; fix-mig002), and two more full local runs were recorded: one failed MIG-AC-002 (final-local-3 (archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md)), and the next passed everything (final-local-4). This update re-bases the local column on final-local-4, records the MIG-AC-002 failure and its outcome, and updates the open items. The Cloudflare and AWS columns are unchanged.
 
 Evaluator: an independent F-EV subagent. I wrote none of the code, tests, evidence or reviews judged here. I worked from committed evidence only:
 - I ran no test suite and made no Cloudflare call.
@@ -24,10 +24,10 @@ Context taken as given: Cloudflare testing is stopped (DEC-0317). D1 has been of
 | --- | --- | --- | --- |
 | **R4** | `validation/local/pzeugkxrk1xcu2w.json` (+ `raw/`), logs in `validation/local/final-local-4/` | `a5b2164` | **Full, unfiltered** `npm run compliance -- --target local`, run once. 111 results for 109 distinct IDs: 109 passed and 2 not-run, the §8.2 clause entries of CORE-AC-006 and SQL-AC-006. 0 failed, 0 blocked, exit 0. Playwright: 42/42 passed, 0 skipped, 0 flaky. Integration layer: 586 tests, 564 passed and 22 skipped (§4.3). Unit layer: 1706 tests, 53 passed, 1653 skipped by design (DEC-0319). HEAD did not move during the run. Dev registry empty after every step. Not run under the `MINIFLARE_WORKERD_PATH` wrapper (the summary does not mention it). |
 | **BV4** | `validation/local/batch-verify-4/` | `a5b2164` | `verify` online and offline, exit 0, each run once. Unit 179 files, 1706/1706; template 18/18 and reference 52/52 per dialect; skill example pages 2/2. |
-| R3b | `validation/local/r5nndia2aediccu.json`, `validation/local/final-local-3/` | `760e7b7` | Full, unfiltered run: 108 passed, 2 not-run (the same clause entries), **1 failed (MIG-AC-002)**, exit 1. The failure was not re-run. Integration 582 tests: 563 passed, 1 failed, 18 skipped. Playwright 42/42. Superseded by R4; see §5 for the failure. |
-| BV3 | `validation/local/batch-verify-3/` | `760e7b7` | `verify` online and offline, exit 0. Unit 178 files, 1692/1692. |
-| R3 | `validation/local/q3qgbyunuxaz1fw.json`, `validation/local/final-local-2/` | `26128b1` | F-EV2's basis: 109 passed, 2 not-run, exit 0. Superseded by R4. |
-| R1, R2 | `emckebxm5x3kxd1`, `cmzgvk4zb2o6ako` | `8d65a70`, `ed1f51b` | Earlier runs, superseded. |
+| R3b | `validation/local/r5nndia2aediccu.json`, `validation/local/final-local-3/` (archived) | `760e7b7` | Full, unfiltered run: 108 passed, 2 not-run (the same clause entries), **1 failed (MIG-AC-002)**, exit 1. The failure was not re-run. Integration 582 tests: 563 passed, 1 failed, 18 skipped. Playwright 42/42. Superseded by R4; see §5 for the failure. |
+| BV3 | `validation/local/batch-verify-3/` (archived) | `760e7b7` | `verify` online and offline, exit 0. Unit 178 files, 1692/1692. |
+| R3 | `validation/local/q3qgbyunuxaz1fw.json` (archived), `validation/local/final-local-2/` | `26128b1` | F-EV2's basis: 109 passed, 2 not-run, exit 0. Superseded by R4. |
+| R1, R2 | `emckebxm5x3kxd1` (archived), `cmzgvk4zb2o6ako` | `8d65a70`, `ed1f51b` | Earlier runs, superseded. |
 | **S1** | `validation/local/g7586p3q4x45qyc.json` | `97dd0d7` | F-01 round 4's own `smoke --target local`: 7/7 passed. Since `97dd0d7`, the only change under `apps/demo` is `b098f89`, which edits `BUILD-RECORD.md` alone (`git diff --stat 26128b1 a5b2164 -- apps tests/compliance/e2e skill` is empty). |
 | review | `validation/reviews/E2E-016.md` (review at `e8c3289`, re-review at `b3e3775`) | | The E2E-016 review part. |
 | RC-009 | `ai/implementation/root-causes/2026-10-20-demo-ac-009.md`, section "Review" | `19a6b09` | Independent review: **accepted**. |
@@ -206,7 +206,7 @@ Unchanged from F-EV2. In brief:
 
 ## 8. Release report
 
-The report is generated with `node tests/compliance/tools/report.mjs release --commit c016e7e831c9cced1f9b1f441d47d5c54e09be0d --out validation/release/2026-10-21-c016e7e.md`, in the same way as `2026-10-20-903d0f9.md`.
+The report is generated with `node tests/compliance/tools/report.mjs release --commit c016e7e831c9cced1f9b1f441d47d5c54e09be0d --out validation/release/2026-10-21-c016e7e.md`, in the same way as the earlier report for `903d0f9` (since deleted from `validation/release/`; the same command regenerates it).
 
 - **Result:** **"not working"**.
 - **Why:** COMPL-REQ-006 counts automated records only for the exact commit. The latest local record (R4) is for `a5b2164`, and the base `c016e7e` adds only `validation/` files, so every automated entry again reads "no record for commit". The generated text is identical to the `903d0f9` report apart from the SHA.

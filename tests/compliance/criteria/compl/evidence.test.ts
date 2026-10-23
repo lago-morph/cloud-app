@@ -8,7 +8,7 @@
  * throwaway clone of this commit (so the enclosing run's working tree is never changed). Runs
  * that must execute a test use the driver's self-test path (`--self-test`: the harness's own
  * self-test suite only, never the real suites), into which a test commits the deliberate case
- * first. Assumptions: ai/implementation/decisions/C-T5.md.
+ * first. Assumptions: DEC-0321…DEC-0322 (docs/decisions/decision-log.md, Item: C-T5).
  */
 import { randomBytes } from "node:crypto";
 import { appendFileSync, rmSync, writeFileSync } from "node:fs";

@@ -3,7 +3,7 @@
  * docs/contracts/ts/{auth,testing,core}.d.ts and docs/contracts/http/framework.openapi.yaml,
  * not from any implementation. Uses only public, contracted names: `defineApp`,
  * `requireUser`/`requireAdmin`/`requireCurrentUser` (`<package>`), and `createTestApp`/`mockUsers`
- * (`<package>/testing`). Assumptions are recorded in ai/implementation/decisions/B-T3.md.
+ * (`<package>/testing`). Assumptions are recorded as DEC-0226…DEC-0234 (docs/decisions/decision-log.md, Item: B-T3).
  */
 import { createHash } from "node:crypto";
 import { expect } from "vitest";

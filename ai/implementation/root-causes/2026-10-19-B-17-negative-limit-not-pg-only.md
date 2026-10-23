@@ -119,6 +119,6 @@ Author: test-case author (prompt §8 step 3); did not write the CLI code, the di
 - `npm run build -w packages/framework`, then `npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/cli/verify.test.ts`: 12/12 passed
 
 ### Open item
-DEC-0239 (`ai/implementation/decisions/B-T4.md`) still describes `.limit(-1)` and says the dialect is not separately asserted. It needs re-recording to `.limit(10).offset(-1)`, with the evidence above and the per-dialect assertions. It was left untouched because this fix was limited to the fixture, the test and this record.
+DEC-0239 (decision log, `Item: B-T4`) still describes `.limit(-1)` and says the dialect is not separately asserted. It needs re-recording to `.limit(10).offset(-1)`, with the evidence above and the per-dialect assertions. It was left untouched because this fix was limited to the fixture, the test and this record.
 
 Closed by C-INT (2026-10-20): DEC-0311 records the corrected fixture and its per-dialect assertions; DEC-0239 is marked accordingly.

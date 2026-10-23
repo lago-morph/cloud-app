@@ -2,7 +2,7 @@
  * Cloud stages that the D-T1 criteria (CF, PROV, COMPL) deploy, change and remove themselves,
  * separate from the run's shared stage (compliance.md "Test stages": stage-lifecycle criteria
  * create and remove their own stages). Written from the criteria and PROV/CLI documents, not
- * from the implementation. Assumptions: ai/implementation/decisions/D-T.md.
+ * from the implementation. Assumptions: DEC-0359…DEC-0366 (docs/decisions/decision-log.md, Item: D-T).
  *
  * - Each stage is `test-<random>` (`newTestStage()`), deployed from a scratch copy of an app
  *   (`apps/reference` or `apps/template`, committed content only) with the framework CLI, and

@@ -7,7 +7,7 @@ The compliance reference app (`apps/reference`, app name `reference`, COMPL §2)
 - state-changing requests that carry a session need `Origin` equal to the public origin (AUTH-REQ-007), as for every app;
 - errors are the framework's `ErrorResponse` (`{ error: { code, message, requestId } }`).
 
-Config keys, secret names, tables and the migration fixtures are listed at the end. Decisions: `ai/implementation/decisions/C-01.md`.
+Config keys, secret names, tables and the migration fixtures are listed at the end. Decisions: DEC-0250…DEC-0258 (`docs/decisions/decision-log.md`, `Item: C-01`).
 
 ## Core and HTTP fixtures
 

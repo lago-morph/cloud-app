@@ -95,7 +95,7 @@ export class FakeCloud {
       if (rest === "/subdomain" && method === "GET") return ok({ enabled: w.enabled, previews_enabled: w.previews });
     }
     if (p === `${A}/r2/buckets` && method === "POST") {
-      if (this.buckets.has(String(b.name))) return err(409, 10004, "The bucket you tried to create already exists.");
+      if (this.buckets.has(String(b.name))) return err(409, 10004, "The bucket you tried to create already exists, and you own it.");
       this.buckets.set(String(b.name), new Set());
       return ok({ name: b.name });
     }

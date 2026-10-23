@@ -9,7 +9,7 @@ In `packages/framework/test/integration/mig/deploy-local.test.ts`:
 3. `[MIG-AC-003] local: a data-dependent failing migration (unique over duplicates) fails the deployment …`: a knock-on failure of test 2. It never reaches its own assertions.
 
 ## Symptom
-Phase-B run (`validation/local/phase-B/05a-integration-vitest-json.log` lines 1790–1819, same in `04-test-integration.log`):
+Phase-B run (`validation/local/phase-B/05a-integration-vitest-json.log` (archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md) lines 1790–1819, same in `04-test-integration.log`):
 - Tests 1 and 2: `Error: expected exactly one local D1 database, found 2: <app>/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/9ba2b04b…4248.sqlite, <app>/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/metadata.sqlite`, thrown by `onlyD1Database` (`mig/local-d1.ts:66`). It is called from `deploy-local.test.ts:98` (test 1) and `:140` (test 2).
 - Test 3: `AssertionError: depends on the previous test's version 2 deployment: expected undefined to be defined` (`deploy-local.test.ts:165`).
 

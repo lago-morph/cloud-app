@@ -1,5 +1,0 @@
-@pulumi/cloudflare exports Worker: true
-@pulumi/cloudflare exports R2Bucket: true
-@pulumi/cloudflare exports D1Database: true
-@pulumi/pulumi version: 3.270.0
-pulumi.Config: true

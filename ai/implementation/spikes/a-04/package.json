@@ -1,8 +1,0 @@
-{
-  "name": "spike-a-04",
-  "private": true,
-  "type": "module",
-  "devDependencies": {
-    "wrangler": "4.149.0"
-  }
-}

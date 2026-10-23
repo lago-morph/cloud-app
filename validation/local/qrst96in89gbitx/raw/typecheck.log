@@ -1,4 +1,0 @@
-
-> prototype-framework-workspace@0.0.0 typecheck
-> tsc -p packages/framework/tsconfig.json && tsc -p tsconfig.json && tsc -p tests/compliance/harness/tsconfig.json
-

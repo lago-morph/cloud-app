@@ -1,4 +1,0 @@
-{
-  "extends": "./tsconfig.node.json",
-  "include": ["src/**/*.ts", "test/**/*.ts", "fixtures/**/*.ts", "vitest.config.ts", "vite.config.ts", "playwright.config.ts", "e2e/**/*.ts", "client/**/*.ts"]
-}

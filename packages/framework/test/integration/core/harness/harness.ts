@@ -7,7 +7,7 @@
  * (CLI-REQ-001), and plain HTTP against `dev`. Nothing here is mocked: `dev` runs Wrangler/workerd
  * and Vite, builds write real files, and `createTestApp` uses its real local storage.
  *
- * Assumptions are recorded in ai/implementation/decisions/B-T1.md.
+ * Assumptions are recorded as DEC-0123, DEC-0210…DEC-0220 (docs/decisions/decision-log.md, Item: B-T1).
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";

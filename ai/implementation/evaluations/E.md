@@ -8,7 +8,7 @@ Inputs:
 - the prompt, §3, §7, §9 E and §11;
 - plan §1 (Cloud usage limits, DEC-0317, Test economy), §6 (E-EV) and DEC-0391;
 - `docs/components/skill.md` §1, §2 and §4, and `docs/components/check.md` CHECK-REQ-003 and §2;
-- the evidence: `validation/local/phase-E-run/` (SUMMARY, environment and `raw/`), and record `validation/local/2au29i3yycjzbas.json` with `raw/vitest.json` and `raw/vitest.log`;
+- the evidence: `validation/local/phase-E-run/` (archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md) (SUMMARY, environment and `raw/`), and record `validation/local/2au29i3yycjzbas.json` with `raw/vitest.json` and `raw/vitest.log`;
 - the tests: `tests/skill/*.test.ts`, `tests/skill/support.ts`, `tests/compliance/criteria/skill/scaffold.test.ts`, `packages/framework/test/integration/check/portability-rules.test.ts` and `packages/framework/test/fixtures/support/check-catalog.ts`;
 - `skill/`, `apps/template/README.md` and `packages/framework/src/check/references.ts`;
 - the root-cause records `2026-10-20-SKILL-AC-004-example-config-not-typechecked.md` and `2026-10-20-COMPL-AC-001-where-parser-decision-log.md`;
@@ -16,7 +16,7 @@ Inputs:
 
 ## 1. Evidence and commit
 
-- **Record `2au29i3yycjzbas`.** Target local, commit `4d73f39`. The command was `npm run compliance -- --target local --only SKILL-AC-001,…,SKILL-AC-005,CHECK-AC-003`. All six IDs are `passed`, and the other 103 are `not-run` ("not selected"). The record's `exitStatus` is 1.
+- **Record `2au29i3yycjzbas` (archived).** Target local, commit `4d73f39`. The command was `npm run compliance -- --target local --only SKILL-AC-001,…,SKILL-AC-005,CHECK-AC-003`. All six IDs are `passed`, and the other 103 are `not-run` ("not selected"). The record's `exitStatus` is 1.
 - **Tagged tests in `raw/vitest.json`, all `passed` and none skipped.** SKILL-AC-001 has 7, SKILL-AC-002 has 3, SKILL-AC-003 has 9, SKILL-AC-004 has 7 (including both apps' `verify`, about 252 s and 264 s), SKILL-AC-005 has 2 and CHECK-AC-003 has 15.
 - **Separate runs.** `npm run verify` exited 0 (`raw/03-verify.log`: template 18/18 and reference 52/52 per dialect). `tests/skill` passed 26/26 (`raw/04-tests-skill.log`).
 - **Why the record exits 1.** One unselected file, `tests/compliance/criteria/compl/targets.test.ts`, failed to load. The COMPL Where parser read a "Where" phrase from the decision log. That parser is not involved in any of the six IDs. It is the COMPL-AC-001 Where-parser root cause, ACCEPTED and fixed after the run (`c83606a`, merged `250f5fe`). **This does not affect any verdict here.**
@@ -44,8 +44,8 @@ Inputs:
 3. **F3. "CI" is the root `npm run verify`, and the byte-for-byte check is not in it.** The repository has no CI workflow file. Root `verify` runs both apps' `verify`. The check that ties examples to their sources (`tests/skill`) runs only in `test:integration` and in the compliance driver. An example that drifts from its source would therefore pass `npm run verify` and be caught only by the integration or compliance run. This is a minor wiring gap and does not change the verdict.
 4. **F4. CHECK-AC-003 leaves the migration checker's diagnostics out of the tagged evidence.** DEC-0187 gives the migration checker five rule IDs (`prototype-framework/migration-checksums`, `-history`, `-apply`, `-supported-changes` and `-dialects`) and the reference `sql-and-migrations.md`. Under CHECK-REQ-003 these are diagnostics too. Only untagged unit tests (`check/migrations/files.unit.test.ts`, `exports.unit.test.ts`) assert their reference, and `references.unit.test.ts` is unit-level and so does not count as evidence (plan §10.1). `sql-and-migrations.md` does list all five rule IDs. I read "every rule" as the shipped lint rules, so the verdict stands. Tagging an integration assertion for the five migration rules would make the evidence complete.
 5. **F5. The CHECK-AC-003 coverage control is untagged, so the driver skipped it.** The control is "every rule has exactly one representative fixture", and it shows as `skipped` in `raw/vitest.json`. This repeats C-local Flag 6. Each per-rule test does assert that its fixture exists, so the verdict stands. Tagging the control is still recommended.
-6. **F6. There is no evidence record for the blocked and not-run cloud items.** E2E-011 (cloud) `blocked` and SKILL-AC-006 `not-run` are stated only in `phase-E-run/SUMMARY.md` prose. Plan §1 says blocked criteria are recorded with the driver's `--blocked`. A record should be written when the cloud run is attempted, or at D-RUN.
-7. **F7. Record `2au29i3yycjzbas` has `exitStatus` 1.** The cause is explained in §1 and is unrelated to the six IDs. A clean re-run at HEAD, after the Where-parser fix, should exit 0. It is not required for these verdicts.
+6. **F6. There is no evidence record for the blocked and not-run cloud items.** E2E-011 (cloud) `blocked` and SKILL-AC-006 `not-run` are stated only in `phase-E-run/SUMMARY.md` (archived) prose. Plan §1 says blocked criteria are recorded with the driver's `--blocked`. A record should be written when the cloud run is attempted, or at D-RUN.
+7. **F7. Record `2au29i3yycjzbas` (archived) has `exitStatus` 1.** The cause is explained in §1 and is unrelated to the six IDs. A clean re-run at HEAD, after the Where-parser fix, should exit 0. It is not required for these verdicts.
 8. **F8. Unverified claims in the skill that something works on Cloudflare** (none of them is backed by a live framework run in this phase):
    - `skill/SKILL.md` line 8 says apps "run unchanged locally, on Cloudflare and on AWS". The AWS target does not exist, and no framework cloud run has passed on Cloudflare. It should be stated as the design goal, not as fact (prompt §11).
    - `troubleshooting.md` §2 says that for `SEC.MISSING` "on Cloudflare, the next request sees it". `files.md` line 50 says an expired ticket gives `status: null` on Cloudflare (DEC-0101, which was seen in spike A-07, not in a framework run). `deploying.md` §3 describes the schema-change copy-and-switch and the restart after a failure (D1 is blocked). `troubleshooting.md` §1 describes the `LOGS`-binding fallback lines (DEC-0323) and the R2 object-listing `prefix` and single-object GET. A-01 tried only an unprefixed listing; DEC-0334 item 3 notes that paging is unconfirmed.
@@ -70,7 +70,7 @@ None of these blocks SKILL-AC-001 to SKILL-AC-005. They are SKILL-REQ-006 / prom
 
 ## 5. Verdict
 
-- **Local exit check:** SKILL-AC-001, SKILL-AC-002, SKILL-AC-003, SKILL-AC-004, SKILL-AC-005 and CHECK-AC-003 are **passed**. The evidence is record `2au29i3yycjzbas` at `4d73f39`. Nothing under test has changed since then.
+- **Local exit check:** SKILL-AC-001, SKILL-AC-002, SKILL-AC-003, SKILL-AC-004, SKILL-AC-005 and CHECK-AC-003 are **passed**. The evidence is record `2au29i3yycjzbas` (archived) at `4d73f39`. Nothing under test has changed since then.
 - **SKILL-AC-006:** `not-run` (Google mocked, Cloud milestone).
 - **Phase E exit check (plan E-EV): not met in full.** The E2E-011 Cloudflare re-run, which uses only the troubleshooting commands, is **blocked** by DEC-0317. Phase E stays open on that one item. It must be re-run, with the D1 before and after readings, once the owner lifts the D1 stop. Until it passes, no Cloudflare log command in the skill may be described as verified.
 - **Recommended before F-EV, none of which changes a verdict:**

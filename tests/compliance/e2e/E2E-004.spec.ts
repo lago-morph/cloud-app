@@ -11,7 +11,7 @@
  * scenario applicable on this target and tier (each has at least one tagged test that this
  * target's run selects, as the driver's runners list them), and the evidence writer validates records against the schema — and
  * the pass part ("every applicable criterion passed; the record is valid") is read by the
- * evaluator from the same run's evidence record (ai/implementation/decisions/C-T4.md). The
+ * evaluator from the same run's evidence record (DEC-0279, DEC-0302…DEC-0310, decision log Item: C-T4). The
  * AWS run is not run in this phase ("AWS phase not started").
  */
 import { readFileSync } from "node:fs";

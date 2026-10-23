@@ -1,9 +1,0 @@
-$ cd /home/user/cloud-app/.claude/worktrees/agent-a690ce12f828a7d6d
-$ npm run build -w packages/framework
-# start: 2026-10-20T11:46:02Z
-
-> @lago-morph/prototype-framework@0.1.0 build
-> tsc -p tsconfig.build.json
-
-# end: 2026-10-20T11:46:11Z
-# exit code: 0

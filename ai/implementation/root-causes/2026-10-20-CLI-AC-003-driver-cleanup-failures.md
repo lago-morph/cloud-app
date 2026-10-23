@@ -8,7 +8,7 @@ Branch: `claude/implement-local-cloudflare-diag-c6`, from `origin/claude/impleme
 
 ## Symptom
 
-Two `[CLI-AC-003]` tests in `tests/compliance/harness/driver.unit.test.ts` (block "compliance runner exit status under injected failures") were committed as `it.skip` by their author (DEC-0396, `ai/implementation/decisions/C-T6.md`). Prompt §8 does not allow skipping, so they have to be unskipped once the driver is fixed.
+Two `[CLI-AC-003]` tests in `tests/compliance/harness/driver.unit.test.ts` (block "compliance runner exit status under injected failures") were committed as `it.skip` by their author (DEC-0396, decision log `Item: C-T6`). Prompt §8 does not allow skipping, so they have to be unskipped once the driver is fixed.
 
 1. Line 289: "local: a failing test whose cleanup (stopping dev) also fails keeps the original status and still writes the record".
 2. Line 334: "cloud: passing tests whose stage cleanup fails (a partial failure) give a non-zero status".
@@ -94,7 +94,7 @@ Also:
 - `tests/compliance/harness/cli.ts` header comment: add "1 when cleanup failed (dev did not stop, or leftovers remain) after an otherwise successful run".
 - `docs/components/compliance.md`, Driver paragraph: one sentence with the same rule. It is not required by the tests, but the driver section is the spec of record.
 - `tests/compliance/harness/driver.unit.test.ts`: change `it.skip(` to `it(` at lines 289 and 334, and remove the two "Skipped: …" comments. Make no other test changes.
-- `ai/implementation/decisions/C-T6.md`: change DEC-0396 to resolved, with a reference to this record.
+- Item C-T6's decision draft (now DEC-0394…DEC-0397 in the decision log): change DEC-0396 to resolved, with a reference to this record.
 
 ## Verification (red-green, §8 step 3)
 
@@ -145,7 +145,7 @@ Fixer: fixing subagent (prompt §8 step 3). I did not diagnose or review this re
 
 - **Red.** I unskipped both tests (`it.skip(` → `it(`, and removed the two "Skipped: …" comments; no other test change). Against the unfixed driver, `npx vitest run --config vitest.unit.config.ts tests/compliance/harness/driver.unit.test.ts -t "CLI-AC-003"` gave `2 failed | 3 passed`, with `Error: dev did not stop` and `AssertionError: expected +0 not to be +0`, as in E1.
 - **Green.** I applied the reviewed diff to `tests/compliance/harness/driver.ts` exactly: only `local.stop()` is guarded (the error text goes to `raw["dev.log"]`, a `compliance: stopping dev failed: …` line is logged, and `exitStatus ||= 1`), and after the `if (toRun.length > 0)` block, `if (leftovers.length > 0) exitStatus ||= 1;`. There is no new flag, and `leftover check failed` entries are not exempted. The same command then gave `5 passed`. `npx vitest run --config vitest.unit.config.ts tests/compliance/harness/` gave 14 files and 95 tests passed. `grep -rnE "(it|test|describe)\.skip" tests/compliance/harness/` finds nothing.
-- **Docs.** The `cli.ts` header comment and the Driver paragraph of `docs/components/compliance.md` state the rule (fix requirements 4 and 5). DEC-0396 in `ai/implementation/decisions/C-T6.md` is now resolved and points here. Its integration into the decision log is left to the next -INT.
+- **Docs.** The `cli.ts` header comment and the Driver paragraph of `docs/components/compliance.md` state the rule (fix requirements 4 and 5). DEC-0396 (decision log, `Item: C-T6`) is now resolved and points here. Its integration into the decision log is left to the next -INT.
 - **verify.** `npm run verify` passed (rc 0).
 - **Not done here (review follow-ups).** F1: `cli.ts` still gives the usage status 64 to any runtime exception from `runCompliance`. F2: `deps.pendingStages.remove` in `removeStage` is still unguarded.
 - **Local compliance run** (commit `1b0b953`, `--only CLI-AC-003,CORE-AC-006,SQL-AC-006`, record outside the repo): CLI-AC-003, CORE-AC-006 and SQL-AC-006 `passed`; CORE-AC-006 and SQL-AC-006 also have their expected `not-run` AWS parts (DEC-0397). No `not-run` skipped-test entry remains for CLI-AC-003. The run exited 1 because of an unrelated suite failure: `tests/compliance/criteria/compl/targets.test.ts` cannot parse a Where entry in `docs/decisions/decision-log.md` ("unexpected target … names a unit test."). Neither file is changed by this fix (both are identical to `origin/claude/implement-local-cloudflare`), so it needs its own root cause.
