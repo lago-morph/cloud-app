@@ -81,3 +81,32 @@ Accompanying, non-code:
 - Live: no new call needed. Pass 0 check 3 already supplies the 409 body. The GET-200 reading was confirmed by check 1.
 
 ## Review
+
+Reviewer: independent root-cause reviewer (prompt §8). I did not write this diagnosis or the code. I made no Cloudflare call and ran no suite. Base `9ed0664`.
+
+**Verdict: accepted with changes.** The fix is minimal and correct in substance, with one wording correction and one test correction.
+
+### Reasons
+1. **The cause is confirmed.**
+   - `packages/framework/src/provision/cloudflare/account.ts:46` maps every 409 to "belongs to another account", and the header at `account.ts:12-18` records this reading as unverified.
+   - Pass 0 `c03-create-existing` returned 409 10004 "…already exists, and you own it." (`logs/responses.jsonl`, ledger `c03`).
+   - `docs/decisions/decision-log.md:2630` (DEC-0334 item 1) already says another account's same-name bucket is invisible, so a 409 on this account's path means this account has it.
+   - The unit test at `account.unit.test.ts:67-76` and the fake at `fake-cloud.test-support.ts:98` encode the old reading. Nothing else depends on the 409 wording: grepping for "another account" finds only the 403/foreign paths (`core/setup-account.ts:18`, `fake-target.ts:146`, the PROV-AC-007 tests).
+2. **The fix is minimal and correct.**
+   - The read-back reuses `inspectBucket` (`account.ts:33-40`). It costs one GET, and only on 409.
+   - It checks ownership, which is what PROV-REQ-004 says counts as existing (`docs/components/provisioning.md:35-38`). It does not rely on message text.
+   - PROV-AC-007 is unaffected, because it goes through the GET 403 path (`account.unit.test.ts:86-104`).
+   - If the read-back GET itself errors (5xx), `inspectBucket` throws "checking R2 bucket … failed", which is acceptable.
+3. **The foreign message after a 409 + GET 403 is slightly wrong.** DEC-0334 item 1 says a foreign bucket is invisible, so in practice this sequence means "this credential cannot read it". The core's foreign message already says that (`core/setup-account.ts:18`, "or this account's credentials cannot see it"), and so does `account.ts:15`. The proposed `createBucket` text drops the qualifier.
+4. **One test is not red, and one must be made red.** Test 2 (409 then GET 403 → `/another account/`) also passes against the current code, which throws "another account" on every 409. That is fine as a guard, but it is not a red test. The GET-404 variant is red only if it asserts that the message does **not** match `/another account/`, and that it names the bucket and `HTTP 409`. "never 'created'" alone passes on the current code, because the current code also throws.
+5. **The race printout should not be fixed in this item.**
+   - `core/setup-account.ts:36-38` prints `created:` from the input list, because `createSharedResources` returns `void` (`core/operations.ts:106`).
+   - Fixing it changes the target-neutral `TargetOperations` interface, which every target and `fake-target.ts` implement, and the `SetupAccountResult.created` contract (`core/setup-account.ts:12-13`).
+   - No requirement fixes the output wording (`provisioning.md` PROV-REQ-004 / PROV-AC-004 constrain only the end state and "changes nothing" on a second run). The end state in the race is the required one.
+   - It is cosmetic and reachable only by a concurrent `setup-account` or a manual create between GET and POST. Record it as a known limitation and keep it out of this fix.
+
+### Required changes
+1. On the 409 → read-back → `foreign` branch, use the core wording: `${name} already exists but belongs to another account (or this account's credentials cannot read it); nothing was created`. Keep the test regex `/R2 bucket prototype-logs.*another account/`.
+2. In the GET-404 variant, assert `.rejects.toThrow(/R2 bucket prototype-logs.*HTTP 409/)` and that the message does not match `/another account/`, so the variant is red on the current code. Name test 1 and this variant as the red tests. Test 2 is a guard.
+3. In test 1, assert the exact request list ``[`POST /accounts/${ACCOUNT}/r2/buckets {"name":"prototype-logs"}`, `GET ${BUCKET_PATH}`]``, which is `stubApi`'s format (`account.unit.test.ts:19`). Rename the test at `account.unit.test.ts:67` so it no longer says "a creation conflict means another account holds the name".
+4. Make the non-code changes the record already lists: the fake's message text, `account.ts:11-18` header, and the DEC-0270 amendment citing pass 0 check 3. The amendment must also record the race printout limitation (reason 5) as known and accepted, not fixed.
