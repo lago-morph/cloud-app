@@ -8,8 +8,32 @@
 import { randomBytes } from "node:crypto";
 import { cpSync, mkdirSync, rmSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import { requireCloudD1 } from "../../criteria/_cloud/d1.js";
+import { holdStages } from "../../criteria/prov/support/stage.js";
 import { deployOrigin } from "../../harness/node-deps.js";
 import { REPO_ROOT, frameworkCli, tail } from "./process.js";
+
+/**
+ * Runs `body`, which deploys and removes stages of its own that hold up to `databases` D1
+ * databases at once, under the shared stage guards (plan §1 "Cloud usage limits"): the D1 stop
+ * (DEC-0317), the cross-process further-stage lock (it serialises Playwright workers as it does
+ * Vitest forks) and the two-database cap (DEC-0318). `body` includes its own `finally`
+ * removals, so the lock is held until they are done.
+ */
+export function withE2EStages<T>(databases: number, what: string, body: () => Promise<T>): Promise<T> {
+  return holdStages(databases, what, body);
+}
+
+/**
+ * E2E-014's cloud step: `secrets set <name>` on the run's (already deployed) stage, then a
+ * deploy. A deploy uses D1, so the D1 stop (DEC-0317) applies first; it creates no database, so
+ * it needs no room check and no lock.
+ */
+export async function setSecretThenDeploy(appDir: string, targetName: string, stage: string, name: string, value: string): Promise<Deployed> {
+  requireCloudD1(targetName);
+  await setSecret(appDir, targetName, stage, name, value);
+  return deployStage(appDir, targetName, stage, { [name]: value });
+}
 
 /** Local state, build output and dev-only secrets are never copied (root .gitignore). */
 const SKIP = new Set(["node_modules", "dist", ".framework", ".wrangler", ".logs", ".dev.vars", "test-results", "playwright-report", "blob-report"]);

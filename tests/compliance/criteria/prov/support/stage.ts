@@ -114,6 +114,13 @@ export interface CloudStage {
   setSecret(name: string, value: string): Promise<CommandResult>;
   /** `remove` (once; later calls return the first result). */
   remove(options?: Omit<RunOptions, "cwd">): Promise<CommandResult>;
+  /**
+   * Records a removal of the stage made by another actor (a clean machine, the driver's
+   * cleanup), so the cleanup in `finally` does not remove it a second time. It counts only when
+   * `result` exited 0 and `remaining` (the stage-resource probe after it) is empty; otherwise the
+   * cleanup still runs.
+   */
+  removedElsewhere(result: CommandResult, remaining: readonly string[]): void;
   /** Applies a migration overlay of apps/reference (ROUTES.md "Migration overlays") to the copy. */
   applyOverlay(overlay: Overlay): void;
   /** Runs any other CLI command in the copy. */
@@ -182,17 +189,40 @@ export function sharedStage(options: StageOptions): { get(): Promise<CloudStage>
   };
 }
 
+/**
+ * The guards every further cloud stage takes, in order (plan §1 "Cloud usage limits"): the D1
+ * stop (DEC-0317), the cross-process further-stage lock (one further stage at a time across
+ * test files and Playwright workers), and the two-database cap (DEC-0318) checked under the
+ * lock. Resolves to the lock's release (idempotent); when the cap check throws, the lock is
+ * released before the error is rethrown. Callers release it on every later failure path.
+ */
+export async function takeStageRoom(databases: number, what: string): Promise<() => Promise<void>> {
+  requireCloudD1(target().target);
+  const release = await acquireLock("further-stage", 60 * 60_000);
+  try {
+    await requireDatabaseRoom(databases, what);
+  } catch (error) {
+    await release();
+    throw error;
+  }
+  let released = false;
+  return async () => {
+    if (released) return;
+    released = true;
+    await release();
+  };
+}
+
 /** Holds the D1 stop, the further-stage lock and the database cap, then deploys nothing yet: `body` drives the stage. */
 export async function withCloudStage<T>(options: StageOptions, body: (stage: CloudStage) => Promise<T>): Promise<T> {
   const t = target().target;
   if (t === "local") throw new Error("withCloudStage is for cloud targets only");
   requireCloudD1(t);
-  const release = options.held === true ? async (): Promise<void> => undefined : await acquireLock("further-stage", 60 * 60_000);
+  const release = options.held === true ? async (): Promise<void> => undefined : await takeStageRoom(options.databases, `a further ${options.app} stage`);
   let copy: ScratchApp | undefined;
   let removed: CommandResult | undefined;
   let deployedOnce = false;
   try {
-    if (options.held !== true) await requireDatabaseRoom(options.databases, `a further ${options.app} stage`);
     copy = await scratchCopy(options.appDir, `d-t1-${options.app}`);
     const dir = copy.dir;
     const stageName = newTestStage();
@@ -242,6 +272,9 @@ export async function withCloudStage<T>(options: StageOptions, body: (stage: Clo
         removed ??= await cli(["remove", "--target", t, "--stage", stageName], o);
         return removed;
       },
+      removedElsewhere(result, remaining) {
+        if (result.status === 0 && remaining.length === 0) removed ??= result;
+      },
       applyOverlay(overlay) {
         copyOverlay(dir, overlay);
       },
@@ -256,21 +289,23 @@ export async function withCloudStage<T>(options: StageOptions, body: (stage: Clo
       }
     }
   } finally {
-    await copy?.remove();
-    await release();
+    try {
+      await copy?.remove();
+    } finally {
+      await release();
+    }
   }
 }
 
 /**
  * For a criterion that opens several stages at once: applies the D1 stop, takes the
- * further-stage lock once and checks that `databases` more D1 databases fit the cap; the
- * stages are then opened with `held: true`.
+ * further-stage lock once and checks that `databases` more D1 databases fit the cap
+ * (`takeStageRoom`); the stages are then opened with `held: true`. The lock is released when
+ * `body` settles, whether it resolves or throws.
  */
 export async function holdStages<T>(databases: number, what: string, body: () => Promise<T>): Promise<T> {
-  requireCloudD1(target().target);
-  const release = await acquireLock("further-stage", 60 * 60_000);
+  const release = await takeStageRoom(databases, what);
   try {
-    await requireDatabaseRoom(databases, what);
     return await body();
   } finally {
     await release();

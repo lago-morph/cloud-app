@@ -1,17 +1,26 @@
 /**
  * MIG-AC-002, MIG-AC-003 (local and cloud) and MIG-AC-006 (cloud), on stages these tests
  * deploy and remove themselves (support/stage.ts; local reading of "deployment": DEC-0144).
- * The tests of one describe block run in order on one stage, and the two blocks run one after
- * the other, so a cloud run holds at most one extra stage (two D1 databases during a
- * schema-changing deploy) at a time.
+ *
+ * Three describe blocks, each on its own stage, so a per-ID selection (`--only`, the driver's
+ * `-t '\[<ID>\]'`) runs only blocks that carry the ID and each such block sets up all it needs
+ * in its own `beforeAll` (root cause 2026-10-23-cloud-test-paths.md, item 1):
+ * - A (MIG-AC-002): the initial deployment and a no-change redeployment;
+ * - B (MIG-AC-003): version 1 with the fixture, a failing data-dependent migration, its re-run;
+ * - C (MIG-AC-003 preservation, MIG-AC-006): version 1 with the fixture and a session, then the
+ *   schema-changing deployment with writes during it, in `beforeAll`; its tests assert on the
+ *   recorded results and the stage afterwards.
+ * The tests of one block run in order on its stage, and the blocks run one after the other. On a
+ * cloud each stage holds the shared stage guards (D1 stop, further-stage lock, room for two D1
+ * databases) from `createStage` to `remove`, so a run holds at most one MIG stage at a time.
  *
  * Data: the reference app's data fixture (3 parents, 5 children, 2 files; ROUTES.md), loaded
- * once per stage, and at most WRITER_MAX KV writes during the schema-changing deploy.
+ * once per stage that needs it, and at most WRITER_MAX KV writes during the schema-changing deploy.
  */
 import { createHash, randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { tag, type ComplianceClient } from "../../harness/index.js";
-import { createStage, failureOutput, frameworkMigrations, type StageUnderTest } from "./support/stage.js";
+import { createStage, failureOutput, frameworkMigrations, snapshot, type DeployResult, type Snapshot, type StageUnderTest } from "./support/stage.js";
 
 const STEP_MS = 1_800_000;
 /** Writes attempted while the schema-changing deploy runs (MIG-AC-006): bounded, a handful of rows. */
@@ -25,21 +34,6 @@ interface FixtureDump {
   readonly parents: readonly { name: string; note?: string | null }[];
   readonly children: readonly { parent: string; label: string; rank?: number }[];
   readonly files: readonly { name: string; size: number; contentType: string; sha256: string }[];
-}
-
-type Rows = Record<string, unknown>[];
-type Snapshot = Record<string, Rows>;
-
-/** Every table of the stage's database with all its rows, sorted (D1 is SQLite on local and Cloudflare). */
-async function snapshot(stage: StageUnderTest): Promise<Snapshot> {
-  const tables = await stage.query("SELECT name FROM sqlite_master WHERE type = 'table' AND substr(name, 1, 7) <> 'sqlite_' AND substr(name, 1, 4) <> '_cf_' ORDER BY name");
-  const out: Snapshot = {};
-  for (const t of tables) {
-    const name = String(t["name"]);
-    const rows = await stage.query(`SELECT * FROM "${name}"`);
-    out[name] = rows.map((r) => ({ ...r })).sort((a, b) => (JSON.stringify(a) < JSON.stringify(b) ? -1 : 1));
-  }
-  return out;
 }
 
 /** MIG-REQ-002: the record lists every migration once, framework first, then app, each in file order (ids per DEC-0142). */
@@ -63,13 +57,14 @@ async function expectAnswering(stage: StageUnderTest, version: string): Promise<
 
 const sha256 = (text: string): string => createHash("sha256").update(text, "utf8").digest("hex");
 
-describe("MIG: initial and unchanged deployments, a failing data-dependent migration and its re-run", () => {
+const secrets = (): Record<string, string> => ({ apiKey: `c-t2-${randomBytes(12).toString("hex")}` });
+
+describe("MIG: initial and unchanged deployments", () => {
   let stage: StageUnderTest;
   let loaded: FixtureDump;
 
   beforeAll(async () => {
-    stage = createStage();
-    await stage.setSecret("apiKey", `c-t2-${randomBytes(12).toString("hex")}`);
+    stage = await createStage({ secrets: secrets() });
   }, STEP_MS);
   afterAll(async () => {
     await stage?.remove();
@@ -117,6 +112,23 @@ describe("MIG: initial and unchanged deployments, a failing data-dependent migra
       expect(probes.filter((s) => s !== 204), "health probes that did not answer 204 while the deploy ran").toEqual([]);
     }
   }, STEP_MS);
+});
+
+describe("MIG: a failing data-dependent migration and its re-run", () => {
+  let stage: StageUnderTest;
+  let loaded: FixtureDump;
+
+  beforeAll(async () => {
+    stage = await createStage({ secrets: secrets() });
+    const result = await stage.deploy("v1");
+    if (!result.ok) throw new Error(`deploying version 1 failed (status ${String(result.status)}): ${failureOutput(result.output)}`);
+    const user = await stage.user();
+    user.expectStatus(await user.post("/api/fixture/load"), 201);
+    loaded = await dump(stage);
+  }, STEP_MS);
+  afterAll(async () => {
+    await stage?.remove();
+  }, STEP_MS);
 
   it(tag("MIG-AC-003", "a data-dependent failing migration (unique over duplicate rows) exits with failure status, leaves the database unchanged and no new database, and the old app answers again"), async () => {
     const before = await snapshot(stage);
@@ -158,10 +170,10 @@ describe("MIG: a schema-changing deployment with data, writes, a secret and a se
   let attempted = 0;
   let deployed = false;
   let meBefore: unknown;
+  let schemaChange: DeployResult;
 
   beforeAll(async () => {
-    stage = createStage();
-    await stage.setSecret("apiKey", secret);
+    stage = await createStage({ secrets: { apiKey: secret } });
     const result = await stage.deploy("v1");
     if (!result.ok) throw new Error(`deploying version 1 failed (status ${String(result.status)}): ${failureOutput(result.output)}`);
     session = await stage.user();
@@ -170,13 +182,8 @@ describe("MIG: a schema-changing deployment with data, writes, a secret and a se
     session.expectStatus(await session.post("/api/fixture/load"), 201);
     loaded = await dump(stage);
     before = await snapshot(stage);
-  }, STEP_MS);
-  afterAll(async () => {
-    await stage?.remove();
-  }, STEP_MS);
-
-  it(tag("MIG-AC-003", "with parent and child rows present, supported changes incl. a column drop on a table with child rows preserve every row and reference not explicitly dropped"), async () => {
-    const result = await stage.deploy("v2", async (signal) => {
+    // The schema-changing deployment, recorded for both tests of this block (MIG-AC-003 preservation, MIG-AC-006).
+    schemaChange = await stage.deploy("v2", async (signal) => {
       // MIG-AC-006: writes made while the deploy runs; the acknowledged ones must survive.
       while (!signal.aborted && attempted < WRITER_MAX) {
         const key = `${writerNs}/${String(attempted).padStart(2, "0")}`;
@@ -187,8 +194,15 @@ describe("MIG: a schema-changing deployment with data, writes, a secret and a se
         await new Promise((r) => setTimeout(r, WRITER_INTERVAL_MS));
       }
     });
+    deployed = schemaChange.ok;
+  }, 2 * STEP_MS);
+  afterAll(async () => {
+    await stage?.remove();
+  }, STEP_MS);
+
+  it(tag("MIG-AC-003", "with parent and child rows present, supported changes incl. a column drop on a table with child rows preserve every row and reference not explicitly dropped"), async () => {
+    const result = schemaChange;
     expect(result.ok, `schema-changing deploy failed (status ${String(result.status)}): ${failureOutput(result.output)}`).toBe(true);
-    deployed = true;
     await expectAnswering(stage, "v2");
     expect(await dump(stage)).toEqual({
       version: "v2",
@@ -210,7 +224,7 @@ describe("MIG: a schema-changing deployment with data, writes, a secret and a se
   }, STEP_MS);
 
   it(tag("MIG-AC-006", "after the schema-changing deploy every write acknowledged during it is present, the stage has one database, the secret set before is returned and the session is still accepted"), async () => {
-    expect(deployed, "the schema-changing deploy ran (previous test)").toBe(true);
+    expect(deployed, "the schema-changing deploy ran (this block's beforeAll)").toBe(true);
     expect(attempted, "writes attempted while the deploy ran").toBeGreaterThan(0);
     expect(acknowledged.length, "writes acknowledged while the deploy ran (none would prove nothing)").toBeGreaterThan(0);
     for (const { key, value } of acknowledged) {

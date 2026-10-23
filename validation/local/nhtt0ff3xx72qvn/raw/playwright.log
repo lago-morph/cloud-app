@@ -1,0 +1,9 @@
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+Running 2 tests using 1 worker
+
+[1/2] [e2e] › tests/compliance/e2e/E2E-014.spec.ts:66:1 › [E2E-014] the stage reports exactly its committed configuration values
+[2/2] [e2e] › tests/compliance/e2e/E2E-014.spec.ts:111:3 › [E2E-014] local part: a configuration change takes effect only after the rebuild, and a secret set with the CLI appears nowhere scanned
+  2 passed (41.3s)

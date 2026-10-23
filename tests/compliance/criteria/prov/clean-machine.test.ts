@@ -57,13 +57,17 @@ if (!isLocal()) {
             expect(user2.expectStatus(await user2.get(`/api/kv/value?key=${encodeURIComponent(key)}`), 200).json(), "data written before the deploy from the clean machine").toEqual({ value: "from machine 1" });
 
             const machine3 = await scratchCopy(REFERENCE_DIR, "d-t1-prov006-m3");
+            let removed;
             try {
-              const removed = await runCli(["remove", "--target", t, "--stage", stage.stage], { cwd: machine3.dir, env: home3.env });
+              removed = await runCli(["remove", "--target", t, "--stage", stage.stage], { cwd: machine3.dir, env: home3.env });
               expect(removed.status, `remove from a clean machine:\n${tail(removed.output)}`).toBe(0);
             } finally {
               await machine3.remove();
             }
-            expect(await listStageResources({ target: t, ...ref }), "resources left after the remove from a clean machine").toEqual([]);
+            const remaining = await listStageResources({ target: t, ...ref });
+            expect(remaining, "resources left after the remove from a clean machine").toEqual([]);
+            // Only now is the stage known to be gone: the cleanup in withCloudStage's finally need not remove it again.
+            stage.removedElsewhere(removed, remaining);
           });
         } finally {
           home1.remove();

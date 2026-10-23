@@ -131,6 +131,8 @@ if (!isLocal()) {
             pendingStageStore(pending).add(t, stage.stage);
             const first = await driverCleanup(t, pending, nodeDeps(REPO_ROOT).cloud(t));
             const remaining = await listStageResources({ target: t, ...ref });
+            // When the cleanup left nothing, the stage is gone: withCloudStage's finally need not remove it again.
+            stage.removedElsewhere({ command: "the driver's cleanup (COMPL-AC-004)", status: 0, output: first.log.join("\n") }, remaining);
             const unreported = remaining.filter((r) => !first.leftovers.some((l) => l.includes(r.slice(r.lastIndexOf(" ") + 1))));
             expect(unreported, `resources still present but not in the record's leftovers (${first.leftovers.join("; ") || "none"})`).toEqual([]);
 
