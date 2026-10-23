@@ -1,0 +1,80 @@
+# E-EV — Phase E evaluation (skill)
+
+Evaluator: independent E-EV subagent. I did not write the skill, the template README, the tests or the evidence. This was a read-only judgement: I ran no test suites, made no Cloudflare calls, and changed no code, tests, skill text or evidence.
+
+Branch `claude/implement-local-cloudflare-e-ev`, from `origin/claude/implement-local-cloudflare` at `7e94e48`.
+
+Inputs:
+- the prompt, §3, §7, §9 E and §11;
+- plan §1 (Cloud usage limits, DEC-0317, Test economy), §6 (E-EV) and DEC-0391;
+- `docs/components/skill.md` §1, §2 and §4, and `docs/components/check.md` CHECK-REQ-003 and §2;
+- the evidence: `validation/local/phase-E-run/` (archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md) (SUMMARY, environment and `raw/`), and record `validation/local/2au29i3yycjzbas.json` with `raw/vitest.json` and `raw/vitest.log`;
+- the tests: `tests/skill/*.test.ts`, `tests/skill/support.ts`, `tests/compliance/criteria/skill/scaffold.test.ts`, `packages/framework/test/integration/check/portability-rules.test.ts` and `packages/framework/test/fixtures/support/check-catalog.ts`;
+- `skill/`, `apps/template/README.md` and `packages/framework/src/check/references.ts`;
+- the root-cause records `2026-10-20-SKILL-AC-004-example-config-not-typechecked.md` and `2026-10-20-COMPL-AC-001-where-parser-decision-log.md`;
+- `ai/implementation/evaluations/C-local.md` §6.
+
+## 1. Evidence and commit
+
+- **Record `2au29i3yycjzbas` (archived).** Target local, commit `4d73f39`. The command was `npm run compliance -- --target local --only SKILL-AC-001,…,SKILL-AC-005,CHECK-AC-003`. All six IDs are `passed`, and the other 103 are `not-run` ("not selected"). The record's `exitStatus` is 1.
+- **Tagged tests in `raw/vitest.json`, all `passed` and none skipped.** SKILL-AC-001 has 7, SKILL-AC-002 has 3, SKILL-AC-003 has 9, SKILL-AC-004 has 7 (including both apps' `verify`, about 252 s and 264 s), SKILL-AC-005 has 2 and CHECK-AC-003 has 15.
+- **Separate runs.** `npm run verify` exited 0 (`raw/03-verify.log`: template 18/18 and reference 52/52 per dialect). `tests/skill` passed 26/26 (`raw/04-tests-skill.log`).
+- **Why the record exits 1.** One unselected file, `tests/compliance/criteria/compl/targets.test.ts`, failed to load. The COMPL Where parser read a "Where" phrase from the decision log. That parser is not involved in any of the six IDs. It is the COMPL-AC-001 Where-parser root cause, ACCEPTED and fixed after the run (`c83606a`, merged `250f5fe`). **This does not affect any verdict here.**
+- **Changes after the evidence commit.** I compared `4d73f39..7e94e48`. Nothing changed under `skill/`, `apps/`, `packages/`, `tests/skill/` or `tests/compliance/criteria/skill/`. The only changes were the compliance harness (catalogue, CLI exit codes, driver, expected list), the COMPL test support, plan text, and decision and root-cause records. The harness changes alter how a run is read and how it exits, not what the six tests check. **The evidence therefore still describes the code at HEAD.**
+- **`vitest.config.ts` deletion (DEC-0390, `783a85e`).** It is an ancestor of `4d73f39`, so the evidence already covers it. The SKILL-AC-004 root-cause fix also landed before the run: the example block was removed and `grep vitest.config skill/` is empty. Both are reflected in the evidence.
+- **Cloud work.** No Cloudflare calls were made (DEC-0317). No `validation/cloudflare/` record exists.
+
+## 2. Per-ID status
+
+| ID | Status | Tests | Judgement |
+| --- | --- | --- | --- |
+| SKILL-AC-001 | **passed** | `tests/skill/budgets-and-links.test.ts` (7) | The byte budgets PAR-070, PAR-071 and PAR-072 are checked against the parameter values. The set of references must equal `REFERENCE_FILES`. The router must link every reference, each reference must link at least one existing example, every example must be linked from some reference, and every relative link in `skill/**/*.md` must resolve. Weak point: "each reference links to *its* examples" is read as "at least one". See F1. |
+| SKILL-AC-002 | **passed** | `tests/skill/structure.test.ts` (3) | The first paragraph after the H1 must begin "Read this when". The last H2 must be "Stopping condition", beginning "Stop reading when". Each of SKILL-REQ-002's tasks needs a task-map row whose task cell names it and which links the right reference ("diagnosing" is split into request and deploy). The tests are as strong as the criterion. |
+| SKILL-AC-003 | **passed** | `tests/skill/hard-rules.test.ts` (9) | The tests read only the numbered items under "Hard rules". Each rule must match every one of its clauses within one item. That covers all five `FRAMEWORK-ISSUE.md` fields and the four parts of the next action (stop, continue only independent work, report the issue and the unfinished requirements to the user, do not declare done). I checked `skill/SKILL.md` §Hard rules by eye, and it states all of them. |
+| SKILL-AC-004 | **passed** | `tests/skill/examples.test.ts` (7) | Every code block must follow its `example-source` marker directly and equal its source byte for byte. Sources must be in `apps/template` or `apps/reference` only. No block may equal an `apps/demo` file. TypeScript sources must sit under `src/` or `tests/`. Root `verify` must run both apps' `verify`, and both of those runs must pass. "Type-checks" is fully shown. "Runs every example" is only partly shown: see F2 and F3. |
+| SKILL-AC-005 | **passed** | `tests/compliance/criteria/skill/scaffold.test.ts` (2) | The tests run the real `skill/scripts/scaffold` into a directory with a clashing file and into one without, with no `--force`. Each run must exit 1 with the refusal message. The tree must stay identical in paths, contents and mtimes, and no `vendor/`, `package.json` or `node_modules` may appear. These assertions are strong. (C-local already judged this `passed`, and I confirm it.) |
+| CHECK-AC-003 | **passed** | `FW/test/integration/check/portability-rules.test.ts` (15) | For each of the 10 framework rules plus `no-raw-html`, `no-suppression-comments` and the three type-escape bans, a real `verify` run must produce a diagnostic. That diagnostic must name the rule, name the construct (the text left after removing the file name, rule and reference), and name a `skill/reference/*.md` that exists on disk. I checked that the rules mapped to each reference are listed in its "Check rules that send you here" section. Coverage gaps: F4 and F5. |
+| E2E-011 (Cloudflare part) | **blocked** | `tests/compliance/e2e/E2E-011.spec.ts` was not run on Cloudflare | Not run, because the owner's D1 stop (DEC-0317) holds. The detail is "D1 daily row limit exhausted by phase A spikes on 2026-10-19; re-run after reset". No stage was created and nothing is billable from E-RUN. The re-run must look up the log entry using only the commands in `skill/reference/troubleshooting.md` §1 "Cloudflare". It must also take the plan §1 before and after D1 readings. See F6. |
+| SKILL-AC-006 | not-run (§4/§8; Cloud milestone) | — | Google login is mocked in this phase. This is confirmed against the plan's not-run list. No record carries it yet (F6). |
+
+## 3. Flagged problems
+
+1. **F1. SKILL-AC-001's link check is weaker than "its examples".** The test needs only one existing example link per reference, plus every example linked from somewhere. It does not check that a reference links the examples relevant to it. Today the links look sensible: for example, `owner-tasks.md` links to `examples/configuration.md`. This does not change the verdict.
+2. **F2. "Runs every example" is only partly shown.** All the client page sources the examples copy are type-checked and linted by `verify`, but no test in `verify` executes them: `apps/template/src/client/pages/{account,admin,files,notes,status}.ts`, `src/client/main.ts` and `src/client/dom.ts`. Neither does `index.html`. The template's tests (`tests/app.test.ts`, `tests/signing.test.ts`, `tests/smoke/`) exercise server routes only. Nothing checks that each copied server file is reached by a test either. I accept SKILL-AC-004 as `passed` under skill.md §2's reading ("type-checked and tested where it lives, by each app's `verify`"). A browser-level test of the template's pages would close the gap.
+3. **F3. "CI" is the root `npm run verify`, and the byte-for-byte check is not in it.** The repository has no CI workflow file. Root `verify` runs both apps' `verify`. The check that ties examples to their sources (`tests/skill`) runs only in `test:integration` and in the compliance driver. An example that drifts from its source would therefore pass `npm run verify` and be caught only by the integration or compliance run. This is a minor wiring gap and does not change the verdict.
+4. **F4. CHECK-AC-003 leaves the migration checker's diagnostics out of the tagged evidence.** DEC-0187 gives the migration checker five rule IDs (`prototype-framework/migration-checksums`, `-history`, `-apply`, `-supported-changes` and `-dialects`) and the reference `sql-and-migrations.md`. Under CHECK-REQ-003 these are diagnostics too. Only untagged unit tests (`check/migrations/files.unit.test.ts`, `exports.unit.test.ts`) assert their reference, and `references.unit.test.ts` is unit-level and so does not count as evidence (plan §10.1). `sql-and-migrations.md` does list all five rule IDs. I read "every rule" as the shipped lint rules, so the verdict stands. Tagging an integration assertion for the five migration rules would make the evidence complete.
+5. **F5. The CHECK-AC-003 coverage control is untagged, so the driver skipped it.** The control is "every rule has exactly one representative fixture", and it shows as `skipped` in `raw/vitest.json`. This repeats C-local Flag 6. Each per-rule test does assert that its fixture exists, so the verdict stands. Tagging the control is still recommended.
+6. **F6. There is no evidence record for the blocked and not-run cloud items.** E2E-011 (cloud) `blocked` and SKILL-AC-006 `not-run` are stated only in `phase-E-run/SUMMARY.md` (archived) prose. Plan §1 says blocked criteria are recorded with the driver's `--blocked`. A record should be written when the cloud run is attempted, or at D-RUN.
+7. **F7. Record `2au29i3yycjzbas` (archived) has `exitStatus` 1.** The cause is explained in §1 and is unrelated to the six IDs. A clean re-run at HEAD, after the Where-parser fix, should exit 0. It is not required for these verdicts.
+8. **F8. Unverified claims in the skill that something works on Cloudflare** (none of them is backed by a live framework run in this phase):
+   - `skill/SKILL.md` line 8 says apps "run unchanged locally, on Cloudflare and on AWS". The AWS target does not exist, and no framework cloud run has passed on Cloudflare. It should be stated as the design goal, not as fact (prompt §11).
+   - `troubleshooting.md` §2 says that for `SEC.MISSING` "on Cloudflare, the next request sees it". `files.md` line 50 says an expired ticket gives `status: null` on Cloudflare (DEC-0101, which was seen in spike A-07, not in a framework run). `deploying.md` §3 describes the schema-change copy-and-switch and the restart after a failure (D1 is blocked). `troubleshooting.md` §1 describes the `LOGS`-binding fallback lines (DEC-0323) and the R2 object-listing `prefix` and single-object GET. A-01 tried only an unprefixed listing; DEC-0334 item 3 notes that paging is unconfirmed.
+   - These pages carry a page-level or section-level "not yet verified on Cloudflare in this phase" notice, and so does the README's opening "What is verified" paragraph. The `files.md` and `SKILL.md` sentences do not.
+   - I found no claim that the framework has passed on Cloudflare. The README and owner-tasks correctly say the cloud commands ran "only against a simulated Cloudflare".
+
+## 4. Owner steps: are they copy-and-paste? (prompt §3, SKILL-REQ-006)
+
+I reviewed `apps/template/README.md` and `skill/reference/{owner-tasks,deploying,troubleshooting}.md`. All the SKILL-REQ-006 tasks are present: user ID to admins and users, account setup, secrets, the Google client, deploy and remove, and logs. Most steps are real commands with `<…>` placeholders, and secrets are read from stdin. These steps are **not** fully copy-and-paste for someone who does not read code:
+
+1. **"Commit" with no command.** README §4 ("Commit your work, because `smoke` refuses…"), README §6 ("create … and commit it"), README §7 ("commit the change"), owner-tasks §5 step 5 ("Commit the file") and deploying §2 and §3 give no `git add …` / `git commit …` lines. Only README §8 and owner-tasks §6 give them.
+2. **The production values file must be created by hand.** README §6 and owner-tasks §6 show the JSON but give no command that writes it. There is no heredoc, and no `cp` of `skill/templates/production-stage.json`, which the owner pages never mention. The owner has to open an editor and save the file at the right path.
+3. **README §8 step 3 is a JSON fragment** (`"framework": {…}`) that must be merged into the existing file by hand. owner-tasks §6 shows the whole file, so the README should too. Neither page gives a command to check the edited file before `deploy`, for example a `build` run for the stage, which validates the values file (CFG; not documented as an owner step).
+4. **Finding the app name means reading code.** README ("replace `template` below with the `name` in `src/app.ts`") and troubleshooting ("`<app>` is the `name` in `src/app.ts`") send the owner into a source file. It could be given as a command, or taken from the address `deploy` prints.
+5. **The `workers.dev` subdomain is left inside JSON output.** README §5 step 1 and owner-tasks §5 step 1 print the raw API response. The owner must find `"subdomain"` in it by eye and build the callback URL by hand.
+6. **The stage name is retyped.** README §4 uses `test-<initials><number>` and later `test-<…>`. A `STAGE=…` variable set once, as troubleshooting §1 does, would prevent mismatches.
+7. **A sandbox-only note appears in an owner page.** troubleshooting §1 says "If the sandbox's proxy injects the Cloudflare token itself, set `CLOUDFLARE_API_TOKEN` to any placeholder word". It is meant for agents in this sandbox and may confuse the owner.
+8. **Dashboard navigation is written from the framework's reading and is unverified.** This covers "Manage Account → Account API Tokens", "Workers & Pages → … → Domains & Routes", "R2 → … → Object lifecycle rules" and the API-token permission list. These are labelled "not yet verified". They cannot be copy-pasted by nature and need confirming at the first live run.
+9. **owner-tasks §1** runs `npm ci` "at the repository root", but every other command runs "in the app's directory". It gives no `cd` back to the app, whereas the README does (`cd apps/template`).
+
+None of these blocks SKILL-AC-001 to SKILL-AC-005. They are SKILL-REQ-006 / prompt §3 quality gaps, and SKILL-AC-006 (Cloud milestone, not-run) is where they would be tested. I recommend an E-02 follow-up to fix points 1 to 7 before F-EV.
+
+## 5. Verdict
+
+- **Local exit check:** SKILL-AC-001, SKILL-AC-002, SKILL-AC-003, SKILL-AC-004, SKILL-AC-005 and CHECK-AC-003 are **passed**. The evidence is record `2au29i3yycjzbas` (archived) at `4d73f39`. Nothing under test has changed since then.
+- **SKILL-AC-006:** `not-run` (Google mocked, Cloud milestone).
+- **Phase E exit check (plan E-EV): not met in full.** The E2E-011 Cloudflare re-run, which uses only the troubleshooting commands, is **blocked** by DEC-0317. Phase E stays open on that one item. It must be re-run, with the D1 before and after readings, once the owner lifts the D1 stop. Until it passes, no Cloudflare log command in the skill may be described as verified.
+- **Recommended before F-EV, none of which changes a verdict:**
+  - fix the owner-step gaps §4.1 to §4.7;
+  - soften the `SKILL.md` line 8 and `files.md` line 50 claims (F8);
+  - tag the CHECK-AC-003 control and add a tagged migration-diagnostic assertion (F4, F5);
+  - write a `blocked` record for E2E-011 (cloud) (F6).
