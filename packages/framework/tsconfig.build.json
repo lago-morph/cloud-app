@@ -1,0 +1,12 @@
+{
+  // Emits dist/ (JavaScript + declarations) for the exports map and the package binary.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.unit.test.ts"]
+}

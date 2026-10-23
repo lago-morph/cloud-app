@@ -72,3 +72,7 @@ All capability components, PROV.
 | AWS-AC-004 | The protected-route acceptance criteria (AUTH-AC-004, AUTH-AC-007) pass when sent directly to the Function URL. | AWS-REQ-004 | Cloud |
 | AWS-AC-005 | One slow test: wait until the cluster is observably paused (bounded; if it never pauses, record not-run with the reason), then send one request. Within PAR-270 it returns 2xx or `SQL.UNAVAILABLE`, never a gateway timeout. | AWS-REQ-005 | Cloud |
 | AWS-AC-006 | A reference route that sets two cookies delivers both, through CloudFront and directly at the Function URL. | AWS-REQ-001 | Cloud |
+
+## 5. Portability note
+
+This component is where AWS names belong: the Lambda and CloudFront runtime shape, the stage's resources and the per-target operations of PROV §2. App source and app-facing contracts do not change for it (SYS-REQ-001, SYS-REQ-003). Another target is a sibling component of the same shape plus one adapter per capability, and touches only the shared places the component map lists (§1); this component does not change.

@@ -82,7 +82,14 @@ Specific content the references carry:
 - **Testing.** One test file under `tests/smoke/**` runs both in-process (`createTestApp`) and against a deployed test stage through `smoke --target <t> --stage <s>` (`connectTestStage()`). Time-dependent behaviour (for example share-link expiry) is tested locally with the test runner's fake timers, not in the smoke test.
 - **Troubleshooting.** Copy-and-paste commands per cloud to list a day's log entries and find the entry for a `requestId` under the LOG-REQ-004 key layout. On Cloudflare this uses the dashboard or an S3-compatible CLI with a manually created read-only R2 token. "When there is no log entry": `aws logs tail` on the stage Lambda's log group, or `wrangler tail` while reproducing. It points to the `meaning` of each code in `errors.d.ts`, and covers login failures (`redirect_uri_mismatch`: register the callback URL printed by deploy).
 
-**Diagnostics** from CHECK name the reference to read.
+**Diagnostics** from CHECK name the reference to read. Each reference a diagnostic can name has a section "Check rules that send you here" listing each such rule ID and what to do.
+
+**Implementation** (E-01, decisions DEC-0367…DEC-0372 in the [decision log](../decisions/decision-log.md)):
+- References are the thirteen files named in `packages/framework/src/check/references.ts`. Each starts with its title and then a paragraph beginning "Read this when", links to at least one example, and ends with a section "Stopping condition" beginning "Stop reading when".
+- `SKILL.md` carries YAML front matter (`name`, `description`), the hard rules as a numbered list, the task map as a table, and links to every reference, example and template.
+- Each example is a Markdown file of whole source files copied unchanged from `apps/template` or `apps/reference`. Each copied file is a fenced block directly preceded by `<!-- example-source: <repo path> -->`. The code is type-checked and tested where it lives, by each app's `verify`; a test can compare every block with its source byte for byte, and reject any source under `apps/demo/`.
+- `skill/templates/` holds the files an app agent copies and fills in: `FRAMEWORK-ISSUE.md` (the entry fields of SKILL-REQ-003) and `production-stage.json` (a schema-valid production values file). The app itself is scaffolded from `apps/template`.
+- The template carries the finalize route (`src/server/routes/files.ts`, with an `uploads` table) and the HMAC helper (`src/server/signing.ts`, with `tests/signing.test.ts`); `files-tickets.md` and `secrets.md` in `skill/examples/` copy them, and the references point there (E-03).
 
 **The template** (`apps/template/`) is the smallest app that uses every capability once, with tests. It is the starting point the scaffolder copies. It depends on an exact framework version, not a range. Its `src/server/env.ts` exports `config`, `secrets` and `type Env = AppEnv<typeof config, (typeof secrets)[number]>`; route modules take `Hono<Env>`. Its README lists what stays billable while idle (Aurora storage, the credentials secret, shared resources, leftover test stages) and how to remove each, and notes that on AWS public routes that read the database keep Aurora awake.
 
@@ -100,3 +107,7 @@ CORE (export list), CHECK, CLI, and the contracts of every capability.
 | SKILL-AC-004 | CI type-checks and runs every example and the template. No example file is derived from `apps/demo/`. | SKILL-REQ-004 | Local |
 | SKILL-AC-005 | Scaffolding into a directory with existing files stops without changing them. | SKILL-REQ-005 | Local |
 | SKILL-AC-006 | Following only the documented owner steps, a tester sets up an account, deploys with a `framework.users` list that omits them and is anonymous after login, adds their ID to `framework.users` and becomes `user`, then becomes admin, and removes the stage. | SKILL-REQ-006 | Cloud (milestone) |
+
+## 5. Portability note
+
+The skill teaches only the public exports and target-neutral rules. Only the owner tasks and troubleshooting have steps for each cloud (SKILL-REQ-006, §2 Troubleshooting), and the template README's list of what stays billable while idle names cloud resources. A new target adds its steps there and its entries in that README list; the router, the other references, the examples and the template's code do not change.

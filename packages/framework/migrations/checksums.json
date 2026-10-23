@@ -1,0 +1,4 @@
+{
+  "postgres/0000_framework_tables.sql": "69f2208cf670bf9d362575483eba95a8f6a797a9fe343c8937a18e760b003206",
+  "sqlite/0000_framework_tables.sql": "32fe88ad0807dfec434f611a83e94829c4b1a8a37b354dcec81a9e40705cb7c1"
+}

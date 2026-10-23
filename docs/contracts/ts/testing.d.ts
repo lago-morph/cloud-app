@@ -29,7 +29,11 @@ export interface LogEntry {
 export interface TestAppOptions {
   /** Identity for every request; default anonymous. */
   readonly user?: CurrentUser;
-  /** Config values overriding the app's defaults. A key the app did not declare makes `createTestApp` throw. */
+  /**
+   * Config values overriding the app's defaults. A key the app did not declare makes `createTestApp` throw.
+   * The reserved key `framework` holds the stage configuration's `framework` section
+   * (`{ admins?, users? }`, stage-config.schema.json); each `createTestApp` call is one build.
+   */
   readonly config?: Record<string, unknown>;
   /** Secret values for the test. */
   readonly secrets?: Record<string, string>;
@@ -41,6 +45,11 @@ export interface TestAppOptions {
    * (docs/components/auth.md). Default false.
    */
   readonly stubLoginProvider?: boolean;
+  /**
+   * For the framework's own LOG tests (LOG-AC-001): a log writer whose every write fails, or
+   * whose writes never complete. `logs()` then returns no entries. Default: the in-memory log.
+   */
+  readonly logWriter?: "failing" | "never-completing";
 }
 
 export interface TestApp {
@@ -48,11 +57,16 @@ export interface TestApp {
    * Sends a request to the app's API and returns the response. State-changing requests
    * (any method other than GET, HEAD, and OPTIONS) carry the deployment's origin in
    * `Origin` unless `init` sets one, so they pass the request forgery check.
+   * `path` is a path on the app's origin, or a URL on that origin; a URL on any other origin
+   * (including `//host`, `/\host`, another protocol on the app's host, and `blob:`) is refused
+   * before anything is sent, on both test apps. Send requests to other hosts, such as a cloud
+   * ticket's `url`, with `fetch`.
    */
   request(path: string, init?: RequestInit): Promise<Response>;
   /**
    * Returns a test app that sends subsequent requests as `user`. It shares storage with
-   * the original. On a connected stage it logs in as `user` through mock-login.
+   * the original. On a connected stage it logs in as `user` through mock-login. A test app
+   * created with `stubLoginProvider` has no authentication mock, so `as` throws there.
    */
   as(user: CurrentUser): TestApp;
   /**
@@ -67,7 +81,12 @@ export interface TestApp {
    * requests. Optional `stubFailure` makes the stub's login fail in the named way.
    */
   loginWithStub(subject: string, options?: { readonly displayName?: string; readonly stubFailure?: "refused" | "replayed" }): Promise<void>;
-  /** Discards all state created by this test app. On a connected stage it only logs out; stage data is kept. */
+  /**
+   * Discards all state created by this test app. In-process, the original and every test
+   * app made from it with `as` share one app: disposing any of them disposes all, and later
+   * requests through any of them reject. On a connected stage it only logs that test app
+   * out; stage data is kept.
+   */
   dispose(): Promise<void>;
 }
 

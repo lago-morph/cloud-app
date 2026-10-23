@@ -1,0 +1,6 @@
+{
+  // Root tooling: runner configs and shared test support. The framework has its own project
+  // (packages/framework/tsconfig.json); `npm run typecheck` checks both.
+  "extends": "./tsconfig.node.json",
+  "include": ["*.config.ts", "tests/support/**/*.ts", "tests/skill/**/*.ts"]
+}

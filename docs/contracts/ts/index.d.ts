@@ -17,7 +17,7 @@ export {
   count, countDistinct, min, max, sum, avg, asc, desc, containsText,
 } from "./sql";
 export type {
-  AtomicResults, Column, ColumnBuilder, ColumnBuilders, PortableDb, PortableQueryResult, WriteDb, WriteStep, Table, TableDefinitions, TableOptions,
+  AnyTable, AtomicResults, Column, ColumnBuilder, ColumnBuilders, PortableDb, PortableQueryResult, WriteDb, WriteStep, Table, TableDefinitions, TableOptions,
 } from "./sql";
 
 export type { KvService, KvListOptions, KvListPage } from "./kv";
