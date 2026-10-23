@@ -349,6 +349,123 @@ Deps: C-EV.
   - **Always `blocked` here:** DEC-0270's 403 "foreign" reading cannot be produced with one account (R2 bucket names are per account); PROV-AC-002's restricted-credential clause (the proxy replaces every `Authorization` header, DEC-0335, DEC-0363); PROV-AC-004's "deploy without `setup-account`" clause (needs an account where it never ran, DEC-0364).
   - **Still open before the SEC/HTTP/CORE criteria that need it:** the driver's `apiKey` generation, `secrets set` on the run stage, `COMPLIANCE_SECRET_API_KEY` and redaction (DEC-0277, DEC-0366); no harness file does it yet.
   - **Passes with ≤ 2 D1 databases (DEC-0318):** (1) the main pass, `--only` every expected ID except MIG-AC-002, -003, -006: the run stage plus at most one further stage at a time (C-T1's lock, DEC-0278); (2) after the main stage is removed, the MIG pass, `--only MIG-AC-002,MIG-AC-003,MIG-AC-006`, with no run stage (`--base-url`; D-05 found that no new driver form is needed, DEC-0355). PROV-AC-002 runs in this pass too (it holds two databases, DEC-0361). Its two MIG stages run one after the other, and a schema-changing deploy holds two databases. Check the database count (PAR-219) and D1 usage before each pass.
+  - **Pass schedule (2026-10-23):** the cloud estimator wrote this estimate read-only, for the orchestrator's check. It covers every Cloudflare criterion still `blocked` (final-report §6.2, final.md), and it splits the passes above and D-RUN-M where the caps need it. Pass 0 is done: `setup-account` ran, and pass 0 used 38 requests and 0 rows.
+    - **Counting basis.** Requests are Cloudflare API requests to `api.cloudflare.com`. R2 S3-endpoint and `workers.dev` requests are not counted. A request count is the framework's requests, counted on the fakes (D-05, DEC-0348, DEC-0399), plus **S per SST/Pulumi run**. S is unmeasured; the worst case is S = 60.
+      - Each operation costs:
+        - first deploy of a stage: 29 + 2S (it stops on the unset secret after step 5);
+        - `secrets set`: 1;
+        - redeploy with nothing pending: 19 + 2S;
+        - schema-changing deploy: 37 + 2S;
+        - deploy failing at step 4: ≈ 38 + S;
+        - `remove`: 20 + S.
+      - So one stage lifecycle with its secret (deploy, set, deploy, remove) costs 69 + 5S, which is **369 at S = 60**.
+      - Other costs:
+        - the driver's leftover check: 5;
+        - a `stageResourceDetails` probe: 5;
+        - the read-only R2 token: 5 per test process that reads `prototype-logs` or `sst-state` (Vitest forks one process per file);
+        - `requireDatabaseRoom`: 1;
+        - the before/after measurement: 3 per pass (2 GraphQL requests and 1 D1 list).
+      - Rows written: a first deploy writes ≤ 50 (DEC-0361). Upper bounds include index entries. Logins write no rows: sessions are signed cookies. Log entries and files go to R2.
+    - **Why a kept run stage R.** At S = 60, the driver's own run stage costs ≈ 374 per pass, so no pass that also needs a further stage can fit under 500.
+      - So R is deployed once by hand (pass 1), used by passes 1–5 with `--base-url "$R_URL" --stage "$R"` (DEC-0355), and removed in pass 5. The tests get the value from the exported `COMPLIANCE_SECRET_API_KEY` (DEC-0398).
+      - In these passes the driver neither redacts the exported value nor runs its leftover check for R. The tests never print the value. Pass 5 keeps `remove`'s own leftover output.
+    - **Every pass.**
+      - Set the environment: `export NODE_USE_ENV_PROXY=1 CLOUDFLARE_API_TOKEN=placeholder CLOUDFLARE_ACCOUNT_ID=<id> CLOUDFLARE_DEFAULT_ACCOUNT_ID=<id> COMPLIANCE_CLOUDFLARE_D1=available`, plus `CLI="node <repo>/packages/framework/bin/prototype-framework.js"` and `C="npm run compliance -- --target cloudflare"` (driver from the repo root).
+      - Before the pass:
+        - take a GraphQL D1 reading;
+        - check the `wrangler d1 list --json` count (0 expected, or 1 while R exists);
+        - check that `.framework/compliance/pending-stages.json` is empty, because the driver would remove pending stages first, at ≈ 85 requests each.
+      - After the pass, take the reading again. Stop if any reading would pass a cap.
+    - **Pass 1: deploy R, then R's own criteria.** ≈ 340 requests at S = 60, ≤ 565 rows written, < 2,500 read, peak 1 database.
+      - Commands:
+        - `npm run build -w packages/framework`;
+        - `R=$(node --input-type=module -e "const m=await import('./packages/framework/dist/evidence/run-id.js');console.log(m.testStageName(m.newRunId()))")`;
+        - `KEY=$(node -e "console.log(require('crypto').randomBytes(24).toString('hex'))")`;
+        - in `apps/reference`: `$CLI deploy --target cloudflare --stage $R` (it stops on `apiKey`), `printf '%s\n' "$KEY" | $CLI secrets set apiKey --target cloudflare --stage $R`, then `$CLI deploy --target cloudflare --stage $R`; `R_URL` is the origin it prints;
+        - `export COMPLIANCE_SECRET_API_KEY=$KEY`;
+        - `$C --base-url "$R_URL" --stage "$R" --only AUTH-AC-004,AUTH-AC-005,AUTH-AC-006,AUTH-AC-007,AUTH-AC-009,CF-AC-001,CFG-AC-003,CFG-AC-004,CFG-AC-005,COMPL-AC-001,COMPL-AC-003,CORE-AC-002,CORE-AC-003,E2E-004,E2E-005,E2E-009,E2E-011,E2E-013,FILES-AC-001,FILES-AC-002,FILES-AC-003,FILES-AC-004,FILES-AC-005,HTTP-AC-001,HTTP-AC-003,HTTP-AC-004,HTTP-AC-005,KV-AC-001,KV-AC-002,KV-AC-003,KV-AC-004,KV-AC-005,LOG-AC-001,LOG-AC-002,LOG-AC-005,SEC-AC-002,SQL-AC-003,SQL-AC-004,SQL-AC-005,SQL-AC-006`;
+        - `$C --milestone --base-url "$R_URL" --stage "$R" --only PROV-AC-004`. This is safe here because nothing deploys meanwhile; a concurrent deploy would change `sst-state` and break its snapshot;
+        - E2E-011's troubleshooting check: the two `curl` commands of `skill/reference/troubleshooting.md` §1 for one `throw-plain` requestId on R. This takes 2 requests, and E-EV judges it. It can also go with pass 8.
+      - Rows written:
+        - R's deploy: ≤ 50;
+        - the SQL case set: ≈ 65, ≤ 200 counting index entries;
+        - the KV case set: ≈ 157, ≤ 314;
+        - everything else: 0.
+      - Requests:
+        - R: 49 + 4S = 289;
+        - R2 tokens for `log/entries`, `secrets/no-leak` and E2E-011: ≈ 15;
+        - PROV-AC-004 (2× `setup-account` and 2 snapshots): ≈ 30;
+        - the troubleshooting commands and the measurement: 5.
+      - Before pass 2, **measure S**: count the first deploy's SST/Pulumi requests in the proxy ledger, as pass 0 did. Then recompute every pass below with the measured S.
+    - **Pass 2: the further-stage group, on R.** ≈ 388 requests (369 + secret hooks 6 + 2 R2 tokens 10 + 3), ≈ 55 rows written, ≈ 50 read, peak 2 databases (R + 1).
+      - Command: `$C --base-url "$R_URL" --stage "$R" --only SEC-AC-001,SEC-AC-003,SEC-AC-005,HTTP-AC-002,LOG-AC-004,CLI-AC-004`.
+      - All six IDs tag tests in `secrets/further-stage.test.ts`. Its `beforeAll` deploys a further reference stage whenever any of them is selected, so none of them can go in pass 1.
+    - **Pass 3: CF-AC-002, on R.** ≈ 396 requests (369 + probes 10 + Worker lookups 2 + secret hooks 6 + R2 token 5 + cap check 1 + 3), ≈ 55 rows written, ≈ 30 read, peak 2.
+      - Command: `$C --base-url "$R_URL" --stage "$R" --only CF-AC-002`.
+      - There is no margin left: skip this pass if the measured S is over 60.
+    - **Pass 4: CLI-AC-005, on R.** ≈ 372 requests (369 + 3), ≈ 45 rows written, peak 2.
+      - Command: `$C --base-url "$R_URL" --stage "$R" --only CLI-AC-005`.
+      - It deploys a further template stage. `smoke` calls `workers.dev` only. The test needs `--stage` for `runDeployment()`.
+    - **Pass 5: E2E-014, then remove R.** ≈ 228 requests (1 + 19 + 2S + 5 + 20 + S + 3), ≤ 5 rows written, peak 1.
+      - Commands:
+        - `$C --base-url "$R_URL" --stage "$R" --only E2E-014`;
+        - then, in `apps/reference`, `$CLI remove --target cloudflare --stage $R`. Keep its output under `validation/cloudflare/pass-5/`; `remove` prints any leftovers and then exits non-zero;
+        - `unset COMPLIANCE_SECRET_API_KEY KEY`.
+      - E2E-014's cloud part sets a new `apiKey` on R and redeploys it, so it must be the last pass on R.
+    - **Pass 6: PROV-AC-001, no run stage.** ≈ 373 requests (369 + 1 + 3), ≈ 40 rows written, peak 1.
+      - Command: `$C --base-url https://no-run-stage.invalid --only PROV-AC-001`.
+    - **Pass 7: COMPL-AC-004, no run stage.** **≈ 481 requests: under the 500 cap, over the 400 aim.** ≈ 50 rows written, ≈ 25 read, peak 1.
+      - Command: `$C --base-url https://no-run-stage.invalid --only COMPL-AC-004`.
+      - The requests are 118 + 6S:
+        - deploy, set, deploy: 289;
+        - the driver cleanup's `remove` plus its leftover check: 85;
+        - the second cleanup's check: 5;
+        - probes: 10;
+        - the token's read, put-back and delete: 3;
+        - the R2 token: 5;
+        - the cap check: 1;
+        - `withCloudStage`'s redundant `remove` of the already removed stage: 20 + S.
+      - Run it only if the measured S is ≤ 47.
+    - **Pass 8: F-03, the demo.** ≈ 382 requests (369 + 2 R2 tokens + 3), ≤ 150 rows written, < 300 read, peak 1.
+      - Prerequisites: after F-01/F-02, and after pass 5, so that the demo stage is the only database.
+      - Commands:
+        - pick `D` as R was picked;
+        - in `apps/demo`: `$CLI deploy --target cloudflare --stage $D` (it stops on `shareKey`), then `secrets set shareKey` with the value on standard input, then `deploy` again; `D_URL` is the origin it prints;
+        - `$CLI smoke --target cloudflare --stage $D`, `smoke --target local`, and `git diff --quiet HEAD -- apps/demo`. These give the cloud parts of E2E-002, DEMO-AC-010 and E2E-015; on a cloud, `E2E-002.spec.ts` reports `blocked` by design;
+        - `COMPLIANCE_DEMO_BASE_URL=$D_URL $C --base-url https://no-run-stage.invalid --only DEMO-AC-001,DEMO-AC-002,DEMO-AC-003,DEMO-AC-004,DEMO-AC-005,DEMO-AC-007,DEMO-AC-009`;
+        - then, alone: `COMPLIANCE_DEMO_BASE_URL=$D_URL COMPLIANCE_DEMO_STAGE=$D $C --base-url https://no-run-stage.invalid --only DEMO-AC-008`. It matches `info` entries by time window (W3), and the driver cannot pass `--workers=1`;
+        - `$CLI remove --target cloudflare --stage $D`.
+      - Rows written: the deploy ≤ 50, plus a handful of posts, photos and preferences per test (≤ 5 photos per post).
+    - **Day total for passes 1–8, at S = 60:** ≈ 2,960 requests, ≤ 965 rows written, < 3,500 read; peak 2 databases (passes 2–4).
+    - **Cannot fit as written at S = 60.** Each item gives its requests as F + n·S, then (in brackets) the largest S at which it fits 400 / 500. Each runs in a pass of its own with no run stage (`--base-url https://no-run-stage.invalid`, plus `--milestone` for the milestone items) once the measured S allows. Together they would add ≈ 6,150 requests and ≈ 1,240 rows, so the day stays ≤ 2,300 rows written.
+      - **MIG-AC-002, -003, -006:** 401 + 17S ≈ 1,420 [never / 5].
+        - `--only` cannot split them: the tests in one file depend on earlier tests, across IDs. Block 1 alone is 253 + 10S; its 5 deploys alone take 10 SST runs. The D1 `query` calls cost 2 requests each (list + query), ≈ 130 in all. D1: ≈ 400 rows written, ≈ 1,000 read.
+        - **Defect:** on Cloudflare, `beforeAll` runs `secrets set` before the first deploy. That is refused for a Worker that does not exist (DEC-0354), so both blocks fail at once.
+        - **Missing guards:** the MIG stage takes neither the further-stage lock nor `requireCloudD1`/`requireDatabaseRoom`. So the earlier "MIG + PROV-AC-002" pass could hold 4 databases.
+        - Needs a test change: deploy, then set, then deploy; selection per describe block; fewer redeploys.
+      - **COMPL-AC-008:** 286 + 17S ≈ 1,306 [6 / 12]. Its two abort points share the ID. One abort point alone is 140 + 8S or 146 + 9S. Needs a split.
+      - **PROV-AC-003:** 174 + 10S ≈ 774 [22 / 32].
+      - **E2E-012:** 152 + 10S ≈ 752 [24 / 34].
+      - **E2E-010:** 128 + 9S ≈ 668 [30 / 41].
+      - **PROV-AC-002:** 153 + 8S ≈ 633, or + 22 + 2S when its secret-hook retry runs [30 / 43]. ≈ 150 rows written, ≈ 200 read.
+      - **PROV-AC-006:** 121 + 8S ≈ 601 [34 / 47]. This includes `withCloudStage`'s redundant second `remove`.
+    - **Missing guards elsewhere.**
+      - E2E `deployStage` (E2E-010, -012, -014) and C-T1's `withFurtherStage` (passes 2 and 4) apply neither `requireCloudD1` nor `requireDatabaseRoom`.
+      - The E2E specs also skip the further-stage lock, and Playwright runs spec files in parallel workers. So never select E2E-010 and E2E-012 in one pass.
+    - **Loops and probing.**
+      - The only test over 50 rows is KV-AC-005's `maxPage`. It loops over PAR-222 = 50 keys with 4 KiB values and deletes them: 100 row writes, ≈ 200 with the key index. The criterion names that limit, so this is allowed.
+      - SQL-AC-006 uses one oversized row (PAR-215).
+      - No platform-limit probing was found.
+    - **Left behind if a pass is interrupted.**
+      - R or the demo stage between passes: Worker, D1 database, R2 bucket, R2 token and state objects. Note both names in the pass log, and remove them in pass 5 or pass 8, or by hand.
+      - Read-only `compliance-r2read-*` tokens. They expire after 30 min, and the next process sweeps them.
+      - COMPL-AC-004's put-back token, if the process is killed.
+      - FILES-AC-002's `x/../y` and `../up.txt`, if that test fails before its own cleanup. `remove` cannot delete them through the proxy (pass-0 F-1), so R's bucket would stay. Delete them through the app before pass 5.
+    - **Not runnable here.**
+      - CLI-AC-001: the driver records the whole criterion `not-run` (Google mocked), and no cloud test exists, although final-report §6.2 lists it as blocked.
+      - Always `blocked`: PROV-AC-002's restricted-credential clause, PROV-AC-004's fresh-account clause, LOG-AC-004's outside-request clause (Q8), and DEC-0270's 403 reading.
+      - FILES-AC-003's expired-ticket clause is expected to fail on Cloudflare (Q4).
+      - E2E-004's pass part: with split passes, the evaluator reads the latest record for each ID (DEC-0264).
 - **D-RUN-M:** milestone run `npm run compliance -- --target cloudflare --milestone`: E2E-010, E2E-012, PROV-AC-003, PROV-AC-004, PROV-AC-006 (CF part), COMPL-AC-008. Deps: D-RUN. Cloud usage: see §1 "Cloud usage limits" (estimate first; caps and before/after measurement apply). DEC-0317 applies. E2E-010 (v1 → v2 on its own stage: 2 databases) and E2E-012 (a kept and a removed stage: 2 databases) each run in a pass of their own with no run stage. The other milestone items run in a separate pass (DEC-0318). COMPL-AC-008 (≈ 420 API requests) runs in a pass of its own after PROV-AC-003, -004, -006 (≈ 380), so no pass exceeds the 500-request cap (DEC-0361).
 - **D-EV:** **Phase D exit check:** every automated criterion/scenario with Cloud in Where, except `aws.md` and §8 not-runs, `passed` on Cloudflare with evidence; a test stage removed with no leftovers (COMPL-AC-004 evidence); milestone records present or listed outstanding with reason. E2E-011 on Cloudflare must find the entry "using only commands copied from the skill's troubleshooting reference", which exists only after E-02; it is judged at E-EV. Writes `ai/implementation/evaluations/D-cloudflare.md`.
 - **D-INT:** decision drafts and parameters (§10.4).
