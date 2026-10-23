@@ -1,6 +1,0 @@
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "paths": { "@lago-morph/prototype-framework": ["./fw-revised/index.d.ts"] }
-  }
-}

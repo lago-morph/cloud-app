@@ -14,7 +14,7 @@ describe("[E2E-004] coverage is computed from the runners' listing with the driv
     const scanned = ["tests/compliance/criteria/kv/kv.pglite.test.ts", "tests/compliance/criteria/kv/suite.ts", "tests/compliance/criteria/sql/sql.pglite.test.ts", "tests/compliance/criteria/sql/suite.ts"].flatMap((f) => scanSourceTags(readFileSync(`${repo}${f}`, "utf8")));
     expect(scanned).not.toContain("KV-AC-001");
     expect(scanned).not.toContain("SQL-AC-003");
-    // The same tests as Vitest names them in the run (raw/vitest.json of record xc3s44jl2dbmqpv).
+    // The same tests as Vitest names them in the run (raw/vitest.json of record xc3s44jl2dbmqpv (archived: branch archive/implement-local-cloudflare, see ARCHIVE-INDEX.md)).
     const listed = scopeTests(runnerSelection({ target: "local" })[0]!, [
       { title: "KV shared case set (in-process PGlite) > [KV-AC-001][KV-AC-004] put, overwrite, get", file: "tests/compliance/criteria/kv/kv.pglite.test.ts" },
       { title: "SQL shared case set (in-process PGlite) > [SQL-AC-003] typed insert and select", file: "tests/compliance/criteria/sql/sql.pglite.test.ts" },

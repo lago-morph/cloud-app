@@ -288,7 +288,7 @@ I ran it alone with `npx vitest run --config vitest.unit.config.ts`.
 
 ## Fix (fixing subagent, prompt §8 step 3)
 
-Author: fixing subagent. I did not find, diagnose or review this issue. Base: `a029c6c`. Branch `claude/implement-local-cloudflare-fix-registry`. Local runs only, with no Cloudflare calls. Decision draft: `ai/implementation/decisions/fix-registry.md` (DEC-0415).
+Author: fixing subagent. I did not find, diagnose or review this issue. Base: `a029c6c`. Branch `claude/implement-local-cloudflare-fix-registry`. Local runs only, with no Cloudflare calls. Decision: DEC-0415 (decision log, `Item: fix-registry`).
 
 Applied as proposed, with Review required changes 1–3:
 - `packages/framework/src/testing/test-app.ts`: `startPlatformProxy` sets `WRANGLER_REGISTRY_PATH=""` around only the synchronous `getPlatformProxy(..., remoteBindings: false)` call, and restores the prior value (or its absence) in `finally`, before any `await`. Its comment names the guard tests (change 2).

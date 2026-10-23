@@ -1,5 +1,7 @@
 # A-09 — `sql.d.ts` typing approach (restricted Drizzle pg-core types)
 
+> **Code and logs archived.** This spike's scripts, `logs/` and `out/` are on branch `archive/implement-local-cloudflare`, in the same directory (see ARCHIVE-INDEX.md there, and `ai/ARCHIVE.md`). The relative paths below resolve on that branch.
+
 ## Question
 
 Does the `docs/contracts/ts/sql.d.ts` typing approach (framework `Table`/`Column` aliases of

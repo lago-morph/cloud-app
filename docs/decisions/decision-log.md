@@ -596,7 +596,7 @@ wrangler (PAR-101) and SST/Pulumi (PAR-100, PAR-108) authenticate in this sandbo
 - SST: `CLOUDFLARE_API_TOKEN=<placeholder>`, `CLOUDFLARE_DEFAULT_ACCOUNT_ID=$CLOUDFLARE_ACCOUNT_ID`, `SST_STAGE` (or `--stage`), `HTTPS_PROXY`; `NODE_EXTRA_CA_CERTS`/`NODE_USE_ENV_PROXY` not needed (system trust store holds the proxy CA).
 - The token is an Account API token, so account IDs are always passed explicitly.
 The framework's preflight (PROV §2 "Credentials") keeps checking `CLOUDFLARE_API_TOKEN` by name only; in this sandbox the placeholder satisfies it. The placeholder is not a credential and must never be replaced by a real token in sandbox runs. On an owner machine the real token goes in the same variable.
-Evidence: `ai/implementation/spikes/a-01/RESULT.md`, logs `w01`–`w15`, `s03`–`s07`. Fallback: none needed.
+Evidence: `ai/implementation/spikes/a-01/RESULT.md`, logs `w01`–`w15`, `s03`–`s07` (archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md). Fallback: none needed.
 
 ### DEC-0084 — SST state home on Cloudflare is the R2 bucket `sst-state`; stage state objects outlive `sst remove`
 Origin: ai-proposed · Status: accepted · Affects: PROV §2 "State home", "Removal"; cloudflare.md "Deploy mechanics" (`setupAccount`, `remove`); PROV-AC-004; D-03
@@ -612,33 +612,33 @@ A Worker deployed with wrangler 4.149.0 (`workers_dev: true`) is reachable at `h
 - Node 22 `fetch` with `NODE_USE_ENV_PROXY=1`: 200 (also in a minimal environment without `NODE_EXTRA_CA_CERTS`). Cloud test clients using Node `fetch` set `NODE_USE_ENV_PROXY=1`; without it Node bypasses `HTTPS_PROXY` and only works because a transparent egress gateway intercepts direct traffic, which is not relied on.
 - Playwright 1.64.1 Chromium: 200 for navigation and in-page `fetch`, with or without the `proxy` launch option; no browser proxy configuration is needed.
 The first request ~1 s after `wrangler deploy` returned already succeeded, so no wait after deploy is required for reachability (on/off propagation is A-04's question). The earlier refusal mentioned in prompt §10 is explained: a made-up *account subdomain* does not resolve and the gateway answers 502 to CONNECT; a made-up Worker name on the real account subdomain returns Cloudflare's 404 through an open tunnel.
-Evidence: `ai/implementation/spikes/a-02/RESULT.md`, logs `c02`, `c03`, `n01`, `n02`, `p01`. Fallback: none needed (plan fallback was "report the refused host to the owner").
+Evidence: `ai/implementation/spikes/a-02/RESULT.md`, logs `c02`, `c03`, `n01`, `n02`, `p01` (archived). Fallback: none needed (plan fallback was "report the refused host to the owner").
 
 ### DEC-0086 — The account's `workers.dev` subdomain is already registered
 Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: cloudflare.md §2 (`setupAccount`), D-03/D-05
 
 `GET /accounts/{account}/workers/subdomain` returns `success: true` with a subdomain set, so on this account `setup-account --target cloudflare` only reads and records it (the "register if none" branch is not exercised here and is tested only by unit tests with a fake API). The subdomain value contains the owner's name; it is not written into committed docs or evidence (it is computed/recorded at runtime by `setup-account`), and spike logs redact it.
 Assumption (taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review): treating the subdomain as non-secret but personal — redacted in committed artefacts, not a credential.
-Evidence: `ai/implementation/spikes/a-02/logs/c01-subdomain-get.txt`. Fallback: none needed.
+Evidence: `ai/implementation/spikes/a-02/logs/c01-subdomain-get.txt` (archived). Fallback: none needed.
 
 ### DEC-0087 — SST/Pulumi Worker updates keep secrets set through the Cloudflare API; no second copy, no extra mechanism
 Origin: ai-proposed · Status: accepted · Affects: cloudflare.md "Deploy mechanics" (`deploy`, `setSecret`), SEC-REQ-003, PROV-REQ-002, D-03
 
 An `sst deploy` (SST 4.17.2, provider 6.15.0) that updates the stage Worker — new script content, changed plain-text variables, a removed binding, also after `sst refresh` — keeps every `SECRET_<NAME>` set by `setSecret` through `PUT /accounts/{id}/workers/scripts/{name}/secrets`; the running Worker keeps the same value. The Cloudflare script-upload API itself keeps a script's existing `secret_text` bindings when a new upload does not declare them (verified with a direct upload without `keep_bindings`). So `deploy` needs nothing extra and never stores secrets. The SST transform `transform.worker: args => { args.keepBindings = ["secret_text", "secret_key"] }` was verified to deploy and may be added as an explicit guard (assumption: D-03 adds it, since it is harmless and makes the reliance visible; not required for correctness today).
 Constraint: an upload that declares any binding with a secret's name replaces that secret permanently, so the framework must never pass a binding named `SECRET_*` through SST (CFG/framework variables must not use the `SECRET_` prefix). `sst remove` deletes the Worker and its secrets (expected).
-Evidence: `ai/implementation/spikes/a-03/RESULT.md`, logs `s02`–`s07`, `c03`–`c17`, `r01`–`r02`. Result: kept. Fallback: none needed (named fallback is the mechanism observed).
+Evidence: `ai/implementation/spikes/a-03/RESULT.md`, logs `s02`–`s07`, `c03`–`c17`, `r01`–`r02` (archived). Result: kept. Fallback: none needed (named fallback is the mechanism observed).
 
 ### DEC-0088 — SST runs need `NODE_USE_ENV_PROXY=1` in the sandbox (amends DEC-0083)
 Origin: ai-proposed · Status: accepted · Affects: DEC-0083, plan §10.6, PROV §2 "Credentials", D-03, D-05, every cloud run
 
 SST's own Node dynamic providers (e.g. `WorkerUrl`, used by `sst.cloudflare.Worker` with `url: true`; also `kv-data`, `worker-placement`, `zone-lookup`) call `api.cloudflare.com` with Node's global `fetch`. Without `NODE_USE_ENV_PROXY=1` that fetch bypasses `HTTPS_PROXY`, the placeholder token is not replaced, and the deploy fails with Cloudflare error 9106 "Authentication failed". The SST environment is therefore A-01's plus `NODE_USE_ENV_PROXY=1` (Node ≥ 22.21; it prints a harmless "EnvHttpProxyAgent is experimental" warning). On an owner machine with a real token the variable is harmless.
-Evidence: `ai/implementation/spikes/a-03/RESULT.md` finding 2, logs `s01` (fails), `s02` (works).
+Evidence: `ai/implementation/spikes/a-03/RESULT.md` finding 2, logs `s01` (fails), `s02` (works) (archived).
 
 ### DEC-0089 — Non-browser clients probing `workers.dev` send their own User-Agent
 Origin: ai-proposed · Status: accepted · Affects: C-04 `smoke`/`connectTestStage`, compliance drivers, D-RUN
 
 Cloudflare answers requests with the default `Python-urllib` User-Agent with 403 "error code: 1010" (not the proxy). Test and smoke clients set an explicit User-Agent.
-Evidence: `ai/implementation/spikes/a-03/logs/c07-diag-403.txt`.
+Evidence: `ai/implementation/spikes/a-03/logs/c07-diag-403.txt` (archived).
 
 ### DEC-0090 — `stopApp`/`startApp` on Cloudflare use the script-subdomain API with `previews_enabled` pinned to false
 Origin: ai-proposed · Status: accepted · Affects: DEC-0078, cloudflare.md §2 "Deploy mechanics" (`stopApp`, `startApp`), migrations.md §2 steps 1 and 6 and "Failure", D-03, MIG-AC-006
@@ -646,20 +646,20 @@ Origin: ai-proposed · Status: accepted · Affects: DEC-0078, cloudflare.md §2 
 DEC-0078's assumption holds. `stopApp` is `POST /accounts/{account}/workers/scripts/{worker}/subdomain` with `{"enabled": false, "previews_enabled": false}`; `startApp` is the same call with `{"enabled": true, "previews_enabled": false}`; the state is read with `GET` on the same path. The call returns the new state synchronously. While off, the `workers.dev` URL answers HTTP 404 (`error code: 1042`). Toggling creates no Worker version or deployment: script settings, deployments and versions were identical before, while off, and after on, and the secret, a plain-text variable and a KV binding all worked after the restart.
 Both fields are always sent: a body with only `{"enabled": true}` turned preview URLs on as a side effect.
 Propagation observed from the sandbox: off ≤ 2.3 s, on ≤ 1.6 s (6 cycles; typically ~0.8 s; probe resolution ~0.7 s). `startApp` therefore needs no fixed wait; a caller that must see the change (tests, smoke) polls the URL for up to 30 s (assumption: simplest reasonable bound, ≫ observed; to be set as a parameter by D-03 if needed).
-Evidence: `ai/implementation/spikes/a-04/RESULT.md`, logs `a01`–`a09`, `t01`–`t06a`, `c03`–`c05`. Fallback: none needed (plan fallback was "ask owner").
+Evidence: `ai/implementation/spikes/a-04/RESULT.md`, logs `a01`–`a09`, `t01`–`t06a`, `c03`–`c05` (archived). Fallback: none needed (plan fallback was "ask owner").
 
 ### DEC-0091 — A deploy may itself re-enable the route; the CLI still calls `startApp` explicitly
 Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: cloudflare.md §2 (`deploy`, `startApp`), migrations.md §2 step 6, D-03
 
 With the route off, `wrangler deploy` of a config with `workers_dev: true` turned the route back on. So a stop is not held across a deploy. This is consistent with MIG §2 step 6 (deploy, then start) and with cloudflare.md's rule that the CLI calls `startApp` explicitly after every deploy. SST's Worker (URL / `WorkersScriptSubdomain`) behaviour while the route is off was not tested here.
 Assumption (taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review): no design change; D-03 verifies by test that an SST deploy followed by `startApp` leaves `enabled: true, previews_enabled: false`, and that `stopApp` is never followed by a deploy before migrations finish (MIG §2 order already guarantees this).
-Evidence: `ai/implementation/spikes/a-04/logs/w05-deploy-while-off.txt`, `a09-sub-after-redeploy.txt`, `c05-get-after-redeploy.txt`.
+Evidence: `ai/implementation/spikes/a-04/logs/w05-deploy-while-off.txt`, `a09-sub-after-redeploy.txt`, `c05-get-after-redeploy.txt` (archived).
 
 ### DEC-0092 — Secret updates reach requests after a short delay
 Origin: ai-proposed · Status: accepted · Affects: SEC tests (SEC-AC-001), MIG-AC-006, D-03 cloud tests
 
 Immediately after `wrangler secret put` the Worker still served the version without the secret; a few seconds later the new version (triggered by the secret) served it. Cloud tests that set a secret and then read it poll for the expected result (bounded) instead of reading once.
-Evidence: `ai/implementation/spikes/a-04/logs/c01-get-before.txt`, `c02-get-before-settled.txt`.
+Evidence: `ai/implementation/spikes/a-04/logs/c01-get-before.txt`, `c02-get-before-settled.txt` (archived).
 
 ### DEC-0093 — A Cloudflare migration file is applied as one `POST …/d1/database/{uuid}/query` request, which is atomic
 Origin: ai-proposed · Status: accepted · Affects: migrations.md §2 "Cloudflare", MIG-REQ-003, MIG-REQ-006, MIG-AC-003, D-04
@@ -730,7 +730,7 @@ Assumption (owner said not to stop for questions): always use the fallback on Cl
 
 Integration (A-INT): the always-fallback choice is recorded under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review. The migrations.md rewrite stays with D-04 (plan §5).
 
-Evidence: `ai/implementation/spikes/a-06/RESULT.md`, `logs/`, `fallback_copy.py`. Fallback applied: yes (migrations.md "Fallback copy").
+Evidence: `ai/implementation/spikes/a-06/RESULT.md`, `logs/`, `fallback_copy.py` (archived). Fallback applied: yes (migrations.md "Fallback copy").
 
 ### DEC-0097 — D1 HTTP API facts the Cloudflare target relies on
 Origin: ai-proposed · Status: accepted · Affects: PROV §2 (Cloudflare `createDatabase`/`copyDatabase`/`dropDatabase`), migrations.md §2 "Cloudflare", D-04, A-05 (cross-check)
@@ -768,7 +768,7 @@ Origin: ai-proposed · Status: accepted (interim assumption; owner decision outs
 
 R2 sends `Access-Control-Allow-Origin` on 200 and 404 responses but not on authentication failures (`403 SignatureDoesNotMatch`, `403 ExpiredRequest`), even for the allowed origin. In Chromium an expired or content-type-mismatched ticket therefore ends with XHR status 0 / `fetch` TypeError ("No 'Access-Control-Allow-Origin' header"), so the browser helpers can only report status null and `no response: network or cross-origin blocked`. FILES-AC-003 requires an expired ticket to fail with storage's status and `rejected by storage (HTTP n)`; that cannot be met on Cloudflare as designed. The design names no fallback.
 Assumption until the owner decides (simplest, no contract change): D-02 implements tickets as in DEC-0098…DEC-0100; on Cloudflare an expired/rejected ticket yields `FILES.TRANSFER_FAILED` with status null and the `no response …` message; the evaluator records FILES-AC-003's expired-ticket clause on Cloudflare as failing with a pointer to this entry, rather than the implementation working around it. Options for the owner: (a) revise FILES-REQ-006/AC-003 to allow status null when storage's response is not readable cross-origin; (b) have the browser helper check the ticket's expiry before sending and fail as an expired ticket without a storage status (still not "storage's status"); (c) route transfers through a framework upload service (files.md §5), losing direct-to-storage transfers.
-Evidence: `ai/implementation/spikes/a-07/RESULT.md` (B3, logs/03-errors.txt).
+Evidence: `ai/implementation/spikes/a-07/RESULT.md` (B3, logs/03-errors.txt (archived)).
 
 Integration (A-INT): adopted as the interim behaviour under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review. The conflict, precisely: FILES-REQ-006 (owner-approved) says `status` is storage's status "when one was received, and null otherwise"; on Cloudflare the browser receives no readable response, so status null with `no response: network or cross-origin blocked` arguably meets the requirement's wording. FILES-AC-003 ("An expired ticket fails with `FILES.TRANSFER_FAILED`, storage's status, and a `rejected by storage (HTTP n)` message", Where: Local, cloud) cannot pass on Cloudflare. A content-type-mismatched upload is still refused by storage, so that clause holds, but it too reports status null. The requirement and criterion text are unchanged; the expired-ticket clause of FILES-AC-003 on Cloudflare is recorded as failing with a pointer here until the owner chooses (a), (b), (c) or another option. Local tickets are same-origin, so the clause is unaffected locally. files.md §2 "Cloudflare" points here.
 
@@ -787,13 +787,13 @@ should state the chunk sizes (PAR-216, PAR-217). Assumption (simplest reading, r
 asked): PGlite/Postgres accepts far more parameters, but app tests run per dialect including local D1
 (DEC-0039, B-16), so the local D1 run catches an over-limit query; the framework does not add a
 pre-check of its own.
-Evidence: `ai/implementation/spikes/a-08/RESULT.md`, `out/local.txt`, `out/remote-binding.txt`,
-`out/remote-http.txt`. Fallback: not needed.
+Evidence: `ai/implementation/spikes/a-08/RESULT.md`, `out/local.txt`, `out/remote-binding.txt` (archived),
+`out/remote-http.txt` (archived). Fallback: not needed.
 
 ### DEC-0103 — sql.d.ts typing approach works; three declarations revised (contract change)
 Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SQL-REQ-002, SQL-REQ-003, CORE (AppDefinition.tables), docs/contracts/ts/sql.d.ts, docs/contracts/ts/index.d.ts, B-05
 
-Spike A-09 (evidence: `ai/implementation/spikes/a-09/RESULT.md`, `revised.diff`; drizzle-orm 0.45.4,
+Spike A-09 (evidence: `ai/implementation/spikes/a-09/RESULT.md`, `revised.diff` (archived); drizzle-orm 0.45.4,
 TypeScript 5.9.3 and 7.0.2). Result: the restricted Drizzle pg-core approach works — the sql.md §2.3
 example type-checks unchanged, `.returning({ id })` gives `{ id: string }[]`, writes without
 `returning()` give `void`, `atomic` infers per-step tuples (`[void, { id: string }[], Row[]]`),
@@ -820,7 +820,7 @@ spike's checks, rerun against the edited contract file (drizzle-orm 0.45.4; Type
 ### DEC-0104 — Dependency pins verified; remaining pins chosen
 Origin: ai-proposed · Status: accepted · Affects: PAR-100…PAR-116, B-01, CHECK, LOCAL, COMPL
 
-Spike A-10 (evidence: `ai/implementation/spikes/a-10/RESULT.md`, `out/`) installed PAR-100…PAR-108 at
+Spike A-10 (evidence: `ai/implementation/spikes/a-10/RESULT.md`, `out/` (archived)) installed PAR-100…PAR-108 at
 their pinned versions with Node 22.22.0 and ran each: `wrangler dev` serving a Hono + Zod + jose +
 aws4fetch + Drizzle (D1) + R2 Worker, online and offline (`unshare -rn`); PGlite + drizzle-orm;
 drizzle-kit generating SQLite and Postgres migrations; `sst install` resolving `@pulumi/cloudflare`
@@ -871,7 +871,7 @@ Evidence: `ai/implementation/spikes/a-01/RESULT.md`, `ai/implementation/spikes/a
 ### DEC-0108 — Offline runs use the spike's `offline.sh` wrapper
 Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: plan §10.2, B-17 (`verify` offline check), B-18 / C-05 exit checks, CHECK-REQ-006 runs
 
-Plan §10.2's offline command runs `ip link set lo up`, but `ip` (iproute2) is not installed in this sandbox. Offline runs use `unshare -rn sh <dir>/offline.sh <command…>`, where `offline.sh` brings loopback up with `ip` if present and otherwise with an ioctl through `python3 -I lo-up.py`, then runs the command. Spike A-10 ran Vitest, `wrangler dev` and Playwright + Vite offline with it. The files are `ai/implementation/spikes/a-10/scripts/{offline.sh,lo-up.py}`; B-01 copies both unchanged to `scripts/offline.sh` and `scripts/lo-up.py` at the repository root, and later items use that path. Unsetting `HTTPS_PROXY` or disabling TLS is still never a substitute.
+Plan §10.2's offline command runs `ip link set lo up`, but `ip` (iproute2) is not installed in this sandbox. Offline runs use `unshare -rn sh <dir>/offline.sh <command…>`, where `offline.sh` brings loopback up with `ip` if present and otherwise with an ioctl through `python3 -I lo-up.py`, then runs the command. Spike A-10 ran Vitest, `wrangler dev` and Playwright + Vite offline with it. The files were `ai/implementation/spikes/a-10/scripts/{offline.sh,lo-up.py}` (archived); B-01 copies both unchanged to `scripts/offline.sh` and `scripts/lo-up.py` at the repository root, and later items use that path. Unsetting `HTTPS_PROXY` or disabling TLS is still never a substitute.
 Recorded under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
 Evidence: `ai/implementation/spikes/a-10/RESULT.md` "Environment", commands 3, 5, 13.
 

@@ -1,9 +1,9 @@
 # Final local run 4 (phase-end full compliance, local) — summary
 
-Recorded by the test runner (did not write the code or tests under test). Records only; the evaluator judges. **Local only: no Cloudflare calls were made** (`COMPLIANCE_DEMO_BASE_URL` and `COMPLIANCE_CLOUDFLARE_D1` unset in every step). No code or tests were changed. `npm run verify` is covered by `validation/local/batch-verify-4/` (same commit). Method copied from `validation/local/final-local-3/` (same dummy-secret script); `NODE_USE_ENV_PROXY` was not set. The driver was run once.
+Recorded by the test runner (did not write the code or tests under test). Records only; the evaluator judges. **Local only: no Cloudflare calls were made** (`COMPLIANCE_DEMO_BASE_URL` and `COMPLIANCE_CLOUDFLARE_D1` unset in every step). No code or tests were changed. `npm run verify` is covered by `validation/local/batch-verify-4/` (same commit). Method copied from `validation/local/final-local-3/` (archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md) (same dummy-secret script); `NODE_USE_ENV_PROXY` was not set. The driver was run once.
 
 - Branch: `claude/implement-local-cloudflare-final-local-4`, from `origin/claude/implement-local-cloudflare` at `a5b21649eb1dd1e63ce38f18ed8ec33b6b4faa70` ("Merge integration of DEC-0417", on top of `eb36e1c`). Tracked tree clean at start and before the driver run.
-- Difference from final-local-3: `npm ci` was not repeated here. It ran once, at the start of batch-verify-4 (`validation/local/batch-verify-4/npm-ci.log`, exit 0), on the same commit, before the two verify runs. Step logs are therefore numbered from 02.
+- Difference from final-local-3 (archived): `npm ci` was not repeated here. It ran once, at the start of batch-verify-4 (`validation/local/batch-verify-4/npm-ci.log`, exit 0), on the same commit, before the two verify runs. Step logs are therefore numbered from 02.
 - Environment: see `environment.txt` (v22.22.0, npm 10.9.4, 4 CPUs).
 - Evidence record: `validation/local/pzeugkxrk1xcu2w.json` (raw: `validation/local/pzeugkxrk1xcu2w/raw/`), runId `pzeugkxrk1xcu2w`, target local, commit `a5b21649eb1dd1e63ce38f18ed8ec33b6b4faa70`, exitStatus 0, 2026-10-21T01:02:21.943Z – 2026-10-21T01:36:54.655Z. HEAD did not move during the run; nothing was committed until the run had finished.
 - Each step log starts with `# uptime before:` and ends with `# exit code:` and `# uptime after:`.
@@ -31,7 +31,7 @@ Driver line: `compliance: 109 passed, 2 not-run; evidence …/validation/local/p
 
 ## Failed / blocked / not-run
 
-- failed: none (MIG-AC-002, which failed in final-local-3, passed).
+- failed: none (MIG-AC-002, which failed in final-local-3 (archived), passed).
 - blocked: none.
 - **CORE-AC-006 — not-run (clause entry; another entry passed):** AWS-bundle clause: AWS phase not started
 - **SQL-AC-006 — not-run (clause entry; another entry passed):** Data API retry-loop clause: AWS phase not started

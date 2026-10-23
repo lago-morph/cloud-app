@@ -1,5 +1,7 @@
 # A-05 — D1 HTTP API: one migration file as one atomic, `PRAGMA defer_foreign_keys = on`-prefixed request
 
+> **Code and logs archived.** This spike's scripts, `logs/` and `out/` are on branch `archive/implement-local-cloudflare`, in the same directory (see ARCHIVE-INDEX.md there, and `ai/ARCHIVE.md`). The relative paths below resolve on that branch.
+
 Date: 2026-10-19. Python 3 `urllib` through `HTTPS_PROXY` (system trust store holds the proxy CA); no
 `Authorization` header sent (the proxy injects the token for `api.cloudflare.com`, A-01). Account ID from
 `$CLOUDFLARE_ACCOUNT_ID`. drizzle-kit 0.31.11 / drizzle-orm 0.45.4 (PAR-103 / PAR-102, A-10 pins).

@@ -3,7 +3,7 @@
 Author: diagnosing subagent (prompt §8 step 1; did not write the code or the tests). Diagnosis only; no code or test changed. Needs independent review (§8 step 2) before any fix.
 
 ## Symptom
-Phase B run (`validation/local/phase-B/SUMMARY.md`, items 17 and 18; commit under test `b229c57`), integration Vitest, two failures with the same message:
+Phase B run (`validation/local/phase-B/SUMMARY.md` (archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md), items 17 and 18; commit under test `b229c57`), integration Vitest, two failures with the same message:
 
 - `packages/framework/test/integration/sql/sql.postgres.test.ts` › `SQL schema rules (PGlite)` › `[SQL-AC-001] unsupported features are rejected: SQL defaults, auto-increment, generated columns, composite keys, reference actions, non-portable column types (PGlite)`
 - `packages/framework/test/integration/sql/sql.sqlite.test.ts` › same test `(local D1)`

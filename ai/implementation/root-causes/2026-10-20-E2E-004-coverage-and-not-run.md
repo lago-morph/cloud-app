@@ -1,17 +1,17 @@
 # Root cause — E2E-004 coverage part and the 26 `not-run` IDs (Phase C local run)
 
-Item: C-RUN (record `validation/local/xc3s44jl2dbmqpv.json`, commit `4ff83c4d`). Diagnosed by a diagnosing subagent (prompt §8 step 1) that did not write the code or the tests. Local only; no Cloudflare calls were made. No code or tests were changed.
+Item: C-RUN (record `validation/local/xc3s44jl2dbmqpv.json` (archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md), commit `4ff83c4d`). Diagnosed by a diagnosing subagent (prompt §8 step 1) that did not write the code or the tests. Local only; no Cloudflare calls were made. No code or tests were changed.
 
 ## Symptom
 
-1. `E2E-004` `failed`: `[E2E-004] coverage part …: Error: applicable on local but no tagged test in this target's suite:` followed by 35 IDs (`raw/playwright.log`, list copied in `validation/local/phase-C-run/SUMMARY.md`). Nine of them, KV-AC-001…005 and SQL-AC-003…006, are `passed` in the same record, so the coverage check and the per-criterion results disagree.
+1. `E2E-004` `failed`: `[E2E-004] coverage part …: Error: applicable on local but no tagged test in this target's suite:` followed by 35 IDs (`raw/playwright.log`, list copied in `validation/local/phase-C-run/SUMMARY.md` (archived)). Nine of them, KV-AC-001…005 and SQL-AC-003…006, are `passed` in the same record, so the coverage check and the per-criterion results disagree.
 2. 26 IDs are `not-run` with `no test tagged [<ID>] ran on local`: CHECK-AC-005; CLI-AC-003; COMPL-AC-001, -002, -003, -006, -007; DEMO-AC-001…011; E2E-002; LOCAL-AC-001; PROV-AC-007; SKILL-AC-001…005. Some of these IDs have tagged tests in the repository.
 
 These are three separate causes. Cause A explains the nine contradicting IDs. Cause B explains the seven unit-tested IDs (CLI-AC-003, COMPL-AC-001/002/003/006/007, PROV-AC-007). Cause C explains the rest (no tagged test exists).
 
 ## Evidence
 
-E1. **Reproduction of the coverage list.** `2026-10-20-E2E-004-coverage-and-not-run.scan.mjs` (next to this record; run `node <it> <repo> validation/local/xc3s44jl2dbmqpv/raw/expected.json [all-ts]`) is a verbatim copy of `TAG_CALL`, `QUOTED_ID`, `BRACKETED` and `scanSourceTags` (`tests/compliance/tools/traceability.ts:33-49`), the `suiteFiles` filter (`tests/compliance/e2e/E2E-004.spec.ts:28-33`) and `listFiles` (`tests/compliance/e2e/support/scan.ts:559-569`). It reads the run's own `raw/expected.json` (`run: true` entries). Its output on this commit is:
+E1. **Reproduction of the coverage list.** `2026-10-20-E2E-004-coverage-and-not-run.scan.mjs` (next to this record; run `node <it> <repo> validation/local/xc3s44jl2dbmqpv/raw/expected.json [all-ts]` (archived)) is a verbatim copy of `TAG_CALL`, `QUOTED_ID`, `BRACKETED` and `scanSourceTags` (`tests/compliance/tools/traceability.ts:33-49`), the `suiteFiles` filter (`tests/compliance/e2e/E2E-004.spec.ts:28-33`) and `listFiles` (`tests/compliance/e2e/support/scan.ts:559-569`). It reads the run's own `raw/expected.json` (`run: true` entries). Its output on this commit is:
    ```
    mode=as-E2E-004 files=84 expected(run)=109 untested=35
    CHECK-AC-005, CLI-AC-003, COMPL-AC-001, … KV-AC-001 … KV-AC-005, LOCAL-AC-001, PROV-AC-007, SKILL-AC-001 … SQL-AC-003 … SQL-AC-006
@@ -127,13 +127,13 @@ C — missing tags and tests (tests; owners as noted):
 
 ## Review
 
-Independent reviewer (prompt §8 step 2). It did not diagnose this failure or write the code or tests. Local only; no Cloudflare calls. No code or tests changed. Checked on `origin/claude/implement-local-cloudflare` with the run's record `validation/local/xc3s44jl2dbmqpv.json` and its `raw/`.
+Independent reviewer (prompt §8 step 2). It did not diagnose this failure or write the code or tests. Local only; no Cloudflare calls. No code or tests changed. Checked on `origin/claude/implement-local-cloudflare` with the run's record `validation/local/xc3s44jl2dbmqpv.json` (archived) and its `raw/`.
 
 **Verdict: Cause A ACCEPTED. Cause B ACCEPTED, with the conditions below. Cause C REJECTED in part:** the SKILL-AC-005 finding is wrong. The rest of C (LOCAL-AC-001, CHECK-AC-005, the E/F IDs) is ACCEPTED. The SKILL-AC-005 part of E9 and of Cause C must be corrected before that ID is fixed. A and B may go to step 3 now.
 
 ### Cause A — E2E-004 coverage from a source scan (ACCEPTED)
 
-- Reproduced. `node …scan.mjs . validation/local/xc3s44jl2dbmqpv/raw/expected.json` prints `files=84 expected(run)=109 untested=35`. That is the same 35 IDs, in the same order, as the failure message in `raw/playwright.json`.
+- Reproduced. `node …scan.mjs . validation/local/xc3s44jl2dbmqpv/raw/expected.json` (archived) prints `files=84 expected(run)=109 untested=35`. That is the same 35 IDs, in the same order, as the failure message in `raw/playwright.json`.
 - `E2E-004.spec.ts:28-46` is exactly what the record says. It uses `scanSourceTags` over `*.test|spec.ts` text only. The KV and SQL tags are built at run time (`t(id, …)` / `tag(id, …)` with a variable ID), so no regex over the source can see them (E3, E4).
 - The record shows these IDs `passed` from runtime titles (E2). The contradiction is therefore in the check, not in the tags.
 - Building coverage from the runners' own listing is consistent with what E2E-004 needs:
@@ -200,7 +200,7 @@ All alternatives the record lists are adequately ruled out by the cited evidence
 
 ## Cause C (revised)
 
-Revised by a diagnosing subagent (prompt §8 step 1) after the Review rejected Cause C in part. Like the original, it did not write the code or the tests. Local only; no Cloudflare calls. No code or tests changed. The original E9 and Cause C above are kept for history. Where they disagree with this section, this section replaces them. Checked on `origin/claude/implement-local-cloudflare` at `7416a75`, against the run record `validation/local/xc3s44jl2dbmqpv.json` and its `raw/`.
+Revised by a diagnosing subagent (prompt §8 step 1) after the Review rejected Cause C in part. Like the original, it did not write the code or the tests. Local only; no Cloudflare calls. No code or tests changed. The original E9 and Cause C above are kept for history. Where they disagree with this section, this section replaces them. Checked on `origin/claude/implement-local-cloudflare` at `7416a75`, against the run record `validation/local/xc3s44jl2dbmqpv.json` (archived) and its `raw/`.
 
 ### E9 (corrected)
 
@@ -215,7 +215,7 @@ Revised by a diagnosing subagent (prompt §8 step 1) after the Review rejected C
 | E2E-002 | 0 | — |
 | DEMO-AC-001…011 | 1 | `tests/compliance/harness/catalogue.unit.test.ts:87` only. It checks that `DEMO-AC-011` is in the catalogue and is not a test of the criterion. |
 
-The original E9 was wrong about SKILL-AC-005: a tagged test exists. The run's own traceability report confirms this. `validation/local/phase-C-run/traceability.md:141` lists that test under SKILL-AC-005, next to the record result `not-run: no test tagged [SKILL-AC-005] ran on local`.
+The original E9 was wrong about SKILL-AC-005: a tagged test exists. The run's own traceability report confirms this. `validation/local/phase-C-run/traceability.md:141` (archived) lists that test under SKILL-AC-005, next to the record result `not-run: no test tagged [SKILL-AC-005] ran on local`.
 
 The test is invisible to the record and to E2E-004 for two reasons:
 
@@ -368,7 +368,7 @@ Scaffolding itself is online, because it needs the npm registry. The criterion d
 
 ## Review (revised C)
 
-Independent reviewer (prompt §8 step 2). It did not diagnose this failure, write the revision, or write the code or tests. Local only; no Cloudflare calls. No code or tests changed. Checked on `origin/claude/implement-local-cloudflare` at `0f11f1e`, against `docs/components/{skill,local,check}.md`, `ai/implementation/plan.md` and the run record `validation/local/xc3s44jl2dbmqpv` with its `raw/`.
+Independent reviewer (prompt §8 step 2). It did not diagnose this failure, write the revision, or write the code or tests. Local only; no Cloudflare calls. No code or tests changed. Checked on `origin/claude/implement-local-cloudflare` at `0f11f1e`, against `docs/components/{skill,local,check}.md`, `ai/implementation/plan.md` and the run record `validation/local/xc3s44jl2dbmqpv` (archived) with its `raw/`.
 
 **Verdict: Cause C (revised) ACCEPTED, with one condition on the SKILL-AC-005 test (below).** The corrected E9 fixes the defect the earlier Review found. Each per-ID finding matches the code and the criterion text. Fix C may go to step 3.
 
@@ -473,7 +473,7 @@ Fixing subagent (prompt §8 step 3), branch `claude/implement-local-cloudflare-f
 
 **Changes.**
 - One shared selection: `tests/compliance/harness/selection.ts` (`runnerSelection`, `idsFor`, `scopeTests`, `uncovered`). It defines the driver's runner invocations per target: integration Vitest config (cloud: `tests/compliance/criteria`), on local the unit config limited to `UNIT_LEVEL`, and the Playwright `integration`/`e2e` projects (cloud: `tests/compliance/`).
-- B: `UNIT_LEVEL` in `harness/expected.ts` = CLI-AC-003, COMPL-AC-002, COMPL-AC-006, COMPL-AC-007, GOOGLE-AC-002, PROV-AC-007 (rationale per criterion text: decision draft `ai/implementation/decisions/fix-c3.md`, DEC-0319). COMPL-AC-001/-003 stay off (properties of a real run), as the Review required. `driver.ts` loops over `runnerSelection`. On local it runs `vitest.unit.config.ts -t <unit-level IDs to run>` once, or skips it when there are none, and keeps `raw/vitest-unit.{log,json}`. A unit outcome is folded only into the unit-level IDs its title carries (`TestOutcome.ids`, read by `criterionResults`).
+- B: `UNIT_LEVEL` in `harness/expected.ts` = CLI-AC-003, COMPL-AC-002, COMPL-AC-006, COMPL-AC-007, GOOGLE-AC-002, PROV-AC-007 (rationale per criterion text: DEC-0319, decision log `Item: fix-c3`). COMPL-AC-001/-003 stay off (properties of a real run), as the Review required. `driver.ts` loops over `runnerSelection`. On local it runs `vitest.unit.config.ts -t <unit-level IDs to run>` once, or skips it when there are none, and keeps `raw/vitest-unit.{log,json}`. A unit outcome is folded only into the unit-level IDs its title carries (`TestOutcome.ids`, read by `criterionResults`).
 - A: `tests/compliance/tools/listing.ts` (`listSelection`, `listDriverTests`) lists the driver's selection through the runners: a collect-only Vitest run per config and `playwright test --list`. It writes to its own JSON file, never the run's `PLAYWRIGHT_JSON_OUTPUT_NAME`. `E2E-004.spec.ts` coverage part = `uncovered(expected, listDriverTests(target))`, with no source scan, and listing errors are appended to the message. `tools/report.ts` uses the same `listSelection` executor and keeps its source-scan supplement (DEC-0265). The assertion is unchanged (`toEqual([])`), so it is not weakened.
 - Docs: compliance.md "Driver" ("runs each selected test layer once … on local also the unit layer for the unit-level criteria only"), the plan §10.1 `npm run compliance` line, and the decision drafts DEC-0319 (supersedes "each runs once" in DEC-0261's first bullet) and -2 (DEC-0305's coverage wording).
 

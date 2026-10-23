@@ -1,4 +1,0 @@
-=== import-batch b-vorderbig @ 2026-10-19T19:55:31Z
-created spikecmmrxula-a06-b-vorderbig
-import info: {"http": 502, "success": null, "errors": "null", "seconds": 30.43, "statements": 0, "request_bytes": 5546864}
-delete spikecmmrxula-a06-b-vorderbig: (200, True, [])

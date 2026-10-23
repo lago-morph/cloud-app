@@ -9,7 +9,7 @@
  * target (each recorded `blocked` with the operator's reason) without starting `dev`, deploying,
  * or running a test: no cloud call, and no recursion into this suite. That the same list is what
  * a full run executes is what the enclosing run's own record and E2E-004 show. Assumptions:
- * ai/implementation/decisions/C-T5.md.
+ * DEC-0321…DEC-0322 (docs/decisions/decision-log.md, Item: C-T5).
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { tag } from "../../harness/index.js";

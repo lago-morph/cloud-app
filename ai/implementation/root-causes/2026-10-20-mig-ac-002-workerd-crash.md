@@ -11,7 +11,7 @@ Scratch files are outside the repo, in `/tmp/claude-0/-home-user-cloud-app/b6482
 A different subagent must review this record.
 
 ## Symptom
-The full local compliance run `r5nndia2aediccu` (at `760e7b7`) failed one test: `tests/compliance/criteria/mig/deploys.test.ts:109`, "[MIG-AC-002] a second deployment with no changes …". The message, from `raw/vitest.json`, is cut to the last 1500 characters by the test (`result.output.slice(-1500)`, at `deploys.test.ts:109`):
+The full local compliance run `r5nndia2aediccu` (at `760e7b7`; raw output archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md) failed one test: `tests/compliance/criteria/mig/deploys.test.ts:109`, "[MIG-AC-002] a second deployment with no changes …". The message, from `raw/vitest.json`, is cut to the last 1500 characters by the test (`result.output.slice(-1500)`, at `deploys.test.ts:109`):
 
 ```
 AssertionError: no-change deploy failed (status 1): cloud-app/…/workerd-linux-64/bin/workerd@5a404cd …/workerd@2159d90 …/workerd@215cd18 …/workerd@21430f2 …/workerd@2143108 …/workerd@5b18586 …/workerd@2143154 /lib/x86_64-linux-gnu/libc.so.6@2a1c9 /lib/x86_64-linux-gnu/libc.so.6@2a28a …/workerd@2143024
@@ -85,7 +85,7 @@ A local "deploy" is a `dev` start (DEC-0144). So the migration checker and the n
 `dmesg` (ring buffer from uptime 27675 s; the failure was at about 73920 s) has no OOM-killer, `segfault` or `killed` lines. The step logs' 1-minute load was 1.26 → 2.90. A SIGKILL from the OOM killer would leave workerd's stderr empty, and it would not produce a kj stack.
 
 ### F6: reproduction, the driver's path, `--only MIG-AC-002` (`npm run compliance -- --target local --only MIG-AC-002 --out <scratch>`)
-This runs the integration vitest with `-t` matching `[MIG-AC-002]`: `deploys.test.ts` (2 tests) and `mig/deploy-local.test.ts` (1 test). Setup was the same as final-local-3: `npm ci`, the framework build, and dummy secrets.
+This runs the integration vitest with `-t` matching `[MIG-AC-002]`: `deploys.test.ts` (2 tests) and `mig/deploy-local.test.ts` (1 test). Setup was the same as final-local-3 (archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md): `npm ci`, the framework build, and dummy secrets.
 
 | Run | Instrument | Start (UTC, load) | Result | No-change test |
 |---|---|---|---|---|
@@ -129,7 +129,7 @@ That is about 1.3·10⁻⁴ per unrelated port-0 bind. Each `dev` start leaves t
   - Their only effect on the host during the run is on *other* test processes: test apps no longer join the registry. A Miniflare instance with the registry off also does not open its `--debug-port` socket (miniflare `index.js:134585-134587, 134623`, cited in `2026-10-20-testing-dev-registry.md`). That leaves fewer port-0 sockets, not more.
   - The registry was empty and `dev` still joins it as before. There is no registry change in `dev`'s path.
 - **Out-of-memory kill — ruled out.** There is no OOM line in dmesg, and a SIGKILL leaves no kj stack (F5).
-- **A deterministic config or app error — ruled out.** The same stage served with the same sources 8 s earlier, and again 10 s later (test 1, and test 2's restart). It also passed in runs 1–3, in `q3qgbyunuxaz1fw` and in `emckebxm5x3kxd1`.
+- **A deterministic config or app error — ruled out.** The same stage served with the same sources 8 s earlier, and again 10 s later (test 1, and test 2's restart). It also passed in runs 1–3, in `q3qgbyunuxaz1fw` (archived) and in `emckebxm5x3kxd1`.
 - **SIGSEGV or another crash signal inside workerd — not ruled out.** kj's handler prints `*** Received signal …` with a main-thread stack that can end in the same frames. dmesg shows no `segfault` line, but kj handles the signal itself, so the kernel may not log it. The cut-off first line is the only evidence that would tell the two apart.
 - **A port collision, but on a socket other than `--port` or `--inspector-port`** (e.g. a port-0 socket): the kernel does not hand out a port that is in use, so a port-0 bind cannot fail this way. Only the two explicitly passed ports are exposed.
 
@@ -242,7 +242,7 @@ The record's own design for the worker port had these properties, except the fre
 
 ## Fix
 
-Fixer: a third subagent (prompt §8 step 3). I did not write the diagnosis or the review. Base: `2e33dc5`. No Cloudflare call was made. Decision draft: `ai/implementation/decisions/fix-mig002.md` (DEC-0417, which updates DEC-0204's "Ports are free loopback ports picked at start").
+Fixer: a third subagent (prompt §8 step 3). I did not write the diagnosis or the review. Base: `2e33dc5`. No Cloudflare call was made. Decision: DEC-0417 (decision log, `Item: fix-mig002`; it updates DEC-0204's "Ports are free loopback ports picked at start").
 
 Changes, as the Review required:
 1. **No pre-picked worker or inspector port.**

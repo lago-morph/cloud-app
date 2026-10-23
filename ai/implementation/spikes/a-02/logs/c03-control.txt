@@ -1,7 +1,0 @@
-## https://spikemkmteluy-nonexistent.<subdomain>.workers.dev/
-http=404 connect=200
-## https://spikemkmteluy-a02-worker.spikemkmteluy-nosuchsub.workers.dev/
-curl: (56) CONNECT tunnel failed, response 502
-http=000 connect=502
-recentRelayFailures= [{"ts": "2026-10-19T19:49:01.721Z", "kind": "connect_rejected", "detail": "gateway answered 502 to CONNECT (policy denial or upstream failure)", "host": "spikemkmteluy-a02-worker.spikemkmteluy-nosuchsub.workers.dev:443"}]
-dns error ENOTFOUND

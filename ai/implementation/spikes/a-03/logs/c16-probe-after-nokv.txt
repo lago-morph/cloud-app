@@ -1,2 +1,0 @@
-probe http=200 {"code": "v2", "extra": "changed script content", "variant": "v2c", "secretPresent": true, "bindings": ["SECRET_SPIKE", "SPIKE_VARIANT", "SST_RESOURCE_App"], "secretMatchesDummy": true}
-exit=0

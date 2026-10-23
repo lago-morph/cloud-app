@@ -1,5 +1,7 @@
 # Spike A-10 — dependency pins install and work together
 
+> **Code and logs archived.** This spike's scripts, `logs/` and `out/` are on branch `archive/implement-local-cloudflare`, in the same directory (see ARCHIVE-INDEX.md there, and `ai/ARCHIVE.md`). The relative paths below resolve on that branch.
+
 **Question.** Do the pinned versions PAR-100…PAR-109 install and work together on Node 22.22 in this
 sandbox, and which exact versions should PAR-111 (Node, TypeScript, ESLint), PAR-112 (Zod),
 PAR-113 (Vite), PAR-114 (Playwright) and PAR-116 (test runner and glob) be? Also: does PGlite give
@@ -58,7 +60,7 @@ advisory GHSA-67mh-4wv8-2f99). drizzle-kit never runs that dev server here; acce
 
 ## Commands and results
 
-All from `ai/implementation/spikes/a-10/`.
+All from `ai/implementation/spikes/a-10/` (archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md).
 
 | # | Command | Result | Evidence |
 | --- | --- | --- | --- |

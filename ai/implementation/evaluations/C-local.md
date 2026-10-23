@@ -5,12 +5,12 @@ Evaluator: an independent subagent. It wrote no code or tests, ran no suite and 
 Inputs read:
 - prompt `ai/prompts/implement-local-cloudflare.md` §4, §7, §8, §9 C, §11;
 - `ai/implementation/plan.md`: C-RUN/C-EV, §8 (not-run rules), §10.3, Open question 1;
-- the evidence record `validation/local/qrst96in89gbitx.json` and its raw output `validation/local/qrst96in89gbitx/raw/` (`vitest.json`, `vitest-unit.json`, `playwright.json`, logs, `expected.json`), and the runner's logs in `validation/local/phase-C-run-3/` (including `attempt-1/`, `SUMMARY.md` and `traceability.md`); earlier records `xc3s44jl2dbmqpv` (run 1) and `zcvgtq52o8niagx` (run 2) for history;
+- the evidence record `validation/local/qrst96in89gbitx.json` (archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md) and its raw output `validation/local/qrst96in89gbitx/raw/` (`vitest.json`, `vitest-unit.json`, `playwright.json`, logs, `expected.json`), and the runner's logs in `validation/local/phase-C-run-3/` (including `attempt-1/`, `SUMMARY.md` and `traceability.md`); earlier records `xc3s44jl2dbmqpv` (run 1) and `zcvgtq52o8niagx` (run 2) for history;
 - the 13 root-cause files dated 2026-10-20 in `ai/implementation/root-causes/`;
 - the acceptance criteria in `docs/components/*.md`, `docs/acceptance/e2e-scenarios.md` and `docs/demo/demo-spec.md`;
 - the test code behind each record entry (paths in the table), `tests/compliance/harness/expected.ts` (not-run rules, unit-level list) and `driver.unit.test.ts`.
 
-Abbreviations in the table: `R` = `validation/local/qrst96in89gbitx.json` (every row's result is in R; the test files below are the ones whose results R folds in, read from `raw/vitest.json`, `raw/vitest-unit.json` and `raw/playwright.json`); `FW-IT/` = `packages/framework/test/integration/`; `FW-SRC/` = `packages/framework/src/`; `CRIT/` = `tests/compliance/criteria/`; `E2E/` = `tests/compliance/e2e/`.
+Abbreviations in the table: `R` = `validation/local/qrst96in89gbitx.json` (archived) (every row's result is in R; the test files below are the ones whose results R folds in, read from `raw/vitest.json`, `raw/vitest-unit.json` and `raw/playwright.json`); `FW-IT/` = `packages/framework/test/integration/`; `FW-SRC/` = `packages/framework/src/`; `CRIT/` = `tests/compliance/criteria/`; `E2E/` = `tests/compliance/e2e/`.
 
 ## 1. Exit-check verdict
 
@@ -21,7 +21,7 @@ Abbreviations in the table: `R` = `validation/local/qrst96in89gbitx.json` (every
 
 All other criteria and scenarios judged here passed, with an evidence record (R). Five IDs are deferred to E-EV and 13 to F-EV (section 6), plus CHECK-AC-005's demo part.
 
-Record facts: run `qrst96in89gbitx`, commit `1833e24`, target local, full unfiltered `npm run compliance -- --target local`, 12:31–13:06 UTC, exit status 1. 110 entries (109 IDs; CHECK-AC-005 has a passed and a not-run part entry): 96 passed, 13 not-run, 1 failed. The record covers every one of the 110 Local IDs except E2E-015, which is a milestone item and correctly absent from an automated run. Between `1833e24` and `475f954` (the code the runner checked out) only `validation/` changed. Between `1833e24` and the base `9673867`, the only non-evidence changes are `packages/framework/test/integration/secrets/cli.test.ts` and its root-cause record (Flag 4).
+Record facts: run `qrst96in89gbitx` (archived), commit `1833e24`, target local, full unfiltered `npm run compliance -- --target local`, 12:31–13:06 UTC, exit status 1. 110 entries (109 IDs; CHECK-AC-005 has a passed and a not-run part entry): 96 passed, 13 not-run, 1 failed. The record covers every one of the 110 Local IDs except E2E-015, which is a milestone item and correctly absent from an automated run. Between `1833e24` and `475f954` (the code the runner checked out) only `validation/` changed. Between `1833e24` and the base `9673867`, the only non-evidence changes are `packages/framework/test/integration/secrets/cli.test.ts` and its root-cause record (Flag 4).
 
 ### Counts (110 Local IDs)
 
@@ -64,7 +64,7 @@ Parts that are `not-run` under §4/§8 inside criteria judged `passed` (local ta
 | CLI-AC-005 | passed | `CRIT/cli/smoke.test.ts` | Local part (against `dev`). Stage part is for D-EV. |
 | CF-AC-003 | passed | `FW-IT/build/cloudflare-bundles.test.ts` |  |
 | COMPL-AC-001 | passed | `CRIT/compl/targets.test.ts` | Automated and milestone lists compared with the Where columns and lines. |
-| COMPL-AC-002 | passed | `HARN/catalogue.unit.test.ts`, `TOOLS/traceability.unit.test.ts` | Unit-level (plan §10.3). The run's own report (`phase-C-run-3/traceability.md`) lists 140 IDs. |
+| COMPL-AC-002 | passed | `HARN/catalogue.unit.test.ts`, `TOOLS/traceability.unit.test.ts` | Unit-level (plan §10.3). The run's own report (`phase-C-run-3/traceability.md` (archived)) lists 140 IDs. |
 | COMPL-AC-003 | passed | `CRIT/compl/evidence.test.ts` | All four clauses. The run itself also showed the dirty-tree refusal (attempt 1). |
 | COMPL-AC-006 | passed | `TOOLS/release.unit.test.ts` |  |
 | COMPL-AC-007 | passed | `FW-SRC/provision/core/databases.unit.test.ts`, `FW-SRC/provision/core/deploy.unit.test.ts` | Unit-level, fake target, as the criterion states. |
@@ -192,12 +192,12 @@ Confirmed against the documents. The list is: GOOGLE-AC-001 (cloud part), GOOGLE
 | D-01, D-03 unit timeouts | yes | **missing** (Flag 5) | covered by the D-04 fix | same |
 | verify-fixes | Fix section of D-04 | — | — | — |
 
-Every failure in the three local runs went through §8. Run 1 (`xc3s44jl2dbmqpv`) failed CHECK-AC-003, CLI-AC-002, MIG-AC-001 and E2E-004. Run 2 (`zcvgtq52o8niagx`) failed FILES-AC-003 and E2E-004. Run 3 (R) failed only E2E-004. No test was skipped, deleted or weakened to get a pass. The FILES-AC-003 review explicitly kept the test as written, and the SEC fix added a non-vacuity assertion.
+Every failure in the three local runs went through §8. Run 1 (`xc3s44jl2dbmqpv` (archived)) failed CHECK-AC-003, CLI-AC-002, MIG-AC-001 and E2E-004. Run 2 (`zcvgtq52o8niagx`) failed FILES-AC-003 and E2E-004. Run 3 (R) failed only E2E-004. No test was skipped, deleted or weakened to get a pass. The FILES-AC-003 review explicitly kept the test as written, and the SEC fix added a non-vacuity assertion.
 
 ## 5. Runner procedure
 
 Sound, with one operator error that it handled correctly.
-- **Attempt 1.** The runner committed partial evidence (`345a4fb`) while the driver was running from `475f954`. The driver then refused to write evidence because HEAD had moved. This is the intended COMPL-AC-003 behaviour, so no record exists for attempt 1. Its logs are kept in `phase-C-run-3/attempt-1/` with a NOTE.
+- **Attempt 1.** The runner committed partial evidence (`345a4fb`) while the driver was running from `475f954`. The driver then refused to write evidence because HEAD had moved. This is the intended COMPL-AC-003 behaviour, so no record exists for attempt 1. Its logs are kept in `phase-C-run-3/attempt-1/` (archived) with a NOTE.
 - **Attempt 2.** A full, unfiltered re-run, with HEAD held at `1833e24` throughout. `1833e24` differs from `475f954` only under `validation/`. The record is therefore valid for the code under test.
 - **Prerequisites and environment.** The dummy `apiKey` was set through stdin, as DEC-0277 requires, and is never recorded. Load average was 1.5–4.2, so the timeout root causes do not apply. No dev process was left behind.
 - **For later runs:**

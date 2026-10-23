@@ -408,7 +408,7 @@ describe("[COMPL-AC-004] the test secret on a cloud run stage (DEC-0277)", () =>
 
 // CLI-AC-003 (CLI-REQ-003) for the compliance runner: injected failures, including failures during cleanup (stopping
 // `dev`, removing the test stage, the leftover check), give a non-zero exit status that reflects the original failure.
-// Decision draft ai/implementation/decisions/C-T6.md.
+// Decisions: DEC-0394…DEC-0397 (docs/decisions/decision-log.md, Item: C-T6).
 describe("[CLI-AC-003] compliance runner exit status under injected failures", () => {
   const failingTest = vitestReport([{ title: "[KV-AC-001] put", status: "failed", message: "expected 200, got 500" }]);
   const LOCAL = ["--target", "local", "--only", "KV-AC-001"];

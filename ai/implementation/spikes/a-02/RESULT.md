@@ -1,5 +1,7 @@
 # A-02 — Is a deployed Worker's `workers.dev` address reachable from this sandbox?
 
+> **Code and logs archived.** This spike's scripts, `logs/` and `out/` are on branch `archive/implement-local-cloudflare`, in the same directory (see ARCHIVE-INDEX.md there, and `ai/ARCHIVE.md`). The relative paths below resolve on that branch.
+
 Date: 2026-10-19 (19:46–19:50 UTC). Node v22.22.0. Pins: Wrangler 4.149.0 (PAR-101), `@playwright/test` 1.64.1 (PAR-114, A-10), Chromium build `chromium-1248` under `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`.
 Cloud resource: one Worker, `spikemkmteluy-a02-worker` (deleted). Wrangler environment exactly as A-01 recorded (placeholder `CLOUDFLARE_API_TOKEN=proxy-injected`, `NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt`, sandbox `CLOUDFLARE_ACCOUNT_ID`, `HTTPS_PROXY`). No Authorization header was sent by the spike; no credential appears in any log.
 
@@ -29,7 +31,7 @@ Prompt §10: "Stage addresses on `workers.dev` were not confirmed reachable. A r
 
 ## Exact commands
 
-From `ai/implementation/spikes/a-02/` after `npm install` (package.json pins wrangler 4.149.0 and @playwright/test 1.64.1):
+From `ai/implementation/spikes/a-02/` (archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md) after `npm install` (package.json pins wrangler 4.149.0 and @playwright/test 1.64.1):
 
 ```
 # account subdomain (proxy injects the token; no Authorization header sent)

@@ -12,7 +12,7 @@
  *   `remove` deletes them itself because `sst remove` leaves them).
  * Log entries are not stage resources: they stay after removal by design (PROV-AC-003).
  *
- * Matching by name (assumption, ai/implementation/decisions/D-T.md): physical names are what
+ * Matching by name (assumption, DEC-0359…DEC-0366, decision log Item: D-T): physical names are what
  * the provisioning tool generates (PROV §2 "Stage resources"), so the probe takes a Worker,
  * bucket, token or state object as the stage's when its name contains both the app name and
  * the stage name as hyphen- or slash-delimited parts. Stage names of test runs carry 15 random

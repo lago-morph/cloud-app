@@ -1,7 +1,0 @@
-node PUT wrong content type -> status 403 ACAO null vary null
-node PUT correct -> status 200 ACAO http://127.0.0.1:8701 vary Origin
-node PUT expired -> status 403 ACAO null
-node GET expired -> status 403 ACAO null
-node GET missing -> status 404 ACAO http://127.0.0.1:8701
-browser (allowed origin) {"wrongTypeSmall":{"error":"xhr error, status 0"},"wrongTypeLarge":{"error":"xhr error, status 0"},"okSmall":{"status":200},"expiredPut":{"error":"xhr error, status 0"},"expiredGet":{"error":"TypeError: Failed to fetch"},"missingGet":{"status":404}}
-browser console ["Access to XMLHttpRequest at '<url> from origin 'http://127.0.0.1:8701' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.","Failed to load resource: net::ERR_FAILED","Failed to load resource: net::ERR_CONNECTION_RESET","Access to XMLHttpRequest at '<url> from origin 'http://127.0.0.1:8701' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.","Failed to load resource: net::ERR_FAILED","Access to fetch at '<url> from origin 'http://127.0.0.1:8701' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.","Failed to load resource: net::ERR_FAILED","Failed to load resource: the server responded with a status of 404 (Not Found)"]

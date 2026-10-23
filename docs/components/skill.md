@@ -84,7 +84,7 @@ Specific content the references carry:
 
 **Diagnostics** from CHECK name the reference to read. Each reference a diagnostic can name has a section "Check rules that send you here" listing each such rule ID and what to do.
 
-**Implementation** (E-01, decisions `ai/implementation/decisions/E-01.md`):
+**Implementation** (E-01, decisions DEC-0367…DEC-0372 in the [decision log](../decisions/decision-log.md)):
 - References are the thirteen files named in `packages/framework/src/check/references.ts`. Each starts with its title and then a paragraph beginning "Read this when", links to at least one example, and ends with a section "Stopping condition" beginning "Stop reading when".
 - `SKILL.md` carries YAML front matter (`name`, `description`), the hard rules as a numbered list, the task map as a table, and links to every reference, example and template.
 - Each example is a Markdown file of whole source files copied unchanged from `apps/template` or `apps/reference`. Each copied file is a fenced block directly preceded by `<!-- example-source: <repo path> -->`. The code is type-checked and tested where it lives, by each app's `verify`; a test can compare every block with its source byte for byte, and reject any source under `apps/demo/`.

@@ -6,7 +6,7 @@ Branch: `claude/implement-local-cloudflare-diag-c4`, created from `origin/claude
 
 ## Symptom
 
-Compliance run 2, `zcvgtq52o8niagx`, Playwright worker 0, started at 08:54:53.750Z and failed after 673 ms:
+Compliance run 2, `zcvgtq52o8niagx` (archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md), Playwright worker 0, started at 08:54:53.750Z and failed after 673 ms:
 
 ```
 Error: page.addScriptTag: Execution context was destroyed, most likely because of a navigation
@@ -15,7 +15,7 @@ Error: page.addScriptTag: Execution context was destroyed, most likely because o
    at tests/compliance/criteria/files/expired-ticket.spec.ts:29:5
 ```
 
-Line 29 is the **first** `openAppPage(page)` call, before any ticket is issued. It is not the call after the 15-minute wait. C-T3's run `xc3s44jl2dbmqpv` passed the same test.
+Line 29 is the **first** `openAppPage(page)` call, before any ticket is issued. It is not the call after the 15-minute wait. C-T3's run `xc3s44jl2dbmqpv` (archived) passed the same test.
 
 ## Short answer
 
@@ -92,10 +92,10 @@ E7. **Faithful rerun without run 2's precondition** (`diag-c4/1owr20jbxay0luf/`)
 - SEC-AC-002 failed early at `testSecretValue()` with a missing prerequisite, so it never crawled `/`.
 - `core/deployment.test.ts` first fetched `/` at 09:52:2x. That was after `scaffold.test.ts` finished (09:51:13–09:52:04).
 - So no `dist` change was seen while no browser was connected, nothing was buffered, and FILES-AC-003's expired clause **passed**.
-- In run 2, by contrast, `no-leak.test.ts` passed at 08:33:11–24, so `/` was crawled, and `scaffold.test.ts` rebuilt `dist` at 08:45:01–40, about 9 minutes before the first browser page (run 2's `raw/vitest.json`). `testSecretValue()` passed because run 2 set the secret first (`phase-C-run-2/03-secrets-set.log`).
+- In run 2, by contrast, `no-leak.test.ts` passed at 08:33:11–24, so `/` was crawled, and `scaffold.test.ts` rebuilt `dist` at 08:45:01–40, about 9 minutes before the first browser page (run 2's `raw/vitest.json`). `testSecretValue()` passed because run 2 set the secret first (`phase-C-run-2/03-secrets-set.log` (archived)).
 - The same rerun also shows the live (unbuffered) form: E2E-001 packs the framework at 09:57:37–38 (it started at 09:57:28.9) → six `dist` change lines → `GET /api/auth/me` from each open reference page reloading.
 
-E8. **Why C-T3's run passed.** `tests/compliance/criteria/skill/scaffold.test.ts` was added in `d887ead` (2026-10-20 05:22). That is after C-T3's run `xc3s44jl2dbmqpv` (no-leak at 04:00:54), and `d887ead` is not in C-T3's commit `a6b711e`. In C-T3's run, nothing in the vitest phase rewrote `dist` after the crawl.
+E8. **Why C-T3's run passed.** `tests/compliance/criteria/skill/scaffold.test.ts` was added in `d887ead` (2026-10-20 05:22). That is after C-T3's run `xc3s44jl2dbmqpv` (archived) (no-leak at 04:00:54), and `d887ead` is not in C-T3's commit `a6b711e`. In C-T3's run, nothing in the vitest phase rewrote `dist` after the crawl.
 
 ## Chain (cause → symptom), with evidence for each link
 
@@ -149,7 +149,7 @@ Considered, and not proposed as the main fix:
 
 ## Evidence files
 
-- Run 2: `validation/local/zcvgtq52o8niagx/raw/{playwright.log,playwright.json,dev.log,vitest.json}` and `validation/local/phase-C-run-2/`.
+- Run 2: `validation/local/zcvgtq52o8niagx/raw/{playwright.log,playwright.json,dev.log,vitest.json}` (archived) and `validation/local/phase-C-run-2/`.
 - Diagnosis scratch, not committed: `/tmp/claude-0/-home-user-cloud-app/b6482c07-38ed-5065-a51e-6194e2f52fc3/scratchpad/diag-c4/`. It holds `dev1.log`–`dev4.log`, `.diag-repro.mjs`, `.diag-repro2.mjs`, `.diag-loop.mjs`, and the rerun record `1owr20jbxay0luf/` with its `raw/dev.log` (`DEBUG=vite:hmr,vite:deps,vite:ws`).
 
 ## Review

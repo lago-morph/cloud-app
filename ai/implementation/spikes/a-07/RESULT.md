@@ -1,5 +1,7 @@
 # A-07 — SigV4-signed R2 S3-endpoint URLs for direct browser transfers; bucket CORS; bucket-scoped R2 token
 
+> **Code and logs archived.** This spike's scripts, `logs/` and `out/` are on branch `archive/implement-local-cloudflare`, in the same directory (see ARCHIVE-INDEX.md there, and `ai/ARCHIVE.md`). The relative paths below resolve on that branch.
+
 Date: 2026-10-19. Node v22.22.0; aws4fetch 1.0.20 (PAR-105); Playwright 1.64.1 (PAR-114) with Chrome Headless Shell 156.0.8078.4 from `/opt/pw-browsers`.
 Cloud resources: R2 buckets `spikecldsqqqq-a07-main`, `spikecldsqqqq-a07-other`; account API token `spikecldsqqqq-a07-r2token`. (Prefix `spike` + 8 random letters; the generator padded with `q`.) All removed — see "Leftovers".
 

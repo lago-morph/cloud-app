@@ -6,7 +6,7 @@ Author: diagnosing subagent (prompt §8 step 1); did not write the code or the t
 `packages/framework/test/integration/mig/generate.test.ts` › `[MIG-AC-001] editing a generated migration makes the checker fail (verify passes before the edit, fails after it)`. Only this test. It is unrelated to the `metadata.sqlite` cause (`2026-10-19-MIG-AC-002-metadata-sqlite-counted-as-d1-database.md`): generate.test never inspects D1 files.
 
 ## Symptom
-Phase-B run (`validation/local/phase-B/05a-integration-vitest-json.log` lines 1823–1857): `AssertionError: verify must pass before the edit:` at `generate.test.ts:64`. The unedited control `verify` exits 1. Its output:
+Phase-B run (`validation/local/phase-B/05a-integration-vitest-json.log` (archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md) lines 1823–1857): `AssertionError: verify must pass before the edit:` at `generate.test.ts:64`. The unedited control `verify` exits 1. Its output:
 ```
 verify: type checking: passed
 verify: portability rules

@@ -1,5 +1,7 @@
 # A-04 — Turning a stage Worker's `workers.dev` route off and on through the API
 
+> **Code and logs archived.** This spike's scripts, `logs/` and `out/` are on branch `archive/implement-local-cloudflare`, in the same directory (see ARCHIVE-INDEX.md there, and `ai/ARCHIVE.md`). The relative paths below resolve on that branch.
+
 Date: 2026-10-19 (19:52–19:57 UTC). Node v22.22.0. Pin: Wrangler 4.149.0 (PAR-101).
 Cloud resources: Worker `spikeqgbznvyy-a04-worker`, KV namespace `spikeqgbznvyy-a04-kv` (both deleted).
 Wrangler environment exactly as A-01 recorded (placeholder `CLOUDFLARE_API_TOKEN=proxy-injected`, `NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt`, `CLOUDFLARE_ACCOUNT_ID`, `HTTPS_PROXY`). Direct API calls are plain `curl` to `api.cloudflare.com` through the proxy; the spike never sends an Authorization header. The secret is a dummy value generated for the spike and kept outside the repo; the Worker reports only the first 8 hex digits of its SHA-256.
@@ -37,7 +39,7 @@ DEC-0078 / MIG §2 steps 1 and 6 / cloudflare.md `stopApp`/`startApp`: can a sta
 
 ## Exact commands
 
-From `ai/implementation/spikes/a-04/` after `npm install`, with `SCRATCH` pointing at a private directory holding the KV id, the dummy secret and the subdomain (never committed). `run.sh` wraps each step; `./run.sh log <name> ./run.sh <step>` records a step to `logs/<name>.txt` (redacted).
+From `ai/implementation/spikes/a-04/` (archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md) after `npm install`, with `SCRATCH` pointing at a private directory holding the KV id, the dummy secret and the subdomain (never committed). `run.sh` wraps each step; `./run.sh log <name> ./run.sh <step>` records a step to `logs/<name>.txt` (redacted).
 
 ```
 ./run.sh kv-create                      # wrangler kv namespace create spikeqgbznvyy-a04-kv
