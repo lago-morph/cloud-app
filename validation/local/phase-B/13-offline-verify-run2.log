@@ -1,0 +1,25 @@
+$ cd /home/user/cloud-app/.claude/worktrees/agent-a9f3ccd5377c6b7ad
+$ unshare -rn sh scripts/offline.sh npm --workspace apps/template run verify
+# start: 2026-10-19T23:42:13Z
+
+> template@0.0.0 verify
+> prototype-framework verify
+
+verify: type checking
+verify: type checking: passed
+verify: portability rules
+verify: portability rules: passed
+verify: migration checker
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+verify: migration checker: passed
+verify: zod version
+verify: zod version: passed (4.6.7)
+verify: tests (sqlite)
+verify: tests (sqlite): passed (14 passed, 0 failed, 0 skipped)
+verify: tests (postgres)
+verify: tests (postgres): passed (14 passed, 0 failed, 0 skipped)
+verify passed
+# end: 2026-10-19T23:42:51Z
+# exit code: 0

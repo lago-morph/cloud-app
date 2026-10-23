@@ -1,0 +1,29 @@
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+
+ ⛅️ wrangler 4.149.0 (update available 4.151.2)
+───────────────────────────────────────────────
+Getting User settings...
+
+▲ [WARNING] Wrangler detected that a corporate proxy or VPN might be enabled on your machine, resulting in API calls failing due to a certificate mismatch. It is likely that you need to install the missing system roots provided by your corporate proxy vendor.
+
+
+▲ [WARNING] A fetch request failed, likely due to a connectivity issue.
+
+  
+  Common causes:
+    - No internet connection or network connectivity problems
+    - Firewall or VPN blocking the request
+    - Network proxy configuration issues
+  
+  Please check your network connection and try again.
+
+
+✘ [ERROR] fetch failed
+
+
+If you think this is a bug then please create an issue at https://github.com/cloudflare/workers-sdk/issues/new/choose
+Note that there is a newer version of Wrangler available (4.151.2). Consider checking whether upgrading resolves this error.
+🪵  Logs were written to "/root/.config/.wrangler/logs/wrangler-2026-10-19_19-36-25_288.log"
+exit=1

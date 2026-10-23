@@ -1,0 +1,5 @@
+uptime before:  22:57:39 up 20:24,  0 user,  load average: 2.53, 3.45, 2.61
+command: unshare -rn sh scripts/offline.sh npm run verify
+exit: 0
+duration_s: 339
+uptime after:  23:03:18 up 20:29,  0 user,  load average: 3.52, 4.02, 3.16

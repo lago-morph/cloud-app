@@ -1,0 +1,12 @@
+$ npx vitest run --config vitest.integration.config.ts tests/skill
+# started 2026-10-20T13:51:22Z head=4d73f396a1219d28e8a49bbbcb6803984c6abac6
+
+ RUN  v5.0.5 /home/user/cloud-app/.claude/worktrees/agent-a4f28fa493a6cb888
+
+
+ Test Files  4 passed (4)
+      Tests  26 passed (26)
+   Start at  13:51:23
+   Duration  261.35s (tests 100%)
+
+# finished 2026-10-20T13:55:45Z exit=0

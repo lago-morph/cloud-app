@@ -1,0 +1,24 @@
+(node:14779) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+SST 4.17.2 ready!
+
+➜  App:        spikeuekwqgqb
+   Stage:      a03
+
+~  Refresh
+
+|  Refreshed   Kv sst:cloudflare:Kv
+|  Refreshed   Api sst:cloudflare:Worker
+|  Refreshed   Api sst:cloudflare:Worker
+|  Refreshed   Kv sst:cloudflare:Kv
+|  Refreshed   default_6_15_0 pulumi:providers:cloudflare
+|  Refreshed   Kv sst:cloudflare:Kv → KvNamespace cloudflare:index:WorkersKvNamespace
+|  Refreshed   Api sst:cloudflare:Worker → ApiScript cloudflare:index:WorkersScript (1.4s)
+|  Refreshed   default pulumi:providers:pulumi-nodejs
+|  Refreshed   Api sst:cloudflare:Worker → ApiUrl sst:cloudflare:WorkerUrl
+|  Warning     Cloudflare detected but `@cloudflare/workers-types` is not installed. Install it to get proper types for your bindings.
+
+✓  Refreshed    
+   url: https://spikeuekwqgqb-a03-apiscript.<subdomain>.workers.dev
+
+exit=0

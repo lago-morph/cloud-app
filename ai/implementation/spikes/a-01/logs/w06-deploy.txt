@@ -1,0 +1,13 @@
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+
+ ⛅️ wrangler 4.149.0 (update available 4.151.2)
+───────────────────────────────────────────────
+
+Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
+Total Upload: 0.16 KiB / gzip: 0.14 KiB
+Worker Startup Time: 2 ms
+Uploaded spikewxlyyipn-a01-worker (1.35 sec)
+No targets deployed for spikewxlyyipn-a01-worker (0.80 sec)
+Current Version ID: a883b1f2-2425-4d8f-a8d3-d1c622f045d3

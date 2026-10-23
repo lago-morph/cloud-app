@@ -1,0 +1,8 @@
+# E6 large request (~5 MB, 56 x 90 kB inserts + 5000 small inserts) whose last statement fails
+statements: 5058 bytes: 5277551
+## form=string
+{  "http": 400,  "elapsed_s": 1.44,  "success": false,  "errors": [   {    "code": 7500,    "message": "UNIQUE constraint failed: parent.id: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_PRIMARYKEY)"   }  ],  "results": [] }
+  blob_t rows after: [{'n': 0}]
+## form=batch
+{  "http": 400,  "elapsed_s": 1.43,  "success": false,  "errors": [   {    "code": 7500,    "message": "UNIQUE constraint failed: parent.id: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_PRIMARYKEY)"   }  ],  "results": [] }
+  blob_t rows after: [{'n': 0}]

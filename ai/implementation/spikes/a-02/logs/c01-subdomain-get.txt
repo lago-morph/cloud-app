@@ -1,0 +1,9 @@
+{
+  "result": {
+    "subdomain": "<subdomain>"
+  },
+  "success": true,
+  "errors": [],
+  "messages": []
+}
+exit=0

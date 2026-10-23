@@ -1,0 +1,23 @@
+## unit (vitest): total=1205 passed=1205
+   numTotalTests=1205 passed=1205 failed=0 pending=0 todo=0
+## integration (vitest): total=389 failed=10 passed=379
+   numTotalTests=389 passed=379 failed=10 pending=0 todo=0
+- failed | packages/framework/test/integration/check/portability-rules.test.ts | failing fixtures (apps/base + check/fail) [CHECK-AC-003] the allowed-imports diagnostic names the construct, the rule and an existing skill reference | tags: CHECK-AC-003
+- failed | packages/framework/test/integration/check/portability-rules.test.ts | failing fixtures (apps/base + check/fail) [CHECK-AC-003] the no-env-access diagnostic names the construct, the rule and an existing skill reference | tags: CHECK-AC-003
+- failed | packages/framework/test/integration/check/portability-rules.test.ts | failing fixtures (apps/base + check/fail) [CHECK-AC-003] the browser-api-only diagnostic names the construct, the rule and an existing skill reference | tags: CHECK-AC-003
+- failed | packages/framework/test/integration/check/portability-rules.test.ts | failing fixtures (apps/base + check/fail) [CHECK-AC-003] the no-raw-sql diagnostic names the construct, the rule and an existing skill reference | tags: CHECK-AC-003
+- failed | packages/framework/test/integration/check/portability-rules.test.ts | failing fixtures (apps/base + check/fail) [CHECK-AC-003] the no-dialect-features diagnostic names the construct, the rule and an existing skill reference | tags: CHECK-AC-003
+- failed | packages/framework/test/integration/check/portability-rules.test.ts | failing fixtures (apps/base + check/fail) [CHECK-AC-003] the framework-order diagnostic names the construct, the rule and an existing skill reference | tags: CHECK-AC-003
+- failed | packages/framework/test/integration/check/portability-rules.test.ts | failing fixtures (apps/base + check/fail) [CHECK-AC-003] the no-transactions diagnostic names the construct, the rule and an existing skill reference | tags: CHECK-AC-003
+- failed | packages/framework/test/integration/check/portability-rules.test.ts | failing fixtures (apps/base + check/fail) [CHECK-AC-003] the no-relational-queries diagnostic names the construct, the rule and an existing skill reference | tags: CHECK-AC-003
+- failed | packages/framework/test/integration/check/portability-rules.test.ts | failing fixtures (apps/base + check/fail) [CHECK-AC-003] the framework-ids diagnostic names the construct, the rule and an existing skill reference | tags: CHECK-AC-003
+- failed | packages/framework/test/integration/check/portability-rules.test.ts | failing fixtures (apps/base + check/fail) [CHECK-AC-003] the app-error-codes diagnostic names the construct, the rule and an existing skill reference | tags: CHECK-AC-003
+## integration (playwright): total=7 expected=7 stats={'startTime': '2026-10-20T00:30:07.925Z', 'duration': 11407.472, 'expected': 7, 'skipped': 0, 'unexpected': 0, 'flaky': 0}
+- expected ['passed'] | packages/framework/test/integration/files/transfers.spec.ts | [FILES-AC-004] browser part: an upload and a download attempted from an unrelated origin are rejected by the browser | tags: FILES-AC-004
+- expected ['passed'] | packages/framework/test/integration/files/transfers.spec.ts | [FILES-AC-006] browser part: an upload interrupted mid-way fails with FILES.TRANSFER_FAILED and an 'interrupted after n bytes' message | tags: FILES-AC-006
+- expected ['passed'] | packages/framework/test/integration/http/api-helper.spec.ts | [HTTP-AC-006] api sends the session cookie | tags: HTTP-AC-006
+- expected ['passed'] | packages/framework/test/integration/http/api-helper.spec.ts | [HTTP-AC-006] api throws ApiError with the server's code on an error response | tags: HTTP-AC-006
+- expected ['passed'] | packages/framework/test/integration/http/api-helper.spec.ts | [HTTP-AC-006] api throws HTTP.NETWORK_ERROR when the API is unreachable | tags: HTTP-AC-006
+- expected ['passed'] | packages/framework/test/integration/http/api-helper.spec.ts | [HTTP-AC-006] a stubbed 502 HTML response throws HTTP.NETWORK_ERROR with that status, null requestId and the not-from-the-app message | tags: HTTP-AC-006
+- expected ['passed'] | packages/framework/test/integration/http/api-helper.spec.ts | [HTTP-AC-006] a non-JSON 200 throws HTTP.NETWORK_ERROR with that status, null requestId and the not-from-the-app message | tags: HTTP-AC-006
+## integration vitest tests without an ID tag in title: 2

@@ -1,0 +1,104 @@
+# E1 atomicity, request form=batch, last statement fails: none
+BEFORE
+  schema: [('table', 'child'), ('table', 'parent')]
+  child: rows=[{'id': 1, 'parent_id': 1}] cols=['id', 'parent_id']
+  parent: rows=[{'id': 1, 'name': 'p1'}] cols=['id', 'name']
+  foreign_key_check: []
+STATEMENTS [
+ "PRAGMA defer_foreign_keys = on",
+ "CREATE TABLE m_new (id INTEGER PRIMARY KEY, v TEXT)",
+ "INSERT INTO m_new (id, v) VALUES (1, 'x')",
+ "ALTER TABLE parent ADD COLUMN extra TEXT DEFAULT 'd'",
+ "CREATE INDEX parent_name_idx ON parent (name)",
+ "INSERT INTO parent (id, name) VALUES (2, 'p2')",
+ "UPDATE parent SET name = 'changed' WHERE id = 1",
+ "DELETE FROM child WHERE id = 1",
+ "INSERT INTO parent (id, name) VALUES (3, 'valid last statement')"
+]
+REQUEST POST .../d1/database/<uuid>/query body={"batch": [{"sql": ...}, ...]}
+RESPONSE {
+ "http": 200,
+ "elapsed_s": 0.48,
+ "success": true,
+ "errors": [],
+ "results": [
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 0,
+   "duration": 0.2437,
+   "changed_db": false
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 2,
+   "duration": 0.1804,
+   "changed_db": true
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 1,
+   "rows_written": 1,
+   "duration": 0.0593,
+   "changed_db": true
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 1,
+   "duration": 0.1332,
+   "changed_db": false
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 0,
+   "rows_written": 2,
+   "duration": 0.1457,
+   "changed_db": true
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 1,
+   "rows_written": 2,
+   "duration": 0.0565,
+   "changed_db": true
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 1,
+   "rows_written": 2,
+   "duration": 0.0497,
+   "changed_db": true
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 1,
+   "rows_written": 1,
+   "duration": 0.0732,
+   "changed_db": true
+  },
+  {
+   "success": true,
+   "rows": [],
+   "changes": 1,
+   "rows_written": 2,
+   "duration": 0.077,
+   "changed_db": true
+  }
+ ]
+}
+AFTER
+  schema: [('table', 'child'), ('table', 'm_new'), ('table', 'parent'), ('index', 'parent_name_idx')]
+  child: rows=[] cols=None
+  m_new: rows=[{'id': 1, 'v': 'x'}] cols=['id', 'v']
+  parent: rows=[{'id': 1, 'name': 'changed', 'extra': 'd'}, {'id': 2, 'name': 'p2', 'extra': 'd'}, {'id': 3, 'name': 'valid last statement', 'extra': 'd'}] cols=['id', 'name', 'extra']
+  foreign_key_check: []

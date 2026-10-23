@@ -1,0 +1,25 @@
+# E11 unique index over duplicate names, in the middle of a PRAGMA-prefixed request
+BEFORE
+  schema: [('table', 'child'), ('table', 'parent')]
+  child: rows=[{'id': 1, 'parent_id': 1}] cols=['id', 'parent_id']
+  parent: rows=[{'id': 1, 'name': 'p1', 'legacy': None}, {'id': 2, 'name': 'p1', 'legacy': None}] cols=['id', 'name', 'legacy']
+  foreign_key_check: []
+STATEMENTS ['PRAGMA defer_foreign_keys = on', 'ALTER TABLE parent DROP COLUMN legacy', 'CREATE TABLE extra (id INTEGER PRIMARY KEY)', 'CREATE UNIQUE INDEX parent_name_uq ON parent (name)', 'ALTER TABLE parent ADD COLUMN later TEXT']
+REQUEST POST .../d1/database/<uuid>/query body={"sql": <statements joined with ';\n'>}
+RESPONSE {
+ "http": 400,
+ "elapsed_s": 0.5,
+ "success": false,
+ "errors": [
+  {
+   "code": 7500,
+   "message": "UNIQUE constraint failed: parent.name: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_UNIQUE)"
+  }
+ ],
+ "results": []
+}
+AFTER
+  schema: [('table', 'child'), ('table', 'parent')]
+  child: rows=[{'id': 1, 'parent_id': 1}] cols=['id', 'parent_id']
+  parent: rows=[{'id': 1, 'name': 'p1', 'legacy': None}, {'id': 2, 'name': 'p1', 'legacy': None}] cols=['id', 'name', 'legacy']
+  foreign_key_check: []

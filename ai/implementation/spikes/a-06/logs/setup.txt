@@ -1,0 +1,16 @@
+=== setup  @ 2026-10-19T19:50:56Z
+created spikecmmrxula-a06-src
+bulk insert: changes=2000
+bulk insert: changes=5000
+bulk insert: changes=5000
+literal batch: 22 statements ok
+big_text b050k: changes=1
+big_text b099k: changes=1
+big_text b150k: changes=1
+big_text b625k: changes=1
+big_text b1m: changes=1
+big_text b200kq: changes=1
+big_text b1900k: changes=1
+setup took 20.8s
+source fingerprint: {"__framework_kv": {"rows": 17, "sha256": "2e1def3480f43488"}, "__framework_migrations": {"rows": 2, "sha256": "3d834e4187ff9d6b"}, "a_child": {"rows": 5000, "sha256": "52c1a9015337080a"}, "big_text": {"rows": 7, "sha256": "32ad977e1597300e", "lengths_chars_bytes": [["b050k", 50000, 50000], ["b099k", 99000, 99000], ["b150k", 150000, 150000], ["b1900k", 1900000, 1900000], ["b1m", 1000000, 1000000], ["b200kq", 200000, 200000], ["b625k", 250000, 625000]]}, "cyc_a": {"rows": 2, "sha256": "bf48130d768c9478"}, "cyc_b": {"rows": 1, "sha256": "cd2e0b37127e47b4"}, "m_grandchild": {"rows": 5000, "sha256": "a1f38698de8dd1af"}, "self_ref": {"rows": 3, "sha256": "1031356eb977de67"}, "x_extras": {"rows": 5, "sha256": "a48244897f70d772"}, "z_parent": {"rows": 2024, "sha256": "291ad87a7df03771"}, "__sqlite_sequence__": [["x_extras", 6]], "__fk_check__": []}
+source file_size bytes: 5128192

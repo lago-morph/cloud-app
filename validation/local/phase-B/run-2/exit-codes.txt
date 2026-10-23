@@ -1,0 +1,14 @@
+01-npm-ci 0
+02-npm-run-verify 0
+03-test-unit 0
+04-test-integration 1
+05a-integration-vitest-json 1
+05b-integration-playwright 0
+07-secrets-set 0
+09-exercise-api 0
+10-exercise-pages 0
+08-dev-server 0
+11-offline-netcheck 0
+12-offline-verify-run1 0
+13-offline-verify-run2 0
+14-offline-verify-diff 0

@@ -1,0 +1,35 @@
+# E1 atomicity, request form=batch, last statement fails: fk_deferred
+BEFORE
+  schema: [('table', 'child'), ('table', 'parent')]
+  child: rows=[{'id': 1, 'parent_id': 1}] cols=['id', 'parent_id']
+  parent: rows=[{'id': 1, 'name': 'p1'}] cols=['id', 'name']
+  foreign_key_check: []
+STATEMENTS [
+ "PRAGMA defer_foreign_keys = on",
+ "CREATE TABLE m_new (id INTEGER PRIMARY KEY, v TEXT)",
+ "INSERT INTO m_new (id, v) VALUES (1, 'x')",
+ "ALTER TABLE parent ADD COLUMN extra TEXT DEFAULT 'd'",
+ "CREATE INDEX parent_name_idx ON parent (name)",
+ "INSERT INTO parent (id, name) VALUES (2, 'p2')",
+ "UPDATE parent SET name = 'changed' WHERE id = 1",
+ "DELETE FROM child WHERE id = 1",
+ "INSERT INTO child (id, parent_id) VALUES (2, 999)"
+]
+REQUEST POST .../d1/database/<uuid>/query body={"batch": [{"sql": ...}, ...]}
+RESPONSE {
+ "http": 400,
+ "elapsed_s": 0.44,
+ "success": false,
+ "errors": [
+  {
+   "code": 7500,
+   "message": "D1 DB was reset and rolled back to its last known good state because the application left the database in a state where constraints were violated: FOREIGN KEY constraint failed: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_FOREIGNKEY)"
+  }
+ ],
+ "results": []
+}
+AFTER
+  schema: [('table', 'child'), ('table', 'parent')]
+  child: rows=[{'id': 1, 'parent_id': 1}] cols=['id', 'parent_id']
+  parent: rows=[{'id': 1, 'name': 'p1'}] cols=['id', 'name']
+  foreign_key_check: []

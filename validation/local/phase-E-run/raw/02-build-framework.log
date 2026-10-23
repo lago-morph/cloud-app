@@ -1,0 +1,7 @@
+$ npm run build -w packages/framework
+# started 2026-10-20T13:38:37Z head=4d73f396a1219d28e8a49bbbcb6803984c6abac6
+
+> @lago-morph/prototype-framework@0.1.0 build
+> tsc -p tsconfig.build.json
+
+# finished 2026-10-20T13:38:53Z exit=0

@@ -1,0 +1,5 @@
+[r6 plain_text named SECRET_SPIKE] upload metadata={"compatibility_date": "2025-01-01", "bindings": [{"type": "plain_text", "name": "SECRET_SPIKE", "text": "not-a-secret"}]} -> http=200 success=True errors=[]
+[r6] secrets=[] bindings=[('SECRET_SPIKE', 'plain_text')]
+[r7 SECRET_SPIKE no longer declared] upload metadata={"compatibility_date": "2025-01-01", "bindings": [{"type": "plain_text", "name": "V", "text": "4"}]} -> http=200 success=True errors=[]
+[r7] secrets=[] bindings=[('V', 'plain_text')]
+exit=0

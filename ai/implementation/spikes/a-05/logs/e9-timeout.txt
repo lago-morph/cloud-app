@@ -1,0 +1,7 @@
+## 200000 small INSERT statements in one request, body 9.7 MB
+status 502 elapsed 30.3s
+headers {"Content-Type": "text/plain; charset=utf-8"}
+body upstream request failed
+rows after +0s: [{'n': 200000}]
+rows after +10s: [{'n': 200000}]
+rows after +30s: [{'n': 200000}]

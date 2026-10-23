@@ -1,0 +1,5 @@
+$ ./run.sh get off
+error code: 1042
+
+http=404
+exit=0

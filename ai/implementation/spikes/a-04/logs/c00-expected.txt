@@ -1,0 +1,3 @@
+$ ./run.sh expected-sha
+expected secret sha8=8d3534bf
+exit=0

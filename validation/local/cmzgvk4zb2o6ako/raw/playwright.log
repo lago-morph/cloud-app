@@ -1,0 +1,100 @@
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+Running 14 tests using 2 workers
+
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+
+[1/14] [e2e] › tests/compliance/e2e/demo-local.spec.ts:19:3 › [DEMO-AC-006] changing the site title in the values file and rebuilding (restarting dev) changes the title the page displays
+[2/14] [e2e] › tests/compliance/e2e/demo-criteria.spec.ts:139:1 › [DEMO-AC-002] each cell of the permissions table with mock identities (anonymous, user, another user, admin): permitted actions succeed through the page, forbidden ones are refused by the app and change nothing
+[3/14] [e2e] › tests/compliance/e2e/demo-pages.spec.ts:162:1 › [DEMO-AC-001] a post title containing <script>…</script> shows as literal text to its author and, published, to an anonymous visitor in the list and on the post; no script element is added and the script does not run
+[4/14] [e2e] › tests/compliance/e2e/demo-pages.spec.ts:230:1 › [DEMO-AC-003] a JPEG of at least 20 MB attached through the page displays: an image on the post is complete with naturalWidth > 0, at the photo's size
+[5/14] [e2e] › tests/compliance/e2e/demo-criteria.spec.ts:332:1 › [DEMO-AC-004] a banner an admin sets through the page appears at the top of the page for anonymous visitors; a user's attempt to set it is refused and changes nothing
+[6/14] [e2e] › tests/compliance/e2e/demo-pages.spec.ts:262:1 › [DEMO-AC-009] with clipboard permissions granted, the account page's copy button puts exactly the /api/auth/me user ID on the clipboard
+[7/14] [e2e] › tests/compliance/e2e/E2E-002.spec.ts:34:3 › [E2E-002][DEMO-AC-010] local part: the demo's smoke test passes locally against dev, from a copy identical to the commit's apps/demo (no source changes)
+[e2e] › tests/compliance/e2e/E2E-002.spec.ts:34:3 › [E2E-002][DEMO-AC-010] local part: the demo's smoke test passes locally against dev, from a copy identical to the commit's apps/demo (no source changes)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[8/14] [e2e] › tests/compliance/e2e/demo-criteria.spec.ts:368:1 › [DEMO-AC-005] a user's posts-per-page choice, made through the page, is still the choice after logging out and in again (same browser and a new one); another user keeps the default
+[9/14] [e2e] › tests/compliance/e2e/demo-criteria.spec.ts:453:1 › [DEMO-AC-007] a share link created through the page shows the draft to an anonymous visitor; the same link with one character altered is refused and shows nothing of the draft
+[10/14] [e2e] › tests/compliance/e2e/demo-criteria.spec.ts:514:3 › [DEMO-AC-007] expiry clause (local, in-process with a moved clock): with the share-link lifetime configured to 1 day, a link opens after 12 hours and is refused after 2 days
+[11/14] [e2e] › tests/compliance/e2e/demo-criteria.spec.ts:600:1 › [DEMO-AC-008] publishing a post and deleting it through the page each produce an info entry of the demo, written during that request, in the target's log
+[12/14] [e2e] › tests/compliance/e2e/E2E-004.spec.ts:32:1 › [E2E-004] coverage part: every criterion and scenario applicable on this target has a tagged test in the suite this run executes
+[13/14] [e2e] › tests/compliance/e2e/demo-criteria.spec.ts:646:3 › [DEMO-AC-011] every committed production values file sets framework.users; in-process with the stub login provider, a login on the users list creates a draft and a login on neither list is refused with 401 and sees only published posts
+[14/14] [e2e] › tests/compliance/e2e/E2E-004.spec.ts:50:1 › [E2E-004] record part: the evidence writer accepts a record of this target and rejects an invalid one
+  14 passed (3.4m)

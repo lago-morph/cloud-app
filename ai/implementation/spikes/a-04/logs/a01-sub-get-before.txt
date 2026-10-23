@@ -1,0 +1,12 @@
+$ ./run.sh sub-get
+{
+  "result": {
+    "enabled": true,
+    "previews_enabled": false
+  },
+  "success": true,
+  "errors": [],
+  "messages": []
+}
+
+exit=0

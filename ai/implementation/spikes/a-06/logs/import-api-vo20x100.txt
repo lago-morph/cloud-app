@@ -1,0 +1,7 @@
+=== import-api vo20x100 @ 2026-10-19T19:54:46Z
+created spikecmmrxula-a06-vo20x100
+import init: http=200 success=True status=None keys=['filename', 'success', 'upload_url'] errors=[]
+upload PUT: http=200 etag_matches=True host=<hex32>.r2.cloudflarestorage.com
+import ingest: http=200 success=True status=None errors=[] error=D1 DB was reset and rolled back to its last known good state because the application left the database in a state where constraints were violated: FOREIGN KEY constraint failed: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_FOREIGNKEY)
+import info: {"upload_url_host": "<hex32>.r2.cloudflarestorage.com", "upload_s": 0.9, "ingest_s": 1.13, "polls": 0, "status": "error", "error": "D1 DB was reset and rolled back to its last known good state because the application left the database in a state where constraints were violated: FOREIGN KEY constraint failed: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_FOREIGNKEY)", "num_queries": null, "meta": null}
+delete spikecmmrxula-a06-vo20x100: (200, True, [])

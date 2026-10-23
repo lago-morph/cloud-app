@@ -1,0 +1,9 @@
+[r1] upload metadata={"compatibility_date": "2025-01-01", "bindings": [{"type": "plain_text", "name": "V", "text": "1"}]} -> http=200 success=True errors=[]
+[r2] PUT secret -> http=201 success=True
+[r2] secrets=[('SECRET_SPIKE', 'secret_text')] bindings=[('SECRET_SPIKE', 'secret_text'), ('V', 'plain_text')]
+[r3 no keep_bindings] upload metadata={"compatibility_date": "2025-01-01", "bindings": [{"type": "plain_text", "name": "V", "text": "2"}]} -> http=200 success=True errors=[]
+[r3] secrets=[('SECRET_SPIKE', 'secret_text')] bindings=[('SECRET_SPIKE', 'secret_text'), ('V', 'plain_text')]
+[r4] PUT secret again -> http=200 success=True
+[r5 keep_bindings=[secret_text]] upload metadata={"compatibility_date": "2025-01-01", "bindings": [{"type": "plain_text", "name": "V", "text": "3"}], "keep_bindings": ["secret_text"]} -> http=200 success=True errors=[]
+[r5] secrets=[('SECRET_SPIKE', 'secret_text')] bindings=[('SECRET_SPIKE', 'secret_text'), ('V', 'plain_text')]
+exit=0

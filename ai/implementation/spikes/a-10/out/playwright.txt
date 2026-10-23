@@ -1,0 +1,10 @@
+[WebServer] ▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+[WebServer] 
+[WebServer] 
+
+Running 2 tests using 1 worker
+
+  ✓  1 [chromium] › e2e/client.spec.ts:3:1 › Vite client reaches the Worker through the /api proxy (443ms)
+  ✓  2 [chromium] › e2e/client.spec.ts:8:1 › cookie set by the Worker is visible to the browser (208ms)
+
+  2 passed (13.1s)

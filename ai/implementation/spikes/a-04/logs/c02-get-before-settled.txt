@@ -1,0 +1,4 @@
+$ ./run.sh get before
+{"path":"/before","secret":"8d3534bf","var":"plain-var-a04","kv":"kv-value-a04"}
+http=200
+exit=0

@@ -1,0 +1,5 @@
+$ cd /home/user/cloud-app/.claude/worktrees/agent-a690ce12f828a7d6d
+$ node tests/compliance/tools/report.mjs traceability --out validation/local/phase-C-run-3/traceability.md
+# start: 2026-10-20T12:28:53Z
+# end: 2026-10-20T12:30:45Z
+# exit code: 0

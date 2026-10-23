@@ -1,0 +1,7 @@
+=== import-api vb150k @ 2026-10-19T19:58:02Z
+created spikecmmrxula-a06-vb150k
+import init: http=200 success=True status=None keys=['filename', 'success', 'upload_url'] errors=[]
+upload PUT: http=200 etag_matches=True host=<hex32>.r2.cloudflarestorage.com
+import ingest: http=200 success=True status=error errors=[] error=statement too long: SQLITE_TOOBIG
+import info: {"upload_url_host": "<hex32>.r2.cloudflarestorage.com", "upload_s": 0.79, "ingest_s": 0.5, "polls": 0, "status": "error", "error": "statement too long: SQLITE_TOOBIG", "num_queries": null, "meta": null}
+delete spikecmmrxula-a06-vb150k: (200, True, [])

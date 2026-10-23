@@ -1,0 +1,17 @@
+$ ./run.sh kv-delete
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+
+ ⛅️ wrangler 4.149.0 (update available 4.151.2)
+───────────────────────────────────────────────
+Resource location: remote 
+
+About to delete remote KV namespace id: "<hex32>".
+This action is irreversible and will permanently delete all data in the KV namespace.
+
+? Ok to proceed?
+🤖 Using fallback value in non-interactive context: yes
+Deleting KV namespace id: "<hex32>".
+Deleted KV namespace id: "<hex32>".
+exit=0

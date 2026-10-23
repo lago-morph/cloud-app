@@ -1,0 +1,69 @@
+(node:9431) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+== remote D1 via http
+setup: {"ok":true}
+select-anon-params n=100: ok
+select-anon-params n=101: ERR HTTP 400 7500: too many SQL variables at offset 207: SQLITE_ERROR
+select-anon-params n=999: ERR HTTP 400 7500: too many SQL variables at offset 207: SQLITE_ERROR
+select-anon-params n=1000: ERR HTTP 400 7500: too many SQL variables at offset 207: SQLITE_ERROR
+select-anon-params n=32766: ERR HTTP 400 7500: too many SQL variables at offset 207: SQLITE_ERROR
+select-anon-params n=32767: ERR HTTP 400 7500: too many SQL variables at offset 207: SQLITE_ERROR
+select-numbered-?k n=100: ok
+select-numbered-?k n=101: ERR HTTP 400 7500: variable number must be between ?1 and ?100 at offset 7: SQLITE_ERROR
+select-numbered-?k n=32766: ERR HTTP 400 7500: variable number must be between ?1 and ?100 at offset 7: SQLITE_ERROR
+select-numbered-?k n=32767: ERR HTTP 400 7500: variable number must be between ?1 and ?100 at offset 7: SQLITE_ERROR
+in-list n=100: ok
+in-list n=101: ERR HTTP 400 7500: too many SQL variables at offset 241: SQLITE_ERROR
+multi-insert-rows(2 params/row) n=50: ok
+multi-insert-rows(2 params/row) n=51: ERR HTTP 400 7500: too many SQL variables at offset 330: SQLITE_ERROR
+statement-bytes n=99999: ok
+statement-bytes n=100000: ok
+statement-bytes n=100001: ERR HTTP 400 7500: statement too long: SQLITE_TOOBIG
+statement-bytes n=1000000: ERR HTTP 400 7500: statement too long: SQLITE_TOOBIG
+bound-text-bytes n=100001: ok
+bound-text-bytes n=1000000: ok
+search: max anonymous params
+  n=1 -> ok
+  n=40000 -> ERR HTTP 400 7500: too many SQL variables at offset 207: SQLITE_ERROR
+  n=20000 -> ERR HTTP 400 7500: too many SQL variables at offset 207: SQLITE_ERROR
+  n=10000 -> ERR HTTP 400 7500: too many SQL variables at offset 207: SQLITE_ERROR
+  n=5000 -> ERR HTTP 400 7500: too many SQL variables at offset 207: SQLITE_ERROR
+  n=2500 -> ERR HTTP 400 7500: too many SQL variables at offset 207: SQLITE_ERROR
+  n=1250 -> ERR HTTP 400 7500: too many SQL variables at offset 207: SQLITE_ERROR
+  n=625 -> ERR HTTP 400 7500: too many SQL variables at offset 207: SQLITE_ERROR
+  n=313 -> ERR HTTP 400 7500: too many SQL variables at offset 207: SQLITE_ERROR
+  n=157 -> ERR HTTP 400 7500: too many SQL variables at offset 207: SQLITE_ERROR
+  n=79 -> ok
+  n=118 -> ERR HTTP 400 7500: too many SQL variables at offset 207: SQLITE_ERROR
+  n=98 -> ok
+  n=108 -> ERR HTTP 400 7500: too many SQL variables at offset 207: SQLITE_ERROR
+  n=103 -> ERR HTTP 400 7500: too many SQL variables at offset 207: SQLITE_ERROR
+  n=100 -> ok
+  n=101 -> ERR HTTP 400 7500: too many SQL variables at offset 207: SQLITE_ERROR
+=> {"max":100,"firstErr":"HTTP 400 7500: too many SQL variables at offset 207: SQLITE_ERROR"}
+search: max statement bytes
+  n=100 -> ok
+  n=2000000 -> ERR HTTP 400 7500: statement too long: SQLITE_TOOBIG
+  n=1000050 -> ERR HTTP 400 7500: statement too long: SQLITE_TOOBIG
+  n=500075 -> ERR HTTP 400 7500: statement too long: SQLITE_TOOBIG
+  n=250087 -> ERR HTTP 400 7500: statement too long: SQLITE_TOOBIG
+  n=125093 -> ERR HTTP 400 7500: statement too long: SQLITE_TOOBIG
+  n=62596 -> ok
+  n=93844 -> ok
+  n=109468 -> ERR HTTP 400 7500: statement too long: SQLITE_TOOBIG
+  n=101656 -> ERR HTTP 400 7500: statement too long: SQLITE_TOOBIG
+  n=97750 -> ok
+  n=99703 -> ok
+  n=100679 -> ERR HTTP 400 7500: statement too long: SQLITE_TOOBIG
+  n=100191 -> ERR HTTP 400 7500: statement too long: SQLITE_TOOBIG
+  n=99947 -> ok
+  n=100069 -> ERR HTTP 400 7500: statement too long: SQLITE_TOOBIG
+  n=100008 -> ERR HTTP 400 7500: statement too long: SQLITE_TOOBIG
+  n=99977 -> ok
+  n=99992 -> ok
+  n=100000 -> ok
+  n=100004 -> ERR HTTP 400 7500: statement too long: SQLITE_TOOBIG
+  n=100002 -> ERR HTTP 400 7500: statement too long: SQLITE_TOOBIG
+  n=100001 -> ERR HTTP 400 7500: statement too long: SQLITE_TOOBIG
+=> {"max":100000,"firstErr":"HTTP 400 7500: statement too long: SQLITE_TOOBIG"}
+== summary {"maxParams":100,"maxBytes":100000}

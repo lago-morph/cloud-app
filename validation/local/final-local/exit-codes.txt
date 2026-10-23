@@ -1,0 +1,7 @@
+01-npm-ci 0
+02-build-framework 0
+03-verify-online 0
+04-verify-offline 0
+05-secrets-set 0
+06-compliance-local 1
+07-traceability 0
