@@ -1,0 +1,82 @@
+/**
+ * The command table and dispatch of the package binary (CLI-REQ-001, CLI-REQ-003).
+ * Exit statuses: 0 success, 1 failure, 2 usage error.
+ */
+
+import { UsageError } from "./args.js";
+import { describeFailure } from "./failure.js";
+import { EXIT, type CliIo, type Command } from "./io.js";
+import { buildBinding, devBinding, generateMigrationBinding, resetLocalBinding, secretsBinding, verifyBinding } from "./wiring.js";
+
+export { EXIT, type CliIo, type Command } from "./io.js";
+
+export interface Entry {
+  readonly summary: string;
+  readonly run: Command;
+}
+
+/** A command loaded when it runs, so one command never loads another's tooling. */
+const lazy =
+  (load: () => Promise<Command>): Command =>
+  async (args, io) =>
+    (await load())(args, io);
+
+/** `smoke` (C-04; never loads Vitest's Node API for other commands), with the cloud process check (D-05) in front. */
+const smokeBinding: Command = lazy(async () => {
+  const [{ smokeBinding: smoke }, { withCloudProcessCheck }] = await Promise.all([import("./commands/smoke.js"), import("./commands/smoke-cloud.js")]);
+  return withCloudProcessCheck(await smoke());
+});
+
+/** The cloud commands (D-05). */
+const deployBinding: Command = lazy(async () => (await import("./commands/deploy.js")).deployBinding());
+const removeBinding: Command = lazy(async () => (await import("./commands/remove.js")).removeBinding());
+const setupAccountBinding: Command = lazy(async () => (await import("./commands/setup-account.js")).setupAccountBinding());
+const certifyAuthBinding: Command = lazy(async () => (await import("./commands/certify-auth.js")).certifyAuthBinding());
+
+const COMMANDS: Readonly<Record<string, Entry>> = {
+  dev: { summary: "run the app locally on http://localhost:<port>", run: devBinding },
+  verify: { summary: "the pre-completion verification (offline)", run: verifyBinding },
+  "generate-migration": { summary: "generate-migration [--name <slug>]: the next migration pair from the table definitions", run: generateMigrationBinding },
+  build: { summary: "build --target <t> --stage <s>: build a deployment without deploying it", run: buildBinding },
+  deploy: { summary: "deploy --target <t> --stage <s>: deploy a stage", run: deployBinding },
+  smoke: { summary: "smoke --target <t> --stage <s>: run the app's smoke tests against a stage", run: smokeBinding },
+  remove: { summary: "remove --target <t> --stage <s> [--confirm-production <s>]: remove a stage", run: removeBinding },
+  secrets: { summary: "secrets set <name> --target <t> --stage <s>: set a secret from standard input", run: secretsBinding },
+  "setup-account": { summary: "setup-account --target <t>: one-time account setup", run: setupAccountBinding },
+  "certify-auth": { summary: "certify-auth --target <t> --stage <s>: guided login-provider certification", run: certifyAuthBinding },
+  "reset-local": { summary: "clear local state (local D1, R2 and .logs/)", run: resetLocalBinding },
+};
+
+export const COMMAND_NAMES: readonly string[] = Object.keys(COMMANDS);
+
+function usage(): string {
+  const width = Math.max(...COMMAND_NAMES.map((n) => n.length));
+  return ["usage: prototype-framework <command> [options]", "", "commands:", ...COMMAND_NAMES.map((n) => `  ${n.padEnd(width)}  ${COMMANDS[n]?.summary ?? ""}`)].join("\n") + "\n";
+}
+
+export type CommandTable = Readonly<Record<string, Entry>>;
+
+export { describeFailure };
+
+export async function runCommand(argv: readonly string[], io: CliIo, table: CommandTable = COMMANDS): Promise<number> {
+  const [name, ...args] = argv;
+  if (name === undefined) {
+    io.stderr(usage());
+    return EXIT.usage;
+  }
+  const entry = Object.hasOwn(table, name) ? table[name] : undefined;
+  if (entry === undefined) {
+    io.stderr(`unknown command ${JSON.stringify(name)}\n${usage()}`);
+    return EXIT.usage;
+  }
+  try {
+    return await entry.run(args, io);
+  } catch (error) {
+    if (error instanceof UsageError) {
+      io.stderr(`${name}: ${error.message}\n`);
+      return EXIT.usage;
+    }
+    io.stderr(`${name} failed: ${describeFailure(error)}\n`);
+    return EXIT.failed;
+  }
+}
