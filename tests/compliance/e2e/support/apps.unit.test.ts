@@ -5,8 +5,8 @@
  * No cloud call.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { D1_AVAILABLE_ENV, D1_STOP_DETAIL } from "../../criteria/_cloud/d1.js";
-import { installCloudFakes, lockHeld, pause, type CloudFakes } from "../../criteria/_fakes/cloud-fakes.js";
+import { D1_AVAILABLE_ENV, D1_STOP_DETAIL, MAX_D1_DATABASES } from "../../criteria/_cloud/d1.js";
+import { installCloudFakes, lockHeld, otherStageDatabases, pause, type CloudFakes } from "../../criteria/_fakes/cloud-fakes.js";
 import { setSecretThenDeploy, withE2EStages } from "./apps.js";
 import { REFERENCE_DIR } from "./process.js";
 
@@ -35,10 +35,10 @@ describe("withE2EStages (E2E-010, E2E-012)", () => {
     expect(body).not.toHaveBeenCalled();
   });
 
-  it("R2c: rejects with the DEC-0318 cap when a test-stage database exists, without running the body, and releases the lock", async () => {
-    fakes.extraDatabases.push("reference-test-a-db-1");
+  it("R2c: rejects with the DEC-0419 cap when two more databases would exceed it, without running the body, and releases the lock", async () => {
+    fakes.extraDatabases.push(...otherStageDatabases(MAX_D1_DATABASES - 1));
     const body = vi.fn(() => Promise.resolve());
-    await expect(Promise.resolve().then(() => withE2EStages(2, "E2E-012 (two stages)", body))).rejects.toThrow(/DEC-0318/);
+    await expect(Promise.resolve().then(() => withE2EStages(2, "E2E-012 (two stages)", body))).rejects.toThrow(/DEC-0419/);
     expect(body).not.toHaveBeenCalled();
     expect(lockHeld(fakes)).toBe(false);
   });

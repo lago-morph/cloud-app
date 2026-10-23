@@ -149,4 +149,7 @@ export function lockHeld(fakes: CloudFakes): boolean {
   return existsSync(fakes.lockPath);
 }
 
+/** `n` distinct test-stage database names of other stages, for filling the account up to or past the cap. */
+export const otherStageDatabases = (n: number): string[] => Array.from({ length: n }, (_, i) => `reference-test-other${String(i)}-db-1`);
+
 export const pause = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
