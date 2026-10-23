@@ -64,15 +64,38 @@ describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
     );
   });
 
-  it("creates an absent bucket in this account; a creation conflict means another account holds the name", async () => {
+  it("creates an absent bucket in this account with one request", async () => {
     const api = stubApi({ [`POST /accounts/${ACCOUNT}/r2/buckets`]: ok({ name: LOG_BUCKET }) });
     await createSharedResources(api, ACCOUNT, [{ name: LOG_BUCKET_RESOURCE, state: "absent" }]);
     expect(api.requests).toEqual([`POST /accounts/${ACCOUNT}/r2/buckets {"name":"prototype-logs"}`]);
+  });
 
-    const conflict = stubApi({ [`POST /accounts/${ACCOUNT}/r2/buckets`]: err(409, 10004, "The bucket you tried to create already exists.") });
-    await expect(createSharedResources(conflict, ACCOUNT, [{ name: LOG_BUCKET_RESOURCE, state: "absent" }])).rejects.toThrow(
+  /** Cloudflare's live answer to creating a bucket this account already has (pass 0 check 3). */
+  const CONFLICT = err(409, 10004, "The bucket you tried to create already exists, and you own it.");
+  const CREATE_PATH = `POST /accounts/${ACCOUNT}/r2/buckets`;
+
+  it("a creation conflict on a bucket this account owns is not an error: the bucket exists in this account", async () => {
+    const api = stubApi({ [CREATE_PATH]: CONFLICT, [`GET ${BUCKET_PATH}`]: ok({ name: LOG_BUCKET }) });
+    await expect(createSharedResources(api, ACCOUNT, [{ name: LOG_BUCKET_RESOURCE, state: "absent" }])).resolves.toBeUndefined();
+    expect(api.requests).toEqual([`POST /accounts/${ACCOUNT}/r2/buckets {"name":"prototype-logs"}`, `GET ${BUCKET_PATH}`]);
+  });
+
+  it("a creation conflict that this account cannot read back stops, naming the bucket as foreign", async () => {
+    const api = stubApi({ [CREATE_PATH]: CONFLICT, [`GET ${BUCKET_PATH}`]: err(403, 10002, "Unauthorized to access requested resource") });
+    await expect(createSharedResources(api, ACCOUNT, [{ name: LOG_BUCKET_RESOURCE, state: "absent" }])).rejects.toThrow(
       /R2 bucket prototype-logs.*another account/,
     );
+  });
+
+  it("a creation conflict whose read-back finds no bucket is an error naming the bucket and HTTP 409, not a foreign bucket", async () => {
+    const api = stubApi({ [CREATE_PATH]: CONFLICT, [`GET ${BUCKET_PATH}`]: err(404, 10006, "The specified bucket does not exist.") });
+    const failure: unknown = await createSharedResources(api, ACCOUNT, [{ name: LOG_BUCKET_RESOURCE, state: "absent" }]).then(
+      () => undefined,
+      (e: unknown) => e,
+    );
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toMatch(/R2 bucket prototype-logs.*HTTP 409/);
+    expect((failure as Error).message).not.toMatch(/another account/);
   });
 
   /** A target whose account inspection is the Cloudflare check over the stubbed API. */
