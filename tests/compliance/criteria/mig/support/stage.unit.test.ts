@@ -4,8 +4,8 @@
  * red tests R1a, R1b, R1d, R4a and the Review's lock-release cases). No cloud call.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { D1_AVAILABLE_ENV, D1_STOP_DETAIL } from "../../_cloud/d1.js";
-import { FAKE_TABLES, installCloudFakes, lockHeld, pause, type CloudFakes } from "../../_fakes/cloud-fakes.js";
+import { D1_AVAILABLE_ENV, D1_STOP_DETAIL, MAX_D1_DATABASES } from "../../_cloud/d1.js";
+import { FAKE_TABLES, installCloudFakes, lockHeld, otherStageDatabases, pause, type CloudFakes } from "../../_fakes/cloud-fakes.js";
 import { acquireLock } from "../../core/support/processes.js";
 import { createStage, snapshot } from "./stage.js";
 
@@ -93,11 +93,11 @@ describe("MIG cloud stage: guards (R1d) and the lock on every failure path", () 
     expect(lockHeld(fakes)).toBe(false);
   });
 
-  it("R1d: with one test-stage database already present, createStage rejects with the DEC-0318 cap, runs no CLI command and releases the lock", async () => {
-    fakes.extraDatabases.push("reference-test-x-db-1");
+  it("R1d: when its two databases would exceed the cap, createStage rejects with the DEC-0419 cap, runs no CLI command and releases the lock", async () => {
+    fakes.extraDatabases.push(...otherStageDatabases(MAX_D1_DATABASES - 1));
     let heldAtList: boolean | undefined;
     fakes.onList = () => (heldAtList = lockHeld(fakes));
-    await expect(Promise.resolve().then(() => createStage({ secrets: { apiKey: SECRET } }))).rejects.toThrow(/DEC-0318/);
+    await expect(Promise.resolve().then(() => createStage({ secrets: { apiKey: SECRET } }))).rejects.toThrow(/DEC-0419/);
     expect(fakes.calls()).toEqual([]);
     expect(heldAtList, "the cap is checked under the lock").toBe(true);
     expect(lockHeld(fakes), "the lock is released after the rejection").toBe(false);

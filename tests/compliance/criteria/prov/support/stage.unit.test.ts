@@ -5,8 +5,8 @@
  * Review's lock-release cases). No cloud call.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { D1_AVAILABLE_ENV, D1_STOP_DETAIL } from "../../_cloud/d1.js";
-import { installCloudFakes, lockHeld, type CloudFakes } from "../../_fakes/cloud-fakes.js";
+import { D1_AVAILABLE_ENV, D1_STOP_DETAIL, MAX_D1_DATABASES } from "../../_cloud/d1.js";
+import { installCloudFakes, lockHeld, otherStageDatabases, type CloudFakes } from "../../_fakes/cloud-fakes.js";
 import { REFERENCE_DIR } from "../../core/support/repo.js";
 import { holdStages, runCli, takeStageRoom, withCloudStage, type CloudStage } from "./stage.js";
 
@@ -35,11 +35,23 @@ describe("takeStageRoom", () => {
     expect(lockHeld(fakes)).toBe(false);
   });
 
+  it("the cap is 8 databases at once (DEC-0419)", () => {
+    expect(MAX_D1_DATABASES).toBe(8);
+  });
+
+  it("admits databases up to the cap", async () => {
+    fakes.extraDatabases.push(...otherStageDatabases(MAX_D1_DATABASES - 2));
+    const release = await takeStageRoom(2, "a test stage");
+    expect(lockHeld(fakes)).toBe(true);
+    await release();
+    expect(lockHeld(fakes)).toBe(false);
+  });
+
   it("checks the cap under the lock and releases the lock when the check rejects", async () => {
-    fakes.extraDatabases.push("reference-test-a-db-1", "reference-test-b-db-1");
+    fakes.extraDatabases.push(...otherStageDatabases(MAX_D1_DATABASES));
     let heldAtList: boolean | undefined;
     fakes.onList = () => (heldAtList = lockHeld(fakes));
-    await expect(Promise.resolve().then(() => takeStageRoom(1, "a test stage"))).rejects.toThrow(/DEC-0318/);
+    await expect(Promise.resolve().then(() => takeStageRoom(1, "a test stage"))).rejects.toThrow(/DEC-0419/);
     expect(heldAtList).toBe(true);
     expect(lockHeld(fakes)).toBe(false);
   });

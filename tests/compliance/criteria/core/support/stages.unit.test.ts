@@ -4,8 +4,8 @@
  * and the Review's lock-release case for `scratchCopy`). No cloud call.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { D1_AVAILABLE_ENV, D1_STOP_DETAIL } from "../../_cloud/d1.js";
-import { installCloudFakes, lockHeld, type CloudFakes } from "../../_fakes/cloud-fakes.js";
+import { D1_AVAILABLE_ENV, D1_STOP_DETAIL, MAX_D1_DATABASES } from "../../_cloud/d1.js";
+import { installCloudFakes, lockHeld, otherStageDatabases, type CloudFakes } from "../../_fakes/cloud-fakes.js";
 import { REFERENCE_DIR } from "./repo.js";
 import { withFurtherStage } from "./stages.js";
 
@@ -53,10 +53,10 @@ describe("withFurtherStage guards", () => {
     expect(body).not.toHaveBeenCalled();
   });
 
-  it("R2b: with two test-stage databases present it rejects with the DEC-0318 cap before any CLI call, and releases the lock", async () => {
-    fakes.extraDatabases.push("reference-test-a-db-1", "reference-test-b-db-1");
+  it("R2b: with the cap's worth of test-stage databases present it rejects with the DEC-0419 cap before any CLI call, and releases the lock", async () => {
+    fakes.extraDatabases.push(...otherStageDatabases(MAX_D1_DATABASES));
     const body = vi.fn(() => Promise.resolve());
-    await expect(withFurtherStage(REFERENCE_DIR, "r2b", SECRETS, body)).rejects.toThrow(/DEC-0318/);
+    await expect(withFurtherStage(REFERENCE_DIR, "r2b", SECRETS, body)).rejects.toThrow(/DEC-0419/);
     expect(fakes.calls()).toEqual([]);
     expect(body).not.toHaveBeenCalled();
     expect(lockHeld(fakes)).toBe(false);
