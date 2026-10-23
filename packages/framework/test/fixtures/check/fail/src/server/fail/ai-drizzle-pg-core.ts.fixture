@@ -1,0 +1,3 @@
+import { pgTable, text } from "drizzle-orm/pg-core";
+
+export const rawTable = pgTable("raw_things", { id: text("id").primaryKey() });

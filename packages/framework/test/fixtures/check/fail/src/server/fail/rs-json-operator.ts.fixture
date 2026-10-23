@@ -1,0 +1,5 @@
+import { sql } from "drizzle-orm";
+import type { PortableDb } from "@lago-morph/prototype-framework";
+import { posts } from "./tables";
+
+export const query = (db: PortableDb) => db.select({ value: sql<string>`json_extract(${posts.body}, '$.a')` }).from(posts);

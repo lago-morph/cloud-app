@@ -1,0 +1,5 @@
+import { sql as q } from "drizzle-orm";
+import type { PortableDb } from "@lago-morph/prototype-framework";
+import { posts } from "./tables";
+
+export const popular = (db: PortableDb) => db.select().from(posts).where(q`${posts.votes} > 3`);

@@ -1,0 +1,2 @@
+// Re-exported framework ordering helpers: a realistic alias that must still pass `framework-order`.
+export { asc as oldestFirst, desc as newestFirst } from "@lago-morph/prototype-framework";

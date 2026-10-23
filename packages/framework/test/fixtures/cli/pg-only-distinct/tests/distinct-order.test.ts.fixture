@@ -1,0 +1,22 @@
+import { expect, it } from "vitest";
+import { createTestApp } from "@lago-morph/prototype-framework/testing";
+import app from "../src/app";
+
+const post = (title: string): RequestInit => ({
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ title }),
+});
+
+it("distinct titles ordered by creation time", async () => {
+  const t = await createTestApp(app);
+  try {
+    expect((await t.request("/api/items", post("same"))).status).toBe(201);
+    expect((await t.request("/api/items", post("other"))).status).toBe(201);
+    const res = await t.request("/api/titles");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toHaveLength(2);
+  } finally {
+    await t.dispose();
+  }
+});

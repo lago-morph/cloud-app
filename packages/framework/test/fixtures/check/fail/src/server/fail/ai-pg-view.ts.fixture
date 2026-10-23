@@ -1,0 +1,3 @@
+import { pgView, text } from "drizzle-orm/pg-core";
+
+export const titles = pgView("post_titles", { title: text("title") }).existing();

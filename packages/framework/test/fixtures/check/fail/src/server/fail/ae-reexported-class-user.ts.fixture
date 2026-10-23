@@ -1,0 +1,5 @@
+import { AppError } from "./ae-errors";
+
+export function reject(): never {
+  throw new AppError("FILES.NOT_FOUND");
+}

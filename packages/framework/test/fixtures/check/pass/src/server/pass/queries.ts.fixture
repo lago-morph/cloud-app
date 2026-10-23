@@ -1,0 +1,131 @@
+// Every supported query feature of sql.md §2.3, used the way an app would (passing fixtures for
+// no-raw-sql, no-dialect-features, framework-order, no-transactions, no-relational-queries and
+// framework-ids; SQL-AC-002).
+import {
+  and,
+  asc,
+  atomic,
+  avg,
+  between,
+  containsText,
+  count,
+  countDistinct,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  max,
+  min,
+  ne,
+  newId as freshId,
+  not,
+  notInArray,
+  now,
+  or,
+  sum,
+  type PortableDb,
+} from "@lago-morph/prototype-framework";
+import { metrics, noteTags, tags } from "./schema-extra";
+import { notebooks, notes } from "./sql-example";
+import { newestFirst, oldestFirst } from "./order";
+
+export async function seed(db: PortableDb): Promise<{ notebookId: string; noteIds: string[] }> {
+  const notebookId = freshId();
+  const first = freshId();
+  const second = freshId();
+  const tagId = freshId();
+  await atomic(db, [
+    (w) => w.insert(notebooks).values({ id: notebookId, name: `book-${notebookId}` }),
+    (w) => w.insert(notes).values({ id: first, notebookId, title: "Alpha", body: null, createdAt: 1_000 }),
+    (w) => w.insert(notes).values({ id: second, notebookId, title: "beta", body: "text", views: 3, createdAt: 2_000 }),
+    (w) => w.insert(tags).values({ id: tagId, name: `tag-${tagId}` }),
+    (w) => w.insert(noteTags).values({ id: freshId(), noteId: first, tagId }),
+    (w) => w.insert(metrics).values({ id: freshId(), label: "a", hits: 2, ratio: 0.5, seenAt: now(), active: true }),
+    (w) => w.insert(metrics).values({ id: freshId(), label: "b", hits: 4, ratio: 1.5, seenAt: now(), active: false, comment: "x" }),
+  ]);
+  return { notebookId, noteIds: [first, second] };
+}
+
+export async function report(db: PortableDb, notebookId: string, noteIds: readonly string[]) {
+  const inner = await db
+    .select({ title: notes.title, notebook: notebooks.name })
+    .from(notes)
+    .innerJoin(notebooks, eq(notes.notebookId, notebooks.id))
+    .where(eq(notebooks.id, notebookId))
+    .orderBy(asc(notes.title), asc(notes.id));
+
+  const left = await db
+    .select({ title: notes.title, tagId: noteTags.tagId })
+    .from(notes)
+    .leftJoin(noteTags, eq(noteTags.noteId, notes.id))
+    .where(inArray(notes.id, [...noteIds]))
+    .orderBy(newestFirst(notes.createdAt), desc(notes.id));
+
+  const distinctTitles = await db
+    .selectDistinct({ title: notes.title })
+    .from(notes)
+    .where(eq(notes.notebookId, notebookId))
+    .orderBy(oldestFirst(notes.title));
+
+  const busy = db.select({ id: notes.id }).from(notes).where(gt(notes.views, 0)).as("busy");
+  const fromSubquery = await db.select({ id: busy.id }).from(busy);
+
+  const recentNotes = db.$with("recent_notes").as(
+    db.select({ id: notes.id, title: notes.title }).from(notes).where(gte(notes.createdAt, 1_500)),
+  );
+  const fromCte = await db.with(recentNotes).select().from(recentNotes);
+
+  const filtered = await db
+    .select({ id: notes.id })
+    .from(notes)
+    .where(
+      and(
+        ne(notes.title, "zzz"),
+        or(lt(notes.views, 10), lte(notes.createdAt, 0)),
+        not(eq(notes.title, "")),
+        or(isNull(notes.body), isNotNull(notes.body)),
+        notInArray(notes.title, ["none-such-title"]),
+        between(notes.createdAt, 0, 10_000),
+        containsText(notes.title, "a"),
+      ),
+    )
+    .orderBy(asc(notes.id))
+    .limit(10)
+    .offset(0);
+
+  const totals = await db
+    .select({
+      rows: count(),
+      labels: countDistinct(metrics.label),
+      firstLabel: min(metrics.label),
+      lastLabel: max(metrics.label),
+      minHits: min(metrics.hits),
+      maxRatio: max(metrics.ratio),
+      firstSeen: min(metrics.seenAt),
+      hits: sum(metrics.hits),
+      meanRatio: avg(metrics.ratio),
+    })
+    .from(metrics);
+
+  const perNotebook = await db
+    .select({ notebookId: notes.notebookId, n: count(), views: sum(notes.views) })
+    .from(notes)
+    .groupBy(notes.notebookId)
+    .orderBy(asc(notes.notebookId));
+
+  return { inner, left, distinctTitles, fromSubquery, fromCte, filtered, totals, perNotebook };
+}
+
+/** Upsert against a declared unique constraint, update with `returning`, and delete. */
+export async function upsertTag(db: PortableDb, name: string): Promise<boolean> {
+  await db.insert(tags).values({ id: freshId(), name }).onConflictDoNothing({ target: tags.name });
+  await db.insert(tags).values({ id: freshId(), name }).onConflictDoUpdate({ target: tags.name, set: { name } });
+  const changed = await db.update(tags).set({ name }).where(eq(tags.name, name)).returning({ id: tags.id });
+  await db.delete(noteTags).where(inArray(noteTags.tagId, changed.map((row) => row.id)));
+  return changed.length === 1;
+}

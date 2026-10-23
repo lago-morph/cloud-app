@@ -1,0 +1,5 @@
+import { max } from "@lago-morph/prototype-framework";
+import type { PortableDb } from "@lago-morph/prototype-framework";
+import { authors, posts } from "./tables";
+
+export const query = (db: PortableDb) => db.select({ m: max(posts.done) }).from(posts);

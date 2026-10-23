@@ -1,0 +1,7 @@
+import { max, type PortableDb } from "@lago-morph/prototype-framework";
+import { posts } from "./tables";
+
+export const query = (db: PortableDb) => {
+  const flags = db.$with("flags").as(db.select({ m: max(posts.done) }).from(posts));
+  return db.with(flags).select().from(flags);
+};
