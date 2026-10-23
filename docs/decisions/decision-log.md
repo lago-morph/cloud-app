@@ -3571,3 +3571,11 @@ Evidence:
   - The new `plan.unit.test.ts` tests failed: the args held the picked ports, and `devServerReadyPort` and `readyLinePort` did not exist.
 - Green, after the change: both pass, with the CLI unit suite and the local `dev` integration suite. See the record's red-green table.
 Item: fix-mig002.
+
+## Implementation phase: local and Cloudflare — Cloudflare API request budget (2026-10-23)
+
+### DEC-0418 — Cloudflare API request budget follows Cloudflare's own rate limit
+Origin: owner · Status: accepted · Affects: plan §1 "Cloud usage limits", plan §5 D-RUN pass schedule
+
+The owner asked (2026-10-23) to raise the API request budget to one appropriate to Cloudflare's actual limits. Cloudflare's global API rate limit is 1,200 requests per 5 minutes per user, counted across the dashboard, API keys and API tokens; exceeding it blocks all API calls for 5 minutes with HTTP 429. There is no daily cap. GraphQL analytics have a separate 300 queries per 5 minutes (developers.cloudflare.com/fundamentals/api/reference/limits/, /analytics/graphql-api/limits/). The per-pass cap of 500 requests (plan §1, set after the phase A D1 incident) is replaced by: ≤ 2,000 Cloudflare API requests per pass, never more than 1,000 in any 5-minute window (headroom for the owner's own dashboard use), and stop on the first HTTP 429. API requests are not billed; the D1 caps (≤ 1,000 rows written and ≤ 10,000 read per pass, ≤ 10,000 written per UTC day, ≤ 2 databases at once) are unchanged. Passes that the pass schedule split only to stay under 500 requests may be merged again.
+
