@@ -11,11 +11,14 @@
  *
  * Bucket ownership (DEC-0270): R2 bucket names are scoped to an account, so a bucket is
  * read through this account's API path. Found → owned; Cloudflare's "not found" (HTTP 404)
- * → absent; refused (HTTP 403), or a creation that conflicts with an existing bucket
- * (HTTP 409) → it exists but this account does not own it (or its credentials cannot see it).
- * Every other answer is an error naming the bucket and the status; nothing is guessed.
- * These readings are not yet verified against the live API: D-RUN verifies them
- * (DEC-0334; the exact requests are listed there).
+ * → absent; refused (HTTP 403) → it exists but this account does not own it (or its
+ * credentials cannot see it). Every other answer is an error naming the bucket and the
+ * status; nothing is guessed. A creation that conflicts with an existing bucket (HTTP 409,
+ * code 10004) is read back with the same GET (DEC-PENDING-fix-pass0-1): owned → the bucket
+ * exists in this account, no error; refused → foreign; not found → an error naming the
+ * bucket and the 409. Pass 0 check 3 confirmed the 200, 404 and 409 answers live: the 409
+ * says "already exists, and you own it". The 403 reading stays unverified (one account
+ * cannot produce it, DEC-0334).
  */
 import type { SharedResource } from "../core/operations.js";
 import { describeFailure, resultOf, succeeded, type CloudflareApi } from "./api.js";
@@ -43,7 +46,14 @@ async function createBucket(api: CloudflareApi, accountId: string, bucket: strin
   const name = `R2 bucket ${bucket}`;
   const r = await api("POST", `/accounts/${accountId}/r2/buckets`, { name: bucket });
   if (succeeded(r)) return;
-  if (r.status === 409) throw new Error(`${name} already exists but belongs to another account; nothing was created`);
+  if (r.status === 409) {
+    const now = await inspectBucket(api, accountId, bucket);
+    if (now.state === "owned") return; // exists in this account: the end state PROV-REQ-004 requires
+    if (now.state === "foreign") {
+      throw new Error(`${name} already exists but belongs to another account (or this account's credentials cannot read it); nothing was created`);
+    }
+    throw new Error(`creating ${name} failed: ${describeFailure(r)}; reading it back found it absent`);
+  }
   throw new Error(`creating ${name} failed: ${describeFailure(r)}`);
 }
 
