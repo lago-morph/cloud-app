@@ -1,0 +1,7 @@
+{
+  "values": {},
+  "framework": {
+    "admins": [],
+    "google": { "clientId": "REPLACE-WITH-THE-GOOGLE-CLIENT-ID" }
+  }
+}

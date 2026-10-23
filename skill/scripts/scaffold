@@ -1,0 +1,45 @@
+#!/usr/bin/env node
+// Usage: skill/scripts/scaffold <new-app-dir> [--force]
+// Copies apps/template into <new-app-dir>, installs the framework there from an `npm pack`
+// tarball at the template's exact version, and runs `npm install`. Stops without changing
+// anything when <new-app-dir> already has files, unless --force (overwrite) is given.
+const { execFileSync } = await import("node:child_process");
+const { mkdtempSync } = await import("node:fs");
+const { tmpdir } = await import("node:os");
+const { dirname, join, resolve } = await import("node:path");
+const { fileURLToPath } = await import("node:url");
+const { scaffold } = await import("./scaffold.mjs");
+
+const args = process.argv.slice(2);
+const force = args.includes("--force");
+const positional = args.filter((a) => !a.startsWith("--"));
+if (positional.length !== 1 || args.length !== positional.length + (force ? 1 : 0)) {
+  console.error("usage: scaffold <new-app-dir> [--force]");
+  process.exit(2);
+}
+
+const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const packDir = mkdtempSync(join(tmpdir(), "framework-pack-"));
+// `prepack` builds the framework, so the tarball contains dist/ (DEC-0049).
+const [packed] = JSON.parse(
+  execFileSync("npm", ["pack", "--json", "--pack-destination", packDir], {
+    cwd: join(repo, "packages", "framework"),
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
+  }),
+);
+
+try {
+  await scaffold({
+    target: resolve(positional[0]),
+    templateDir: join(repo, "apps", "template"),
+    tarball: join(packDir, packed.filename),
+    version: packed.version,
+    force,
+    install: (dir) => execFileSync("npm", ["install", "--no-audit", "--no-fund"], { cwd: dir, stdio: "inherit" }),
+  });
+} catch (err) {
+  console.error(`scaffold: ${err instanceof Error ? err.message : String(err)}`);
+  process.exit(1);
+}
+console.log(`Scaffolded ${resolve(positional[0])}. Next: cd there, then npx prototype-framework dev / verify.`);
