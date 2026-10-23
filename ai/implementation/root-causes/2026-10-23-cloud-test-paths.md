@@ -186,3 +186,55 @@ F + n·S after the fix, then [the largest S that fits 400 / 500]:
 - `withCloudStage.deployReady`, `withFurtherStage` and `deployStage` detect the secret stop by `output.includes(<secret name>)`, which is looser than DEC-0398's `secretsNotSet`. That does not cause any symptom here.
 
 ## Review
+
+Reviewer: independent root-cause reviewer (prompt §8). I did not write the diagnosis, the code or the tests. Base `d918ccd`. No Cloudflare call was made. One local unit run: `vitest run --config vitest.unit.config.ts` on `provision/cloudflare/worker.unit.test.ts`, `cli/commands/secrets-cloud.unit.test.ts` and `provision/core/deploy.unit.test.ts`, 31/31 passed. That confirms E1 and E2 (`worker.ts:27` refuses `secrets set` before the Worker exists). I did not repeat E3. I checked the mechanism against `deploys.test.ts:66-224` instead.
+
+### Verdict
+**Accepted with the required changes below.** All four causes are confirmed against the code, and the file:line citations hold:
+- `mig/deploys.test.ts:72,164`, `mig/support/stage.ts:344-360,362-368,382-387`;
+- `prov/support/stage.ts:186-278`, `core/support/stages.ts:39-86`;
+- `e2e/support/apps.ts:62-82`, `E2E-010/012/014.spec.ts`; `playwright.config.ts` sets no `workers`;
+- `prov/clean-machine.test.ts:61,66`, `prov/test-stages.test.ts:132-133,155`;
+- `tools/release.ts:86-98` (DEC-0264).
+
+No proposed fix changes an assertion. Checked against MIG-AC-002/-003/-006 (migrations.md:101-103), COMPL-AC-004/-008 (compliance.md:80,84), PROV-AC-006 (provisioning.md:116) and E2E-010/-012/-014:
+- In item 1, the secret retry happens only on the first deploy and only on `secretsNotSet`. The schema is still created by the initial deploy, and the no-change redeploy stays a separate, probed deploy.
+- The A/B/C split keeps each criterion's clauses inside the blocks that carry its ID.
+- Item 3 drops only a cleanup.
+
+Three points need corrections before the fix item starts. Two are in red tests and one is in a fix.
+
+### Required changes
+1. **Item 3, PROV-AC-006: call `removedElsewhere` after `:66`, not after `:62`.** At `:62`, a machine-3 `remove` that exits 0 but leaves resources would also cancel `withCloudStage`'s cleanup, so the stage would be left over. Mark the stage removed only once `listStageResources` is empty, as the record already does for COMPL-AC-004 (`remaining` empty). Add **R3c**: exit 0 with a non-empty resource list still gives one `finally` `remove`.
+2. **The guards must release the lock on every failure path.** Add red tests for each case below; none exists yet.
+   - `takeStageRoom` takes the lock first. When `requireDatabaseRoom` throws, or anything else does, it must release the lock before rethrowing. `withCloudStage` already does this inside its `try`; a new helper must too.
+   - The MIG `createStage` must release the lock if anything after the lock throws, such as the copy or the account check.
+   - The MIG `remove()` must release the lock in `finally`, even when `remove` exits non-zero.
+   - In `withFurtherStage`, `scratchCopy` (`stages.ts:49`) runs outside the `try`. A throw there leaks the lock today, and Vitest may reuse the live fork, so `acquireLock` would not reclaim the lock as stale. Move the copy, and the new room check, inside the `try`.
+   - The helper exposes no skip flag to MIG or E2E. The `held` flag is for `holdStages` callers only.
+   - For E2E-010 and E2E-012, `holdStages` wraps the whole body, including the `finally` removals.
+3. **The red-test isolation and accuracy fixes:**
+   - **R1d and R2c (lock):** set `TMPDIR` to a scratch directory in the test, so the test's `further-stage` lock never collides with a real run on the same machine. `os.tmpdir()` reads `TMPDIR` on each call. Today R1d must hold the lock *and* call `deploy`, because `createStage()` makes no CLI call. Assert that the log is still empty after a bounded wait.
+   - **R1c (selection):** the in-memory `StageUnderTest` fake would also need to fake `stage.user()`'s HTTP client for fixture load/dump, `cases/run`, KV, `me`, `secret` and `schema-version`, which amounts to a second reference app. The local target reproduces the same defect for real and runs no cloud: block 1's MIG-AC-003 `it`s call `stage.user()` before any `dev` start (`localStage.current()`, `stage.ts:234-236`), and MIG-AC-006 hits `deployed === false`. So the simpler and stronger R1c is: run `deploys.test.ts` with `-t '\[MIG-AC-00x\]'` per ID on `--target local`, and assert 0 failed and ≥ 1 passed. It fails today for -003 and -006.
+   - **R4a:** `snapshot()` must first list the tables, so it makes ≤ 2 `…/query` calls, not exactly 1. Assert the no-list caching separately, so the red test does not depend on the multi-statement form, which is still unconfirmed (DEC-0348).
+   - **Query caching:** refresh the cached current database after *every* deploy attempt, failed ones included, and never from inside the `during` callback.
+4. **Item 4: correct the single-pass condition, and name the simpler option.**
+   - **Correction.** "A measured S ≤ 30 for MIG-AC-003 block B alone" is wrong. Block B does not contain the preservation clause, so under DEC-0264 its record is not evidence for MIG-AC-003 as a whole. One record can carry the whole ID in two ways:
+     - blocks B and C in one pass, at 270 + 15S ≤ 500, so S ≤ 15;
+     - the combined-overlay single stage, at 191 + 10S ≤ 500, so S ≤ 30.
+   - **The DEC-0264 reading is sound.** `release.ts:89` and `:98` take the newest record containing the ID. With split passes, a passing later part masks a failing earlier part, for MIG-AC-003 and for COMPL-AC-008's abort points alike. COMPL-AC-008 is milestone-only, and invalidations cannot fix this: they only invalidate older records.
+   - **The simpler path.** Two decisions are possible:
+     - (a) an owner exception to §1's 500-request cap (applied per pass, DEC-0361) for these two single-stage passes, with the rows and two-database caps unchanged. That keeps one record per ID, and needs no evaluator or record-format change.
+     - (b) a DEC-0264 amendment. `release.ts` would then need a notion of parts, for example the latest result per test title, which changes the rule for every ID; for example, a stale pass of a renamed test would persist.
+
+     Recommend drafting (a) first, after S is measured in pass 1, and (b) only if the owner refuses (a). MIG-AC-002 and MIG-AC-006 alone are unaffected: the selection by block keeps their records whole.
+
+### Guards: bypass check
+The guards hold once the changes above are in:
+- **MIG:** the D1 stop runs before the lock, and the cap check runs under the lock. MIG passes have no run stage, so 0 + 2 ≤ 2.
+- **`withFurtherStage`:** room is checked for 1 database (R + 1 ≤ 2).
+- **E2E:** E2E-010 and E2E-012 use `holdStages(2)`. The lock works across Playwright workers through the same tmpdir directory and the per-process pid. E2E-014 calls only `requireCloudD1`, which is enough because it creates no database.
+
+Remaining limits, by design and not defects:
+- The lock is per machine.
+- `requireDatabaseRoom` checks the account, then the test acts, so the check is not atomic. Both rely on the operator running one pass at a time (plan §5 "Every pass").
