@@ -16,8 +16,10 @@
  * `SECRET_*` variable or binding name is refused, and `keepBindings` keeps the Worker's
  * secrets explicitly. All inputs are embedded as JSON, never as code.
  *
- * Step 3 (long-lived infrastructure) runs `sst deploy --target Files`; step 5 runs a full
- * `sst deploy`. Not yet run against the live API (D1 stop, DEC-0317): D-RUN's first deploy
+ * Step 3 (long-lived infrastructure) runs `sst deploy --target Files` when the stage has a
+ * database, and an untargeted `sst deploy` of the bucket-only program otherwise (SST 4.17.2
+ * resolves `--target` only in the stage's state; root cause 2026-10-23-pass1). Step 5 runs a
+ * full `sst deploy`. Not yet run against the live API (D1 stop, DEC-0317): D-RUN's first deploy
  * verifies the generated program (DEC-0336 lists what to check).
  */
 import { spawn } from "node:child_process";

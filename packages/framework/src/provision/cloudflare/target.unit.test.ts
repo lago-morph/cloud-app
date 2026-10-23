@@ -92,7 +92,10 @@ describe("deploy on Cloudflare (PROV-REQ-002 steps 3, 5, 6, 7)", () => {
     const result = await runDeploy(target, request(), io);
     expect(io.err).toBe("");
     expect(result).toEqual({ status: 0, publicOrigin: "https://notes-test-abc.example.workers.dev" });
-    expect(cloud.sstRuns).toEqual(["install --stage test-abc", "deploy --stage test-abc --target Files", "deploy --stage test-abc"]);
+    // Step 3 of a first deploy is untargeted on a bucket-only program: SST 4.17.2 resolves
+    // `--target` in the stage's previous state only (root cause 2026-10-23-pass1, R1).
+    expect(cloud.sstRuns).toEqual(["install --stage test-abc", "deploy --stage test-abc", "deploy --stage test-abc"]);
+    expect(cloud.programs[0]).not.toMatch(/"worker":/);
     expect(cloud.cors.get("notes-test-abc-files")).toEqual({
       rules: [{ allowed: { origins: ["https://notes-test-abc.example.workers.dev"], methods: ["PUT", "GET"], headers: ["Content-Type"] }, maxAgeSeconds: 60 }],
     });
@@ -154,7 +157,55 @@ describe("deploy on Cloudflare (PROV-REQ-002 steps 3, 5, 6, 7)", () => {
     const io = captureIo();
     const result = await runDeploy(target, request(), io);
     expect(result.failure?.step).toBe("infrastructure");
-    expect(io.err).toMatch(/sst deploy --stage test-abc --target Files failed \(exit 1\)/);
+    expect(io.err).toMatch(/sst deploy --stage test-abc failed \(exit 1\)/);
+  });
+
+  it("a second deploy targets step 3 at Files; the Worker and its secrets are unchanged by step 3", async () => {
+    const { cloud, target } = setup();
+    expect((await runDeploy(target, request(), captureIo())).status).toBe(0);
+    await target.setSecret(stage, "apiKey", "v-1");
+    const before = cloud.workers.get("notes-test-abc")!;
+    const secrets = new Map(before.secrets);
+    cloud.sstRuns.length = 0;
+    await target.deployInfrastructure({ stage, database: { id: "uuid-1", name: "notes-test-abc-db-1", number: 1 } });
+    expect(cloud.sstRuns).toEqual(["deploy --stage test-abc --target Files"]);
+    expect(cloud.workers.get("notes-test-abc")).toBe(before);
+    expect(before.secrets).toEqual(secrets);
+    expect((await runDeploy(target, request(), captureIo())).status).toBe(0);
+    expect(cloud.sstRuns.slice(1)).toEqual(["deploy --stage test-abc --target Files", "deploy --stage test-abc"]);
+    expect(cloud.workers.get("notes-test-abc")!.secrets.get("SECRET_API_KEY")).toBe("v-1");
+  });
+
+  it("R1: step 3 of a stage with a database but no built Worker code is refused before SST runs; the Worker stays", async () => {
+    const a = setup();
+    expect((await runDeploy(a.target, request(), captureIo())).status).toBe(0);
+    const { code: _built, ...withoutCode } = a.options;
+    const target = createCloudflareTarget(withoutCode);
+    a.cloud.sstRuns.length = 0;
+    const io = captureIo();
+    const result = await runDeploy(target, request(), io);
+    expect(result.failure?.step).toBe("infrastructure");
+    expect(io.err).toMatch(/no built Worker code/);
+    expect(a.cloud.sstRuns).toEqual([]);
+    await expect(target.deployInfrastructure({ stage, database: { id: "uuid-1", name: "notes-test-abc-db-1", number: 1 } })).rejects.toThrow(/no built Worker code/);
+    expect(a.cloud.sstRuns).toEqual([]);
+    expect([...a.cloud.workers.get("notes-test-abc")!.secrets.keys()]).toContain("SECRET_FRAMEWORK_SESSION_KEY");
+  });
+
+  it("R2: step 3 of a stage with a Worker but no database is refused before SST runs; the Worker and its secrets stay", async () => {
+    const { cloud, target, databases } = setup();
+    expect((await runDeploy(target, request(), captureIo())).status).toBe(0);
+    await target.setSecret(stage, "apiKey", "v-1");
+    databases.dbs.clear();
+    cloud.sstRuns.length = 0;
+    const io = captureIo();
+    const result = await runDeploy(target, request(), io);
+    expect(result.failure?.step).toBe("infrastructure");
+    expect(io.err).toMatch(/Worker notes-test-abc but no database[\s\S]*restore the database or run remove/);
+    expect(cloud.sstRuns).toEqual([]);
+    const w = cloud.workers.get("notes-test-abc")!;
+    expect(w.secrets.get("SECRET_API_KEY")).toBe("v-1");
+    expect(w.secrets.has("SECRET_FRAMEWORK_SESSION_KEY")).toBe(true);
   });
 
   it("secrets set and the secret listing go through the Worker's secrets API", async () => {
@@ -179,8 +230,9 @@ describe("listStageResources and remove on Cloudflare (PROV-REQ-003; DEC-0084, D
       { kind: "R2 API token", id: "tok1" },
       { kind: "SST state object", id: "app/notes/test-abc" },
       { kind: "SST state object", id: "passphrase/notes/test-abc" },
-      ...listed.resources.filter((r) => r.kind === "SST state object" && r.id.startsWith("snapshot/notes/test-abc/")),
+      ...listed.resources.filter((r) => r.kind === "SST state object" && r.id.startsWith("update/notes/test-abc/")),
     ]);
+    expect(listed.resources.filter((r) => r.id.startsWith("update/notes/test-abc/")).length).toBeGreaterThan(0);
     expect(listed.resources.some((r) => r.id.includes("test-xyz"))).toBe(false);
     expect(listed.databases.map((d) => d.name).sort()).toEqual(["notes-test-abc-db-1", "notes-test-xyz-db-1"]);
   });
@@ -201,6 +253,41 @@ describe("listStageResources and remove on Cloudflare (PROV-REQ-003; DEC-0084, D
     expect(cloud.workers.has("notes-test-xyz")).toBe(true);
     expect([...databases.dbs.values()].map((d) => d.name)).toEqual(["notes-test-xyz-db-1"]);
     expect(cloud.sstRuns.at(-1)).toBe("remove --stage test-abc");
+
+    // R3: the successful `sst remove` left `app/` behind; it is deleted, so a re-run skips `sst remove`.
+    const runs = cloud.sstRuns.length;
+    expect(await runRemove(target, stage, captureIo())).toEqual({ status: 0, leftovers: [] });
+    expect(cloud.sstRuns.slice(runs).some((r) => r.startsWith("remove"))).toBe(false);
+  });
+
+  it("R3: remove after a failed first deploy (no app/ state object) skips sst remove and deletes the state objects", async () => {
+    const { cloud, target } = setup();
+    const state = cloud.buckets.get("sst-state")!;
+    state.add("passphrase/notes/test-abc").add("update/notes/test-abc/1").add("app/notes/test-abcd");
+    const io = captureIo();
+    expect(await runRemove(target, stage, io)).toEqual({ status: 0, leftovers: [] });
+    expect(io.err).toBe("");
+    expect(cloud.sstRuns.some((r) => r.startsWith("remove"))).toBe(false);
+    expect([...state]).toEqual(["app/notes/test-abcd"]);
+  });
+
+  it("R3: when the state listing fails, sst remove still runs and the failure is reported", async () => {
+    const { cloud, target } = setup();
+    await runDeploy(target, request(), captureIo());
+    let failed = false;
+    cloud.override.set(`GET /accounts/${ACCOUNT}/r2/buckets/sst-state/objects?per_page=1000`, () => {
+      if (failed) {
+        cloud.override.delete(`GET /accounts/${ACCOUNT}/r2/buckets/sst-state/objects?per_page=1000`);
+        return { status: 200, body: { success: true, errors: [], messages: [], result: [...cloud.buckets.get("sst-state")!].sort().map((key) => ({ key })), result_info: { is_truncated: false } } };
+      }
+      failed = true;
+      return { status: 500, body: { success: false, errors: [{ code: 1, message: "internal" }] } };
+    });
+    const error = await target.removeStage(stage).then(() => undefined, (e: unknown) => e as Error);
+    expect(error?.message).toMatch(/listing the objects of R2 bucket sst-state/);
+    expect(cloud.sstRuns.at(-1)).toBe("remove --stage test-abc");
+    expect(cloud.workers.has("notes-test-abc")).toBe(false);
+    expect([...cloud.buckets.get("sst-state")!].some((k) => k.includes("/test-abc"))).toBe(false);
   });
 
   it("when SST's removal fails, the Worker and the emptied bucket are deleted by their exact names; what still cannot be deleted is a leftover", async () => {

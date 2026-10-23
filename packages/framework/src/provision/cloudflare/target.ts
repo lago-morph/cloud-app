@@ -5,8 +5,11 @@
  * - `preflight`: the credential variables by name, the token's usability, and the permission
  *   to create R2 API tokens. Reads only.
  * - `inspectAccount` / `createSharedResources`: `account.ts`.
- * - `deployInfrastructure` (step 3): `sst deploy --target Files` (the stage bucket only), then
- *   the bucket's CORS policy for the stage's public origin (FILES' policy, DEC-0099).
+ * - `deployInfrastructure` (step 3): the stage bucket only, then the bucket's CORS policy for
+ *   the stage's public origin (FILES' policy, DEC-0099). With a database, the program declares
+ *   the Worker and the run is `sst deploy --target Files`; without one (a first deploy), the
+ *   program is bucket-only and the run is untargeted, refused when the Worker exists.
+ *   SST resolves `--target` only in the stage's state (root cause 2026-10-23-pass1).
  * - `deployCode` (step 5): a full `sst deploy` with the current database as an input, then the
  *   framework-internal secrets the CLI creates: the session key (generated when absent) and the
  *   stage's R2 signing token as S3 credentials (created when absent; a token whose secrets are
@@ -16,7 +19,8 @@
  * - `checkHealth`: `health.ts` with FILES' storage preflight.
  * - `listStageResources`: the Worker, the bucket, the token and the SST state objects, each by
  *   its exact identifier, plus every D1 database.
- * - `removeStage`: every step attempted: empty the bucket, delete the token, `sst remove`, then
+ * - `removeStage`: every step attempted: empty the bucket, delete the token, `sst remove` (skipped
+ *   when `sst-state` has no `app/<app>/<stage>`; its leftover `app/` object deleted after), then
  *   delete the Worker and the bucket by exact name if they are still there (e.g. when SST's
  *   removal failed or its state was lost), then the stage's SST state objects (DEC-0084).
  *   Failures are collected and thrown together; the core then reports leftovers.
@@ -119,9 +123,26 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
     createSharedResources: (absent) => createSharedResources(api, accountId, absent),
 
     async deployInfrastructure(input: DeployInput) {
+      // SST 4.17.2 resolves `--target` only in the stage's previous state (run.go:348-360), so
+      // step 3 targets `Files` exactly when the stage has a database: the first database is
+      // created only after a step 3 succeeded, which put `Files` in SST's state. Without a
+      // database the program is bucket-only and the run is untargeted, which reconciles the
+      // whole stage stack and would delete a Worker in state (root cause 2026-10-23-pass1, R1/R2).
+      const { database } = input;
+      if (database && !options.code) throw new Error("no built Worker code; build --target cloudflare must run before deploy (step 3 of a stage with a database declares its Worker)");
+      if (!database && (await exists(`${workerPath(input.stage)}/settings`, `Worker ${workerName(input.stage)}`))) {
+        throw new Error(
+          `the stage has a Worker ${workerName(input.stage)} but no database; step 3 would delete the Worker with its secrets; restore the database or run remove`,
+        );
+      }
       const stageOrigin = await origin(input.stage);
-      writeSstApp(dir, { stage: input.stage, ...(input.database && options.code ? { worker: { publicOrigin: stageOrigin, database: input.database, code: options.code } } : {}) });
-      await runSst(sst, sstRun(input.stage), "deploy", { target: INFRASTRUCTURE_COMPONENT });
+      if (database && options.code) {
+        writeSstApp(dir, { stage: input.stage, worker: { publicOrigin: stageOrigin, database, code: options.code } });
+        await runSst(sst, sstRun(input.stage), "deploy", { target: INFRASTRUCTURE_COMPONENT });
+      } else {
+        writeSstApp(dir, { stage: input.stage });
+        await runSst(sst, sstRun(input.stage), "deploy");
+      }
       const r = await api("PUT", `${bucketPath(input.stage)}/cors`, options.files.bucketCors(stageOrigin));
       if (!succeeded(r)) throw new Error(`setting the CORS policy of R2 bucket ${filesBucketName(input.stage)} failed: ${describeFailure(r)}`);
     },
@@ -182,8 +203,21 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
         if (token) await deleteSigningToken(api, accountId, token.id);
       });
       await attempt(async () => {
+        // SST knows a stage only by its `app/<app>/<stage>` object (PullState); without it,
+        // `sst remove` fails with `Stage not found` and touches nothing, so it is skipped. Only a
+        // listing that succeeded can decide that (root cause 2026-10-23-pass1, R3).
+        const appState = `app/${stage.app}/${stage.stage}`;
+        let keys: string[] | undefined;
+        try {
+          keys = await listObjectKeys(api, accountId, STATE_BUCKET);
+        } catch (error) {
+          failures.push(error instanceof Error ? error.message : String(error));
+        }
+        if (keys && !keys.includes(appState)) return;
         writeSstApp(dir, { stage });
         await runSst(sst, sstRun(stage), "remove");
+        // A successful `sst remove` leaves `app/` behind as an empty checkpoint.
+        await deleteObjects(api, accountId, STATE_BUCKET, [appState]);
       });
       await attempt(async () => {
         if (!(await exists(`${workerPath(stage)}/settings`, `Worker ${workerName(stage)}`))) return;

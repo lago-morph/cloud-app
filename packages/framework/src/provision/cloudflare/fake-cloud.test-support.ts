@@ -1,8 +1,8 @@
 /**
  * An in-memory Cloudflare account for the target's unit tests: the API endpoints the target
  * uses, with the request and response shapes recorded by spikes A-01, A-03, A-04 and A-07, a
- * fake SST CLI that creates and removes what the generated program declares (and, like the
- * real one, leaves the stage's state objects behind), and in-memory D1 database operations
+ * fake SST CLI that models SST's per-stage state (see `sst` below; like the real one, it
+ * leaves the stage's state objects behind), and in-memory D1 database operations
  * standing in for D-04's. No network.
  */
 import { mkdirSync, readFileSync } from "node:fs";
@@ -40,7 +40,10 @@ export class FakeCloud {
   readonly override = new Map<string, ApiReply | (() => ApiReply)>();
   /** SST commands (`deploy`, `remove`) that fail. */
   readonly failSst = new Set<string>();
+  /** SST's state per `<app>/<stage>`: the logical names of the components it holds. */
+  readonly sstState = new Map<string, Set<string>>();
   private nextToken = 1;
+  private nextUpdate = 1;
 
   readonly api: CloudflareApi = async (method, path, body) => {
     this.requests.push(`${method} ${path}`);
@@ -124,7 +127,21 @@ export class FakeCloud {
     throw new Error(`fake Cloudflare: unexpected request ${method} ${path}`);
   }
 
-  /** The fake SST CLI: reads the generated program's embedded input and applies it. */
+  /**
+   * The fake SST CLI: reads the generated program's embedded input and applies it, modelling
+   * SST 4.17.2's state per stage (root cause 2026-10-23-pass1-sst-target-not-found, Review R4;
+   * SST `pkg/project/run.go:98-121, 348-360`):
+   * - a stage exists for SST only when `sst-state` holds `app/<app>/<stage>` (`PullState`);
+   * - `--target X` is resolved against the components in that state only: absent →
+   *   `Target not found: X`, before anything is deployed. A targeted run adds nothing to the
+   *   state (the Worker is not deployed even when the program declares it);
+   * - an untargeted deploy makes the state equal the program: a Worker in state that the
+   *   program leaves out is deleted, with its secrets;
+   * - `remove` of a stage without `app/` fails with `Stage not found`; otherwise it deletes only
+   *   the components in state (not by name) and leaves `app/` behind (an empty checkpoint);
+   * - every deploy or remove, failed or not, writes `update/<app>/<stage>/<id>`, and a stage's
+   *   first run writes `passphrase/<app>/<stage>`.
+   */
   readonly sst: SstExec = async (args, options) => {
     const [command] = args;
     const stage = args[args.indexOf("--stage") + 1]!;
@@ -133,7 +150,7 @@ export class FakeCloud {
       mkdirSync(join(options.cwd, ".sst", "platform"), { recursive: true });
       return { code: 0, output: "✓ Installed" };
     }
-    if (this.failSst.has(command!)) return { code: 1, output: `✕ ${command} failed: injected` };
+    if (command !== "deploy" && command !== "remove") return { code: 1, output: `unknown command ${command}` };
     const program = readFileSync(join(options.cwd, "sst.config.ts"), "utf8");
     this.programs.push(program);
     const input = JSON.parse(/const input = (\{[\s\S]*?\n\}) as const;/.exec(program)![1]!) as {
@@ -141,27 +158,55 @@ export class FakeCloud {
       filesBucket: string;
       worker?: { name: string; bindings: { type: string; name: string }[] };
     };
-    const stateKeys = [`app/${input.app}/${stage}`, `passphrase/${input.app}/${stage}`, `snapshot/${input.app}/${stage}/${this.sstRuns.length}`];
+    const stateBucket = this.buckets.get("sst-state");
+    if (!stateBucket) return { code: 1, output: "✕  state bucket sst-state not found" };
+    const id = `${input.app}/${stage}`;
+    stateBucket.add(`passphrase/${id}`);
+    stateBucket.add(`update/${id}/${String(this.nextUpdate++)}`);
+    const hasState = stateBucket.has(`app/${id}`);
+    const components = new Set(hasState ? (this.sstState.get(id) ?? []) : []);
+    if (this.failSst.has(command)) return { code: 1, output: `✕ ${command} failed: injected` };
+    const workerName = `${input.app}-${stage}`;
+
     if (command === "deploy") {
+      const targets = args.flatMap((a, i) => (a === "--target" ? [args[i + 1]!] : []));
+      for (const t of targets) if (!components.has(t)) return { code: 1, output: `SST 4.17.2 ready!\n~  Deploy\n✕  Target not found: ${t}` };
+      if (targets.length > 0) {
+        // Only the targeted components (and their dependents) are updated; nothing is added.
+        if (targets.includes("Files") && !this.buckets.has(input.filesBucket)) this.buckets.set(input.filesBucket, new Set());
+        return { code: 0, output: "✓ Complete" };
+      }
       if (!this.buckets.has(input.filesBucket)) this.buckets.set(input.filesBucket, new Set());
-      const targeted = args.includes("--target");
-      if (!targeted && input.worker) {
+      const next = new Set(["Files"]);
+      if (input.worker) {
         const existing = this.workers.get(input.worker.name);
         // A deploy turns the workers.dev route on (A-04 w05, DEC-0091), keeping secrets (A-03).
         this.workers.set(input.worker.name, { secrets: existing?.secrets ?? new Map(), enabled: true, previews: false, bindings: input.worker.bindings });
+        next.add("Worker");
+      } else if (components.has("Worker")) {
+        this.workers.delete(workerName);
       }
-      const state = this.buckets.get("sst-state");
-      for (const k of stateKeys) state?.add(k);
+      this.sstState.set(id, next);
+      stateBucket.add(`app/${id}`);
       return { code: 0, output: "✓ Complete" };
     }
-    if (command === "remove") {
-      for (const [name] of this.workers) if (name === `${input.app}-${stage}`) this.workers.delete(name);
-      const files = this.buckets.get(input.filesBucket);
-      if (files && files.size > 0) return { code: 1, output: "✕ Failed: bucket not empty" };
-      this.buckets.delete(input.filesBucket);
-      return { code: 0, output: "✓ Removed" };
+
+    if (!hasState) return { code: 1, output: "SST 4.17.2 ready!\n✕  Stage not found" };
+    if (components.has("Worker")) {
+      this.workers.delete(workerName);
+      components.delete("Worker");
     }
-    return { code: 1, output: `unknown command ${command}` };
+    if (components.has("Files")) {
+      const files = this.buckets.get(input.filesBucket);
+      if (files && files.size > 0) {
+        this.sstState.set(id, components);
+        return { code: 1, output: "✕ Failed: bucket not empty" };
+      }
+      this.buckets.delete(input.filesBucket);
+      components.delete("Files");
+    }
+    this.sstState.set(id, components);
+    return { code: 0, output: "✓ Removed" };
   };
 
   /** A deployed-looking account with its shared resources. */
