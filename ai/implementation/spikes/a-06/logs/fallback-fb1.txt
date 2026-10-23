@@ -1,6 +1,0 @@
-=== fallback copy -> spikecmmrxula-a06-fb1 @ 2026-10-19T20:00:15Z PAGE_ROWS=1000 PAGE_BYTES=1000000
-created spikecmmrxula-a06-fb1
-table groups (parents first): [['z_parent'], ['a_child'], ['m_grandchild'], ['self_ref'], ['cyc_b', 'cyc_a'], ['big_text'], ['__framework_kv'], ['__framework_migrations'], ['x_extras']]
-cyclic group ['self_ref']: 3 rows, 3 row SCCs, largest 1
-cyclic group ['cyc_b', 'cyc_a']: 3 rows, 2 row SCCs, largest 2
-fallback info: {"data_s": 52.11, "index_seq_s": 1.65, "requests": 20, "read_requests": 79, "pages": 17, "page_rows": 1000, "page_bytes": 1000000}

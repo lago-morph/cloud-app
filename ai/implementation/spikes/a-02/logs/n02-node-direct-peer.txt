@@ -1,3 +1,0 @@
-dns: [{"address":"104.21.39.162","family":4},{"address":"172.67.146.189","family":4}]
-peer=104.21.39.162:443 status=200 issuer=Anthropic/Egress Gateway SDS Issuing CA (production)
-exit=0

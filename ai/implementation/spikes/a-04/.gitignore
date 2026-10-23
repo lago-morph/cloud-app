@@ -1,3 +1,0 @@
-node_modules/
-worker/wrangler.gen.jsonc
-logs/*.raw

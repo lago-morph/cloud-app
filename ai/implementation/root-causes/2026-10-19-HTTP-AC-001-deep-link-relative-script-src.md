@@ -2,7 +2,7 @@
 
 Author: diagnosing subagent (prompt §8 step 1); did not write the code or the test. Date: 2026-10-19. Local only, no Cloudflare calls. No code or test left changed. Needs independent review (§8 step 2) before any fix.
 
-Branch diagnosed: `origin/claude/implement-local-cloudflare` at `9c09143` (Phase B run evidence: `b229c57`, `validation/local/phase-B/05a-integration-vitest-json.log` lines 1766–1786, failure 12 in `SUMMARY.md`).
+Branch diagnosed: `origin/claude/implement-local-cloudflare` at `9c09143` (Phase B run evidence: `b229c57`, `validation/local/phase-B/05a-integration-vitest-json.log` (archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md) lines 1766–1786, failure 12 in `SUMMARY.md`).
 
 ## Symptom
 `packages/framework/test/integration/http/dev-paths.test.ts` › "[HTTP-AC-001] GET /some/deep/link returns the client entry page" fails on its last assertion, `expect(deepHtml).toBe(entryHtml)` (line 59). Status 200, `text/html` and the marker assertions pass. The only difference:
@@ -29,7 +29,7 @@ abs: / -> /main.ts | /some/deep/link -> /main.ts | identical: true
    i.e. for a request other than `/` that falls back to `/index.html`, relative URLs are made absolute against `base` (`./main.ts` → `/main.ts`); for `/` they stay as written.
 4. Minimal reproduction above: relative `src` → pages differ exactly as in the symptom; absolute `src` → byte-identical. Framework not involved.
 5. Experiment with the real framework (temporary one-line edit to `CLIENT_PAGE`, `src="/src/client/main.ts"`, reverted with `git checkout` afterwards, `git status` clean): `dev-paths.test.ts` → `Tests 2 passed (2)`.
-6. Phase B manual check of the template (`validation/local/phase-B/09-exercise-api.log:38`, `10-exercise-pages.log`): `/some/deep/link` → 200 with the same HTML and `#app` present; `apps/template/index.html:10` uses the absolute `/src/client/main.ts`.
+6. Phase B manual check of the template (`validation/local/phase-B/09-exercise-api.log:38` (archived), `10-exercise-pages.log`): `/some/deep/link` → 200 with the same HTML and `#app` present; `apps/template/index.html:10` uses the absolute `/src/client/main.ts`.
 
 ## Cause → symptom chain
 - The fixture page loads its script with a relative URL `./main.ts` (evidence 1).

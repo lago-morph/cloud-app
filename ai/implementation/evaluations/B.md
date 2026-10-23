@@ -5,14 +5,14 @@ Evaluator: an independent subagent. It wrote no code or tests and ran no suite. 
 Inputs read:
 - prompt `ai/prompts/implement-local-cloudflare.md` §7, §8, §9 B and §11;
 - `ai/implementation/plan.md`: the B-18 exit, the B-T1…B-T4 rows, B-RUN/B-EV/B-INT, the "Phase B outcomes" notes, C-EV/E-EV and Open question 1;
-- the evidence in `validation/local/phase-B/run-2/` (all logs, the JSON reports, `06-per-test-statuses.txt`, `exercise/`), and run 1 (`validation/local/phase-B/*`) for history;
+- the evidence in `validation/local/phase-B/run-2/` (archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md) (all logs, the JSON reports, `06-per-test-statuses.txt`, `exercise/`), and run 1 (`validation/local/phase-B/*`) for history;
 - the eight records in `ai/implementation/root-causes/`;
 - the acceptance criteria in `docs/components/*.md` and E2E-007 in `docs/acceptance/e2e-scenarios.md`;
 - the test code of every phase-B integration suite (`packages/framework/test/integration/**`) and the helpers it relies on (`test/fixtures/support/{app,check-catalog}.ts`, `tests/support/tags.ts`, `scripts/offline.sh`).
 
 No code, test or evidence was changed. One read-only analysis script, which re-applies the CHECK-AC-003 assertion to the diagnostics printed in the failure messages, was run from the scratchpad.
 
-Abbreviations for evidence files (all under `validation/local/phase-B/run-2/`):
+Abbreviations for evidence files (all under `validation/local/phase-B/run-2/` (archived)):
 - **V**: `05a-integration-vitest.json` (with `05a-integration-vitest-json.log` and `04-test-integration.log`);
 - **P**: `05b-integration-playwright.json`;
 - **TC**: `02-npm-run-verify.log`, the `tsc -p packages/framework/tsconfig.json` step, which type-checks `test/**/*.ts` and exited 0.

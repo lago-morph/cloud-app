@@ -1,5 +1,7 @@
 # A-06 — Do D1 export and import produce a full copy?
 
+> **Code and logs archived.** This spike's scripts, `logs/` and `out/` are on branch `archive/implement-local-cloudflare`, in the same directory (see ARCHIVE-INDEX.md there, and `ai/ARCHIVE.md`). The relative paths below resolve on that branch.
+
 Date: 2026-10-19. Python 3.13 `urllib` straight to the D1 HTTP API on `api.cloudflare.com` through `HTTPS_PROXY`. The proxy injects the token; this spike never sends an `Authorization` header (A-01). No wrangler: the design uses the D1 HTTP API from the CLI.
 Every cloud resource was a D1 database named `spikecmmrxula-a06-…`. Wrangler/SST were not needed.
 

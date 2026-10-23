@@ -3,7 +3,7 @@
 Author: diagnosing subagent diag-b4 (did not write the code involved; diagnosis only, no code or test changed). Needs independent review (prompt §8 step 2).
 
 ## Symptom
-In the phase-B exit check (`validation/local/phase-B/10-exercise-pages.log`, line 9), after uploading `b-run.txt` (`text/plain`, 33 bytes) through the template's Files page, clicking its "Download" button produced:
+In the phase-B exit check (`validation/local/phase-B/10-exercise-pages.log` (archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md), line 9), after uploading `b-run.txt` (`text/plain`, 33 bytes) through the template's Files page, clicking its "Download" button produced:
 
 ```
 {"step":"files-download-popup","popupPath":"","matches":false,"bodyLength":0}
@@ -18,7 +18,7 @@ E1. Code paths.
 - `apps/template/src/client/pages/files.ts:15-17`: `download()` POSTs `/files/download-ticket`, then `window.open(downloadUrl(ticket), "_blank", "noopener")`.
 - `packages/framework/src/files/client.ts:57-60`: `downloadUrl` returns the ticket's URL unchanged.
 - `packages/framework/src/files/local/route.ts:15,17,49`: every response carries `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`; `Content-Disposition: attachment` is added unless the content type is a raster image (`image/png`, `jpeg`, `gif`, `webp`, `avif`, `bmp`).
-- Check script `validation/local/phase-B/exercise/exercise-pages.mjs:74-90`: it waits for a context `page` event, then `popup.waitForURL(/\/api\//)` (errors swallowed), reads `popup.textContent("body")` and `popup.url()`, and compares the body with the upload. It does not listen for a `download` event. In 10a it ran `new URL(popup.url())` unconditionally, which throws `Invalid URL` on `""`.
+- Check script `validation/local/phase-B/exercise/exercise-pages.mjs:74-90` (archived): it waits for a context `page` event, then `popup.waitForURL(/\/api\//)` (errors swallowed), reads `popup.textContent("body")` and `popup.url()`, and compares the body with the upload. It does not listen for a `download` event. In 10a it ran `new URL(popup.url())` unconditionally, which throws `Invalid URL` on `""`.
 
 E2. Response headers of the local transfer route for a GET with a download ticket (curl after mock-login):
 ```

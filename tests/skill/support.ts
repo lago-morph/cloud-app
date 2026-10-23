@@ -1,7 +1,7 @@
 /**
  * Shared support for the E-T1 skill checks (SKILL-AC-001…-004, docs/components/skill.md §4).
  * Written from the criteria and the skill design (skill.md §2 "Layout", "Implementation"), not
- * from the skill's text. Assumptions: ai/implementation/decisions/E-T1.md.
+ * from the skill's text. Assumptions: DEC-0384…DEC-0389 (docs/decisions/decision-log.md, Item: E-T1).
  *
  * Small Markdown readers: relative links, H2 sections, numbered list items, table rows and
  * fenced code blocks with the line just before each.

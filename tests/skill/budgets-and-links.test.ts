@@ -80,7 +80,7 @@ describe("SKILL: size budgets and links", () => {
   // "Its examples" (E-T2, flag F1): every example that shows what a reference covers, not only
   // one. Each row comes from skill.md §2 ("References cover", "Specific content the references
   // carry", "Implementation") and from the files each example copies, never from the
-  // references' own text; ai/implementation/decisions/E-T2.md gives the reason for each row.
+  // references' own text; DEC-0403…DEC-0407 (decision log, Item: E-T2) give the reason for each row.
   // A reference the design ties to no particular example has an empty row and keeps only the
   // "at least one example" check above.
   const ITS_EXAMPLES: Readonly<Record<string, readonly string[]>> = {

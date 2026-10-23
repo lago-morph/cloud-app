@@ -1,2 +1,0 @@
-$ diff <(12-offline-verify-run1.log minus '# start:'/'# end:' lines) <(13-offline-verify-run2.log minus same)
-# diff exit code: 0  (0 = identical)

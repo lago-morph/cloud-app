@@ -1,5 +1,7 @@
 # A-01 — Cloudflare access and tool authentication through the sandbox proxy
 
+> **Code and logs archived.** This spike's scripts, `logs/` and `out/` are on branch `archive/implement-local-cloudflare`, in the same directory (see ARCHIVE-INDEX.md there, and `ai/ARCHIVE.md`). The relative paths below resolve on that branch.
+
 Date: 2026-10-19. Node v22.22.0, npm 10.9.4. Pins: Wrangler 4.149.0 (PAR-101), SST 4.17.2 (PAR-100), Cloudflare provider 6.15.0 (PAR-108, `providers: { cloudflare: "6.15.0" }`).
 Cloud resources were all named `spikewxlyyipn-…` except SST's state bucket, whose name `sst-state` is fixed by SST (see "State home").
 

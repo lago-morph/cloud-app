@@ -2,7 +2,7 @@
 
 Author: diagnosing subagent (prompt §8 step 1); did not write the code or the test. Date: 2026-10-19. Local only, no Cloudflare calls. No code or test changed. Needs independent review (§8 step 2) before any fix.
 
-Branch diagnosed: `origin/claude/implement-local-cloudflare` at `9c09143` (Phase B run evidence: `b229c57`, `validation/local/phase-B/05a-integration-vitest-json.log`, failure 11 in `SUMMARY.md`).
+Branch diagnosed: `origin/claude/implement-local-cloudflare` at `9c09143` (Phase B run evidence: `b229c57`, `validation/local/phase-B/05a-integration-vitest-json.log` (archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md), failure 11 in `SUMMARY.md`).
 
 ## Symptom
 `packages/framework/test/integration/core/types.test.ts` › "[CORE-AC-001] every framework type in a public signature is importable from a subpath its importers may use" fails:

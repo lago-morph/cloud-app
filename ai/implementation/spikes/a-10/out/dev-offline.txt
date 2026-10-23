@@ -1,7 +1,0 @@
-GET /api/health -> {"ok":true}
-GET /api/jwt -> {"sub":"u1"}
-GET /api/sigv4 -> {"signed":true}
-GET /api/r2 -> {"text":"hello-r2"}
-POST /api/notes -> {"rows":[{"id":"1","title":"b","rank":1,"body":null}]}
-POST invalid -> HTTP 400
-stopped

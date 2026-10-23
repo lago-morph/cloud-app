@@ -1,7 +1,7 @@
 /**
  * Shared support for the C-T1 compliance criteria (core, http, log, config, secrets, cli).
  * Written from the criteria, the contracts and apps/reference/ROUTES.md, not from the
- * implementation. Assumptions: ai/implementation/decisions/C-T1.md.
+ * implementation. Assumptions: DEC-0277…DEC-0280 (docs/decisions/decision-log.md, Item: C-T1).
  *
  * This module: repository paths, the run's deployment (app, stage, target), contract data read
  * from docs/ (error catalogue, parameters, schemas), and small value helpers.

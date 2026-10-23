@@ -1,8 +1,0 @@
-show lc_collate => ERROR unrecognized configuration parameter "lc_collate"
-show lc_ctype => ERROR unrecognized configuration parameter "lc_ctype"
-show server_encoding => [{"server_encoding":"UTF8"}]
-select lower('ÀB') as l, lower('ÀB' collate "C") as lc, upper('àb' collate "C") as uc => [{"l":"àb","lc":"Àb","uc":"àB"}]
-select 'é' < 'z' as cmp_default, ('é' collate "C") < 'z' as cmp_c => [{"cmp_default":false,"cmp_c":false}]
-CREATE DATABASE spikec TEMPLATE template0 LC_COLLATE 'C' LC_CTYPE 'C' => []
-select datname, datcollate, datctype from pg_database where datname = 'spikec' => [{"datname":"spikec","datcollate":"C","datctype":"C"}]
-appdb: [{"db":"appdb","l":"Àb","cmp":false}]

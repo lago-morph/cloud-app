@@ -1,9 +1,0 @@
-$ ./run.sh delete
-▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
-
-
-
- ⛅️ wrangler 4.149.0 (update available 4.151.2)
-───────────────────────────────────────────────
-Successfully deleted spikeqgbznvyy-a04-worker
-exit=0

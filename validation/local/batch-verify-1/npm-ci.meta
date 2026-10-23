@@ -1,5 +1,0 @@
-uptime before:  16:34:40 up 14:01,  0 user,  load average: 0.94, 3.12, 5.28
-command: npm ci
-exit: 0
-duration_s: 11
-uptime after:  16:34:51 up 14:01,  0 user,  load average: 1.24, 3.11, 5.26

@@ -1,5 +1,5 @@
 /**
- * Support for the COMPL run-level criteria (C-T5; assumptions: ai/implementation/decisions/C-T5.md).
+ * Support for the COMPL run-level criteria (C-T5; assumptions: DEC-0321…DEC-0322 in docs/decisions/decision-log.md).
  * Written from compliance.md (COMPL-REQ-001, COMPL-REQ-003, COMPL-REQ-006, COMPL-AC-001,
  * COMPL-AC-003, "Driver"), the evidence contract and the Where columns and lines, not from the
  * driver's implementation: nothing here imports the harness's catalogue, expected-ID or result

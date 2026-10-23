@@ -1,1 +1,0 @@
-export { notesSqlite } from "./schema";

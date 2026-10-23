@@ -1,5 +1,7 @@
 # A-08 — Does local D1 enforce D1's bound-parameter and statement-size limits? (SQL-OQ-1)
 
+> **Code and logs archived.** This spike's scripts, `logs/` and `out/` are on branch `archive/implement-local-cloudflare`, in the same directory (see ARCHIVE-INDEX.md there, and `ai/ARCHIVE.md`). The relative paths below resolve on that branch.
+
 Date: 2026-10-19. Node v22.22.0, Wrangler 4.149.0 (PAR-101; ships Miniflare 5.20261006.1-alpha, per A-10).
 Cloud resource: one D1 database `spike2djg358e-a08-limits` (region ENAM), created and deleted in this spike.
 
@@ -38,7 +40,7 @@ cover this because the local D1 run fails.
 
 ## Setup and exact commands
 
-All from `ai/implementation/spikes/a-08/` (throwaway; own `package.json`, only `wrangler@4.149.0`).
+All from `ai/implementation/spikes/a-08/` (archived: branch `archive/implement-local-cloudflare`, see ARCHIVE-INDEX.md) (throwaway; own `package.json`, only `wrangler@4.149.0`).
 Probe logic is shared (`probe-lib.mjs`): each case runs one statement and records ok/error; the
 boundary cases are exact, then a binary search finds the largest accepted parameter count
 (`SELECT ?,?,…`) and statement length (`SELECT 'xx…x' AS s`, ASCII, exact UTF-8 byte count).

@@ -57,6 +57,6 @@ describe("LOG: key layout in the shared bucket", () => {
   it(tag("LOG-AC-004", "an entry written outside a request has a random final part in its key"), () => {
     // No reference route, and no app-facing API (log.d.ts), writes an entry outside an HTTP
     // request: every app write happens in a request. Recorded in decisions C-T1 as a missing fixture.
-    prerequisiteMissing("LOG-AC-004 (outside-request clause): the reference app has no way to write a log entry outside an HTTP request (needs a fixture; see ai/implementation/decisions/C-T1.md)");
+    prerequisiteMissing("LOG-AC-004 (outside-request clause): the reference app has no way to write a log entry outside an HTTP request (needs a fixture; see DEC-0277…DEC-0280 in docs/decisions/decision-log.md)");
   });
 });
