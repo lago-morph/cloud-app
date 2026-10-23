@@ -1,6 +1,6 @@
 # Spikes (phase A throwaway code and logs)
 
-Back to [ARCHIVE-INDEX.md](../ARCHIVE-INDEX.md). Each entry is `ai/implementation/spikes/a-NN/` without two things: its `RESULT.md`, which stays on the working branch and is the place to start, and its `package-lock.json`, which was deleted (the A-10 pins are in the root lock, DEC-0104). Each `RESULT.md` refers to its own `logs/`, `out/` and scripts by relative path. Those paths resolve here. Read `RESULT.md` with `git show archive-evidence-2026-10-23:ai/implementation/spikes/a-NN/RESULT.md` if you want it next to the code.
+Back to [ARCHIVE-INDEX.md](../ARCHIVE-INDEX.md). Each entry is `ai/implementation/spikes/a-NN/` without two things: its `RESULT.md`, which stays on the working branch and is the place to start, and its `package-lock.json`, which was deleted (the A-10 pins are in the root lock, DEC-0104). Each `RESULT.md` refers to its own `logs/`, `out/` and scripts by relative path. Those paths resolve here. Read `RESULT.md` with `git show c512ad6:ai/implementation/spikes/a-NN/RESULT.md` if you want it next to the code.
 
 All spikes date from 2026-10-19. They called the real Cloudflare API, with secrets redacted by each spike's `redact.py`. Re-running one makes Cloudflare calls and needs owner approval. The useful scripts were promoted: `a-10/scripts/{offline.sh,lo-up.py}` → `scripts/` (DEC-0108); `a-06/fallback_copy.py` was ported into the framework (decision log, "A-06 prototype").
 
