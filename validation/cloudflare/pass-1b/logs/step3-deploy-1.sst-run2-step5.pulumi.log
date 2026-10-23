@@ -1,0 +1,29 @@
+Updating (test-wxezkd4j5ye3oio):
+
+@ updating........
+ +  sst:cloudflare:Worker Worker creating (0s) 
+ +  cloudflare:index:WorkersScript WorkerScript creating (0s) 
+@ updating......
+ +  cloudflare:index:WorkersScript WorkerScript creating (2s) error: [ERROR] POST "https://api.cloudflare.com/client/v4/accounts/<ACCOUNT>/workers/assets/upload?base64=true": 401 Unauthorized : failed to upload assets
+ +  cloudflare:index:WorkersScript WorkerScript creating (2s) error: failed to upload assets: POST "https://api.cloudflare.com/client/v4/accounts/<ACCOUNT>/workers/assets/upload?base64=true": 401 Unauthorized 
+ +  cloudflare:index:WorkersScript WorkerScript **creating failed** error: failed to upload assets: POST "https://api.cloudflare.com/client/v4/accounts/<ACCOUNT>/workers/assets/upload?base64=true": 401 Unauthorized 
+    pulumi:pulumi:Stack reference-test-wxezkd4j5ye3oio running error: update failed
+    pulumi:pulumi:Stack reference-test-wxezkd4j5ye3oio **failed** 1 error
+Diagnostics:
+  pulumi:pulumi:Stack (reference-test-wxezkd4j5ye3oio):
+    error: update failed
+
+  cloudflare:index:WorkersScript (WorkerScript):
+    error: [ERROR] POST "https://api.cloudflare.com/client/v4/accounts/<ACCOUNT>/workers/assets/upload?base64=true": 401 Unauthorized : failed to upload assets
+    error: failed to upload assets: POST "https://api.cloudflare.com/client/v4/accounts/<ACCOUNT>/workers/assets/upload?base64=true": 401 Unauthorized 
+
+Outputs:
+    _protect: false
+
+Resources:
+    + 1 created
+    4 unchanged
+    2 errored
+
+Duration: 8s
+
