@@ -1,0 +1,8 @@
+[fetch-trace #1] GET api.cloudflare.com/client/v4/accounts/<ACCOUNT>/r2/buckets/prototype-logs -> 404
+[fetch-trace #2] GET api.cloudflare.com/client/v4/accounts/<ACCOUNT>/r2/buckets/sst-state -> 404
+[fetch-trace #3] GET api.cloudflare.com/client/v4/accounts/<ACCOUNT>/workers/subdomain -> 200
+already present: workers.dev subdomain
+[fetch-trace #4] POST api.cloudflare.com/client/v4/accounts/<ACCOUNT>/r2/buckets -> 200
+[fetch-trace #5] POST api.cloudflare.com/client/v4/accounts/<ACCOUNT>/r2/buckets -> 200
+created: R2 bucket prototype-logs, R2 bucket sst-state
+exit 0
