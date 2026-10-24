@@ -12,13 +12,15 @@
  *   endpoint with a read-only token created and deleted by the hook (`r2.ts`).
  * No hook reads or writes D1, so none is affected by the D1 stop (DEC-0317).
  *
+ * AWS implementation: `aws/` (plan-aws.md G-T1).
+ *
  * Usage per call: `deleteSecret` 2 API requests (Workers list, DELETE); `secretLocations` 2;
  * `logBucketExists` 1; `listLogKeys`/`readLogObject` 0 API requests (S3 endpoint) after the
  * token's 4–5 once per process.
  */
-import { prerequisiteMissing } from "../../harness/index.js";
 import type { CloudHooks, HookStage } from "../core/support/stores.js";
 import { accountId, cfApi, cfOk, failure } from "./api.js";
+import { awsCloudHooks } from "./aws/index.js";
 import { bucketExists, LOG_BUCKET, listKeys, readObject } from "./r2.js";
 import { stageWorker } from "./stage-resources.js";
 
@@ -55,7 +57,7 @@ function cloudflareHooks(): CloudHooks {
 /** DEC-0279: the hooks for this run's target. */
 export function cloudHooks(target: string): CloudHooks {
   if (target === "cloudflare") return cloudflareHooks();
-  if (target === "aws") return prerequisiteMissing("the cloud test hooks for aws do not exist: AWS phase not started");
+  if (target === "aws") return awsCloudHooks();
   throw new Error(`no cloud test hooks for target ${target}`);
 }
 
