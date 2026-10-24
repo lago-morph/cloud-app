@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readDownloadTicket, readUploadTicket } from "../tickets.js";
-import { expectedSignature } from "./sigv4-reference.test-support.js";
+import { expectedSignature } from "../s3/sigv4-reference.test-support.js";
 import { createCloudflareTicketIssuer, createWorkerTicketIssuer, type CloudflareTicketOptions } from "./tickets.js";
 
 /** Generated per run: dummy identifiers and key pair, never real ones. */

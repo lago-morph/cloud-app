@@ -1,10 +1,13 @@
 /**
  * Cross-origin configuration of a stage's R2 bucket (files.md §2 "Cross-origin configuration";
  * DEC-0099; FILES-REQ-004): the policy provisioning sets, and the one CORS preflight deploy's
- * health step sends to storage (provisioning.md §2 step 7). App code never sees either.
+ * health step sends to storage (provisioning.md §2 step 7). App code never sees either. The
+ * origin check and the preflight are shared with AWS (`../s3/cors.ts`).
  * Workers- and Node-compatible (`fetch` only).
  */
-import { FrameworkError } from "../../core/errors.js";
+import { CORS_PROBE_KEY, exactOrigin, preflightStorageCors, type StorageCorsOutcome } from "../s3/cors.js";
+
+export type { StorageCorsOutcome } from "../s3/cors.js";
 
 /** The body of `PUT /accounts/<account>/r2/buckets/<bucket>/cors` (Cloudflare API). */
 export interface BucketCorsPolicy {
@@ -14,29 +17,12 @@ export interface BucketCorsPolicy {
   }[];
 }
 
-/** The one origin `origin` names exactly (scheme, host, port; no path, no wildcard), or a throw. */
-function exactOrigin(origin: string): string {
-  let parsed: URL | undefined;
-  try {
-    parsed = new URL(origin);
-  } catch {
-    parsed = undefined;
-  }
-  if (parsed === undefined || parsed.origin !== origin || origin.includes("*")) {
-    throw new FrameworkError("CORE.MISCONFIGURED", `the stage's public origin ${JSON.stringify(origin)} is not exactly one origin`);
-  }
-  return origin;
-}
-
 /** One rule: PUT and GET from the stage's public origin only, with the Content-Type header. */
 export function bucketCorsPolicy(publicOrigin: string): BucketCorsPolicy {
   return {
     rules: [{ allowed: { origins: [exactOrigin(publicOrigin)], methods: ["PUT", "GET"], headers: ["Content-Type"] }, maxAgeSeconds: 60 }],
   };
 }
-
-/** The health step's outcome (the shape of PROV's `HealthOutcome`). */
-export type StorageCorsOutcome = { readonly ok: true } | { readonly ok: false; readonly message: string; readonly status?: number };
 
 export interface StorageCorsCheck {
   readonly accountId: string;
@@ -46,34 +32,14 @@ export interface StorageCorsCheck {
   readonly fetch?: typeof fetch;
 }
 
-/** Key the preflight names; a preflight reads and writes nothing, so it need not exist. */
-const PROBE_KEY = "__framework-cors-check";
-
 /**
  * One CORS preflight to the bucket's S3 endpoint as the browser would send it before an upload.
  * Passes when storage allows exactly the stage's public origin; never throws, never includes
  * storage's response body (it is not read).
  */
 export async function checkStorageCors(check: StorageCorsCheck): Promise<StorageCorsOutcome> {
-  const url = `https://${check.accountId}.r2.cloudflarestorage.com/${encodeURIComponent(check.bucket)}/${PROBE_KEY}`;
-  let response: Response;
-  try {
-    response = await (check.fetch ?? fetch)(url, {
-      method: "OPTIONS",
-      headers: { "Origin": check.publicOrigin, "Access-Control-Request-Method": "PUT", "Access-Control-Request-Headers": "content-type" },
-    });
-  } catch (thrown) {
-    const cause = thrown instanceof Error ? `${thrown.name}: ${thrown.message}` : String(thrown);
-    return { ok: false, message: `the stage's file storage could not be reached for its CORS preflight (${cause})` };
-  }
-  await response.body?.cancel();
-  const allowed = response.headers.get("Access-Control-Allow-Origin");
-  if (response.status >= 200 && response.status < 300 && allowed === check.publicOrigin) return { ok: true };
-  return {
-    ok: false,
-    status: response.status,
-    message: `the stage's file storage refused a CORS preflight from ${check.publicOrigin} (HTTP ${response.status}, Access-Control-Allow-Origin ${allowed === null ? "absent" : JSON.stringify(allowed)})`,
-  };
+  const url = `https://${check.accountId}.r2.cloudflarestorage.com/${encodeURIComponent(check.bucket)}/${CORS_PROBE_KEY}`;
+  return preflightStorageCors(url, check.publicOrigin, check.fetch);
 }
 
 /** The Cloudflare API path (under `/client/v4`) of a bucket's CORS configuration. */
