@@ -19,7 +19,7 @@ describe("Cloudflare Worker ticket wiring (D-02 issuer, location from Worker var
     const env = { [BINDINGS.r2AccountId]: "acc123", [BINDINGS.filesBucket]: "notes-test-abc-files" };
     const ticket = (await workerTicketIssuer(env, secrets).upload("a.txt", "text/plain")) as { url: string };
     expect(new URL(ticket.url).host).toBe("acc123.r2.cloudflarestorage.com");
-    expect(new URL(ticket.url).pathname).toBe("/notes-test-abc-files/a.txt");
+    expect(new URL(ticket.url).pathname).toBe("/notes-test-abc-files/a.txt%01");
   });
 
   it("without the variables, creating a ticket is CORE.MISCONFIGURED; building the issuer is not", async () => {
@@ -47,10 +47,11 @@ describe("createCloudflareWorker issues signed R2 tickets (D-02 wired by D-05)",
     });
     const resolved: ResolvedConfig = { deployment: createDeployment({ app: "cfticket", stage: "test-unit", target: "cloudflare" }), values: {}, admins: [], secrets: [] };
     const origin = "https://cfticket-test-unit.example.workers.dev";
+    const heads: string[] = [];
     const env = {
       // The route touches no SQL; the database binding only has to exist.
       DB: { prepare: () => Promise.reject(new Error("no SQL in this test")), batch: () => Promise.reject(new Error("no SQL in this test")) },
-      FILES: { head: async () => null },
+      FILES: { head: async (key: string) => (heads.push(key), null) },
       FRAMEWORK_PUBLIC_ORIGIN: origin,
       [BINDINGS.r2AccountId]: "acc123",
       [BINDINGS.filesBucket]: "cfticket-test-unit-files",
@@ -62,7 +63,9 @@ describe("createCloudflareWorker issues signed R2 tickets (D-02 wired by D-05)",
     const res = await createCloudflareWorker(app, resolved).fetch(new Request(`${origin}/api/ticket`, { method: "POST", headers: { origin } }), env, ctx);
     const body = (await res.json()) as { url?: string };
     expect(res.status, JSON.stringify(body)).toBe(200);
-    expect(body.url).toMatch(/^https:\/\/acc123\.r2\.cloudflarestorage\.com\/cfticket-test-unit-files\/a\.txt\?/);
+    expect(body.url).toMatch(/^https:\/\/acc123\.r2\.cloudflarestorage\.com\/cfticket-test-unit-files\/a\.txt%01\?/);
+    // The Worker addresses the R2 binding by the stored key (cloudflareFilesStore), as the ticket does.
+    expect(heads).toEqual(["a.txt\u0001"]);
     expect(body.url).toContain("X-Amz-Signature=");
   });
 });
