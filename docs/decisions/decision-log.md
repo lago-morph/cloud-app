@@ -4832,3 +4832,15 @@ Origin: ai-proposed · Status: accepted (to be confirmed live) · Affects: `test
 - `stageFunctions` lists Lambda functions with the stage's name prefix.
 - `stageNatGateways` lists NAT gateways that are not `deleted` and are in the shared VPC (found by the tag `prototype-framework=shared-network`, DEC-0475), in any VPC a stage function names, or tagged with the stage. An EC2 client is added to the hooks' clients.
 Item: G-T4.
+
+### DEC-0503 — The driver gives the AWS test hooks the account's region
+Origin: ai-proposed · Status: accepted · Affects: `tests/compliance/harness/{driver,node-deps}.ts`, `tests/compliance/criteria/_cloud/aws/{api,usage}.ts`, plan-aws.md §4 (`AWS_REGION` item)
+
+On `--target aws`, right after building the stage operations and before removing old stages or deploying, the driver reads the account's region. It reads it the way `deploy` and `smoke` do (DEC-0075, DEC-0476): G-07's `awsAccount(...).region()` with the CLI's AWS child environment. That is the log bucket's location, or PAR-060 when the account has no log bucket yet. Operations that cannot read it fall back to `AWS_REGION`, then `AWS_DEFAULT_REGION`. When the account has a region, it wins over a different `AWS_REGION`, and the driver prints a note. With no region, or when reading it fails, the driver stops with a `PrerequisiteMissingError` before deploying. Every criterion that would have run is then recorded not-run with that reason. Every test process gets `AWS_REGION` and `AWS_DEFAULT_REGION` set to the region. The cluster count in the driver's own process gets it too, through `testStageClusters(region)`. `raw/aws-usage.log` records it. Reading the region costs STS `GetCallerIdentity` plus the log bucket's head and location, 2 or 3 calls. Like the framework CLI's own calls, they are not counted against the hooks' cap. The owner no longer needs to export `AWS_REGION`.
+Item: G-EV fixes (F4, F3).
+
+### DEC-0504 — A run against fakes is marked `dryRun` and never counted
+Origin: ai-proposed · Status: accepted · Affects: `docs/contracts/schemas/evidence.schema.json` (new optional `dryRun` string), `packages/framework/src/evidence/{schema,writer}.ts`, `tests/compliance/harness/{driver,node-deps}.ts`, `tests/compliance/tools/{records,release,traceability}.ts`
+
+The evidence record gets an optional `dryRun` string, which says what was faked. The driver sets it when `DriverDeps.notRunRules` is not `PHASE_RULES`. It also sets it when the stage operations carry a `dryRun` of their own. `cliStageOps` gives them one when it is built on a fake CLI runner or a fake `OperationsFactory`. `readRecords` lists such a record among the skipped files ("a dry run (…), never evidence"). The release and traceability reports also drop it themselves, so a marked record never counts, wherever it is stored. GD (`validation/local/phase-G/aws-dry-run/…/rx3n81izmc4esca.json`) predates the field. It stays unmarked as committed and must still never be moved under `validation/aws/`.
+Item: G-EV fixes (F4, F3).
