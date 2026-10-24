@@ -1,0 +1,4 @@
+registry at start (after reset, before npm ci): 0 entries
+registry after npm-ci (2026-10-21T00:49:50Z): 0 entries []
+registry after verify-online (2026-10-21T00:55:52Z): 0 entries []
+registry after verify-offline (2026-10-21T01:01:45Z): 0 entries []

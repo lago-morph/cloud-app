@@ -1,0 +1,57 @@
+time=2026-10-23T18:07:25.528Z level=INFO msg="checking for pulumi" path=/root/.config/sst/bin/pulumi
+time=2026-10-23T18:07:25.761Z level=INFO msg="checking for bun" path=/root/.config/sst/bin/bun
+time=2026-10-23T18:07:25.764Z level=INFO msg="initializing project" version=4.17.2
+time=2026-10-23T18:07:25.765Z level=INFO msg="esbuild building" out=/home/user/cloud-app/.claude/worktrees/agent-acc92d10277f9fd58/apps/reference/.framework/provision/cloudflare/.sst/platform/sst.config.1792778845765.mjs
+time=2026-10-23T18:07:25.772Z level=INFO msg="esbuild built" outfile=/home/user/cloud-app/.claude/worktrees/agent-acc92d10277f9fd58/apps/reference/.framework/provision/cloudflare/.sst/platform/sst.config.1792778845765.mjs
+time=2026-10-23T18:07:25.773Z level=INFO msg="evaluating config"
+time=2026-10-23T18:07:25.850Z level=INFO msg="config evaluated"
+time=2026-10-23T18:07:25.851Z level=INFO msg="checking platform"
+time=2026-10-23T18:07:25.851Z level=INFO msg="checking provider" name=cloudflare version=6.15.0 compare=6.15.0
+time=2026-10-23T18:07:25.851Z level=INFO msg="loading home"
+time=2026-10-23T18:07:25.851Z level=INFO msg="cloudflare account selected" account=<ACCOUNT>
+time=2026-10-23T18:07:26.343Z level=INFO msg="found existing bucket" bucket=sst-state
+time=2026-10-23T18:07:26.344Z level=INFO msg="loaded config" app=reference stage=test-wxezkd4j5ye3oio
+time=2026-10-23T18:07:26.344Z level=INFO msg="initializing ui" isTTY=false
+time=2026-10-23T18:07:26.344Z level=INFO msg="server port assigned" port=13557
+time=2026-10-23T18:07:26.344Z level=INFO msg="running stack command" service=project.run cmd=deploy
+time=2026-10-23T18:07:26.345Z level=INFO msg="INFO locking app=reference stage=test-wxezkd4j5ye3oio"
+time=2026-10-23T18:07:26.345Z level=INFO msg=starting service=server
+time=2026-10-23T18:07:26.345Z level=INFO msg="INFO getting data key=lock app=reference stage=test-wxezkd4j5ye3oio"
+time=2026-10-23T18:07:26.345Z level=INFO msg=server service=server addr=0.0.0.0:13557
+time=2026-10-23T18:07:26.345Z level=INFO msg="server ready to accept connections" service=server
+time=2026-10-23T18:07:28.317Z level=INFO msg="INFO putting update app=reference stage=test-wxezkd4j5ye3oio"
+time=2026-10-23T18:07:29.463Z level=INFO msg="INFO getting passphrase app=reference stage=test-wxezkd4j5ye3oio"
+time=2026-10-23T18:07:30.215Z level=INFO msg="INFO pulling state app=reference stage=test-wxezkd4j5ye3oio out=/home/user/cloud-app/.claude/worktrees/agent-acc92d10277f9fd58/apps/reference/.framework/provision/cloudflare/.sst/pulumi/<UPDATE-ID>/.pulumi/stacks/reference/test-wxezkd4j5ye3oio.json"
+time=2026-10-23T18:07:31.855Z level=INFO msg="got previous deployment" service=project.run updateID=<UPDATE-ID>
+time=2026-10-23T18:07:31.855Z level=INFO msg="esbuild building" out=/home/user/cloud-app/.claude/worktrees/agent-acc92d10277f9fd58/apps/reference/.framework/provision/cloudflare/.sst/platform/sst.config.1792778850214.mjs
+time=2026-10-23T18:07:31.957Z level=INFO msg="esbuild built" outfile=/home/user/cloud-app/.claude/worktrees/agent-acc92d10277f9fd58/apps/reference/.framework/provision/cloudflare/.sst/platform/sst.config.1792778850214.mjs
+time=2026-10-23T18:07:31.977Z level=INFO msg="built sst.config.ts" service=project.run updateID=<UPDATE-ID> to=/home/user/cloud-app/.claude/worktrees/agent-acc92d10277f9fd58/apps/reference/.framework/provision/cloudflare/.sst/platform/sst.config.1792778850214.mjs
+time=2026-10-23T18:07:31.986Z level=INFO msg="tracked files" service=project.run updateID=<UPDATE-ID>
+time=2026-10-23T18:07:31.986Z level=INFO msg="INFO getting data key=secret app=reference stage=_fallback"
+time=2026-10-23T18:07:31.986Z level=INFO msg="INFO getting data key=secret app=reference stage=test-wxezkd4j5ye3oio"
+time=2026-10-23T18:07:34.068Z level=INFO msg="starting pulumi" service=project.run updateID=<UPDATE-ID> args="[/root/.config/sst/bin/pulumi up --yes -f --stack organization/reference/test-wxezkd4j5ye3oio --non-interactive --event-log /home/user/cloud-app/.claude/worktrees/agent-acc92d10277f9fd58/apps/reference/.framework/provision/cloudflare/.sst/pulumi/<UPDATE-ID>/eventlog.json --config cloudflare:version=6.15.0]"
+time=2026-10-23T18:07:39.069Z level=INFO msg="INFO pushing partial state updateID=<UPDATE-ID>"
+time=2026-10-23T18:07:40.929Z level=INFO msg="rpc request" method=POST url=/rpc
+time=2026-10-23T18:07:40.930Z level=INFO msg="building function" runtime=worker functionID=Worker
+time=2026-10-23T18:07:41.002Z level=INFO msg="loader info" loader=map[]
+time=2026-10-23T18:07:41.171Z level=INFO msg="function built" runtime=worker functionID=Worker
+time=2026-10-23T18:07:41.197Z level=INFO msg="INFO pushing partial state updateID=<UPDATE-ID>"
+time=2026-10-23T18:07:42.794Z level=INFO msg="INFO pushing partial state updateID=<UPDATE-ID>"
+time=2026-10-23T18:07:44.242Z level=INFO msg="telemetry tracking error" service=project.run updateID=<UPDATE-ID>
+time=2026-10-23T18:07:44.301Z level=INFO msg="pulumi exited" service=project.run updateID=<UPDATE-ID> err="exit status 255"
+time=2026-10-23T18:07:44.301Z level=INFO msg="eof and exited" service=project.run updateID=<UPDATE-ID> eofs=0
+time=2026-10-23T18:07:44.301Z level=INFO msg="eof and exited" service=project.run updateID=<UPDATE-ID> eofs=1
+time=2026-10-23T18:07:44.301Z level=INFO msg="breaking out of tail loop" service=project.run updateID=<UPDATE-ID>
+time=2026-10-23T18:07:44.301Z level=INFO msg="parsing state" service=project.run updateID=<UPDATE-ID>
+time=2026-10-23T18:07:44.301Z level=INFO msg="INFO pushing partial state updateID=<UPDATE-ID>"
+time=2026-10-23T18:07:44.854Z level=INFO msg="generating types" root=/home/user/cloud-app/.claude/worktrees/agent-acc92d10277f9fd58/apps/reference/.framework/provision/cloudflare
+time=2026-10-23T18:07:44.855Z level=INFO msg="canceling partial" service=project.run updateID=<UPDATE-ID>
+time=2026-10-23T18:07:44.855Z level=INFO msg="waiting for partial to exit" service=project.run updateID=<UPDATE-ID>
+time=2026-10-23T18:07:45.680Z level=INFO msg="INFO pushing eventlog updateID=<UPDATE-ID>"
+time=2026-10-23T18:07:45.680Z level=INFO msg="INFO pushing snapshot updateID=<UPDATE-ID>"
+time=2026-10-23T18:07:48.045Z level=INFO msg="INFO putting update app=reference stage=test-wxezkd4j5ye3oio"
+time=2026-10-23T18:07:50.126Z level=INFO msg="done running stack command" service=project.run updateID=<UPDATE-ID> resources=6
+time=2026-10-23T18:07:50.131Z level=INFO msg="INFO unlocking app=reference stage=test-wxezkd4j5ye3oio"
+time=2026-10-23T18:07:51.168Z level=INFO msg="shutting down server" service=server
+time=2026-10-23T18:07:51.168Z level=INFO msg="server done" service=server
+time=2026-10-23T18:07:51.168Z level=ERROR msg="exited with error" err="stack run had errors"

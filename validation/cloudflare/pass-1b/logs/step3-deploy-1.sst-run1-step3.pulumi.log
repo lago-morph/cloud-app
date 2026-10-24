@@ -1,0 +1,20 @@
+Updating (test-wxezkd4j5ye3oio):
+
+@ updating.....
+ +  pulumi:pulumi:Stack reference-test-wxezkd4j5ye3oio creating (0s) 
+@ updating......
+ +  sst:cloudflare:Bucket Files creating (0s) 
+@ updating..............
+ +  cloudflare:index:R2Bucket FilesBucket creating (0s) 
+ +  cloudflare:index:R2Bucket FilesBucket created (0.63s) 
+ +  sst:sst:LinkRef FilesLinkRef creating (0s) 
+@ updating....
+ +  pulumi:pulumi:Stack reference-test-wxezkd4j5ye3oio created (13s) 
+Outputs:
+    _protect: false
+
+Resources:
+    + 4 created
+
+Duration: 17s
+

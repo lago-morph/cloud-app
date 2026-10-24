@@ -1,0 +1,26 @@
+{
+  "dotUploadUrlPath": "/prototype-logs/x%2F..%2Fy",
+  "dotUpload": {
+    "status": 200,
+    "body": ""
+  },
+  "dotDownloadUrlPath": "/prototype-logs/x%2F..%2Fy",
+  "dotDownload": {
+    "status": 200,
+    "bodyMatches": true,
+    "contentDisposition": "attachment; filename*=UTF-8''x%2F..%2Fy"
+  },
+  "dispUpload": {
+    "status": 200,
+    "body": ""
+  },
+  "dispSignedQueryValue": "attachment; filename*=UTF-8''pass0%20report%20%281%29.txt",
+  "dispRawQueryFragment": "response-content-disposition=attachment%3B+filename*%3DUTF-8%27%27pass0%2520report%2520%25281%2529.txt",
+  "expectedDisposition": "attachment; filename*=UTF-8''pass0%20report%20%281%29.txt",
+  "dispDownload": {
+    "status": 200,
+    "bodyMatches": true,
+    "contentDisposition": "attachment; filename*=UTF-8''pass0%20report%20%281%29.txt"
+  },
+  "dispMatches": true
+}

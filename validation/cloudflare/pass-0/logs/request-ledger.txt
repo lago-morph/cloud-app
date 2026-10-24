@@ -1,0 +1,32 @@
+graphql d1 usage (before)
+wrangler d1 list --json (before; 1 list request expected, untraced; counted as 2)
+setup-account: 5 framework requests (traced)
+c01-get-log-bucket GET /accounts/ACCT/r2/buckets/prototype-logs -> 200
+c02-get-never-created GET /accounts/ACCT/r2/buckets/spike-pass0-never-created-q7k2 -> 404
+c03-create-existing POST /accounts/ACCT/r2/buckets -> 409
+c04-subdomain GET /accounts/ACCT/workers/subdomain -> 200
+c05a-objects-empty GET /accounts/ACCT/r2/buckets/prototype-logs/objects?per_page=1000 -> 200
+c06-tokens-page1 GET /accounts/ACCT/tokens?per_page=50&page=1 -> 200
+c07-missing-secrets GET /accounts/ACCT/workers/scripts/spike-pass0-missing-q7k2/secrets -> 404
+c08-missing-settings GET /accounts/ACCT/workers/scripts/spike-pass0-missing-q7k2/settings -> 404
+c09-list-workers GET /accounts/ACCT/workers/scripts -> 200
+c11a-token-verify GET /accounts/ACCT/tokens/verify -> 200
+c11b-permission-groups GET /accounts/ACCT/tokens/permission_groups -> 200
+d02a-create-token POST /accounts/ACCT/tokens -> 200
+d02b PUT (S3) ticket x/../y -> 200
+d02c GET (S3) ticket x/../y -> 200
+d02d PUT (S3) ticket "pass0 report (1).txt" -> 200
+d02e GET (S3) ticket "pass0 report (1).txt" -> 200
+c05b-objects-page1 GET /accounts/ACCT/r2/buckets/prototype-logs/objects?per_page=1 -> 200
+c05c-objects-page2 GET /accounts/ACCT/r2/buckets/prototype-logs/objects?per_page=1&cursor=<CURSOR> -> 200
+d02f-delete-dot DELETE /accounts/ACCT/r2/buckets/prototype-logs/objects/x%2F..%2Fy -> 403
+d02h DELETE (S3, presigned) x/../y -> 204
+d02g-delete-disp DELETE /accounts/ACCT/r2/buckets/prototype-logs/objects/pass0%20report%20(1).txt -> 200
+d02i-objects-after GET /accounts/ACCT/r2/buckets/prototype-logs/objects?per_page=1000 -> 502
+d02j-objects-after-2 GET /accounts/ACCT/r2/buckets/prototype-logs/objects?per_page=1000 -> 200
+d02k-delete-token DELETE /accounts/ACCT/tokens/<ID> -> 200
+graphql d1 usage (after)
+s5-r2-buckets GET /accounts/ACCT/r2/buckets -> 200
+s5-workers GET /accounts/ACCT/workers/scripts -> 200
+s5-tokens GET /accounts/ACCT/tokens?per_page=50&page=1 -> 200
+wrangler d1 list --json (after; counted as 2)

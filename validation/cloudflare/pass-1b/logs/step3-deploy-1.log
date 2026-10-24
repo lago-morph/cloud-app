@@ -1,0 +1,23 @@
+start 2026-10-23T18:06:30Z
+(node:9010) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+deploy failed at step 5 (code): sst deploy --stage test-wxezkd4j5ye3oio failed (exit 1):
+SST 4.17.2 ready!
+
+➜  App:        reference
+   Stage:      test-wxezkd4j5ye3oio
+
+~  Deploy
+
+|  Created     Worker sst:cloudflare:Worker
+|  Error       Worker sst:cloudflare:Worker → WorkerScript cloudflare:index:WorkersScript
+[ERROR] POST "https://api.cloudflare.com/client/v4/accounts/<ACCOUNT>/workers/assets/upload?base64=true": 401 Unauthorized : failed to upload assets
+|  Warning     Cloudflare detected but `@cloudflare/workers-types` is not installed. Install it to get proper types for your bindings.
+
+✕  Failed    
+
+Worker sst:cloudflare:Worker → WorkerScript cloudflare:index:WorkersScript
+[ERROR] POST "https://api.cloudflare.com/client/v4/accounts/<ACCOUNT>/workers/assets/upload?base64=true": 401 Unauthorized : failed to upload assets
+  stage state: database reference-test-wxezkd4j5ye3oio-db-1 is current; the app may be stopped
+  next action: fix the problem and run deploy again
+exit 1 2026-10-23T18:07:53Z
