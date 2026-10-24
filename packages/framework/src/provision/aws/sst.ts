@@ -40,6 +40,7 @@ import type { Stage } from "../core/operations.js";
 import type { SstExec } from "../cloudflare/sst.js";
 import { AWS_PROVIDER, logBucketName, type SharedNetwork } from "./account.js";
 import { sstEnvironment, type Environment } from "./environment.js";
+import { LAMBDA_VARIABLES } from "../../targets/aws/variables.js";
 import { checkClusterIdentifier, checkDatabaseSecretArn, clusterArn, clusterIdentifier, databaseSecretName, filesBucketName, functionName, stageArns } from "./names.js";
 
 export { processSstExec, sstBinary, type SstExec } from "../cloudflare/sst.js";
@@ -62,16 +63,11 @@ export const INFRASTRUCTURE_COMPONENTS = ["Files", "Database"] as const;
 /** Step 3's `--target` value on a stage that has a database. */
 export const INFRASTRUCTURE_TARGET = INFRASTRUCTURE_COMPONENTS.join(",");
 
-/** The framework variables the program sets on the Function (read by the AWS runtime, G-03/G-05). */
-export const LAMBDA_VARIABLES = {
-  publicOrigin: "FRAMEWORK_PUBLIC_ORIGIN",
-  database: "FRAMEWORK_DATABASE",
-  databaseClusterArn: "FRAMEWORK_DATABASE_CLUSTER_ARN",
-  databaseSecretArn: "FRAMEWORK_DATABASE_SECRET_ARN",
-  filesBucket: "FRAMEWORK_FILES_BUCKET",
-  logBucket: "FRAMEWORK_LOG_BUCKET",
-  accountId: "FRAMEWORK_ACCOUNT_ID",
-} as const;
+/**
+ * The framework variables the program sets on the Function: the runtime's own list
+ * (`targets/aws/variables.ts`, read by `awsLambdaSettings`; DEC-PENDING-g-05-2).
+ */
+export { LAMBDA_VARIABLES };
 
 /** The data API calls the Function makes on its cluster (SQL §2 AWS; DEC-0037). */
 export const DATA_API_ACTIONS = [
@@ -189,7 +185,7 @@ export function sstProgram(input: SstInput): string {
         path: API_PATH,
         environment: {
           ...h.code.variables,
-          [LAMBDA_VARIABLES.database]: h.database,
+          [LAMBDA_VARIABLES.databaseName]: h.database,
           [LAMBDA_VARIABLES.databaseClusterArn]: clusterArn(stage, account.region, account.accountId),
           [LAMBDA_VARIABLES.databaseSecretArn]: h.databaseSecretArn,
           [LAMBDA_VARIABLES.filesBucket]: filesBucketName(stage, account.accountId),
