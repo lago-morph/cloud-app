@@ -1,6 +1,6 @@
 /**
  * The SST app of one AWS stage, built from the app definition alone (PROV-REQ-001; aws.md §2;
- * AWS-REQ-001…005; DEC-PENDING-G-S2-1…7). Apps contain no IaC: the framework writes
+ * AWS-REQ-001…005; DEC-0438…DEC-0444). Apps contain no IaC: the framework writes
  * `sst.config.ts` into `<app>/.framework/provision/aws/` on every deploy and remove and runs
  * SST there. It mirrors `provision/cloudflare/sst.ts`.
  *
@@ -16,15 +16,15 @@
  *   fixed name, the built bundle, `nodejs22.x` on `arm64` (PAR-272/273, both set explicitly:
  *   SST's defaults are Node 24 and x86_64), 1024 MB, PAR-270 timeout, a Function URL with no
  *   CORS of its own, routed at `/api` with the PAR-271 read timeout, `router.url` as
- *   `FRAMEWORK_PUBLIC_ORIGIN` (one phase, DEC-PENDING-G-S2-2), no VPC (AWS-REQ-002), explicit
+ *   `FRAMEWORK_PUBLIC_ORIGIN` (one phase, DEC-0439), no VPC (AWS-REQ-002), explicit
  *   `permissions` on exact ARNs and **no `link`**, and a role that trusts Lambda only
- *   (DEC-PENDING-G-S2-6)).
+ *   (DEC-0443)).
  * `removal: "remove"` so nothing is retained; `home: "aws"` keeps state in SST's bootstrap
  * bucket; `state.purge` makes a remove that leaves nothing also delete the stage's state and
  * passphrase. All inputs are embedded as JSON, never as code. Secrets are never declared: a
  * `SECRET_*` variable is refused (they are SSM parameters read per request, SEC-REQ-003).
  *
- * Step 3 (long-lived infrastructure; DEC-PENDING-G-S2-3, the AWS form of root cause
+ * Step 3 (long-lived infrastructure; DEC-0440, the AWS form of root cause
  * 2026-10-23-pass1): SST 4.17.2 resolves `--target` only in the stage's stored state and adds
  * `--target-dependents`. So a stage with a database runs `sst deploy --target Files,Database`
  * with the full program, and a stage without one (a first deploy) runs an untargeted deploy of
@@ -49,7 +49,7 @@ export { processSstExec, sstBinary, type SstExec } from "../cloudflare/sst.js";
 export const LAMBDA_TIMEOUT = "55 seconds";
 /** PAR-271: the API read timeout at the router (SST's and CloudFront's maximum). */
 export const ROUTER_READ_TIMEOUT = "60 seconds";
-/** PAR-272, PAR-273, PAR-274 (DEC-PENDING-g-s1-2). */
+/** PAR-272, PAR-273, PAR-274 (DEC-0433). */
 export const LAMBDA_RUNTIME = "nodejs22.x";
 export const LAMBDA_ARCHITECTURE = "arm64";
 export const LAMBDA_MEMORY = "1024 MB";
@@ -65,7 +65,7 @@ export const INFRASTRUCTURE_TARGET = INFRASTRUCTURE_COMPONENTS.join(",");
 
 /**
  * The framework variables the program sets on the Function: the runtime's own list
- * (`targets/aws/variables.ts`, read by `awsLambdaSettings`; DEC-PENDING-g-05-2).
+ * (`targets/aws/variables.ts`, read by `awsLambdaSettings`; DEC-0469).
  */
 export { LAMBDA_VARIABLES };
 
@@ -328,7 +328,7 @@ export function writeSstApp(dir: string, input: SstInput): void {
 }
 
 /**
- * Step 3's program and run (DEC-PENDING-G-S2-3; root cause 2026-10-23-pass1). A stage with a
+ * Step 3's program and run (DEC-0440; root cause 2026-10-23-pass1). A stage with a
  * database has passed a step 3 before (its first database is created only after one), so
  * `Files` and `Database` are in SST's state and `--target Files,Database` resolves; the program
  * is the full one, so the targeted run deletes nothing. A stage without one gets an untargeted

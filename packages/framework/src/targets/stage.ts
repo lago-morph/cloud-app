@@ -8,7 +8,7 @@
  * bindings. What differs per target (bindings, sink, ticket issuer, extra routes, mock,
  * provider) is passed in. Workers-compatible: no Node APIs. Target-neutral: it imports no
  * target's adapters, so it lives here rather than under `targets/cloudflare/`
- * (DEC-PENDING-g-06-2; `targets/cloudflare/stage.ts` re-exports it).
+ * (DEC-0473; `targets/cloudflare/stage.ts` re-exports it).
  */
 import type { Hono } from "hono";
 import { assembleApp, type RuntimeContext, type RuntimeEnv } from "../core/assemble.js";

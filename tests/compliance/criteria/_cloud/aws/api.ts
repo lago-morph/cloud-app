@@ -3,7 +3,7 @@
  * `_cloud/api.ts`).
  *
  * - Clients are the framework's pinned SDK v3 clients (PAR-111), each created once per process
- *   with the framework's proxy-aware request handler (`targets/aws/sdk.ts`, DEC-PENDING-g-03-4),
+ *   with the framework's proxy-aware request handler (`targets/aws/sdk.ts`, DEC-0459),
  *   so they reach AWS through `HTTPS_PROXY` in the sandbox and directly elsewhere. Credentials
  *   come from the SDK's default chain (environment, profile, …) and are never read or printed
  *   here.

@@ -8,7 +8,7 @@
  * `setup-account` on its own. Locally there are no shared resources.
  *
  * `--region` is AWS only: the account's region, recorded as the log bucket's location (DEC-0075,
- * DEC-PENDING-G-07-2). Without it a new account gets PAR-060 and an existing one keeps its
+ * DEC-0476). Without it a new account gets PAR-060 and an existing one keeps its
  * region; a region that differs from an existing log bucket's is refused by the account
  * operations, naming both.
  */

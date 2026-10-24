@@ -1,5 +1,5 @@
 /**
- * The AWS operations of the cloud commands (G-11; DEC-PENDING-G-10-5): G-10's `createAwsTarget`
+ * The AWS operations of the cloud commands (G-11; DEC-0492): G-10's `createAwsTarget`
  * on G-07's account, built from the process environment.
  *
  * **Child environment.** Every AWS client and every child process the target starts (SST, which

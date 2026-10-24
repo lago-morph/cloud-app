@@ -4,10 +4,10 @@
  * created, copied, migrated, checked and dropped through the RDS Data API from the CLI. G-10
  * spreads these into its `TargetOperations` and uses `listDatabases()` for
  * `StageResources.databases`. A `StageDatabase.id` is the database name: Postgres names a
- * database uniquely within its cluster, and the cluster is the stage's (DEC-PENDING-g-09-1).
+ * database uniquely within its cluster, and the cluster is the stage's (DEC-0485).
  *
  * - **Resume.** Every Data API call is retried while the cluster resumes, with sql/data-api.ts's
- *   loop (proposed PAR-275 backoff) inside PAR-210 per call. Before its first operation an
+ *   loop (PAR-275 backoff) inside PAR-210 per call. Before its first operation an
  *   instance waits for the cluster with one `SELECT 1` on `postgres` (`waitForResume`).
  * - **Create, copy, drop** run connected to the `postgres` database, outside any transaction,
  *   with every name quoted: `CREATE DATABASE "<n>" TEMPLATE template0 LC_COLLATE 'C' LC_CTYPE 'C'`,
@@ -20,11 +20,11 @@
  * - **List**: the names of `pg_database` that are not templates.
  * - **Migrate**: one Data API transaction per migration file: `BeginTransaction`, each statement
  *   of the file unchanged, its `__framework_migrations` row, `CommitTransaction`;
- *   `RollbackTransaction` after any failure (DEC-PENDING-g-09-2).
+ *   `RollbackTransaction` after any failure (DEC-0486).
  * - **Check** (step 4): mig/cloud/check.ts's comparison over a Postgres `CheckReader`: tables of
  *   `public` with columns (`information_schema`) and exact row counts, rows whose foreign key
  *   points at no row (every `pg_constraint` FK, MATCH SIMPLE), and the column rule of added
- *   columns from the declared type (DEC-PENDING-g-09-3).
+ *   columns from the declared type (DEC-0487).
  *
  * Errors are thrown with messages naming the database and the cause; ARNs are not secrets, and no
  * credential value is ever in a message (CLI-REQ-004). Makes no call but through `client`.

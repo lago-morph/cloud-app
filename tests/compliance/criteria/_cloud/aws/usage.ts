@@ -1,7 +1,7 @@
 /**
  * The AWS cluster cap (plan-aws.md G-T4; `harness/aws-usage.ts`): at most `MAX_AWS_CLUSTERS` (3)
  * Aurora clusters at once. `testStageClusters` lists the account's test-stage clusters
- * (`<app>-test-…`, by the fixed cluster identifier `<app>-<stage>`, decision G-S2/G-08-1) with RDS
+ * (`<app>-test-…`, by the fixed cluster identifier `<app>-<stage>`, DEC-0438, DEC-0480) with RDS
  * `DescribeDBClusters`, one counted call per 100 clusters, bounded. The driver checks it before it
  * deploys its run stage; a test that creates a further stage calls `requireClusterRoom` first, which
  * reports a missing prerequisite (recorded `blocked`) when the cap would be passed.

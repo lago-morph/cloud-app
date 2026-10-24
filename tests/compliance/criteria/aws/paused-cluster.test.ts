@@ -5,7 +5,7 @@
  *
  * Runs against the run's stage. The cluster-paused observer of the AWS cloud hooks is polled
  * every 30 s, with no request to the stage meanwhile, for at most `pauseBoundMs(PAR-213)` (the
- * auto-pause delay plus 10 minutes; no parameter names this bound yet). If the cluster is not
+ * auto-pause delay plus 10 minutes, PAR-281). If the cluster is not
  * observably paused by then, the test is skipped with the reason as its note, so the driver
  * records AWS-AC-005 `not-run` (the title below states that reason; results.ts records skipped
  * tagged tests by title). Other tests of the run using the database can keep it from pausing.

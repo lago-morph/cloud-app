@@ -305,8 +305,18 @@ That is roughly 12–14 h of active time. Allow an account lifetime of 2–3 day
 7. COMPL-AC-004's R2-token clause has no AWS equivalent. Please confirm the reading in decision 10.
 8. PROV-AC-006 needs a second region, which means one more VPC and log bucket. Is that acceptable?
 9. FILES-AC-003's expired-ticket clause may pass on S3 but fail on Cloudflare (DEC-0101). That is a divergence, not a defect.
-10. DEC-0110 (no `./targets/aws`), still open for your review, is now superseded.
+10. DEC-0110 (no `./targets/aws`), still open for your review, is now superseded (by DEC-0447).
 11. Proposed AWS usage caps: at most 3 stages at once, the $25 budget alarm, and stop on throttling. Please approve them or set your own.
+
+### 5.1 Owner questions from the phase G decision drafts (G-INT, 2026-10-24)
+
+1. **Conflict, `.`/`..` names (DEC-0464 vs FILES-AC-002):** on AWS a name that is only `.` or `..` is `FILES.INVALID_NAME` (URLs cannot carry it), but FILES-AC-002's shared case round-trips `".."` and fails in G-T3's S3 pre-check; choose: forbid both names in FILES-REQ-002 on every target (recommended), accept a target difference, or send them through `@aws-sdk/client-s3`.
+2. **Remove keeps state (DEC-0491):** unlike Cloudflare (DEC-0084), a failed `sst remove` on AWS keeps the stage's SST state and passphrase so a later `remove` can retry (no by-name fallback for cluster, Function or CloudFront); confirm.
+3. **`kms:Decrypt` for SSM (DEC-0481):** the Function role is not granted `kms:Decrypt`, on the reading that the AWS-managed `aws/ssm` key allows SSM use by account principals; confirm, or have it granted on that key.
+4. **CloudFront `Origin` forwarding (DEC-0468):** the router's origin request policy must pass `Origin` to the Function URL unchanged, or every session POST through CloudFront is `AUTH.REQUEST_FORGERY`; confirm that phase L may change the policy if SST's default drops it.
+5. **Go TLS via `SSL_CERT_FILE` (DEC-0495):** SST/Pulumi get `SSL_CERT_FILE` = `NODE_EXTRA_CA_CERTS` (unless you set your own), which replaces Go's system roots; confirm this for the sandbox, to be verified at L-0.
+6. **PAR-214 vs PAR-215 for NULL-heavy results (DEC-0453):** if phase L shows such results pass PAR-215 but exceed the Data API's 1 MiB, choose: count NULL as 8 bytes in sql.md §2.3, or add a row cap.
+7. **Usage caps as parameters (DEC-0501):** Q11's caps are now PAR-282 (2,000 hook API calls per run) and PAR-283 (3 test-stage clusters at once); approve or set your own.
 
 ### Critical Files for Implementation
 - /home/user/cloud-app/docs/components/aws.md

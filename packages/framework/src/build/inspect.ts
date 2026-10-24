@@ -1,10 +1,10 @@
 /**
  * Inspection of the AWS Lambda bundle at build time (CORE-REQ-006, PROV-REQ-005; plan-aws G-06;
- * DEC-PENDING-g-06-3). It mirrors the Cloudflare bundle inspection (DEC-0240): modules are
+ * DEC-0474). It mirrors the Cloudflare bundle inspection (DEC-0240): modules are
  * recognised by the paths esbuild reports and by strings that survive minification. The build
  * fails before anything is deployed when the bundle:
  * - leaves anything but a Node built-in external: the AWS SDK and every other package are
- *   bundled, never taken from the managed runtime (DEC-PENDING-g-s1-1);
+ *   bundled, never taken from the managed runtime (DEC-0432);
  * - holds a Cloudflare-only module (Workers adapters, Wrangler, Miniflare, `cloudflare:`
  *   imports), provisioning (SST, Pulumi, `provision/`), a CLI-only AWS SDK client, the Postgres
  *   harness, the stub login provider or test helpers, the local file-transfer route or its
@@ -12,13 +12,13 @@
  * - is a production bundle and holds the authentication mock or its mock-login route;
  * - contains a secret value the build process can see (`SECRET_*` and AWS credential variables,
  *   the app's `.dev.vars`) or an AWS access key ID;
- * - is larger than the bundle size bound (new PAR, DEC-PENDING-g-06-3).
+ * - is larger than the bundle size bound (PAR-276, DEC-0474).
  * The caller reads the bundle and the secret values; this module only compares.
  */
 
 import { builtinModules } from "node:module";
 
-/** The AWS Lambda bundle size bound in bytes (new PAR, DEC-PENDING-g-06-3): 4 MiB minified. */
+/** The AWS Lambda bundle size bound in bytes (PAR-276, DEC-0474): 4 MiB minified. */
 export const AWS_BUNDLE_MAX_BYTES = 4 * 1024 * 1024;
 
 /** Secret values shorter than this are not searched for (they would match by chance). */
@@ -39,7 +39,7 @@ const SPECIFIER = (names: string): RegExp => new RegExp(`(?:from\\s*|import\\s*|
 /** The framework's own modules: its sources in this repository, or its installed `dist/` (never the app's `src/`). */
 const FRAMEWORK = "(?:^|/)(?:packages/framework|@lago-morph/prototype-framework)/(?:src|dist)/";
 
-/** CLI or provisioning only (DEC-PENDING-g-s1-1): the HTTP Lambda carries rds-data, s3 and ssm. */
+/** CLI or provisioning only (DEC-0432): the HTTP Lambda carries rds-data, s3 and ssm. */
 export const CLI_ONLY_AWS_CLIENTS = ["ec2", "iam", "rds", "sts", "secrets-manager", "lambda", "resource-groups-tagging-api"] as const;
 
 export const AWS_BUNDLE_RULES: readonly ForbiddenRule[] = [

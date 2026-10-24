@@ -9,7 +9,7 @@
  * preflight then proves them usable with STS `GetCallerIdentity`, which also yields the
  * account ID every shared-resource name and expected-owner check uses.
  *
- * Proxy (G-S1 §5, DEC-PENDING-g-s1-5): `NODE_USE_ENV_PROXY=1` does not reach SDK v3's own
+ * Proxy (G-S1 §5, DEC-0436): `NODE_USE_ENV_PROXY=1` does not reach SDK v3's own
  * `https.Agent`, so every client the CLI builds gets a `NodeHttpHandler` whose agent is
  * `new https.Agent({ keepAlive: true, proxyEnv })`. It honours `HTTPS_PROXY`/`NO_PROXY` and
  * connects directly when none is set. The handler is given as its options object, which the

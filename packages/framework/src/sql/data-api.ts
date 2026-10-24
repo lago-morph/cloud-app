@@ -5,11 +5,11 @@
  * runtime imports it.
  *
  * - **Client.** One `RDSDataClient` per cold start (`dataApiClient`), with the SDK's own retries
- *   off (`maxAttempts: 1`, DEC-PENDING-g-s1-4 (c)) so this module's loop is the only retry, and
+ *   off (`maxAttempts: 1`, DEC-0435 (c)) so this module's loop is the only retry, and
  *   an explicit `NodeHttpHandler` whose agent honours `HTTPS_PROXY`/`NO_PROXY` (`proxyEnv`,
- *   DEC-PENDING-g-s1-5); with no proxy variable set, as in Lambda, it connects directly.
+ *   DEC-0436); with no proxy variable set, as in Lambda, it connects directly.
  * - **Resume retry.** A call failing with `DatabaseResumingException` (matched by `name`) is
- *   retried after random(0, min(5 s, 250 ms × 2ⁿ)) (proposed PAR-275, full jitter) until the
+ *   retried after random(0, min(5 s, 250 ms × 2ⁿ)) (PAR-275, full jitter) until the
  *   next attempt would start after PAR-210 (the handle's budget); then the call fails with
  *   `SQL.UNAVAILABLE`, logged once. The clock, the sleep and the random source are injected
  *   (sql.md §AWS), and the error source is the client, so the loop is tested with the Data API
@@ -53,7 +53,7 @@ import { portableHandle, type DrizzleDb } from "./handle.js";
 import type { PortableDb } from "./types.js";
 import { withValueRules } from "./write-rules.js";
 
-/** Proposed PAR-275: Data API resume backoff (G-S1 RESULT; DEC-PENDING-g-s1 parameter changes). */
+/** PAR-275: Data API resume backoff (G-S1 RESULT; DEC-0435). */
 export const RESUME_BACKOFF = { baseMs: 250, factor: 2, capMs: 5_000 } as const;
 
 /** PAR-214: the Data API's maximum response size, in bytes. */

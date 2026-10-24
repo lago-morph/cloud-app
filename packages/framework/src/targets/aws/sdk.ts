@@ -1,6 +1,6 @@
 /**
  * The request handler every AWS SDK v3 client of the framework gets, runtime and CLI alike
- * (DEC-PENDING-g-s1-5, DEC-PENDING-G-07-5): `new https.Agent({ keepAlive: true, proxyEnv })`,
+ * (DEC-0436, DEC-0479): `new https.Agent({ keepAlive: true, proxyEnv })`,
  * given as the handler's options object so the SDK builds `NodeHttpHandler.create(options)`
  * itself (no direct `@smithy/node-http-handler` dependency). It honours `HTTPS_PROXY` and
  * `NO_PROXY` from `env` and connects directly when none is set, as in Lambda. Shared by
