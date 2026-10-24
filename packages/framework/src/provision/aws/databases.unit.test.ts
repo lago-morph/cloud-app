@@ -1,7 +1,7 @@
 /**
  * AWS database operations (G-09) against the G-F1 Data API fake, and PROV's target-neutral
  * deploy sequence with them (MIG-REQ-003 failure path, MIG-REQ-006 copy-migrate-check-replace).
- * A PRE-CHECK, never AWS evidence (DEC-PENDING-g-f1-1). No AWS call: the network guard records
+ * A PRE-CHECK, never AWS evidence (DEC-0445). No AWS call: the network guard records
  * any attempt.
  */
 import { mkdtempSync, rmSync } from "node:fs";

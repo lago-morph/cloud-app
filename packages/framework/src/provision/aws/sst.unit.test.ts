@@ -84,7 +84,7 @@ async function run(input: SstInput) {
   return { ...e, outputs, byName };
 }
 
-describe("the SST app of an AWS stage, built from the app definition (PROV-REQ-001; aws.md §2; DEC-PENDING-G-S2-1)", () => {
+describe("the SST app of an AWS stage, built from the app definition (PROV-REQ-001; aws.md §2; DEC-0438)", () => {
   it("has SST's settings: app name, never retains resources, state home on AWS with purge, the pinned provider in the account's region", () => {
     const { config } = evaluate(sstProgram(full));
     expect(config.app({ stage: "test-abc" })).toEqual({
@@ -126,7 +126,7 @@ describe("the SST app of an AWS stage, built from the app definition (PROV-REQ-0
     expect(db.transformed.cluster).toEqual({ clusterIdentifier: "notes-test-abc", skipFinalSnapshot: true, deletionProtection: false });
   });
 
-  it("names SST's credentials secret by a global transform, and only that secret (DEC-PENDING-G-S2-4)", async () => {
+  it("names SST's credentials secret by a global transform, and only that secret (DEC-0441)", async () => {
     const { globalTransforms } = await run(full);
     expect(globalTransforms.map((t) => t.resource)).toEqual(["aws.secretsmanager.Secret"]);
     const mine: Args = {};
@@ -160,7 +160,7 @@ describe("the SST app of an AWS stage, built from the app definition (PROV-REQ-0
     expect(seconds(fn.args.timeout as string)).toBeGreaterThan(45 + 2); // PAR-210 + PAR-260 (AWS-REQ-005)
   });
 
-  it("the Function's role trusts Lambda only (DEC-PENDING-G-S2-6)", async () => {
+  it("the Function's role trusts Lambda only (DEC-0443)", async () => {
     const { byName } = await run(full);
     expect(byName("Http").transformed.role).toEqual({ assumeRolePolicy: { trust: { Service: "lambda.amazonaws.com" } } });
   });
@@ -179,7 +179,7 @@ describe("the SST app of an AWS stage, built from the app definition (PROV-REQ-0
     });
   });
 
-  it("the framework variables the program sets are exactly the ones the AWS runtime reads (DEC-PENDING-g-05-2)", async () => {
+  it("the framework variables the program sets are exactly the ones the AWS runtime reads (DEC-0469)", async () => {
     const { byName } = await run(full);
     const environment = byName("Http").args.environment as Record<string, unknown>;
     const set = Object.keys(environment).filter((name) => !(name in code.variables)).sort();
@@ -211,7 +211,7 @@ describe("the SST app of an AWS stage, built from the app definition (PROV-REQ-0
     expect(noClient.components.map((c) => c.name)).toEqual(["Files", "Database", "Router", "Http"]);
   });
 
-  it("step 3 safety: nothing under Router, Site or Http takes an output of Files or Database; the only output the Function takes is router.url (DEC-PENDING-G-S2-3)", async () => {
+  it("step 3 safety: nothing under Router, Site or Http takes an output of Files or Database; the only output the Function takes is router.url (DEC-0440)", async () => {
     const { components } = await run(full);
     for (const c of components.filter((x) => ["Router", "Site", "Http"].includes(x.name))) {
       const refs = [...outputsIn(c.args), ...outputsIn(c.transformed)];
@@ -298,7 +298,7 @@ describe("the Function's IAM statements (AWS-REQ-003; AWS-AC-003 and SEC-AC-003,
   });
 });
 
-describe("step 3 on AWS (DEC-PENDING-G-S2-3; root cause 2026-10-23-pass1)", () => {
+describe("step 3 on AWS (DEC-0440; root cause 2026-10-23-pass1)", () => {
   it("a stage without a database (first deploy): the program without the Function, untargeted", async () => {
     const plan = infrastructureDeploy(full, false);
     expect(plan.target).toBeUndefined();

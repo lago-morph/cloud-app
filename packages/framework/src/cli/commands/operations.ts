@@ -1,6 +1,6 @@
 /**
  * The cloud commands' PROV operations, one factory per cloud target (D-05; G-11;
- * DEC-PENDING-G-10-5). `deploy`, `remove`, `setup-account`, `secrets set` and the compliance
+ * DEC-0492). `deploy`, `remove`, `setup-account`, `secrets set` and the compliance
  * harness's leftover check all take their target's operations from `targetOperations`, which
  * dispatches on `--target` to the target's own factory:
  * - `cloudflare`: `cloudflareOperations` (D-03 with D-04's databases and D-02's CORS parts),

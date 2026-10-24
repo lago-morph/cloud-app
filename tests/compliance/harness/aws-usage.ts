@@ -2,7 +2,7 @@
  * The driver's AWS rules for `--target aws` (plan-aws.md G-T4; plan §1 "Cloud usage limits"):
  *
  * - **Stage naming.** A run stage is `test-<run ID>` as on every cloud (COMPL-REQ-004). On AWS the
- *   stage also names four fixed physical resources (decision G-S2/G-08-1): the Aurora cluster
+ *   stage also names four fixed physical resources (DEC-0438, DEC-0480): the Aurora cluster
  *   `<app>-<stage>`, the Function `<app>-<stage>-http`, the files bucket
  *   `<app>-<stage>-files-<account-id>` and the credentials secret
  *   `<app>-<stage>-database-credentials`. `awsStageNameProblems` checks that those names are valid
@@ -20,8 +20,9 @@
  *   (deploy, remove, the leftover check) are the CLI's and are not in this count.
  */
 
+/** PAR-283: test-stage Aurora clusters at once in the account (DEC-0501). */
 export const MAX_AWS_CLUSTERS = 3;
-/** The run's cap on AWS API calls by the test hooks (like the Cloudflare pass cap of 2,000 requests, DEC-0419). */
+/** PAR-282: the run's cap on AWS API calls by the test hooks (like the Cloudflare pass cap of 2,000 requests, DEC-0419; DEC-0501). */
 export const DEFAULT_MAX_AWS_RUN_CALLS = 2_000;
 export const MAX_AWS_RUN_CALLS_ENV = "COMPLIANCE_AWS_MAX_RUN_CALLS";
 /** The per-process cap the hooks read (`criteria/_cloud/aws/api.ts`). */

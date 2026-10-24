@@ -5,7 +5,7 @@
  * not import it, so production bundles contain no mock (CORE-REQ-006, PROV-REQ-005).
  *
  * The handler is the shared stage runtime over the AWS adapters behind Hono's AWS Lambda
- * adapter (`handler.ts`; aws.md §2; DEC-PENDING-g-s1-3). It reads the Lambda's own environment
+ * adapter (`handler.ts`; aws.md §2; DEC-0434). It reads the Lambda's own environment
  * (`process.env`, `settings.ts`), and creates its SDK clients once per cold start.
  */
 import type { DefinedApp } from "../../core/public.js";

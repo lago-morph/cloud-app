@@ -127,7 +127,7 @@ export function prepareDeploy(deps: PrepareDeps): DeployDeps["prepare"] {
     const withAssets = assetsDirectory === undefined ? {} : { assetsDirectory };
     let code: WorkerCode | FunctionCode;
     if (target === "aws") {
-      // G-06's build output is exactly the stage program's FunctionCode (DEC-PENDING-g-06-1); the
+      // G-06's build output is exactly the stage program's FunctionCode (DEC-0472); the
       // program sets the framework's Lambda variables itself, so the code adds none.
       if (built.lambda === undefined) throw new Error(`the AWS build of stage ${stage} returned no Lambda code`);
       code = { bundle: built.lambda.bundle, handler: built.lambda.handler, ...withAssets };

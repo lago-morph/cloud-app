@@ -11,7 +11,7 @@
  * - `deployCode` (step 5): the session key is generated when its parameter is absent, then a
  *   full `sst deploy` with the current database as an input, then the files bucket's CORS rule
  *   for the public origin (`router.url`, read from the run's outputs) set by API: the program
- *   declares `cors: false`, so SST never manages or overwrites it (DEC-PENDING-G-08-3).
+ *   declares `cors: false`, so SST never manages or overwrites it (DEC-0482).
  * - `setSecret`, `listSetSecrets`: SSM SecureString parameters `/<app>/<stage>/secrets/<name>`
  *   (SEC-REQ-003). They do not depend on the Function, so the listing is never `null`.
  * - `stopApp` / `startApp`: the Function's reserved concurrency 0 / removed (DEC-0078).
@@ -26,7 +26,7 @@
  * - `removeStage`, in order, every step attempted: empty the files bucket (every version and
  *   delete marker), delete the parameters under `/<app>/<stage>/`, `sst remove` (skipped when
  *   the state bucket has no `app/<app>/<stage>.json`), force-delete the credentials secret
- *   (no recovery window, DEC-PENDING-G-S2-4), then delete the stage's SST state objects (every
+ *   (no recovery window, DEC-0441), then delete the stage's SST state objects (every
  *   version) and its passphrase parameter, but only when `sst remove` succeeded or was skipped:
  *   otherwise they are kept so that a later remove can run SST again. Failures are collected
  *   and thrown together; the core then reports leftovers.
@@ -69,7 +69,7 @@ export interface AwsStageClients {
 /** The region where the Tagging API lists global (CloudFront) resources. */
 export const GLOBAL_TAGGING_REGION = "us-east-1";
 
-/** Builds the stage clients for `region` with the proxy-aware handler (DEC-PENDING-G-07-5). */
+/** Builds the stage clients for `region` with the proxy-aware handler (DEC-0479). */
 export function createAwsStageClients(env: Environment, region: string): AwsStageClients {
   const config = clientConfig(env, region);
   const tagging = new ResourceGroupsTaggingAPIClient(config);
@@ -208,7 +208,7 @@ export function createAwsTarget(options: AwsTargetOptions): TargetOperations {
     }
   }
 
-  /** The credentials secret's full ARN by its fixed name (DEC-PENDING-G-S2-4), or undefined. */
+  /** The credentials secret's full ARN by its fixed name (DEC-0441), or undefined. */
   async function databaseSecretArn(stage: Stage): Promise<string | undefined> {
     const { clients, region, accountId } = await located();
     let arn: string | undefined;
@@ -416,7 +416,7 @@ export function createAwsTarget(options: AwsTargetOptions): TargetOperations {
     createSharedResources: (absent) => account.createSharedResources(absent),
 
     async deployInfrastructure(input: DeployInput) {
-      // SST 4.17.2 resolves `--target` only in the stage's stored state (DEC-PENDING-G-S2-3), so
+      // SST 4.17.2 resolves `--target` only in the stage's stored state (DEC-0440), so
       // step 3 targets `Files,Database` exactly when the stage has a database; without one the
       // run is untargeted and reconciles the whole stage stack, so it would delete a Function in
       // state with the app's code (root cause 2026-10-23-pass1, R1/R2).
@@ -619,7 +619,7 @@ export function createAwsTarget(options: AwsTargetOptions): TargetOperations {
         sstDone = true;
       });
 
-      // 4. Force-delete the credentials secret, with no recovery window (DEC-PENDING-G-S2-4), in
+      // 4. Force-delete the credentials secret, with no recovery window (DEC-0441), in
       //    case SST's removal did not, so the name can be created again at once.
       await attempt(async () => {
         const { clients } = await located();

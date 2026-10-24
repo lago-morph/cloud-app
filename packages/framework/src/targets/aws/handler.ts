@@ -1,7 +1,7 @@
 /**
  * The AWS Lambda runtime (aws.md §2; plan-aws G-05): the shared stage runtime (`assembleStage`)
  * over the AWS adapters, behind Hono's AWS Lambda adapter for Function URL (payload 2.0) events
- * (DEC-PENDING-g-s1-3). `public.ts` calls it with the Lambda's own environment and clients;
+ * (DEC-0434). `public.ts` calls it with the Lambda's own environment and clients;
  * tests pass fakes.
  *
  * - **SQL and KV**: the Data API adapter (`sql/data-api.ts`, G-02) on the cluster, secret and
@@ -15,13 +15,13 @@
  * - **LOG**: one S3 `PutObject` per entry into the shared log bucket (`log/aws/sink.ts`, G-03).
  *   Each invocation has its own pending-write tracker, and the handler awaits it for at most
  *   PAR-260 before it returns the response (LOG-REQ-001). A write still running then is
- *   abandoned (DEC-PENDING-g-03-1, open question 3; DEC-PENDING-g-05-3).
+ *   abandoned (DEC-0456, open question 3; DEC-0470).
  * - **Public origin**: `FRAMEWORK_PUBLIC_ORIGIN`, never the request's `Host` (AWS-REQ-004,
  *   DEC-0044). The adapter builds `c.req.url` from `Host`; the framework does not use it as the
  *   origin.
  * - **Redaction**: every secret value the runtime has read during this cold start, through
  *   either reader, is redacted from error responses and log entries (DEC-0123;
- *   DEC-PENDING-g-05-4). A value never read cannot appear in an error.
+ *   DEC-0471). A value never read cannot appear in an error.
  *
  * Node only (the AWS SDK clients); the Lambda bundle (G-06) is the only place it runs.
  */
@@ -97,7 +97,7 @@ export interface AwsRuntimeDependencies {
   readonly provider?: LoginProvider;
 }
 
-/** Records every value a reader returns, for redaction (DEC-PENDING-g-05-4). */
+/** Records every value a reader returns, for redaction (DEC-0471). */
 function recording(read: SecretReader, seen: Set<string>): SecretReader {
   return async (name) => {
     const value = await read(name);
@@ -195,6 +195,6 @@ export function createAwsLambdaRuntime<C extends ConfigDeclaration, S extends st
   });
   const lambda = handle(outer);
   // One boundary cast: Hono's event types require fields Function URL events leave out
-  // (`body`, `requestContext.authorizer`/`authentication`; DEC-PENDING-g-s1-3).
+  // (`body`, `requestContext.authorizer`/`authentication`; DEC-0434).
   return async (event, context) => (await lambda(event as unknown as LambdaEvent, context as LambdaContext | undefined)) as unknown as FunctionUrlResult;
 }

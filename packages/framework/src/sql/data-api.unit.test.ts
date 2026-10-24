@@ -1,6 +1,6 @@
 /**
  * The Data API adapter (plan-aws G-02) against the in-process Data API fake (G-F1). The fake is
- * a PRE-CHECK, never AWS evidence (DEC-PENDING-g-f1-1): these tests show that the adapter's code
+ * a PRE-CHECK, never AWS evidence (DEC-0445): these tests show that the adapter's code
  * paths work against the fake's assumed shapes; phase L confirms them on AWS.
  */
 import { ExecuteStatementCommand } from "@aws-sdk/client-rds-data";
@@ -96,7 +96,7 @@ function recordingLog(): LogService & { entries: string[] } {
   return { entries, write: (_component: string, _level: string, message: string) => void entries.push(message) } as unknown as LogService & { entries: string[] };
 }
 
-describe("resume backoff (proposed PAR-275: 250 ms base, factor 2, 5 s cap, full jitter)", () => {
+describe("resume backoff (PAR-275: 250 ms base, factor 2, 5 s cap, full jitter)", () => {
   it("delay n is random(0, min(5 s, 250 ms × 2ⁿ))", () => {
     expect(RESUME_BACKOFF).toEqual({ baseMs: 250, factor: 2, capMs: 5_000 });
     const ceilings = [0, 1, 2, 3, 4, 5, 6, 10].map((n) => resumeDelayMs(n, () => 0.999999999));

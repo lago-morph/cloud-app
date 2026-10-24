@@ -2,10 +2,10 @@
  * The documented AWS names the hooks find a stage's resources by (no lookup in the framework's
  * implementation; the hooks must stay independent of it):
  * - SSM SecureString parameters `/<app>/<stage>/secrets/<name>`, logical name unchanged
- *   (SEC-REQ-003, secrets.md §2; DEC-PENDING-g-01-2);
+ *   (SEC-REQ-003, secrets.md §2; DEC-0448);
  * - the shared log bucket `prototype-logs-<account-id>` (log.md §2 "AWS") with the LOG-REQ-004
- *   key layout `<app>/<stage>/<yyyy>/<mm>/<dd>/…` (DEC-PENDING-g-03-1, -3);
- * - the four fixed physical names of DEC-PENDING-G-S2 / G-08-1: the Function `<app>-<stage>-http`,
+ *   key layout `<app>/<stage>/<yyyy>/<mm>/<dd>/…` (DEC-0456, DEC-0458);
+ * - the four fixed physical names of DEC-0438 / DEC-0480: the Function `<app>-<stage>-http`,
  *   the Aurora cluster `<app>-<stage>`, the files bucket `<app>-<stage>-files-<account-id>` and
  *   the credentials secret `<app>-<stage>-database-credentials`;
  * - every other stage resource carries SST's default tags `sst:app` and `sst:stage` (G-S2 RESULT,

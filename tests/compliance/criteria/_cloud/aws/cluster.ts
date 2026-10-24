@@ -1,5 +1,5 @@
 /**
- * Cluster-paused observer (AWS-AC-005; DEC-PENDING-g-s1-6, PAR-281).
+ * Cluster-paused observer (AWS-AC-005; DEC-0437, PAR-281).
  *
  * Observing a pause must not end it, so the observer uses control-plane reads only and never
  * the Data API:
@@ -22,7 +22,7 @@ import { DescribeDBClustersCommand, DescribeEventsCommand } from "@aws-sdk/clien
 import { awsCall, awsClients, awsFailure, errorName, MAX_PAGES } from "./api.js";
 import { type AwsStage, clusterIdentifier } from "./names.js";
 
-/** PAR-281 (proposed): the bound on the wait for an observable pause. */
+/** PAR-281: the bound on the wait for an observable pause. */
 export const PAUSE_WAIT_MS = 15 * 60_000;
 export const PAUSE_POLL_MS = 30_000;
 export const EVENT_WINDOW_MINUTES = 60;

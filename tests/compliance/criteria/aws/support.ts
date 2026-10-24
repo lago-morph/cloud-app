@@ -190,8 +190,8 @@ export function simulationCases(r: AwsStageResources, app: string, stage: string
 
 /**
  * Bound on waiting for the cluster to pause: the auto-pause delay PAR-213 plus 10 minutes for
- * the platform to act on it and for the observer's metric to show it. No parameter names this
- * bound yet (plan-aws.md §2 "bounded by a new PAR"); proposed for G-INT.
+ * the platform to act on it and for the observer's metric to show it: PAR-281 (15 minutes with
+ * PAR-213 at 5 minutes; DEC-0437).
  */
 export function pauseBoundMs(autoPauseMinutes: number): number {
   return (autoPauseMinutes + 10) * 60_000;

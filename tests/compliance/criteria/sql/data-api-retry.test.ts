@@ -26,7 +26,7 @@ const { dataApiDb } = await import("../../../../packages/framework/src/sql/data-
 const { defineTable, id, text } = await import("../../../../packages/framework/src/index.js");
 
 const PAR_210_MS = parameterNumber("PAR-210") * 1000;
-/** Generous bound on the backoff's largest single wait (sql.md §AWS names backoff, not its cap); proposed PAR-275 is 5 s. */
+/** Generous bound on the backoff's largest single wait (sql.md §AWS names backoff, not its cap); PAR-275's cap is 5 s. */
 const MAX_WAIT_MS = 10_000;
 /** Attempts the stand-in answers before it stops the test (a loop that never gives up). */
 const MAX_ATTEMPTS = 10_000;

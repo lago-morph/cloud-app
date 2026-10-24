@@ -73,7 +73,7 @@ function contributedModules(metafile: esbuild.Metafile): string[] {
 const LAMBDA_BANNER = 'import { createRequire as __frameworkCreateRequire } from "node:module";\nconst require = __frameworkCreateRequire(import.meta.url);';
 
 /**
- * The AWS Lambda bundle (plan-aws G-06; aws.md §2; DEC-PENDING-g-s1-1, -2): Node 22 (PAR-272,
+ * The AWS Lambda bundle (plan-aws G-06; aws.md §2; DEC-0432, DEC-0433): Node 22 (PAR-272,
  * `nodejs22.x`), ESM, fully self-contained. The AWS SDK clients the runtime uses (rds-data, s3,
  * ssm) are bundled at the framework's pinned version (PAR-111), never taken from the copy in
  * the managed runtime, so nothing is external. ESM entry points of dependencies are preferred

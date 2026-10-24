@@ -3,7 +3,7 @@
  * PROV's target-neutral deploy and remove sequences on top. No AWS call is made and `sst` never
  * runs: the network guard records any attempt to reach AWS, and the suite asserts it saw none.
  *
- * The fake SST models what root cause 2026-10-23-pass1 and DEC-PENDING-G-S2-3 established for
+ * The fake SST models what root cause 2026-10-23-pass1 and DEC-0440 established for
  * SST 4.17.2: `--target` resolves only against the stage's checkpoint (`app/<app>/<stage>.json`
  * in the state bucket), so a target on a new stage fails with `Target not found`; a targeted run
  * adds nothing to state; an untargeted run makes the state equal the program (deleting a Function

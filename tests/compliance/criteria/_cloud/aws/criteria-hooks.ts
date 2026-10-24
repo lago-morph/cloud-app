@@ -10,7 +10,7 @@
  * - `stageFunctions`: every Lambda function whose name is the stage's (`<app>-<stage>-…`, names.ts),
  *   with `VpcConfig`, from Lambda `ListFunctions`. One call per 50 functions, bounded.
  * - `stageNatGateways`: every NAT gateway, in any state but `deleted`, in the account's shared VPC
- *   (EC2 `DescribeVpcs` by the tag `prototype-framework=shared-network`, decision G-07-1), in a VPC
+ *   (EC2 `DescribeVpcs` by the tag `prototype-framework=shared-network`, DEC-0475), in a VPC
  *   one of the stage's functions names, or tagged `sst:app`/`sst:stage` with the stage. 1 + 2 calls
  *   per 1,000 gateways, bounded.
  * - `simulatePrincipalPolicy`, `functionUrl`, `observeCluster`: G-T1's `simulatePrincipal`,
@@ -28,7 +28,7 @@ import { functionUrlOrigin } from "./function-url.js";
 import { simulatePrincipal, stageRoleArn } from "./iam.js";
 import { type AwsStage, checkStage, clusterIdentifier, credentialsSecretName, filesBucketName, functionName, generatedNameOfStage, STAGE_TAG_KEYS } from "./names.js";
 
-/** The tag `setup-account` puts on the shared network (decision G-07-1). */
+/** The tag `setup-account` puts on the shared network (DEC-0475). */
 export const SHARED_NETWORK_TAG = { key: "prototype-framework", value: "shared-network" } as const;
 
 type Members = Omit<AwsCloudHooks, keyof CloudHooks>;

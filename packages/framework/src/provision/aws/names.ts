@@ -1,6 +1,6 @@
 /**
  * Physical names and ARNs of an AWS stage's resources (PROV §2 "Stage resources"; AWS-REQ-003;
- * DEC-PENDING-G-S2-1). Four names are fixed by the app, stage and account: the files bucket,
+ * DEC-0438). Four names are fixed by the app, stage and account: the files bucket,
  * the Aurora cluster, the database-credentials secret and the HTTP Function. With them, the
  * Function's IAM statements name exact resources, and stop, start, secrets, removal and the
  * leftover check find the stage's resources from the stage name alone, also on a machine
@@ -20,7 +20,7 @@ export const clusterIdentifier = (stage: Stage): string => `${stage.app}-${stage
 /** The stage's Aurora cluster ARN (the Data API's resource ARN). */
 export const clusterArn = (stage: Stage, region: string, accountId: string): string => `arn:aws:rds:${region}:${accountId}:cluster:${clusterIdentifier(stage)}`;
 
-/** The name of the SST-created database-credentials secret (DEC-PENDING-G-S2-4). */
+/** The name of the SST-created database-credentials secret (DEC-0441). */
 export const databaseSecretName = (stage: Stage): string => `${stage.app}-${stage.stage}-database-credentials`;
 
 /** The stage's HTTP Lambda function. */

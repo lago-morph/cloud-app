@@ -1,6 +1,6 @@
 /**
  * The AWS Lambda bundle inspection rules (`inspect.ts`; CORE-REQ-006, PROV-REQ-005;
- * DEC-PENDING-g-06-3), one forbidden kind at a time over a synthetic clean bundle. The real
+ * DEC-0474), one forbidden kind at a time over a synthetic clean bundle. The real
  * bundles are inspected in `aws.unit.test.ts`.
  */
 import { describe, expect, it } from "vitest";

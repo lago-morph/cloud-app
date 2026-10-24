@@ -12,13 +12,13 @@
  *
  * Missing framework variables are `CORE.MISCONFIGURED`, raised on first use, as on Cloudflare.
  * The log bucket is the exception: without it entries fall back to marked output lines and
- * requests are unaffected (LOG-REQ-001; DEC-PENDING-g-03-2).
+ * requests are unaffected (LOG-REQ-001; DEC-0457).
  */
 import { FrameworkError } from "../../core/errors.js";
 import type { Environment } from "./sdk.js";
 import { LAMBDA_RUNTIME_VARIABLES, LAMBDA_VARIABLES } from "./variables.js";
 
-/** The variable names, shared with the stage program (`variables.ts`; DEC-PENDING-g-05-2). */
+/** The variable names, shared with the stage program (`variables.ts`; DEC-0469). */
 export { LAMBDA_RUNTIME_VARIABLES, LAMBDA_VARIABLES };
 
 /** The prefix no Lambda variable may carry on AWS (Worker secrets' naming on the other targets). */

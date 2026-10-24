@@ -14,7 +14,7 @@
  *    AWS SDK bundled) into `<app>/.framework/aws/bundle/index.mjs`, handler `index.handler`, the
  *    `FunctionCode` the AWS stage program points the Function at (`provision/aws/sst.ts`);
  * 6. AWS: inspect the bundle (`inspect.ts`) and fail on a forbidden module, a secret value or
- *    the size bound (CORE-REQ-006, PROV-REQ-005; DEC-PENDING-g-06-3);
+ *    the size bound (CORE-REQ-006, PROV-REQ-005; DEC-0474);
  * 7. locally, write the `wrangler.jsonc` `dev` runs (local D1 `DB`, local R2 `FILES`).
  * Everything goes under `<app>/.framework/<target>/`, which is replaced on every build.
  * Node only.
