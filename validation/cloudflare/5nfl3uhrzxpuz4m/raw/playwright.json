@@ -1,0 +1,187 @@
+{
+  "config": {
+    "argv": [
+      "/opt/node22/bin/node",
+      "/home/user/cloud-app/.claude/worktrees/agent-ac2d7ebe7faf3d877/node_modules/.bin/playwright",
+      "test",
+      "tests/compliance/",
+      "--project",
+      "integration",
+      "--project",
+      "e2e",
+      "--grep",
+      "\\[(?:E2E-009)\\]",
+      "--reporter=json",
+      "--pass-with-no-tests"
+    ],
+    "configFile": "/home/user/cloud-app/.claude/worktrees/agent-ac2d7ebe7faf3d877/playwright.config.ts",
+    "rootDir": "/home/user/cloud-app/.claude/worktrees/agent-ac2d7ebe7faf3d877",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-ac2d7ebe7faf3d877/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "integration",
+        "name": "integration",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-ac2d7ebe7faf3d877",
+        "testIgnore": [],
+        "testMatch": [
+          "packages/framework/test/integration/**/*.spec.ts",
+          "tests/compliance/criteria/**/*.spec.ts"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-ac2d7ebe7faf3d877/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "e2e",
+        "name": "e2e",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-ac2d7ebe7faf3d877/tests/compliance/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "filteredProjects": [
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-ac2d7ebe7faf3d877/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "integration",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-ac2d7ebe7faf3d877",
+        "snapshotDir": "/home/user/cloud-app/.claude/worktrees/agent-ac2d7ebe7faf3d877",
+        "testIgnore": [],
+        "testMatch": [
+          "packages/framework/test/integration/**/*.spec.ts",
+          "tests/compliance/criteria/**/*.spec.ts"
+        ],
+        "timeout": 30000,
+        "use": {
+          "browserName": "chromium"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "integration"
+      },
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-ac2d7ebe7faf3d877/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "e2e",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-ac2d7ebe7faf3d877/tests/compliance/e2e",
+        "snapshotDir": "/home/user/cloud-app/.claude/worktrees/agent-ac2d7ebe7faf3d877/tests/compliance/e2e",
+        "testIgnore": [],
+        "testMatch": "**/*.spec.ts",
+        "timeout": 30000,
+        "use": {
+          "browserName": "chromium"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "e2e"
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "default",
+    "updateSourceMethod": "patch",
+    "version": "1.64.1",
+    "workers": 2,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "tests/compliance/e2e/E2E-009-large-photos.spec.ts",
+      "file": "tests/compliance/e2e/E2E-009-large-photos.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[E2E-009] upload a 20 MB and a 100 MB photo from a real browser, view and download them byte-identical; app browser code used only the app's API and framework helpers; no storage or CORS settings in the app",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 1200000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 24064,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T06:40:49.835Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "cfa91347479fbcfcd5a2-f667bfab36f692aab5d9",
+          "file": "tests/compliance/e2e/E2E-009-large-photos.spec.ts",
+          "line": 91,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-24T06:40:40.128Z",
+    "duration": 34129.968,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}
