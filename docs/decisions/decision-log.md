@@ -2581,7 +2581,7 @@ Evidence: `packages/framework/src/files/cloudflare/{sign,tickets}.unit.test.ts`.
 Item: D-02.
 
 ### DEC-0328 — Names with `.` / `..` segments on R2 URLs
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open); unchanged in effect by DEC-0430, which addresses the stored key (`x%2F..%2Fy%01`); extended on AWS to every operation by DEC-0464 (owner review open) · Affects: FILES-REQ-002, FILES-REQ-003, files.md §2 "Cloudflare"
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open); unchanged in effect by DEC-0430, which addresses the stored key (`x%2F..%2Fy%01`); extended on AWS to every operation by DEC-0464; its `.`/`..` corner case removed by DEC-0505 (those names are invalid on every target) · Affects: FILES-REQ-002, FILES-REQ-003, files.md §2 "Cloudflare"
 
 WHATWG URL parsing, used by aws4fetch, Workers and browsers, resolves `.` and `..` path segments, even when they are percent-encoded. With per-segment encoding, a ticket for `x/../y` would address `y`, and a ticket for `../up.txt` would address `/up.txt` outside the bucket path. That is unit-tested: the test failed before the fix. Fix (simplest): when any segment of the name is `.` or `..`, the issuer encodes the whole name, every `/` as `%2F`. Other names keep the per-segment form that A-07 verified. Assumption, not verified live: R2 decodes `%2F` in the path into `/` in the key, as S3 does, and canonicalises the path from the decoded key, as aws4fetch does. D-RUN checks it with one ticket for a `x/../y` name. A name that is exactly `.` or `..` cannot be put in any path-style or virtual-hosted URL. For such a name, `createUploadTicket`/`createDownloadTicket` on Cloudflare throw `FILES.INVALID_NAME`: "cannot be transferred by the browser on this target". Server operations on such names still work. This is a target difference in a corner case that FILES-REQ-002 allows. Owner: accept it, or forbid the names `.` and `..` in FILES-REQ-002 on every target.
 Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
@@ -4256,7 +4256,7 @@ Assumed, live item L-1: S3's exact `encoding-type=url` character set.
 Item: G-04.
 
 ### DEC-0464 — On AWS, a name that is only `.` or `..` is `FILES.INVALID_NAME` for every operation (extends DEC-0328)
-Origin: ai-proposed · Status: proposed, owner review open (conflict flagged: FILES-AC-002's `..` case, plan-aws.md §5.1) · Affects: DEC-0328, FILES-REQ-002, FILES-AC-002, `src/files/s3/path.ts`, `packages/framework/test/integration/files/server-operations.test.ts`
+Origin: ai-proposed · Status: proposed; conflict resolved by DEC-0505 (the owner chose option 1: `.` and `..` are invalid on every target) · Affects: DEC-0328, FILES-REQ-002, FILES-AC-002, `src/files/s3/path.ts`, `packages/framework/test/integration/files/server-operations.test.ts`
 
 On AWS the server operations also go through URLs. WHATWG URL parsing, used by `fetch` and aws4fetch, resolves `.` and `..` path segments, even when they are percent-encoded (`%2e`). So no URL can address the key `.` or `..`.
 
@@ -4844,3 +4844,40 @@ Origin: ai-proposed · Status: accepted · Affects: `docs/contracts/schemas/evid
 
 The evidence record gets an optional `dryRun` string, which says what was faked. The driver sets it when `DriverDeps.notRunRules` is not `PHASE_RULES`. It also sets it when the stage operations carry a `dryRun` of their own. `cliStageOps` gives them one when it is built on a fake CLI runner or a fake `OperationsFactory`. `readRecords` lists such a record among the skipped files ("a dry run (…), never evidence"). The release and traceability reports also drop it themselves, so a marked record never counts, wherever it is stored. GD (`validation/local/phase-G/aws-dry-run/…/rx3n81izmc4esca.json`) predates the field. It stays unmarked as committed and must still never be moved under `validation/aws/`.
 Item: G-EV fixes (F4, F3).
+
+## Implementation phase: AWS — live preparation (2026-10-24)
+
+### DEC-0505 — The file names `.` and `..` are invalid on every target
+Origin: owner · Status: accepted · Resolves: the DEC-0464 / FILES-AC-002 conflict (plan-aws.md §5.1 Q1) · Affects: FILES-REQ-002, FILES-AC-002, DEC-0328, DEC-0464, `packages/framework/src/files/names.ts`, `packages/framework/test/integration/files/server-operations.cases.ts`, `tests/compliance/criteria/files/server-operations.test.ts`, `skill/reference/files.md`
+
+The owner, 2026-10-24: "File names of . and .. are ridiculous and should never be allowed." FILES-REQ-002 now says a name MUST NOT be exactly `.` or `..`. The shared check (`checkName`, which every FILES operation that takes a name calls before any storage call) rejects both with `FILES.INVALID_NAME` on local, Cloudflare and AWS. Only the whole name is tested. Names that merely contain dots (`...`, `.x`) and names with `.` or `..` as a `/`-separated segment (`a/../b`, `./x`, `../../etc/passwd`) keep their documented behaviour: they are valid and never resolved as paths, since FILES-REQ-002 says names are not paths, so segments are not names. List prefixes are unchanged (a prefix `..` still lists names such as `../up.txt`). DEC-0328's `%2F` rule for dot segments stays. Its ticket refusal, and DEC-0464's refusal in `objectPath`, now act only as a second guard behind `checkName`, so there is no target difference. FILES-AC-002's round-trip case no longer lists `..` (`...` takes its place), and its rejection cases add `.` and `..`. G-T3's aws-precheck suite runs the same cases and now passes.
+
+### DEC-0506 — The Pluralsight AWS sandbox's limits are binding; at most 8 Lambda functions (PAR-284); no budget alarm
+Origin: owner (the sandbox and its limits) · ai-proposed (PAR-284's value of 8, and counting every function in both regions) · Status: accepted · Affects: plan-aws.md §4 and §5 Q11, PAR-274, PAR-283, PAR-284 (new), `tests/compliance/harness/{aws-usage,driver,node-deps}.ts`, `tests/compliance/criteria/_cloud/aws/{api,usage}.ts`, `tests/compliance/criteria/prov/support/stage.ts`, `ai/implementation/evaluations/G-aws-offline.md` §7–§8
+
+The owner, 2026-10-24: live AWS testing runs in a Pluralsight AWS cloud sandbox, whose limits are binding. A violation gets the account silently deleted. The limits that matter here:
+- regions us-east-1 and us-west-2 only;
+- Lambda: at most 2,048 MB per function, and at most 10 functions in the account;
+- RDS: instance types t3 or t4g micro, small or medium; at most 50 GB storage; no provisioned IOPS;
+- AWS Budgets, Cost Explorer and billing: not supported;
+- IAM: supported, but the sandbox's `cloud_user` and admin roles must not be modified;
+- PrivateLink: not supported;
+- EC2 (not used): t2/t3/t3a/t4g micro, small or medium only;
+- credentials: an IAM user access key ID and secret with no session token; each sandbox lasts 4 hours.
+
+Consequences:
+1. **Lambda functions (PAR-284).** One stage creates exactly one Lambda function, its `Http` Function (`provision/aws/sst.ts`). Checked against SST 4.17.2's platform source: `sst.aws.Router` with no `protection` creates CloudFront Functions and a KeyValueStore, not Lambda (its Lambda@Edge function exists only for `protection: "oac-with-edge-signing"`, which the program does not set). `sst.aws.StaticSite` on the router creates CloudFront Functions only. `Bucket` (no notifications) and `Aurora` create none. `setup-account` creates no function. The driver, before deploying its run stage, and every further stage through `takeStageRoom` (`requireAwsStageRoom`), list every function in us-east-1 and us-west-2 with Lambda `ListFunctions` through the counted hooks. They refuse a deploy that would bring the total above 8, two below the sandbox's 10. The report has the same form as the cluster cap's: the driver records "setting up the target failed: … would bring the account to 9 Lambda functions …", and a further stage reports a missing prerequisite. `raw/aws-usage.log` records the count. Every function counts, not only test stages', since the sandbox limit is per account.
+2. **Memory.** PAR-274 is 1,024 MB, below the 2,048 MB limit. Unchanged.
+3. **No budget alarm.** The $25 AWS Budget alarm is removed from the readiness checklist and the owner's list. Cost is covered by the leftover check and the caps.
+4. **Regions.** See DEC-0507.
+5. **Open, flagged and not resolved here:** the stage cluster is Aurora Serverless v2, whose instance class is `db.serverless`, not a t3/t4g type. Whether the sandbox's RDS rule allows it must be confirmed before L-0, or the design needs a provisioned `db.t4g.medium` instance (an owner question). The 4-hour sandbox and its credentials with no session token also do not match plan-aws.md §4's assumptions: 12-hour credentials, a 2–3 day account and a pass schedule of about 12–14 h. The passes must be split across sandboxes.
+Item: implement-aws-live.
+
+### DEC-0507 — While `PROTOTYPE_AWS_SANDBOX=pluralsight` is set, only us-east-1 and us-west-2
+Origin: ai-proposed (the guard and its setting; the allowed regions are the owner's, DEC-0506) · Status: accepted · Affects: CLI-REQ-001 (`setup-account`), cli.md, plan-aws.md §4, `packages/framework/src/provision/aws/sandbox.ts`, `packages/framework/src/cli/commands/setup-account.ts`, `tests/compliance/harness/driver.ts`
+
+A new setting, the environment variable `PROTOTYPE_AWS_SANDBOX`, says that the AWS account is a sandbox with binding limits. When it is unset or empty, the setting is off and nothing changes. `pluralsight` is the one known value. Any other non-empty value is refused, so a typo cannot switch the guard off silently. While the setting is `pluralsight`:
+- `setup-account --target aws --region <r>` is a usage error (exit 2), naming the allowed regions, for any `r` other than us-east-1 or us-west-2. It is refused before any operations are built. Without `--region`, a new account gets PAR-060 (us-east-1).
+- The compliance driver on `--target aws` refuses an account region outside the two before it deploys anything. Every criterion that would have run is recorded not-run with "setting up the target failed: the AWS account's region … is not allowed …".
+The owner sets the variable for every live command in the sandbox (plan-aws.md §4). It limits nothing else (Lambda memory and the function count are covered by PAR-274 and PAR-284 on every account).
+Item: implement-aws-live.

@@ -225,8 +225,10 @@ describe("[COMPL-AC-004] AWS leftovers through listStageResources (fake target)"
     expect((await ops.deploy(STAGE)).baseUrl).toBe("https://d111111abcdef8.cloudfront.net");
     expect(calls).toEqual([["prototype-framework", "deploy", "--target", "aws", "--stage", STAGE]]);
     expect(typeof ops.testStageClusters).toBe("function");
+    expect(typeof ops.lambdaFunctions).toBe("function");
     expect(ops.apiCalls?.()).toBe(0);
     expect(cliStageOps(repo, "cloudflare").testStageClusters).toBeUndefined();
+    expect(cliStageOps(repo, "cloudflare").lambdaFunctions).toBeUndefined();
   });
 
   // G-EV F4: the account's region, read as the framework reads it (the log bucket's location); G-EV F3: fakes mark the record.

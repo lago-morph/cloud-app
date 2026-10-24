@@ -7,7 +7,9 @@
  * expected ID (`-t` / `--grep`), runs each selected test layer once (selection.ts: on local
  * also the unit layer, for the unit-level IDs only), generates no data, and on a cloud target
  * uses one test stage for the whole run. On AWS it also checks the stage's AWS names, holds at most
- * three Aurora clusters at once and counts the test hooks' AWS API calls against the run's cap
+ * three Aurora clusters at once, refuses a deploy that would bring the account past eight Lambda
+ * functions in us-east-1 and us-west-2 (PAR-284, DEC-0506), refuses a region the sandbox does not
+ * allow while `PROTOTYPE_AWS_SANDBOX` is set (DEC-0507), and counts the test hooks' AWS API calls against the run's cap
  * (aws-usage.ts; plan-aws.md G-T4). Before anything is deployed it reads the account's region, as
  * deploy does (the log bucket's location, DEC-0075, DEC-0476), and gives it to every test process
  * as `AWS_REGION` and `AWS_DEFAULT_REGION`; with no region to be found it stops on a missing
@@ -31,7 +33,8 @@ import {
 import { ALL, type ComplianceArgs } from "./args.js";
 import { NOT_SELECTED, type CatalogueEntry, type Target } from "./catalogue.js";
 import { PrerequisiteMissingError } from "./blocked.js";
-import { assertAwsStageName, assertClusterRoom, awsCallsInOutput, awsRunCallCap, MAX_AWS_CALLS_ENV, TEST_STAGE_CLUSTER } from "./aws-usage.js";
+import { sandboxRegionProblem } from "../../../packages/framework/src/provision/aws/sandbox.js";
+import { assertAwsStageName, assertClusterRoom, assertLambdaRoom, awsCallsInOutput, awsRunCallCap, LAMBDA_COUNT_REGIONS, MAX_AWS_CALLS_ENV, TEST_STAGE_CLUSTER } from "./aws-usage.js";
 import { childEnv } from "./env.js";
 import { expectedCriteria, PHASE_RULES, type ExpectedEntry, type NotRunRule } from "./expected.js";
 import { assertTestStage, REFERENCE_APP } from "./leftovers.js";
@@ -90,6 +93,8 @@ export interface CloudStageOps {
   listStageResources(stage: string): Promise<readonly string[]>;
   /** AWS: the account's test-stage Aurora clusters in `region`, by identifier (the three-at-once cap; required to deploy on AWS). */
   testStageClusters?(region: string): Promise<readonly string[]>;
+  /** AWS: every Lambda function in us-east-1 and us-west-2, as `<region>/<name>` (the PAR-284 cap; required to deploy on AWS). */
+  lambdaFunctions?(): Promise<readonly string[]>;
   /** AWS: the account's region as the framework reads it (the log bucket's location, DEC-0476). */
   region?(): Promise<string>;
   /** Set when these operations are fakes (G-RUN's dry run): what is faked. The record is then marked `dryRun`. */
@@ -179,6 +184,9 @@ async function awsTestRegion(ops: CloudStageOps, env: Readonly<Record<string, st
   } else region = given;
   if (region === undefined || region === "") throw missing("is unknown (the stage operations cannot read it and neither AWS_REGION nor AWS_DEFAULT_REGION is set)");
   if (!AWS_REGION_NAME.test(region)) throw missing(`is not an AWS region name: ${region}`);
+  // DEC-0507: while PROTOTYPE_AWS_SANDBOX names a sandbox, only its regions.
+  const problem = sandboxRegionProblem(env, region);
+  if (problem !== undefined) throw new Error(`the AWS account's ${problem}; nothing is deployed`);
   return region;
 }
 
@@ -218,13 +226,17 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
   const awsUsage: string[] = [];
   let awsTestCalls = 0;
 
-  /** AWS, before the run stage is deployed: valid AWS names, and room for one more Aurora cluster (aws-usage.ts). */
+  /** AWS, before the run stage is deployed: valid AWS names, room for one more Aurora cluster and one more stage's Lambda functions (aws-usage.ts). */
   const checkAwsStage = async (ops: CloudStageOps, name: string, region: string): Promise<void> => {
     assertAwsStageName(REFERENCE_APP, name);
     if (ops.testStageClusters === undefined) throw new Error("the aws stage operations cannot count the account's Aurora clusters (needed for the three-at-once cap)");
     const clusters = (await ops.testStageClusters(region)).filter((c) => TEST_STAGE_CLUSTER.test(c));
     awsUsage.push(`test-stage Aurora clusters before deploying ${name}: ${String(clusters.length)}${clusters.length > 0 ? ` (${clusters.join(", ")})` : ""}`);
     assertClusterRoom(clusters, 1, `deploying ${name}`);
+    if (ops.lambdaFunctions === undefined) throw new Error("the aws stage operations cannot count the account's Lambda functions (needed for the PAR-284 cap)");
+    const functions = await ops.lambdaFunctions();
+    awsUsage.push(`Lambda functions in ${LAMBDA_COUNT_REGIONS.join(" and ")} before deploying ${name}: ${String(functions.length)}${functions.length > 0 ? ` (${functions.join(", ")})` : ""}`);
+    assertLambdaRoom(functions, 1, `deploying ${name}`);
   };
 
   /**

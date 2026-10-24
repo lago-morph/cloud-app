@@ -121,6 +121,17 @@ export interface AwsClients {
 
 let clients: AwsClients | undefined;
 let account: Promise<string> | undefined;
+const regionalLambda = new Map<string, LambdaClient>();
+
+/** A Lambda client in `region`, created once per process (the function cap lists regions other than the account's). */
+export function awsLambdaIn(region: string): LambdaClient {
+  let client = regionalLambda.get(region);
+  if (client === undefined) {
+    client = new LambdaClient({ region, maxAttempts: MAX_ATTEMPTS, requestHandler: proxyAwareHandler(process.env) });
+    regionalLambda.set(region, client);
+  }
+  return client;
+}
 
 /** The process's clients, created on first use in the region of `env` (default: the process environment). */
 export function awsClients(env: Env = process.env): AwsClients {
@@ -167,5 +178,6 @@ async function readAccountId(): Promise<string> {
 export function resetAwsHooksState(): void {
   clients = undefined;
   account = undefined;
+  regionalLambda.clear();
   calls = 0;
 }

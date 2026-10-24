@@ -1,7 +1,7 @@
 // plan-aws.md G-T4: the driver's AWS rules (stage naming, cluster cap, API-call count). No AWS request.
 import { describe, expect, it } from "vitest";
 import { newRunId, testStageName } from "../../../packages/framework/src/evidence/public.js";
-import { assertClusterRoom, AWS_CALLS_REPORT_PREFIX, awsCallsInOutput, awsRunCallCap, awsStageNameProblems, DEFAULT_MAX_AWS_RUN_CALLS, MAX_AWS_CLUSTERS } from "./aws-usage.js";
+import { assertClusterRoom, assertLambdaRoom, AWS_CALLS_REPORT_PREFIX, LAMBDA_COUNT_REGIONS, LAMBDA_FUNCTIONS_PER_STAGE, MAX_AWS_LAMBDA_FUNCTIONS, awsCallsInOutput, awsRunCallCap, awsStageNameProblems, DEFAULT_MAX_AWS_RUN_CALLS, MAX_AWS_CLUSTERS } from "./aws-usage.js";
 
 describe("[COMPL-AC-004] AWS stage naming", () => {
   it("every run stage test-<run ID> of the reference app gives valid AWS names, at the longest app name too", () => {
@@ -26,6 +26,20 @@ describe("[COMPL-AC-004] AWS usage caps", () => {
     expect(() => assertClusterRoom(["reference-test-a", "reference-test-b", "prodcheck-cluster", "reference-prodcheck"], 1, "deploying test-c")).not.toThrow();
     expect(() => assertClusterRoom(["reference-test-a", "reference-test-b", "notes-test-c"], 1, "deploying test-d")).toThrow(/deploying test-d would hold 4 Aurora clusters at once .*at most 3 at once/);
     expect(() => assertClusterRoom(["reference-test-a"], 3, "E2E-012")).toThrow(/would hold 4/);
+  });
+
+  // PAR-284 (DEC-0506): the Pluralsight sandbox allows 10 Lambda functions in the account; the driver keeps two in reserve.
+  it("allows at most eight Lambda functions in us-east-1 and us-west-2 together, every function counting", () => {
+    expect(MAX_AWS_LAMBDA_FUNCTIONS).toBe(8);
+    expect(LAMBDA_FUNCTIONS_PER_STAGE).toBe(1);
+    expect(LAMBDA_COUNT_REGIONS).toEqual(["us-east-1", "us-west-2"]);
+    const seven = Array.from({ length: 7 }, (_, i) => `us-east-1/fn-${String(i)}`);
+    expect(() => assertLambdaRoom(seven, 1, "deploying test-c")).not.toThrow();
+    expect(() => assertLambdaRoom([...seven, "us-west-2/other"], 1, "deploying test-d")).toThrow(
+      /deploying test-d would bring the account to 9 Lambda functions in us-east-1 and us-west-2 \(8 exist: .*us-west-2\/other\); at most 8 .*PAR-284.*remove stages or functions first/,
+    );
+    expect(() => assertLambdaRoom(["a", "b", "c", "d", "e", "f"], 3, "E2E-012")).toThrow(/would bring the account to 9/);
+    expect(() => assertLambdaRoom([], 8, "eight stages")).not.toThrow();
   });
 
   it("sums the hooks' per-process call counts from a runner's output, ignoring other lines", () => {

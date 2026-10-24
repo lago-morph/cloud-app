@@ -5,11 +5,16 @@
  * `DescribeDBClusters`, one counted call per 100 clusters, bounded. The driver checks it before it
  * deploys its run stage; a test that creates a further stage calls `requireClusterRoom` first, which
  * reports a missing prerequisite (recorded `blocked`) when the cap would be passed.
+ *
+ * The Lambda function cap (PAR-284, DEC-0506) works the same way: `accountLambdaFunctions` lists
+ * every function in us-east-1 and us-west-2 with Lambda `ListFunctions`, one counted call per 50
+ * functions per region, bounded; `requireAwsStageRoom` checks both caps for a further stage.
  */
+import { ListFunctionsCommand } from "@aws-sdk/client-lambda";
 import { DescribeDBClustersCommand } from "@aws-sdk/client-rds";
-import { assertClusterRoom, TEST_STAGE_CLUSTER } from "../../../harness/aws-usage.js";
+import { assertClusterRoom, assertLambdaRoom, LAMBDA_COUNT_REGIONS, TEST_STAGE_CLUSTER } from "../../../harness/aws-usage.js";
 import { prerequisiteMissing } from "../../../harness/index.js";
-import { awsCall, awsClients, awsFailure, MAX_PAGES } from "./api.js";
+import { awsCall, awsClients, awsFailure, awsLambdaIn, MAX_PAGES } from "./api.js";
 
 /**
  * Identifiers of the account's test-stage Aurora clusters (any status, deleting included), sorted.
@@ -42,4 +47,43 @@ export async function requireClusterRoom(more: number, what: string): Promise<vo
   } catch (error) {
     prerequisiteMissing(error instanceof Error ? error.message : String(error));
   }
+}
+
+/** Every Lambda function in us-east-1 and us-west-2, as `<region>/<name>`, sorted (PAR-284 counts them all). */
+export async function accountLambdaFunctions(): Promise<string[]> {
+  const names: string[] = [];
+  for (const region of LAMBDA_COUNT_REGIONS) {
+    const what = `listing Lambda functions in ${region}`;
+    let marker: string | undefined;
+    let done = false;
+    for (let page = 0; page < MAX_PAGES && !done; page += 1) {
+      let r;
+      try {
+        r = await awsCall(what, () => awsLambdaIn(region).send(new ListFunctionsCommand({ MaxItems: 50, ...(marker === undefined ? {} : { Marker: marker }) })));
+      } catch (error) {
+        throw awsFailure(what, error);
+      }
+      for (const f of r.Functions ?? []) if (f.FunctionName !== undefined) names.push(`${region}/${f.FunctionName}`);
+      marker = r.NextMarker;
+      done = marker === undefined || marker === "";
+    }
+    if (!done) throw new Error(`${what}: more than ${String(MAX_PAGES)} pages; the hook does not list further`);
+  }
+  return names.sort();
+}
+
+/** Reports a missing prerequisite when creating `more` stages would pass the Lambda function cap. */
+export async function requireLambdaRoom(more: number, what: string): Promise<void> {
+  const existing = await accountLambdaFunctions();
+  try {
+    assertLambdaRoom(existing, more, what);
+  } catch (error) {
+    prerequisiteMissing(error instanceof Error ? error.message : String(error));
+  }
+}
+
+/** Both AWS caps for `more` further stages: the cluster cap (PAR-283), then the Lambda function cap (PAR-284). */
+export async function requireAwsStageRoom(more: number, what: string): Promise<void> {
+  await requireClusterRoom(more, what);
+  await requireLambdaRoom(more, what);
 }

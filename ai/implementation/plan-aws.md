@@ -277,7 +277,14 @@ Each hook is unit-tested with client-mock.
 - Lambda concurrency at least 10.
 - VPCs per region: 5 (we use 1).
 - Aurora clusters: the default is fine.
-- Set an AWS Budget alarm at $25.
+- No AWS Budget alarm: AWS Budgets, Cost Explorer and billing are not supported in the Pluralsight sandbox (DEC-0506).
+
+**Pluralsight sandbox limits (owner, 2026-10-24; binding: a violation gets the account silently deleted; DEC-0506)**
+- Regions us-east-1 and us-west-2 only. Set `PROTOTYPE_AWS_SANDBOX=pluralsight` for every live command: `setup-account --target aws --region` and the compliance driver then refuse any other region (DEC-0507).
+- Lambda: at most 2,048 MB per function (PAR-274 is 1,024 MB) and at most 10 functions in the account. One stage creates one function; the driver and the stage-lifecycle tests refuse a deploy that would bring us-east-1 plus us-west-2 above 8 (PAR-284).
+- RDS: instance types t3/t4g micro, small or medium; at most 50 GB storage; no provisioned IOPS. Open: the stage cluster is Aurora Serverless v2 (`db.serverless`), which is not on that list (DEC-0506).
+- IAM is supported; the sandbox's `cloud_user` and admin roles must not be modified. PrivateLink is not supported (the framework uses none). EC2 (not used): t2/t3/t3a/t4g micro, small or medium.
+- Credentials: an IAM user access key ID and secret, with no session token. Each sandbox lasts 4 hours.
 
 **Pass schedule** (stages take about 20 min to create and 15–25 min to remove; CloudFront is the slow part; at most 3 stages at a time):
 - L-0 + L-1: about 3 h (1 stage).
@@ -292,7 +299,7 @@ That is roughly 12–14 h of active time. Allow an account lifetime of 2–3 day
 - Aurora: about 10 cluster lifecycles × about 1.5 h × about 1 ACU × about $0.12 ≈ $2–4.
 - Data API, Lambda, CloudFront, S3, SSM, Secrets Manager and logs: cents.
 - No NAT gateway, no public IPv4.
-- Expected total $5–15. The risk is a cluster forgotten at 4 ACU, which would cost about $0.50 an hour. The leftover check and the budget alarm cover that.
+- Expected total $5–15. The risk is a cluster forgotten at 4 ACU, which would cost about $0.50 an hour. The leftover check covers that (no budget alarm: the sandbox does not support AWS Budgets, DEC-0506).
 
 ### Readiness verdict (G-EV, 2026-10-24)
 
@@ -311,7 +318,6 @@ Full evaluation: `ai/implementation/evaluations/G-aws-offline.md` (§7 has each 
 - the credential variables;
 - the allowlist, including the Pulumi plugin hosts in a fresh sandbox;
 - CloudFront verification and the quotas;
-- the $25 budget alarm;
 - answers to §5 Q4–Q5 and §5.1 Q1/Q3/Q4/Q7 before L-1.
 
 ## 5. Risks and open questions for you
@@ -326,11 +332,11 @@ Full evaluation: `ai/implementation/evaluations/G-aws-offline.md` (§7 has each 
 8. PROV-AC-006 needs a second region, which means one more VPC and log bucket. Is that acceptable?
 9. FILES-AC-003's expired-ticket clause may pass on S3 but fail on Cloudflare (DEC-0101). That is a divergence, not a defect.
 10. DEC-0110 (no `./targets/aws`), still open for your review, is now superseded (by DEC-0447).
-11. Proposed AWS usage caps: at most 3 stages at once, the $25 budget alarm, and stop on throttling. Please approve them or set your own.
+11. Proposed AWS usage caps: at most 3 stages at once, and stop on throttling (the $25 budget alarm is withdrawn: the sandbox does not support AWS Budgets, DEC-0506). Please approve them or set your own.
 
 ### 5.1 Owner questions from the phase G decision drafts (G-INT, 2026-10-24)
 
-1. **Conflict, `.`/`..` names (DEC-0464 vs FILES-AC-002):** on AWS a name that is only `.` or `..` is `FILES.INVALID_NAME` (URLs cannot carry it), but FILES-AC-002's shared case round-trips `".."` and fails in G-T3's S3 pre-check; choose: forbid both names in FILES-REQ-002 on every target (recommended), accept a target difference, or send them through `@aws-sdk/client-s3`.
+1. **Answered (owner, 2026-10-24; DEC-0505):** "File names of . and .. are ridiculous and should never be allowed." FILES-REQ-002 now forbids both names on every target; FILES-AC-002 and the shared cases are updated. The question was: **Conflict, `.`/`..` names (DEC-0464 vs FILES-AC-002):** on AWS a name that is only `.` or `..` is `FILES.INVALID_NAME` (URLs cannot carry it), but FILES-AC-002's shared case round-trips `".."` and fails in G-T3's S3 pre-check; choose: forbid both names in FILES-REQ-002 on every target (recommended), accept a target difference, or send them through `@aws-sdk/client-s3`.
 2. **Remove keeps state (DEC-0491):** unlike Cloudflare (DEC-0084), a failed `sst remove` on AWS keeps the stage's SST state and passphrase so a later `remove` can retry (no by-name fallback for cluster, Function or CloudFront); confirm.
 3. **`kms:Decrypt` for SSM (DEC-0481):** the Function role is not granted `kms:Decrypt`, on the reading that the AWS-managed `aws/ssm` key allows SSM use by account principals; confirm, or have it granted on that key.
 4. **CloudFront `Origin` forwarding (DEC-0468):** the router's origin request policy must pass `Origin` to the Function URL unchanged, or every session POST through CloudFront is `AUTH.REQUEST_FORGERY`; confirm that phase L may change the policy if SST's default drops it.

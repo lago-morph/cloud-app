@@ -209,6 +209,7 @@ describe("[COMPL-AC-004] --target aws: stage naming, leftovers, cluster cap and 
     deploy: (stage) => Promise.resolve({ baseUrl: "https://d111111abcdef8.cloudfront.net", output: `deployed ${stage}` }),
     ...(clusters === null ? {} : { testStageClusters: () => Promise.resolve(clusters) }),
     ...(region === null ? {} : { region: () => Promise.resolve(region) }),
+    lambdaFunctions: () => Promise.resolve([]),
     apiCalls: () => 3,
     ...extra,
   });
@@ -274,6 +275,53 @@ describe("[COMPL-AC-004] --target aws: stage naming, leftovers, cluster cap and 
     expect(h.calls.filter((c) => c.args[0] === "vitest")).toEqual([]);
     expect(recordOf(h).results.find((r) => r.id === "KV-AC-001")?.detail).toMatch(/^not run: setting up the target failed: deploying test-abcdefghij12345 would hold 4 Aurora clusters at once .*at most 3 at once/);
     expect(result.exitStatus).toBe(1);
+  });
+
+  // PAR-284 (DEC-0506): the Pluralsight sandbox allows 10 Lambda functions; one stage creates one (its Http Function).
+  it("refuses a deploy that would make a ninth Lambda function in us-east-1 and us-west-2, and operations that cannot count them", async () => {
+    const eight = Array.from({ length: 8 }, (_, i) => `us-${i < 4 ? "east-1" : "west-2"}/fn-${String(i)}`);
+    const h = harness({ notRunRules: [], cloud: awsCloud([], { lambdaFunctions: () => Promise.resolve(eight) }) });
+    const result = await runCompliance(parseArgs(AWS), AWS, h.deps);
+    expect(h.events.filter((e) => /^(pending|deploy)/.test(e))).toEqual([]);
+    expect(h.calls.filter((c) => c.args[0] === "vitest")).toEqual([]);
+    expect(recordOf(h).results.find((r) => r.id === "KV-AC-001")?.detail).toMatch(
+      /^not run: setting up the target failed: deploying test-abcdefghij12345 would bring the account to 9 Lambda functions in us-east-1 and us-west-2 .*at most 8/,
+    );
+    expect(h.written[0]?.raw?.["aws-usage.log"]).toContain("Lambda functions in us-east-1 and us-west-2 before deploying test-abcdefghij12345: 8");
+    expect(result.exitStatus).toBe(1);
+
+    const seven = harness({ notRunRules: [], vitest: vitestReport([{ title: "[KV-AC-001] put", status: "passed" }]), cloud: awsCloud([], { lambdaFunctions: () => Promise.resolve(eight.slice(1)) }) });
+    await runCompliance(parseArgs(AWS), AWS, seven.deps);
+    expect(seven.events).toContain("pending+ test-abcdefghij12345");
+    expect(seven.written[0]?.raw?.["aws-usage.log"]).toContain("Lambda functions in us-east-1 and us-west-2 before deploying test-abcdefghij12345: 7");
+
+    const { lambdaFunctions: _drop, ...noCount } = awsCloud();
+    const blind = harness({ notRunRules: [], cloud: noCount });
+    await runCompliance(parseArgs(AWS), AWS, blind.deps);
+    expect(blind.events.filter((e) => e.startsWith("deploy"))).toEqual([]);
+    expect(recordOf(blind).results.find((r) => r.id === "KV-AC-001")?.detail).toMatch(/cannot count the account's Lambda functions/);
+  });
+
+  // DEC-0507: with PROTOTYPE_AWS_SANDBOX=pluralsight the driver refuses an account region the sandbox does not allow.
+  it("with PROTOTYPE_AWS_SANDBOX=pluralsight, refuses an account region other than us-east-1 or us-west-2 before deploying", async () => {
+    const restore = ownEnv("PROTOTYPE_AWS_SANDBOX", "pluralsight");
+    try {
+      const h = harness({ notRunRules: [], cloud: awsCloud([], {}, "eu-west-2") });
+      const result = await runCompliance(parseArgs(AWS), AWS, h.deps);
+      expect(h.events.filter((e) => /^(pending|deploy|secret)/.test(e))).toEqual([]);
+      expect(recordOf(h).results.find((r) => r.id === "KV-AC-001")?.detail).toMatch(/region eu-west-2 is not allowed .*PROTOTYPE_AWS_SANDBOX=pluralsight.*us-east-1, us-west-2/);
+      expect(result.exitStatus).toBe(1);
+      for (const region of ["us-east-1", "us-west-2"]) {
+        const ok = harness({ notRunRules: [], vitest: vitestReport([{ title: "[KV-AC-001] put", status: "passed" }]), cloud: awsCloud([], {}, region) });
+        await runCompliance(parseArgs(AWS), AWS, ok.deps);
+        expect(ok.events).toContain("pending+ test-abcdefghij12345");
+      }
+    } finally {
+      restore();
+    }
+    const off = harness({ notRunRules: [], vitest: vitestReport([{ title: "[KV-AC-001] put", status: "passed" }]), cloud: awsCloud([], {}, "eu-west-2") });
+    await runCompliance(parseArgs(AWS), AWS, off.deps);
+    expect(off.events).toContain("pending+ test-abcdefghij12345");
   });
 
   it("refuses a stage whose AWS names would be invalid, and operations that cannot count clusters", async () => {

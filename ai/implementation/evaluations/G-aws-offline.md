@@ -129,7 +129,7 @@ The two DEC-0397 not-run clause entries that F-EV3's R4 carried are gone: GL has
 | Regions us-east-1 (PAR-060), us-west-2 for the milestone | **ready** | `DEFAULT_REGION = "us-east-1"`. `setup-account --target aws --region` exists (DEC-0496). A second region needs its own allowlist entries. |
 | CloudFront enabled on the new account | **owner-action** | Confirm before L-0 (§5 Q3). If it is blocked, AWS-AC-001/004/006 and every deploy are blocked. |
 | Lambda concurrency ≥ 10; VPCs 5 per region; Aurora default | **owner-action** | Check Service Quotas. A new account's Lambda limit can be 10, which is just enough. |
-| AWS Budget alarm at $25 | **owner-action** | Create it before L-0. |
+| AWS Budget alarm at $25 | **removed** (DEC-0506) | AWS Budgets are not supported in the Pluralsight sandbox; nothing to create. |
 | Pass schedule (~12–14 h active, 2–3 day lifetime, ≤ 3 stages) | **ready** (estimate) | PAR-283 enforces at most 3 test-stage clusters, and PAR-282 caps hook calls at 2,000 per run (DEC-0501, to be approved in §5.1 Q7). |
 | Cost ($5–15 expected) | **ready** (estimate; prices not checked) | No NAT and no public IPv4 by design. The risk is a forgotten cluster, which the leftover check and the alarm cover. |
 | §5 / §5.1 owner questions | **owner-action** | Answer at least §5 Q4–Q5 (named fallbacks, so the live run does not stall) and §5.1 Q1 (F2), Q3 (`kms:Decrypt`) and Q4 (`Origin` forwarding) before L-1. The rest can be answered during L. |
@@ -155,6 +155,6 @@ The two DEC-0397 not-run clause entries that F-EV3's R4 carried are gone: GL has
    - `get.pulumi.com` and GitHub release downloads, if the Pulumi plugin cache is absent.
    - Reachability is needed from curl, Node, the SST/Pulumi Go binaries and Chromium.
 5. **Quotas:** Lambda concurrency ≥ 10, 5 VPCs per region, Aurora at the defaults.
-6. **Budget:** an AWS Budget alarm at **$25**. Expected spend is **$5–15** (Aurora ≈ $2–4, the rest cents). The tail risk is about $0.50/h for a forgotten 4-ACU cluster.
+6. **Budget:** no AWS Budget alarm (removed by DEC-0506: AWS Budgets are not supported in the Pluralsight sandbox). Expected spend is **$5–15** (Aurora ≈ $2–4, the rest cents). The tail risk is about $0.50/h for a forgotten 4-ACU cluster.
 7. **Time:** about **12–14 h of active time** (L-0+L-1 ~3 h, L-RUN ~3 h, fixes ~2 h, L-RUN-M ~4 h, L-DEMO ~1 h). Keep the account for 2–3 days.
 8. **Decisions:** answer §5 Q4–Q5 and §5.1 Q1, Q3, Q4 and Q7 before L-1.

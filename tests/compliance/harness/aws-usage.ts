@@ -11,6 +11,12 @@
  *   the driver deploys its run stage it counts the account's test-stage clusters and refuses when
  *   one more would exceed the cap. Further stages created by stage-lifecycle tests take the same
  *   check (`criteria/_cloud/aws/usage.ts` `requireClusterRoom`).
+ * - **At most `MAX_AWS_LAMBDA_FUNCTIONS` (8) Lambda functions in the account (PAR-284, DEC-0506).**
+ *   The Pluralsight sandbox allows 10 in the whole account; 8 leaves two in reserve. Every
+ *   function in us-east-1 and us-west-2 (the sandbox's regions) counts, not only test stages'. One
+ *   stage creates `LAMBDA_FUNCTIONS_PER_STAGE` (1): its `Http` Function; SST's Router and
+ *   StaticSite create CloudFront Functions, not Lambda functions (`provision/aws/sst.ts`). The
+ *   driver and every further stage (`requireAwsStageRoom`) take this check with the cluster cap.
  * - **An AWS API-call count.** Every AWS call of the cloud test hooks is counted per process
  *   (`criteria/_cloud/aws/api.ts`), which prints `AWS_CALLS_REPORT_PREFIX<n>` once on exit. The
  *   driver sums those lines from each test process's output, adds its own process's count, records
@@ -22,6 +28,12 @@
 
 /** PAR-283: test-stage Aurora clusters at once in the account (DEC-0501). */
 export const MAX_AWS_CLUSTERS = 3;
+/** PAR-284: Lambda functions in us-east-1 and us-west-2 together, after a deploy (DEC-0506). */
+export const MAX_AWS_LAMBDA_FUNCTIONS = 8;
+/** Lambda functions one stage creates: the `Http` Function (`provision/aws/sst.ts`; Router and StaticSite create none). */
+export const LAMBDA_FUNCTIONS_PER_STAGE = 1;
+/** The regions whose functions count toward PAR-284 (the Pluralsight sandbox's regions). */
+export const LAMBDA_COUNT_REGIONS = ["us-east-1", "us-west-2"] as const;
 /** PAR-282: the run's cap on AWS API calls by the test hooks (like the Cloudflare pass cap of 2,000 requests, DEC-0419; DEC-0501). */
 export const DEFAULT_MAX_AWS_RUN_CALLS = 2_000;
 export const MAX_AWS_RUN_CALLS_ENV = "COMPLIANCE_AWS_MAX_RUN_CALLS";
@@ -61,6 +73,16 @@ export function assertClusterRoom(existing: readonly string[], more: number, wha
   if (clusters.length + more > MAX_AWS_CLUSTERS) {
     throw new Error(
       `${what} would hold ${String(clusters.length + more)} Aurora clusters at once (${String(clusters.length)} test-stage cluster(s) exist: ${clusters.join(", ") || "none"}); at most ${String(MAX_AWS_CLUSTERS)} at once (plan-aws.md G-T4): remove stages first`,
+    );
+  }
+}
+
+/** Throws unless `moreStages` more stages' Lambda functions fit beside the account's `existing` ones (`<region>/<name>`). */
+export function assertLambdaRoom(existing: readonly string[], moreStages: number, what: string): void {
+  const after = existing.length + moreStages * LAMBDA_FUNCTIONS_PER_STAGE;
+  if (after > MAX_AWS_LAMBDA_FUNCTIONS) {
+    throw new Error(
+      `${what} would bring the account to ${String(after)} Lambda functions in ${LAMBDA_COUNT_REGIONS.join(" and ")} (${String(existing.length)} exist: ${existing.join(", ") || "none"}); at most ${String(MAX_AWS_LAMBDA_FUNCTIONS)} (PAR-284, DEC-0506; the sandbox allows 10): remove stages or functions first`,
     );
   }
 }

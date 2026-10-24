@@ -10,13 +10,15 @@
  * `--region` is AWS only: the account's region, recorded as the log bucket's location (DEC-0075,
  * DEC-0476). Without it a new account gets PAR-060 and an existing one keeps its
  * region; a region that differs from an existing log bucket's is refused by the account
- * operations, naming both.
+ * operations, naming both. While `PROTOTYPE_AWS_SANDBOX=pluralsight` is set, a `--region` other
+ * than us-east-1 or us-west-2 is a usage error (DEC-0507).
  */
 import type { Target } from "../../core/identity.js";
 import { runSetupAccount } from "../../provision/core/setup-account.js";
 import type { TargetOperations } from "../../provision/core/operations.js";
 import { parseOptions, TARGETS, UsageError } from "../args.js";
 import { EXIT, type Command } from "../io.js";
+import { sandboxRegionProblem } from "../../provision/aws/sandbox.js";
 import { refuseUnreachableCloud, type ProcessEnvironment } from "./smoke-cloud.js";
 
 export interface SetupAccountDeps {
@@ -37,6 +39,14 @@ export function setupAccountCommand(deps: SetupAccountDeps): Command {
     if (region !== undefined) {
       if (target !== "aws") throw new UsageError("--region is only for --target aws (the Cloudflare and local targets have no account region)");
       if (!AWS_REGION.test(region)) throw new UsageError("--region must be an AWS region name such as us-east-1");
+      // DEC-0507: while PROTOTYPE_AWS_SANDBOX names a sandbox, only its regions.
+      let problem: string | undefined;
+      try {
+        problem = sandboxRegionProblem(deps.env, region);
+      } catch (error) {
+        throw new UsageError(error instanceof Error ? error.message : String(error));
+      }
+      if (problem !== undefined) throw new UsageError(problem);
     }
     if (target === "local") {
       io.stdout("setup-account (local): nothing to set up; the local target has no shared account resources\n");

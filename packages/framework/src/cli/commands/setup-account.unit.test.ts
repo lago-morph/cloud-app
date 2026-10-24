@@ -96,6 +96,21 @@ describe("setup-account --target aws [--region <r>] (G-11; PROV-REQ-006)", () =>
     expect(seen).toEqual([]);
   });
 
+  // DEC-0507: the Pluralsight sandbox allows us-east-1 and us-west-2 only; the guard applies only while PROTOTYPE_AWS_SANDBOX=pluralsight.
+  it("with PROTOTYPE_AWS_SANDBOX=pluralsight, refuses any --region but us-east-1 and us-west-2, before any operations are built", async () => {
+    const fake = new FakeTarget();
+    const seen: string[] = [];
+    const deps: SetupAccountDeps = { env: { PROTOTYPE_AWS_SANDBOX: "pluralsight" }, operations: (input) => (seen.push(input.region ?? "none"), fake) };
+    await expect(setupAccountCommand(deps)(["--target", "aws", "--region", "eu-west-1"], captureIo())).rejects.toThrow(/region eu-west-1 is not allowed .*PROTOTYPE_AWS_SANDBOX=pluralsight.*us-east-1, us-west-2/);
+    await expect(setupAccountCommand(deps)(["--target", "aws", "--region", "us-east-2"], captureIo())).rejects.toThrow(UsageError);
+    expect(seen).toEqual([]);
+    for (const region of ["us-east-1", "us-west-2"]) expect(await setupAccountCommand(deps)(["--target", "aws", "--region", region], captureIo())).toBe(0);
+    expect(await setupAccountCommand(deps)(["--target", "aws"], captureIo())).toBe(0);
+    expect(seen).toEqual(["us-east-1", "us-west-2", "none"]);
+    const typo: SetupAccountDeps = { ...deps, env: { PROTOTYPE_AWS_SANDBOX: "pluralsite" } };
+    await expect(setupAccountCommand(typo)(["--target", "aws", "--region", "us-east-1"], captureIo())).rejects.toThrow(/PROTOTYPE_AWS_SANDBOX=pluralsite is not a known sandbox \(known: pluralsight\)/);
+  });
+
   it("accepts region names of every shape (us-east-1, ap-southeast-2, us-gov-west-1)", async () => {
     const { deps, seen } = regional(new FakeTarget());
     for (const region of ["us-east-1", "ap-southeast-2", "us-gov-west-1", "eu-central-2"]) expect(await setupAccountCommand(deps)(["--target", "aws", "--region", region], captureIo())).toBe(0);

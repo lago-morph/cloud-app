@@ -101,6 +101,7 @@ Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 | PAR-281 | AWS-AC-005 wait for a paused cluster | 15 minutes (PAR-213 plus 10 minutes), polling every 30 seconds | ai-proposed | If the cluster has not observably paused by then, AWS-AC-005 is recorded not-run with the reason and the last observed state. Keeps one slow test under about 20 minutes (DEC-0437). |
 | PAR-282 | AWS API calls by the cloud test hooks per compliance run | 2,000 | ai-proposed | `COMPLIANCE_AWS_MAX_RUN_CALLS` overrides it. Calls the framework CLI makes (deploy, remove, the leftover check) are not counted; a total above the cap fails the run (DEC-0501). |
 | PAR-283 | Test-stage Aurora clusters at once in the AWS account | 3 | ai-proposed | The driver and the stage-lifecycle tests refuse a deploy that would exceed it and record the criteria not-run (DEC-0501). |
+| PAR-284 | Lambda functions in the AWS account (us-east-1 and us-west-2 together) after a test deploy | 8 | ai-proposed | Below the Pluralsight sandbox's binding limit of 10 functions per account, with two in reserve. Every function counts, not only test stages'. One stage creates one function (its `Http` Function). The driver and the stage-lifecycle tests refuse a deploy that would exceed it, as for PAR-283 (DEC-0506). |
 
 ## Names
 

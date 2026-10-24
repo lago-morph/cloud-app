@@ -191,9 +191,13 @@ export async function stageResourceOperations(
 }
 
 /** The AWS usage parts of the stage operations: the cluster count and the driver's own call count (the G-T1 hooks, loaded only on AWS). */
-async function awsUsageHooks(): Promise<{ testStageClusters(env: Readonly<Record<string, string | undefined>>): Promise<string[]>; awsCallCount(): number }> {
+async function awsUsageHooks(): Promise<{
+  testStageClusters(env: Readonly<Record<string, string | undefined>>): Promise<string[]>;
+  accountLambdaFunctions(): Promise<string[]>;
+  awsCallCount(): number;
+}> {
   const [usage, api] = await Promise.all([import("../criteria/_cloud/aws/usage.js"), import("../criteria/_cloud/aws/api.js")]);
-  return { testStageClusters: usage.testStageClusters, awsCallCount: api.awsCallCount };
+  return { testStageClusters: usage.testStageClusters, accountLambdaFunctions: usage.accountLambdaFunctions, awsCallCount: api.awsCallCount };
 }
 
 /** Reads the AWS account's region, given the CLI's AWS child environment (default: `defaultAccountRegion`). */
@@ -263,6 +267,11 @@ export function cliStageOps(
             const hooks = await awsUsageHooks();
             ownCalls = hooks.awsCallCount;
             return hooks.testStageClusters({ ...env, AWS_REGION: region, AWS_DEFAULT_REGION: region });
+          },
+          async lambdaFunctions() {
+            const hooks = await awsUsageHooks();
+            ownCalls = hooks.awsCallCount;
+            return hooks.accountLambdaFunctions();
           },
           apiCalls: () => ownCalls(),
         }
