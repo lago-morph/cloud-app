@@ -47,6 +47,8 @@ From `@lago-morph/prototype-framework/client`:
 - `downloadUrl(ticket)` returns a URL valid for the ticket's lifetime.
 - A transfer that does not complete throws `ApiError` with `FILES.TRANSFER_FAILED`; `status` is storage's HTTP status when the browser could read one, otherwise `null`. The message names the class: `no response: network or cross-origin blocked`, `rejected by storage (HTTP n)`, `interrupted after n bytes`, or `content type does not match ticket`. Retry with a fresh ticket.
 
+Platform note: on Cloudflare, each file is stored in R2 under its name followed by an invisible U+0001 character (a name of exactly 1,024 bytes has none), so that listings come back in code point order. Your code always sees plain names and never needs the ending. Only when you look in the R2 dashboard, or use `wrangler r2 object get` or an S3 tool on the bucket, does the key carry it: a lookup by the plain name finds nothing there, and S3 listings need `encoding-type=url`.
+
 Platform note (not yet verified on Cloudflare in this phase: seen in a spike, not in a framework run): on Cloudflare, storage sends no cross-origin headers with its refusals, so an expired or mismatched ticket is reported there with `status: null` and the `no response` message instead of storage's status. This differs from the other targets and is an open owner item (DEC-0101); do not branch on the status of a failed transfer.
 
 ## Testing
