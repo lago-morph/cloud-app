@@ -1,0 +1,265 @@
+(node:2266) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2278) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v5.0.5 /home/user/cloud-app/.claude/worktrees/agent-aa2e78cb332fe6259
+
+(node:2300) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2301) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2303) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/config/values.test.ts (1 test | 1 skipped)
+(node:2300) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+ ↓ tests/compliance/criteria/secrets/read.test.ts (1 test | 1 skipped)
+(node:2321) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2322) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/secrets/no-leak.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/http/errors.test.ts (2 tests | 2 skipped)
+(node:2335) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2336) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/log/entries.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/core/deployment.test.ts (2 tests | 2 skipped)
+(node:2349) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2355) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/mig/deploys.test.ts (6 tests | 6 skipped)
+(node:2363) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/log/keys.test.ts (2 tests | 2 skipped)
+(node:2370) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/files/server-operations.test.ts (6 tests | 6 skipped)
+(node:2377) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/sql/sql.http.test.ts (12 tests | 12 skipped)
+(node:2384) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/kv/kv.http.test.ts (6 tests | 6 skipped)
+(node:2391) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/auth/contract.test.ts (6 tests | 6 skipped)
+(node:2398) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/http/paths.test.ts (1 test | 1 skipped)
+(node:2405) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/auth/mock-login.test.ts (2 tests | 2 skipped)
+(node:2412) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/http/input.test.ts (2 tests | 2 skipped)
+(node:2419) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/files/private-storage.test.ts (1 test | 1 skipped)
+(node:2426) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/auth/access.test.ts (4 tests | 4 skipped)
+(node:2433) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/compliance/criteria/auth/forgery.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+(node:2355) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/compliance/criteria/auth/sessions.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+(node:2349) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/auth/forgery.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/auth/sessions.test.ts (4 tests | 4 skipped)
+ ↓ tests/compliance/criteria/http/no-store.test.ts (1 test | 1 skipped)
+(node:2463) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2464) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2477) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/skill/scaffold.test.ts (0 test) 1ms
+ ↓ tests/compliance/criteria/cli/commands.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/compl/evidence.test.ts (5 tests | 5 skipped)
+(node:2484) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2485) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2498) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/kv/kv.pglite.test.ts (0 test) 1ms
+(node:2505) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/compl/targets.test.ts (2 tests | 2 skipped)
+(node:2512) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/config/lists.test.ts (1 test | 1 skipped)
+(node:2519) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/kv/kv.d1.test.ts (0 test) 1ms
+ ↓ tests/compliance/criteria/secrets/storage.test.ts (1 test | 1 skipped)
+(node:2526) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2533) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/sql/sql.pglite.test.ts (0 test) 1ms
+(node:2540) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/sql/sql.d1.test.ts (0 test) 1ms
+ ↓ tests/compliance/criteria/cli/smoke.test.ts (1 test | 1 skipped)
+(node:2547) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2548) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/log/writer.test.ts (1 test | 1 skipped)
+(node:2561) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/config/secret-locations.test.ts (1 test | 1 skipped)
+(node:2568) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/files/app-facing-types.test.ts (3 tests | 3 skipped)
+(node:2575) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/prov/support/stage.unit.test.ts (9 tests | 9 skipped)
+(node:2582) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/mig/support/stage.unit.test.ts (11 tests | 11 skipped)
+(node:2547) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(node:2589) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/core/support/stages.unit.test.ts (4 tests | 4 skipped)
+(node:2596) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/_cloud/aws/cluster-url.unit.test.ts (10 tests | 10 skipped)
+(node:2603) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/_cloud/aws/secrets-logs.unit.test.ts (11 tests | 11 skipped)
+stderr | tests/compliance/criteria/files/unavailable.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ tests/compliance/criteria/files/unavailable.test.ts (1 test | 1 skipped)
+(node:2575) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2620) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2622) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/_cloud/aws/api.unit.test.ts (9 tests | 9 skipped)
+(node:2634) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/core/support/secrets.unit.test.ts (10 tests | 10 skipped)
+(node:2641) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/_cloud/aws/iam.unit.test.ts (10 tests | 10 skipped)
+(node:2648) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/_cloud/aws/criteria-hooks.unit.test.ts (7 tests | 7 skipped)
+ ↓ tests/compliance/criteria/aws/support.unit.test.ts (11 tests | 11 skipped)
+(node:2655) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2662) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/_cloud/aws/stage-resources.unit.test.ts (7 tests | 7 skipped)
+ ↓ tests/compliance/criteria/compl/support.unit.test.ts (7 tests | 7 skipped)
+(node:2669) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2675) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/_cloud/aws/usage.unit.test.ts (2 tests | 2 skipped)
+(node:2683) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/prov/support/restricted-token.unit.test.ts (3 tests | 3 skipped)
+(node:2690) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/secrets/further-stage.test.ts (5 tests | 5 skipped)
+(node:2697) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/sql/data-api-retry.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/_cloud/api.unit.test.ts (3 tests | 3 skipped)
+(node:2704) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2711) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/aws/least-privilege.test.ts (1 test | 1 skipped)
+(node:2718) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ tests/compliance/criteria/aws/network.test.ts (1 test | 1 failed) 585ms
+   ❯ AWS-AC-002 no NAT, no VPC-attached Lambda (aws) (1)
+     × [AWS-AC-002] the stage contains no NAT gateway and none of its Lambda functions is attached to a VPC 583ms
+ ↓ tests/compliance/criteria/mig/support/failure-output.unit.test.ts (3 tests | 3 skipped)
+(node:2690) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(node:2725) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2732) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/prov/test-stages.test.ts (3 tests | 3 skipped)
+(node:2739) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/prov/removal.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/prov/setup-account.test.ts (2 tests | 2 skipped)
+(node:2746) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2753) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/aws/runtime-shape.test.ts (1 test | 1 skipped)
+(node:2760) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/aws/direct-function-url.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/prov/template-deploy.test.ts (1 test | 1 skipped)
+(node:2767) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2774) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/cf/stage-resources.test.ts (1 test | 1 skipped)
+(node:2781) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/prov/deploy-sequence.test.ts (5 tests | 5 skipped)
+ ↓ tests/compliance/criteria/cf/one-origin.test.ts (2 tests | 2 skipped)
+(node:2788) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2794) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/aws/paused-cluster.test.ts (1 test | 1 skipped)
+(node:2802) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/aws/two-cookies.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/prov/deploy-recovery.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/prov/clean-machine.test.ts (1 test | 1 skipped)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/compliance/criteria/aws/network.test.ts > AWS-AC-002 no NAT, no VPC-attached Lambda (aws) > [AWS-AC-002] the stage contains no NAT gateway and none of its Lambda functions is attached to a VPC
+Error: listing Lambda functions failed: PrerequisiteMissingError
+ ❯ awsFailure tests/compliance/criteria/_cloud/aws/api.ts:94:10
+     92|   const name = errorName(error) ?? "unknown error";
+     93|   const status = errorStatus(error);
+     94|   return new Error(`${what} failed: ${name}${status === undefined ? ""…
+       |          ^
+     95| }
+     96|
+ ❯ stageFunctions tests/compliance/criteria/_cloud/aws/criteria-hooks.ts:88:13
+ ❯ stageNatGateways tests/compliance/criteria/_cloud/aws/criteria-hooks.ts:133:29
+ ❯ tests/compliance/criteria/aws/network.test.ts:26:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 5 passed | 62 skipped (68)
+      Tests  1 failed | 228 skipped (229)
+   Start at  10:12:53
+   Duration  13.62s (import 88%, transform 8%, tests 2%, worker 1%)
+
+    Isolate  68 workers spawned · ~142ms startup each (spawn + environment, per file)
+             at least ~3.08s faster with isolate: false — reuses workers across files instead of one per file
+
+JSON report written to /tmp/compliance-sOUu2c/vitest.json

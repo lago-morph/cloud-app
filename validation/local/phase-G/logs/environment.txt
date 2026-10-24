@@ -1,0 +1,10 @@
+SHA (HEAD at start): 876686adad88401a2854d9f4d3faff607699cc1a
+node v22.22.0
+npm 10.9.4
+Linux vm 6.18.44-fc-v153 #1 SMP PREEMPT_DYNAMIC @0 x86_64 x86_64 x86_64 GNU/Linux
+CPUs: 4
+AWS: no calls; AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_REGION AWS_DEFAULT_REGION AWS_PROFILE unset for every step
+Cloudflare: no calls (local only); COMPLIANCE_DEMO_BASE_URL, COMPLIANCE_CLOUDFLARE_D1 and NODE_USE_ENV_PROXY unset
+PROTOTYPE_SST_PLATFORM=<scratchpad>/repro/.sst/platform (version 4.17.2, @pulumi/aws 7.20.0)
+host trace: NODE_OPTIONS=--require host-trace.cjs (logs/tooling/host-trace.cjs), HOST_TRACE_DIR per step
+SHA (HEAD after): 876686adad88401a2854d9f4d3faff607699cc1a
