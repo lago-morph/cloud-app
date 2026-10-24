@@ -6,6 +6,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { transformSync } from "esbuild";
 import { describe, expect, it } from "vitest";
+import { awsLambdaSettings, LAMBDA_RUNTIME_VARIABLES, LAMBDA_VARIABLES as RUNTIME_VARIABLES } from "../../targets/aws/settings.js";
 import { functionName } from "./names.js";
 import { functionPermissions, infrastructureDeploy, runSst, sstProgram, stageOutputs, writeSstApp, type SstExec, type SstInput } from "./sst.js";
 
@@ -176,6 +177,30 @@ describe("the SST app of an AWS stage, built from the app definition (PROV-REQ-0
       FRAMEWORK_ACCOUNT_ID: "123456789012",
       FRAMEWORK_PUBLIC_ORIGIN: { output: "Router.url" },
     });
+  });
+
+  it("the framework variables the program sets are exactly the ones the AWS runtime reads (DEC-PENDING-g-05-2)", async () => {
+    const { byName } = await run(full);
+    const environment = byName("Http").args.environment as Record<string, unknown>;
+    const set = Object.keys(environment).filter((name) => !(name in code.variables)).sort();
+    // Every variable the runtime's settings reader asks for, through each of its getters.
+    const read = new Set<string>();
+    const env = new Proxy({} as Record<string, string | undefined>, {
+      get: (_t, name) => {
+        if (typeof name === "string") read.add(name);
+        return typeof name === "string" && name.startsWith("AWS_") ? "x" : `value-of-${String(name)}`;
+      },
+    });
+    const settings = awsLambdaSettings(env);
+    void [settings.region, settings.accountId, settings.publicOrigin, settings.filesBucket, settings.database, settings.credentials, settings.logBucket];
+    const runtimeOwn = new Set<string>(Object.values(LAMBDA_RUNTIME_VARIABLES));
+    expect([...read].filter((name) => !runtimeOwn.has(name)).sort()).toEqual(set);
+    expect(set).toEqual(Object.values(RUNTIME_VARIABLES).sort());
+    // And the runtime reads the program's values back as the stage's.
+    const deployed = awsLambdaSettings({ ...environment, FRAMEWORK_PUBLIC_ORIGIN: "https://d111.cloudfront.net" } as Record<string, string>);
+    expect(deployed.database).toEqual({ clusterArn: "arn:aws:rds:us-east-1:123456789012:cluster:notes-test-abc", secretArn, name: "notes-test-abc-db-1" });
+    expect(deployed.filesBucket).toBe("notes-test-abc-files-123456789012");
+    expect(deployed.accountId).toBe("123456789012");
   });
 
   it("serves the prebuilt client on the router; without a client there is no Site", async () => {

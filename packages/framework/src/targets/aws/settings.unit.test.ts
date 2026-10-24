@@ -33,9 +33,9 @@ describe("awsLambdaEnvironment (provisioning side)", () => {
       FRAMEWORK_ACCOUNT_ID: ACCOUNT,
       FRAMEWORK_LOG_BUCKET: `prototype-logs-${ACCOUNT}`,
       FRAMEWORK_FILES_BUCKET: "notes-test-abc-files",
-      FRAMEWORK_DB_CLUSTER_ARN: INPUT.database.clusterArn,
-      FRAMEWORK_DB_SECRET_ARN: INPUT.database.secretArn,
-      FRAMEWORK_DB_NAME: "notes_test_abc_1",
+      FRAMEWORK_DATABASE_CLUSTER_ARN: INPUT.database.clusterArn,
+      FRAMEWORK_DATABASE_SECRET_ARN: INPUT.database.secretArn,
+      FRAMEWORK_DATABASE: "notes_test_abc_1",
     });
     expect(Object.values(LAMBDA_VARIABLES).every((name) => !name.startsWith("SECRET_"))).toBe(true);
   });
@@ -47,7 +47,7 @@ describe("awsLambdaEnvironment (provisioning side)", () => {
   });
 
   it("refuses SECRET_* and Lambda-reserved variables", () => {
-    expect(codeOf(() => checkLambdaEnvironment({ SECRET_API_KEY: "x", FRAMEWORK_DB_NAME: "d" }))).toBe(
+    expect(codeOf(() => checkLambdaEnvironment({ SECRET_API_KEY: "x", FRAMEWORK_DATABASE: "d" }))).toBe(
       "CORE.MISCONFIGURED: the Lambda environment declares SECRET_API_KEY; on AWS secrets are SSM parameters, never environment variables",
     );
     expect(codeOf(() => checkLambdaEnvironment({ AWS_REGION: "x" }))).toMatch(/AWS_REGION, which the Lambda runtime sets/);
@@ -77,9 +77,9 @@ describe("awsLambdaSettings (runtime side)", () => {
   });
 
   it("a missing or empty required variable is CORE.MISCONFIGURED naming it, raised on first use", () => {
-    const settings = awsLambdaSettings({ ...env, FRAMEWORK_PUBLIC_ORIGIN: "", FRAMEWORK_DB_SECRET_ARN: undefined, AWS_ACCESS_KEY_ID: undefined });
+    const settings = awsLambdaSettings({ ...env, FRAMEWORK_PUBLIC_ORIGIN: "", FRAMEWORK_DATABASE_SECRET_ARN: undefined, AWS_ACCESS_KEY_ID: undefined });
     expect(codeOf(() => settings.publicOrigin)).toMatch(/^CORE\.MISCONFIGURED: the Lambda variable FRAMEWORK_PUBLIC_ORIGIN/);
-    expect(codeOf(() => settings.database)).toMatch(/FRAMEWORK_DB_SECRET_ARN/);
+    expect(codeOf(() => settings.database)).toMatch(/FRAMEWORK_DATABASE_SECRET_ARN/);
     expect(codeOf(() => settings.credentials)).toMatch(/AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY/);
     expect(settings.region).toBe("eu-west-1");
   });

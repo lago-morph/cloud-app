@@ -16,30 +16,10 @@
  */
 import { FrameworkError } from "../../core/errors.js";
 import type { Environment } from "./sdk.js";
+import { LAMBDA_RUNTIME_VARIABLES, LAMBDA_VARIABLES } from "./variables.js";
 
-/** The framework's Lambda environment variables. */
-export const LAMBDA_VARIABLES = Object.freeze({
-  /** The stage's public origin (its CloudFront URL, DEC-0073). */
-  publicOrigin: "FRAMEWORK_PUBLIC_ORIGIN",
-  /** The account ID: the expected owner of every bucket the runtime calls (aws.md §2). */
-  accountId: "FRAMEWORK_ACCOUNT_ID",
-  /** The account's shared log bucket, `prototype-logs-<account-id>` (LOG-REQ-004). */
-  logBucket: "FRAMEWORK_LOG_BUCKET",
-  /** The stage's S3 bucket (FILES, G-04). */
-  filesBucket: "FRAMEWORK_FILES_BUCKET",
-  /** The stage's Aurora cluster, its credentials secret and the current database (SQL, G-02). */
-  databaseClusterArn: "FRAMEWORK_DB_CLUSTER_ARN",
-  databaseSecretArn: "FRAMEWORK_DB_SECRET_ARN",
-  databaseName: "FRAMEWORK_DB_NAME",
-} as const);
-
-/** Variables the Lambda runtime sets itself (reserved; provisioning never declares them). */
-export const LAMBDA_RUNTIME_VARIABLES = Object.freeze({
-  region: "AWS_REGION",
-  accessKeyId: "AWS_ACCESS_KEY_ID",
-  secretAccessKey: "AWS_SECRET_ACCESS_KEY",
-  sessionToken: "AWS_SESSION_TOKEN",
-} as const);
+/** The variable names, shared with the stage program (`variables.ts`; DEC-PENDING-g-05-2). */
+export { LAMBDA_RUNTIME_VARIABLES, LAMBDA_VARIABLES };
 
 /** The prefix no Lambda variable may carry on AWS (Worker secrets' naming on the other targets). */
 export const SECRET_PREFIX = "SECRET_";
