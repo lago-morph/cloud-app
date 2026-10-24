@@ -64,6 +64,7 @@
     "@aws-sdk/client-ssm": "3.1153.0",
     "@aws-sdk/client-sts": "3.1153.0",
     "@electric-sql/pglite": "0.5.8",
+    "@smithy/node-http-handler": "4.12.1",
     "@typescript-eslint/utils": "8.72.0",
     "aws4fetch": "1.0.20",
     "drizzle-kit": "0.31.11",
