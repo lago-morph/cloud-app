@@ -1,0 +1,12 @@
+Updating (test-aufdf24vgdoqnph):
+
+@ updating.........
+    pulumi:pulumi:Stack reference-test-aufdf24vgdoqnph  
+Outputs:
+    _protect: false
+
+Resources:
+    8 unchanged
+
+Duration: 6s
+
