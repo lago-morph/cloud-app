@@ -314,7 +314,7 @@ export async function ensureSharedNetwork(clients: AwsClients): Promise<SharedNe
 // ---------------------------------------------------------------------------------------------
 
 /** The state bucket `/sst/bootstrap` names, or undefined when SST has not bootstrapped the region (or would again). */
-async function bootstrapStateBucket(clients: AwsClients): Promise<string | undefined> {
+export async function bootstrapStateBucket(clients: Pick<AwsClients, "ssm" | "region">): Promise<string | undefined> {
   let value: string | undefined;
   try {
     value = (await clients.ssm.send(new GetParameterCommand({ Name: SST_BOOTSTRAP_PARAMETER }))).Parameter?.Value;
