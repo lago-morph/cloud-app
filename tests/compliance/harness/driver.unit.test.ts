@@ -202,10 +202,11 @@ describe("[COMPL-AC-003] skip notes", () => {
 // AWS criterion not-run without an account, so these runs pass their own not-run rules.
 describe("[COMPL-AC-004] --target aws: stage naming, leftovers, cluster cap and API-call count", () => {
   const AWS = ["--target", "aws", "--only", "KV-AC-001"];
-  /** `clusters` null: operations that cannot count clusters. */
-  const awsCloud = (clusters: string[] | null = [], extra: Partial<CloudStageOps> = {}): Partial<CloudStageOps> => ({
+  /** `clusters` null: operations that cannot count clusters; `region` null: operations that cannot read the account's region. */
+  const awsCloud = (clusters: string[] | null = [], extra: Partial<CloudStageOps> = {}, region: string | null = "us-east-1"): Partial<CloudStageOps> => ({
     deploy: (stage) => Promise.resolve({ baseUrl: "https://d111111abcdef8.cloudfront.net", output: `deployed ${stage}` }),
     ...(clusters === null ? {} : { testStageClusters: () => Promise.resolve(clusters) }),
+    ...(region === null ? {} : { region: () => Promise.resolve(region) }),
     apiCalls: () => 3,
     ...extra,
   });
@@ -311,6 +312,85 @@ describe("[COMPL-AC-004] --target aws: stage naming, leftovers, cluster cap and 
     expect(h.events.filter((e) => /^(remove|deploy) /.test(e))[0]).toBe("remove test-old000000000001");
     expect(recordOf(h).leftovers).toEqual(["test-old000000000001: Aurora cluster reference-test-old000000000001"]);
     expect(h.pending.get("aws")?.has("test-old000000000001")).toBe(true);
+  });
+
+  // G-EV F4: the AWS test hooks take the account region from AWS_REGION; the driver sets it from the account (DEC-0075, DEC-0476).
+  it("gives every test process and the cluster count the account's region as AWS_REGION and AWS_DEFAULT_REGION", async () => {
+    const restore = [ownEnv("AWS_REGION", "us-west-1"), ownEnv("AWS_DEFAULT_REGION", undefined)];
+    try {
+      const asked: string[] = [];
+      const h = harness({
+        notRunRules: [],
+        vitest: vitestReport([{ title: "[KV-AC-001] put", status: "passed" }]),
+        cloud: awsCloud([], { region: () => Promise.resolve("eu-west-2"), testStageClusters: (region) => (asked.push(region), Promise.resolve([])) }),
+      });
+      await runCompliance(parseArgs(AWS), AWS, h.deps);
+      const tests = h.calls.filter((c) => c.args[0] === "vitest" || c.args[0] === "playwright");
+      expect(tests.map((c) => c.args[0])).toEqual(["vitest", "playwright"]);
+      for (const c of tests) expect([c.env.AWS_REGION, c.env.AWS_DEFAULT_REGION]).toEqual(["eu-west-2", "eu-west-2"]);
+      expect(asked).toEqual(["eu-west-2"]);
+      expect(h.written[0]?.raw?.["aws-usage.log"]).toContain("account region: eu-west-2");
+      expect(h.logs.join("\n")).toMatch(/AWS_REGION=us-west-1 is not the account's region eu-west-2/);
+    } finally {
+      for (const r of restore) r();
+    }
+  });
+
+  it("without the account's region, falls back to AWS_REGION, then AWS_DEFAULT_REGION", async () => {
+    for (const [name, value] of [["AWS_REGION", "ap-south-1"], ["AWS_DEFAULT_REGION", "sa-east-1"]] as const) {
+      const restore = [ownEnv("AWS_REGION", undefined), ownEnv("AWS_DEFAULT_REGION", undefined), ownEnv(name, value)];
+      try {
+        const h = harness({ notRunRules: [], vitest: vitestReport([{ title: "[KV-AC-001] put", status: "passed" }]), cloud: awsCloud([], {}, null) });
+        await runCompliance(parseArgs(AWS), AWS, h.deps);
+        expect(h.calls.find((c) => c.args[0] === "vitest")?.env.AWS_REGION).toBe(value);
+      } finally {
+        for (const r of restore.reverse()) r();
+      }
+    }
+  });
+
+  it("with no region to be found, stops with a missing prerequisite before deploying or running any test", async () => {
+    const restore = [ownEnv("AWS_REGION", undefined), ownEnv("AWS_DEFAULT_REGION", undefined)];
+    try {
+      const failing: Partial<CloudStageOps> = { region: () => Promise.reject(new Error("AWS credentials are not usable: STS GetCallerIdentity failed with ExpiredToken")) };
+      for (const [extra, region] of [[{}, null], [failing, "us-east-1"]] as const) {
+        const counted: string[] = [];
+        const h = harness({ notRunRules: [], cloud: awsCloud([], { ...extra, testStageClusters: () => (counted.push("count"), Promise.resolve([])) }, region) });
+        const result = await runCompliance(parseArgs(AWS), AWS, h.deps);
+        expect(h.events.filter((e) => /^(pending|deploy|secret)/.test(e))).toEqual([]);
+        expect(counted).toEqual([]);
+        expect(h.calls.filter((c) => c.args[0] === "vitest" || c.args[0] === "playwright")).toEqual([]);
+        expect(h.written[0]?.raw?.["driver-error.log"]).toMatch(/^PrerequisiteMissingError: PREREQUISITE MISSING: the AWS account's region/);
+        const detail = recordOf(h).results.find((r) => r.id === "KV-AC-001")?.detail ?? "";
+        expect(detail).toMatch(/^not run: setting up the target failed: PREREQUISITE MISSING: the AWS account's region .*(setup-account --target aws|ExpiredToken)/);
+        expect(result.exitStatus).toBe(1);
+      }
+    } finally {
+      for (const r of restore) r();
+    }
+  });
+
+  // G-EV F3: a run against fakes says so in its record, so no report can count it whatever folder it lands in.
+  it("marks the record as a dry run when the not-run rules are overridden or the stage operations are fakes, and only then", async () => {
+    const overridden = harness({ notRunRules: [], cloud: awsCloud() });
+    await runCompliance(parseArgs(AWS), AWS, overridden.deps);
+    expect(recordOf(overridden).dryRun).toBe("not-run rules overridden (DriverDeps.notRunRules)");
+    expect(overridden.logs.join("\n")).toMatch(/dry run \(not-run rules overridden.*\): this record is not evidence/);
+
+    const faked = harness({ notRunRules: [], cloud: awsCloud([], { dryRun: "fake OperationsFactory" }) });
+    await runCompliance(parseArgs(AWS), AWS, faked.deps);
+    expect(recordOf(faked).dryRun).toBe("not-run rules overridden (DriverDeps.notRunRules); fake OperationsFactory");
+
+    const fakeOpsOnly = harness({ cloud: { dryRun: "fake framework CLI runner" } });
+    await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], fakeOpsOnly.deps);
+    expect(recordOf(fakeOpsOnly).dryRun).toBe("fake framework CLI runner");
+
+    const real = harness();
+    await runCompliance(parseArgs(["--target", "aws"]), [], real.deps);
+    expect(recordOf(real)).not.toHaveProperty("dryRun");
+    const local = harness();
+    await runCompliance(parseArgs(["--target", "local"]), [], local.deps);
+    expect(recordOf(local)).not.toHaveProperty("dryRun");
   });
 });
 

@@ -14,6 +14,8 @@ import { REFERENCE_APP, stageLeftovers } from "./leftovers.js";
 import { waitFor } from "./wait.js";
 import type { TargetOperations } from "../../../packages/framework/src/provision/core/operations.js";
 import { targetOperations } from "../../../packages/framework/src/cli/commands/operations.js";
+import { awsChildEnvironment } from "../../../packages/framework/src/cli/commands/aws-operations.js";
+import { awsAccount } from "../../../packages/framework/src/provision/aws/account.js";
 import { cloudProcessProblems } from "../../../packages/framework/src/cli/commands/smoke-cloud.js";
 
 /** The origin `dev` prints once the client and `/api` answer (cli.md `dev`). */
@@ -189,13 +191,35 @@ export async function stageResourceOperations(
 }
 
 /** The AWS usage parts of the stage operations: the cluster count and the driver's own call count (the G-T1 hooks, loaded only on AWS). */
-async function awsUsageHooks(): Promise<{ testStageClusters(): Promise<string[]>; awsCallCount(): number }> {
+async function awsUsageHooks(): Promise<{ testStageClusters(env: Readonly<Record<string, string | undefined>>): Promise<string[]>; awsCallCount(): number }> {
   const [usage, api] = await Promise.all([import("../criteria/_cloud/aws/usage.js"), import("../criteria/_cloud/aws/api.js")]);
   return { testStageClusters: usage.testStageClusters, awsCallCount: api.awsCallCount };
 }
 
-export function cliStageOps(repoRoot: string, target: Target, options: { readonly operations?: OperationsFactory; readonly run?: (call: RunCall) => Promise<{ status: number; output: string }>; readonly env?: Readonly<Record<string, string | undefined>> } = {}): CloudStageOps {
+/** Reads the AWS account's region, given the CLI's AWS child environment (default: `defaultAccountRegion`). */
+export type AccountRegionReader = (env: Readonly<Record<string, string | undefined>>) => Promise<string>;
+
+/**
+ * The AWS account's region as the framework reads it for `deploy` and `smoke` (DEC-0075, DEC-0476):
+ * G-07's account operations, so STS `GetCallerIdentity` and the log bucket's location (PAR-060
+ * when the account has no log bucket yet, whose deploy preflight then fails on its own).
+ */
+export const defaultAccountRegion: AccountRegionReader = (env) => awsAccount({ env }).region();
+
+export function cliStageOps(
+  repoRoot: string,
+  target: Target,
+  options: {
+    readonly operations?: OperationsFactory;
+    readonly run?: (call: RunCall) => Promise<{ status: number; output: string }>;
+    readonly env?: Readonly<Record<string, string | undefined>>;
+    readonly accountRegion?: AccountRegionReader;
+  } = {},
+): CloudStageOps {
   const runner = options.run ?? runProcess;
+  const env = options.env ?? process.env;
+  // G-EV F3: operations built on a fake runner or factory say so, and the driver marks the record.
+  const fakes = [...(options.run === undefined ? [] : ["fake framework CLI runner"]), ...(options.operations === undefined ? [] : ["fake stage operations (OperationsFactory)"])];
   let ownCalls = (): number => 0;
   const cli = (args: string[], input?: string): Promise<{ status: number; output: string }> =>
     runner({
@@ -206,6 +230,7 @@ export function cliStageOps(repoRoot: string, target: Target, options: { readonl
       ...(input === undefined ? {} : { input, redact: [input] }),
     });
   return {
+    ...(fakes.length === 0 ? {} : { dryRun: fakes.join("; ") }),
     async deploy(stage) {
       const result = await cli(["deploy", "--target", target, "--stage", stage]);
       if (result.status !== 0) {
@@ -229,14 +254,15 @@ export function cliStageOps(repoRoot: string, target: Target, options: { readonl
       return output;
     },
     async listStageResources(stage) {
-      return stageLeftovers(await stageResourceOperations(repoRoot, target, { env: options.env ?? process.env, ...(options.operations === undefined ? {} : { operations: options.operations }) }), { app: REFERENCE_APP, stage });
+      return stageLeftovers(await stageResourceOperations(repoRoot, target, { env, ...(options.operations === undefined ? {} : { operations: options.operations }) }), { app: REFERENCE_APP, stage });
     },
     ...(target === "aws"
       ? {
-          async testStageClusters() {
+          region: () => (options.accountRegion ?? defaultAccountRegion)(awsChildEnvironment(env)),
+          async testStageClusters(region) {
             const hooks = await awsUsageHooks();
             ownCalls = hooks.awsCallCount;
-            return hooks.testStageClusters();
+            return hooks.testStageClusters({ ...env, AWS_REGION: region, AWS_DEFAULT_REGION: region });
           },
           apiCalls: () => ownCalls(),
         }

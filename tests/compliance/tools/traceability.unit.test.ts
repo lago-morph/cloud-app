@@ -64,6 +64,18 @@ describe("[COMPL-AC-002] traceability report", () => {
     expect(buildTraceability({ catalogue, tests: [], records }).rows[0]?.results.cloudflare).toBe("passed; not-run: cloud production part: Google login mocked for this phase (2026-10-20T12:00:00Z)");
   });
 
+  // G-EV F3: a record marked as a dry run is never shown as a result.
+  it("never shows a result from a record marked as a dry run", () => {
+    const records = [
+      rec("aws", "2026-10-20T10:00:00Z", [{ id: "KV-AC-001", status: "not-run", detail: "AWS live run pending (no account)" }]),
+      { ...rec("aws", "2026-10-20T11:00:00Z", [{ id: "KV-AC-001", status: "passed" }]), dryRun: "fake stage operations (OperationsFactory)" },
+      { ...rec("local", "2026-10-20T12:00:00Z", [{ id: "KV-AC-002", status: "passed" }]), dryRun: "not-run rules overridden (DriverDeps.notRunRules)" },
+    ];
+    const rows = buildTraceability({ catalogue, tests: [], records }).rows;
+    expect(rows[0]?.results).toEqual({ aws: "not-run: AWS live run pending (no account) (2026-10-20T10:00:00Z)" });
+    expect(rows[1]?.results).toEqual({});
+  });
+
   it("lists every ID defined in the real documents", () => {
     const real = readCatalogue(new URL("../../../docs/", import.meta.url).pathname);
     const report = buildTraceability({ catalogue: real, tests: [], records: [] });

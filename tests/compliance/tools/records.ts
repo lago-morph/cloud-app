@@ -4,6 +4,12 @@ import { join } from "node:path";
 import { validateEvidence, type EvidenceRecord } from "../../../packages/framework/src/evidence/public.js";
 import { TARGETS } from "../harness/catalogue.js";
 
+/** A record of a run against fakes (G-EV F3): never evidence, wherever it is stored. */
+export function isDryRun(record: EvidenceRecord): boolean {
+  return record.dryRun !== undefined;
+}
+
+/** The evidence records; a dry run's record is named among the skipped ones, never returned. */
 export function readRecords(root: string): { records: EvidenceRecord[]; skipped: string[] } {
   const records: EvidenceRecord[] = [];
   const skipped: string[] = [];
@@ -22,6 +28,7 @@ export function readRecords(root: string): { records: EvidenceRecord[]; skipped:
       }
       const errors = validateEvidence(value);
       if (errors.length > 0) skipped.push(`${rel}: ${errors.join("; ")}`);
+      else if (isDryRun(value as EvidenceRecord)) skipped.push(`${rel}: a dry run (${String((value as EvidenceRecord).dryRun)}), never evidence`);
       else records.push(value as EvidenceRecord);
     }
   }

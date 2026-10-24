@@ -7,10 +7,12 @@
  *   so they reach AWS through `HTTPS_PROXY` in the sandbox and directly elsewhere. Credentials
  *   come from the SDK's default chain (environment, profile, …) and are never read or printed
  *   here.
- * - The region is the account region recorded by `setup-account` (DEC-0075); the hooks take it
- *   from `AWS_REGION` (or `AWS_DEFAULT_REGION`), which the driver sets for an AWS run. Without one
- *   a hook reports a missing prerequisite. The account ID comes from STS `GetCallerIdentity`,
- *   once per process.
+ * - The region is the account region recorded by `setup-account` (DEC-0075): the log bucket's
+ *   location (DEC-0476). On `--target aws` the driver reads it once, as deploy does, and sets
+ *   `AWS_REGION` and `AWS_DEFAULT_REGION` to it in every test process it spawns; in its own process
+ *   it passes it to `awsClients(env)` (G-EV F4). The hooks take it from `AWS_REGION` (or
+ *   `AWS_DEFAULT_REGION`); without one a hook reports a missing prerequisite. The account ID comes
+ *   from STS `GetCallerIdentity`, once per process.
  * - Usage is countable and capped (plan §1 "Cloud usage limits"): every `send` goes through
  *   `awsCall`, which counts it, refuses calls beyond `maxAwsCalls()` (default 500 per process,
  *   `COMPLIANCE_AWS_MAX_CALLS` overrides) and prints `[g-t1] aws api calls in this process: <n>`
@@ -120,10 +122,10 @@ export interface AwsClients {
 let clients: AwsClients | undefined;
 let account: Promise<string> | undefined;
 
-/** The process's clients, created on first use. */
-export function awsClients(): AwsClients {
+/** The process's clients, created on first use in the region of `env` (default: the process environment). */
+export function awsClients(env: Env = process.env): AwsClients {
   if (clients !== undefined) return clients;
-  const region = awsRegion();
+  const region = awsRegion(env);
   const base = { region, maxAttempts: MAX_ATTEMPTS, requestHandler: proxyAwareHandler(process.env) };
   clients = {
     ec2: new EC2Client(base),

@@ -8,7 +8,13 @@
  * also the unit layer, for the unit-level IDs only), generates no data, and on a cloud target
  * uses one test stage for the whole run. On AWS it also checks the stage's AWS names, holds at most
  * three Aurora clusters at once and counts the test hooks' AWS API calls against the run's cap
- * (aws-usage.ts; plan-aws.md G-T4).
+ * (aws-usage.ts; plan-aws.md G-T4). Before anything is deployed it reads the account's region, as
+ * deploy does (the log bucket's location, DEC-0075, DEC-0476), and gives it to every test process
+ * as `AWS_REGION` and `AWS_DEFAULT_REGION`; with no region to be found it stops on a missing
+ * prerequisite (G-EV F4).
+ *
+ * A run against fakes (overridden not-run rules, or stage operations that say they are fakes) is
+ * marked `dryRun` in its record, which no report counts (G-EV F3).
  */
 import {
   DirtyTreeError,
@@ -24,6 +30,7 @@ import {
 } from "../../../packages/framework/src/evidence/public.js";
 import { ALL, type ComplianceArgs } from "./args.js";
 import type { CatalogueEntry, Target } from "./catalogue.js";
+import { PrerequisiteMissingError } from "./blocked.js";
 import { assertAwsStageName, assertClusterRoom, awsCallsInOutput, awsRunCallCap, MAX_AWS_CALLS_ENV, TEST_STAGE_CLUSTER } from "./aws-usage.js";
 import { childEnv } from "./env.js";
 import { expectedCriteria, PHASE_RULES, type ExpectedEntry, type NotRunRule } from "./expected.js";
@@ -81,8 +88,12 @@ export interface CloudStageOps {
   remove(stage: string): Promise<string>;
   /** The stage's resources that still exist, by exact identifier (PROV `listStageResources`). */
   listStageResources(stage: string): Promise<readonly string[]>;
-  /** AWS: the account's test-stage Aurora clusters, by identifier (the three-at-once cap; required to deploy on AWS). */
-  testStageClusters?(): Promise<readonly string[]>;
+  /** AWS: the account's test-stage Aurora clusters in `region`, by identifier (the three-at-once cap; required to deploy on AWS). */
+  testStageClusters?(region: string): Promise<readonly string[]>;
+  /** AWS: the account's region as the framework reads it (the log bucket's location, DEC-0476). */
+  region?(): Promise<string>;
+  /** Set when these operations are fakes (G-RUN's dry run): what is faked. The record is then marked `dryRun`. */
+  readonly dryRun?: string;
   /** AWS: the AWS API calls the driver's own process made through the counted hooks. */
   apiCalls?(): number;
 }
@@ -146,6 +157,31 @@ function expandBlocked(given: ReadonlyMap<string, string>, expected: readonly Ex
   return out;
 }
 
+const AWS_REGION_NAME = /^[a-z]{2}(-[a-z]+)+-\d{1,2}$/;
+
+/**
+ * The region the AWS test hooks get (G-EV F4): the account's region from the stage operations, as
+ * deploy reads it; operations that cannot read it fall back to `AWS_REGION`, then
+ * `AWS_DEFAULT_REGION`. Rejects with a `PrerequisiteMissingError` when there is none.
+ */
+async function awsTestRegion(ops: CloudStageOps, env: Readonly<Record<string, string | undefined>>, log: (line: string) => void): Promise<string> {
+  const missing = (why: string): PrerequisiteMissingError =>
+    new PrerequisiteMissingError(`the AWS account's region ${why}; the AWS test hooks need it as AWS_REGION. Run setup-account --target aws, or set AWS_REGION to the account's region`);
+  const given = [env.AWS_REGION, env.AWS_DEFAULT_REGION].find((r) => r !== undefined && r !== "");
+  let region: string | undefined;
+  if (ops.region !== undefined) {
+    try {
+      region = await ops.region();
+    } catch (error) {
+      throw missing(`could not be read: ${firstLine(error)}`);
+    }
+    if (given !== undefined && given !== region) log(`compliance: note: AWS_REGION=${given} is not the account's region ${region}; the tests use ${region}`);
+  } else region = given;
+  if (region === undefined || region === "") throw missing("is unknown (the stage operations cannot read it and neither AWS_REGION nor AWS_DEFAULT_REGION is set)");
+  if (!AWS_REGION_NAME.test(region)) throw missing(`is not an AWS region name: ${region}`);
+  return region;
+}
+
 function subdomainRedaction(baseUrl: string): Redaction[] {
   const match = /^https:\/\/[^./]+\.([^./]+)\.workers\.dev(?:[/:]|$)/.exec(baseUrl);
   return match?.[1] === undefined ? [] : [{ value: match[1], replacement: "<account-subdomain>" }];
@@ -183,10 +219,10 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
   let awsTestCalls = 0;
 
   /** AWS, before the run stage is deployed: valid AWS names, and room for one more Aurora cluster (aws-usage.ts). */
-  const checkAwsStage = async (ops: CloudStageOps, name: string): Promise<void> => {
+  const checkAwsStage = async (ops: CloudStageOps, name: string, region: string): Promise<void> => {
     assertAwsStageName(REFERENCE_APP, name);
     if (ops.testStageClusters === undefined) throw new Error("the aws stage operations cannot count the account's Aurora clusters (needed for the three-at-once cap)");
-    const clusters = (await ops.testStageClusters()).filter((c) => TEST_STAGE_CLUSTER.test(c));
+    const clusters = (await ops.testStageClusters(region)).filter((c) => TEST_STAGE_CLUSTER.test(c));
     awsUsage.push(`test-stage Aurora clusters before deploying ${name}: ${String(clusters.length)}${clusters.length > 0 ? ` (${clusters.join(", ")})` : ""}`);
     assertClusterRoom(clusters, 1, `deploying ${name}`);
   };
@@ -248,6 +284,7 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
   };
 
   let ops: CloudStageOps | undefined;
+  let awsRegion: string | undefined;
   if (toRun.length > 0) {
     let local: LocalSession | undefined;
     let deployed = false;
@@ -267,11 +304,16 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
       }
       if (isCloud) {
         ops = deps.cloud(args.target);
+        // AWS: the account's region first, so a run that cannot give it to the test hooks stops before deploying (G-EV F4).
+        if (isAws) {
+          awsRegion = await awsTestRegion(ops, process.env, log);
+          awsUsage.push(`account region: ${awsRegion} (AWS_REGION and AWS_DEFAULT_REGION of the test runs)`);
+        }
         // An interrupted earlier run left these stages: remove them first (COMPL-REQ-004).
         for (const old of deps.pendingStages.list(args.target)) await removeStage(ops, old);
         if (baseUrl === undefined) {
           stage ??= testStageName(runId);
-          if (isAws) await checkAwsStage(ops, stage);
+          if (awsRegion !== undefined) await checkAwsStage(ops, stage, awsRegion);
           deps.pendingStages.add(args.target, stage);
           deployed = true;
           baseUrl = await deployWithTestSecret(ops, stage);
@@ -301,7 +343,7 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
           exitStatus ||= 1;
           continue;
         }
-        const runEnv = isAws ? { ...env, [MAX_AWS_CALLS_ENV]: String(left) } : env;
+        const runEnv = isAws ? { ...env, [MAX_AWS_CALLS_ENV]: String(left), ...(awsRegion === undefined ? {} : { AWS_REGION: awsRegion, AWS_DEFAULT_REGION: awsRegion }) } : env;
         const pattern = grepPattern(ids);
         const jsonPath = `${tmp}/${selection.label}.json`;
         const result =
@@ -363,6 +405,10 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
   if (runErrors.length > 0) raw["run-errors.log"] = `${runErrors.join("\n")}\n`;
 
   const results: EvidenceResult[] = criterionResults({ target: args.target, expected, outcomes, blocked });
+  // G-EV F3: a run against fakes says so in its record; the reports never count it, wherever it is stored.
+  const fakes = [...(deps.notRunRules !== undefined && deps.notRunRules !== PHASE_RULES ? ["not-run rules overridden (DriverDeps.notRunRules)"] : []), ...(ops?.dryRun === undefined ? [] : [ops.dryRun])];
+  const dryRun = fakes.length === 0 ? undefined : fakes.join("; ");
+  if (dryRun !== undefined) log(`compliance: dry run (${dryRun}): this record is not evidence`);
   const record: EvidenceRecord = {
     runId,
     commit,
@@ -375,6 +421,7 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
     results,
     versions: deps.versions(),
     ...(isCloud ? { leftovers } : {}),
+    ...(dryRun === undefined ? {} : { dryRun }),
   };
   try {
     const paths = deps.writeEvidence({ root: args.out ?? deps.repoRoot, git: deps.git, record, raw, redactions });
