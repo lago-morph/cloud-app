@@ -4,7 +4,7 @@ This is the smallest app built on the prototype framework. It uses each capabili
 
 This page lists everything the owner does by hand, as copy-and-paste steps. Run the commands in a terminal, in this app's folder, on macOS or Linux with Node 22.22.0. Replace the `<…>` parts. Never paste a secret value into a command line, a committed file or a chat.
 
-**What is verified in this phase.** Local development (§1) is verified. Every Cloudflare step (§2–§9) is **not yet verified on Cloudflare in this phase**: the framework's cloud commands have run only against a simulated Cloudflare. The Google steps (§5) have never been run, because Google login is mocked in this phase. The AWS target is not available yet.
+**What is verified in this phase.** Local development (§1) is verified. Every Cloudflare step (§2–§9) is **not yet verified on Cloudflare in this phase**: the framework's cloud commands have run only against a simulated Cloudflare. The Google steps (§5) have never been run, because Google login is mocked in this phase. AWS is a future release: this release targets local and Cloudflare only.
 
 ## 1. Run it on your computer
 
@@ -211,7 +211,5 @@ Cloudflare charges for requests and storage. An idle stage has no requests, but 
 | Leftover test stages: Workers named `template-test-…`, D1 databases `template-test-…-db-<n>` | `remove` each by its stage name. Check Workers & Pages and D1 in the dashboard (menu names not yet verified). |
 | The shared `prototype-logs` bucket, which grows with every entry and is never emptied by `remove` | Delete old entries in the dashboard. To do it automatically, open R2 → `prototype-logs` → Settings → Object lifecycle rules (not yet verified), and delete objects after, for example, 30 days. |
 | The shared `sst-state` bucket, which is small | Keep it while any stage exists. Delete it in the dashboard only after the last stage is removed. |
-
-On AWS, which is not available yet, the database storage, the database-credentials secret and the shared network also stay billable while idle. Public routes that read the database keep the database awake there.
 
 **Keeping test stages small.** On Cloudflare's free plan, D1 allows about **100,000 rows written per day** per account; reads have a larger limit. When a daily limit is used up, database requests fail until it resets at 00:00 UTC. So keep test data to a few rows, never load data in loops, run one test stage at a time, and remove it right after its smoke test. An account holds at most **10 D1 databases**, and a deploy that changes the schema briefly holds two per stage.

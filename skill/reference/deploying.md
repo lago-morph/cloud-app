@@ -4,7 +4,7 @@ Read this when you deploy, smoke-test, stop, start or remove a stage on a cloud.
 
 Commands run in the app's directory, with `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` set ([owner-tasks.md](owner-tasks.md) §2). Each `npm run <command> -- …` is the same as `npx prototype-framework <command> …`. Behind an HTTPS proxy, put `NODE_USE_ENV_PROXY=1 ` in front of every cloud command; the command says so if it is needed.
 
-**Status in this phase:** every command on this page is **not yet verified on Cloudflare in this phase**. The framework's cloud commands have run only against a simulated Cloudflare. Only the Cloudflare API calls for stop and start (§4) were tried on a real Worker. The AWS target is not available yet.
+**Status in this phase:** every command on this page is **not yet verified on Cloudflare in this phase**. The framework's cloud commands have run only against a simulated Cloudflare. Only the Cloudflare API calls for stop and start (§4) were tried on a real Worker. AWS is a future release: this release deploys to Cloudflare only.
 
 ## 1. Test stages and production stages
 
