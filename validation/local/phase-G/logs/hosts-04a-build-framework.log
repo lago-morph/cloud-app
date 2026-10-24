@@ -1,0 +1,2 @@
+2026-10-24T09:42:20.302Z pid=10871 t=0 start ["/opt/node22/bin/npm","run"]
+2026-10-24T09:42:20.460Z pid=10884 t=0 start ["/home/user/cloud-app/.claude/worktrees/agent-aa2e78cb332fe6259/node_modules/.bin/tsc","-p"]
