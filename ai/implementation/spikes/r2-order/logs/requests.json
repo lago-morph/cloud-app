@@ -1,0 +1,820 @@
+[
+  {
+    "kind": "api",
+    "method": "GET",
+    "what": "/accounts/<ACCOUNT_ID>/tokens/permission_groups",
+    "status": 200,
+    "success": true,
+    "note": "find permission group id",
+    "n": 1,
+    "cumulative": 1
+  },
+  {
+    "kind": "api",
+    "method": "POST",
+    "what": "/accounts/<ACCOUNT_ID>/r2/buckets",
+    "status": 200,
+    "success": true,
+    "errors": [],
+    "note": "create temporary bucket",
+    "n": 2,
+    "cumulative": 2
+  },
+  {
+    "kind": "api",
+    "method": "POST",
+    "what": "/accounts/<ACCOUNT_ID>/tokens",
+    "status": 200,
+    "success": true,
+    "errors": [],
+    "note": "create temporary R2 token scoped to the bucket",
+    "n": 3,
+    "cumulative": 3
+  },
+  {
+    "kind": "wrangler",
+    "method": "CLI",
+    "what": "wrangler deploy",
+    "status": 0,
+    "apiRequests": 9,
+    "requestLines": [
+      "-- START CF API REQUEST: GET https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/workers/services/spike-r2order-69acd7",
+      "-- START CF API REQUEST: GET https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/workers/scripts/spike-r2order-69acd7/secrets",
+      "-- START CF API REQUEST: GET https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/workers/subdomain",
+      "-- START CF API REQUEST: GET https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/workers/scripts/spike-r2order-69acd7/deployments",
+      "-- START CF API REQUEST: GET https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/workers/scripts/spike-r2order-69acd7/settings",
+      "-- START CF API REQUEST: GET https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/r2/buckets/spike-r2order-69acd7",
+      "-- START CF API REQUEST: PUT https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/workers/scripts/spike-r2order-69acd7",
+      "-- START CF API REQUEST: GET https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/workers/workers/spike-r2order-69acd7",
+      "-- START CF API REQUEST: POST https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/workers/scripts/spike-r2order-69acd7/subdomain"
+    ],
+    "n": 4,
+    "cumulative": 12
+  },
+  {
+    "kind": "worker",
+    "method": "POST",
+    "what": "/head",
+    "status": 404,
+    "note": "readiness check",
+    "response": "<!DOCTYPE html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class=\"no-js ie7 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 8]>    <html class=\"no-js ie8 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if gt IE 8]><!--> <html class=\"no-js\" lang=\"en-US\"> <!--<![endif]-->\n  <head>\n    <meta charSet=\"utf-8\"/>\n    <meta http-equiv=\"refresh\" content=\"30\">\n    <title>Page not found</title>\n    <link rel=\"icon\" type=\"image/png\" href=\"https://workers.cloudflar",
+    "n": 5,
+    "cumulative": 13
+  },
+  {
+    "kind": "worker",
+    "method": "POST",
+    "what": "/head",
+    "status": 200,
+    "note": "readiness check",
+    "response": [],
+    "n": 6,
+    "cumulative": 14
+  },
+  {
+    "kind": "worker",
+    "method": "POST",
+    "what": "/put",
+    "status": 200,
+    "note": "binding put of 11 one-byte objects",
+    "response": [
+      {
+        "op": "put",
+        "hex": "712f61",
+        "ok": true,
+        "storedHex": "712f61"
+      },
+      {
+        "op": "put",
+        "hex": "712f612062",
+        "ok": true,
+        "storedHex": "712f612062"
+      },
+      {
+        "op": "put",
+        "hex": "712f6121",
+        "ok": true,
+        "storedHex": "712f6121"
+      },
+      {
+        "op": "put",
+        "hex": "712f612f62",
+        "ok": true,
+        "storedHex": "712f612f62"
+      },
+      {
+        "op": "put",
+        "hex": "712f6130",
+        "ok": true,
+        "storedHex": "712f6130"
+      },
+      {
+        "op": "put",
+        "hex": "712f6161",
+        "ok": true,
+        "storedHex": "712f6161"
+      },
+      {
+        "op": "put",
+        "hex": "712f61c3a9",
+        "ok": true,
+        "storedHex": "712f61c3a9"
+      },
+      {
+        "op": "put",
+        "hex": "712f62",
+        "ok": true,
+        "storedHex": "712f62"
+      },
+      {
+        "op": "put",
+        "hex": "742f6101",
+        "ok": true,
+        "storedHex": "742f6101"
+      },
+      {
+        "op": "put",
+        "hex": "742f61206201",
+        "ok": true,
+        "storedHex": "742f61206201"
+      },
+      {
+        "op": "put",
+        "hex": "742f612f6201",
+        "ok": true,
+        "storedHex": "742f612f6201"
+      }
+    ],
+    "n": 7,
+    "cumulative": 15
+  },
+  {
+    "kind": "worker",
+    "method": "POST",
+    "what": "/list",
+    "status": 200,
+    "note": "binding listings L1-L8",
+    "response": [
+      {
+        "id": "L1",
+        "pages": [
+          {
+            "opts": {
+              "prefix": "q/"
+            },
+            "hex": [
+              "712f612062",
+              "712f6121",
+              "712f612f62",
+              "712f6130",
+              "712f61",
+              "712f6161",
+              "712f61c3a9",
+              "712f62"
+            ],
+            "json": [
+              "\"q/a b\"",
+              "\"q/a!\"",
+              "\"q/a/b\"",
+              "\"q/a0\"",
+              "\"q/a\"",
+              "\"q/aa\"",
+              "\"q/aé\"",
+              "\"q/b\""
+            ],
+            "truncated": false,
+            "delimitedPrefixes": [],
+            "httpMetadataPresent": [
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false
+            ]
+          }
+        ]
+      },
+      {
+        "id": "L2",
+        "pages": [
+          {
+            "opts": {
+              "prefix": "q/",
+              "include": [
+                "httpMetadata"
+              ]
+            },
+            "hex": [
+              "712f612062",
+              "712f6121",
+              "712f612f62",
+              "712f6130",
+              "712f61",
+              "712f6161",
+              "712f61c3a9",
+              "712f62"
+            ],
+            "json": [
+              "\"q/a b\"",
+              "\"q/a!\"",
+              "\"q/a/b\"",
+              "\"q/a0\"",
+              "\"q/a\"",
+              "\"q/aa\"",
+              "\"q/aé\"",
+              "\"q/b\""
+            ],
+            "truncated": false,
+            "delimitedPrefixes": [],
+            "httpMetadataPresent": [
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true
+            ]
+          }
+        ]
+      },
+      {
+        "id": "L3",
+        "pages": [
+          {
+            "opts": {
+              "prefix": "q/",
+              "startAfter": "q/a"
+            },
+            "hex": [
+              "712f612062",
+              "712f6121",
+              "712f612f62",
+              "712f6130",
+              "712f6161",
+              "712f61c3a9",
+              "712f62"
+            ],
+            "json": [
+              "\"q/a b\"",
+              "\"q/a!\"",
+              "\"q/a/b\"",
+              "\"q/a0\"",
+              "\"q/aa\"",
+              "\"q/aé\"",
+              "\"q/b\""
+            ],
+            "truncated": false,
+            "delimitedPrefixes": [],
+            "httpMetadataPresent": [
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false
+            ]
+          }
+        ]
+      },
+      {
+        "id": "L4",
+        "pages": [
+          {
+            "opts": {
+              "prefix": "q/",
+              "startAfter": "q/a b"
+            },
+            "hex": [
+              "712f6121",
+              "712f612f62",
+              "712f6130",
+              "712f61",
+              "712f6161",
+              "712f61c3a9",
+              "712f62"
+            ],
+            "json": [
+              "\"q/a!\"",
+              "\"q/a/b\"",
+              "\"q/a0\"",
+              "\"q/a\"",
+              "\"q/aa\"",
+              "\"q/aé\"",
+              "\"q/b\""
+            ],
+            "truncated": false,
+            "delimitedPrefixes": [],
+            "httpMetadataPresent": [
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false
+            ]
+          }
+        ]
+      },
+      {
+        "id": "L5",
+        "pages": [
+          {
+            "opts": {
+              "prefix": "q/",
+              "limit": 2
+            },
+            "hex": [
+              "712f612062",
+              "712f6121"
+            ],
+            "json": [
+              "\"q/a b\"",
+              "\"q/a!\""
+            ],
+            "truncated": true,
+            "delimitedPrefixes": [],
+            "httpMetadataPresent": [
+              false,
+              false
+            ]
+          },
+          {
+            "opts": {
+              "prefix": "q/",
+              "limit": 2,
+              "cursor": "<R2 cursor>"
+            },
+            "hex": [
+              "712f612f62",
+              "712f6130"
+            ],
+            "json": [
+              "\"q/a/b\"",
+              "\"q/a0\""
+            ],
+            "truncated": true,
+            "delimitedPrefixes": [],
+            "httpMetadataPresent": [
+              false,
+              false
+            ]
+          },
+          {
+            "opts": {
+              "prefix": "q/",
+              "limit": 2,
+              "cursor": "<R2 cursor>"
+            },
+            "hex": [
+              "712f61",
+              "712f6161"
+            ],
+            "json": [
+              "\"q/a\"",
+              "\"q/aa\""
+            ],
+            "truncated": true,
+            "delimitedPrefixes": [],
+            "httpMetadataPresent": [
+              false,
+              false
+            ]
+          },
+          {
+            "opts": {
+              "prefix": "q/",
+              "limit": 2,
+              "cursor": "<R2 cursor>"
+            },
+            "hex": [
+              "712f61c3a9",
+              "712f62"
+            ],
+            "json": [
+              "\"q/aé\"",
+              "\"q/b\""
+            ],
+            "truncated": false,
+            "delimitedPrefixes": [],
+            "httpMetadataPresent": [
+              false,
+              false
+            ]
+          }
+        ]
+      },
+      {
+        "id": "L6",
+        "pages": [
+          {
+            "opts": {
+              "prefix": "q/a"
+            },
+            "hex": [
+              "712f612062",
+              "712f6121",
+              "712f612f62",
+              "712f6130",
+              "712f61",
+              "712f6161",
+              "712f61c3a9"
+            ],
+            "json": [
+              "\"q/a b\"",
+              "\"q/a!\"",
+              "\"q/a/b\"",
+              "\"q/a0\"",
+              "\"q/a\"",
+              "\"q/aa\"",
+              "\"q/aé\""
+            ],
+            "truncated": false,
+            "delimitedPrefixes": [],
+            "httpMetadataPresent": [
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false
+            ]
+          }
+        ]
+      },
+      {
+        "id": "L7",
+        "pages": [
+          {
+            "opts": {
+              "prefix": "q/",
+              "delimiter": "/"
+            },
+            "hex": [
+              "712f612062",
+              "712f6121",
+              "712f6130",
+              "712f61",
+              "712f6161",
+              "712f61c3a9",
+              "712f62"
+            ],
+            "json": [
+              "\"q/a b\"",
+              "\"q/a!\"",
+              "\"q/a0\"",
+              "\"q/a\"",
+              "\"q/aa\"",
+              "\"q/aé\"",
+              "\"q/b\""
+            ],
+            "truncated": false,
+            "delimitedPrefixes": [
+              "q/a/"
+            ],
+            "httpMetadataPresent": [
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false
+            ]
+          }
+        ]
+      },
+      {
+        "id": "L8",
+        "pages": [
+          {
+            "opts": {
+              "prefix": "t/"
+            },
+            "hex": [
+              "742f6101",
+              "742f61206201",
+              "742f612f6201"
+            ],
+            "json": [
+              "\"t/a\\u0001\"",
+              "\"t/a b\\u0001\"",
+              "\"t/a/b\\u0001\""
+            ],
+            "truncated": false,
+            "delimitedPrefixes": [],
+            "httpMetadataPresent": [
+              false,
+              false,
+              false
+            ]
+          }
+        ]
+      }
+    ],
+    "n": 8,
+    "cumulative": 16
+  },
+  {
+    "kind": "s3",
+    "method": "GET",
+    "what": "S1 ListObjectsV2 prefix=q%2F",
+    "status": 200,
+    "hex": [
+      "712f612062",
+      "712f6121",
+      "712f612f62",
+      "712f6130",
+      "712f61",
+      "712f6161",
+      "712f61c3a9",
+      "712f62"
+    ],
+    "rawControlCharsInXml": false,
+    "controlCharRefsInXml": false,
+    "xmlBody": "\"<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\"?><ListBucketResult xmlns=\\\"http://s3.amazonaws.com/doc/2006-03-01/\\\"><Name>spike-r2order-69acd7</Name><Contents><Key>q/a b</Key><Size>1</Size><LastModified>2026-10-24T04:10:28.924Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>q/a!</Key><Size>1</Size><LastModified>2026-10-24T04:10:29.282Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>q/a/b</Key><Size>1</Size><LastModified>2026-10-24T04:10:29.428Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>q/a0</Key><Size>1</Size><LastModified>2026-10-24T04:10:29.698Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>q/a</Key><Size>1</Size><LastModified>2026-10-24T04:10:28.751Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>q/aa</Key><Size>1</Size><LastModified>2026-10-24T04:10:29.895Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>q/aé</Key><Size>1</Size><LastModified>2026-10-24T04:10:30.059Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>q/b</Key><Size>1</Size><LastModified>2026-10-24T04:10:30.294Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><IsTruncated>false</IsTruncated><Prefix>q/</Prefix><MaxKeys>1000</MaxKeys><KeyCount>8</KeyCount></ListBucketResult>\"",
+    "n": 9,
+    "cumulative": 17
+  },
+  {
+    "kind": "s3",
+    "method": "GET",
+    "what": "S2 ListObjectsV2 prefix=q%2F&start-after=q%2Fa",
+    "status": 200,
+    "hex": [
+      "712f612062",
+      "712f6121",
+      "712f612f62",
+      "712f6130",
+      "712f6161",
+      "712f61c3a9",
+      "712f62"
+    ],
+    "rawControlCharsInXml": false,
+    "controlCharRefsInXml": false,
+    "xmlBody": "\"<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\"?><ListBucketResult xmlns=\\\"http://s3.amazonaws.com/doc/2006-03-01/\\\"><Name>spike-r2order-69acd7</Name><Contents><Key>q/a b</Key><Size>1</Size><LastModified>2026-10-24T04:10:28.924Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>q/a!</Key><Size>1</Size><LastModified>2026-10-24T04:10:29.282Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>q/a/b</Key><Size>1</Size><LastModified>2026-10-24T04:10:29.428Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>q/a0</Key><Size>1</Size><LastModified>2026-10-24T04:10:29.698Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>q/aa</Key><Size>1</Size><LastModified>2026-10-24T04:10:29.895Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>q/aé</Key><Size>1</Size><LastModified>2026-10-24T04:10:30.059Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>q/b</Key><Size>1</Size><LastModified>2026-10-24T04:10:30.294Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><IsTruncated>false</IsTruncated><Prefix>q/</Prefix><StartAfter>q/a</StartAfter><MaxKeys>1000</MaxKeys><KeyCount>7</KeyCount></ListBucketResult>\"",
+    "n": 10,
+    "cumulative": 18
+  },
+  {
+    "kind": "s3",
+    "method": "GET",
+    "what": "S3 ListObjectsV2 prefix=q%2F&encoding-type=url",
+    "status": 200,
+    "hex": [
+      "712f612062",
+      "712f6121",
+      "712f612f62",
+      "712f6130",
+      "712f61",
+      "712f6161",
+      "712f61c3a9",
+      "712f62"
+    ],
+    "rawControlCharsInXml": false,
+    "controlCharRefsInXml": false,
+    "xmlBody": "\"<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\"?><ListBucketResult xmlns=\\\"http://s3.amazonaws.com/doc/2006-03-01/\\\"><Name>spike-r2order-69acd7</Name><Contents><Key>q%2Fa%20b</Key><Size>1</Size><LastModified>2026-10-24T04:10:28.924Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>q%2Fa!</Key><Size>1</Size><LastModified>2026-10-24T04:10:29.282Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>q%2Fa%2Fb</Key><Size>1</Size><LastModified>2026-10-24T04:10:29.428Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>q%2Fa0</Key><Size>1</Size><LastModified>2026-10-24T04:10:29.698Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>q%2Fa</Key><Size>1</Size><LastModified>2026-10-24T04:10:28.751Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>q%2Faa</Key><Size>1</Size><LastModified>2026-10-24T04:10:29.895Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>q%2Fa%C3%A9</Key><Size>1</Size><LastModified>2026-10-24T04:10:30.059Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>q%2Fb</Key><Size>1</Size><LastModified>2026-10-24T04:10:30.294Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><IsTruncated>false</IsTruncated><Prefix>q%2F</Prefix><MaxKeys>1000</MaxKeys><KeyCount>8</KeyCount><EncodingType>url</EncodingType></ListBucketResult>\"",
+    "n": 11,
+    "cumulative": 19
+  },
+  {
+    "kind": "s3",
+    "method": "GET",
+    "what": "S4 ListObjectsV2 prefix=t%2F",
+    "status": 200,
+    "hex": [
+      "742f6101",
+      "742f61206201",
+      "742f612f6201"
+    ],
+    "rawControlCharsInXml": true,
+    "controlCharRefsInXml": false,
+    "xmlBody": "\"<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\"?><ListBucketResult xmlns=\\\"http://s3.amazonaws.com/doc/2006-03-01/\\\"><Name>spike-r2order-69acd7</Name><Contents><Key>t/a\\u0001</Key><Size>1</Size><LastModified>2026-10-24T04:10:30.490Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>t/a b\\u0001</Key><Size>1</Size><LastModified>2026-10-24T04:10:30.655Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>t/a/b\\u0001</Key><Size>1</Size><LastModified>2026-10-24T04:10:30.837Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><IsTruncated>false</IsTruncated><Prefix>t/</Prefix><MaxKeys>1000</MaxKeys><KeyCount>3</KeyCount></ListBucketResult>\"",
+    "n": 12,
+    "cumulative": 20
+  },
+  {
+    "kind": "s3",
+    "method": "GET",
+    "what": "S5 ListObjectsV2 prefix=t%2F&encoding-type=url",
+    "status": 200,
+    "hex": [
+      "742f6101",
+      "742f61206201",
+      "742f612f6201"
+    ],
+    "rawControlCharsInXml": false,
+    "controlCharRefsInXml": false,
+    "xmlBody": "\"<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\"?><ListBucketResult xmlns=\\\"http://s3.amazonaws.com/doc/2006-03-01/\\\"><Name>spike-r2order-69acd7</Name><Contents><Key>t%2Fa%01</Key><Size>1</Size><LastModified>2026-10-24T04:10:30.490Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>t%2Fa%20b%01</Key><Size>1</Size><LastModified>2026-10-24T04:10:30.655Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><Contents><Key>t%2Fa%2Fb%01</Key><Size>1</Size><LastModified>2026-10-24T04:10:30.837Z</LastModified><ETag>&quot;<md5>&quot;</ETag><StorageClass>STANDARD</StorageClass></Contents><IsTruncated>false</IsTruncated><Prefix>t%2F</Prefix><MaxKeys>1000</MaxKeys><KeyCount>3</KeyCount><EncodingType>url</EncodingType></ListBucketResult>\"",
+    "n": 13,
+    "cumulative": 21
+  },
+  {
+    "kind": "s3",
+    "method": "GET",
+    "what": "P1 presigned GET /<bucket>/t/a%01",
+    "status": 200,
+    "keyBytes": 4,
+    "bodyLength": 1,
+    "body": "\"x\"",
+    "n": 14,
+    "cumulative": 22
+  },
+  {
+    "kind": "s3",
+    "method": "PUT",
+    "what": "P2 presigned PUT /<bucket>/t/up%01",
+    "status": 200,
+    "keyBytes": 5,
+    "bodyLength": 0,
+    "body": "\"\"",
+    "n": 15,
+    "cumulative": 23
+  },
+  {
+    "kind": "worker",
+    "method": "POST",
+    "what": "/head",
+    "status": 200,
+    "note": "binding head after presigned PUT",
+    "response": [
+      {
+        "op": "head",
+        "hex": "742f757001",
+        "found": true,
+        "size": 1,
+        "keyBytes": 5
+      },
+      {
+        "op": "head",
+        "hex": "742f7570",
+        "found": false,
+        "size": null,
+        "keyBytes": null
+      }
+    ],
+    "n": 16,
+    "cumulative": 24
+  },
+  {
+    "kind": "s3",
+    "method": "PUT",
+    "what": "P3 presigned PUT /<bucket>/z/kkkkkkkkkkkkkkkkkkkkkkkkkkkk…(1034 chars)",
+    "status": 200,
+    "keyBytes": 1024,
+    "bodyLength": 0,
+    "body": "\"\"",
+    "n": 17,
+    "cumulative": 25
+  },
+  {
+    "kind": "s3",
+    "method": "GET",
+    "what": "P4 presigned GET /<bucket>/z/kkkkkkkkkkkkkkkkkkkkkkkkkkkk…(1034 chars)",
+    "status": 200,
+    "keyBytes": 1024,
+    "bodyLength": 1,
+    "body": "\"z\"",
+    "n": 18,
+    "cumulative": 26
+  },
+  {
+    "kind": "s3",
+    "method": "PUT",
+    "what": "P5 presigned PUT /<bucket>/z/kkkkkkkkkkkkkkkkkkkkkkkkkkkk…(1035 chars)",
+    "status": 400,
+    "keyBytes": 1025,
+    "bodyLength": 141,
+    "body": "\"<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\"?><Error><Code>InvalidObjectName</Code><Message>The specified object name is not valid.</Message></Error>\"",
+    "n": 19,
+    "cumulative": 27
+  },
+  {
+    "kind": "worker",
+    "method": "POST",
+    "what": "/head",
+    "status": 200,
+    "note": "binding head of 1,024- and 1,025-byte keys",
+    "response": [
+      {
+        "op": "head",
+        "hex": "<1024 bytes>",
+        "found": true,
+        "size": 1,
+        "keyBytes": 1024
+      },
+      {
+        "op": "head",
+        "error": "head: The specified object name is not valid. (10020)"
+      }
+    ],
+    "n": 20,
+    "cumulative": 28
+  },
+  {
+    "kind": "worker",
+    "method": "POST",
+    "what": "/delete-all",
+    "status": 200,
+    "note": "delete every object",
+    "response": [
+      {
+        "op": "delete-all",
+        "deleted": 13,
+        "deletedKeys": [
+          "712f612062",
+          "712f6121",
+          "712f612f62",
+          "712f6130",
+          "712f61",
+          "712f6161",
+          "712f61c3a9",
+          "712f62",
+          "742f6101",
+          "742f61206201",
+          "742f612f6201",
+          "742f757001",
+          "<1024 bytes>"
+        ],
+        "remaining": 0
+      }
+    ],
+    "n": 21,
+    "cumulative": 29
+  },
+  {
+    "kind": "wrangler",
+    "method": "CLI",
+    "what": "wrangler delete",
+    "status": 0,
+    "apiRequests": 2,
+    "requestLines": [
+      "-- START CF API REQUEST: DELETE https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/workers/services/spike-r2order-69acd7",
+      "-- START CF API REQUEST: GET https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/storage/kv/namespaces"
+    ],
+    "n": 22,
+    "cumulative": 31
+  },
+  {
+    "kind": "api",
+    "method": "DELETE",
+    "what": "/accounts/<ACCOUNT_ID>/r2/buckets/spike-r2order-69acd7",
+    "status": 200,
+    "success": true,
+    "errors": [],
+    "note": "delete bucket",
+    "n": 23,
+    "cumulative": 32
+  },
+  {
+    "kind": "api",
+    "method": "DELETE",
+    "what": "/accounts/<ACCOUNT_ID>/tokens/<TOKEN_ID/ACCESS_KEY_ID>",
+    "status": 200,
+    "success": true,
+    "errors": [],
+    "note": "delete token",
+    "n": 24,
+    "cumulative": 33
+  },
+  {
+    "kind": "api",
+    "method": "GET",
+    "what": "/accounts/<ACCOUNT_ID>/r2/buckets?name_contains=spike-r2order",
+    "status": 200,
+    "success": true,
+    "errors": [],
+    "note": "confirm: list buckets",
+    "n": 25,
+    "cumulative": 34
+  },
+  {
+    "kind": "api",
+    "method": "GET",
+    "what": "/accounts/<ACCOUNT_ID>/workers/scripts",
+    "status": 200,
+    "success": true,
+    "errors": [],
+    "note": "confirm: list Worker scripts",
+    "n": 26,
+    "cumulative": 35
+  },
+  {
+    "kind": "api",
+    "method": "GET",
+    "what": "/accounts/<ACCOUNT_ID>/tokens?per_page=50&page=1",
+    "status": 200,
+    "success": true,
+    "errors": [],
+    "note": "confirm: list account tokens",
+    "n": 27,
+    "cumulative": 36
+  }
+]

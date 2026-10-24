@@ -1,0 +1,110 @@
+🪵  Writing logs to "/root/.config/.wrangler/logs/wrangler-2026-10-24_04-10-19_193.log"
+.env file not found at "<scratch>/worker/.env". Continuing... For more details, refer to https://developers.cloudflare.com/workers/wrangler/system-environment-variables/
+.env file not found at "<scratch>/worker/.env.local". Continuing... For more details, refer to https://developers.cloudflare.com/workers/wrangler/system-environment-variables/
+
+ ⛅️ wrangler 4.149.0
+────────────────────
+Starting verifyWorkerMatchesCITag() with tag: undefined, name: spike-r2order-69acd7
+No WRANGLER_CI_MATCH_TAG variable provided, aborting verifyWorkerMatchesCITag()
+-- START CF API REQUEST: GET https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/workers/services/spike-r2order-69acd7
+QUERY STRING: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+INIT: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+-- END CF API REQUEST
+-- START CF API RESPONSE: Not Found 404
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+RESPONSE: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+-- END CF API RESPONSE
+-- START CF API REQUEST: GET https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/workers/scripts/spike-r2order-69acd7/secrets
+QUERY STRING: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+INIT: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+-- END CF API REQUEST
+-- START CF API RESPONSE: Not Found 404
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+RESPONSE: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+-- END CF API RESPONSE
+-- START CF API REQUEST: GET https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/workers/subdomain
+QUERY STRING: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+INIT: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+-- END CF API REQUEST
+-- START CF API RESPONSE: OK 200
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+RESPONSE: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+-- END CF API RESPONSE
+-- START CF API REQUEST: GET https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/workers/scripts/spike-r2order-69acd7/deployments
+QUERY STRING: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+INIT: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+-- END CF API REQUEST
+-- START CF API RESPONSE: Not Found 404
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+RESPONSE: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+-- END CF API RESPONSE
+Total Upload: 3.02 KiB / gzip: 1.08 KiB
+-- START CF API REQUEST: GET https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/workers/scripts/spike-r2order-69acd7/settings
+QUERY STRING: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+INIT: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+-- END CF API REQUEST
+-- START CF API RESPONSE: Not Found 404
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+RESPONSE: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+-- END CF API RESPONSE
+No settings found
+-- START CF API REQUEST: GET https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/r2/buckets/spike-r2order-69acd7
+QUERY STRING: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+INIT: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+-- END CF API REQUEST
+-- START CF API RESPONSE: OK 200
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+RESPONSE: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+-- END CF API RESPONSE
+-- START CF API REQUEST: PUT https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/workers/scripts/spike-r2order-69acd7
+QUERY STRING: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+INIT: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+BODY: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+-- END CF API REQUEST
+-- START CF API RESPONSE: OK 200
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+RESPONSE: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+-- END CF API RESPONSE
+Worker Startup Time: 1 ms
+Your Worker has access to the following bindings:
+Binding                                   Resource                  
+env.B (spike-r2order-69acd7)              R2 Bucket                 
+env.PROBE_KEY ("(hidden)")                Environment Variable      
+
+Uploaded spike-r2order-69acd7 (1.60 sec)
+-- START CF API REQUEST: GET https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/workers/workers/spike-r2order-69acd7
+QUERY STRING: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+INIT: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+-- END CF API REQUEST
+-- START CF API RESPONSE: OK 200
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+RESPONSE: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+-- END CF API RESPONSE
+-- START CF API REQUEST: POST https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/workers/scripts/spike-r2order-69acd7/subdomain
+QUERY STRING: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+INIT: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+-- END CF API REQUEST
+-- START CF API RESPONSE: OK 200
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+RESPONSE: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+-- END CF API RESPONSE
+Deployed spike-r2order-69acd7 triggers (0.50 sec)
+  https://spike-r2order-69acd7.<SUBDOMAIN>.workers.dev
+Current Version ID: 8814d00d-bb79-4e09-8d5b-c7c049f9608d
+
+(node:13703) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+(node:13712) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
