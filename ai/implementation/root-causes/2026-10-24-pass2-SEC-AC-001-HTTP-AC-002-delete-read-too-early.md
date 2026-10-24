@@ -62,3 +62,28 @@ Test-only, in `tests/compliance/criteria/secrets/further-stage.test.ts` (C-T1's 
 - The pass-2 re-run on Cloudflare (`--only SEC-AC-001,…,HTTP-AC-002`): the further-stage test reaches 500 `SEC.MISSING` on both paths with two distinct request IDs. SEC-AC-001 and HTTP-AC-002 `passed`. The trace shows one or more 200 reads, then 500s, within 60 s of the DELETE.
 
 ## Review
+
+Reviewer: independent root-cause reviewer (prompt §8). I did not write this diagnosis or the code under diagnosis. Base `75c0260`. No Cloudflare call was made. I checked the record against the code, `trace-2-pass2.log:88-104`, `docs/components/secrets.md`, `http.md:76`, DEC-0092 and DEC-0280.
+
+**Verdict: diagnosis confirmed. The fix is accepted with one required correction (R1).**
+
+Evidence checked:
+- The trace lines `:94-102` match E1 as stated. The DELETE answered at 03:59:31.740 and the read at 31.866 got 200. The trace logs at response headers, so 126 ms is measured from the DELETE's answer.
+- `further-stage.test.ts:90-99` reads once, with no wait (E2). `stage-resources.test.ts:119-121` waits after the same hook (E4).
+- The framework reads `env` on every request and has no cross-request cache: `secrets/service.ts:16-21,62-78`, `targets/cloudflare/stage.ts:136` (E5).
+- `/api/errors/SEC.MISSING` reads `apiKey` too (`apps/reference/src/server/routes/errors.ts:146-149`). So both paths in the loop depend on the rollout, and both are covered once the wait has passed.
+
+**Does the wait weaken SEC-AC-001 or HTTP-AC-002? No.**
+- SEC-AC-001 (`secrets.md:68`) and HTTP-AC-002 (`http.md:76`) are statements about a state. Neither has a timing clause. DEC-0280's readings of HTTP-AC-002 and SEC-AC-001 add none either. Only SEC-AC-005 carries "next request".
+- DEC-0092 says by name that SEC-AC-001's cloud tests poll (bounded).
+- The wait is only a precondition: "the stage has no value". Every assertion after it is unchanged and made on fresh requests: the status, the code, `errorResponseViolations`, the UUID request ID, and two distinct IDs.
+- The predicate accepts only `errorCode === "SEC.MISSING"`, so a stale 200 or any other error cannot satisfy it. A stage that never reaches SEC.MISSING still fails, at the bound.
+- Fix item 2 makes the test stricter: it swallows only "not found" from `deleteSecret`. Today an authorization failure would be hidden.
+
+Required correction and remarks:
+- **R1 (required).** The `it` at `further-stage.test.ts:86` has no timeout of its own. So it gets `testTimeout: 60_000` (`vitest.integration.config.ts:10`). The proposed `timeoutMs: CLOUD_WAITS.routeToggleMs * 2` is also 60 s, and the hook's own API calls come before it. Vitest would kill the test before `waitFor` can report its bounded failure. Give the `it` an explicit timeout like its siblings (`10 * 60_000`, as at `:66,83`).
+- **R2 (advisory).** The bound is DEC-0090's route-toggle constant doubled. DEC-0092 states no number, and compliance.md "Time limits" asks for a bound derived from the behaviour being waited for. A named `CLOUD_WAITS.secretRolloutMs` (60 s, citing DEC-0092) would say what is meant. CF-AC-002, SEC-AC-003 (`:64`) and this test could share it. This is not needed for correctness.
+- **R3 (advisory).** A rollout reaches the PoP's machines at slightly different times. So the loop's first read after `waitFor` could, rarely, still hit the old version. If that shows up as a flake, the waiting helper could require two consecutive SEC.MISSING answers. This is not a reason to change the fix now.
+- The red test only shows that the helper waits. It does not show the platform delay. The record says so, and that is acceptable.
+
+Owner decision needed: none. The fix is test-only and stays within DEC-0092 and DEC-0280.
