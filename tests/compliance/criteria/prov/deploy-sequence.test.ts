@@ -10,9 +10,9 @@
  *    Needs no D1.
  * 2. "On Cloudflare, with a credential that lacks the permission to create R2 API tokens,
  *    deploy names that permission and stops before creating anything": needs such a token from
- *    the operator in `COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_R2_TOKEN_PERMISSION` and a machine
- *    without the sandbox proxy, which replaces every Authorization header to api.cloudflare.com
- *    (DEC-0083); otherwise a missing prerequisite (`blocked`). Needs no D1.
+ *    the operator in `COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_R2_TOKEN_PERMISSION`; otherwise a
+ *    missing prerequisite (`blocked`). Runs in the sandbox too: the proxy no longer replaces the
+ *    Authorization header (DEC-0420). Needs no D1.
  * 3. "A clean deploy passes the health check": the first deploy of a shared stage exits 0
  *    (after setting the declared secret when the first deploy asks for it), and the stage's
  *    health endpoint answers 204.
@@ -39,15 +39,15 @@
  * hooks and probes.
  */
 import { afterAll, describe, expect, it } from "vitest";
-import { CLOUD_WAITS, newTestStage, prerequisiteMissing, tag, target, waitFor } from "../../harness/index.js";
+import { CLOUD_WAITS, newTestStage, tag, target, waitFor } from "../../harness/index.js";
 import { cloudHooks as hooksFor } from "../_cloud/index.js";
 import { listStageResources, stageDatabases } from "../_cloud/stage-resources.js";
 import { requireDatabaseRoom } from "../_cloud/d1.js";
 import { acquireLock, scratchCopy } from "../core/support/processes.js";
 import { isLocal, REFERENCE_DIR, uniqueValue } from "../core/support/repo.js";
+import { restrictedToken } from "./support/restricted-token.js";
 import { healthStatus, restoreCommitted, runCli, sharedStage, tail, type CloudStage, type CommandResult } from "./support/stage.js";
 
-const RESTRICTED_TOKEN_ENV = "COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_R2_TOKEN_PERMISSION";
 /** Output showing the deploy is past step 1 (any later step, or the provisioning tool running). */
 const PAST_PREFLIGHT = /\bstep\s*[2-6]\b|find the databases|long-lived infrastructure|\bsst\b|pulumi|\bdeploying\b|\bupdating\b/i;
 
@@ -84,13 +84,7 @@ if (!isLocal()) {
     }, 15 * 60_000);
 
     it(tag("PROV-AC-002", "Cloudflare: with a credential lacking the permission to create R2 API tokens, deploy names that permission and stops before creating anything"), async () => {
-      const token = process.env[RESTRICTED_TOKEN_ENV];
-      if (token === undefined || token === "") {
-        prerequisiteMissing(
-          `needs a Cloudflare API token without the permission to create R2 API tokens in ${RESTRICTED_TOKEN_ENV}, used on a machine without the sandbox proxy; in this sandbox the proxy replaces every Authorization header to api.cloudflare.com with its injected token (DEC-0083), so such a credential cannot be presented`,
-        );
-      }
-      if ((process.env.HTTPS_PROXY ?? "") !== "") prerequisiteMissing(`${RESTRICTED_TOKEN_ENV} is set, but HTTPS_PROXY is too: the sandbox proxy would replace the restricted token with its own (DEC-0083)`);
+      const token = restrictedToken();
       const { result, left } = await deployNewStage({ env: { CLOUDFLARE_API_TOKEN: token } });
       expect(result.status, `deploy with the restricted token must fail:\n${tail(result.output)}`).not.toBe(0);
       expect(result.output, "the output names the missing permission to create R2 API tokens").toMatch(/R2 API tokens?|API Tokens? (?:Write|Edit)/i);
