@@ -11,13 +11,19 @@
  * - Function URL discovery (`function-url.ts`);
  * - cluster-paused observer (`cluster.ts`).
  * Every call is counted and capped (`api.ts`).
+ *
+ * `awsCloudHooks()` is what `cloudHooks("aws")` returns: C-T1's `CloudHooks` plus G-T2's
+ * `AwsCloudHooks` members (`stageResources`, `stageNatGateways`, `stageFunctions`,
+ * `simulatePrincipalPolicy`, `functionUrl`, `observeCluster`; `criteria-hooks.ts`, G-T4).
  */
-import type { CloudHooks } from "../../core/support/stores.js";
+import type { AwsCloudHooks } from "../../aws/support.js";
+import { awsCriteriaHooks } from "./criteria-hooks.js";
 import { awsLogBucketExists, listAwsLogKeys, readAwsLogObject } from "./logs.js";
 import { deleteStageSecret, stageSecretLocations } from "./secrets.js";
 
-export function awsCloudHooks(): CloudHooks {
+export function awsCloudHooks(): AwsCloudHooks {
   return {
+    ...awsCriteriaHooks(),
     deleteSecret: (stage, name) => deleteStageSecret(stage, name),
     secretLocations: (stage) => stageSecretLocations(stage),
     logBucketExists: () => awsLogBucketExists(),
@@ -27,6 +33,7 @@ export function awsCloudHooks(): CloudHooks {
 }
 
 export { awsAccountId, awsCallCount, awsRegion, maxAwsCalls } from "./api.js";
+export { observeCluster, SHARED_NETWORK_TAG, sharedVpcIds, stageFunctions, stageNatGateways, stageResources } from "./criteria-hooks.js";
 export { observeClusterPause, waitForClusterPaused, PAUSE_POLL_MS, PAUSE_WAIT_MS, type PauseObservation, type PauseWaitResult } from "./cluster.js";
 export { functionUrlOrigin } from "./function-url.js";
 export { addLogDeny, allowedPairs, removeLogDeny, simulatePrincipal, simulateStageRole, stageRoleArn, withLogDeny, type SimulationResult } from "./iam.js";

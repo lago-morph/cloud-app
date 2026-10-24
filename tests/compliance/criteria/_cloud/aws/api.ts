@@ -17,6 +17,7 @@
  *   once on exit. The count is of `send` calls; the SDK's own retries (at most `MAX_ATTEMPTS`
  *   per call) are not counted separately. Listings are bounded by their callers (`MAX_PAGES`).
  */
+import { EC2Client } from "@aws-sdk/client-ec2";
 import { IAMClient } from "@aws-sdk/client-iam";
 import { LambdaClient } from "@aws-sdk/client-lambda";
 import { RDSClient } from "@aws-sdk/client-rds";
@@ -100,6 +101,7 @@ export function awsRegion(env: Env = process.env): string {
 }
 
 export interface AwsClients {
+  readonly ec2: EC2Client;
   readonly ssm: SSMClient;
   readonly s3: S3Client;
   readonly lambda: LambdaClient;
@@ -122,6 +124,7 @@ export function awsClients(): AwsClients {
   const region = awsRegion();
   const base = { region, maxAttempts: MAX_ATTEMPTS, requestHandler: proxyAwareHandler(process.env) };
   clients = {
+    ec2: new EC2Client(base),
     ssm: new SSMClient(base),
     s3: new S3Client(base),
     lambda: new LambdaClient(base),
