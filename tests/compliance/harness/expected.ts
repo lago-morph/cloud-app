@@ -1,14 +1,18 @@
 /**
  * Per-target expected criteria (COMPL-AC-001): which criteria and scenarios a run on one target
  * and tier must report, derived from the Where columns and lines, with this phase's not-run
- * rules (plan §8; prompt §4, §11) applied.
+ * rules (plan §8; prompt §4, §11) applied, and the clauses a tagged test must show by name.
  */
 import type { CatalogueEntry, Target } from "./catalogue.js";
 
 export type RunMode = "automated" | "milestone";
 
 export const GOOGLE_MOCKED = "Google login mocked for this phase";
-export const AWS_NOT_STARTED = "AWS phase not started";
+/**
+ * Every AWS criterion while there is no AWS account (plan-aws.md G-T4, §2): the offline phase G
+ * builds and pre-checks everything, and only the live phase L records AWS evidence.
+ */
+export const AWS_LIVE_PENDING = "AWS live run pending (no account)";
 
 export interface NotRunRule {
   /** A criterion or scenario ID, or "*" for every one on the rule's targets. */
@@ -30,13 +34,34 @@ export interface ExpectedEntry {
   readonly parts: readonly string[];
   /** Parts not run, each recorded as its own `not-run` result. */
   readonly notRunParts: readonly { readonly part: string; readonly detail: string }[];
+  /**
+   * Clauses this run must show by an executed tagged test whose title matches `titlePattern`
+   * (a RegExp source, case-insensitive); a clause no such test shows is recorded `not-run`.
+   * Absent when the criterion has none.
+   */
+  readonly clauses?: readonly { readonly part: string; readonly titlePattern: string }[];
+}
+
+/**
+ * A clause of a criterion that its own tagged test must show by name (plan-aws.md G-T4): the
+ * criterion's other tests passing does not cover it. Replaces DEC-0397's static not-run parts:
+ * the clause is now expected to run, and a run in which no test for it ran records that part
+ * `not-run` instead of letting the criterion's other tests stand for it.
+ */
+export interface ClauseRule {
+  readonly id: string;
+  readonly targets: readonly Target[];
+  readonly mode: RunMode;
+  readonly part: string;
+  /** Matches the title of a test that shows the clause (RegExp source, case-insensitive). */
+  readonly titlePattern: string;
 }
 
 const CLOUD: readonly Target[] = ["cloudflare", "aws"];
 
 /** This phase's not-run rules (plan §8.1, §8.2). §8.3's outstanding milestone items follow from them. */
 export const PHASE_RULES: readonly NotRunRule[] = [
-  { id: "*", targets: ["aws"], mode: "any", detail: AWS_NOT_STARTED },
+  { id: "*", targets: ["aws"], mode: "any", detail: AWS_LIVE_PENDING },
   { id: "GOOGLE-AC-001", targets: CLOUD, mode: "automated", detail: GOOGLE_MOCKED },
   { id: "GOOGLE-AC-005", targets: CLOUD, mode: "milestone", detail: GOOGLE_MOCKED },
   { id: "AUTH-AC-005", targets: CLOUD, mode: "milestone", detail: GOOGLE_MOCKED },
@@ -51,10 +76,18 @@ export const PHASE_RULES: readonly NotRunRule[] = [
   { id: "E2E-007", targets: CLOUD, mode: "milestone", detail: GOOGLE_MOCKED },
   { id: "E2E-008", targets: CLOUD, mode: "milestone", detail: GOOGLE_MOCKED },
   { id: "CLI-AC-001", targets: CLOUD, mode: "automated", detail: GOOGLE_MOCKED },
-  // Plan §8.2 AWS parts of Local criteria: there is no AWS bundle and no Data API adapter yet (C-local evaluation,
-  // Flag 2; DEC-0397). The AWS phase removes these rules when it adds their tests.
-  { id: "CORE-AC-006", targets: ["local"], mode: "automated", part: "AWS-bundle clause", detail: AWS_NOT_STARTED },
-  { id: "SQL-AC-006", targets: ["local"], mode: "automated", part: "Data API retry-loop clause", detail: AWS_NOT_STARTED },
+  // DEC-0397's AWS parts of Local criteria (CORE-AC-006 AWS bundle, SQL-AC-006 Data API retry loop) are no longer
+  // not-run rules: plan-aws.md G-T4 adds their tests, and CLAUSE_RULES below requires each to run.
+];
+
+/**
+ * The AWS clauses of Local criteria (plan-aws.md §1, G-T4). Each runs on local, by its own tagged
+ * test: SQL-AC-006's in `tests/compliance/criteria/sql/data-api-retry.test.ts`, CORE-AC-006's in
+ * the framework's AWS bundle inspection (G-06; its title names the AWS bundle).
+ */
+export const CLAUSE_RULES: readonly ClauseRule[] = [
+  { id: "CORE-AC-006", targets: ["local"], mode: "automated", part: "AWS-bundle clause", titlePattern: String.raw`\bAWS[- ]bundle\b` },
+  { id: "SQL-AC-006", targets: ["local"], mode: "automated", part: "Data API retry-loop clause", titlePattern: String.raw`\bData API retry[- ]loop clause\b` },
 ];
 
 /**
@@ -70,7 +103,13 @@ function ruleMatches(rule: NotRunRule, id: string, target: Target, mode: RunMode
   return (rule.id === "*" || rule.id === id) && rule.targets.includes(target) && (rule.mode === "any" || rule.mode === mode);
 }
 
-export function expectedCriteria(catalogue: readonly CatalogueEntry[], target: Target, mode: RunMode, rules: readonly NotRunRule[] = PHASE_RULES): ExpectedEntry[] {
+export function expectedCriteria(
+  catalogue: readonly CatalogueEntry[],
+  target: Target,
+  mode: RunMode,
+  rules: readonly NotRunRule[] = PHASE_RULES,
+  clauseRules: readonly ClauseRule[] = CLAUSE_RULES,
+): ExpectedEntry[] {
   const out: ExpectedEntry[] = [];
   for (const entry of catalogue) {
     const applies = entry.applies[target];
@@ -84,13 +123,17 @@ export function expectedCriteria(catalogue: readonly CatalogueEntry[], target: T
       continue;
     }
     const notRunParts = matching.flatMap((rule) => (rule.part === undefined ? [] : [{ part: rule.part, detail: rule.detail }]));
-    out.push({ id: entry.id, run: true, parts, notRunParts });
+    const notRunNames = new Set(notRunParts.map((p) => p.part));
+    const clauses = clauseRules
+      .filter((c) => c.id === entry.id && c.targets.includes(target) && c.mode === mode && !notRunNames.has(c.part))
+      .map((c) => ({ part: c.part, titlePattern: c.titlePattern }));
+    out.push(clauses.length === 0 ? { id: entry.id, run: true, parts, notRunParts } : { id: entry.id, run: true, parts, notRunParts, clauses });
   }
   return out;
 }
 
-/** Problems with `rules` against the catalogue: a rule for an unknown ID, or for a target/tier where its criterion does not apply. */
-export function checkRules(catalogue: readonly CatalogueEntry[], rules: readonly NotRunRule[]): string[] {
+/** Problems with `rules` (not-run or clause rules) against the catalogue: a rule for an unknown ID, or for a target/tier where its criterion does not apply. */
+export function checkRules(catalogue: readonly CatalogueEntry[], rules: readonly Pick<NotRunRule, "id" | "targets" | "mode">[]): string[] {
   const byId = new Map(catalogue.map((entry) => [entry.id, entry]));
   const problems: string[] = [];
   for (const rule of rules) {

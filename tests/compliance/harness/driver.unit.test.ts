@@ -166,11 +166,11 @@ describe("[COMPL-AC-003] compliance driver records", () => {
     expect(result.exitStatus).toBe(0);
   });
 
-  it("runs nothing when nothing is to be run (aws in this phase): every criterion not-run", async () => {
+  it("runs nothing when nothing is to be run (aws without an account): every criterion not-run", async () => {
     const h = harness();
     const result = await runCompliance(parseArgs(["--target", "aws"]), [], h.deps);
     expect(h.calls).toEqual([]);
-    expect(recordOf(h).results.every((r) => r.status === "not-run" && r.detail === "AWS phase not started")).toBe(true);
+    expect(recordOf(h).results.every((r) => r.status === "not-run" && r.detail === "AWS live run pending (no account)")).toBe(true);
     expect(result.exitStatus).toBe(0);
   });
 });
