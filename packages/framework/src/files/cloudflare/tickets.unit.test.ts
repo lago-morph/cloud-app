@@ -21,7 +21,7 @@ describe("Cloudflare upload tickets (DEC-0098, DEC-0160, FILES-REQ-003)", () => 
     expect(ticket?.expiresAt).toBe(NOW + 15 * 60 * 1000);
     const url = new URL(ticket?.url ?? "");
     expect(url.origin).toBe(`https://${accountId}.r2.cloudflarestorage.com`);
-    expect(url.pathname).toBe("/app-test-x-files/photo.png");
+    expect(url.pathname).toBe("/app-test-x-files/photo.png%01");
     expect(url.searchParams.get("X-Amz-Expires")).toBe("900");
     expect(url.searchParams.get("X-Amz-SignedHeaders")).toBe("content-type;host");
     expect(url.searchParams.get("X-Amz-Credential")).toBe(`${credentials.accessKeyId}/20261020/auto/s3/aws4_request`);
@@ -30,11 +30,11 @@ describe("Cloudflare upload tickets (DEC-0098, DEC-0160, FILES-REQ-003)", () => 
   });
 
   it.each([
-    ["tickets/ä ö %/photo 1.png", "/tickets/%C3%A4%20%C3%B6%20%25/photo%201.png"],
-    ["it's (1)*!.txt", "/it%27s%20%281%29%2A%21.txt"],
-    ["a?b#c&d=e+f", "/a%3Fb%23c%26d%3De%2Bf"],
-    ["a//b/", "/a//b/"],
-  ])("FILES-REQ-002: the name %j is the key, each /-segment RFC 3986-encoded", async (name, path) => {
+    ["tickets/ä ö %/photo 1.png", "/tickets/%C3%A4%20%C3%B6%20%25/photo%201.png%01"],
+    ["it's (1)*!.txt", "/it%27s%20%281%29%2A%21.txt%01"],
+    ["a?b#c&d=e+f", "/a%3Fb%23c%26d%3De%2Bf%01"],
+    ["a//b/", "/a//b/%01"],
+  ])("FILES-REQ-002: the name %j plus its U+0001 ending is the key, each /-segment RFC 3986-encoded", async (name, path) => {
     const ticket = readUploadTicket(await issuer().upload(name, "text/plain"));
     const url = new URL(ticket?.url ?? "");
     expect(url.pathname).toBe(`/app-test-x-files${path}`);
@@ -47,15 +47,29 @@ describe("Cloudflare upload tickets (DEC-0098, DEC-0160, FILES-REQ-003)", () => 
     async (name) => {
       const ticket = readUploadTicket(await issuer().upload(name, "text/plain"));
       const url = new URL(ticket?.url ?? "");
-      expect(url.pathname).toBe(`/app-test-x-files/${encodeURIComponent(name)}`);
-      expect(decodeURIComponent(url.pathname.slice("/app-test-x-files/".length))).toBe(name);
+      expect(url.pathname).toBe(`/app-test-x-files/${encodeURIComponent(name)}%01`);
+      expect(decodeURIComponent(url.pathname.slice("/app-test-x-files/".length))).toBe(`${name}\u0001`);
       expect(url.searchParams.get("X-Amz-Signature")).toBe(expectedSignature(ticket?.url ?? "", "PUT", { "Content-Type": "text/plain" }, credentials.secretAccessKey));
     },
   );
 
-  it.each([".", ".."])("the name %j cannot be a storage URL path, so no ticket is issued (FILES.INVALID_NAME)", async (name) => {
+  it.each([".", ".."])("the name %j cannot be a storage URL path, so no ticket is issued (FILES.INVALID_NAME), as before the U+0001 ending (DEC-0328)", async (name) => {
     await expect(issuer().upload(name, "text/plain")).rejects.toMatchObject({ code: "FILES.INVALID_NAME" });
     await expect(issuer().download(name)).rejects.toMatchObject({ code: "FILES.INVALID_NAME" });
+  });
+
+  it.each([".x", "x.", "...", "a/.../b"])("%j has no dot segment, so it keeps its slashes (the ending does not change DEC-0328's rule)", async (name) => {
+    const url = new URL(readUploadTicket(await issuer().upload(name, "text/plain"))?.url ?? "");
+    expect(url.pathname).toBe(`/app-test-x-files/${name}%01`);
+  });
+
+  it("a name of 1,023 bytes gets the ending; one of exactly PAR-230 (1,024) bytes is the key unterminated", async () => {
+    const short = `d/${"k".repeat(1021)}`;
+    const full = `d/${"k".repeat(1022)}`;
+    expect(new URL(readUploadTicket(await issuer().upload(short, "text/plain"))?.url ?? "").pathname).toBe(`/app-test-x-files/${short}%01`);
+    const fullUrl = readUploadTicket(await issuer().upload(full, "text/plain"))?.url ?? "";
+    expect(new URL(fullUrl).pathname).toBe(`/app-test-x-files/${full}`);
+    expect(new URL(fullUrl).searchParams.get("X-Amz-Signature")).toBe(expectedSignature(fullUrl, "PUT", { "Content-Type": "text/plain" }, credentials.secretAccessKey));
   });
 
   it("reads the credentials for each ticket, so a rotated secret is used at once", async () => {
@@ -94,12 +108,21 @@ describe("Cloudflare download tickets (DEC-0098, DEC-0160, DEC-0313)", () => {
     expect(Object.keys(ticket ?? {}).sort()).toEqual(["expiresAt", "url"]);
     expect(ticket?.expiresAt).toBe(NOW + 15 * 60 * 1000);
     const url = new URL(ticket?.url ?? "");
-    expect(url.pathname).toBe("/app-test-x-files/photos/%C3%A4%20b.pdf");
+    expect(url.pathname).toBe("/app-test-x-files/photos/%C3%A4%20b.pdf%01");
     expect(url.searchParams.get("X-Amz-SignedHeaders")).toBe("host");
     expect(url.searchParams.get("X-Amz-Expires")).toBe("900");
+    // The saved file is named after the name, without the stored key's U+0001 ending.
     expect(url.searchParams.get("response-content-disposition")).toBe("attachment; filename*=UTF-8''photos%2F%C3%A4%20b.pdf");
     expect(url.searchParams.get("X-Amz-Signature")).toBe(expectedSignature(ticket?.url ?? "", "GET", {}, credentials.secretAccessKey));
     expect(ticket?.url).not.toContain(credentials.secretAccessKey);
+  });
+
+  it("a dot-segment name is sent with %2F and the ending; the saved file keeps the plain name (DEC-0328)", async () => {
+    const ticket = readDownloadTicket(await issuer().download("x/../y"));
+    const url = new URL(ticket?.url ?? "");
+    expect(url.pathname).toBe("/app-test-x-files/x%2F..%2Fy%01");
+    expect(url.searchParams.get("response-content-disposition")).toBe("attachment; filename*=UTF-8''x%2F..%2Fy");
+    expect(url.searchParams.get("X-Amz-Signature")).toBe(expectedSignature(ticket?.url ?? "", "GET", {}, credentials.secretAccessKey));
   });
 
   it("a raster image is named as an attachment, like every other download (DEC-0414)", async () => {

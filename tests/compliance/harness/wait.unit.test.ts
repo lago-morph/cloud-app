@@ -11,6 +11,7 @@ describe("bounded waits", () => {
     expect(CLOUD_WAITS.databaseResumeMs).toBe(45_000); // PAR-210
     expect(CLOUD_WAITS.routeToggleMs).toBe(30_000); // DEC-0090
     expect(CLOUD_WAITS.requestMs).toBe(55_000); // PAR-270
+    expect(CLOUD_WAITS.secretRolloutMs).toBe(60_000); // DEC-0092
   });
 
   it("returns the first defined probe result", async () => {

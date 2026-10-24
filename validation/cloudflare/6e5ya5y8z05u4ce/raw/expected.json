@@ -1,0 +1,108 @@
+[
+  {
+    "id": "AUTH-AC-005",
+    "run": false,
+    "notRun": "Google login mocked for this phase",
+    "parts": [
+      "admin-list part"
+    ],
+    "notRunParts": []
+  },
+  {
+    "id": "COMPL-AC-008",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-007",
+    "run": false,
+    "notRun": "Google login mocked for this phase",
+    "parts": [
+      ""
+    ],
+    "notRunParts": []
+  },
+  {
+    "id": "E2E-008",
+    "run": false,
+    "notRun": "Google login mocked for this phase",
+    "parts": [
+      ""
+    ],
+    "notRunParts": []
+  },
+  {
+    "id": "E2E-010",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-012",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-015",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "GOOGLE-AC-005",
+    "run": false,
+    "notRun": "Google login mocked for this phase",
+    "parts": [
+      ""
+    ],
+    "notRunParts": []
+  },
+  {
+    "id": "PROV-AC-003",
+    "run": true,
+    "parts": [
+      ""
+    ],
+    "notRunParts": []
+  },
+  {
+    "id": "PROV-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "PROV-AC-006",
+    "run": true,
+    "parts": [
+      ""
+    ],
+    "notRunParts": []
+  },
+  {
+    "id": "SKILL-AC-006",
+    "run": false,
+    "notRun": "Google login mocked for this phase",
+    "parts": [
+      ""
+    ],
+    "notRunParts": []
+  }
+]

@@ -1,0 +1,3 @@
+2026-10-24T06:39:25Z deployed (deploy 1 exit 1 on unset apiKey as designed; secret exit 0; deploy 2 exit 0); measured 1-after-deploy; starting 4-driver E2E-009
+2026-10-24T06:41:30Z 4-driver exit 0, record 5nfl3uhrzxpuz4m: E2E-009 passed. next: measure 4-after-driver, then 5-remove
+2026-10-24T06:42:30Z 5-remove exit 0; measuring 5-after-remove

@@ -1,10 +1,9 @@
 /**
  * The Cloudflare REST API as the cloud test hooks use it (plan item D-T2).
  *
- * - The sandbox proxy injects the API token for `api.cloudflare.com`; this module never sends an
- *   `Authorization` header and never handles a token (plan §10.6, DEC-0083). On an owner machine
- *   the same proxy-less call needs the token in `CLOUDFLARE_API_TOKEN`; it is then sent as a
- *   bearer token, read from the environment only and never printed.
+ * - Every request sends the token from `CLOUDFLARE_API_TOKEN` as a bearer token, in the sandbox
+ *   and on an owner machine alike: the sandbox proxy no longer injects one (plan §10.6, DEC-0420).
+ *   The token is read from the environment only and never printed.
  * - Node `fetch` uses the proxy only with `NODE_USE_ENV_PROXY=1`, which the driver sets for
  *   cloud targets (DEC-0085).
  * - Explicit User-Agent (DEC-0089); every request bounded by `CLOUD_WAITS.requestMs`.
@@ -52,11 +51,10 @@ export function accountId(): string {
   return id;
 }
 
-function authHeader(): Record<string, string> {
-  // In the sandbox the proxy injects the token, and CLOUDFLARE_API_TOKEN is a placeholder (DEC-0083):
-  // sending it would be replaced anyway. Only an owner machine without the proxy sends its own.
-  if (process.env.HTTPS_PROXY !== undefined && process.env.HTTPS_PROXY !== "") return {};
-  const token = process.env.CLOUDFLARE_API_TOKEN;
+export function authHeader(env: Readonly<Record<string, string | undefined>> = process.env): Record<string, string> {
+  // The token always comes from CLOUDFLARE_API_TOKEN, with or without HTTPS_PROXY: the sandbox
+  // proxy no longer injects one (DEC-0420, superseding the placeholder of DEC-0083). Never printed.
+  const token = env.CLOUDFLARE_API_TOKEN;
   return token === undefined || token === "" ? {} : { authorization: `Bearer ${token}` };
 }
 

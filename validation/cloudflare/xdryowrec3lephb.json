@@ -1,0 +1,347 @@
+{
+  "runId": "xdryowrec3lephb",
+  "commit": "93e6d7d6dfb0cd7c995e02a43ec7a30451fed447",
+  "target": "cloudflare",
+  "stage": "test-9mfkg261apxm7s2",
+  "command": "npm run compliance -- --target cloudflare --base-url https://reference-test-9mfkg261apxm7s2.<account-subdomain>.workers.dev --stage test-9mfkg261apxm7s2 --only AUTH-AC-004,AUTH-AC-005,AUTH-AC-006,AUTH-AC-007,AUTH-AC-009,CF-AC-001,CFG-AC-003,CFG-AC-004,CFG-AC-005,COMPL-AC-001,COMPL-AC-003,CORE-AC-002,CORE-AC-003,E2E-004,E2E-005,E2E-009,E2E-011,E2E-013,FILES-AC-001,FILES-AC-002,FILES-AC-003,FILES-AC-004,FILES-AC-005,HTTP-AC-001,HTTP-AC-003,HTTP-AC-004,HTTP-AC-005,KV-AC-001,KV-AC-002,KV-AC-003,KV-AC-004,KV-AC-005,LOG-AC-001,LOG-AC-002,LOG-AC-005,SEC-AC-002,SQL-AC-003,SQL-AC-004,SQL-AC-005,SQL-AC-006",
+  "startedAt": "2026-10-24T03:33:12.378Z",
+  "finishedAt": "2026-10-24T03:50:12.376Z",
+  "exitStatus": 1,
+  "results": [
+    {
+      "id": "AUTH-AC-004",
+      "status": "passed"
+    },
+    {
+      "id": "AUTH-AC-005",
+      "status": "not-run",
+      "detail": "no test tagged [AUTH-AC-005] ran on cloudflare"
+    },
+    {
+      "id": "AUTH-AC-006",
+      "status": "passed"
+    },
+    {
+      "id": "AUTH-AC-007",
+      "status": "passed"
+    },
+    {
+      "id": "AUTH-AC-009",
+      "status": "passed"
+    },
+    {
+      "id": "AUTH-AC-009",
+      "status": "not-run",
+      "detail": "cloud production part: Google login mocked for this phase"
+    },
+    {
+      "id": "AUTH-AC-011",
+      "status": "not-run",
+      "detail": "Google login mocked for this phase"
+    },
+    {
+      "id": "CF-AC-001",
+      "status": "passed"
+    },
+    {
+      "id": "CF-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CFG-AC-003",
+      "status": "passed"
+    },
+    {
+      "id": "CFG-AC-004",
+      "status": "passed"
+    },
+    {
+      "id": "CFG-AC-005",
+      "status": "passed"
+    },
+    {
+      "id": "CLI-AC-001",
+      "status": "not-run",
+      "detail": "Google login mocked for this phase"
+    },
+    {
+      "id": "CLI-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CLI-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "COMPL-AC-001",
+      "status": "passed"
+    },
+    {
+      "id": "COMPL-AC-003",
+      "status": "passed"
+    },
+    {
+      "id": "COMPL-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "COMPL-AC-005",
+      "status": "not-run",
+      "detail": "Google login mocked for this phase"
+    },
+    {
+      "id": "CORE-AC-002",
+      "status": "passed"
+    },
+    {
+      "id": "CORE-AC-003",
+      "status": "passed"
+    },
+    {
+      "id": "DEMO-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-007",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-008",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-009",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-010",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-004",
+      "status": "failed",
+      "detail": "1 of 2 tests failed: [E2E-004] coverage part: every criterion and scenario applicable on this target has a tagged test in the suite this run executes: Error: applicable on cloudflare but no tagged test in this target's suite:"
+    },
+    {
+      "id": "E2E-005",
+      "status": "passed"
+    },
+    {
+      "id": "E2E-006",
+      "status": "not-run",
+      "detail": "Google login mocked for this phase"
+    },
+    {
+      "id": "E2E-009",
+      "status": "passed"
+    },
+    {
+      "id": "E2E-011",
+      "status": "passed"
+    },
+    {
+      "id": "E2E-013",
+      "status": "passed"
+    },
+    {
+      "id": "E2E-014",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "FILES-AC-001",
+      "status": "failed",
+      "detail": "1 of 4 tests failed: FILES-AC-001 server operations > [FILES-AC-001] list returns exactly the prefix's names in code point order across several pages: AssertionError: expected [ …(7) ] to strictly equal [ …(7) ]"
+    },
+    {
+      "id": "FILES-AC-002",
+      "status": "passed"
+    },
+    {
+      "id": "FILES-AC-003",
+      "status": "failed",
+      "detail": "1 of 5 tests failed: [FILES-AC-003] expired-ticket clause: an expired ticket fails with FILES.TRANSFER_FAILED, storage's status and a rejected by storage (HTTP n) message without storage's error body: Error: status is storage's HTTP status, got null"
+    },
+    {
+      "id": "FILES-AC-004",
+      "status": "passed"
+    },
+    {
+      "id": "FILES-AC-005",
+      "status": "passed"
+    },
+    {
+      "id": "GOOGLE-AC-001",
+      "status": "not-run",
+      "detail": "Google login mocked for this phase"
+    },
+    {
+      "id": "HTTP-AC-001",
+      "status": "passed"
+    },
+    {
+      "id": "HTTP-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "HTTP-AC-003",
+      "status": "passed"
+    },
+    {
+      "id": "HTTP-AC-004",
+      "status": "passed"
+    },
+    {
+      "id": "HTTP-AC-005",
+      "status": "passed"
+    },
+    {
+      "id": "KV-AC-001",
+      "status": "passed"
+    },
+    {
+      "id": "KV-AC-002",
+      "status": "passed"
+    },
+    {
+      "id": "KV-AC-003",
+      "status": "passed"
+    },
+    {
+      "id": "KV-AC-004",
+      "status": "passed"
+    },
+    {
+      "id": "KV-AC-005",
+      "status": "passed"
+    },
+    {
+      "id": "LOG-AC-001",
+      "status": "passed"
+    },
+    {
+      "id": "LOG-AC-002",
+      "status": "passed"
+    },
+    {
+      "id": "LOG-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "LOG-AC-005",
+      "status": "passed"
+    },
+    {
+      "id": "MIG-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "MIG-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "MIG-AC-006",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "PROV-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "PROV-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SEC-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SEC-AC-002",
+      "status": "passed"
+    },
+    {
+      "id": "SEC-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SEC-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SQL-AC-003",
+      "status": "passed"
+    },
+    {
+      "id": "SQL-AC-004",
+      "status": "passed"
+    },
+    {
+      "id": "SQL-AC-005",
+      "status": "passed"
+    },
+    {
+      "id": "SQL-AC-006",
+      "status": "passed"
+    }
+  ],
+  "versions": {
+    "node": "v22.22.0",
+    "@lago-morph/prototype-framework": "0.1.0",
+    "vitest": "5.0.5",
+    "@playwright/test": "1.64.1",
+    "wrangler": "4.149.0",
+    "typescript": "6.0.3",
+    "drizzle-orm": "0.45.4",
+    "drizzle-kit": "0.31.11",
+    "hono": "4.13.13",
+    "zod": "4.6.7",
+    "@electric-sql/pglite": "0.5.8",
+    "esbuild": "0.28.2",
+    "sst": "4.17.2"
+  },
+  "leftovers": []
+}

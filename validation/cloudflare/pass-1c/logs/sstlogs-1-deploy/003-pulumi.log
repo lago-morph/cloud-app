@@ -1,0 +1,22 @@
+Updating (test-9mfkg261apxm7s2):
+@ updating.......
+
+@ updating......
+ +  pulumi:pulumi:Stack reference-test-9mfkg261apxm7s2 creating (0s) 
+@ updating......
+ +  sst:cloudflare:Bucket Files creating (0s) 
+@ updating............
+ +  cloudflare:index:R2Bucket FilesBucket creating (0s) 
+@ updating....
+ +  cloudflare:index:R2Bucket FilesBucket created (0.94s) 
+ +  sst:sst:LinkRef FilesLinkRef creating (0s) 
+ +  pulumi:pulumi:Stack reference-test-9mfkg261apxm7s2 created (13s) 
+Outputs:
+    _protect: false
+
+Resources:
+    + 4 created
+
+Duration: 17s
+
+

@@ -1,0 +1,6 @@
+2026-10-24T05:58:07Z F-03 resumed by runner2: stage test-s6jca41ew34ahz3, shareKey generated (sharekey.secret mode 600)
+2026-10-24T06:01:17Z 2-secret ok, 3-deploy ok (durl.txt written); next 4-smoke cloud
+2026-10-24T06:02:54Z 4-smoke cloud 7/7 (vn8cm0ie7v2rhul), local smoke 7/7 (kbe5rzjb8ls9p8z), source diff clean; dev stopped. next 9-driver DEMO-AC set
+2026-10-24T06:05:32Z 9-driver exit 0 nu3lt4mhjsn4ihq 7 passed; next 10-driver DEMO-AC-008 alone
+2026-10-24T06:06:58Z 10-driver exit 0 pqc4u7j4o1g4rpb DEMO-AC-008 passed; measured 2-before-remove; next 11-remove
+2026-10-24T06:07:45Z 11-remove exit 0; measuring 3-after-remove

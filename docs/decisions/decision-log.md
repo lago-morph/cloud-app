@@ -1245,7 +1245,7 @@ Origin: ai-proposed · Status: accepted · Affects: FILES-REQ-003, FILES-REQ-005
 Item: B-11.
 
 ### DEC-0162 — `list` paging: own cursor over `startAfter`, pages filled to the limit, limit clamped
-Origin: ai-proposed · Status: accepted · Affects: FILES-REQ-001, FILES-AC-001, PAR-231, PAR-232
+Origin: ai-proposed · Status: accepted; "Order" amended on Cloudflare by DEC-0430 (stored keys end in U+0001) · Affects: FILES-REQ-001, FILES-AC-001, PAR-231, PAR-232
 
 - **Cursor.** The cursor is `base64url(JSON {p: prefix, a: lastName})` (`src/files/cursor.ts`), the same idea as KV's design. A cursor is `FILES.INVALID_CURSOR` when it is malformed, when its `a` is outside its own prefix, or when its prefix differs from the requested one. The next page lists with `startAfter: a`. Every object store can list after a key, and R2's own cursor is not used.
 - **Full pages.** R2 may return short truncated pages when metadata is included. The service therefore asks again until it has `limit + 1` items (at most 1,000 per call) or the store is done. The extra item decides `nextCursor`, so an exactly full last page has a null cursor.
@@ -2035,15 +2035,15 @@ One `test-<run ID>` stage per cloud run is deployed and removed through the fram
 Item: C-02.
 
 ### DEC-0264 — Release report and invalidations
-Origin: ai-proposed · Status: accepted · Affects: COMPL-REQ-006, COMPL-AC-006, `validation/invalidations.md`
+Origin: ai-proposed · Status: accepted; "contains an ID" amended 2026-10-24 (root cause 2026-10-24-G6-release-milestone-misread) · Affects: COMPL-REQ-006, COMPL-AC-006, `validation/invalidations.md`, DEC-0261
 
-A record whose command contains `--milestone` is milestone evidence. Any other record is automated evidence for its commit only. For each target, the latest record that contains an ID decides that ID. "Works" requires every automated entry of every applicable target to be `passed` for the commit. It also requires every milestone item's latest milestone record to be passed and not invalidated. An invalidation line is `- <YYYY-MM-DD | ISO time> | <IDs> | <reason>`. A date alone means the end of that UTC day. An entry invalidates records that finished at or before it, and elapsed time never does. The commits touching `packages/framework/src/google/`, `packages/framework/src/auth/login-provider.ts` or `docs/contracts/ts/internal/login-provider.d.ts` since the commit of the last valid GOOGLE-AC-005 record are listed. With no certification, the whole history is listed.
+A record whose command contains `--milestone` is milestone evidence. Any other record is automated evidence for its commit only. For each target, the latest record that contains an ID decides that ID. A record contains an ID when it has an entry for the ID other than `not-run: not selected for this run (--only)`, the entry DEC-0261 writes for an expected ID outside `--only`. That entry says only that the run did not try the ID, so it is skipped when choosing the deciding record and when judging it. The match is exact (status `not-run` and that detail, `NOT_SELECTED` in `tests/compliance/harness/catalogue.ts`); every other `not-run` detail still counts. "Works" requires every automated entry of every applicable target to be `passed` for the commit. It also requires every milestone item's latest milestone record to be passed and not invalidated. An invalidation line is `- <YYYY-MM-DD | ISO time> | <IDs> | <reason>`. A date alone means the end of that UTC day. An entry invalidates records that finished at or before it, and elapsed time never does. The commits touching `packages/framework/src/google/`, `packages/framework/src/auth/login-provider.ts` or `docs/contracts/ts/internal/login-provider.d.ts` since the commit of the last valid GOOGLE-AC-005 record are listed. With no certification, the whole history is listed.
 Item: C-02.
 
 ### DEC-0265 — Traceability report
-Origin: ai-proposed · Status: accepted · Affects: COMPL-REQ-002, COMPL-AC-002
+Origin: ai-proposed · Status: accepted; "latest result per target" amended 2026-10-24 (root cause 2026-10-24-G6-release-milestone-misread) · Affects: COMPL-REQ-002, COMPL-AC-002, DEC-0261
 
-Tests are found by the runners themselves, so titles built at run time are read the way the runners name them. For Vitest, a run whose name filter matches nothing collects every file without running any test body. Playwright uses `--list`. A scan of the test sources adds bracketed tags and `tag(...)` calls, for suites a listing cannot see. Each catalogue ID is listed with its tests and its latest result per target. IDs with no test are flagged **UNTESTED**, and tags that name no defined ID are flagged too.
+Tests are found by the runners themselves, so titles built at run time are read the way the runners name them. For Vitest, a run whose name filter matches nothing collects every file without running any test body. Playwright uses `--list`. A scan of the test sources adds bracketed tags and `tag(...)` calls, for suites a listing cannot see. Each catalogue ID is listed with its tests and its latest result per target. The latest result per target comes from the latest record that contains the ID in DEC-0264's sense: an entry `not-run: not selected for this run (--only)` (DEC-0261) does not count, matched exactly as there. IDs with no test are flagged **UNTESTED**, and tags that name no defined ID are flagged too.
 Item: C-02.
 
 ### DEC-0266 — Harness tooling: launcher, HTTP client, Playwright, self-test, root scripts
@@ -2081,7 +2081,7 @@ Origin: ai-proposed · Status: accepted · Affects: PROV-REQ-002, MIG-REQ-003, C
 Item: C-03.
 
 ### DEC-0270 — Ownership of the Cloudflare shared log bucket
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open; unverified against the live API, verify in D-03/D-RUN) · Affects: PROV-REQ-004, PROV-AC-007, cloudflare.md `setupAccount`, D-03
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open; unverified against the live API, verify in D-03/D-RUN); 409 reading amended by DEC-0421 (200, 404 and 409 confirmed live in pass 0) · Affects: PROV-REQ-004, PROV-AC-007, cloudflare.md `setupAccount`, D-03
 
 R2 bucket names are scoped to an account, so the bucket `prototype-logs` is read through this account's path `GET /accounts/{account}/r2/buckets/prototype-logs`: success → owned; HTTP 404 → absent; HTTP 403 → foreign (it exists but this account does not own it, or its credentials cannot see it — the message says both). Creation is `POST /accounts/{account}/r2/buckets {"name":"prototype-logs"}`; HTTP 409 → foreign. Any other answer is an error naming the bucket and the HTTP status. The status codes were not observed against the live API (this item is offline); D-03/D-RUN confirm them. Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
 
@@ -2234,7 +2234,7 @@ Taken under the owner's instruction "Do not stop and ask me questions. Make an a
 Item: C-T2.
 
 ### DEC-0286 — MIG criteria deploy their own stages from a scratch copy of the reference app
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: MIG-AC-002, -003, -006, DEC-0144, compliance.md "Test stages", D-RUN
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open); stage layout amended by DEC-0423 (three self-contained blocks), its D1 reads' "no Authorization header" by DEC-0428 · Affects: MIG-AC-002, -003, -006, DEC-0144, compliance.md "Test stages", D-RUN
 
 `tests/compliance/criteria/mig/support/stage.ts` copies `apps/reference` (without state, tests and overlays) to a temporary directory, applies an overlay (`v1` = committed app, `versions/v2`, `versions/unique-fail`) and deploys it: locally a `dev` start (DEC-0144; after a failed start the harness serves the previous version's sources, the local reading of "the old app answers again"), on Cloudflare `deploy --target cloudflare --stage test-<random>` then `remove`. The database is read only with SELECTs: locally from Miniflare's SQLite file, on Cloudflare through the D1 HTTP API `query` endpoint of the stage's lowest-numbered `reference-<stage>-db-<n>` database (no Authorization header; the proxy injects it). Two stages, used one after the other: (1) initial deploy, unchanged redeploy, failing `unique-fail` deploy, data correction, successful re-run; (2) v1 → v2 with data, writes during the deploy, a secret and a session.
 - MIG-AC-002: "creates the schema" = every app and framework table exists; "the record lists every migration once" = `__framework_migrations.id` in rowid order equals `framework/<file>` for the framework history then `app/<file>` for the app's, each in file order (DEC-0142 format); "changes no data" = every table's rows, incl. the record's applied times, are identical; "does not stop the app" = on a cloud every health probe during the deploy answers 204; locally a deployment is a `dev` restart, so only "applies nothing" is checked (DEC-0144).
@@ -2465,7 +2465,7 @@ Phase A spikes wrote about 1.22 million D1 rows on 2026-10-19 against the free p
 Item: C-INT (recording an owner direction).
 
 ### DEC-0318 — Phase D cloud runs hold at most two D1 databases at once
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: plan §1 "Cloud usage limits", §5 D-RUN and D-RUN-M, DEC-0263, DEC-0268, DEC-0278, DEC-0286, DEC-0308, MIG-AC-002, MIG-AC-003, MIG-AC-006, E2E-010, E2E-012, PAR-219
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open); two-database cap superseded by DEC-0419; the stage guards applied to every further stage by DEC-0424 · Affects: plan §1 "Cloud usage limits", §5 D-RUN and D-RUN-M, DEC-0263, DEC-0268, DEC-0278, DEC-0286, DEC-0308, MIG-AC-002, MIG-AC-003, MIG-AC-006, E2E-010, E2E-012, PAR-219
 
 C-T2's estimate per Cloudflare run is about 350 base rows written, up to about 700 with index entries, under 2,000 rows read, and about 100–150 API requests from the MIG tests, plus those of 2 stages × 3–4 deploys and removals. That is within the caps. The databases are the problem. A run stage holds one D1 database. A stage's first deploy migrates in place (DEC-0268), and so does a redeploy without pending migrations, so each holds one database. A schema-changing deploy copies (MIG-REQ-006) and holds two. The MIG file (DEC-0286), E2E-010 (v1 → v2 on its own stage) and E2E-012 (a kept and a removed stage) therefore reach three databases alongside the run stage, which breaks the plan §1 cap of two. Rule: D-RUN and D-RUN-M run in passes, each holding at most two databases.
 1. **Main pass:** `npm run compliance -- --target cloudflare --only <every expected ID except MIG-AC-002, MIG-AC-003, MIG-AC-006>`. It uses the run stage plus at most one further stage at a time (DEC-0278's lock; further stages deploy the committed schema, so one database each).
@@ -2581,7 +2581,7 @@ Evidence: `packages/framework/src/files/cloudflare/{sign,tickets}.unit.test.ts`.
 Item: D-02.
 
 ### DEC-0328 — Names with `.` / `..` segments on R2 URLs
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: FILES-REQ-002, FILES-REQ-003, files.md §2 "Cloudflare"
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open); unchanged in effect by DEC-0430, which addresses the stored key (`x%2F..%2Fy%01`) · Affects: FILES-REQ-002, FILES-REQ-003, files.md §2 "Cloudflare"
 
 WHATWG URL parsing, used by aws4fetch, Workers and browsers, resolves `.` and `..` path segments, even when they are percent-encoded. With per-segment encoding, a ticket for `x/../y` would address `y`, and a ticket for `../up.txt` would address `/up.txt` outside the bucket path. That is unit-tested: the test failed before the fix. Fix (simplest): when any segment of the name is `.` or `..`, the issuer encodes the whole name, every `/` as `%2F`. Other names keep the per-segment form that A-07 verified. Assumption, not verified live: R2 decodes `%2F` in the path into `/` in the key, as S3 does, and canonicalises the path from the decoded key, as aws4fetch does. D-RUN checks it with one ticket for a `x/../y` name. A name that is exactly `.` or `..` cannot be put in any path-style or virtual-hosted URL. For such a name, `createUploadTicket`/`createDownloadTicket` on Cloudflare throw `FILES.INVALID_NAME`: "cannot be transferred by the browser on this target". Server operations on such names still work. This is a target difference in a corner case that FILES-REQ-002 allows. Owner: accept it, or forbid the names `.` and `..` in FILES-REQ-002 on every target.
 Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
@@ -2645,7 +2645,7 @@ D-03's own code writes and reads no D1 rows and creates no D1 databases; databas
 Item: D-03.
 
 ### DEC-0335 — Preflight checks the token permission by reads only
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: PROV-REQ-002 step 1, PROV-AC-002, `provision/cloudflare/r2-token.ts`, D-T1
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open); open question closed by DEC-0420 and DEC-0428 (no proxy injection; the restricted-credential clause runs when the operator supplies the token) · Affects: PROV-REQ-002 step 1, PROV-AC-002, `provision/cloudflare/r2-token.ts`, D-T1
 
 Cloudflare has no request that answers "may this credential create a token?" without creating one, and step 1 must create nothing. The preflight therefore reads `GET /accounts/$ID/tokens/permission_groups` and `GET /accounts/$ID/tokens?per_page=50&page=1`, the two reads that token creation itself needs. If either is refused, it reports "the Cloudflare API token lacks the permission to create R2 API tokens (Account API Tokens: Edit): HTTP …". Before that, it checks the credential variables by name (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) and the token with `GET /accounts/$ID/tokens/verify`. A token that can read tokens but not edit them passes the preflight, and step 5's token creation then fails, naming the token. That is accepted as the simplest available check.
 **Open question (owner / D-T1):** in the sandbox the proxy replaces every `Authorization` header to `api.cloudflare.com` with the injected token, so a deploy cannot use a restricted credential. If so, PROV-AC-002's "credential that lacks the permission to create R2 API tokens" clause cannot be run live from this sandbox, and its unit test (`r2-token.unit.test.ts`, `target.unit.test.ts`) is the only evidence.
@@ -2653,7 +2653,7 @@ Taken under the owner's instruction "Do not stop and ask me questions. Make an a
 Item: D-03.
 
 ### DEC-0336 — The SST app generated for a Cloudflare stage
-Origin: ai-proposed · Status: accepted (unverified live; DEC-0334 item 6) · Affects: PROV-REQ-001, PROV-REQ-002 steps 3 and 5, cloudflare.md §2, DEC-0036, DEC-0084, DEC-0087, DEC-0088, DEC-0091, DEC-0107, `provision/cloudflare/sst.ts`
+Origin: ai-proposed · Status: accepted (unverified live; DEC-0334 item 6); "Steps" amended by DEC-0427 · Affects: PROV-REQ-001, PROV-REQ-002 steps 3 and 5, cloudflare.md §2, DEC-0036, DEC-0084, DEC-0087, DEC-0088, DEC-0091, DEC-0107, `provision/cloudflare/sst.ts`
 
 - **Where:** `<app>/.framework/provision/cloudflare/sst.config.ts` plus a minimal `package.json`, rewritten on every deploy and remove. It is outside `.framework/<target>/`, which `build` replaces. SST's platform (`.sst/platform`) is installed with `sst install` when it is missing.
 - **Program:** `removal: "remove"` (never retains), `home: "cloudflare"`, provider `cloudflare` 6.15.0 (PAR-108). `sst.cloudflare.Bucket("Files")` with a transform giving the fixed bucket name. When there is a database: `sst.cloudflare.Worker("Worker", { handler: <built bundle>, url: true, assets: { directory }, environment: <framework variables + FRAMEWORK_PUBLIC_ORIGIN> })`. Its transform sets `scriptName`, compatibility date and flags, and `keepBindings: ["secret_text", "secret_key"]` (DEC-0087's guard), and appends the bindings `DB` (the current D1 database, an input never in SST's state), `FILES` and the shared log bucket. Every input is embedded as JSON, never as code. A `SECRET_*` variable or binding name is refused (DEC-0087).
@@ -2923,7 +2923,7 @@ Integrator note: D-03 gives the Worker, bucket and token fixed names that contai
 Item: D-T.
 
 ### DEC-0361 — D1 stop and two-database cap are enforced inside the tests
-Origin: ai-proposed · Status: accepted · Affects: DEC-0317, DEC-0318, D-RUN, D-RUN-M
+Origin: ai-proposed · Status: accepted; refined by DEC-0424 (one guard sequence, `takeStageRoom`, for every further stage; the lock released on every failure path) · Affects: DEC-0317, DEC-0318, D-RUN, D-RUN-M
 
 `requireCloudD1()` blocks by default and passes only with `COMPLIANCE_CLOUDFLARE_D1=available`. The operator sets that variable once the reset is confirmed and the caps can be met. That way no D1 use happens by accident while DEC-0317 holds.
 
@@ -2960,7 +2960,7 @@ Taken under the owner's instruction "Do not stop and ask me questions. Make an a
 Item: D-T.
 
 ### DEC-0363 — Readings of PROV-AC-002
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: PROV-AC-002, D-05
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open); "blocked in this sandbox" amended by DEC-0428 (blocked only while the restricted token is not supplied) · Affects: PROV-AC-002, D-05
 
 - **"One credential removed":** `CLOUDFLARE_API_TOKEN` is removed from the deploy's environment, on a stage never deployed before. The deploy must exit non-zero and name the variable. Afterwards the independent probe must find nothing of the stage.
 - **"Lacks the permission to create R2 API tokens":** the test needs an operator-supplied restricted token (`COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_R2_TOKEN_PERMISSION`) and a machine without the sandbox proxy. The proxy replaces every Authorization header (DEC-0083), so this clause is `blocked` in this sandbox.
@@ -3584,3 +3584,192 @@ Origin: owner · Status: accepted · Affects: plan §1 "Cloud usage limits", DEC
 
 The owner (2026-10-23): the free D1 limits are 5,000,000 rows read and 100,000 rows written per day; adjust the budget, there is no need for crippling limits; do not run stress tests. New caps: per pass ≤ 10,000 rows written and ≤ 500,000 read; per UTC day ≤ 50,000 written and ≤ 2,500,000 read (half the free limits, leaving headroom for the owner's own use); ≤ 4 D1 databases at once (account limit 10); raised the same day by the owner to ≤ 8 D1 databases at once. The rule that prevents a repeat of the phase A incident stays: no stress tests, load tests, platform-limit probing or row loops; tens of rows per test; measure D1 usage before and after every pass. The earlier ≤ 1,000 written / ≤ 10,000 read per item and ≤ 2 databases at once are superseded; DEC-0318's two-database rule no longer forces separate passes.
 
+### DEC-0420 — Cloudflare credentials come from the environment, not proxy injection
+Origin: owner · Status: accepted · Affects: plan §10.6, plan §5 D-RUN, DEC-0083, DEC-0107, DEC-0335, DEC-0363
+
+On 2026-10-24 the owner changed the cloud environment: the sandbox proxy no longer injects a token for `api.cloudflare.com`, and a real API token is provided as the environment variable `CLOUDFLARE_API_TOKEN`. Reason: the proxy replaced every `Authorization` header, so the Workers static-asset upload, which must be authorised with the upload-session JWT, always failed with 401 (validation/cloudflare/pass-1b/SUMMARY.md). Verified: a request with no header or a fake token now returns 400; a request with the environment token returns `active`. Tools use the variable directly; the placeholder value of DEC-0083/DEC-0107 is no longer set. The token value is never printed, logged or committed; evidence is grepped for it. PROV-AC-002's restricted-credential clause, blocked only because the proxy replaced every header (DEC-0335, DEC-0363), may now be runnable.
+
+## Implementation phase: local and Cloudflare — Cloudflare live testing (2026-10-23/24)
+
+Entries DEC-0421 to DEC-0431 were integrated by the integrator from the drafts of items fix-pass0, fix-cloudtests, fix-pass1, fix-envtoken, fix-auth005, fix-r2order and fix-sec001 (plan §10.4), written after Cloudflare passes 0, 1, 1c and 2. Each entry keeps its draft's wording and status. The integration made no Cloudflare call. No parameter changed (`CLOUD_WAITS.secretRolloutMs` of DEC-0431 is a test-harness wait bound, not a parameter). Marked in place: DEC-0270 (409 reading amended by DEC-0421), DEC-0336 ("Steps" amended by DEC-0427), DEC-0162 ("Order" amended on Cloudflare by DEC-0430), DEC-0328 (stored key extended by DEC-0430; its rule is unchanged in effect), DEC-0286 (stage layout amended by DEC-0423, its D1 reads' Authorization header by DEC-0428), DEC-0318 and DEC-0361 (guards applied to every further stage by DEC-0424), and DEC-0335 and DEC-0363 (the sandbox refusal of PROV-AC-002's restricted-credential clause removed by DEC-0428, applying DEC-0420). DEC-0429 and DEC-0430 are open for owner review (plan §11 Q5); the owner items from these passes are plan §11 Q11–Q14.
+
+### DEC-0421 — A bucket-creation conflict is read back, not taken as foreign (amends DEC-0270)
+Origin: ai-proposed · Status: accepted · Affects: DEC-0270, DEC-0334, PROV-REQ-004, PROV-AC-007, `packages/framework/src/provision/cloudflare/account.ts`
+
+DEC-0270 read every HTTP 409 from `POST /accounts/{account}/r2/buckets` as "foreign". Pass 0 check 3 (`validation/cloudflare/pass-0/logs/responses.jsonl`, label `c03-create-existing`) disproved that reading. Creating `prototype-logs` while this account already had it answered 409, code 10004, "The bucket you tried to create already exists, and you own it." R2 bucket names are scoped to an account (DEC-0334 item 1), so a 409 on this account's path means the bucket exists in this account.
+
+Amended reading: on a 409, `createBucket` reads the bucket back with the same `GET /accounts/{account}/r2/buckets/<name>` that inspection uses (DEC-0270's GET readings):
+- 200 → owned: no error, because the end state PROV-REQ-004 requires is reached;
+- 403 → foreign: "`R2 bucket <name>` already exists but belongs to another account (or this account's credentials cannot read it); nothing was created";
+- 404 → an error naming the bucket and `HTTP 409`, with "reading it back found it absent";
+- any other answer → inspection's error, "checking `R2 bucket <name>` failed: …".
+
+The code does not rely on the 409 message text, which is not a contract. The read-back costs one GET, and only on a 409. DEC-0270's other readings are unchanged. The 200, 404 and 409 answers are now confirmed live by pass 0 (checks 1–3). The 403 reading stays unverified, because one account cannot produce it (DEC-0334). PROV-AC-007 goes through inspection's GET 403 and is unaffected. The fake (`fake-cloud.test-support.ts`) now answers with the live 409 message.
+
+**Known limitation, accepted and not fixed:** the 409 path is reached only when the bucket appears between `setup-account`'s inspection GET (404) and its POST: a concurrent `setup-account`, or a bucket created by hand. In that race `setup-account` still prints `created: R2 bucket <name>` (`core/setup-account.ts`), although another process created it, because `createSharedResources` returns `void` and `created` is built from its input list. The end state, an owned bucket, is the required one, and no requirement fixes the output wording. Changing it would widen the target-neutral `TargetOperations` interface and the `SetupAccountResult.created` contract, which is out of scope for this fix.
+
+Evidence: `ai/implementation/root-causes/2026-10-23-pass0-F2-create-bucket-409-owned.md` (diagnosis and Review); unit tests in `packages/framework/src/provision/cloudflare/account.unit.test.ts` (the 409-then-200 and 409-then-404 tests failed before the fix; 409-then-403 is a guard).
+Item: fix-pass0.
+
+### DEC-0422 — In the sandbox, `remove` cannot delete R2 objects whose names have a `..` segment through the API
+Origin: ai-proposed · Status: accepted · Affects: PROV-REQ-003, FILES-REQ-002, FILES-AC-002, D-RUN, `packages/framework/src/provision/cloudflare/objects.ts`
+
+Pass 0 (`validation/cloudflare/pass-0/logs/`, label `d02f-delete-dot`) sent `DELETE /accounts/{account}/r2/buckets/prototype-logs/objects/x%2F..%2Fy` and got 403 with the plain-text body "request rejected: path contains traversal sequence". The body format and the request's position point to the sandbox's egress proxy, not Cloudflare. The response headers were not captured, so this is an inference. R2 accepted the same key through the S3 endpoint (PUT 200, GET 200, DELETE 204).
+
+No framework defect was found. Whether real Cloudflare, reached without this proxy, accepts the path is unverified (owner item, plan §11 Q11). If real Cloudflare refuses it, PROV-REQ-003 is broken for valid FILES-REQ-002 names, and the fix is an S3-DELETE fallback in `deleteObjects` (see the root-cause record).
+
+Limitation recorded: in this sandbox, stage removal (`remove`) cannot delete objects in the files bucket whose names have a `..` segment. `remove` reports such a leftover by name and fails (DEC-0263). Only `..` was observed. Names with `.` or empty (`//`) segments are untested. The pass-1 handling is in plan §5 D-RUN. No code was changed.
+
+Evidence: `ai/implementation/root-causes/2026-10-23-pass0-F1-r2-api-delete-traversal-403.md` (diagnosis and Review).
+Item: fix-pass0.
+
+### DEC-0423 — The MIG criteria run as three self-contained blocks, and set the secret after the first Cloudflare deploy
+Origin: ai-proposed · Status: accepted · Affects: MIG-AC-002, MIG-AC-003, MIG-AC-006, DEC-0277, DEC-0286, DEC-0398, `tests/compliance/criteria/mig/**`
+
+`mig/deploys.test.ts` had two describe blocks whose tests depended on each other across IDs, so a per-ID selection (`--only`, the driver's `-t '\[<ID>\]'`) failed MIG-AC-003 and MIG-AC-006. It now has three blocks, each on its own stage, with the assertions unchanged:
+- A (MIG-AC-002): the initial deployment and the no-change redeployment;
+- B (MIG-AC-003): `beforeAll` deploys version 1 and loads the fixture; then the failing `unique-fail` deploy and its re-run;
+- C (MIG-AC-003 preservation, MIG-AC-006): `beforeAll` deploys version 1, loads the fixture, takes a session, then runs the v2 schema-changing deploy with the writer and records its result; the two tests assert on the recorded result and the stage.
+
+`createStage({ secrets })` takes the declared secrets. Locally it sets them with `secrets set --target local` before the first `dev` start (DEC-0277). On Cloudflare only the stage's first deploy is special: when it stops on unset secrets (DEC-0398's `secretsNotSet`), the stage runs `secrets set` for each secret, value on stdin, and deploys again, returning the combined output. No later deploy and no deploy failing for another reason is retried. `remove()` runs `remove` only if a deploy was attempted. The stage's CLI is the shared `BIN` of `core/support/repo.ts`.
+
+Evidence: root cause `ai/implementation/root-causes/2026-10-23-cloud-test-paths.md` item 1 and its Review. Red then green: R1c was run as per-ID `-t` runs of `deploys.test.ts` on `--target local`.
+- Before: MIG-AC-002 passed (2 passed); MIG-AC-003 failed 2 of 3 ("expected one local D1 database, found 0", "not being served"); MIG-AC-006 failed on "the schema-changing deploy ran (previous test)".
+- After: MIG-AC-002 2 passed, MIG-AC-003 3 passed, 0 failed.
+
+MIG-AC-006 now passes both selection-dependent assertions (the deploy ran, and writes were attempted) and fails at "writes acknowledged while the deploy ran > 0". That is its cloud-only clause: the criterion's Where is "Cloud", and locally a deployment is a `dev` restart, so no write can be acknowledged during it (DEC-0144). The assertion is unchanged and fails the same way in a whole-file local run. The local driver does not select MIG-AC-006. R1a/R1b are in `mig/support/stage.unit.test.ts`.
+Item: fix-cloudtests.
+
+### DEC-0424 — Every further cloud stage takes the shared stage guards, and releases the lock on every failure path
+Origin: ai-proposed · Status: accepted · Affects: DEC-0317, DEC-0318, DEC-0361, plan §1 "Cloud usage limits", `tests/compliance/criteria/prov/support/stage.ts`, `tests/compliance/criteria/core/support/stages.ts`, `tests/compliance/criteria/mig/support/stage.ts`, `tests/compliance/e2e/**`
+
+`takeStageRoom(databases, what)` in `prov/support/stage.ts` runs the guard sequence in a fixed order: the D1 stop (`requireCloudD1`), the cross-process `further-stage` lock, and the two-database cap (`requireDatabaseRoom`) under the lock. When the cap check throws, it releases the lock before rethrowing. It returns an idempotent release. It has no skip flag; only `withCloudStage`'s existing `held` option (for `holdStages` callers) bypasses it.
+- `withCloudStage` and `holdStages` use it.
+- The MIG cloud stage takes it for 2 databases before anything is copied or deployed. It releases it if any later step of `createStage` throws (account check, stage name, copy). `remove()` releases it in `finally`, even when `remove` exits non-zero.
+- `withFurtherStage` replaces its own lock with `takeStageRoom(1, …)`. `scratchCopy` now runs inside the `try`, so a failed copy no longer leaks the lock, and the stage is removed only if a deploy was attempted.
+- E2E-010 and E2E-012 wrap their whole body, including the `finally` removals, in `withE2EStages(2, …)` (`holdStages`). E2E-014's cloud step `setSecretThenDeploy` applies only the D1 stop before `secrets set`, because it creates no database.
+
+Evidence: same root cause, items 1c and 2, and the Review's required change 2. The red-then-green tests are R1d, R2a–R2d and the lock-release cases in `mig/support/stage.unit.test.ts`, `core/support/stages.unit.test.ts`, `prov/support/stage.unit.test.ts` and `e2e/support/apps.unit.test.ts`. They run against a fake CLI (`criteria/_fakes/fake-cli.mjs`) and a stubbed `fetch`, with `TMPDIR` set to a scratch directory so the test lock never collides with a real run.
+Item: fix-cloudtests.
+
+### DEC-0425 — A removal made by another actor cancels the cleanup removal only when nothing is left
+Origin: ai-proposed · Status: accepted · Affects: PROV-AC-006, COMPL-AC-004, `tests/compliance/criteria/prov/support/stage.ts`
+
+`CloudStage.removedElsewhere(result, remaining)` records an out-of-band removal, so `withCloudStage`'s `finally` does not run `remove` a second time. It counts only when `result.status === 0` **and** `remaining` (the stage-resource probe after the removal) is empty. Otherwise the cleanup still runs. Taking `remaining` as a parameter enforces the Review's condition in the helper itself, not only at the call sites.
+- PROV-AC-006 calls it after the no-leftovers check (`clean-machine.test.ts`, after `listStageResources`), with machine 3's `remove` result.
+- COMPL-AC-004 calls it right after the first driver cleanup's `listStageResources`, with status 0 and the cleanup's log. The put-back token is still deleted by ID in the outer `finally`.
+
+Each call saves one `remove` (20 + S Cloudflare requests).
+
+Evidence: same root cause, item 3, and the Review's required change 1. The red-then-green tests are R3a (one `remove`), R3b (failed out-of-band removal: cleanup still runs) and R3c (exit 0 with resources left: cleanup still runs).
+Item: fix-cloudtests.
+
+### DEC-0426 — The MIG Cloudflare stage reads the D1 listing once per deploy, and `snapshot()` batches its SELECTs
+Origin: ai-proposed · Status: accepted · Affects: plan §1 "Cloud usage limits" (500 requests per item), DEC-0348, `tests/compliance/criteria/mig/support/stage.ts`
+
+`cloudflareStage.query` used to list the account's databases on every query. Now the stage's current database (the lowest `-db-<n>`) is re-read once after every deploy attempt, failed ones included. It is read after the `during` callback has settled and never from inside it. A failed re-read leaves it unset, so the next query reads it again. `databases()` still lists every time.
+
+`snapshot()` moved to `support/stage.ts`. It makes one query for the table names, then one `queryBatch` of all the tables' SELECTs. That is a single `/query` with `{ batch: [{ sql }, …] }`, the form D-04's D1 client already relies on (`provision/cloudflare/d1/client.ts`), and `fake-d1-api.ts` implements it; it stays a DEC-0348 item-1 check for D-RUN. The result count is checked against the statement count. Locally, `queryBatch` runs each statement on the same read-only database.
+
+Item 4's split-pass question (MIG-AC-003 and COMPL-AC-008 across two records; the Review's options (a) and (b)) is **not** decided here. It goes to the owner.
+
+Evidence: same root cause, item 4. R4a in `mig/support/stage.unit.test.ts`: the listings are at most deploys + `databases()` calls; a query after a failed deploy goes to the database read after that deploy; a snapshot makes at most 2 `/query` calls.
+Item: fix-cloudtests.
+
+### DEC-0427 — Step 3 targets `Files` only when the stage has a database; `sst remove` runs only when SST has the stage's state (amends DEC-0336 "Steps")
+Origin: ai-proposed · Status: accepted · Affects: DEC-0336, DEC-0334 item 10, DEC-0084, PROV-REQ-002, PROV-REQ-003, `packages/framework/src/provision/cloudflare/target.ts`, `sst.ts`, `fake-cloud.test-support.ts`
+
+Pass 1's first deploy of `apps/reference` failed at step 3 with `✕  Target not found: Files`. SST 4.17.2 resolves `--target <name>` only against the resources in the stage's previous deployment state (`pkg/project/run.go:348-360`). A stage's first deploy has no state, so DEC-0336's `sst deploy --target Files` could never succeed on it. A stage without `app/<app>/<stage>` in `sst-state` is also unknown to `sst remove`, which then fails with `Stage not found`.
+
+Amended steps:
+- **Step 3 (`deployInfrastructure`)** decides from `input.database`:
+  - with a database, the program declares the bucket and the Worker, and the run is `sst deploy --target Files`. The first database is created only after a step 3 succeeded, so `Files` is in SST's state. If the built Worker code is absent, step 3 is refused before any SST run: an untargeted run on a bucket-only program would delete the Worker with its secrets (R1);
+  - without a database (a first deploy), the program is bucket-only and the run is an untargeted `sst deploy`. An untargeted run makes the stage's SST state equal the program, so it would delete a Worker in that state. If the Worker `<app>-<stage>` exists (checked by exact name), step 3 is refused: "the stage has a Worker `<app>-<stage>` but no database; … restore the database or run remove" (R2).
+- **Removal:** `sst remove` is skipped only when a successful listing of `sst-state` lacks the exact key `app/<app>/<stage>`. If the listing fails, the failure is recorded and `sst remove` still runs. After a successful `sst remove`, the `app/` object it leaves behind (an empty checkpoint) is deleted, so a re-run of `remove` skips `sst remove`. The exact-name Worker and bucket deletes and the final deletion of the stage's state objects are unchanged (DEC-0084) (R3).
+- Step order is unchanged (3 → first database → 4 → 5), so PROV-REQ-002's "no new app code" in step 3 holds.
+
+Known limit, accepted: a stage with a database whose SST state was lost fails step 3 with SST's own `Target not found: Files`; `remove` recovers it.
+
+The unit tests' fake SST now models SST's per-stage state (R4): `app/` marks a stage SST knows; `--target X` must be in that state; a targeted run adds nothing; an untargeted run makes the state equal the program; `remove` deletes only components in state and fails with `Stage not found` without `app/`; every run writes `update/<app>/<stage>/<id>`, and a stage's first run writes `passphrase/`. The old `snapshot/` keys are gone.
+
+Still unverified live, carried to pass 2 (DEC-0334 item 10): a later `--target Files` step 3 leaves the Worker and its secrets in place, and whether `--target Files --target-dependents` updates the bucket's child resource. The pass-1 leftovers (`passphrase/` and `update/` objects of `test-ycfmck8n9jis0gb`) should be removed with the fixed `remove`, which should exit 0 without running `sst remove`.
+
+Evidence: `ai/implementation/root-causes/2026-10-23-pass1-sst-target-not-found.md` (diagnosis and Review, R1–R4); `packages/framework/src/provision/cloudflare/target.unit.test.ts` (the first-deploy sequence, R1, R2 and both R3 remove tests failed before the fix; the second-deploy targeted test guards the targeted path).
+Item: fix-pass1.
+
+### DEC-0428 — Test hooks always send the environment token; PROV-AC-002's restricted-credential clause no longer refuses HTTPS_PROXY (applies DEC-0420)
+Origin: ai-proposed · Status: accepted · Affects: DEC-0420, DEC-0083, DEC-0335, DEC-0363, PROV-AC-002, plan §10.6, `tests/compliance/criteria/_cloud/api.ts`, `tests/compliance/criteria/prov/deploy-sequence.test.ts`, `tests/compliance/criteria/prov/support/restricted-token.ts`, `tests/compliance/criteria/mig/support/stage.ts`, `tests/compliance/e2e/support/cloud.ts`
+
+DEC-0420 removed the proxy's token injection for `api.cloudflare.com` and put a real token in `CLOUDFLARE_API_TOKEN`. Code written for DEC-0083 still assumed injection:
+
+- `_cloud/api.ts` `authHeader()` sent no `Authorization` header whenever `HTTPS_PROXY` was set, so every cloud test hook request in the sandbox was unauthenticated (400 since DEC-0420). It now sends `Bearer $CLOUDFLARE_API_TOKEN` whenever the variable is set, proxy or not, and takes the environment as a parameter so it can be unit tested.
+- Two further direct Cloudflare API callers sent no header by design ("the proxy injects the token"): the D1 HTTP reads in `mig/support/stage.ts` and the E2E probes in `e2e/support/cloud.ts`. Both now spread `authHeader()` into their headers.
+- PROV-AC-002's restricted-credential clause refused to run when `HTTPS_PROXY` was set, because the proxy replaced the restricted token (DEC-0335, DEC-0363). The refusal is removed. The gate moved to `prov/support/restricted-token.ts` (`restrictedToken(env)`); the clause is still `blocked` when `COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_R2_TOKEN_PERMISSION` is unset, and runs in the sandbox when the operator supplies it.
+- Comments that described the sandbox token as a placeholder the proxy replaces were updated: `packages/framework/src/provision/cloudflare/api.ts`, `environment.ts`, and the module headers above. The framework's own code already sent the bearer token unconditionally; no behaviour change there. Framework unit tests that use the literal fake value `"placeholder"` are fake tokens, not the DEC-0083 convention, and are unchanged.
+
+Not done here: the restricted token itself is not provisioned, so the clause stays `blocked` until the owner supplies one. No live Cloudflare call was made.
+
+Evidence: `tests/compliance/criteria/_cloud/api.unit.test.ts` and `tests/compliance/criteria/prov/support/restricted-token.unit.test.ts` (with `HTTPS_PROXY` and a fake token set, the header is sent / the token is returned; both failed before the fix and pass after). `vitest related` (unit config) 26 files / 204 tests pass; typecheck and lint pass.
+Item: fix-envtoken.
+
+### DEC-0429 — AUTH-AC-005's contract part runs over HTTP on every target; its successful-callback response is a cloud not-run part
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: AUTH-AC-005, AUTH-REQ-005, E2E-004, COMPL-AC-001, DEC-0171, plan §8.1, `tests/compliance/criteria/auth/contract.test.ts`, `tests/compliance/harness/expected.ts`, `tests/support/http-schemas.ts`
+
+AUTH-AC-005's Where is "Local, cloud; admin-list part: cloud (milestone)", so its contract part ("`/api/auth/*` responses validate against the HTTP contract") is automated on cloud. Its only tests were in-process (`packages/framework/test/integration/auth/routes-contract.test.ts`), which the cloud selection rightly excludes. Pass 1c therefore recorded AUTH-AC-005 `not-run` on Cloudflare and failed E2E-004's coverage part.
+
+Decision:
+- **Location.** The contract part's cloud evidence is `tests/compliance/criteria/auth/contract.test.ts`, target-neutral through `client()`: `GET /api/auth/me` (anonymous, user, admin via mock-login; 200, `no-store`, CurrentUser), `POST /api/auth/mock-login` (204, empty body; four invalid bodies are 400 `HTTP.INVALID_INPUT`), `GET /api/auth/login?returnTo=%2Fafter` (302/303 to `/after` on the target's origin, the mock session of DEC-0171), `GET /api/auth/callback` without a transaction (302 to `/` with `authError=login_failed` and a `requestId`, no session), `POST /api/auth/logout` (204, empty body, with and without a session), and undefined methods (`GET logout`, `DELETE me`, `POST login`, `GET mock-login`: 405 `HTTP.METHOD_NOT_ALLOWED` with `Allow`). Every error assertion checks the exact catalogue status and code, and the ErrorResponse schema. Mock-login tests use per-test IDs (`fix-auth005-*`).
+- **Shared schema checks.** `isCurrentUserResponse` and `isErrorResponse` move to `tests/support/http-schemas.ts`, which imports only the error catalogue (`packages/framework/src/core/errors.ts`). The framework AUTH suite's `support.ts` re-exports them; the compliance suite does not import that `support.ts` (it pulls in `createTestApp` and `node:crypto`).
+- **No local successful-callback copy.** The local selection already runs `routes-contract.test.ts`, whose stub-provider test covers the successful callback in-process.
+- **Part rule.** `{ id: "AUTH-AC-005", targets: CLOUD, mode: "automated", part: "contract part: successful callback (needs a real login provider)", detail: GOOGLE_MOCKED }`. A test stage has the mock and no real provider (DEC-0171), so the 302 to `returnTo` with a session cookie first exists on `prodcheck` with Google, like AUTH-AC-009's cloud production part. It is added to plan §8.1 "for the evaluator to confirm": prompt §4 names only the admin-list part.
+
+Evidence: `ai/implementation/root-causes/2026-10-24-pass1c-E2E-004-AUTH-AC-005-no-cloud-test.md` (diagnosis and Review, changes 1-5). Red-green in the Review's order: the offline Cloudflare coverage check (`tests/compliance/harness/selection.unit.test.ts`, `uncovered` over `listDriverTests("cloudflare")`) was red with `["AUTH-AC-005"]` until the contract tests landed; the `expected.unit.test.ts` expectation (Cloudflare automated `notRunParts` = that part; local none) was red until the part rule landed. Local driver run `--target local --only AUTH-AC-005,E2E-004` (record `oddohzaf86h0m0a`, not committed: a filtered run): AUTH-AC-005 and E2E-004 passed (6 new HTTP tests plus the 3 in-process ones). No Cloudflare call was made.
+
+Still to verify in pass 2 on Cloudflare: AUTH-AC-005 `passed` with the not-run part entry above, the admin-list milestone part still outstanding, and E2E-004's coverage part passed.
+Item: fix-auth005.
+
+### DEC-0430 — On Cloudflare, R2 keys are `name + U+0001` (below PAR-230 bytes), so R2 lists in code point order (amends DEC-0162 "Order"; DEC-0328 unchanged in effect)
+Origin: ai-proposed (orchestrator, under the owner's "make an assumption and continue") · Status: proposed, owner review open · Affects: DEC-0162, DEC-0328, FILES-REQ-001, FILES-REQ-002, PAR-230, `docs/components/files.md` §2 Cloudflare, `skill/reference/files.md`, `packages/framework/src/files/cloudflare/keys.ts`, `tickets.ts`, `src/targets/cloudflare/public.ts`, `src/files/fake-store.test-support.ts`
+
+Pass 1c failed FILES-AC-001 on Cloudflare: R2 listed `…/a` after `…/a b` and `…/a/b`. The live probe of 2026-10-24 measured R2's order, through the binding and the S3 API alike: UTF-8 byte order, except that the end of a key ranks like one more byte between 0x31 and 0x61. `startAfter` does not follow that order (it returned keys the listing puts before it), so the service's paging could also repeat names. Keys ending in U+0001 list in true byte order, presigned GET/PUT of `%01` keys work, and R2's key limit is 1,024 bytes (1,025 gets 400 `InvalidObjectName`). Listing through S3 is no alternative: it has the same order.
+
+Decision:
+1. **Stored key.** The Cloudflare store (`cloudflareFilesStore`, wrapping the R2 binding in `createCloudflareWorker`) stores each name as `name + U+0001` when the name is under PAR-230 (1,024) UTF-8 bytes. FILES-REQ-002 forbids U+0001 in names, and it sorts below every byte a name can hold, so no stored key is a proper prefix of another and R2's end-of-key rank never decides an order. A name of exactly 1,024 bytes is stored unterminated: `name + U+0001` would exceed R2's limit, and a 1,024-byte name can be a proper prefix of no valid name, so the order still holds. PAR-230 is unchanged.
+2. **Decoding and paging.** `get`, `head`, `delete` address the stored key; listed keys have a trailing U+0001 removed (a key without one is returned as it is, never dropped). `startAfter` is the last name's stored key, so paging stays in the listing's order. `prefix` is passed unchanged.
+3. **Tickets.** Upload and download tickets sign and address the stored key (`…/<name>%01`). The `response-content-disposition` filename and everything app-facing keep the plain name.
+4. **Scope.** The shared service, the local target (Miniflare, which already lists in byte order) and any S3 store keep plain keys. No framework code lists R2 through the S3 XML API, so no `encoding-type=url` change was needed; owner S3 tooling must use it (U+0001 cannot appear in XML 1.0).
+5. **DEC-0328 `.`/`..` names keep working as before.** The dot-segment checks test the name, not the stored key: a name that is only `.` or `..` still gets no ticket (`FILES.INVALID_NAME`), and a name with a `.`/`..` segment is still sent with every `/` as `%2F` (now `x%2F..%2Fy%01`). The server operations accept these names as before. D-RUN's live `x/../y` check must be repeated with terminated keys in pass 2.
+6. **Existing objects: no migration, no read fallback.** No FILES object exists outside test stages. The only `*-files` bucket recorded as kept is pass 1c's stage R (`reference-test-9mfkg261apxm7s2-files`, `validation/cloudflare/pass-1c/SUMMARY.md`), a test stage; pass 2 removes it (or clears it) before redeploying. Objects written there before this change would read as missing, and a list would return them unchanged. Tickets issued before the deploy point at plain keys; their 15-minute lifetime (PAR-233) bounds that.
+7. **Visible to owners.** In the R2 dashboard and `wrangler r2 object get <bucket>/<key>`, every key carries an invisible U+0001, and a lookup by the plain name finds nothing. Documented in files.md §2 Cloudflare and `skill/reference/files.md`. Owner question (open, next to the alternative of changing FILES-REQ-001 to the platform's order): accept the invisible ending.
+
+Evidence: `ai/implementation/root-causes/2026-10-24-pass1c-FILES-AC-001-r2-list-order.md` (diagnosis, Review items 1–7, "Live probe (2026-10-24)"). The fake binding gained `order: "r2"`, which implements the probe's measured order (end of key ranked 0x31) and `startAfter` rule, and refuses keys over 1,024 bytes; `keys.unit.test.ts` checks it against probe L1, L3, L4 and L8. Red before the fix: the limit-3 listing of `p/…` names with five `p/a/…` extensions, plain and with short store pages, repeated names until the 50-page cap. Green after: each name once, in code point order. Also covered: 1,023-, 1,024- and 1,025-byte names, `.`, `..`, `x/../y`, `a/.` names in the store and in tickets, and the Worker addressing the binding by the stored key.
+
+Still unverified live, carried to pass 2: FILES-AC-001 on Cloudflare with terminated keys, FILES-AC-002/-003/-004 transfers with `%01` keys, and D-RUN's `x/../y` check.
+Item: fix-r2order.
+
+### DEC-0431 — The cloud SEC-AC-001 / HTTP-AC-002 test waits, bounded, for SEC.MISSING after deleting the secret; `CLOUD_WAITS.secretRolloutMs` names the DEC-0092 bound
+Origin: ai-proposed · Status: accepted · Affects: DEC-0092, DEC-0280, SEC-AC-001, HTTP-AC-002, `tests/compliance/criteria/secrets/further-stage.test.ts`, `tests/compliance/criteria/core/support/secrets.ts`, `tests/compliance/harness/wait.ts`
+
+Pass 2 failed SEC-AC-001 and HTTP-AC-002 because the further-stage test read `/api/ref/secret` once, 126 ms after `DELETE …/secrets/SECRET_API_KEY` answered 200. Cloudflare was still serving the previous Worker version, which has the secret (DEC-0092). The test was the only cloud secret-deletion check that did not wait. CF-AC-002 already waits.
+
+Change (test-only):
+- New helper `expectSecretMissing(c)` in `core/support/secrets.ts`. It first waits, using `waitFor` with `timeoutMs: CLOUD_WAITS.secretRolloutMs` and `intervalMs: 2_000`, until `GET /api/ref/secret` passes `c.expectError(…, catalogueStatus("SEC.MISSING"), "SEC.MISSING")`. Only that status with that code ends the wait. A stale 200, another code, SEC.MISSING with another status, or a body without a code all keep it waiting. If the bound passes, the test fails, and the timeout message carries the last HTTP check failure. After the wait, the earlier assertions run unchanged on fresh requests to both paths: status and code, `errorResponseViolations`, a UUID request ID, and two distinct IDs.
+- `further-stage.test.ts`: the SEC-AC-001 / HTTP-AC-002 `it` calls the helper after `deleteSecret`. It gets its own `10 * 60_000` timeout (Review R1). Without that, the integration default of 60 s would stop the test before the 60 s wait could report.
+- `CLOUD_WAITS.secretRolloutMs = 60_000` (DEC-0092; twice the route toggle's bound, the value CF-AC-002 uses inline). This follows Review R2. CF-AC-002 and SEC-AC-003 keep their inline bounds, which have the same value. Moving them to the constant is a later cleanup, not part of this fix.
+
+Not changed:
+- SEC-AC-005's test. Its "next request" wording waits on an owner decision (see that test's own root-cause record).
+- `deleteSecret`'s catch-all (root cause, fix item 2, optional). It still hides an authorization failure, but the wait now catches that case anyway: the stage never answers SEC.MISSING, and the test fails at the bound.
+- R3 (two consecutive SEC.MISSING answers). This is not adopted. Revisit it only if a flake shows up.
+
+Red-green (local fakes, no cloud call): `tests/compliance/criteria/core/support/secrets.unit.test.ts`. The fake stage keeps answering 200 with the old hash for the first 2 requests after the delete, then answers SEC.MISSING.
+- With the helper as the old single read, the test failed with pass 2's exact error: `GET /api/ref/secret → status 200, code none … (expected status 500 with code SEC.MISSING)`. 7 of 10 tests were red.
+- With the wait, all of them pass.
+- Further cases prove the wait accepts only SEC.MISSING, and that a stage which never reaches it fails at 60 s. Two more cases show the assertions after the wait still fail on an empty request ID and on a repeated one.
+
+These tests show the wait, not Cloudflare's rollout delay. The delay is documented by the trace and by DEC-0092.
+
+Still to verify live: the pass-2 re-run (`--only SEC-AC-001,HTTP-AC-002`) passes on the further stage.
+
+Evidence: `ai/implementation/root-causes/2026-10-24-pass2-SEC-AC-001-HTTP-AC-002-delete-read-too-early.md` (diagnosis and Review R1–R3).
+Item: fix-sec001.

@@ -1,0 +1,86 @@
+{
+  "runId": "e22y1n7jn93xoz4",
+  "commit": "6417611f8a0b1552975330ef24080ad990cc7ffa",
+  "target": "cloudflare",
+  "command": "npm run compliance -- --target cloudflare --base-url https://no-run-stage.invalid --milestone --only E2E-012",
+  "startedAt": "2026-10-24T04:54:30.380Z",
+  "finishedAt": "2026-10-24T04:59:17.960Z",
+  "exitStatus": 0,
+  "results": [
+    {
+      "id": "AUTH-AC-005",
+      "status": "not-run",
+      "detail": "Google login mocked for this phase"
+    },
+    {
+      "id": "COMPL-AC-008",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-007",
+      "status": "not-run",
+      "detail": "Google login mocked for this phase"
+    },
+    {
+      "id": "E2E-008",
+      "status": "not-run",
+      "detail": "Google login mocked for this phase"
+    },
+    {
+      "id": "E2E-010",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-012",
+      "status": "passed"
+    },
+    {
+      "id": "E2E-015",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "GOOGLE-AC-005",
+      "status": "not-run",
+      "detail": "Google login mocked for this phase"
+    },
+    {
+      "id": "PROV-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "PROV-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "PROV-AC-006",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SKILL-AC-006",
+      "status": "not-run",
+      "detail": "Google login mocked for this phase"
+    }
+  ],
+  "versions": {
+    "node": "v22.22.0",
+    "@lago-morph/prototype-framework": "0.1.0",
+    "vitest": "5.0.5",
+    "@playwright/test": "1.64.1",
+    "wrangler": "4.149.0",
+    "typescript": "6.0.3",
+    "drizzle-orm": "0.45.4",
+    "drizzle-kit": "0.31.11",
+    "hono": "4.13.13",
+    "zod": "4.6.7",
+    "@electric-sql/pglite": "0.5.8",
+    "esbuild": "0.28.2",
+    "sst": "4.17.2"
+  },
+  "leftovers": []
+}

@@ -1,0 +1,19 @@
+Updating (test-s6jca41ew34ahz3):
+
+@ updating.....
+ +  pulumi:pulumi:Stack demo-test-s6jca41ew34ahz3 creating (0s) 
+@ updating....
+ +  sst:cloudflare:Bucket Files creating (0s) 
+ +  cloudflare:index:R2Bucket FilesBucket creating (0s) 
+@ updating....
+ +  cloudflare:index:R2Bucket FilesBucket created (0.80s) 
+ +  sst:sst:LinkRef FilesLinkRef creating (0s) 
+ +  pulumi:pulumi:Stack demo-test-s6jca41ew34ahz3 created (2s) 
+Outputs:
+    _protect: false
+
+Resources:
+    + 4 created
+
+Duration: 4s
+

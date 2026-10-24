@@ -3,9 +3,9 @@
  *
  * Every Cloudflare operation of the target goes through one `CloudflareApi` function, so unit
  * tests stub it and no other module handles a credential. The real one sends the token from
- * `CLOUDFLARE_API_TOKEN` as a bearer token, as wrangler and SST do: on an owner machine that is
- * the real token; in the sandbox it is a non-secret placeholder that the proxy replaces
- * (DEC-0083). Node's `fetch` uses `HTTPS_PROXY` only when the process runs with
+ * `CLOUDFLARE_API_TOKEN` as a bearer token, as wrangler and SST do. It is the real token on an
+ * owner machine and in the sandbox alike: the sandbox proxy no longer injects or replaces it
+ * (DEC-0420, superseding the placeholder of DEC-0083). Node's `fetch` uses `HTTPS_PROXY` only when the process runs with
  * `NODE_USE_ENV_PROXY=1` (DEC-0085), which the CLI process must have (D-05). Messages never
  * contain the token or a request body.
  */

@@ -1,0 +1,49 @@
+time=2026-10-24T06:07:03.752Z level=INFO msg="checking for pulumi" path=/root/.config/sst/bin/pulumi
+time=2026-10-24T06:07:03.891Z level=INFO msg="checking for bun" path=/root/.config/sst/bin/bun
+time=2026-10-24T06:07:03.893Z level=INFO msg="initializing project" version=4.17.2
+time=2026-10-24T06:07:03.893Z level=INFO msg="esbuild building" out=/home/user/cloud-app/.claude/worktrees/agent-a4665bc84e87d6f2c/apps/demo/.framework/provision/cloudflare/.sst/platform/sst.config.1792822023893.mjs
+time=2026-10-24T06:07:03.896Z level=INFO msg="esbuild built" outfile=/home/user/cloud-app/.claude/worktrees/agent-a4665bc84e87d6f2c/apps/demo/.framework/provision/cloudflare/.sst/platform/sst.config.1792822023893.mjs
+time=2026-10-24T06:07:03.897Z level=INFO msg="evaluating config"
+time=2026-10-24T06:07:03.953Z level=INFO msg="config evaluated"
+time=2026-10-24T06:07:03.954Z level=INFO msg="checking platform"
+time=2026-10-24T06:07:03.954Z level=INFO msg="checking provider" name=cloudflare version=6.15.0 compare=6.15.0
+time=2026-10-24T06:07:03.954Z level=INFO msg="loading home"
+time=2026-10-24T06:07:03.954Z level=INFO msg="cloudflare account selected" account=<ACCOUNT>
+time=2026-10-24T06:07:04.597Z level=INFO msg="found existing bucket" bucket=sst-state
+time=2026-10-24T06:07:04.597Z level=INFO msg="loaded config" app=demo stage=test-s6jca41ew34ahz3
+time=2026-10-24T06:07:04.597Z level=INFO msg="initializing ui" isTTY=false
+time=2026-10-24T06:07:04.597Z level=INFO msg="server port assigned" port=13557
+time=2026-10-24T06:07:04.597Z level=INFO msg="running stack command" service=project.run cmd=remove
+time=2026-10-24T06:07:04.598Z level=INFO msg="INFO locking app=demo stage=test-s6jca41ew34ahz3"
+time=2026-10-24T06:07:04.598Z level=INFO msg="INFO getting data key=lock app=demo stage=test-s6jca41ew34ahz3"
+time=2026-10-24T06:07:04.598Z level=INFO msg=starting service=server
+time=2026-10-24T06:07:04.598Z level=INFO msg=server service=server addr=0.0.0.0:13557
+time=2026-10-24T06:07:04.598Z level=INFO msg="server ready to accept connections" service=server
+time=2026-10-24T06:07:06.371Z level=INFO msg="INFO putting update app=demo stage=test-s6jca41ew34ahz3"
+time=2026-10-24T06:07:07.430Z level=INFO msg="INFO getting passphrase app=demo stage=test-s6jca41ew34ahz3"
+time=2026-10-24T06:07:07.800Z level=INFO msg="INFO pulling state app=demo stage=test-s6jca41ew34ahz3 out=/home/user/cloud-app/.claude/worktrees/agent-a4665bc84e87d6f2c/apps/demo/.framework/provision/cloudflare/.sst/pulumi/fe5e937ae66a433fbdc740dc/.pulumi/stacks/demo/test-s6jca41ew34ahz3.json"
+time=2026-10-24T06:07:08.848Z level=INFO msg="got previous deployment" service=project.run updateID=fe5e937ae66a433fbdc740dc
+time=2026-10-24T06:07:08.848Z level=INFO msg="esbuild building" out=/home/user/cloud-app/.claude/worktrees/agent-a4665bc84e87d6f2c/apps/demo/.framework/provision/cloudflare/.sst/platform/sst.config.1792822027799.mjs
+time=2026-10-24T06:07:08.927Z level=INFO msg="esbuild built" outfile=/home/user/cloud-app/.claude/worktrees/agent-a4665bc84e87d6f2c/apps/demo/.framework/provision/cloudflare/.sst/platform/sst.config.1792822027799.mjs
+time=2026-10-24T06:07:08.937Z level=INFO msg="built sst.config.ts" service=project.run updateID=fe5e937ae66a433fbdc740dc to=/home/user/cloud-app/.claude/worktrees/agent-a4665bc84e87d6f2c/apps/demo/.framework/provision/cloudflare/.sst/platform/sst.config.1792822027799.mjs
+time=2026-10-24T06:07:08.941Z level=INFO msg="tracked files" service=project.run updateID=fe5e937ae66a433fbdc740dc
+time=2026-10-24T06:07:08.941Z level=INFO msg="INFO getting data key=secret app=demo stage=_fallback"
+time=2026-10-24T06:07:08.942Z level=INFO msg="INFO getting data key=secret app=demo stage=test-s6jca41ew34ahz3"
+time=2026-10-24T06:07:10.045Z level=INFO msg="starting pulumi" service=project.run updateID=fe5e937ae66a433fbdc740dc args="[/root/.config/sst/bin/pulumi destroy --yes -f --stack organization/demo/test-s6jca41ew34ahz3 --non-interactive --event-log /home/user/cloud-app/.claude/worktrees/agent-a4665bc84e87d6f2c/apps/demo/.framework/provision/cloudflare/.sst/pulumi/fe5e937ae66a433fbdc740dc/eventlog.json]"
+time=2026-10-24T06:07:11.553Z level=INFO msg="INFO pushing partial state updateID=fe5e937ae66a433fbdc740dc"
+time=2026-10-24T06:07:12.580Z level=INFO msg="pulumi exited" service=project.run updateID=fe5e937ae66a433fbdc740dc err=<nil>
+time=2026-10-24T06:07:12.581Z level=INFO msg="eof and exited" service=project.run updateID=fe5e937ae66a433fbdc740dc eofs=0
+time=2026-10-24T06:07:12.581Z level=INFO msg="eof and exited" service=project.run updateID=fe5e937ae66a433fbdc740dc eofs=1
+time=2026-10-24T06:07:12.581Z level=INFO msg="breaking out of tail loop" service=project.run updateID=fe5e937ae66a433fbdc740dc
+time=2026-10-24T06:07:12.581Z level=INFO msg="parsing state" service=project.run updateID=fe5e937ae66a433fbdc740dc
+time=2026-10-24T06:07:12.581Z level=INFO msg="generating types" root=/home/user/cloud-app/.claude/worktrees/agent-a4665bc84e87d6f2c/apps/demo/.framework/provision/cloudflare
+time=2026-10-24T06:07:12.581Z level=INFO msg="canceling partial" service=project.run updateID=fe5e937ae66a433fbdc740dc
+time=2026-10-24T06:07:12.582Z level=INFO msg="waiting for partial to exit" service=project.run updateID=fe5e937ae66a433fbdc740dc
+time=2026-10-24T06:07:13.041Z level=INFO msg="INFO pushing eventlog updateID=fe5e937ae66a433fbdc740dc"
+time=2026-10-24T06:07:13.041Z level=INFO msg="INFO pushing partial state updateID=fe5e937ae66a433fbdc740dc"
+time=2026-10-24T06:07:13.041Z level=INFO msg="INFO pushing snapshot updateID=fe5e937ae66a433fbdc740dc"
+time=2026-10-24T06:07:16.981Z level=INFO msg="INFO putting update app=demo stage=test-s6jca41ew34ahz3"
+time=2026-10-24T06:07:18.210Z level=INFO msg="done running stack command" service=project.run updateID=fe5e937ae66a433fbdc740dc resources=0
+time=2026-10-24T06:07:18.214Z level=INFO msg="INFO unlocking app=demo stage=test-s6jca41ew34ahz3"
+time=2026-10-24T06:07:19.107Z level=INFO msg="shutting down server" service=server
+time=2026-10-24T06:07:19.107Z level=INFO msg="server done" service=server
