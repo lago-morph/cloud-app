@@ -19,7 +19,7 @@ import { LOCAL_COOKIES } from "../../auth/local-cookies.js";
 import { createLocalTicketIssuer } from "../../files/local/tickets.js";
 import { registerLocalTransferRoute } from "../../files/local/route.js";
 import { workerPublicOrigin, workerSecretValues, workerSql, workerStore, type WorkerHandler } from "../cloudflare/bindings.js";
-import { assembleStage } from "../cloudflare/stage.js";
+import { assembleStage } from "../stage.js";
 
 export type { WorkerHandler } from "../cloudflare/bindings.js";
 

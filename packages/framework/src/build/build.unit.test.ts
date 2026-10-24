@@ -151,21 +151,19 @@ describe("buildApp --target cloudflare", () => {
   });
 });
 
-describe("buildApp --target aws (AWS phase G)", () => {
-  it("resolves the stage's config/aws/test.json, then stops: the AWS bundle is not implemented yet", async () => {
-    const dir = fixture({ "config/aws/test.json": JSON.stringify({ values: { greeting: "marker-aws-test-json" }, framework: {} }) });
-    await expect(buildApp({ appDir: dir, target: "aws", stage: "test-ab1", runtimeImport: runtimeImport("aws") })).rejects.toThrow(/AWS target not yet implemented \(phase G\)/);
+describe("buildApp --target aws (the Lambda bundle itself: aws.unit.test.ts)", () => {
+  it("a missing config/aws/test.json is reported first, naming the file, and nothing is written (CFG-REQ-002)", async () => {
+    const dir = fixture({});
+    await expect(buildApp({ appDir: dir, target: "aws", stage: "test-ab1" })).rejects.toThrow(/config\/aws\/test\.json is missing/);
     expect(existsSync(join(dir, ".framework", "aws"))).toBe(false);
   });
 
-  it("a missing config/aws/test.json is still reported first, naming the file (CFG-REQ-002)", async () => {
-    const dir = fixture({});
-    await expect(buildApp({ appDir: dir, target: "aws", stage: "test-ab1" })).rejects.toThrow(/config\/aws\/test\.json is missing/);
-  });
-
-  it("the generated entry for aws is not implemented yet, and never falls back to the Cloudflare Worker", () => {
+  it("the generated entry for aws never falls back to the Cloudflare Worker", () => {
     const deployment = createDeployment({ app: "notes", stage: "test-ab1", target: "aws" });
-    expect(() => entrySource({ deployment, appImport: "./app.js", exportName: "app", configImport: "./config.mjs", runtimeImport: "x/targets/aws" })).toThrow(/AWS target not yet implemented \(phase G\)/);
+    const source = entrySource({ deployment, appImport: "./app.js", exportName: "app", configImport: "./config.mjs", runtimeImport: "x/targets/aws" });
+    expect(source).toContain("import { app } from");
+    expect(source).toContain("createAwsLambdaHandler(app, config");
+    expect(source).not.toMatch(/createCloudflareWorker|createLocalWorker/);
   });
 });
 

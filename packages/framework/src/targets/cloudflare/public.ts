@@ -23,7 +23,7 @@ import { envSecretReader } from "../../secrets/service.js";
 import { FRAMEWORK_SECRETS, type FrameworkSecretName } from "../../secrets/names.js";
 import { workerLogBucket, workerPublicOrigin, workerSecretValues, workerSql, workerStore, type WorkerHandler } from "./bindings.js";
 import { cloudflareFilesStore } from "../../files/cloudflare/keys.js";
-import { assembleStage } from "./stage.js";
+import { assembleStage } from "../stage.js";
 import { workerTicketIssuer } from "./tickets.js";
 
 export { createAuthMock } from "../../auth/mock.js";

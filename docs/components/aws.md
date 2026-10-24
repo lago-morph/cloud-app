@@ -45,7 +45,7 @@ The router is created first; the Function's route is attached to it, and `router
 
 The region is the account setting recorded by `setup-account` (default PAR-060); every stage in the account uses it (DEC-0075). Aurora clusters use one VPC per account and region, created by `setup-account` with no NAT gateway and no bastion host, so the number of stages is not limited by the VPC quota (DEC-0074).
 
-The stage's public origin is its CloudFront URL; custom domains are not supported (DEC-0073). The HTTP entry uses Hono's AWS Lambda adapter. SDK clients are created once per cold start. Runtime S3 calls (log writes, file operations) send `x-amz-expected-bucket-owner` with the account ID.
+The stage's public origin is its CloudFront URL; custom domains are not supported (DEC-0073). The HTTP entry uses Hono's AWS Lambda adapter. `build --target aws` bundles it for Node 22 as one ESM file, `.framework/aws/bundle/index.mjs` (handler `index.handler`), with the AWS SDK clients it uses bundled at the framework's pinned version rather than taken from the managed runtime; the build inspects that bundle and fails on a Cloudflare-only, provisioning or CLI-only module, a secret value or a bundle above the size bound (CORE-REQ-006). SDK clients are created once per cold start. Runtime S3 calls (log writes, file operations) send `x-amz-expected-bucket-owner` with the account ID.
 
 ### Deploy mechanics
 

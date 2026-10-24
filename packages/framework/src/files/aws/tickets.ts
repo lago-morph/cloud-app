@@ -17,7 +17,7 @@
  * Workers-compatible (Web Crypto).
  */
 import type { TicketIssuer } from "../service.js";
-import { downloadDisposition } from "../cloudflare/disposition.js";
+import { downloadDisposition } from "../disposition.js";
 import { objectPath } from "../s3/path.js";
 import { presignUrl, type S3Credentials } from "../s3/sign.js";
 import { TICKET_LIFETIME_MS, type DownloadTicketData, type UploadTicketData } from "../tickets.js";

@@ -38,7 +38,7 @@ import { generateAppMigrations } from "../mig/generate.js";
 import type { FilesStore } from "../files/service.js";
 import { createLocalTicketIssuer } from "../files/local/tickets.js";
 import { registerLocalTransferRoute } from "../files/local/route.js";
-import { assembleStage } from "../targets/cloudflare/stage.js";
+import { assembleStage } from "../targets/stage.js";
 import { startPlatformProxy } from "../targets/local/platform-proxy.js";
 
 /** Options for `createTestApp` (testing.d.ts). */
