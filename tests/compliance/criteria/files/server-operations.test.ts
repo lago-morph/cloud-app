@@ -131,14 +131,14 @@ describe("FILES-AC-002 names", () => {
     expect(await listAll(u, p)).toStrictEqual([]);
   });
 
-  it(tag("FILES-AC-002", "empty and oversized names, and names containing CR, LF or NUL, are rejected with FILES.INVALID_NAME"), async () => {
+  it(tag("FILES-AC-002", "empty and oversized names, the names . and .., and names containing CR, LF or NUL, are rejected with FILES.INVALID_NAME"), async () => {
     const u = await user();
     const p = prefix("ac002-invalid");
     // PAR-230: at most 1,024 UTF-8 bytes. One name one byte over (multi-byte characters, so a
     // character count would not catch it).
     const oversized = `${p}${"é".repeat(Math.ceil((1025 - Buffer.byteLength(p)) / 2))}`;
     expect(Buffer.byteLength(oversized)).toBeGreaterThan(1024);
-    const invalid = ["", oversized, `${p}cr\rx`, `${p}lf\nx`, `${p}nul\u0000x`];
+    const invalid = ["", ".", "..", oversized, `${p}cr\rx`, `${p}lf\nx`, `${p}nul\u0000x`];
     for (const name of invalid) {
       const q = encodeURIComponent(name);
       u.expectError(await u.request("PUT", "/api/files/content", { json: { name, base64: "AQ==" } }), 400, "FILES.INVALID_NAME");
