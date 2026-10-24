@@ -1,0 +1,24 @@
+/// <reference path="./.sst/platform/config.d.ts" />
+// Negative control for the type-check (copied to out/negative.sst.config.ts by typecheck.sh):
+// each line marked ERR must fail, proving the platform types are really applied.
+export default $config({
+  app() {
+    return { name: "neg", removal: "remove", home: "aws", providers: { aws: { version: "7.20.0", region: "us-east-1" } } };
+  },
+  async run() {
+    const router = new sst.aws.Router("Router");
+    new sst.aws.Function("Http", {
+      handler: "index.handler",
+      timeout: "55 secs", // ERR: not a Duration ("16 minutes" would pass: the 15-minute cap is runtime-only)
+      link: 3, // ERR: not an array
+      url: { router: { instance: router, path: "/api", readTimeout: "60 minutes" } }, // ERR: DurationSeconds
+    });
+    new sst.aws.Aurora("Database", {
+      engine: "postgresql", // ERR: "postgres" | "mysql"
+      dataApi: true,
+      scaling: { min: "0 ACU", max: "4 ACU", pauseAfter: "5 minutes" },
+      vpc: { subnets: ["s"], securityGroups: ["g"] },
+    });
+    return {};
+  },
+});

@@ -1,0 +1,8 @@
+platform view at /home/user/cloud-app/.claude/worktrees/agent-a641b5346ed069304/ai/implementation/spikes/g-s2/out/.sst/platform (SST 4.17.2, @pulumi/aws 7.20.0)
+wrote out/sst.config.ts (full program) and out/step3/sst.config.ts (first-deploy step 3)
+positive: out/sst.config.ts and out/step3/sst.config.ts type-check
+negative control fails as expected:
+out/negative.sst.config.ts(12,7): error TS2322: Type '"55 secs"' is not assignable to type 'Input<`${number} second` | `${number} seconds` | `${number} minute` | `${number} minutes`> | undefined'.
+out/negative.sst.config.ts(13,7): error TS2322: Type 'number' is not assignable to type 'Input<any[]> | undefined'.
+out/negative.sst.config.ts(14,56): error TS2322: Type '"60 minutes"' is not assignable to type 'Input<`${number} second` | `${number} seconds`> | undefined'.
+out/negative.sst.config.ts(17,7): error TS2820: Type '"postgresql"' is not assignable to type 'Input<"postgres" | "mysql">'. Did you mean '"postgres"'?
