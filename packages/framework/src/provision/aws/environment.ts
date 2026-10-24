@@ -16,14 +16,17 @@
  * SDK turns into `NodeHttpHandler.create(options)` itself; this needs no direct dependency on
  * `@smithy/node-http-handler`.
  */
-import https from "node:https";
+import type https from "node:https";
 import { EC2Client } from "@aws-sdk/client-ec2";
 import { RDSClient } from "@aws-sdk/client-rds";
 import { S3Client } from "@aws-sdk/client-s3";
 import { SSMClient } from "@aws-sdk/client-ssm";
 import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
+import { proxyAwareHandler, type Environment } from "../../targets/aws/sdk.js";
 
-export type Environment = Readonly<Record<string, string | undefined>>;
+export type { Environment };
+/** The proxy-aware request handler options every CLI-side SDK client gets (shared with the Lambda runtime). */
+export { proxyAwareHandler };
 
 /** The default AWS region `setup-account` uses when none is chosen and none is recorded (PAR-060). */
 export const DEFAULT_REGION = "us-east-1";
@@ -40,15 +43,6 @@ const set = (env: Environment, name: string): boolean => (env[name] ?? "") !== "
 export function missingCredentials(env: Environment): string[] {
   if (OTHER_SOURCES.some((name) => set(env, name))) return [];
   return CREDENTIAL_NAMES.filter((name) => !set(env, name));
-}
-
-/** `https.Agent` options of Node 22.22 that @types/node 22.20.5 does not declare yet (G-S1 §5). */
-type ProxyAgentOptions = https.AgentOptions & { readonly proxyEnv?: Environment };
-
-/** The proxy-aware request handler options every CLI-side SDK client gets. */
-export function proxyAwareHandler(env: Environment): { readonly httpsAgent: https.Agent } {
-  const options: ProxyAgentOptions = { keepAlive: true, proxyEnv: env };
-  return { httpsAgent: new https.Agent(options) };
 }
 
 /** Client configuration for one region: the region and the proxy-aware handler. */
