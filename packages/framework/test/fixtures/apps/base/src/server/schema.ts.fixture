@@ -1,0 +1,7 @@
+import { defineTable, id, text, timestamp } from "@lago-morph/prototype-framework";
+
+export const items = defineTable("items", {
+  id: id(),
+  title: text(),
+  createdAt: timestamp(),
+});

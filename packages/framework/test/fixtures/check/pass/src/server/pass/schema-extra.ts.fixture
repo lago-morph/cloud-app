@@ -1,0 +1,23 @@
+import { boolean, defineTable, id, integer, number, ref, text, timestamp } from "@lago-morph/prototype-framework";
+import { notes } from "./sql-example";
+
+/** Rows keyed by a user-supplied value: `id()` plus a unique text column (sql.md "Common needs"). */
+export const tags = defineTable("tags", { id: id(), name: text().unique() });
+
+/** Join table: `id()` plus a `uniques` entry over its two reference columns. */
+export const noteTags = defineTable(
+  "note_tags",
+  { id: id(), noteId: ref(() => notes.id), tagId: ref(() => tags.id) },
+  { uniques: [["noteId", "tagId"]] },
+);
+
+/** One column of every portable type, for aggregates and comparisons. */
+export const metrics = defineTable("metrics", {
+  id: id(),
+  label: text(),
+  hits: integer().default(0),
+  ratio: number().default(0),
+  seenAt: timestamp(),
+  active: boolean().default(true),
+  comment: text().nullable(),
+});

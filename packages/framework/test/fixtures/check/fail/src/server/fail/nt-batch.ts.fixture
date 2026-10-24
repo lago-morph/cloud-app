@@ -1,0 +1,5 @@
+import { newId, type PortableDb } from "@lago-morph/prototype-framework";
+import { authors } from "./tables";
+
+export const twoAuthors = (db: PortableDb) =>
+  db.batch([db.insert(authors).values({ id: newId(), name: "a" }), db.insert(authors).values({ id: newId(), name: "b" })]);

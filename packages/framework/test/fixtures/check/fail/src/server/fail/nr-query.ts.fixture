@@ -1,0 +1,3 @@
+import type { PortableDb } from "@lago-morph/prototype-framework";
+
+export const allPosts = (db: PortableDb) => db.query.posts.findMany();

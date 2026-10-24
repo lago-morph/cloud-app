@@ -1,0 +1,13 @@
+import { boolean, defineTable, id, integer, number, ref, text, timestamp } from "@lago-morph/prototype-framework";
+
+export const authors = defineTable("authors", { id: id(), name: text().unique() });
+export const posts = defineTable("posts", {
+  id: id(),
+  authorId: ref(() => authors.id),
+  title: text(),
+  body: text().nullable(),
+  votes: integer().default(0),
+  score: number().default(0),
+  done: boolean().default(false),
+  createdAt: timestamp(),
+});

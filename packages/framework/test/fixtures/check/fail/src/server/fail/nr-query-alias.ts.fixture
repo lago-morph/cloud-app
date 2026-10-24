@@ -1,0 +1,6 @@
+import type { PortableDb } from "@lago-morph/prototype-framework";
+
+export const firstPost = (db: PortableDb) => {
+  const relational = db.query;
+  return relational.posts.findFirst();
+};

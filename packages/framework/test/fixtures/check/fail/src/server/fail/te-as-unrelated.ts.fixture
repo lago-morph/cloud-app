@@ -1,0 +1,5 @@
+interface Point {
+  readonly x: number;
+}
+
+export const point = { label: "a" } as Point;

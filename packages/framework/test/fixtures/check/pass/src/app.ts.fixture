@@ -1,0 +1,66 @@
+import {
+  FrameworkError,
+  configString,
+  defineApp,
+  jsonBody,
+  newId,
+  now,
+  queryParams,
+  requireAdmin,
+  requireCurrentUser,
+  requireUser,
+  z,
+} from "@lago-morph/prototype-framework";
+import { noteInput } from "./shared/schemas";
+import { items } from "./server/schema";
+import { metrics, noteTags, tags } from "./server/pass/schema-extra";
+import { example, notebooks, notes } from "./server/pass/sql-example";
+import { report, seed, upsertTag } from "./server/pass/queries";
+import { missing } from "./server/pass/errors";
+
+const newItem = z.object({ title: z.string().min(1) });
+
+export const app = defineApp({
+  name: "fixtureapp",
+  config: { greeting: configString({ default: "hello" }) },
+  secrets: [],
+  tables: { items, notebooks, notes, tags, noteTags, metrics },
+  routes: (api) => {
+    api.get("/hello", (c) => c.json({ greeting: c.var.config.get("greeting") }));
+    api.post("/items", jsonBody(newItem), async (c) => {
+      const { title } = c.req.valid("json");
+      const itemId = newId();
+      await c.var.sql.insert(items).values({ id: itemId, title, createdAt: now() });
+      return c.json({ id: itemId }, 201);
+    });
+    api.post("/notebooks", jsonBody(z.object({ name: z.string().min(1) })), async (c) => {
+      const notebookId = newId();
+      await c.var.sql.insert(notebooks).values({ id: notebookId, name: c.req.valid("json").name });
+      return c.json({ id: notebookId }, 201);
+    });
+    api.post("/notebooks/:id/example", async (c) => c.json(await example(c.var.sql, c.req.param("id"), 0)));
+    api.post("/report", async (c) => {
+      const { notebookId, noteIds } = await seed(c.var.sql);
+      const result = await report(c.var.sql, notebookId, noteIds);
+      const upserted = await upsertTag(c.var.sql, `tag-${notebookId}`);
+      return c.json({ ...result, upserted });
+    });
+    api.post("/notes", jsonBody(noteInput), (c) => {
+      if (c.req.valid("json").title === "missing") missing();
+      throw new FrameworkError("HTTP.CONFLICT", "notes are read-only in this fixture");
+    });
+    api.get("/kv", queryParams(z.object({ key: z.string().min(1) })), async (c) => {
+      const { key } = c.req.valid("query");
+      c.var.log.write("fixture", "info", "kv read");
+      return c.json({ value: await c.var.kv.get(key) });
+    });
+    api.get("/me", requireUser(), (c) => c.json({ id: c.var.user.id }));
+    api.get("/admin", requireAdmin(), (c) => c.json({ admin: c.var.user.id }));
+    api.get("/whoami", (c) => {
+      const user = requireCurrentUser(c);
+      return c.json({ level: user.level });
+    });
+  },
+});
+
+export default app;

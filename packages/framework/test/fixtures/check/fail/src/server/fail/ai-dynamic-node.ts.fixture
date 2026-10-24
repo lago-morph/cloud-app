@@ -1,0 +1,4 @@
+export async function hostName(): Promise<string> {
+  const os = await import("node:os");
+  return os.hostname();
+}

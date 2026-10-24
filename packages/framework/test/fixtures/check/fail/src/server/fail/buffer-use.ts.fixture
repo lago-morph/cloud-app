@@ -1,0 +1,1 @@
+export const encoded = Buffer.from("hello").toString("base64");
