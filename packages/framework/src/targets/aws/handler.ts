@@ -46,7 +46,7 @@ import { ssmSecretReader } from "../../secrets/aws.js";
 import type { SecretReader } from "../../secrets/service.js";
 import { FRAMEWORK_SECRETS, type FrameworkSecretName } from "../../secrets/names.js";
 import { dataApiDb, type DataApiClock, type DataApiTarget } from "../../sql/data-api.js";
-import { assembleStage } from "../cloudflare/stage.js";
+import { assembleStage } from "../stage.js";
 import type { Environment } from "./sdk.js";
 import { awsLambdaSettings } from "./settings.js";
 

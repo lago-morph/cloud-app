@@ -9,7 +9,7 @@
  */
 import type { Context, Hono } from "hono";
 import type { RuntimeEnv } from "../../core/assemble.js";
-import { downloadDisposition } from "../cloudflare/disposition.js";
+import { downloadDisposition } from "../disposition.js";
 import { LOCAL_TRANSFER_PATH, verifyLocalTicket } from "./tickets.js";
 
 const SAFE_HEADERS = { "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "sandbox" } as const;

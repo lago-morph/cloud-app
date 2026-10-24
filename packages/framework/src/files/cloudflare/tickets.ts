@@ -9,7 +9,7 @@
 import { FRAMEWORK_SECRETS, type FrameworkSecretName } from "../../secrets/names.js";
 import type { TicketIssuer } from "../service.js";
 import { TICKET_LIFETIME_MS, type DownloadTicketData, type UploadTicketData } from "../tickets.js";
-import { downloadDisposition } from "./disposition.js";
+import { downloadDisposition } from "../disposition.js";
 import { storedKey } from "./keys.js";
 import { objectPath } from "../s3/path.js";
 import { presignUrl, type S3Credentials } from "../s3/sign.js";
