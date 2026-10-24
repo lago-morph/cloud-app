@@ -1,0 +1,47 @@
+{
+  "tests": [
+    {
+      "file": "tests/smoke/smoke.test.ts",
+      "name": "the app is healthy and serves its configuration (DEMO-REQ-006)",
+      "state": "passed",
+      "errors": []
+    },
+    {
+      "file": "tests/smoke/smoke.test.ts",
+      "name": "the account's ID is the one /api/auth/me reports (DEMO-REQ-009)",
+      "state": "passed",
+      "errors": []
+    },
+    {
+      "file": "tests/smoke/smoke.test.ts",
+      "name": "posts: drafts are private, only admins publish, anyone reads published posts newest first (DEMO-REQ-001, -002, -008)",
+      "state": "passed",
+      "errors": []
+    },
+    {
+      "file": "tests/smoke/smoke.test.ts",
+      "name": "photos: a 20 MB JPEG round-trips, the maximum holds, deleting removes rows and files (DEMO-REQ-003)",
+      "state": "passed",
+      "errors": []
+    },
+    {
+      "file": "tests/smoke/smoke.test.ts",
+      "name": "the banner set by an admin reaches anonymous visitors; users cannot set it (DEMO-REQ-004)",
+      "state": "passed",
+      "errors": []
+    },
+    {
+      "file": "tests/smoke/smoke.test.ts",
+      "name": "the posts-per-page choice survives a new login (DEMO-REQ-005)",
+      "state": "passed",
+      "errors": []
+    },
+    {
+      "file": "tests/smoke/smoke.test.ts",
+      "name": "a share link shows a draft to an anonymous visitor; an altered link is refused (DEMO-REQ-007)",
+      "state": "passed",
+      "errors": []
+    }
+  ],
+  "fileErrors": []
+}

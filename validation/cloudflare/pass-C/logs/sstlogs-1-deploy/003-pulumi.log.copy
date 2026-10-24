@@ -1,0 +1,19 @@
+Updating (test-byxa6sar2ps05po):
+
+@ updating.....
+ +  pulumi:pulumi:Stack reference-test-byxa6sar2ps05po creating (0s) 
+@ updating....
+ +  sst:cloudflare:Bucket Files creating (0s) 
+ +  cloudflare:index:R2Bucket FilesBucket creating (0s) 
+@ updating....
+ +  cloudflare:index:R2Bucket FilesBucket created (0.78s) 
+ +  sst:sst:LinkRef FilesLinkRef creating (0s) 
+ +  pulumi:pulumi:Stack reference-test-byxa6sar2ps05po created (2s) 
+Outputs:
+    _protect: false
+
+Resources:
+    + 4 created
+
+Duration: 4s
+

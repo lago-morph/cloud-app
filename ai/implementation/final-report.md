@@ -1,12 +1,12 @@
 # Final report: local and Cloudflare phase (interim)
 
-Date: 2026-10-21 (first written 2026-10-20 at `faced8b`). Base: `origin/claude/implement-local-cloudflare` at `c016e7e`. Pull request: https://github.com/lago-morph/cloud-app/pull/5.
+Date: 2026-10-24 (first written 2026-10-20 at `faced8b`; updates 2026-10-21 at `c016e7e` and 2026-10-24 at `1b474c1`). Base: `origin/claude/implement-local-cloudflare` at `ce53772`. Pull request: https://github.com/lago-morph/cloud-app/pull/5.
 
-**Status: interim.** Local work is complete. Cloudflare testing is stopped, and the Cloudflare checks have not run. This report is written from committed files only. No test suite was run and no Cloudflare call was made for it.
+**Status: interim.** Local work is complete, and the Cloudflare runs (D-RUN, D-RUN-M, F-03, C-1) are done. Five Cloudflare criteria wait on owner decisions or owner-supplied credentials. The local evidence is current at `1b474c1` (L1 closed). This report is written from committed files only. No test suite was run and no Cloudflare call was made for it.
 
-**Overall verdict: "not working"** (COMPL-REQ-006, prompt §11). Release report: `validation/release/2026-10-21-c016e7e.md`.
-- **Local:** 110 of 110 IDs passed (full run `pzeugkxrk1xcu2w` at `a5b2164`). MIG-AC-002 failed once in the run before it; the cause is unproven (§6.5, U1).
-- **Cloudflare:** no criterion has passed. 73 are `blocked` and 8 are `not-run` (Google).
+**Overall verdict: "not working"** (COMPL-REQ-006, prompt §11). Release report: `validation/release/2026-10-24-33b3df7.md`.
+- **Local:** 110 of 110 IDs passed (full run `kex4v2xk3522i52` at `1b474c1`, after every phase-D fix, with `verify` passing online and offline at the same commit).
+- **Cloudflare:** 67 of 81 IDs passed. 2 failed (FILES-AC-003, SEC-AC-005) and 3 are blocked (PROV-AC-002, PROV-AC-004, LOG-AC-004); all five need the owner (§6.1, §6.2). 9 are `not-run` (Google).
 - **AWS:** not started.
 - **Google:** the real Google login is not certified.
 
@@ -22,27 +22,39 @@ Date: 2026-10-21 (first written 2026-10-20 at `faced8b`). Base: `origin/claude/i
 | `tests/skill` | The skill tests: size budgets, links, structure, hard rules, examples, and the check that no example comes from the demo. |
 | `skill/` | `SKILL.md`, 13 references, examples, templates, and the scaffolder (`scripts/scaffold.mjs`). |
 
-**Cloudflare adapter:** implemented (D-01…D-05) and unit-tested against stubbed Cloudflare APIs. It has **not** been tested in the cloud. AWS code was not built, because it is out of scope. Google login is mocked.
+**Cloudflare adapter:** implemented (D-01…D-05), unit-tested against stubbed Cloudflare APIs, and now **tested on Cloudflare** in passes 0 to C and F-03 (2026-10-23/24). The live runs led to eight root-cause records. Their fixes (DEC-0421…DEC-0431) landed and were re-checked on Cloudflare, except SEC-AC-005 (owner decision) and the `..` key DELETE (unverified outside the sandbox) (§4). AWS code was not built, because it is out of scope. Google login is mocked.
 
 ## 2. Checks
 
-Source: `ai/implementation/evaluations/final.md` (F-EV3, base `c016e7e`). Local evidence R4 is `validation/local/pzeugkxrk1xcu2w.json` at `a5b2164` (logs in `validation/local/final-local-4/`): one full, unfiltered run with exit 0. The base differs from `a5b2164` only in `validation/`.
+Sources: `ai/implementation/evaluations/final.md` (update 5, base `ce53772`) and `ai/implementation/evaluations/D-cloudflare.md` (the D-EV verdict, update 1). Local evidence R5 is `validation/local/kex4v2xk3522i52.json` at `1b474c1`: one full, unfiltered run with exit 0, with batch verify BV5 (`validation/local/batch-verify-5/`) at the same commit. Cloudflare evidence is 19 driver records and 1 smoke record under `validation/cloudflare/`, at six commits from `93e6d7d` to `ad0e252`; the latest record that selected an ID decides it (DEC-0264).
 
 | Target | Applicable | passed | failed | blocked | not-run |
 | --- | --- | --- | --- | --- | --- |
 | local | 110 | 110 | 0 | 0 | 0 (plus 2 §8.2 clause entries inside passed IDs: CORE-AC-006, SQL-AC-006) |
-| cloudflare | 81 | 0 | 0 | 73 | 8 (Google login mocked) |
+| cloudflare | 81 | 67 | 2 | 3 | 9 (Google login mocked; plus 3 part entries inside passed IDs) |
 | aws | 85 | 0 | 0 | 0 | 85 (AWS phase not started) |
 
-Notable entries:
-- **R4:** 109 of the local IDs passed in R4. The 110th, E2E-015, is a milestone judged from BUILD-RECORD plus R4.
-- **R4 layer counts:** Playwright 42/42, 0 flaky. Integration 586 tests: 564 passed and 22 skipped. The 22 are 16 Cloud-only tests, the 2 untagged controls (G4), and 4 untagged regression tests added by fix-mig002 (one `dev.test.ts` port test, O2, and three `failure-output.unit.test.ts` tests, which passed in BV4). None was skipped to obtain a pass: they are left out by the driver's ID filter, and every tagged MIG-AC-002 test ran and passed. Unit-level criteria 53 passed.
-- **Batch verify BV4** (`validation/local/batch-verify-4/`, `a5b2164`, the same commit as R4): online and offline, exit 0. Unit 1706/1706, template 18/18, reference 52/52 per dialect, skill example pages 2/2.
-- **MIG-AC-002 failed once**, in the previous full run R3b (`validation/local/r5nndia2aediccu.json`, `760e7b7`, 108 passed, 1 failed, exit 1): the no-change deploy's `dev` start died with a workerd fatal at startup, and the first line of the error was cut off. The cause is **unproven**. A confirmed `dev` port race of the same signature was fixed (fix-mig002, DEC-0417), the test messages now keep the first fatal line, and MIG-AC-002 passed in R4. Open item U1 (§6.5).
-- **DEMO-AC-003:** `passed`, with the weak assertion W5 still open (owner question Q10).
-- **E2E-002, E2E-004, DEMO-AC-010:** only their local parts pass. The scenarios are not met until the Cloudflare and AWS runs pass.
-- **E2E-015, E2E-016:** judged `passed` on local, but neither has a milestone evidence record (G5). The release report therefore cannot see them.
-- **Every Cloudflare `blocked`** carries the detail "D1 daily row limit exhausted by phase A spikes on 2026-10-19; re-run after reset" (DEC-0317).
+Cloudflare, notable entries:
+- **Failed, owner-dependent:**
+  - **FILES-AC-003** (`gblenqeyh7kuls5`): the expired-ticket clause gets status null, because R2 sends no CORS headers on a 403 (DEC-0101, Q4). The other four tests passed.
+  - **SEC-AC-005** (`651l3x1zgz7pbx5`): the request right after `secrets set` still saw the old value. Cloudflare rolls a secret change out as a new Worker version over up to a few seconds (DEC-0092); the framework does not cache. The Review says no agent change can pass it honestly (Q12).
+- **Blocked:** PROV-AC-002's restricted-token clause (no token supplied, Q13; 4 of 5 tests passed); PROV-AC-004's fresh-account clause (needs an account where `setup-account` never ran; the twice-run part passed); LOG-AC-004's outside-request clause (Q8; the other clauses passed).
+- **Superseded failures:** FILES-AC-001 failed in pass 1c (R2 list order) and passed in pass C after DEC-0430. E2E-004's coverage part and AUTH-AC-005 failed or were not-run in pass 1c and passed in pass C after DEC-0429. SEC-AC-001 and HTTP-AC-002 failed in pass 2 and passed in pass C after DEC-0431.
+- **Milestones (D-RUN-M):** E2E-010, E2E-012, PROV-AC-003, PROV-AC-006 (CF part) and COMPL-AC-008 passed with milestone records; PROV-AC-004 is blocked as above.
+- **Demo on Cloudflare (F-03):** DEMO-AC-001…-005, -007, -008, -009 passed; the demo smoke passed on Cloudflare and locally from one commit with no source difference, which is the Cloudflare part of DEMO-AC-010 and E2E-002. E2E-015's cloud part is met. E2E-002, E2E-004 and DEMO-AC-010 stay unmet as scenarios until AWS passes, and E2E-004's pass part also needs the two failures resolved.
+- **E2E-011:** the skill's two troubleshooting `curl` commands found a forced error's log entry by its requestId on Cloudflare. E-EV's open item is closed.
+- **Stage removal:** every test stage was removed with no leftovers (every record `leftovers: []`; COMPL-AC-004 passed).
+- **E2E-009 after the R2 key fix (C-1, closed):** re-run alone in pass C-1 (`5nfl3uhrzxpuz4m`, `ad0e252`), passed, stage removed with no leftovers (32 D1 rows written, 41 read, 106 API requests).
+
+Local, notable entries:
+- **R5 layer counts:** 109 passed and 2 §8.2 clause entries (CORE-AC-006, SQL-AC-006), 0 failed, 0 blocked, exit 0. Playwright 42/42, 0 flaky. Integration 632 tests: 570 passed and 62 skipped (Cloud-only tests, 2 untagged controls G4, and untagged regression and support unit tests that the ID filter skips; the 40 new ones since R4 are phase-D support unit tests that ran in the unit suite). None was skipped to obtain a pass. **Batch verify BV5** at the same commit: online and offline, exit 0, unit 1780/1780.
+- **L1 closed:** R5 and BV5 are at `1b474c1`, after every phase-D fix, and R5 ran with the local `apiKey` set (SEC-AC-001 and HTTP-AC-002 passed). R5 repeats R4's result (`pzeugkxrk1xcu2w`, `a5b2164`) ID for ID.
+- **MIG-AC-002 failed once**, in R3b (`r5nndia2aediccu`, `760e7b7`); cause unproven (U1), port race fixed (DEC-0417), passed in R4 and R5.
+- **DEMO-AC-003:** `passed`, with the weak assertion W5 still open (Q10).
+- **E2E-015, E2E-016:** judged `passed` on local, without milestone evidence records (G5). E2E-015 rests on `apps/demo/BUILD-RECORD.md` (round 4) and R5's demo results.
+- **L2 (new, minor):** after `1b474c1` only the G6 fix (report tools and their unit tests) and the S-1 skill sentence changed. No committed run covers them yet.
+
+The release report lists every automated entry as "no record for commit", because no record is for `33b3df7` itself. With G6 fixed, it reads the milestone items from the records that ran them: E2E-010, E2E-012, PROV-AC-003, PROV-AC-006 and COMPL-AC-008 have no Cloudflare line (passed), and PROV-AC-004 reads `blocked`. It says "no record" for E2E-015 (local and Cloudflare) and E2E-016 (local), because no `--milestone` record has selected them (G5). Their statuses are judged without one: E2E-015 from BUILD-RECORD plus R5 on local and from F-03's records on Cloudflare. The evaluator's hand-written note at the end of the report says this.
 
 ## 3. Spikes
 
@@ -64,7 +76,7 @@ Every spike is in `ai/implementation/spikes/a-NN/RESULT.md`. A-EV (`ai/implement
 **D1 incident (process failure).** On 2026-10-19 the phase A spikes wrote about 1.22 million D1 rows. The free plan allows 100,000 rows written per day (DEC-0317). Most of it came from A-05's limit probing, for example the 200,000-row insert requests e8 and e9 (`a-05/RESULT.md`, "Size and time limits"). That probing went well beyond any reasonable usage for a framework whose target apps need tens of rows: no binding requirement asked for those limits to be measured. The plan had no usage caps at the time. As a result:
 - the plan §1 "Cloud usage limits" were added: per-item and per-day row caps, no limit probing, and D1 readings before and after each cloud item;
 - the owner stopped D1 use (DEC-0317);
-- every Cloudflare run since has been held.
+- every Cloudflare run was held until the owner lifted the stop on 2026-10-23 with new caps (DEC-0418, DEC-0419). The phase-D passes stayed well inside them (§7).
 
 ## 4. Failures
 
@@ -106,16 +118,27 @@ These are the records in `ai/implementation/root-causes/`. Verdicts are read fro
 | 2026-10-20 mig-ac-002-workerd-crash | MIG-AC-002 failed in R3b: the no-change deploy's `dev` start died with a workerd fatal at startup. Diagnosed as `dev`'s pick-then-release port race | **not accepted as the proven cause** of that failure (the first fatal line was cut off). Accepted in part: (A) the port race is a proven latent defect, to be fixed race-free; (B) the diagnostic change. Fixed by fix-mig002 (DEC-0417); the cause of the R3b failure stays open (U1) |
 | 2026-10-20 testing-dev-registry | `createTestApp` joined the host-wide Miniflare dev registry under a fixed name, so test apps interfered across processes | accepted-with-changes ("ACCEPTED, with the required changes below"). Fixed by fix-registry (DEC-0415) and fix-registry-2 (DEC-0416) |
 | 2026-10-20 verify-fixes | The Fix section for the D-04 record (a fix log, not a diagnosis) | n/a (covered by the D-04 Review) |
+| 2026-10-23 cloud-test-paths | Cloud test paths found by the pass-schedule estimate: the MIG blocks depended on each other across IDs and set the secret before the first Cloudflare deploy; further stages lacked the D1 and database-count guards; a redundant second `remove`; passes over the request budget | accepted-with-changes ("Accepted with the required changes below", 4 changes). Fixed by fix-cloudtests (DEC-0423…DEC-0426). The split-pass question of item 4 became moot when DEC-0418 raised the per-pass cap: MIG-AC-002/-003/-006 and COMPL-AC-008 each passed in one record |
+| 2026-10-23 pass0-F1-r2-api-delete-traversal-403 | The API `DELETE` of an object named `x/../y` got 403 "request rejected: path contains traversal sequence", most likely from the sandbox proxy | accepted-with-changes; "no defect found" holds only for this sandbox. DEC-0422 records the limitation; whether real Cloudflare accepts the path is owner item **Q11**. No `..` key reached `remove` in any pass |
+| 2026-10-23 pass0-F2-create-bucket-409-owned | `createBucket` read every 409 as "another account"; the live 409 says "you own it" | accepted-with-changes (4 changes). Fixed by fix-pass0 (DEC-0421, amends DEC-0270) |
+| 2026-10-23 pass1-sst-target-not-found | SST 4.17.2 resolves `--target` only against existing state, so step 3 could never succeed on a first deploy; `sst remove` fails on a stage SST does not know | cause confirmed; fix accepted with required changes R1–R4. Fixed by fix-pass1 (DEC-0427). Checked live in pass 1c (DEC-0334 check 10 passed) |
+| 2026-10-24 pass1c-E2E-004-AUTH-AC-005-no-cloud-test | AUTH-AC-005's contract part had only in-process tests, which the cloud selection excludes, so E2E-004's coverage part failed | cause accepted; fix approved with changes 1–5. Fixed by fix-auth005 (DEC-0429, owner review open). Both passed in pass C |
+| 2026-10-24 pass1c-FILES-AC-001-r2-list-order | R2 ranks the end of a key like a byte between 0x31 and 0x61, so a name lists after its extensions | cause accepted; the first fix was not approved; after the live probe (an addendum to the record), approved with items 1–7. Fixed by fix-r2order (DEC-0430, `proposed`, owner review open, **Q14**). Passed in pass C |
+| 2026-10-24 pass2-SEC-AC-001-HTTP-AC-002-delete-read-too-early | The test read once, 126 ms after deleting the secret, while Cloudflare still served the previous version | diagnosis confirmed; fix accepted with one required correction (R1). Fixed by fix-sec001 (DEC-0431). Both passed in pass C |
+| 2026-10-24 pass2-SEC-AC-005-next-request-version-rollout | A secret change reaches requests through a Worker version rollout of up to seconds; "the next request" cannot be guaranteed on Cloudflare | causal claim confirmed; the deletion clause cannot be met, the `secrets set` clause only probabilistically. **No agent fix:** SEC-AC-005 stays `failed` until the owner decides **Q12** |
 
-**Records without a committed review:** none. The D-01, D-03 and order-scan Reviews landed in `8f3ab0f`.
+**Records without a committed review:** none. Pass 1b's static-asset 401 has no record of its own: the orchestrator confirmed the cause in `validation/cloudflare/pass-1b/SUMMARY.md` (the proxy replaced every `Authorization` header), and the owner removed it (DEC-0420).
 
 **Still open from these records:**
 - mig-ac-002-workerd-crash: the cause of the R3b failure is unproven (§6.5, U1). Its integration regression test has no runner output (O2).
 - test-order-dependence-scan: the scan covers 29 of 84 integration files (O3, optional).
+- pass2-SEC-AC-005: owner decision Q12.
+- pass0-F1: real Cloudflare's answer to the `..` DELETE is unverified (Q11).
+- pass1c-FILES-AC-001: DEC-0430's visible key ending needs the owner's review (Q14).
 
 ## 5. Decisions and design documents
 
-**Decision-log entries added in this run:** DEC-0083…DEC-0417, 335 entries, with no gaps.
+**Decision-log entries added in this run:** DEC-0083…DEC-0431, 349 entries, with no gaps.
 
 | Phase (decision-log heading) | Range | Count |
 | --- | --- | --- |
@@ -127,13 +150,26 @@ These are the records in `ai/implementation/root-causes/`. Verdicts are read fro
 | F-04 fixes for E2E-016 | DEC-0413…DEC-0414 | 2 |
 | dev-registry fixes (fix-registry, fix-registry-2) | DEC-0415…DEC-0416 | 2 |
 | `dev` port binding fix (fix-mig002) | DEC-0417 | 1 |
+| Cloudflare API request budget (owner) | DEC-0418…DEC-0420 | 3 |
+| Cloudflare live testing (2026-10-23/24) | DEC-0421…DEC-0431 | 11 |
 
-The three new entries, all `accepted` and none marked "owner review open":
-- **DEC-0415:** a test app never joins Wrangler's local dev registry (refines DEC-0105).
-- **DEC-0416:** one registry-free platform-proxy helper (`targets/local/platform-proxy.ts`) for `createTestApp`, the migration checker and the fake D1 API, each with a guard test.
-- **DEC-0417:** `dev` binds its ports itself: Vite first on port 0, then Wrangler on port 0 for the Worker and the inspector, with the real ports read back; a bounded retry on Vite's structured `EADDRINUSE` only (refines DEC-0204).
+Entries added since the 2026-10-21 report (DEC-0415…DEC-0417 are described in git history):
+- **Owner, accepted:**
+  - **DEC-0418:** at most 2,000 Cloudflare API requests per pass and 1,000 in any 5 minutes; stop on the first HTTP 429 (Cloudflare's own limit is 1,200 per 5 minutes).
+  - **DEC-0419:** D1 caps from the free plan: per pass ≤ 10,000 rows written and ≤ 500,000 read; per UTC day ≤ 50,000 written and ≤ 2,500,000 read; ≤ 8 databases at once; still no stress tests or row loops. Lifts DEC-0317's stop.
+  - **DEC-0420:** the proxy no longer injects a Cloudflare token; a real token comes from `CLOUDFLARE_API_TOKEN`. This fixed pass 1b's static-asset upload 401.
+- **AI-proposed, accepted:**
+  - **DEC-0421:** a 409 on bucket creation is read back (owned → fine; 403 → foreign; 404 → error), amending DEC-0270.
+  - **DEC-0422:** in this sandbox, `remove` cannot delete R2 objects whose names have a `..` segment through the API (Q11).
+  - **DEC-0423…DEC-0426:** the MIG criteria as three self-contained blocks with the secret set after the first deploy; the shared stage guards and lock release on every further cloud stage; a removal by another actor cancels the cleanup only when nothing is left; one D1 listing per MIG deploy and batched snapshots.
+  - **DEC-0427:** step 3 targets `Files` only when the stage has a database, and `sst remove` runs only when SST has the stage's state (amends DEC-0336).
+  - **DEC-0428:** test hooks always send the environment token; PROV-AC-002's restricted-credential clause no longer refuses to run behind the proxy (Q13).
+  - **DEC-0431:** the cloud SEC-AC-001 / HTTP-AC-002 test waits, bounded by `CLOUD_WAITS.secretRolloutMs` (60 s), for SEC.MISSING after deleting the secret.
+- **Owner review open:**
+  - **DEC-0429** (accepted as an assumption): AUTH-AC-005's contract part runs over HTTP on every target; its successful-callback response is a cloud not-run part (added to plan §8.1).
+  - **DEC-0430** (`proposed`): on Cloudflare every R2 key is the name plus an invisible U+0001 (below PAR-230 bytes), so R2 lists in code point order (Q14).
 
-**Entries marked "owner review open":** 172 in total (unchanged; DEC-0415…DEC-0417 add none).
+**Entries marked "owner review open":** 174 in total (DEC-0429 and DEC-0430 added).
 
 | Phase | Entries |
 | --- | --- |
@@ -143,8 +179,9 @@ The three new entries, all `accepted` and none marked "owner review open":
 | C follow-ups, D, E (31) | DEC-0319…0323, DEC-0328, DEC-0329, DEC-0331, DEC-0333, DEC-0335, DEC-0350, DEC-0356, DEC-0357, DEC-0359, DEC-0360, DEC-0362…0365, DEC-0367, DEC-0368, DEC-0371, DEC-0374, DEC-0376, DEC-0380…0382, DEC-0390…0393 |
 | F (11) | DEC-0398, DEC-0403…0412 |
 | F-04 (1) | DEC-0414 |
+| Cloudflare live testing (2) | DEC-0429, DEC-0430 |
 
-Some entries are marked "owner decision outstanding" instead: DEC-0101 (Q4), DEC-0146 (Q6), DEC-0165 (Q7) and DEC-0314 (Q8). Some entries are unverified until D-RUN, for example DEC-0270 and DEC-0317.
+Some entries are marked "owner decision outstanding" instead: DEC-0101 (Q4), DEC-0146 (Q6), DEC-0165 (Q7) and DEC-0314 (Q8). Verified live since the last report: DEC-0270's 200, 404 and 409 readings (the 409 reading was wrong and is amended by DEC-0421; the 403 "foreign" reading cannot be produced with one account and stays an assumption); DEC-0356 (SST's `assets` option works); DEC-0334's checks 1–8, 10 and 11 (check 9's direct Worker `DELETE` was not observed: SST deleted the Worker first). DEC-0317's D1 stop is lifted (DEC-0419).
 
 **Design documents changed in this run.** This is `git diff --stat d460045 HEAD -- docs/`. `d460045` (the merge of PR #3) is the parent of this run's first commit, `ebe46b9` "Add implementation plan for local and Cloudflare phase".
 
@@ -158,7 +195,7 @@ Some entries are marked "owner decision outstanding" instead: DEC-0101 (Q4), DEC
 | `docs/components/compliance.md` | 8 |
 | `docs/components/config.md` | 10 |
 | `docs/components/core.md` | 8 |
-| `docs/components/files.md` | 26 |
+| `docs/components/files.md` | 27 (DEC-0430: the U+0001 key ending in §2 Cloudflare) |
 | `docs/components/google.md` | 8 |
 | `docs/components/http.md` | 10 |
 | `docs/components/kv.md` | 6 |
@@ -172,10 +209,10 @@ Some entries are marked "owner decision outstanding" instead: DEC-0101 (Q4), DEC
 | `docs/contracts/ts/index.d.ts` | 2 (contract) |
 | `docs/contracts/ts/sql.d.ts` | 36 (contract, DEC-0103) |
 | `docs/contracts/ts/testing.d.ts` | 25 (contract) |
-| `docs/decisions/decision-log.md` | 2990 |
+| `docs/decisions/decision-log.md` | 3192 |
 | `docs/parameters/parameters.md` | 25 |
 
-In total, 24 files changed: 3287 insertions and 72 deletions. Since the first version of this report, `core.md` §2 "Testing" (DEC-0415/0416), `check.md` §3 "Uses" (DEC-0416), `cli.md` §2 and `local.md` §2 (DEC-0417) changed.
+In total, 24 files changed: 3490 insertions and 72 deletions. Since the 2026-10-21 report, only `files.md` (DEC-0430), `skill.md` (2 lines) and the decision log changed (diff `c016e7e..1b474c1 -- docs`).
 
 ## 6. Open items and owner actions
 
@@ -186,62 +223,41 @@ In total, 24 files changed: 3287 insertions and 72 deletions. Since the first ve
 | Q1 | Some Local criteria (skill, demo, E2E-004) were judged at E-EV or F-EV, not at C-EV. | Nothing, if you agree. Otherwise reply: `Q1: object — <reason>`. |
 | Q2 | PROV-AC-006 on Cloudflare: the clean-machine part runs; the region part is recorded `not-run` (AWS). | Reply `Q2: confirmed` or `Q2: change — <rule>`. |
 | Q3 | No `./targets/aws` subpath until the AWS phase (DEC-0110). | Reply `Q3: confirmed` or `Q3: add the subpath now`. |
-| Q4 | FILES-AC-003's expired-ticket clause cannot pass on Cloudflare, because R2 sends no CORS headers on 403 (DEC-0101). | Reply one of: `Q4: (a) allow status null when storage's response is unreadable cross-origin`, `Q4: (b) check ticket expiry in the browser helper before sending`, `Q4: (c) route transfers through a framework upload service`. |
-| Q5 | 172 assumptions marked "owner review open" (§5 above). Visible change under DEC-0414: local photo links with `_blank` now download instead of displaying. | Read the entries in `docs/decisions/decision-log.md`. Reply `Q5: accept all`, or `Q5: reject DEC-nnnn — <reason>` for each one you reject. |
+| Q4 | FILES-AC-003's expired-ticket clause cannot pass on Cloudflare, because R2 sends no CORS headers on 403 (DEC-0101). **Confirmed live:** it failed in pass 1c and pass C with status null; the other four tests passed. | Reply one of: `Q4: (a) allow status null when storage's response is unreadable cross-origin`, `Q4: (b) check ticket expiry in the browser helper before sending`, `Q4: (c) route transfers through a framework upload service`. |
+| Q5 | 174 assumptions marked "owner review open" (§5 above), now including DEC-0429 and DEC-0430. Visible change under DEC-0414: local photo links with `_blank` now download instead of displaying. | Read the entries in `docs/decisions/decision-log.md`. Reply `Q5: accept all`, or `Q5: reject DEC-nnnn — <reason>` for each one you reject. |
 | Q6 | KV-AC-002 vs KV-REQ-002 on empty values (DEC-0146). | Reply `Q6: drop "and values" from KV-AC-002`, or `Q6: add an empty-value rule and code to KV-REQ-002`. |
 | Q7 | A non-ticket value passed to `uploadFile`/`downloadUrl` fits no FILES-REQ-006 failure class (DEC-0165). | Reply `Q7: add the class "rejected before sending: not an upload/download ticket" to FILES-REQ-006`, or `Q7: use class <name>`. |
-| Q8 | LOG-AC-004's "written outside a request" clause cannot be observed (DEC-0314). | Reply `Q8: drop the clause from LOG-AC-004`, or `Q8: support out-of-request entries from <source>`. |
+| Q8 | LOG-AC-004's "written outside a request" clause cannot be observed (DEC-0314). On Cloudflare it is the only clause of LOG-AC-004 not passed. | Reply `Q8: drop the clause from LOG-AC-004`, or `Q8: support out-of-request entries from <source>`. |
 | Q9 | E-T2's readings DEC-0403…DEC-0407 were accepted by the orchestrator. | Reply `Q9: accept`, or `Q9: reject DEC-04nn`. A rejected entry must then remove its test check through its own decision. |
 | Q10 | The testing contract cannot fail a deletion of a stored file (W5). | Reply one of: `Q10: (a) add a switchable failure switch`, `Q10: (b) add a seed API`, `Q10: (c) no change, accept W5`. |
+| Q11 | In the sandbox, the R2 API refused `DELETE …/objects/x%2F..%2Fy` with 403 "path contains traversal sequence", most likely the egress proxy (DEC-0422). If real Cloudflare refuses it too, `remove` cannot delete valid FILES names with a `..` segment (PROV-REQ-003), and `deleteObjects` needs an S3-DELETE fallback. | On your own machine, in a test bucket you own (`B=<bucket>`), upload a one-byte object named exactly `x/../y` (for example through the dashboard), then run `curl -sS -i -X DELETE -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets/$B/objects/x%2F..%2Fy" \| head -20`. Reply `Q11: real Cloudflare answered <status>, Server <value>, cf-ray <present/absent>, body <first line>`, or `Q11: the proxy operators confirm the filter`. |
+| Q12 | SEC-AC-005 fails on Cloudflare: after `secrets set`, the next request can still be served by the previous Worker version (rollout of up to seconds, DEC-0092); after a direct store deletion it is still 200. No framework change can make "the next request" true for the deletion clause. | Reply one of: `Q12: (A) amend SEC-AC-005 to "within <N> s, and <M> consecutive requests after that"` (recommended; for example `N = 60` (`CLOUD_WAITS.secretRolloutMs`), `M = 5`; supersedes DEC-0280's SEC-AC-005 bullet); `Q12: (A) plus (B) — also make secrets set wait until the stage serves the new version` (best effort, more requests per `secrets set`); `Q12: (C) move Cloudflare secrets to a read-after-write store` (changes SEC-REQ-003/-005; not recommended). |
+| Q13 | PROV-AC-002's clause "a credential that lacks the permission to create R2 API tokens" is `blocked`: no such token was supplied (DEC-0428). The other four PROV-AC-002 tests passed. | Either create a second API token with the same permissions as the run token except the one that creates API tokens (Account API Tokens: Edit), and give it to the next run as the environment variable `COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_R2_TOKEN_PERMISSION` (never pasted into chat, logs or files), then reply `Q13: token provided`; or reply `Q13: accept blocked, unit tests only`. |
+| Q14 | DEC-0430 (`proposed`): on Cloudflare every R2 key is the file name plus an invisible U+0001, so R2 lists in FILES-REQ-001's code point order. You would see the ending in the R2 dashboard and `wrangler r2 object get`; a lookup by the plain name finds nothing; S3 tools must list with `encoding-type=url`. | Reply `Q14: accept the U+0001 ending` or `Q14: change FILES-REQ-001 to the platform's order and drop DEC-0430`. |
+| — | PROV-AC-004's clause "deploying without `setup-account` fails with a clear message" needs an account where `setup-account` never ran (DEC-0364). | Reply `PROV-AC-004: accept blocked`, or provide a second, empty Cloudflare account for one run with `COMPLIANCE_CLOUDFLARE_FRESH_ACCOUNT=1`. |
 
-### 6.2 Blocked Cloudflare criteria
+### 6.2 Cloudflare criteria not passed
 
-**Blocked (73):**
+Detail per ID: `ai/implementation/evaluations/D-cloudflare.md` §7.
 
-AUTH-AC-004, -005, -006, -007, -009; CF-AC-001, -002; CFG-AC-003, -004, -005; CLI-AC-001, -004, -005; COMPL-AC-001, -003, -004, -008; CORE-AC-002, -003; DEMO-AC-001, -002, -003, -004, -005, -007, -008, -009, -010; E2E-002, -004, -005, -009, -010, -011, -012, -013, -014, -015; FILES-AC-001…-005; HTTP-AC-001…-005; KV-AC-001…-005; LOG-AC-001, -002, -004, -005; MIG-AC-002, -003, -006; PROV-AC-001, -002, -003, -004, -006; SEC-AC-001, -002, -003, -005; SQL-AC-003…-006.
+| ID | Status | Record | Why | Owner item |
+| --- | --- | --- | --- | --- |
+| FILES-AC-003 | failed | `gblenqeyh7kuls5` (pass C) | Expired-ticket clause: status null, no CORS headers on R2's 403 | Q4 |
+| SEC-AC-005 | failed | `651l3x1zgz7pbx5` (pass C) | Version rollout after `secrets set` | Q12 |
+| PROV-AC-002 | blocked | `5swm2wowq7t3yho` (pass B) | Restricted-token clause: token not supplied | Q13 |
+| PROV-AC-004 | blocked | `sysad9rajoir4yt` (pass 1c, milestone) | Fresh-account clause | row "—" in §6.1 |
+| LOG-AC-004 | blocked | `cwcrlz8fxgo3ud4` (pass 2) | Outside-request clause: nothing writes outside a request | Q8 |
 
-**Always `blocked` in this sandbox, even after the runs:**
-- DEC-0270's 403 "foreign bucket" reading;
-- PROV-AC-002's restricted-credential clause (DEC-0335, DEC-0363);
-- PROV-AC-004's "deploy without `setup-account`" clause (DEC-0364);
-- LOG-AC-004's outside-request clause (Q8).
+**Not a criterion, still unverified:** DEC-0270's 403 "foreign bucket" reading (one account cannot produce it).
 
-**Owner action:**
-1. Check D1 usage for today. In the dashboard: Workers & Pages → D1 → Metrics (rows written and read today). Or run this on your own machine with your own token. The query shape is from plan §1; it was not run for this report.
-   ```
-   curl -sS https://api.cloudflare.com/client/v4/graphql \
-     -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' \
-     -d '{"query":"query($a:String!,$d:Date!){viewer{accounts(filter:{accountTag:$a}){d1AnalyticsAdaptiveGroups(limit:100,filter:{date:$d}){sum{rowsRead rowsWritten}}}}}","variables":{"a":"'"$CLOUDFLARE_ACCOUNT_ID"'","d":"'"$(date -u +%F)"'"}}'
-   ```
-2. Check the D1 database count (account limit 10, PAR-219): Workers & Pages → D1, or `npx wrangler d1 list`.
-3. Reply: `go ahead with Cloudflare runs`.
-
-**Planned Cloudflare pass sequence once allowed** (plan §1, §5). Every pass is under the caps:
-- per item: ≤ 1,000 D1 rows written, ≤ 10,000 rows read, ≤ 500 Cloudflare API requests and ≤ 2 D1 databases at once;
-- for the whole run: ≤ 10,000 rows written per UTC day;
-- every pass takes D1 readings before and after.
-
-| # | Pass | Estimate |
-| --- | --- | --- |
-| 0 | `setup-account --target cloudflare` (once) and DEC-0334's 11 live checks | 3 requests (up to 6 when creating); the live checks take < 30 requests |
-| 1 | D-RUN main pass: every expected ID except MIG-AC-002, -003, -006, on one `test-<id>` stage plus at most one further stage at a time | Per stage ≈ 215–370 API requests including SST, < 60 D1 rows written, 1 database. C-T2's tests ≈ 350 rows (≤ 700 with indexes), < 2,000 read, 100–150 requests. D-T1's main pass ≈ 145 written / 80 read / 315 requests. |
-| 2 | D-RUN MIG pass, run after pass 1's stage is removed: MIG-AC-002, -003, -006 and PROV-AC-002, with no run stage | ≈ 110 written / 100 read / 245 requests; 2 databases |
-| 3 | D-RUN-M: E2E-010 in its own pass | 2 databases |
-| 4 | D-RUN-M: E2E-012 in its own pass | 2 databases |
-| 5 | D-RUN-M: PROV-AC-003, -004, -006 | ≈ 380 requests |
-| 6 | D-RUN-M: COMPL-AC-008 alone | ≈ 260 written / 150 read / 420 requests |
-| 7 | F-03: deploy the demo to `test-<id>`; then `smoke --target cloudflare`, the DEMO-AC-008 driver check, E2E-011 cloud (using only the commands in `skill/reference/troubleshooting.md` §1), and `remove` | Per stage as in pass 1; F-03 writes its own estimate before it starts |
-| 8 | D-EV, then the release report again | No cloud usage |
-
-Start the driver as `NODE_USE_ENV_PROXY=1 npm run compliance -- --target cloudflare …` (DEC-0349, DEC-0357).
-
-Also still open before the SEC, HTTP and CORE criteria that need it: the driver's `apiKey` handling (DEC-0277, DEC-0366, DEC-0398).
+**After the owner answers:** a test author changes the affected test (Q4, Q12), and a runner re-runs only those IDs on one Cloudflare stage, under the plan §1 caps with D1 readings before and after. One stage lifecycle (deploy, `secrets set`, redeploy, `remove`) counted about 90 API requests plus SST's own and wrote under 50 D1 rows; pass C counted 207 requests for 10 IDs. The release report can only say "working" after AWS and Google, so these re-runs do not change the overall verdict.
 
 ### 6.3 Google criteria (`not-run`, "Google login mocked for this phase")
 
 **IDs:**
-- whole criteria: GOOGLE-AC-001 (cloud part), GOOGLE-AC-005, AUTH-AC-011, COMPL-AC-005, SKILL-AC-006, E2E-006, E2E-007 (cloud part) and E2E-008;
-- parts of criteria: AUTH-AC-005 (admin-list part), AUTH-AC-009 (production part) and CLI-AC-001 (`certify-auth` part).
+- whole criteria: GOOGLE-AC-001 (cloud part), GOOGLE-AC-005, AUTH-AC-011, COMPL-AC-005, SKILL-AC-006, E2E-006, E2E-007 (cloud part) and E2E-008. Every Cloudflare record confirms them;
+- parts of criteria: AUTH-AC-005 (admin-list part, and the successful-callback part on cloud, DEC-0429) and AUTH-AC-009 (production part);
+- CLI-AC-001 on Cloudflare: the driver records the whole ID as `not-run` (its `certify-auth` row needs a production stage), and no Cloudflare test is tagged with it.
 
 **Owner action:** nothing in this phase. In a later phase, follow the Google OAuth client setup in `skill/reference/owner-tasks.md`, which was written but never executed:
 1. Create the client.
@@ -259,8 +275,9 @@ Every AWS entry is `not-run` ("AWS phase not started"): 85 IDs, including AWS-AC
 
 | Item | What | What to do |
 | --- | --- | --- |
-| **U1** | **The cause of MIG-AC-002's failure in R3b (`r5nndia2aediccu`, `760e7b7`) is unproven.** The visible workerd frames fit a port-bind error but also any other startup fatal or crash signal; the first line was cut off, and the run was not repeated. The port race was fixed as a confirmed defect (DEC-0417), and MIG-AC-002 passed in R4. One clean run cannot confirm the cause. | Agent work, no owner action. **Evidence that would settle it:** the first fatal line of workerd's stderr from a recurrence. The MIG deploy messages now keep it (`failureOutput`), so any recurrence in a later full run is self-diagnosing; or a runner can do the next full local run under the root-cause record's `MINIFLARE_WORKERD_PATH` wrapper, which stores every workerd's full stderr and arguments. A fatal that is not `bind(): Address already in use` sends the record back to §8 step 1. |
+| **U1** | **The cause of MIG-AC-002's failure in R3b (`r5nndia2aediccu`, `760e7b7`) is unproven.** The visible workerd frames fit a port-bind error but also any other startup fatal or crash signal; the first line was cut off, and the run was not repeated. The port race was fixed as a confirmed defect (DEC-0417), and MIG-AC-002 passed in R4 and again in R5 (`kex4v2xk3522i52`). Clean runs cannot confirm the cause. | Agent work, no owner action. **Evidence that would settle it:** the first fatal line of workerd's stderr from a recurrence. The MIG deploy messages now keep it (`failureOutput`), so any recurrence in a later full run is self-diagnosing; or a runner can do the next full local run under the root-cause record's `MINIFLARE_WORKERD_PATH` wrapper, which stores every workerd's full stderr and arguments. A fatal that is not `bind(): Address already in use` sends the record back to §8 step 1. |
 | O2 | fix-mig002's integration regression test (`test/integration/local/dev.test.ts`, "serves even when every port freePort returns is taken …") is untagged and not in `verify`, so no committed runner output covers it; only the fixer's red-green does. | Agent work: run it in the next batch, or tag it. No owner action. |
+| L2 | The G6 fix (`tests/compliance/harness/catalogue.ts`, `driver.ts`, `tools/release.ts`, `tools/traceability.ts` and their unit tests) and the S-1 sentence in `skill/reference/troubleshooting.md` came after R5 and BV5 (`1b474c1`), so no committed run covers them. | Agent work: the next batch `verify` at the head, online and offline. No criterion status depends on it. No owner action. |
 | O3 | The order-dependence scan covers 29 of 84 integration files. | Optional: the shuffle runs the accepted record names (`kv/*`, `sql/*`, `files/server-operations`, `local/dev`). No owner action. |
 | W1 | DEMO-AC-001 "paginated": only the page size is shown. | Optional: a test author adds a check of the next page. No owner action. |
 | W2 | The smoke-test clauses of DEMO-AC-001 and -003 count through E2E-002's tag. | None (accepted). |
@@ -268,23 +285,42 @@ Every AWS entry is `not-run` ("AWS phase not started"): 85 IDs, including AWS-AC
 | W4 | DEMO-AC-007's expiry clause uses a shifted clock. | None (accepted). |
 | W5 | DEMO-AC-003's warn-clause test cannot delete a stored photo. | Answer Q10. A test author then strengthens the test, and a runner re-runs it. |
 | G4 | The untagged controls for CFG-AC-002 and CORE-AC-007 are filtered out of driver runs. | Optional: tag them. No owner action. |
-| G5 | E2E-015 and E2E-016 (review part) have no milestone evidence record, and the Cloudflare `blocked` set has no record. | Agent work: record the milestones with `npm run compliance -- --target local --milestone`, or write a record for the review. Record the `blocked` set once a `--blocked` run is confirmed to make no Cloudflare request (DEC-0261). No owner action. |
+| G5 | E2E-015 (local and cloud parts) and E2E-016 (review part) have no milestone evidence record. | Agent work: record the milestones with `--milestone`, or write a record for the review. No owner action. |
 
-Closed since the first version of this report: O1 (`expected.unit.test.ts` ran in BV3 and BV4), and the missing Reviews of the D-01, D-03 and order-scan records (`8f3ab0f`).
+Closed on 2026-10-24 (final.md update 5): **L1** (full local run `kex4v2xk3522i52` and batch verify 5 at `1b474c1`), **C-1** (E2E-009 passed on Cloudflare after fix-r2order, `5nfl3uhrzxpuz4m`), **G6** (release and traceability reports skip not-selected entries, `33b3df7`; report regenerated as `validation/release/2026-10-24-33b3df7.md`) and **S-1** (the troubleshooting page calls the two `curl` commands verified). No Cloudflare agent run is outstanding; the remaining Cloudflare items are the owner's (§6.1, §6.2).
+
+Closed since the first version of this report: O1 (`expected.unit.test.ts` ran in BV3 and BV4), and the missing Reviews of the D-01, D-03 and order-scan records (`8f3ab0f`). Closed by the Cloudflare runs: E-EV's open item for E2E-011 on Cloudflare (the troubleshooting check passed) and the missing record of the Cloudflare `blocked` set (G5's second half; real records exist now).
 
 ## 7. Costs
 
-The list below comes from the spike records, the evaluation records and plan §10.6. **It has not been checked against the account today.**
+**Account state per the last listings** (`validation/cloudflare/f-03/logs/measure/*-3-after-remove.json`, 2026-10-24 06:07 UTC, after F-03's `remove`):
 
-| Resource | Status per records |
-| --- | --- |
-| Spike resources (Workers, KV, R2 buckets, D1 databases, R2 token) | None left. Every spike's RESULT.md records zero leftovers. |
-| `sst-state` R2 bucket (SST state home) | Stays by design once created. A-01 and A-03 created it, then emptied and deleted it. Per records it does not exist now; the first `setup-account` or SST deploy creates it again. |
-| `prototype-logs` R2 bucket (shared logs) | Stays by design once created. Per records it was never created, because `setup-account` has not run. |
-| Test stages (`test-*`) | None. No D-RUN, E-RUN cloud or F-03 stage was created, and no `validation/cloudflare/` record exists. |
+| Resource | State | Billable |
+| --- | --- | --- |
+| R2 bucket `prototype-logs` (shared logs) | Present, created by `setup-account` in pass 0. Holds the test stages' log entries, small JSON objects that stay after `remove` by design. | Yes, near zero (a few kilobytes to megabytes of storage) |
+| R2 bucket `sst-state` (SST state home) | Present, created in pass 0. Empty (0 objects). | Yes, near zero (empty) |
+| Workers | None | — |
+| D1 databases | None | — |
+| Test stages (`test-*`), spike resources | None. Every phase-D stage was removed (D-cloudflare §3); every driver record has `leftovers: []`. | — |
+| API tokens | Not listed since pass 0, when only the account's two own tokens existed. Stage R2 tokens are deleted by `remove` and covered by the leftover check; the tests' read-only `compliance-r2read-*` tokens expire after 30 minutes. | No (tokens are free) |
 
-**Owner check:**
-- Dashboard: Workers & Pages (Workers and D1), R2 Object Storage (buckets), and My Profile → API Tokens (tokens named `spike*` or per stage).
+So the two shared buckets are the only billable resources, both at near-zero cost, and both stay by design (plan §10.6).
+
+**Cloudflare usage on the testing days** (account-wide D1 readings from GraphQL `d1AnalyticsAdaptiveGroups` for the UTC day; requests as counted by the runners, without SST/Pulumi's own calls, which were not traced):
+
+| Day (UTC) | Work | D1 rows written | D1 rows read | API requests counted | Peak D1 databases |
+| --- | --- | --- | --- | --- | --- |
+| 2026-10-23 | pass 0 (`setup-account`, live checks), pass 1, pass 1b, cleanup-R | 32 | 17 | ≈ 176 | 1 |
+| 2026-10-24 | passes 1c, 2–5, B, M, the R2 order probe, C, F-03 | 2,080 | 5,665 | ≈ 2,770 | 2 |
+| **Total** | | **2,112** | **5,682** | **≈ 2,950** | |
+| Cap (DEC-0418, DEC-0419) | | ≤ 50,000 per day | ≤ 2,500,000 per day | ≤ 2,000 per pass, ≤ 1,000 per 5 min | ≤ 8 |
+
+The largest pass (pass M) counted 1,018 requests, at most 268 in any 5 minutes. No pass got an HTTP 429. D1 usage was about 2 % of the free plan's daily rows written (100,000) and 0.1 % of rows read (5,000,000). API requests are not billed. Workers and R2 operations stayed within the free allowances by a wide margin (tens of deploys and a few hundred object operations), but no Workers or R2 usage was measured.
+
+Pass C-1 (E2E-009 re-run) came after these readings, on 2026-10-24: 32 D1 rows written, 41 read, 106 API requests (at most 78 in 5 minutes), peak 1 D1 database, no HTTP 429. Afterwards the account held 0 Workers, 0 D1 databases, 0 `sst-state` objects and only the two shared R2 buckets (`validation/cloudflare/pass-C1/SUMMARY.md`), so the account state above is unchanged.
+
+**Owner check (optional):**
+- Dashboard: Storage & databases → R2 (expect only `prototype-logs` and `sst-state`), Workers & Pages (expect no Workers), D1 (expect none), My Profile → API Tokens (expect no `compliance-*`, `spike*` or per-stage tokens).
 - Or, with your own token:
   ```
   npx wrangler d1 list
@@ -292,4 +328,4 @@ The list below comes from the spike records, the evaluation records and plan §1
   curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
     "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts"
   ```
-- Expected: no `spike*` or `test-*` resources.
+- To remove the shared buckets after the project (they are needed for any further cloud run): empty `prototype-logs`, then delete both buckets in the dashboard.

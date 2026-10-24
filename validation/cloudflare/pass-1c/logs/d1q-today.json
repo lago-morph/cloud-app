@@ -1,0 +1,2 @@
+{"query":"query{viewer{accounts(filter:{accountTag:\"<ACCOUNT>\"}){d1AnalyticsAdaptiveGroups(limit:1000,filter:{date:\"2026-10-24\"},orderBy:[date_ASC]){sum{rowsRead rowsWritten readQueries writeQueries}dimensions{date databaseId}}}}}"}
+

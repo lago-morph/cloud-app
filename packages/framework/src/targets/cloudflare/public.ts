@@ -6,7 +6,9 @@
  *
  * Log entries go to the account's shared log bucket through the `LOGS` binding, each write
  * handed to the request's `waitUntil` (LOG-REQ-004). Transfer tickets are SigV4-signed R2 URLs
- * (D-02) for the account and bucket the Worker variables name (`tickets.ts`).
+ * (D-02) for the account and bucket the Worker variables name (`tickets.ts`). The R2 binding is
+ * addressed through `cloudflareFilesStore`, which stores each name with a U+0001 ending so R2
+ * lists in code point order (DEC-0430); the local target keeps plain keys.
  * Workers-compatible: no Node APIs.
  */
 import type { RuntimeContext } from "../../core/assemble.js";
@@ -20,6 +22,7 @@ import { r2LogSink } from "../../log/cloudflare/sink.js";
 import { envSecretReader } from "../../secrets/service.js";
 import { FRAMEWORK_SECRETS, type FrameworkSecretName } from "../../secrets/names.js";
 import { workerLogBucket, workerPublicOrigin, workerSecretValues, workerSql, workerStore, type WorkerHandler } from "./bindings.js";
+import { cloudflareFilesStore } from "../../files/cloudflare/keys.js";
 import { assembleStage } from "./stage.js";
 import { workerTicketIssuer } from "./tickets.js";
 
@@ -46,7 +49,7 @@ export function createCloudflareWorker<C extends ConfigDeclaration, S extends st
     requestSink: (c: RuntimeContext) => r2LogSink({ bucket: workerLogBucket(c.env), waitUntil: (pending) => c.executionCtx.waitUntil(pending) }),
     publicOrigin: (c: RuntimeContext) => workerPublicOrigin(c.env),
     sql: workerSql,
-    store: workerStore,
+    store: (env) => cloudflareFilesStore(workerStore(env)),
     tickets: workerTicketIssuer,
     readSecret: (env) => envSecretReader(env, deployment.target),
     readFrameworkSecret: (env) => envSecretReader(env, deployment.target),

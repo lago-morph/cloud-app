@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { listDriverTests } from "../tools/listing.js";
 import { scanSourceTags } from "../tools/traceability.js";
 import { readCatalogue } from "./catalogue.js";
-import { UNIT_LEVEL } from "./expected.js";
+import { expectedCriteria, UNIT_LEVEL } from "./expected.js";
 import { runnerSelection, scopeTests, uncovered } from "./selection.js";
 
 const repo = new URL("../../../", import.meta.url).pathname;
@@ -63,4 +64,23 @@ describe("[E2E-004] coverage is computed from the runners' listing with the driv
     const catalogue = new Map(readCatalogue(`${repo}docs`).map((e) => [e.id, e]));
     for (const id of UNIT_LEVEL) expect(catalogue.get(id)?.applies.local?.automated, id).toBe(true);
   });
+});
+
+// Root cause 2026-10-24-pass1c-E2E-004-AUTH-AC-005-no-cloud-test: E2E-004's coverage part for Cloudflare, offline.
+// Listing is collect-only (no test body runs, no deployment). Needs the framework build
+// (`npm run build -w packages/framework`), as the integration suites do.
+describe("[E2E-004] the Cloudflare selection covers every criterion expected there", () => {
+  it("every criterion expected on Cloudflare has a tagged test in the cloud selection (AUTH-AC-005's contract part included)", () => {
+    const expected = expectedCriteria(readCatalogue(`${repo}docs`), "cloudflare", "automated").filter((e) => e.run);
+    const env: NodeJS.ProcessEnv = { ...process.env, COMPLIANCE_TARGET: "cloudflare" };
+    for (const k of Object.keys(env)) if (k.startsWith("VITEST")) delete env[k];
+    const listing = listDriverTests("cloudflare", { root: repo, env });
+    expect(listing.errors).toEqual([]);
+    expect(
+      uncovered(
+        expected.map((e) => e.id),
+        listing.tests,
+      ),
+    ).toEqual([]);
+  }, 180_000);
 });

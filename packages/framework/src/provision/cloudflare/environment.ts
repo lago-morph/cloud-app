@@ -1,8 +1,8 @@
 /**
  * Cloudflare credentials and the SST tool environment (PROV §2 "Credentials"; DEC-0083,
  * DEC-0088, DEC-0107). Credentials come from the variables the tools normally use and are
- * checked by name only. In the sandbox `CLOUDFLARE_API_TOKEN` holds a non-secret placeholder
- * that the proxy replaces; on an owner machine it holds the real token. SST additionally needs
+ * checked by name only. `CLOUDFLARE_API_TOKEN` holds the real token in the sandbox and on an
+ * owner machine alike; the sandbox proxy no longer injects one (DEC-0420). SST additionally needs
  * the account as `CLOUDFLARE_DEFAULT_ACCOUNT_ID` and `NODE_USE_ENV_PROXY=1` (its own Node
  * providers call the API with `fetch`). Wrangler is not used by provisioning.
  */

@@ -2,8 +2,8 @@
  * Cloud probes for the E2E scenarios.
  *
  * - Cloudflare D1 databases of a stage, by PROV-REQ-002's exact pattern `^<app>-<stage>-db-(\d+)$`,
- *   and the shared log bucket, read through the Cloudflare API. The proxy injects the API token
- *   for api.cloudflare.com; no Authorization header is sent (plan §10.6). Node `fetch` uses the
+ *   and the shared log bucket, read through the Cloudflare API with the bearer token from
+ *   `CLOUDFLARE_API_TOKEN`; the proxy no longer injects one (plan §10.6, DEC-0420). Node `fetch` uses the
  *   proxy because the driver sets `NODE_USE_ENV_PROXY=1` for cloud targets.
  * - Hooks owned by D-T2 under `tests/compliance/criteria/_cloud/` (plan §5 "Phase D test-case
  *   authors"): the log-bucket listing and the stage-resource probe. Until a hook exists, a test
@@ -13,6 +13,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { authHeader } from "../../criteria/_cloud/api.js";
 import { prerequisiteMissing } from "../../harness/index.js";
 import { REPO_ROOT } from "./process.js";
 
@@ -33,7 +34,7 @@ interface CfEnvelope<T> {
 
 async function cloudflareGet<T>(path: string): Promise<{ readonly status: number; readonly body: CfEnvelope<T> | undefined }> {
   const response = await fetch(`https://api.cloudflare.com/client/v4${path}`, {
-    headers: { "user-agent": "prototype-framework-compliance/0.1.0", accept: "application/json" },
+    headers: { "user-agent": "prototype-framework-compliance/0.1.0", accept: "application/json", ...authHeader() },
     signal: AbortSignal.timeout(55_000),
   });
   const text = await response.text();

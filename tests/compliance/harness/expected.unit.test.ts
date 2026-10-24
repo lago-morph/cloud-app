@@ -75,6 +75,16 @@ describe("[COMPL-AC-001] this phase's not-run rules (plan §8) against the docum
     expect(cfm.get("PROV-AC-003")?.run).toBe(true);
   });
 
+  // Root cause 2026-10-24-pass1c-E2E-004-AUTH-AC-005-no-cloud-test (Review, change 3): the contract part runs on
+  // Cloudflare except the successful-callback response, which needs a real login provider (DEC-0171).
+  it("runs AUTH-AC-005's contract part on Cloudflare with its successful-callback response not-run, and all of it on local", () => {
+    const part = { part: "contract part: successful callback (needs a real login provider)", detail: "Google login mocked for this phase" };
+    const cf = new Map(expectedCriteria(real, "cloudflare", "automated").map((e) => [e.id, e]));
+    expect(cf.get("AUTH-AC-005")).toEqual({ id: "AUTH-AC-005", run: true, parts: [""], notRunParts: [part] });
+    const local = new Map(expectedCriteria(real, "local", "automated").map((e) => [e.id, e]));
+    expect(local.get("AUTH-AC-005")).toEqual({ id: "AUTH-AC-005", run: true, parts: [""], notRunParts: [] });
+  });
+
   it("runs CHECK-AC-005 on local as a whole: its demo part has a tagged test, so no part is recorded not-run", () => {
     const local = new Map(expectedCriteria(real, "local", "automated").map((e) => [e.id, e]));
     expect(local.get("CHECK-AC-005")).toEqual({ id: "CHECK-AC-005", run: true, parts: [""], notRunParts: [] });

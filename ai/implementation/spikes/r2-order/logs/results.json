@@ -1,0 +1,597 @@
+{
+  "bucket": "spike-r2order-<random>",
+  "rand": "69acd7",
+  "put": {
+    "status": 200,
+    "j": [
+      {
+        "op": "put",
+        "hex": "712f61",
+        "ok": true,
+        "storedHex": "712f61"
+      },
+      {
+        "op": "put",
+        "hex": "712f612062",
+        "ok": true,
+        "storedHex": "712f612062"
+      },
+      {
+        "op": "put",
+        "hex": "712f6121",
+        "ok": true,
+        "storedHex": "712f6121"
+      },
+      {
+        "op": "put",
+        "hex": "712f612f62",
+        "ok": true,
+        "storedHex": "712f612f62"
+      },
+      {
+        "op": "put",
+        "hex": "712f6130",
+        "ok": true,
+        "storedHex": "712f6130"
+      },
+      {
+        "op": "put",
+        "hex": "712f6161",
+        "ok": true,
+        "storedHex": "712f6161"
+      },
+      {
+        "op": "put",
+        "hex": "712f61c3a9",
+        "ok": true,
+        "storedHex": "712f61c3a9"
+      },
+      {
+        "op": "put",
+        "hex": "712f62",
+        "ok": true,
+        "storedHex": "712f62"
+      },
+      {
+        "op": "put",
+        "hex": "742f6101",
+        "ok": true,
+        "storedHex": "742f6101"
+      },
+      {
+        "op": "put",
+        "hex": "742f61206201",
+        "ok": true,
+        "storedHex": "742f61206201"
+      },
+      {
+        "op": "put",
+        "hex": "742f612f6201",
+        "ok": true,
+        "storedHex": "742f612f6201"
+      }
+    ]
+  },
+  "lists": {
+    "status": 200,
+    "j": [
+      {
+        "id": "L1",
+        "pages": [
+          {
+            "opts": {
+              "prefix": "q/"
+            },
+            "hex": [
+              "712f612062",
+              "712f6121",
+              "712f612f62",
+              "712f6130",
+              "712f61",
+              "712f6161",
+              "712f61c3a9",
+              "712f62"
+            ],
+            "json": [
+              "\"q/a b\"",
+              "\"q/a!\"",
+              "\"q/a/b\"",
+              "\"q/a0\"",
+              "\"q/a\"",
+              "\"q/aa\"",
+              "\"q/aé\"",
+              "\"q/b\""
+            ],
+            "truncated": false,
+            "delimitedPrefixes": [],
+            "httpMetadataPresent": [
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false
+            ]
+          }
+        ]
+      },
+      {
+        "id": "L2",
+        "pages": [
+          {
+            "opts": {
+              "prefix": "q/",
+              "include": [
+                "httpMetadata"
+              ]
+            },
+            "hex": [
+              "712f612062",
+              "712f6121",
+              "712f612f62",
+              "712f6130",
+              "712f61",
+              "712f6161",
+              "712f61c3a9",
+              "712f62"
+            ],
+            "json": [
+              "\"q/a b\"",
+              "\"q/a!\"",
+              "\"q/a/b\"",
+              "\"q/a0\"",
+              "\"q/a\"",
+              "\"q/aa\"",
+              "\"q/aé\"",
+              "\"q/b\""
+            ],
+            "truncated": false,
+            "delimitedPrefixes": [],
+            "httpMetadataPresent": [
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true
+            ]
+          }
+        ]
+      },
+      {
+        "id": "L3",
+        "pages": [
+          {
+            "opts": {
+              "prefix": "q/",
+              "startAfter": "q/a"
+            },
+            "hex": [
+              "712f612062",
+              "712f6121",
+              "712f612f62",
+              "712f6130",
+              "712f6161",
+              "712f61c3a9",
+              "712f62"
+            ],
+            "json": [
+              "\"q/a b\"",
+              "\"q/a!\"",
+              "\"q/a/b\"",
+              "\"q/a0\"",
+              "\"q/aa\"",
+              "\"q/aé\"",
+              "\"q/b\""
+            ],
+            "truncated": false,
+            "delimitedPrefixes": [],
+            "httpMetadataPresent": [
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false
+            ]
+          }
+        ]
+      },
+      {
+        "id": "L4",
+        "pages": [
+          {
+            "opts": {
+              "prefix": "q/",
+              "startAfter": "q/a b"
+            },
+            "hex": [
+              "712f6121",
+              "712f612f62",
+              "712f6130",
+              "712f61",
+              "712f6161",
+              "712f61c3a9",
+              "712f62"
+            ],
+            "json": [
+              "\"q/a!\"",
+              "\"q/a/b\"",
+              "\"q/a0\"",
+              "\"q/a\"",
+              "\"q/aa\"",
+              "\"q/aé\"",
+              "\"q/b\""
+            ],
+            "truncated": false,
+            "delimitedPrefixes": [],
+            "httpMetadataPresent": [
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false
+            ]
+          }
+        ]
+      },
+      {
+        "id": "L5",
+        "pages": [
+          {
+            "opts": {
+              "prefix": "q/",
+              "limit": 2
+            },
+            "hex": [
+              "712f612062",
+              "712f6121"
+            ],
+            "json": [
+              "\"q/a b\"",
+              "\"q/a!\""
+            ],
+            "truncated": true,
+            "delimitedPrefixes": [],
+            "httpMetadataPresent": [
+              false,
+              false
+            ]
+          },
+          {
+            "opts": {
+              "prefix": "q/",
+              "limit": 2,
+              "cursor": "<R2 cursor>"
+            },
+            "hex": [
+              "712f612f62",
+              "712f6130"
+            ],
+            "json": [
+              "\"q/a/b\"",
+              "\"q/a0\""
+            ],
+            "truncated": true,
+            "delimitedPrefixes": [],
+            "httpMetadataPresent": [
+              false,
+              false
+            ]
+          },
+          {
+            "opts": {
+              "prefix": "q/",
+              "limit": 2,
+              "cursor": "<R2 cursor>"
+            },
+            "hex": [
+              "712f61",
+              "712f6161"
+            ],
+            "json": [
+              "\"q/a\"",
+              "\"q/aa\""
+            ],
+            "truncated": true,
+            "delimitedPrefixes": [],
+            "httpMetadataPresent": [
+              false,
+              false
+            ]
+          },
+          {
+            "opts": {
+              "prefix": "q/",
+              "limit": 2,
+              "cursor": "<R2 cursor>"
+            },
+            "hex": [
+              "712f61c3a9",
+              "712f62"
+            ],
+            "json": [
+              "\"q/aé\"",
+              "\"q/b\""
+            ],
+            "truncated": false,
+            "delimitedPrefixes": [],
+            "httpMetadataPresent": [
+              false,
+              false
+            ]
+          }
+        ]
+      },
+      {
+        "id": "L6",
+        "pages": [
+          {
+            "opts": {
+              "prefix": "q/a"
+            },
+            "hex": [
+              "712f612062",
+              "712f6121",
+              "712f612f62",
+              "712f6130",
+              "712f61",
+              "712f6161",
+              "712f61c3a9"
+            ],
+            "json": [
+              "\"q/a b\"",
+              "\"q/a!\"",
+              "\"q/a/b\"",
+              "\"q/a0\"",
+              "\"q/a\"",
+              "\"q/aa\"",
+              "\"q/aé\""
+            ],
+            "truncated": false,
+            "delimitedPrefixes": [],
+            "httpMetadataPresent": [
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false
+            ]
+          }
+        ]
+      },
+      {
+        "id": "L7",
+        "pages": [
+          {
+            "opts": {
+              "prefix": "q/",
+              "delimiter": "/"
+            },
+            "hex": [
+              "712f612062",
+              "712f6121",
+              "712f6130",
+              "712f61",
+              "712f6161",
+              "712f61c3a9",
+              "712f62"
+            ],
+            "json": [
+              "\"q/a b\"",
+              "\"q/a!\"",
+              "\"q/a0\"",
+              "\"q/a\"",
+              "\"q/aa\"",
+              "\"q/aé\"",
+              "\"q/b\""
+            ],
+            "truncated": false,
+            "delimitedPrefixes": [
+              "q/a/"
+            ],
+            "httpMetadataPresent": [
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false
+            ]
+          }
+        ]
+      },
+      {
+        "id": "L8",
+        "pages": [
+          {
+            "opts": {
+              "prefix": "t/"
+            },
+            "hex": [
+              "742f6101",
+              "742f61206201",
+              "742f612f6201"
+            ],
+            "json": [
+              "\"t/a\\u0001\"",
+              "\"t/a b\\u0001\"",
+              "\"t/a/b\\u0001\""
+            ],
+            "truncated": false,
+            "delimitedPrefixes": [],
+            "httpMetadataPresent": [
+              false,
+              false,
+              false
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "s3": {
+    "S1": {
+      "status": 200,
+      "keys": [
+        "q/a b",
+        "q/a!",
+        "q/a/b",
+        "q/a0",
+        "q/a",
+        "q/aa",
+        "q/aé",
+        "q/b"
+      ]
+    },
+    "S2": {
+      "status": 200,
+      "keys": [
+        "q/a b",
+        "q/a!",
+        "q/a/b",
+        "q/a0",
+        "q/aa",
+        "q/aé",
+        "q/b"
+      ]
+    },
+    "S3": {
+      "status": 200,
+      "keys": [
+        "q/a b",
+        "q/a!",
+        "q/a/b",
+        "q/a0",
+        "q/a",
+        "q/aa",
+        "q/aé",
+        "q/b"
+      ]
+    },
+    "S4": {
+      "status": 200,
+      "keys": [
+        "t/a\u0001",
+        "t/a b\u0001",
+        "t/a/b\u0001"
+      ]
+    },
+    "S5": {
+      "status": 200,
+      "keys": [
+        "t/a\u0001",
+        "t/a b\u0001",
+        "t/a/b\u0001"
+      ]
+    }
+  },
+  "p1": {
+    "status": 200,
+    "text": "x"
+  },
+  "p2": {
+    "status": 200,
+    "text": ""
+  },
+  "h1": {
+    "status": 200,
+    "j": [
+      {
+        "op": "head",
+        "hex": "742f757001",
+        "found": true,
+        "size": 1,
+        "keyBytes": 5
+      },
+      {
+        "op": "head",
+        "hex": "742f7570",
+        "found": false,
+        "size": null,
+        "keyBytes": null
+      }
+    ]
+  },
+  "p3": {
+    "status": 200,
+    "text": ""
+  },
+  "p4": {
+    "status": 200,
+    "text": "z"
+  },
+  "p5": {
+    "status": 400,
+    "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>InvalidObjectName</Code><Message>The specified object name is not valid.</Message></Error>"
+  },
+  "h2": {
+    "status": 200,
+    "j": [
+      {
+        "op": "head",
+        "hex": "<1024 bytes>",
+        "found": true,
+        "size": 1,
+        "keyBytes": 1024
+      },
+      {
+        "op": "head",
+        "error": "head: The specified object name is not valid. (10020)"
+      }
+    ]
+  },
+  "del": {
+    "status": 200,
+    "j": [
+      {
+        "op": "delete-all",
+        "deleted": 13,
+        "deletedKeys": [
+          "712f612062",
+          "712f6121",
+          "712f612f62",
+          "712f6130",
+          "712f61",
+          "712f6161",
+          "712f61c3a9",
+          "712f62",
+          "742f6101",
+          "742f61206201",
+          "742f612f6201",
+          "742f757001",
+          "<1024 bytes>"
+        ],
+        "remaining": 0
+      }
+    ]
+  },
+  "stoppedBeforeCleanup": null,
+  "confirm": {
+    "bucketsMatching": [],
+    "ourBucketPresent": false,
+    "scriptsTotal": 1,
+    "scriptsMatching": [],
+    "ourWorkerPresent": false,
+    "tokensTotal": 7,
+    "tokensMatching": [],
+    "ourTokenPresent": false
+  },
+  "counts": {
+    "api": 8,
+    "wrangler": 11,
+    "worker": 7,
+    "s3": 10,
+    "total": 36
+  }
+}

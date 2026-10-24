@@ -1,0 +1,5 @@
+
+> @lago-morph/prototype-framework@0.1.0 build
+> tsc -p tsconfig.build.json
+
+build exit 0

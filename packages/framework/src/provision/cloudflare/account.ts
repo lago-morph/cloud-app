@@ -14,7 +14,7 @@
  * → absent; refused (HTTP 403) → it exists but this account does not own it (or its
  * credentials cannot see it). Every other answer is an error naming the bucket and the
  * status; nothing is guessed. A creation that conflicts with an existing bucket (HTTP 409,
- * code 10004) is read back with the same GET (DEC-PENDING-fix-pass0-1): owned → the bucket
+ * code 10004) is read back with the same GET (DEC-0421): owned → the bucket
  * exists in this account, no error; refused → foreign; not found → an error naming the
  * bucket and the 409. Pass 0 check 3 confirmed the 200, 404 and 409 answers live: the 409
  * says "already exists, and you own it". The 403 reading stays unverified (one account
