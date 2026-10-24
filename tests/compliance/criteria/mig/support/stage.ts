@@ -14,7 +14,7 @@
  *   version's sources, which this harness performs after a failed deploy, as the CLI restarts
  *   the previous version on a cloud. The database is read straight from Miniflare's SQLite file.
  * - cloudflare: `deploy --target cloudflare --stage test-<random>` from the copy; the database
- *   is read through the D1 HTTP API (the proxy injects the token; no Authorization header).
+ *   is read through the D1 HTTP API with the bearer token from `CLOUDFLARE_API_TOKEN` (DEC-0420).
  *   Removed with `remove` afterwards. Before anything is copied or deployed, the stage takes the
  *   shared stage guards (`takeStageRoom`: the D1 stop of DEC-0317, the further-stage lock, and
  *   room for 2 D1 databases under DEC-0318, since a schema-changing deploy holds two); `remove()`
@@ -39,6 +39,7 @@ import { basename, join, sep } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { CLOUD_WAITS, createClient, newTestStage, prerequisiteMissing, REFERENCE_APP, target, waitFor, type ComplianceClient } from "../../../harness/index.js";
 import { secretsNotSet } from "../../../harness/node-deps.js";
+import { authHeader } from "../../_cloud/api.js";
 import { BIN, REPO_ROOT } from "../../core/support/repo.js";
 import { takeStageRoom } from "../../prov/support/stage.js";
 
@@ -346,7 +347,7 @@ const CF_API = "https://api.cloudflare.com/client/v4";
 async function cfApi(path: string, init?: { method: string; body: unknown }): Promise<unknown> {
   const response = await fetch(`${CF_API}${path}`, {
     method: init?.method ?? "GET",
-    headers: { "content-type": "application/json", "user-agent": "prototype-framework-compliance/0.1.0" },
+    headers: { "content-type": "application/json", "user-agent": "prototype-framework-compliance/0.1.0", ...authHeader() },
     ...(init === undefined ? {} : { body: JSON.stringify(init.body) }),
     signal: AbortSignal.timeout(CLOUD_WAITS.requestMs),
   });
