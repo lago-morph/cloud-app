@@ -2,7 +2,7 @@
 import { DescribeDBClustersCommand } from "@aws-sdk/client-rds";
 import { describe, expect, it } from "vitest";
 import { PREREQUISITE_MARKER } from "../../../harness/index.js";
-import { awsCallCount } from "./api.js";
+import { awsCallCount, awsClients } from "./api.js";
 import { expectNoAwsTraffic, useAwsMocks } from "./hooks.test-support.js";
 import { requireClusterRoom, testStageClusters } from "./usage.js";
 
@@ -17,6 +17,15 @@ describe("AWS cluster cap", () => {
       .resolves({ DBClusters: [{ DBClusterIdentifier: "notes-test-a0000000000001" }, { DBClusterIdentifier: "manual" }] });
     expect(await testStageClusters()).toEqual(["notes-test-a0000000000001", "reference-test-b0000000000001"]);
     expect(awsCallCount()).toBe(2);
+    expectNoAwsTraffic(t.guard());
+  });
+
+  // G-EV F4: in the driver's own process the region comes from the driver (the account's region), not the environment.
+  it("lists in the region it is given when the process environment has none", async () => {
+    delete process.env.AWS_REGION;
+    t.mocks().rds.on(DescribeDBClustersCommand).resolves({ DBClusters: [] });
+    expect(await testStageClusters({ AWS_REGION: "ap-southeast-2" })).toEqual([]);
+    expect(await awsClients().rds.config.region()).toBe("ap-southeast-2");
     expectNoAwsTraffic(t.guard());
   });
 

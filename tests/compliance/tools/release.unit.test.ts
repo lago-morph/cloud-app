@@ -85,6 +85,18 @@ describe("[COMPL-AC-006] release report", () => {
     expect(LOGIN_PROVIDER_PATHS).toEqual(["packages/framework/src/google/", "packages/framework/src/auth/login-provider.ts", "docs/contracts/ts/internal/login-provider.d.ts"]);
   });
 
+  // G-EV F3: a record marked as a dry run is never counted, even when it is the newest and all passed.
+  it("never counts a record marked as a dry run", () => {
+    const records = allPassed("c1").map((r) => (r.target === "aws" ? { ...r, dryRun: "fake stage operations (OperationsFactory)" } : r));
+    const report = releaseReport({ commit: "c1", catalogue, records, invalidations: [], loginCommits: noLoginCommits });
+    expect(report.works).toBe(false);
+    expect(report.problems).toEqual(["KV-AC-001 on aws: no record for commit c1"]);
+    const certified = allPassed("c1").map((r) => (r.command.includes("--milestone") ? { ...r, dryRun: "not-run rules overridden (DriverDeps.notRunRules)" } : r));
+    const milestone = releaseReport({ commit: "c1", catalogue, records: certified, invalidations: [], loginCommits: noLoginCommits });
+    expect(milestone.problems).toEqual(["GOOGLE-AC-005 on cloudflare (milestone): no record"]);
+    expect(milestone.lastCertification).toBeUndefined();
+  });
+
   it("ignores list lines inside fenced code blocks (the format example)", () => {
     expect(parseInvalidations("```\n- <YYYY-MM-DD> | <ID> | <reason>\n```\n- 2026-10-19 | E2E-008 | r\n").map((i) => i.ids)).toEqual([["E2E-008"]]);
   });

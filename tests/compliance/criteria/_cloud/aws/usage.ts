@@ -11,15 +11,19 @@ import { assertClusterRoom, TEST_STAGE_CLUSTER } from "../../../harness/aws-usag
 import { prerequisiteMissing } from "../../../harness/index.js";
 import { awsCall, awsClients, awsFailure, MAX_PAGES } from "./api.js";
 
-/** Identifiers of the account's test-stage Aurora clusters (any status, deleting included), sorted. */
-export async function testStageClusters(): Promise<string[]> {
+/**
+ * Identifiers of the account's test-stage Aurora clusters (any status, deleting included), sorted.
+ * `env` gives the region when the process's clients are not created yet (the driver's own process
+ * passes the account's region; G-EV F4).
+ */
+export async function testStageClusters(env: Readonly<Record<string, string | undefined>> = process.env): Promise<string[]> {
   const ids: string[] = [];
   let marker: string | undefined;
   const what = "listing Aurora clusters";
   for (let page = 0; page < MAX_PAGES; page += 1) {
     let r;
     try {
-      r = await awsCall(what, () => awsClients().rds.send(new DescribeDBClustersCommand({ MaxRecords: 100, ...(marker === undefined ? {} : { Marker: marker }) })));
+      r = await awsCall(what, () => awsClients(env).rds.send(new DescribeDBClustersCommand({ MaxRecords: 100, ...(marker === undefined ? {} : { Marker: marker }) })));
     } catch (error) {
       throw awsFailure(what, error);
     }

@@ -32,6 +32,8 @@ export interface EvidenceRecord {
   readonly results: readonly EvidenceResult[];
   readonly versions: Readonly<Record<string, string>>;
   readonly leftovers?: readonly string[];
+  /** Set only on a run against fakes: what was faked. Such a record is never evidence (the reports ignore it). */
+  readonly dryRun?: string;
 }
 
 /** What the writer needs to know about the working tree. */

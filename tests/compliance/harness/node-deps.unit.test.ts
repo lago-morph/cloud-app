@@ -228,4 +228,24 @@ describe("[COMPL-AC-004] AWS leftovers through listStageResources (fake target)"
     expect(ops.apiCalls?.()).toBe(0);
     expect(cliStageOps(repo, "cloudflare").testStageClusters).toBeUndefined();
   });
+
+  // G-EV F4: the account's region, read as the framework reads it (the log bucket's location); G-EV F3: fakes mark the record.
+  it("reads the account's region through the given account reader, on AWS only", async () => {
+    const seen: (string | undefined)[] = [];
+    const ops = cliStageOps(repo, "aws", { env: { AWS_REGION: "us-west-1", HTTPS_PROXY: "http://proxy:3128" }, accountRegion: (env) => (seen.push(env.https_proxy), Promise.resolve("eu-north-1")) });
+    expect(await ops.region?.()).toBe("eu-north-1");
+    // The reader gets the CLI's AWS child environment (proxy variables paired), as deploy and smoke build it.
+    expect(seen).toEqual(["http://proxy:3128"]);
+    expect(cliStageOps(repo, "cloudflare").region).toBeUndefined();
+  });
+
+  it("says it is a dry run when the CLI runner or the operations factory is a fake, and not otherwise", () => {
+    const { factory } = fakeAws();
+    const run = (): Promise<{ status: number; output: string }> => Promise.resolve({ status: 0, output: "" });
+    expect(cliStageOps(repo, "aws", { operations: factory }).dryRun).toBe("fake stage operations (OperationsFactory)");
+    expect(cliStageOps(repo, "aws", { run, operations: factory }).dryRun).toBe("fake framework CLI runner; fake stage operations (OperationsFactory)");
+    expect(cliStageOps(repo, "cloudflare", { run }).dryRun).toBe("fake framework CLI runner");
+    expect(cliStageOps(repo, "aws").dryRun).toBeUndefined();
+    expect(cliStageOps(repo, "aws", { env: AWS_ENV })).not.toHaveProperty("dryRun");
+  });
 });
