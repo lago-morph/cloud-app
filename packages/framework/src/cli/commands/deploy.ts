@@ -9,7 +9,8 @@
  * 3. `prepare`: build the deployment (`build --target <t> --stage <s>`, plus the client's static
  *    assets) and read what the core needs from the app: the migration histories, the declared
  *    secrets, the stage's Google client ID. Only local files are written.
- * 4. The target-neutral PROV core (`runDeploy`, steps 1–7) on the target's operations. It never
+ * 4. The target-neutral PROV core (`runDeploy`, steps 1–7) on the target's operations
+ *    (`targetOperations`: one factory per cloud target, `operations.ts`). It never
  *    creates the account's shared resources: only `setup-account` does (PROV-REQ-004).
  * 5. On success: record the stage's public origin for `smoke` (`recordDeployOutput`, DEC-0272)
  *    and, for a production stage, print the Google callback URL to register (GOOGLE-REQ-004).
@@ -18,24 +19,20 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { buildApp, COMPATIBILITY_DATE, type BuildOptions, type BuildResult } from "../../build/build.js";
-import { AwsNotImplementedError } from "../../core/aws-pending.js";
 import type { Target } from "../../core/identity.js";
-import { bucketCorsPolicy, checkStorageCors } from "../../files/cloudflare/cors.js";
 import type { Histories } from "../../mig/apply.js";
 import { readHistory } from "../../mig/history.js";
 import { FRAMEWORK_MIGRATIONS_DIR } from "../../mig/migrations-dir.js";
-import { createCloudflareApi } from "../../provision/cloudflare/api.js";
-import { d1DatabaseOperations } from "../../provision/cloudflare/d1/operations.js";
-import { missingCredentials } from "../../provision/cloudflare/environment.js";
 import { filesBucketName } from "../../provision/cloudflare/names.js";
 import type { WorkerCode } from "../../provision/cloudflare/sst.js";
-import { createCloudflareTarget } from "../../provision/cloudflare/target.js";
+import type { FunctionCode } from "../../provision/aws/sst.js";
 import { runDeploy, type AbortPoint } from "../../provision/core/deploy.js";
 import type { TargetOperations } from "../../provision/core/operations.js";
 import { BINDINGS } from "../../targets/cloudflare/bindings.js";
 import { UsageError } from "../args.js";
 import { describeFailure } from "../failure.js";
 import { EXIT, type Command } from "../io.js";
+import { targetOperations } from "./operations.js";
 import { recordDeployOutput } from "./smoke.js";
 import { parseCloudTargetStage, refuseUnreachableCloud, type ProcessEnvironment } from "./smoke-cloud.js";
 
@@ -106,41 +103,51 @@ export function deployCommand(deps: DeployDeps): Command {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Real dependencies (Cloudflare). The Cloudflare API is reached only through `fetch`, which the
-// unit tests stub: no test of this module contacts Cloudflare.
+// Real dependencies. The Cloudflare API is reached only through `fetch`, which the unit tests
+// stub, and the AWS operations are injected or mocked: no test of this module contacts a cloud.
 
 export interface PrepareDeps {
   /** The build pipeline (`buildApp`). */
-  build(options: BuildOptions): Promise<Pick<BuildResult, "deployment" | "resolved" | "outDir" | "bundle">>;
+  build(options: BuildOptions): Promise<Pick<BuildResult, "deployment" | "resolved" | "outDir" | "bundle" | "lambda">>;
   /** Builds the client's static assets into `outDir`; undefined when the app has no client. */
   buildClient(appDir: string, outDir: string): Promise<string | undefined>;
   /** The package's framework migration histories (`FRAMEWORK_MIGRATIONS_DIR`). */
   readonly frameworkMigrationsDir: string;
-  /** `CLOUDFLARE_ACCOUNT_ID`, delivered to the Worker for its R2 tickets. */
+  /** `CLOUDFLARE_ACCOUNT_ID`, delivered to the Worker for its R2 tickets (Cloudflare only). */
   readonly accountId: string | undefined;
 }
 
-/** `deploy`'s `prepare` on Cloudflare: build, client, migrations, secrets and the Worker code. */
+/** `deploy`'s `prepare`: build, client, migrations, secrets and the target's code (Cloudflare: the Worker; AWS: the Lambda). */
 export function prepareDeploy(deps: PrepareDeps): DeployDeps["prepare"] {
   return async (appDir, target, stage) => {
-    if (target === "aws") throw new AwsNotImplementedError("deploy's build, migrations and Lambda code for --target aws (G-06, G-10, G-11)");
-    if (target !== "cloudflare") throw new Error(`deploy has no provisioning for target ${target}`);
+    if (target !== "cloudflare" && target !== "aws") throw new Error(`deploy has no provisioning for target ${target}`);
     const built = await deps.build({ appDir, target, stage });
     const assetsDirectory = await deps.buildClient(appDir, join(built.outDir, "client"));
     const app = built.deployment.app;
-    const accountId = deps.accountId ?? "";
-    const code: WorkerCode = {
-      bundle: built.bundle,
-      ...(assetsDirectory === undefined ? {} : { assetsDirectory }),
-      compatibilityDate: COMPATIBILITY_DATE,
-      variables: { ...(accountId === "" ? {} : { [BINDINGS.r2AccountId]: accountId }), [BINDINGS.filesBucket]: filesBucketName({ app, stage }) },
-      logBucketBinding: BINDINGS.logs,
-    };
+    const withAssets = assetsDirectory === undefined ? {} : { assetsDirectory };
+    let code: WorkerCode | FunctionCode;
+    if (target === "aws") {
+      // G-06's build output is exactly the stage program's FunctionCode (DEC-PENDING-g-06-1); the
+      // program sets the framework's Lambda variables itself, so the code adds none.
+      if (built.lambda === undefined) throw new Error(`the AWS build of stage ${stage} returned no Lambda code`);
+      code = { bundle: built.lambda.bundle, handler: built.lambda.handler, ...withAssets };
+    } else {
+      const accountId = deps.accountId ?? "";
+      code = {
+        bundle: built.bundle,
+        ...withAssets,
+        compatibilityDate: COMPATIBILITY_DATE,
+        variables: { ...(accountId === "" ? {} : { [BINDINGS.r2AccountId]: accountId }), [BINDINGS.filesBucket]: filesBucketName({ app, stage }) },
+        logBucketBinding: BINDINGS.logs,
+      };
+    }
+    // D1 runs the SQLite histories; Aurora (through the Data API) the Postgres ones.
+    const dialect = target === "aws" ? "postgres" : "sqlite";
     return {
       app,
       migrations: {
-        framework: readHistory(deps.frameworkMigrationsDir, "sqlite", "framework"),
-        app: readHistory(join(appDir, "migrations"), "sqlite", "app"),
+        framework: readHistory(deps.frameworkMigrationsDir, dialect, "framework"),
+        app: readHistory(join(appDir, "migrations"), dialect, "app"),
       },
       requiredSecrets: built.resolved.secrets.map((s) => s.name),
       ...(built.resolved.google === undefined ? {} : { googleClientId: built.resolved.google.clientId }),
@@ -168,52 +175,14 @@ export async function buildClientAssets(appDir: string, outDir: string): Promise
   return outDir;
 }
 
-export interface OperationsOptions {
-  readonly env: ProcessEnvironment;
-  /** Default the global `fetch` (the process runs with `NODE_USE_ENV_PROXY=1` behind a proxy). */
-  readonly fetch?: typeof fetch;
-  /**
-   * Refuse, naming them, when credential variables are missing (remove, setup-account, secrets).
-   * `deploy` leaves it off: its step 1 reports every missing prerequisite itself.
-   */
-  readonly requireCredentials: boolean;
-}
+export { cloudflareOperations, targetOperations, type OperationsFactory, type OperationsInput, type OperationsOptions, type StageOperations } from "./operations.js";
 
-/** The target's PROV operations from the process environment (Cloudflare: D-03 with D-04's databases and D-02's CORS parts). */
-export function cloudflareOperations(options: OperationsOptions): DeployDeps["operations"] {
-  return ({ appDir, target, code }) => {
-    if (target === "aws") throw new AwsNotImplementedError("the AWS provisioning operations (G-07…G-11)");
-    if (target !== "cloudflare") throw new Error(`there are no provisioning operations for target ${target}`);
-    const env = options.env;
-    if (options.requireCredentials) {
-      const missing = missingCredentials(env);
-      if (missing.length > 0) throw new Error(`missing Cloudflare credentials: ${missing.join(", ")} (set them in the environment; values are never printed)`);
-    }
-    const accountId = env.CLOUDFLARE_ACCOUNT_ID ?? "";
-    const withFetch = options.fetch === undefined ? {} : { fetch: options.fetch };
-    const api = createCloudflareApi({ token: env.CLOUDFLARE_API_TOKEN ?? "", ...withFetch });
-    return createCloudflareTarget({
-      api,
-      accountId,
-      env,
-      appDir,
-      databases: d1DatabaseOperations({ api, accountId }),
-      files: {
-        bucketCors: (origin) => bucketCorsPolicy(origin),
-        storagePreflight: ({ accountId: account, bucket, origin }) => checkStorageCors({ accountId: account, bucket, publicOrigin: origin, ...withFetch }),
-      },
-      ...(code === undefined ? {} : { code: code as WorkerCode }),
-      ...withFetch,
-    });
-  };
-}
-
-/** `deploy` bound to the build pipeline, the Cloudflare operations and the recorded deploy output. */
+/** `deploy` bound to the build pipeline, the target's operations and the recorded deploy output. */
 export function deployBinding(env: ProcessEnvironment = process.env): Command {
   return deployCommand({
     env,
     prepare: prepareDeploy({ build: buildApp, buildClient: buildClientAssets, frameworkMigrationsDir: FRAMEWORK_MIGRATIONS_DIR, accountId: env.CLOUDFLARE_ACCOUNT_ID }),
-    operations: cloudflareOperations({ env, requireCredentials: false }),
+    operations: targetOperations({ env, requireCredentials: false }),
     recordDeployOutput,
   });
 }

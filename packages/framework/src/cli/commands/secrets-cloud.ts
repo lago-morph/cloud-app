@@ -4,7 +4,8 @@
  * value from standard input; this module checks the stage and the process first, then writes
  * the value with the target's `setSecret` (Cloudflare: the Worker secret `SECRET_<NAME>`, which
  * needs the stage's Worker, so a stage's first deploy comes first: PROV §2 "First Cloudflare
- * deploy"). Nothing here prints or returns the value (CLI-REQ-004).
+ * deploy"; AWS: the SSM SecureString parameter `/<app>/<stage>/secrets/<name>`, which does not
+ * need the Function). Nothing here prints or returns the value (CLI-REQ-004).
  */
 import { secretLocation } from "../../config/secret-locations.js";
 import type { Target } from "../../core/identity.js";
@@ -55,8 +56,8 @@ export function cloudSecretsBinding(env: ProcessEnvironment = process.env): Clou
   return {
     refuse: (_target, stage, io) => refuse(env, stage, io),
     async set(...args) {
-      const [{ loadApp }, { cloudflareOperations }] = await Promise.all([import("../../build/load.js"), import("./deploy.js")]);
-      return setWith({ appName: async (appDir) => (await loadApp(appDir)).definition.name, operations: cloudflareOperations({ env, requireCredentials: true }) }, ...args);
+      const [{ loadApp }, { targetOperations }] = await Promise.all([import("../../build/load.js"), import("./operations.js")]);
+      return setWith({ appName: async (appDir) => (await loadApp(appDir)).definition.name, operations: targetOperations({ env, requireCredentials: true }) }, ...args);
     },
   };
 }

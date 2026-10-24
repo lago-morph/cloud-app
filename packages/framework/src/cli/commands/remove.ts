@@ -61,16 +61,16 @@ export function removeCommand(deps: RemoveDeps): Command {
 
 /** `remove` bound to the app loader, the target's operations and the recorded deploy output. */
 export async function removeBinding(env: ProcessEnvironment = process.env): Promise<Command> {
-  const [{ loadApp }, { cloudflareOperations }, { deployRecordPath }, { rmSync }] = await Promise.all([
+  const [{ loadApp }, { targetOperations }, { deployRecordPath }, { rmSync }] = await Promise.all([
     import("../../build/load.js"),
-    import("./deploy.js"),
+    import("./operations.js"),
     import("./smoke.js"),
     import("node:fs"),
   ]);
   return removeCommand({
     env,
     appName: async (appDir) => (await loadApp(appDir)).definition.name,
-    operations: cloudflareOperations({ env, requireCredentials: true }),
+    operations: targetOperations({ env, requireCredentials: true }),
     forgetDeployOutput: (appDir, target, stage) => rmSync(deployRecordPath(appDir, target, stage), { force: true }),
   });
 }

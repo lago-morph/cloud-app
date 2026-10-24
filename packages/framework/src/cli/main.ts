@@ -42,7 +42,7 @@ const COMMANDS: Readonly<Record<string, Entry>> = {
   smoke: { summary: "smoke --target <t> --stage <s>: run the app's smoke tests against a stage", run: smokeBinding },
   remove: { summary: "remove --target <t> --stage <s> [--confirm-production <s>]: remove a stage", run: removeBinding },
   secrets: { summary: "secrets set <name> --target <t> --stage <s>: set a secret from standard input", run: secretsBinding },
-  "setup-account": { summary: "setup-account --target <t>: one-time account setup", run: setupAccountBinding },
+  "setup-account": { summary: "setup-account --target <t> [--region <r>]: one-time account setup (--region: aws only)", run: setupAccountBinding },
   "certify-auth": { summary: "certify-auth --target <t> --stage <s>: guided login-provider certification", run: certifyAuthBinding },
   "reset-local": { summary: "clear local state (local D1, R2 and .logs/)", run: resetLocalBinding },
 };

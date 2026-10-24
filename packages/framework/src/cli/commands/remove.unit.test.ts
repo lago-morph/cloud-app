@@ -82,3 +82,21 @@ describe("remove (CLI-REQ-001, PROV-REQ-003, CLI-REQ-003)", () => {
     expect(h.fake.calls).toEqual([]);
   });
 });
+
+describe("remove --target aws (G-11)", () => {
+  it("removes the stage through the AWS operations and forgets .framework/aws/stages/<stage>.json", async () => {
+    const fake = new FakeTarget({ dialect: "postgres", databases: [{ name: "notes-test-abc-db-1" }] });
+    fake.stageState(STAGE).resources.push({ kind: "lambda function", id: "arn:aws:lambda:eu-west-1:123456789012:function:notes-test-abc-http" });
+    const h = harness(fake);
+    const io = captureIo("/apps/notes");
+    expect(await removeCommand(h.deps)(["--target", "aws", "--stage", "test-abc"], io)).toBe(0);
+    expect(h.events).toEqual(["appName /apps/notes", "operations aws", "forget /apps/notes aws test-abc"]);
+    expect(io.out).toContain("removed stage test-abc");
+  });
+
+  it("a production stage needs --confirm-production on AWS too", async () => {
+    const h = harness();
+    await expect(removeCommand(h.deps)(["--target", "aws", "--stage", "prod"], captureIo())).rejects.toThrow(/--confirm-production prod/);
+    expect(h.events).toEqual([]);
+  });
+});

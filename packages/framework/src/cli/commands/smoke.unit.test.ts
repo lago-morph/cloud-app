@@ -185,11 +185,56 @@ describe("smoke --target local (CLI-REQ-001; CLI-AC-005 local part)", () => {
   });
 });
 
-describe("smoke --target aws (AWS phase G)", () => {
-  it("is accepted as a target and stops at the AWS log location, which phase G has not implemented yet", async () => {
-    const h = harness();
-    await expect(h.smoke(["--target", "aws", "--stage", "test-abc"], captureIo())).rejects.toThrow(/AWS target not yet implemented \(phase G\)/);
-    expect(h.ran).toEqual([]);
+describe("smoke --target aws --stage test-… (G-11; CLI-AC-005 AWS part, offline)", () => {
+  const CLOUDFRONT = "https://d1234abcd.cloudfront.net";
+  const ACCOUNT_ID = "123456789012";
+  const aws = (over: Partial<SmokeDeps> = {}) =>
+    harness({ deployedOrigin: () => CLOUDFRONT, awsLogAccount: async () => ({ accountId: ACCOUNT_ID, region: "eu-west-1" }), ...over });
+
+  it("runs against the recorded CloudFront origin and prints the S3 prefix (LOG-REQ-004) and the CloudWatch log group", async () => {
+    const h = aws();
+    const io = captureIo("/repo/apps/template");
+    expect(await h.smoke(["--target", "aws", "--stage", "test-abc"], io)).toBe(0);
+    expect(h.ran).toEqual([{ target: "aws", stage: "test-abc", baseUrl: CLOUDFRONT }]);
+    expect(io.out).toContain(
+      `log for today: S3 bucket prototype-logs-${ACCOUNT_ID} (eu-west-1), keys under template/test-abc/2026/10/20/ (s3://prototype-logs-${ACCOUNT_ID}/template/test-abc/2026/10/20/); Lambda output: CloudWatch log group /aws/lambda/template-test-abc-http (eu-west-1)`,
+    );
+    expect(io.out).toContain("evidence: validation/aws/abcdefghijklmno.json");
+  });
+
+  it("the evidence record redacts the account ID (the log line is in the raw smoke log)", async () => {
+    const h = aws();
+    await h.smoke(["--target", "aws", "--stage", "test-abc"], captureIo());
+    const input = h.written[0];
+    expect(input?.record).toMatchObject({ target: "aws", stage: "test-abc", command: "smoke --target aws --stage test-abc", exitStatus: 0 });
+    expect(input?.raw?.["smoke.log"]).toContain(`prototype-logs-${ACCOUNT_ID}`);
+    expect(input?.redactions).toEqual([{ value: ACCOUNT_ID, replacement: "<account-id>" }]);
+  });
+
+  it("when the account cannot be read, prints the location with <account-id> and the reason, and the run still counts", async () => {
+    const h = aws({
+      awsLogAccount: async () => {
+        throw new Error("AWS credentials are not usable: STS GetCallerIdentity failed with ExpiredToken (HTTP 403)");
+      },
+    });
+    const io = captureIo();
+    expect(await h.smoke(["--target", "aws", "--stage", "test-abc"], io)).toBe(0);
+    expect(io.out).toContain(
+      "log for today: S3 bucket prototype-logs-<account-id>, keys under template/test-abc/2026/10/20/; Lambda output: CloudWatch log group /aws/lambda/template-test-abc-http (the account ID and region could not be read: AWS credentials are not usable: STS GetCallerIdentity failed with ExpiredToken (HTTP 403))",
+    );
+    expect(h.written[0]?.redactions).toEqual([]);
+  });
+
+  it("refuses production stages and reports a stage that was never deployed, before any test runs", async () => {
+    const prod = aws();
+    const io = captureIo();
+    expect(await prod.smoke(["--target", "aws", "--stage", "prod"], io)).toBe(1);
+    expect(io.err).toContain("runs only against test stages");
+    const never = aws({ deployedOrigin: () => undefined });
+    const io2 = captureIo();
+    expect(await never.smoke(["--target", "aws", "--stage", "test-abc"], io2)).toBe(1);
+    expect(io2.err).toContain("npm run deploy -- --target aws --stage test-abc");
+    expect([...prod.ran, ...never.ran]).toEqual([]);
   });
 });
 

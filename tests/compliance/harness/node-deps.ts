@@ -13,7 +13,7 @@ import { SecretsNotSetError, TEST_SECRET, type CloudStageOps, type DriverDeps, t
 import { REFERENCE_APP, stageLeftovers } from "./leftovers.js";
 import { waitFor } from "./wait.js";
 import type { TargetOperations } from "../../../packages/framework/src/provision/core/operations.js";
-import { cloudflareOperations } from "../../../packages/framework/src/cli/commands/deploy.js";
+import { targetOperations } from "../../../packages/framework/src/cli/commands/operations.js";
 import { cloudProcessProblems } from "../../../packages/framework/src/cli/commands/smoke-cloud.js";
 
 /** The origin `dev` prints once the client and `/api` answer (cli.md `dev`). */
@@ -161,15 +161,15 @@ function startReferenceDev(repoRoot: string): Promise<LocalSession> {
   });
 }
 
-/** Builds a target's PROV operations as `remove` builds them (the framework's `cloudflareOperations`, D-05; on AWS G-10/G-11). */
+/** Builds a target's PROV operations as `remove` builds them (the framework's per-target `targetOperations`, D-05, G-11). */
 export type OperationsFactory = (options: { readonly env: Readonly<Record<string, string | undefined>>; readonly requireCredentials: boolean; readonly fetch?: typeof fetch }) => (input: { readonly appDir: string; readonly target: Target }) => Pick<TargetOperations, "listStageResources">;
 
 /**
  * The target's PROV operations (PROV §2), for the leftover check (compliance.md "Test stages":
  * by exact name, using `listStageResources`). These are the framework's own operations, wired
- * exactly as `remove` wires them (D-05 `cloudflareOperations`; decision D-06-2); on AWS the same
- * factory gives the AWS `TargetOperations` (G-10, wired by G-11). Until those land it throws the
- * framework's "AWS target not yet implemented" error, which the driver records as a failed
+ * exactly as `remove` wires them (`targetOperations`, the per-target factory; decision D-06-2):
+ * Cloudflare's D-03 operations, or on AWS G-10's `TargetOperations` (wired by G-11). A failure to
+ * build them (missing credentials, for example) rejects, and the driver records it as a failed
  * leftover check, never as "no leftovers". Tests pass a fake target's operations as `operations`.
  * The check runs in the driver's process, so behind a proxy the driver itself must be started with
  * `NODE_USE_ENV_PROXY=1` (DEC-0085); otherwise, and without credentials, this rejects before any
@@ -183,7 +183,7 @@ export async function stageResourceOperations(
   if (target === "local") throw new Error("the local target has no stage resources");
   const problems = cloudProcessProblems(options.env);
   if (problems.length > 0) throw new Error(`the leftover check cannot reach ${target === "aws" ? "AWS" : "Cloudflare"}: ${problems.join("; ")}`);
-  const factory: OperationsFactory = options.operations ?? cloudflareOperations;
+  const factory: OperationsFactory = options.operations ?? targetOperations;
   const make = factory({ env: options.env, requireCredentials: true, ...(options.fetch === undefined ? {} : { fetch: options.fetch }) });
   return make({ appDir: join(repoRoot, "apps", REFERENCE_APP), target });
 }
