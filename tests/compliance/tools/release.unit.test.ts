@@ -53,6 +53,28 @@ describe("[COMPL-AC-006] release report", () => {
     expect(releaseReport({ commit: "c1", catalogue, records, invalidations: [], loginCommits: noLoginCommits }).problems).toEqual(["KV-AC-001 on local: failed: boom (run r5)"]);
   });
 
+  it("a newer milestone record that did not select an ID does not decide it", () => {
+    const records = [
+      ...allPassed("c1"),
+      rec("cloudflare", "c0", [{ id: "GOOGLE-AC-005", status: "not-run", detail: "not selected for this run (--only)" }], { milestone: true, finishedAt: "2026-10-19T10:00:00Z" }),
+    ];
+    const report = releaseReport({ commit: "c1", catalogue, records, invalidations: [], loginCommits: noLoginCommits });
+    expect(report.problems).toEqual([]);
+    expect(report.lastCertification?.runId).toBe("r4");
+  });
+
+  it("a newer automated record that did not select an ID does not shadow the record that ran it", () => {
+    const records = [...allPassed("c1"), rec("local", "c1", [{ id: "KV-AC-001", status: "not-run", detail: "not selected for this run (--only)" }])];
+    const report = releaseReport({ commit: "c1", catalogue, records, invalidations: [], loginCommits: noLoginCommits });
+    expect(report.problems).toEqual([]);
+    expect(report.works).toBe(true);
+  });
+
+  it("only the exact not-selected entry is skipped; any other not-run detail still decides", () => {
+    const records = [...allPassed("c1"), rec("local", "c1", [{ id: "KV-AC-001", status: "not-run", detail: "not selected for this run (--only) extra" }])];
+    expect(releaseReport({ commit: "c1", catalogue, records, invalidations: [], loginCommits: noLoginCommits }).problems).toEqual(["KV-AC-001 on local: not-run: not selected for this run (--only) extra (run r5)"]);
+  });
+
   it("a certification invalidated by a recorded entry makes the commit not working", () => {
     const invalidations = parseInvalidations("# Invalidations\n\n- 2026-10-19 | GOOGLE-AC-005, E2E-008 | login-provider interface changed\n");
     const report = releaseReport({ commit: "c1", catalogue, records: allPassed("c1"), invalidations, loginCommits: noLoginCommits });

@@ -8,7 +8,7 @@
  * last GOOGLE certification (GOOGLE-AC-005). It records; the evaluator judges.
  */
 import type { EvidenceRecord } from "../../../packages/framework/src/evidence/public.js";
-import { TARGETS, type CatalogueEntry } from "../harness/catalogue.js";
+import { selectedEntries, TARGETS, type CatalogueEntry } from "../harness/catalogue.js";
 import { isDryRun } from "./records.js";
 
 /** GOOGLE and the login-provider interface (auth.md, internal/login-provider.d.ts). */
@@ -66,8 +66,11 @@ export interface ReleaseReport {
 const isMilestone = (r: EvidenceRecord): boolean => /(?:^|\s)--milestone(?:\s|$)/.test(r.command);
 const newestFirst = (records: readonly EvidenceRecord[]): EvidenceRecord[] => [...records].sort((a, b) => (a.finishedAt < b.finishedAt ? 1 : a.finishedAt > b.finishedAt ? -1 : 0));
 
+/** A record contains an ID when it has an entry for it other than the not-selected one (DEC-0264). */
+const selects = (r: EvidenceRecord, id: string): boolean => selectedEntries(r, id).length > 0;
+
 function summary(record: EvidenceRecord, id: string): { passed: boolean; text: string } {
-  const entries = record.results.filter((r) => r.id === id);
+  const entries = selectedEntries(record, id);
   const bad = entries.filter((r) => r.status !== "passed");
   return { passed: bad.length === 0, text: bad.map((r) => (r.detail === undefined ? r.status : `${r.status}: ${r.detail}`)).join("; ") };
 }
@@ -85,7 +88,7 @@ export function releaseReport(input: ReleaseInput): ReleaseReport {
       const applies = entry.applies[target];
       if (applies === undefined) continue;
       if (applies.automated) {
-        const record = automated.find((r) => r.target === target && r.results.some((x) => x.id === entry.id));
+        const record = automated.find((r) => r.target === target && selects(r, entry.id));
         if (record === undefined) problems.push(`${entry.id} on ${target}: no record for commit ${input.commit}`);
         else {
           const s = summary(record, entry.id);
@@ -93,7 +96,7 @@ export function releaseReport(input: ReleaseInput): ReleaseReport {
         }
       }
       if (applies.milestone.length > 0) {
-        const record = milestone.find((r) => r.target === target && r.results.some((x) => x.id === entry.id));
+        const record = milestone.find((r) => r.target === target && selects(r, entry.id));
         if (record === undefined) {
           problems.push(`${entry.id} on ${target} (milestone): no record`);
           continue;

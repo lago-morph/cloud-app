@@ -29,7 +29,7 @@ import {
   redact,
 } from "../../../packages/framework/src/evidence/public.js";
 import { ALL, type ComplianceArgs } from "./args.js";
-import type { CatalogueEntry, Target } from "./catalogue.js";
+import { NOT_SELECTED, type CatalogueEntry, type Target } from "./catalogue.js";
 import { PrerequisiteMissingError } from "./blocked.js";
 import { assertAwsStageName, assertClusterRoom, awsCallsInOutput, awsRunCallCap, MAX_AWS_CALLS_ENV, TEST_STAGE_CLUSTER } from "./aws-usage.js";
 import { childEnv } from "./env.js";
@@ -145,7 +145,7 @@ function select(args: ComplianceArgs, deps: DriverDeps): ExpectedEntry[] {
     if (!ids.has(id)) deps.log(`compliance: note: ${id} is not expected on ${args.target} in this tier; ignored`);
   }
   const only = args.only === undefined ? undefined : new Set(args.only);
-  return expected.map((e) => (e.run && only !== undefined && !only.has(e.id) ? { ...e, run: false, notRun: "not selected for this run (--only)", notRunParts: [] } : e));
+  return expected.map((e) => (e.run && only !== undefined && !only.has(e.id) ? { ...e, run: false, notRun: NOT_SELECTED, notRunParts: [] } : e));
 }
 
 /** The operator's `--blocked` list with `*` expanded to every criterion the run would execute. */

@@ -76,6 +76,17 @@ describe("[COMPL-AC-002] traceability report", () => {
     expect(rows[1]?.results).toEqual({});
   });
 
+  it("a newer record that did not select a criterion (--only) does not hide the latest result of the run that did", () => {
+    const records = [
+      rec("cloudflare", "2026-10-20T12:00:00Z", [{ id: "KV-AC-001", status: "passed" }]),
+      rec("cloudflare", "2026-10-20T13:00:00Z", [{ id: "KV-AC-001", status: "not-run", detail: "not selected for this run (--only)" }]),
+      rec("local", "2026-10-20T13:00:00Z", [{ id: "KV-AC-001", status: "not-run", detail: "not selected for this run (--only)" }]),
+    ];
+    const results = buildTraceability({ catalogue, tests: [], records }).rows[0]?.results;
+    expect(results).toEqual({ cloudflare: "passed (2026-10-20T12:00:00Z)" });
+    expect(renderTraceability(buildTraceability({ catalogue, tests: [], records }))).not.toContain("not selected for this run");
+  });
+
   it("lists every ID defined in the real documents", () => {
     const real = readCatalogue(new URL("../../../docs/", import.meta.url).pathname);
     const report = buildTraceability({ catalogue: real, tests: [], records: [] });
