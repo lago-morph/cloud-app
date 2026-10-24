@@ -46,6 +46,18 @@ async function rejection(p: Promise<unknown>): Promise<Error> {
   throw new Error("expected a rejection");
 }
 
+/** Whether a pg error `code` (a five-character SQLSTATE) sits on `e` or on anything it references. */
+function pgCodeFound(e: unknown, seen = new Set<unknown>()): boolean {
+  if (typeof e !== "object" || e === null || seen.has(e)) return false;
+  seen.add(e);
+  for (const key of Reflect.ownKeys(e)) {
+    const value = (e as Record<PropertyKey, unknown>)[key];
+    if (key === "code" && typeof value === "string" && /^[0-9A-Z]{5}$/.test(value)) return true;
+    if (pgCodeFound(value, seen)) return true;
+  }
+  return false;
+}
+
 let fake: DataApiFake;
 beforeAll(async () => {
   fake = await DataApiFake.create({ databases: ["app"], defaultDatabase: "app" });
@@ -274,6 +286,26 @@ describe("SQL errors carry the SQLSTATE in the message", () => {
       expect(e.message).toBe('ERROR: relation "missing_table" does not exist; SQLState: 42P01');
     } finally {
       await other.close();
+    }
+  });
+
+  it("a thrown SQL exception carries no cause and no pg code anywhere, only the SQLSTATE in its message", async () => {
+    // The SDK's exceptions carry no PGlite error, so a consumer must parse the message (G-S1 (b)).
+    await fake.send(exec({ sql: "create table nc1 (id text primary key)" }));
+    await fake.send(exec({ sql: "insert into nc1 values ('a')" }));
+    const outside = await rejection(fake.send(exec({ sql: "insert into nc1 values ('a')" })));
+    const { transactionId } = await fake.send(new BeginTransactionCommand(ARNS));
+    const inside = await rejection(fake.send(exec({ sql: "insert into nc1 values ('a')", transactionId })));
+    await fake.send(new RollbackTransactionCommand({ ...ARNS, transactionId }));
+    const batch = await rejection(
+      fake.send(new BatchExecuteStatementCommand({ ...ARNS, sql: "insert into nc1 values (:id)", parameterSets: [[str("id", "a")]] })),
+    );
+    for (const e of [outside, inside, batch]) {
+      expect(e).toBeInstanceOf(BadRequestException);
+      expect(e.message).toBe('ERROR: duplicate key value violates unique constraint "nc1_pkey"\n  Detail: Key (id)=(a) already exists.; SQLState: 23505');
+      expect(Reflect.ownKeys(e)).not.toContain("cause");
+      expect((e as { cause?: unknown }).cause).toBeUndefined();
+      expect(pgCodeFound(e)).toBe(false);
     }
   });
 

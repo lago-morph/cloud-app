@@ -3,7 +3,7 @@
  * a PRE-CHECK, never AWS evidence (DEC-PENDING-g-f1-1): these tests show that the adapter's code
  * paths work against the fake's assumed shapes; phase L confirms them on AWS.
  */
-import { ExecuteStatementCommand, type RDSDataClient } from "@aws-sdk/client-rds-data";
+import { ExecuteStatementCommand } from "@aws-sdk/client-rds-data";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
 import { generateDrizzleJson, generateMigration } from "drizzle-kit/api";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -53,24 +53,9 @@ const TARGET = { resourceArn: FAKE_RESOURCE_ARN, secretArn: FAKE_SECRET_ARN, dat
 
 let fake: DataApiFake;
 const exec = (sql: string) => fake.send(new ExecuteStatementCommand({ resourceArn: FAKE_RESOURCE_ARN, secretArn: FAKE_SECRET_ARN, database: "app", sql }));
-/**
- * The fake's client as the SDK would behave: the fake keeps the PGlite error (with its pg
- * `code`) as `cause` of the SQL exception it throws, which no real SDK exception has. That
- * would let the shared guard find SQLSTATE 23505 without parsing the message, so the shim drops
- * it and the adapter must classify by the message, as on AWS (G-S1 finding (b)).
- */
-function sdkLike(client: RDSDataClient): RDSDataClient {
-  const send = async (command: unknown): Promise<unknown> => {
-    try {
-      return await (client.send as (c: unknown) => Promise<unknown>)(command);
-    } catch (e) {
-      if (typeof e === "object" && e !== null && "cause" in e) delete (e as { cause?: unknown }).cause;
-      throw e;
-    }
-  };
-  return new Proxy(client, { get: (t, p) => (p === "send" ? send : Reflect.get(t, p, t)) });
-}
-const handle = (options: DataApiOptions = {}): PortableDb => dataApiDb(sdkLike(fake.client), TARGET, options);
+// The fake's SQL exceptions carry the SQLSTATE only in the message, with no pg `code` on them
+// or on a cause, as the SDK's do; so the adapter must classify by the message (G-S1 finding (b)).
+const handle = (options: DataApiOptions = {}): PortableDb => dataApiDb(fake.client, TARGET, options);
 
 beforeAll(async () => {
   fake = await DataApiFake.create({ databases: ["app"], defaultDatabase: "app", resourceArn: FAKE_RESOURCE_ARN, secretArn: FAKE_SECRET_ARN,

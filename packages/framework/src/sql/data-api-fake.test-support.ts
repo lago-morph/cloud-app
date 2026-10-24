@@ -37,7 +37,10 @@
  *   `numberOfRecordsUpdated` is the affected row count (0 for a select).
  * - Postgres errors become `BadRequestException` (default) or `DatabaseErrorException`
  *   (`sqlErrorException` option) whose message carries the SQLSTATE:
- *   `ERROR: <message>[\n  Detail: <detail>]; SQLState: <code>`. No error has a pg `code` field.
+ *   `ERROR: <message>[\n  Detail: <detail>]; SQLState: <code>`. No error has a pg `code` field
+ *   or a `cause`: the PGlite error is never reachable from the thrown exception (the fake keeps
+ *   its own "statement failed" bookkeeping in a private WeakSet), so consumers cannot classify
+ *   without parsing the message, as on AWS.
  * - A response whose JSON encoding exceeds `maxResponseBytes` (PAR-214, 1 MiB) fails with
  *   `BadRequestException` "Database returned more than the allowed response size limit".
  * - Injection: `inject()` makes matching calls fail with a given error before they run;
@@ -51,6 +54,10 @@
  *    layout around `SQLState: <code>`, the resume message, the response-size message and its
  *    exception are not confirmed live (G-S1 RESULT §4). Consumers must classify by the
  *    exception `name` and by the SQLSTATE parsed from the message, accepting either name.
+ *    (Until the G-F1 follow-up, the fake attached the PGlite error, with its pg `code`, as
+ *    `cause`; that let a consumer skip the message parsing. It no longer does, and a self-test
+ *    checks that no pg `code` is reachable from a thrown exception.) Whether the real SDK
+ *    exception carries anything besides `name`, `message`, `$fault` and `$metadata` is assumed.
  * 2. Response size is measured as the UTF-8 length of the JSON-encoded response body (blobs as
  *    base64), not the service's own accounting. For a write the statement has already run (and,
  *    outside a transaction, committed) when the size error is raised; that is assumed.
@@ -585,6 +592,12 @@ export class DataApiFake {
   private readonly transactions = new Map<string, Transaction>();
   private readonly injections: Injection[] = [];
   private readonly adminLock = new Lock();
+  /**
+   * SQL exceptions raised by a statement Postgres ran and refused (they abort an open
+   * transaction). Kept here, not on the exception: an SDK exception carries no PGlite error, so
+   * a pg `code` on the thrown error would let consumers skip parsing the message.
+   */
+  private readonly statementFailures = new WeakSet<object>();
   private resumeCalls = 0;
   private resumeUntil = Number.NEGATIVE_INFINITY;
   private closed = false;
@@ -787,7 +800,7 @@ export class DataApiFake {
       try {
         return await work(tx.db, true);
       } catch (e) {
-        if (isPgError((e as { cause?: unknown }).cause)) tx.failed = true;
+        if (typeof e === "object" && e !== null && this.statementFailures.has(e)) tx.failed = true;
         throw e;
       }
     }
@@ -837,7 +850,10 @@ export class DataApiFake {
         serializers: TEXT_SERIALIZERS,
       });
     } catch (e) {
-      throw isPgError(e) ? Object.assign(this.sqlError(e), { cause: e }) : e;
+      if (!isPgError(e)) throw e;
+      const error = this.sqlError(e);
+      this.statementFailures.add(error);
+      throw error;
     }
   }
 
