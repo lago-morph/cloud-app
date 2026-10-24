@@ -133,7 +133,7 @@ export function expectedCriteria(
 }
 
 /** Problems with `rules` (not-run or clause rules) against the catalogue: a rule for an unknown ID, or for a target/tier where its criterion does not apply. */
-export function checkRules(catalogue: readonly CatalogueEntry[], rules: readonly Pick<NotRunRule, "id" | "targets" | "mode">[]): string[] {
+export function checkRules(catalogue: readonly CatalogueEntry[], rules: readonly (NotRunRule | ClauseRule)[]): string[] {
   const byId = new Map(catalogue.map((entry) => [entry.id, entry]));
   const problems: string[] = [];
   for (const rule of rules) {

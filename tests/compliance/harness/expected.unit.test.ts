@@ -1,6 +1,7 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parseWhere, readCatalogue, type CatalogueEntry } from "./catalogue.js";
-import { AWS_LIVE_PENDING, CLAUSE_RULES, checkRules, expectedCriteria, GOOGLE_MOCKED, PHASE_RULES, type ClauseRule, type NotRunRule } from "./expected.js";
+import { AWS_LIVE_PENDING, CLAUSE_RULES, checkRules, expectedCriteria, GOOGLE_MOCKED, PHASE_RULES, UNIT_LEVEL, type ClauseRule, type NotRunRule } from "./expected.js";
 
 const docs = new URL("../../../docs/", import.meta.url).pathname;
 
@@ -115,6 +116,20 @@ describe("[COMPL-AC-001] this phase's not-run rules (plan §8) against the docum
     expect(core?.test('[CORE-AC-006] Cloudflare bundle part, stage "test-b4t1": no AWS SDK')).toBe(false);
     expect(sql?.test('[SQL-AC-006] Data API retry-loop clause (longest waits): with a "database resuming" error injected')).toBe(true);
     expect(sql?.test("[SQL-AC-006] a duplicate unique value yields SQL.CONFLICT")).toBe(false);
+  });
+
+  // plan-aws.md G-T4: the other AWS clauses of Local criteria are G-07's and G-01's tagged tests, selected as they are.
+  it("selects the existing AWS cases of PROV-AC-007 (unit level) and CORE-AC-005 (integration layer) on local", () => {
+    expect(UNIT_LEVEL).toContain("PROV-AC-007");
+    const repo = new URL("../../../", import.meta.url).pathname;
+    const prov = readFileSync(`${repo}packages/framework/src/provision/aws/account.unit.test.ts`, "utf8");
+    expect(prov).toMatch(/"\[PROV-AC-007\] AWS: with HeadBucket stubbed to 403 for the expected owner[^"]*setup-account and deploy stop with a message naming the bucket and change nothing"/);
+    const verify = readFileSync(`${repo}packages/framework/test/integration/cli/verify.test.ts`, "utf8");
+    expect(verify).toContain('tag("CORE-AC-005", "a fixture importing ./targets/aws from app code fails verify")');
+    expect(verify).toContain('tag("CORE-AC-005", "the package\'s exports map equals the subpath table, ./targets/aws included")');
+    const local = new Map(expectedCriteria(real, "local", "automated").map((e) => [e.id, e]));
+    expect(local.get("PROV-AC-007")).toEqual({ id: "PROV-AC-007", run: true, parts: [""], notRunParts: [] });
+    expect(local.get("CORE-AC-005")).toEqual({ id: "CORE-AC-005", run: true, parts: [""], notRunParts: [] });
   });
 
   it("records every AWS criterion as not-run 'AWS live run pending (no account)', and Local criteria run locally", () => {

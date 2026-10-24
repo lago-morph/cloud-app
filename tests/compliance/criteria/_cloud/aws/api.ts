@@ -27,10 +27,12 @@ import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import { SSMClient } from "@aws-sdk/client-ssm";
 import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
 import { proxyAwareHandler } from "../../../../../packages/framework/src/targets/aws/sdk.js";
+import { AWS_CALLS_REPORT_PREFIX, MAX_AWS_CALLS_ENV as CALLS_ENV } from "../../../harness/aws-usage.js";
 import { prerequisiteMissing } from "../../../harness/index.js";
 
 export const DEFAULT_MAX_AWS_CALLS = 500;
-export const MAX_AWS_CALLS_ENV = "COMPLIANCE_AWS_MAX_CALLS";
+/** The per-process cap variable; the driver sets it to what is left of the run's budget (harness/aws-usage.ts). */
+export const MAX_AWS_CALLS_ENV = CALLS_ENV;
 /** SDK attempts per call (its default); kept explicit so a hook's worst-case cost is known. */
 export const MAX_ATTEMPTS = 3;
 /** Pages any one listing reads at most; more is an error, never a silent cut. */
@@ -65,7 +67,7 @@ export async function awsCall<T>(what: string, send: () => Promise<T>): Promise<
   calls += 1;
   if (!reporting) {
     reporting = true;
-    process.once("exit", () => process.stderr.write(`[g-t1] aws api calls in this process: ${String(calls)}\n`));
+    process.once("exit", () => process.stderr.write(`${AWS_CALLS_REPORT_PREFIX}${String(calls)}\n`));
   }
   return send();
 }
