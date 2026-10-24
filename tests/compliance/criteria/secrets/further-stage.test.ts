@@ -16,7 +16,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { client, createClient, tag, waitFor } from "../../harness/index.js";
 import { withFurtherStage, type FurtherStage } from "../core/support/stages.js";
-import { catalogueStatus, errorResponseViolations, isLocal, REFERENCE_DIR, sha256Hex, uniqueValue, UUID, runDeployment, utcDay } from "../core/support/repo.js";
+import { catalogueStatus, isLocal, REFERENCE_DIR, sha256Hex, uniqueValue, runDeployment, utcDay } from "../core/support/repo.js";
+import { expectSecretMissing } from "../core/support/secrets.js";
 import { cloudHooks, logDayPrefix } from "../core/support/stores.js";
 
 if (!isLocal()) {
@@ -83,26 +84,23 @@ if (!isLocal()) {
       10 * 60_000,
     );
 
-    it(tag(["SEC-AC-001", "HTTP-AC-002"], "on the cloud, the declared secret without a value fails with SEC.MISSING as a schema-valid ErrorResponse with the request's ID"), async () => {
-      const s = current();
-      const hooks = await cloudHooks("SEC-AC-001");
-      // Independent of the previous test: make sure the stage has no value.
-      try {
-        await hooks.deleteSecret({ app: s.app, stage: s.stage }, "apiKey");
-      } catch {
-        // already deleted
-      }
-      const c = createClient({ baseUrl: s.baseUrl });
-      const status = catalogueStatus("SEC.MISSING");
-      const ids = new Set<string>();
-      for (const path of ["/api/ref/secret", "/api/errors/SEC.MISSING"]) {
-        const r = c.expectError(await c.get(path), status, "SEC.MISSING");
-        expect(errorResponseViolations(r.json()), path).toEqual([]);
-        expect(r.requestId ?? "", path).toMatch(UUID);
-        ids.add(r.requestId ?? "");
-      }
-      expect(ids.size, "each response has its own request ID").toBe(2);
-    });
+    it(
+      tag(["SEC-AC-001", "HTTP-AC-002"], "on the cloud, the declared secret without a value fails with SEC.MISSING as a schema-valid ErrorResponse with the request's ID"),
+      async () => {
+        const s = current();
+        const hooks = await cloudHooks("SEC-AC-001");
+        // Independent of the previous test: make sure the stage has no value.
+        try {
+          await hooks.deleteSecret({ app: s.app, stage: s.stage }, "apiKey");
+        } catch {
+          // already deleted
+        }
+        // DEC-0092: the deletion reaches requests after a short, bounded delay; then the unchanged
+        // assertions run on fresh requests (core/support/secrets.ts).
+        await expectSecretMissing(createClient({ baseUrl: s.baseUrl }));
+      },
+      10 * 60_000,
+    );
 
     it(
       tag("LOG-AC-004", "after a stage is removed, the shared log bucket and the other stage's entries remain"),
