@@ -8,7 +8,7 @@
  * handed to the request's `waitUntil` (LOG-REQ-004). Transfer tickets are SigV4-signed R2 URLs
  * (D-02) for the account and bucket the Worker variables name (`tickets.ts`). The R2 binding is
  * addressed through `cloudflareFilesStore`, which stores each name with a U+0001 ending so R2
- * lists in code point order (DEC-PENDING-fix-r2order-1); the local target keeps plain keys.
+ * lists in code point order (DEC-0430); the local target keeps plain keys.
  * Workers-compatible: no Node APIs.
  */
 import type { RuntimeContext } from "../../core/assemble.js";

@@ -1,5 +1,5 @@
 /**
- * Cloudflare R2 keys for FILES names (DEC-PENDING-fix-r2order-1, amends DEC-0162 "Order").
+ * Cloudflare R2 keys for FILES names (DEC-0430, amends DEC-0162 "Order").
  *
  * R2 lists in UTF-8 byte order except where one key is a proper prefix of another: the end of a
  * key then ranks like a byte between 0x31 and 0x61, and `startAfter` does not follow the listing
