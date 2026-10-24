@@ -14,7 +14,7 @@ export const UNIT_RUNNER = { pool: "forks", testTimeout: 30_000, hookTimeout: 30
 // Unit layer (plan §10.1): colocated framework unit tests and tool unit tests. No network.
 export default defineConfig({
   test: {
-    include: ["packages/framework/src/**/*.unit.test.ts", "tests/**/*.unit.test.ts", "skill/scripts/**/*.unit.test.ts"],
+    include: ["packages/framework/src/**/*.unit.test.ts", "packages/create-prototype-app/test/**/*.unit.test.ts", "tests/**/*.unit.test.ts", "skill/scripts/**/*.unit.test.ts"],
     ...UNIT_RUNNER,
   },
 });
