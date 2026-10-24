@@ -1,0 +1,12 @@
+Updating (test-byxa6sar2ps05po):
+
+@ updating.......
+    pulumi:pulumi:Stack reference-test-byxa6sar2ps05po  
+Outputs:
+    _protect: false
+
+Resources:
+    8 unchanged
+
+Duration: 4s
+

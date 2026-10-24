@@ -1,0 +1,22 @@
+Updating (test-s6jca41ew34ahz3):
+
+@ updating......
+ +  sst:cloudflare:Worker Worker creating (0s) 
+ +  cloudflare:index:WorkersScript WorkerScript creating (0s) 
+@ updating........
+ +  cloudflare:index:WorkersScript WorkerScript created (4s) 
+@ updating....
+ +  pulumi-nodejs:dynamic:Resource WorkerUrl.sst.cloudflare.WorkerUrl creating (0s) 
+@ updating.......
+ +  pulumi-nodejs:dynamic:Resource WorkerUrl.sst.cloudflare.WorkerUrl created (3s) 
+ +  sst:sst:LinkRef WorkerLinkRef creating (0s) 
+    pulumi:pulumi:Stack demo-test-s6jca41ew34ahz3  
+Outputs:
+    _protect: false
+
+Resources:
+    + 4 created
+    4 unchanged
+
+Duration: 13s
+
