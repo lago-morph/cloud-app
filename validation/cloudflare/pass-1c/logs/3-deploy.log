@@ -1,0 +1,7 @@
+start 2026-10-24T03:12:46Z
+(node:3822) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+deployed reference stage test-9mfkg261apxm7s2 to cloudflare; database reference-test-9mfkg261apxm7s2-db-1
+public origin: https://reference-test-9mfkg261apxm7s2.<SUBDOMAIN>.workers.dev
+exit 0 2026-10-24T03:13:47Z
+

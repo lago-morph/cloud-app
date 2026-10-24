@@ -1,0 +1,28 @@
+{
+  "result": [
+    {
+      "created_on": "2026-10-24T03:10:58.208925Z",
+      "modified_on": "2026-10-24T03:13:44.118086Z",
+      "id": "reference-test-9mfkg261apxm7s2",
+      "tag": "<HEX32>",
+      "tags": null,
+      "deployment_id": "",
+      "tail_consumers": null,
+      "logpush": false,
+      "has_assets": true,
+      "has_modules": true,
+      "etag": "8bb2e784e39d02d2df60a9c088f28d7320b41e60d2cd0390db17d6fa4ec31625",
+      "handlers": [
+        "fetch"
+      ],
+      "last_deployed_from": "terraform",
+      "compatibility_date": "2026-10-01",
+      "usage_model": "standard",
+      "routes": null
+    }
+  ],
+  "success": true,
+  "errors": [],
+  "messages": []
+}
+

@@ -1,0 +1,107 @@
+(node:2433) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2446) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+(node:2446) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 14 tests using 2 workers
+
+(node:2530) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+(node:2531) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/14] [integration] › tests/compliance/criteria/files/transfers.spec.ts:49:1 › [FILES-AC-003] a 20 MB file uploads through uploadFile and downloads through downloadUrl byte-exact
+[2/14] [integration] › tests/compliance/criteria/files/expired-ticket.spec.ts:23:1 › [FILES-AC-003] expired-ticket clause: an expired ticket fails with FILES.TRANSFER_FAILED, storage's status and a rejected by storage (HTTP n) message without storage's error body
+[3/14] [integration] › tests/compliance/criteria/files/transfers.spec.ts:63:1 › [FILES-AC-003] a ticket for one name cannot write another
+[4/14] [integration] › tests/compliance/criteria/files/transfers.spec.ts:90:1 › [FILES-AC-003] an upload with a content type other than the ticket's is rejected and stores nothing
+[5/14] [integration] › tests/compliance/criteria/files/transfers.spec.ts:105:1 › [FILES-AC-003] uploadFile rejects a Blob whose non-empty type differs from the ticket's before sending: FILES.TRANSFER_FAILED, status null, content type does not match ticket
+[6/14] [integration] › tests/compliance/criteria/files/transfers.spec.ts:123:1 › [FILES-AC-004] browser part: an upload and a download attempted from an unrelated origin are rejected by the browser
+[7/14] [integration] › tests/compliance/criteria/http/one-origin.spec.ts:9:1 › [HTTP-AC-004] the deployed client's API calls are all same-origin, with no CORS preflight
+(node:2806) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[8/14] [e2e] › tests/compliance/e2e/E2E-004.spec.ts:32:1 › [E2E-004] coverage part: every criterion and scenario applicable on this target has a tagged test in the suite this run executes
+  1) [e2e] › tests/compliance/e2e/E2E-004.spec.ts:32:1 › [E2E-004] coverage part: every criterion and scenario applicable on this target has a tagged test in the suite this run executes 
+
+    Error: applicable on cloudflare but no tagged test in this target's suite:
+    AUTH-AC-005
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "AUTH-AC-005",
+    + ]
+
+      45 |   );
+      46 |   const problems = listing.errors.length === 0 ? "" : `\n(listing problems: ${listing.errors.join("; ")})`;
+    > 47 |   expect(untested, `applicable on ${t.target} but no tagged test in this target's suite:\n${untested.join("\n")}${problems}`).toEqual([]);
+         |                                                                                                                               ^
+      48 | });
+      49 |
+      50 | test(tag("E2E-004", "record part: the evidence writer accepts a record of this target and rejects an invalid one"), () => {
+        at /home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/tests/compliance/e2e/E2E-004.spec.ts:47:127
+
+    Error Context: test-results/E2E-004--E2E-004-coverage--61ba7-the-suite-this-run-executes-e2e/error-context.md
+
+
+(node:3328) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[9/14] [e2e] › tests/compliance/e2e/E2E-004.spec.ts:50:1 › [E2E-004] record part: the evidence writer accepts a record of this target and rejects an invalid one
+[10/14] [e2e] › tests/compliance/e2e/E2E-005.spec.ts:113:1 › [E2E-005] anonymous, user and admin each get exactly their permitted actions in a browser, and no API response exposes login-provider details
+[11/14] [e2e] › tests/compliance/e2e/E2E-005.spec.ts:163:1 › [E2E-005] no app-facing type exposes login-provider names, tokens, issuers or email addresses
+[12/14] [e2e] › tests/compliance/e2e/E2E-009-large-photos.spec.ts:91:1 › [E2E-009] upload a 20 MB and a 100 MB photo from a real browser, view and download them byte-identical; app browser code used only the app's API and framework helpers; no storage or CORS settings in the app
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+
+[13/14] [e2e] › tests/compliance/e2e/E2E-011.spec.ts:135:1 › [E2E-011] app and framework entries are stored under the app and stage with timestamps, and the plain-Error request's entry is found by its requestId
+[e2e] › tests/compliance/e2e/E2E-011.spec.ts:135:1 › [E2E-011] app and framework entries are stored under the app and stage with timestamps, and the plain-Error request's entry is found by its requestId
+(node:3328) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[14/14] [e2e] › tests/compliance/e2e/E2E-013.spec.ts:66:1 › [E2E-013] invalid input, unauthenticated, forbidden, unknown route and plain-Error requests get catalogue errors with no stack traces, provider messages or secret values
+[d-t2] cloudflare api requests in this process: 3
+
+  2) [integration] › tests/compliance/criteria/files/expired-ticket.spec.ts:23:1 › [FILES-AC-003] expired-ticket clause: an expired ticket fails with FILES.TRANSFER_FAILED, storage's status and a rejected by storage (HTTP n) message without storage's error body 
+
+    Error: status is storage's HTTP status, got null
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "number"
+    Received: "object"
+
+      49 |
+      50 |     expect(out).toMatchObject({ ok: false, isApiError: true, code: "FILES.TRANSFER_FAILED" });
+    > 51 |     expect(typeof out.status, `status is storage's HTTP status, got ${String(out.status)}`).toBe("number");
+         |                                                                                             ^
+      52 |     expect(out.status).toBeGreaterThanOrEqual(400);
+      53 |     expect(out.message).toContain(`rejected by storage (HTTP ${String(out.status)})`);
+      54 |     for (const body of storageBodies) expect(out.message ?? "").not.toContain(body);
+        at /home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/tests/compliance/criteria/files/expired-ticket.spec.ts:51:93
+
+    Error Context: test-results/tests-compliance-criteria--26aa9-ithout-storage-s-error-body-integration/error-context.md
+
+
+  Slow test file: [integration] › tests/compliance/criteria/files/expired-ticket.spec.ts (15.6m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  2 failed
+    [integration] › tests/compliance/criteria/files/expired-ticket.spec.ts:23:1 › [FILES-AC-003] expired-ticket clause: an expired ticket fails with FILES.TRANSFER_FAILED, storage's status and a rejected by storage (HTTP n) message without storage's error body 
+    [e2e] › tests/compliance/e2e/E2E-004.spec.ts:32:1 › [E2E-004] coverage part: every criterion and scenario applicable on this target has a tagged test in the suite this run executes 
+  12 passed (15.9m)

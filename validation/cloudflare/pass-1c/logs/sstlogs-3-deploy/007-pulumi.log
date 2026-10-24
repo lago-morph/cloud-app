@@ -1,0 +1,13 @@
+Updating (test-9mfkg261apxm7s2):
+
+@ updating.........
+    pulumi:pulumi:Stack reference-test-9mfkg261apxm7s2  
+Outputs:
+    _protect: false
+
+Resources:
+    8 unchanged
+
+Duration: 6s
+
+
