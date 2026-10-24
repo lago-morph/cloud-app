@@ -41,7 +41,7 @@ When its storage cannot be used, KV MUST fail with `KV.UNAVAILABLE`. Failures of
 
 KV is stored in a framework table in the app's SQL database, `__framework_kv(key text primary key, value text)` (DEC-0010). This is a simplification, not part of the contract. Prefix listing uses a key range (`key >= prefix AND key < prefix-successor`), not `LIKE`. The cursor encodes the prefix and the last key returned. PAR-220, PAR-222, and PAR-223 are chosen so that a maximum page (PAR-222 × (PAR-220 + PAR-223)) stays within the portable SQL result limit (PAR-215). SQL failures are mapped to `KV.UNAVAILABLE`.
 
-The local, Cloudflare, and AWS adapters are the SQL adapters for each target; KV needs no target-specific code.
+The local, Cloudflare, and AWS adapters are the SQL adapters for each target; KV needs no target-specific code. (AWS: deferred, branch `aws`.)
 
 Implementation details (B-08):
 - **Rules.** Keys, prefixes and values are checked before the database is used. The empty value is a value (KV-REQ-002 rejects only empty keys; DEC-0146). A prefix may be empty (it lists every key) and is at most PAR-220 bytes (DEC-0147).
@@ -60,7 +60,7 @@ SQL, MIG (framework table migrations).
 | KV-AC-001 | Put, overwrite, get, missing-key get, delete, and repeated delete behave as specified; list returns exactly the keys that literally match the prefix, including keys containing `%`, `_`, and mixed case. | KV-REQ-001 | Local, cloud |
 | KV-AC-002 | Empty, oversized, and malformed keys and values are rejected with the specified codes; a key of exactly PAR-220 bytes and a value of exactly PAR-223 bytes are accepted. | KV-REQ-002 | Local, cloud |
 | KV-AC-003 | Listing 2.5 pages of keys returns each key once; a cursor used with a different prefix is rejected. | KV-REQ-003 | Local, cloud |
-| KV-AC-004 | The KV suite produces identical results on local D1, PGlite, Cloudflare, and AWS. | KV-REQ-004 | Local, cloud |
+| KV-AC-004 | The KV suite produces identical results on local D1, PGlite, Cloudflare, and AWS. (AWS: deferred, branch `aws`.) | KV-REQ-004 | Local, cloud |
 | KV-AC-005 | Locally, with the database unreachable, KV operations fail with `KV.UNAVAILABLE`. On every target, a maximum page of maximum-size entries lists successfully. | KV-REQ-005 | Local, cloud |
 
 ## 5. Portability note

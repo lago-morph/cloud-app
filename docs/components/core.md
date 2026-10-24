@@ -36,7 +36,7 @@ The package MUST expose exactly the subpaths below, and the portability rules MU
 | `.` | Server-side app API ([index.d.ts](../contracts/ts/index.d.ts)) | App server code, app tests |
 | `./client` | Browser helpers ([client.d.ts](../contracts/ts/client.d.ts)) | App browser code |
 | `./testing` | Test helpers ([testing.d.ts](../contracts/ts/testing.d.ts)) | App test files |
-| `./targets/<target>`, one subpath per supported target (`./targets/local`, `./targets/cloudflare`, `./targets/aws`) | Target runtimes | Generated entry points only |
+| `./targets/<target>`, one subpath per supported target (`./targets/local`, `./targets/cloudflare`, `./targets/aws`) — release 1: `./targets/local` and `./targets/cloudflare` only; `./targets/aws` is deferred (branch `aws`, DEC-0508) | Target runtimes | Generated entry points only |
 | `./provision` | Provisioning | CLI only |
 | `./check` | Portability rules and migration checker | CLI and lint configuration only |
 
@@ -82,11 +82,11 @@ AUTH (current user middleware), HTTP (error handler), all capability adapters (v
 | ID | Criterion | Verifies | Where |
 | --- | --- | --- | --- |
 | CORE-AC-001 | A fixture app using only `.` exports type-checks, and `c.var` has exactly the `RequestVars` members. A second fixture with routes in a separate file type-checks config value types (a wrong value type fails type checking). Every framework type appearing in a public signature can be imported from the subpath whose signatures use it. | CORE-REQ-001, CORE-REQ-005 | Local |
-| CORE-AC-002 | One unmodified app module builds and starts on local, Cloudflare, and AWS. | CORE-REQ-002 | Local, cloud |
+| CORE-AC-002 | One unmodified app module builds and starts on local, Cloudflare, and AWS. (AWS part: deferred, branch `aws`.) | CORE-REQ-002 | Local, cloud |
 | CORE-AC-003 | Requests with forged Host or forwarding headers do not change `c.var.deployment`; `c.var.deployment` has exactly the members `app` and `stage`. | CORE-REQ-003 | Local, cloud |
 | CORE-AC-004 | Every code thrown by framework source appears in the catalogue; an app throwing a plain `Error` yields 500 `CORE.INTERNAL` with no stack trace or message details in the response. | CORE-REQ-004 | Local |
-| CORE-AC-005 | The package's exports map equals the subpath table; a fixture importing `./targets/aws` from app code fails the verification command. | CORE-REQ-005 | Local |
-| CORE-AC-006 | Bundle inspection: the Cloudflare bundle contains no AWS SDK, provisioning, or Postgres harness modules; the AWS bundle contains no Cloudflare-only modules; no cloud bundle contains the stub login provider, the local file-transfer route, or its ticket key; production bundles contain no mock. | CORE-REQ-006 | Local |
+| CORE-AC-005 | The package's exports map equals the subpath table; a fixture importing `./targets/aws` from app code fails the verification command. (Release 1 has no `./targets/aws` subpath, DEC-0508; the fixture still fails.) | CORE-REQ-005 | Local |
+| CORE-AC-006 | Bundle inspection: the Cloudflare bundle contains no AWS SDK, provisioning, or Postgres harness modules; the AWS bundle contains no Cloudflare-only modules; no cloud bundle contains the stub login provider, the local file-transfer route, or its ticket key; production bundles contain no mock. (AWS bundle clause: deferred, branch `aws`.) | CORE-REQ-006 | Local |
 | CORE-AC-007 | Building a fixture app whose name contains a hyphen fails with a message naming the app-name rule. | CORE-REQ-003 | Local |
 | CORE-AC-008 | Fixture routes throwing each code in the CORE-REQ-007 table return that code with its catalogue status; a fixture app that throws a capability-owned code (for example `SQL.CONFLICT`) from its own code fails `verify`. | CORE-REQ-007 | Local |
 

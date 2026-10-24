@@ -61,7 +61,9 @@ Vite serves the client and proxies `/api` to the Worker running under Wrangler (
 ### Cloudflare
 One Worker serves both: static assets are uploaded with the Worker, the Worker runs first for `/api` and `/api/*`, and the assets layer serves everything else with single-page-app fallback to `index.html`.
 
-### AWS
+### AWS — deferred (branch `aws`)
+
+Deferred to a later release (DEC-0508): this section describes the AWS target, which is not part of release 1. Its code is on the branch `aws`.
 A CloudFront distribution (SST Router) sends `/api` and `/api/*` to the HTTP Lambda's Function URL (DEC-0044) and every other path to the static site bucket, with `index.html` fallback. API behaviors use a no-caching policy and forward cookies, query strings, and the `Origin` header, but not `Host`, which must be the Function URL's own host. The router's read timeout (PAR-271) exceeds the Lambda timeout (PAR-270), so the framework's own error arrives before a gateway timeout.
 
 ## 3. Uses

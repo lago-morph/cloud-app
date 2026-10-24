@@ -4,7 +4,7 @@ This is the smallest app built on the prototype framework. It uses each capabili
 
 This page lists everything the owner does by hand, as copy-and-paste steps. Run the commands in a terminal, in this app's folder, on macOS or Linux with Node 22.22.0. Replace the `<…>` parts. Never paste a secret value into a command line, a committed file or a chat.
 
-**What is verified in this phase.** Local development (§1) is verified. Every Cloudflare step (§2–§9) is **not yet verified on Cloudflare in this phase**: the framework's cloud commands have run only against a simulated Cloudflare. The Google steps (§5) have never been run, because Google login is mocked in this phase. Every AWS step (§12, and the AWS part of §11) is **not yet verified on AWS**: the framework's AWS commands have run only against simulated AWS.
+**What is verified in this phase.** Local development (§1) is verified. Every Cloudflare step (§2–§9) is **not yet verified on Cloudflare in this phase**: the framework's cloud commands have run only against a simulated Cloudflare. The Google steps (§5) have never been run, because Google login is mocked in this phase. The AWS target is not available yet.
 
 ## 1. Run it on your computer
 
@@ -212,57 +212,6 @@ Cloudflare charges for requests and storage. An idle stage has no requests, but 
 | The shared `prototype-logs` bucket, which grows with every entry and is never emptied by `remove` | Delete old entries in the dashboard. To do it automatically, open R2 → `prototype-logs` → Settings → Object lifecycle rules (not yet verified), and delete objects after, for example, 30 days. |
 | The shared `sst-state` bucket, which is small | Keep it while any stage exists. Delete it in the dashboard only after the last stage is removed. |
 
-On AWS (not yet verified on AWS; §12), an idle stage has no requests and its Lambda function costs nothing, but these remain:
-
-| Billable while idle on AWS | How to remove it |
-| --- | --- |
-| Each stage's Aurora Serverless v2 database. After 5 minutes with no database use it pauses at 0 ACU, so its compute costs nothing, but its storage stays billable. Any request that reads the database, a public route too, wakes it, and the first request then waits while it resumes. | `remove` the stage (§12 step 3). |
-| Each stage's database-credentials secret (Secrets Manager) and S3 file bucket | `remove` the stage. |
-| Leftover test stages. List them with `aws lambda list-functions --query "Functions[?starts_with(FunctionName, 'template-test-')].FunctionName"`. | `remove` each by its stage name. |
-| The shared `prototype-logs-<account-id>` bucket, which grows with every entry and is never emptied by `remove`, and the small deploy-state bucket | Delete old entries in the S3 console. |
-| The shared network from `setup-account`: one VPC with two private subnets, a DB subnet group and a security group. It has no NAT gateway and no public address, the parts that would cost money while idle. | Keep it; every stage in the account uses it, and it stays after the last stage is removed. |
+On AWS, which is not available yet, the database storage, the database-credentials secret and the shared network also stay billable while idle. Public routes that read the database keep the database awake there.
 
 **Keeping test stages small.** On Cloudflare's free plan, D1 allows about **100,000 rows written per day** per account; reads have a larger limit. When a daily limit is used up, database requests fail until it resets at 00:00 UTC. So keep test data to a few rows, never load data in loops, run one test stage at a time, and remove it right after its smoke test. An account holds at most **10 D1 databases**, and a deploy that changes the schema briefly holds two per stage.
-
-## 12. AWS (not yet verified on AWS)
-
-Every step in this section is **not yet verified on AWS**: the framework's AWS commands have run only against simulated AWS. The steps mirror §2–§10.
-
-1. **Credentials (once per terminal).** Use a temporary AWS account and an IAM user or role in it that is not the root user, with the `AdministratorAccess` policy. Create an access key, or get temporary credentials (they come with a session token) from your sign-in portal. Install the AWS CLI v2 (`aws`). Never paste the values into a chat, a committed file or a command line. In each new terminal, set them: paste each value when `read` waits, then press Enter. Skip the last line for a permanent access key. A named profile (`export AWS_PROFILE=<name>`) also works.
-   ```sh
-   read -rs AWS_ACCESS_KEY_ID && export AWS_ACCESS_KEY_ID
-   read -rs AWS_SECRET_ACCESS_KEY && export AWS_SECRET_ACCESS_KEY
-   read -rs AWS_SESSION_TOKEN && export AWS_SESSION_TOKEN
-   aws sts get-caller-identity
-   ```
-   The last command must print your account ID.
-2. **One-time account setup.** Choose the region once; every stage in the account uses it. Without `--region`, a new account gets `us-east-1`.
-   ```sh
-   npm run setup-account -- --target aws --region <region>
-   ```
-   It checks that the region offers Aurora PostgreSQL 17 Serverless v2 with the Data API, then creates the log bucket `prototype-logs-<account-id>`, one shared network (a VPC with two private subnets, and no NAT gateway or internet gateway) and the deploy-state home. Running it again changes nothing. A different `--region` later is refused, naming both regions.
-3. **Deploy a test stage, test it, remove it.** Test stages use `config/aws/test.json`. On AWS a secret can be set before the stage's first deploy; paste the value, press Enter, then press Ctrl-D. Creating a stage takes about 20 minutes, and removing it 15 to 25.
-   ```sh
-   STAGE=test-<initials><number>
-   npm run secrets -- set apiKey --target aws --stage "$STAGE"
-   npm run deploy -- --target aws --stage "$STAGE"
-   git add -A
-   git commit -m "Changes before the smoke test"
-   npm run smoke -- --target aws --stage "$STAGE"
-   npm run remove -- --target aws --stage "$STAGE"
-   ```
-   A successful deploy prints the stage's address, `https://<id>.cloudfront.net`. If it names secrets that are not set, set them with `--target aws` and deploy again. `remove` empties and deletes the stage's file bucket, drops its databases, deletes its secrets and its database-credentials secret, and removes its Aurora cluster (with no final snapshot), Lambda function and CloudFront distribution. It keeps the log entries. If it prints leftovers and exits with an error, run it again.
-4. **Production stage.** Follow §5–§8 with `aws` in place of `cloudflare` (`config/aws/prod.json`, `--target aws`), with one change: the Google callback URL is known only after the first deploy. Skip §5 step 1, and create the Google client without a redirect URI. After the first deploy, add the printed `Google callback URL to register` (`https://<id>.cloudfront.net/api/auth/callback`) to the client. Remove a production stage with `npm run remove -- --target aws --stage prod --confirm-production prod`.
-5. **Stop and start.** There is no stop command. To stop a stage, set its Lambda function's reserved concurrency to zero; its requests then fail, and its code, data and secrets stay. Every `deploy` starts it again.
-   ```sh
-   aws lambda put-function-concurrency --function-name "$APP-$STAGE-http" --reserved-concurrent-executions 0   # stop
-   aws lambda delete-function-concurrency --function-name "$APP-$STAGE-http"   # start
-   ```
-6. **Reading the logs.** Each entry is an object in the S3 bucket `prototype-logs-<account-id>`, under `template/<stage>/<yyyy>/<mm>/<dd>/`. The date is UTC, and the object name ends in `-<requestId>.json`. `smoke` prints the bucket and today's prefix. `APP` must be set (§1 step 2). List today's entries, add `| grep '<requestId>'` to find one request, then read one by pasting its key:
-   ```sh
-   STAGE='<stage>'; DAY=$(date -u +%Y/%m/%d)
-   BUCKET="prototype-logs-$(aws sts get-caller-identity --query Account --output text)"
-   aws s3 ls "s3://$BUCKET/$APP/$STAGE/$DAY/"
-   KEY='<paste the key here>'; aws s3 cp "s3://$BUCKET/$KEY" -
-   ```
-   **No entry?** Watch the Lambda function's own output while you repeat the request: `aws logs tail "/aws/lambda/$APP-$STAGE-http" --follow`.

@@ -1,5 +1,7 @@
 # AWS — AWS target
 
+> **Deferred to a later release (DEC-0508, owner, 2026-10-24).** Release 1 targets local and Cloudflare only. This document is kept unchanged for the record; nothing in it binds release 1, and its criteria (AWS-AC-…) are listed as deferred by the traceability and release reports. The AWS code, tests and evidence are on the branch `aws` (head `07be83f`); the index for resuming is `ai/implementation/aws-deferred.md`.
+
 Runs an app on AWS: an HTTP Lambda behind CloudFront together with a static site, Aurora Serverless v2 through the Data API, S3, SSM Parameter Store, and the shared log bucket.
 
 Contracts: none of its own. It implements the capability contracts for AWS.

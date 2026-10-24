@@ -95,7 +95,9 @@ Implementation details (DEC-0098…DEC-0100, DEC-0327…DEC-0330, DEC-0430; code
 
 Note: R2 sends no CORS headers on its 403 responses (expired or mismatched ticket), so the browser cannot read storage's status there; on Cloudflare such a transfer fails with status null and the `no response: network or cross-origin blocked` message. This conflicts with FILES-AC-003's expired-ticket clause and is an open owner item: see DEC-0101.
 
-### AWS
+### AWS — deferred (branch `aws`)
+
+Deferred to a later release (DEC-0508): this section describes the AWS target, which is not part of release 1. Its code is on the branch `aws`.
 Server operations and tickets use S3 with the Lambda's role credentials, including the session token, through aws4fetch. Tickets last PAR-233, on the assumption that role sessions outlast it; a ticket whose credentials expire early fails in the browser with `FILES.TRANSFER_FAILED` and storage's status. Lambdas access S3 directly, outside any VPC. File content reaches the browser only through `downloadUrl`, never as an API route's response body: Lambda buffers responses and refuses those above its response payload limit, so a route returning a `files.get` stream fails on AWS for large files.
 
 Implementation details (DEC-0461…DEC-0467; code in `src/files/aws/`, sharing `src/files/s3/` with Cloudflare; pre-checked against an in-process S3 fake only, not yet verified on AWS):

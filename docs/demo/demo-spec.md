@@ -82,5 +82,5 @@ The smoke test (DEMO-REQ-010) covers each criterion on a deployed stage, except:
 | DEMO-AC-007 | A share link shows the draft to an anonymous visitor. An altered or expired link is refused. | DEMO-REQ-007 | Local, cloud |
 | DEMO-AC-008 | Publish and delete actions produce `info` entries in the target's log. | DEMO-REQ-008 | Local, cloud |
 | DEMO-AC-009 | The account page shows the same ID as `/api/auth/me`, and the copy button copies it. | DEMO-REQ-009 | Local, cloud |
-| DEMO-AC-010 | The smoke test passes on local, Cloudflare, and AWS from one commit with no source changes. | DEMO-REQ-010 | Local, cloud |
+| DEMO-AC-010 | The smoke test passes on local, Cloudflare, and AWS from one commit with no source changes. (AWS: deferred, branch `aws`.) | DEMO-REQ-010 | Local, cloud |
 | DEMO-AC-011 | Every committed production values file of the demo sets `framework.users`. In a local test with the stub login provider, a login on the list can create a draft, and a login on neither list is refused with 401 and sees only published posts. | DEMO-REQ-011 | Local |

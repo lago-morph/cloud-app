@@ -21,7 +21,7 @@ Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 | ID | Parameter | Value | Category | Notes |
 | --- | --- | --- | --- | --- |
 | PAR-200 | Maximum JSON request body | 1,000,000 bytes | ai-proposed | Used by HTTP-REQ-003. Must stay below PAR-201 and PAR-202. |
-| PAR-201 | AWS Lambda request payload limit | 6 MB, less for binary bodies, which are base64-encoded | platform | AWS Lambda quotas. Why large files bypass the API (DEC-0058). |
+| PAR-201 | AWS Lambda request payload limit | 6 MB, less for binary bodies, which are base64-encoded | platform | AWS Lambda quotas. Why large files bypass the API (DEC-0058). Deferred (branch `aws`). |
 | PAR-202 | Cloudflare Workers request body limit | 100 MB (Free and Pro plans) | platform | Cloudflare Workers limits. |
 
 ## SQL and migrations
@@ -29,9 +29,9 @@ Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 | ID | Parameter | Value | Category | Notes |
 | --- | --- | --- | --- | --- |
 | PAR-210 | Time budget for reaching the database, including resume from pause | 45 seconds | ai-proposed | SQL-REQ-006 and the deploy-time wait. PAR-210 + PAR-260 must be below PAR-270. |
-| PAR-212 | Aurora capacity range | 0 to 4 ACU | ai-proposed | 0 lets the database pause when idle. |
-| PAR-213 | Aurora auto-pause delay | 5 minutes | ai-proposed | Platform minimum is 300 seconds. |
-| PAR-214 | Data API maximum response size | 1 MiB | platform | RDS Data API quotas. |
+| PAR-212 | Aurora capacity range | 0 to 4 ACU | ai-proposed | 0 lets the database pause when idle. Deferred (branch `aws`). |
+| PAR-213 | Aurora auto-pause delay | 5 minutes | ai-proposed | Platform minimum is 300 seconds. Deferred (branch `aws`). |
+| PAR-214 | Data API maximum response size | 1 MiB | platform | RDS Data API quotas. Deferred (branch `aws`). |
 | PAR-215 | Portable maximum query result size | 256 KiB | ai-proposed | Enforced on every target, measured as defined in sql.md §2.3. Leaves room for the Data API's JSON encoding within PAR-214. |
 | PAR-216 | D1 maximum bound parameters per statement | 100 | platform | Cloudflare D1 limits; measured identical on local D1 and remote D1 (DEC-0102, DEC-0097). Apps chunk long `inArray` lists and multi-row inserts; the D1 copy stays within it. |
 | PAR-217 | D1 maximum SQL statement length | 100,000 bytes | platform | Cloudflare D1 limits; SQL text only, bound values excluded; measured identical locally and remotely (DEC-0102, DEC-0097). |
@@ -72,7 +72,9 @@ Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 | --- | --- | --- | --- | --- |
 | PAR-260 | Maximum time a response waits for pending log writes | 2 seconds | ai-proposed | Matters on AWS, where a frozen Lambda would lose pending writes. |
 
-## AWS deployment
+## AWS deployment — deferred (branch `aws`)
+
+Deferred to a later release (DEC-0508): these parameters belong to the AWS target, which is not part of release 1. Its code is on the branch `aws`.
 
 | ID | Parameter | Value | Category | Notes |
 | --- | --- | --- | --- | --- |
@@ -98,9 +100,9 @@ Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 | ID | Parameter | Value | Category | Notes |
 | --- | --- | --- | --- | --- |
 | PAR-280 | Floating-point comparison tolerance in compliance tests | `abs(actual − expected) ≤ max(1e-12, 1e-12 × abs(expected))` | ai-proposed | |
-| PAR-281 | AWS-AC-005 wait for a paused cluster | 15 minutes (PAR-213 plus 10 minutes), polling every 30 seconds | ai-proposed | If the cluster has not observably paused by then, AWS-AC-005 is recorded not-run with the reason and the last observed state. Keeps one slow test under about 20 minutes (DEC-0437). |
-| PAR-282 | AWS API calls by the cloud test hooks per compliance run | 2,000 | ai-proposed | `COMPLIANCE_AWS_MAX_RUN_CALLS` overrides it. Calls the framework CLI makes (deploy, remove, the leftover check) are not counted; a total above the cap fails the run (DEC-0501). |
-| PAR-283 | Test-stage Aurora clusters at once in the AWS account | 3 | ai-proposed | The driver and the stage-lifecycle tests refuse a deploy that would exceed it and record the criteria not-run (DEC-0501). |
+| PAR-281 | AWS-AC-005 wait for a paused cluster | 15 minutes (PAR-213 plus 10 minutes), polling every 30 seconds | ai-proposed | If the cluster has not observably paused by then, AWS-AC-005 is recorded not-run with the reason and the last observed state. Keeps one slow test under about 20 minutes (DEC-0437). Deferred (branch `aws`). |
+| PAR-282 | AWS API calls by the cloud test hooks per compliance run | 2,000 | ai-proposed | `COMPLIANCE_AWS_MAX_RUN_CALLS` overrides it. Calls the framework CLI makes (deploy, remove, the leftover check) are not counted; a total above the cap fails the run (DEC-0501). Deferred (branch `aws`). |
+| PAR-283 | Test-stage Aurora clusters at once in the AWS account | 3 | ai-proposed | The driver and the stage-lifecycle tests refuse a deploy that would exceed it and record the criteria not-run (DEC-0501). Deferred (branch `aws`). |
 
 ## Names
 
@@ -125,8 +127,8 @@ All pins are **ai-proposed**. They were selected around October 9, 2026; spike A
 | PAR-107 | PGlite | 0.5.8 | |
 | PAR-108 | @pulumi/cloudflare | 6.15.0 | The provider generation SST 4.17.2 pins. A direct framework dependency only if framework code imports it (DEC-0109). |
 | PAR-109 | @pulumi/aws | 7.20.0 | The provider generation SST 4.17.2 pins. |
-| PAR-110 | Aurora PostgreSQL engine | 17.x | The highest 17.x minor that the region supports with Data API and auto-pause, resolved at implementation start; verified per region by `setup-account` and deploy preflight. |
-| PAR-111 | Node.js, TypeScript, ESLint, AWS SDKs | Node.js 22.22.0; TypeScript 6.0.3; ESLint 10.13.0 with typescript-eslint 8.72.0; @types/node 22.20.5 (framework and tests only); AWS SDKs: AWS SDK for JavaScript v3 3.1153.0 for every `@aws-sdk/client-*` the framework uses (ec2, iam, lambda, rds, rds-data, resource-groups-tagging-api, s3, secrets-manager, ssm, sts), and `@smithy/node-http-handler` 4.12.1 | TypeScript 7.x is outside typescript-eslint's supported range (`<6.1.0`), which CHECK's type-aware rules need (DEC-0104). `@typescript-eslint/utils` is declared at the typescript-eslint version (DEC-0243). AWS SDK: one version for every client, the one SST 4.17.2 resolves for `client-lambda`; the ten clients share one `@aws-sdk/core` (3.978.5); their transitive ranges are fixed by the root lockfile. `@smithy/node-http-handler` is the version already in the lockfile, imported directly by the Data API adapter. The HTTP Lambda bundle carries only rds-data and ssm, never the runtime's own SDK copy (DEC-0432, DEC-0451, DEC-0455, DEC-0472). |
+| PAR-110 | Aurora PostgreSQL engine | 17.x | The highest 17.x minor that the region supports with Data API and auto-pause, resolved at implementation start; verified per region by `setup-account` and deploy preflight. Deferred (branch `aws`). |
+| PAR-111 | Node.js, TypeScript, ESLint, AWS SDKs | Node.js 22.22.0; TypeScript 6.0.3; ESLint 10.13.0 with typescript-eslint 8.72.0; @types/node 22.20.5 (framework and tests only); AWS SDKs: AWS SDK for JavaScript v3 3.1153.0 for every `@aws-sdk/client-*` the framework uses (ec2, iam, lambda, rds, rds-data, resource-groups-tagging-api, s3, secrets-manager, ssm, sts), and `@smithy/node-http-handler` 4.12.1 | TypeScript 7.x is outside typescript-eslint's supported range (`<6.1.0`), which CHECK's type-aware rules need (DEC-0104). `@typescript-eslint/utils` is declared at the typescript-eslint version (DEC-0243). AWS SDK: one version for every client, the one SST 4.17.2 resolves for `client-lambda`; the ten clients share one `@aws-sdk/core` (3.978.5); their transitive ranges are fixed by the root lockfile. `@smithy/node-http-handler` is the version already in the lockfile, imported directly by the Data API adapter. The HTTP Lambda bundle carries only rds-data and ssm, never the runtime's own SDK copy (DEC-0432, DEC-0451, DEC-0455, DEC-0472). (The AWS SDKs: deferred, branch `aws`; release 1 installs none.) |
 | PAR-112 | Zod | 4.6.7 | Re-exported to apps (DEC-0059). Verified by spike A-10 (DEC-0104). |
 | PAR-113 | Vite | 8.3.4 | Client build and local dev server; `/api` proxy to `wrangler dev` verified (DEC-0104). |
 | PAR-114 | Playwright | `@playwright/test` 1.64.1; browser Chrome Headless Shell 156.0.8078.4 (`npx playwright install chromium`) | Browser-level compliance tests (DEC-0104). |
@@ -134,5 +136,5 @@ All pins are **ai-proposed**. They were selected around October 9, 2026; spike A
 | PAR-117 | Miniflare | 5.20261006.1-alpha | Exactly the version Wrangler (PAR-101) depends on, so there is one workerd; declared only if framework code imports Miniflare directly (DEC-0105). Moves with PAR-101. |
 | PAR-118 | @cloudflare/workers-types | 5.20261006.1 | Framework dev dependency only, for Miniflare's type declarations; never in a `types` array (DEC-0105, CHECK §2). Moves with PAR-101. |
 | PAR-119 | esbuild | 0.28.2 | Exactly the version Wrangler (PAR-101) depends on; a framework dependency so npm hoists it for Vite (PAR-113) and the build pipeline, while drizzle-kit keeps its own nested copy (DEC-0114). Moves with PAR-101. |
-| PAR-120 | aws-sdk-client-mock | 4.1.0 | Framework dev dependency for AWS SDK unit tests; works with the PAR-111 clients (DEC-0432). |
-| PAR-121 | @types/aws-lambda | 8.10.164 | Framework dev dependency only, for the Lambda entry's event and result types; the published declarations do not need it (DEC-0432, DEC-0468). |
+| PAR-120 | aws-sdk-client-mock | 4.1.0 | Framework dev dependency for AWS SDK unit tests; works with the PAR-111 clients (DEC-0432). Deferred (branch `aws`). |
+| PAR-121 | @types/aws-lambda | 8.10.164 | Framework dev dependency only, for the Lambda entry's event and result types; the published declarations do not need it (DEC-0432, DEC-0468). Deferred (branch `aws`). |

@@ -5,7 +5,7 @@ description: Build, test and deploy small web apps on the portable prototype fra
 
 # Building apps on the prototype framework
 
-Apps are small (one or a few users, little data) and are designed to run unchanged locally, on Cloudflare and on AWS. In this phase only local runs are verified: running on Cloudflare is not yet verified, and the AWS target is built but not yet verified on AWS. The framework gives each request handler SQL, KV, files, configuration, secrets, a log and the current user; app code never sees which cloud it runs on. Package: `@lago-morph/prototype-framework` (server code), `/client` (browser code), `/testing` (tests). Commands: `npx prototype-framework <command>`, also `npm run <command>`.
+Apps are small (one or a few users, little data) and are designed to run unchanged locally, on Cloudflare and on AWS. In this phase only local runs are verified: running on Cloudflare is not yet verified, and the AWS target is not built yet. The framework gives each request handler SQL, KV, files, configuration, secrets, a log and the current user; app code never sees which cloud it runs on. Package: `@lago-morph/prototype-framework` (server code), `/client` (browser code), `/testing` (tests). Commands: `npx prototype-framework <command>`, also `npm run <command>`.
 
 Read this page, then only the references your task needs (task map below).
 
@@ -25,7 +25,7 @@ Read this page, then only the references your task needs (task map below).
 
    Use [templates/FRAMEWORK-ISSUE.md](templates/FRAMEWORK-ISSUE.md).
 7. **After recording an entry**, stop work on the blocked requirement; continue only work that does not depend on it; report the issue and the list of unfinished requirements to the user; and do not declare the app done.
-8. **A target this phase cannot reach is not a framework issue.** The AWS target has not run on AWS yet, and Cloudflare runs may be paused (for example while a cloud quota is used up). Do not add a `FRAMEWORK-ISSUE.md` entry for that. In your build record, list each requirement or check that needs such a run as unfinished: `not-run` for AWS ("AWS phase not started"), `blocked` with the stated reason for paused Cloudflare runs.
+8. **A target this phase cannot reach is not a framework issue.** The AWS target is not built yet, and Cloudflare runs may be paused (for example while a cloud quota is used up). Do not add a `FRAMEWORK-ISSUE.md` entry for that. In your build record, list each requirement or check that needs such a run as unfinished: `not-run` for AWS ("AWS phase not started"), `blocked` with the stated reason for paused Cloudflare runs.
 
 ## Task map
 
