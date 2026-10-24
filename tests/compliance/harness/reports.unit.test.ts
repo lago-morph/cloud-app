@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { grepPattern, parsePlaywrightJson, parseVitestJson } from "./reports.js";
+import SkipNotesReporter, { SKIP_NOTE_META } from "./skip-notes-reporter.js";
 
 describe("test-runner reports into outcomes", () => {
   it("reads Vitest's JSON report with describe titles in the full title", () => {
@@ -60,6 +61,49 @@ describe("test-runner reports into outcomes", () => {
       { title: "browser > [FILES-AC-005] skipped", file: "tests/compliance/criteria/files/files.spec.ts", status: "skipped" },
     ]);
     expect(parsed.errors).toEqual(["Error: config broke"]);
+  });
+
+  // G-T2 report: AWS-AC-005 skips with its not-run reason as the note; the reason must reach the outcome.
+  it("keeps a skipped test's note: Vitest's from meta.skipNote (skip-notes reporter), Playwright's from its skip annotation", () => {
+    const vitest = {
+      testResults: [
+        {
+          name: "/repo/tests/compliance/criteria/aws/paused-cluster.test.ts",
+          status: "passed",
+          assertionResults: [
+            { ancestorTitles: [], title: "[AWS-AC-005] paused", status: "skipped", failureMessages: [], meta: { [SKIP_NOTE_META]: "not-run: the cluster did not pause within 15 minutes" } },
+            { ancestorTitles: [], title: "[AWS-AC-005] plain skip", status: "skipped", failureMessages: [], meta: {} },
+            { ancestorTitles: [], title: "[AWS-AC-005] blank note", status: "skipped", failureMessages: [], meta: { [SKIP_NOTE_META]: "  " } },
+          ],
+        },
+      ],
+    };
+    expect(parseVitestJson(JSON.stringify(vitest), "/repo").outcomes).toEqual([
+      { title: "[AWS-AC-005] paused", file: "tests/compliance/criteria/aws/paused-cluster.test.ts", status: "skipped", note: "not-run: the cluster did not pause within 15 minutes" },
+      { title: "[AWS-AC-005] plain skip", file: "tests/compliance/criteria/aws/paused-cluster.test.ts", status: "skipped" },
+      { title: "[AWS-AC-005] blank note", file: "tests/compliance/criteria/aws/paused-cluster.test.ts", status: "skipped" },
+    ]);
+    const playwright = {
+      suites: [
+        {
+          title: "a.spec.ts",
+          file: "a.spec.ts",
+          specs: [{ title: "[E2E-002] aws part", file: "a.spec.ts", tests: [{ status: "skipped", annotations: [{ type: "skip", description: "no AWS stage in this run" }], results: [{ status: "skipped" }] }] }],
+        },
+      ],
+    };
+    expect(parsePlaywrightJson(JSON.stringify(playwright), "").outcomes).toEqual([{ title: "[E2E-002] aws part", file: "a.spec.ts", status: "skipped", note: "no AWS stage in this run" }]);
+  });
+
+  it("the skip-notes reporter copies a skip(note) into the JSON report's meta, and leaves other results alone", () => {
+    const meta: Record<string, unknown> = {};
+    const testCase = (result: unknown) => ({ result: () => result, meta: () => meta }) as unknown as Parameters<SkipNotesReporter["onTestCaseResult"]>[0];
+    const reporter = new SkipNotesReporter();
+    reporter.onTestCaseResult(testCase({ state: "passed", errors: undefined }));
+    reporter.onTestCaseResult(testCase({ state: "skipped", errors: undefined, note: undefined }));
+    expect(meta).toEqual({});
+    reporter.onTestCaseResult(testCase({ state: "skipped", errors: undefined, note: "not-run: never paused" }));
+    expect(meta).toEqual({ [SKIP_NOTE_META]: "not-run: never paused" });
   });
 
   it("reports an unreadable report as an error, not as outcomes", () => {

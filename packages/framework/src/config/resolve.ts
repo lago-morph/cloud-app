@@ -88,7 +88,7 @@ export function resolveConfig(input: ResolveInput): ResolvedConfig {
     ...(users === undefined ? {} : { users: Object.freeze([...users]) }),
     ...(google === undefined ? {} : { google: Object.freeze({ clientId: google.clientId }) }),
     secrets: Object.freeze(
-      input.secrets.map((name) => Object.freeze({ name, location: secretLocation(input.deployment.target, name) })),
+      input.secrets.map((name) => Object.freeze({ name, location: secretLocation(input.deployment.target, name, input.deployment) })),
     ),
   });
 }

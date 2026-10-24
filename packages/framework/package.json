@@ -26,6 +26,10 @@
       "types": "./dist/targets/cloudflare/public.d.ts",
       "default": "./dist/targets/cloudflare/public.js"
     },
+    "./targets/aws": {
+      "types": "./dist/targets/aws/public.d.ts",
+      "default": "./dist/targets/aws/public.js"
+    },
     "./provision": {
       "types": "./dist/provision/public.d.ts",
       "default": "./dist/provision/public.js"
@@ -49,7 +53,18 @@
     "prepack": "npm run build"
   },
   "dependencies": {
+    "@aws-sdk/client-ec2": "3.1153.0",
+    "@aws-sdk/client-iam": "3.1153.0",
+    "@aws-sdk/client-lambda": "3.1153.0",
+    "@aws-sdk/client-rds": "3.1153.0",
+    "@aws-sdk/client-rds-data": "3.1153.0",
+    "@aws-sdk/client-resource-groups-tagging-api": "3.1153.0",
+    "@aws-sdk/client-s3": "3.1153.0",
+    "@aws-sdk/client-secrets-manager": "3.1153.0",
+    "@aws-sdk/client-ssm": "3.1153.0",
+    "@aws-sdk/client-sts": "3.1153.0",
     "@electric-sql/pglite": "0.5.8",
+    "@smithy/node-http-handler": "4.12.1",
     "@typescript-eslint/utils": "8.72.0",
     "aws4fetch": "1.0.20",
     "drizzle-kit": "0.31.11",
@@ -69,6 +84,8 @@
   "devDependencies": {
     "@cloudflare/workers-types": "5.20261006.1",
     "@playwright/test": "1.64.1",
-    "@types/node": "22.20.5"
+    "@types/aws-lambda": "8.10.164",
+    "@types/node": "22.20.5",
+    "aws-sdk-client-mock": "4.1.0"
   }
 }

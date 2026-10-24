@@ -10,27 +10,41 @@
  * 4. generate the target entry point: it imports the app module, the configuration module and
  *    `<package>/targets/<target>`; only a test-stage Cloudflare entry imports the
  *    authentication mock (production bundles contain none);
- * 5. bundle the entry for Workers (esbuild);
- * 6. locally, write the `wrangler.jsonc` `dev` runs (local D1 `DB`, local R2 `FILES`).
+ * 5. bundle the entry: for Workers (local, Cloudflare), or for the AWS Lambda (Node 22 ESM, the
+ *    AWS SDK bundled) into `<app>/.framework/aws/bundle/index.mjs`, handler `index.handler`, the
+ *    `FunctionCode` the AWS stage program points the Function at (`provision/aws/sst.ts`);
+ * 6. AWS: inspect the bundle (`inspect.ts`) and fail on a forbidden module, a secret value or
+ *    the size bound (CORE-REQ-006, PROV-REQ-005; DEC-0474);
+ * 7. locally, write the `wrangler.jsonc` `dev` runs (local D1 `DB`, local R2 `FILES`).
  * Everything goes under `<app>/.framework/<target>/`, which is replaced on every build.
  * Node only.
  */
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
+import { FrameworkError } from "../core/errors.js";
 import { createDeployment, type Deployment, type Target } from "../core/identity.js";
 import { nodeFileReader, resolveStageConfig } from "../config/files.js";
 import { generateConfigModule } from "../config/embed.js";
 import type { ResolvedConfig } from "../config/resolve.js";
 import { checkSecretDeclarations } from "../secrets/names.js";
+import { readDevVars } from "../secrets/dev-vars.js";
+import { DEV_VARS_FILE } from "../secrets/local.js";
 import { BINDINGS } from "../targets/cloudflare/bindings.js";
 import { APP_ENTRY, BUILD_DIR, loadAppModule } from "./load.js";
-import { bundleWorker } from "./bundle.js";
+import { bundleLambda, bundleWorker } from "./bundle.js";
+import { environmentSecretValues, inspectBundle } from "./inspect.js";
 
 /** The framework's package name, as generated entry points import it. */
 export const PACKAGE_NAME = "@lago-morph/prototype-framework";
 
 /** Workers compatibility date written for local `dev` (the Wrangler pin's runtime supports it). */
 export const COMPATIBILITY_DATE = "2026-10-01";
+
+/**
+ * The AWS Lambda code the build writes: the directory SST zips (`FunctionCode.bundle`, relative
+ * to `<app>/.framework/aws/`), the file in it, and the handler (`FunctionCode.handler`).
+ */
+export const AWS_LAMBDA_CODE = { bundleDir: "bundle", file: "index.mjs", handler: "index.handler" } as const;
 
 export interface BuildOptions {
   /** The app directory (holding `src/app.ts`, `config/`). */
@@ -42,6 +56,19 @@ export interface BuildOptions {
    * The framework's own tests point it at the runtime's sources.
    */
   readonly runtimeImport?: string;
+  /**
+   * AWS: the environment whose secret values the bundle inspection searches for (`SECRET_*`,
+   * AWS credentials); default `process.env`.
+   */
+  readonly env?: Readonly<Record<string, string | undefined>>;
+}
+
+/** AWS only: what `provision/aws/sst.ts`'s `FunctionCode` takes. */
+export interface LambdaCode {
+  /** The directory holding the bundle (`<app>/.framework/aws/bundle`). */
+  readonly bundle: string;
+  /** `index.handler`. */
+  readonly handler: string;
 }
 
 export interface BuildResult {
@@ -51,8 +78,10 @@ export interface BuildResult {
   readonly outDir: string;
   readonly entry: string;
   readonly configModule: string;
-  /** The Worker bundle. */
+  /** The Worker bundle, or the Lambda bundle file on AWS. */
   readonly bundle: string;
+  /** AWS only: the Lambda code for the stage program. */
+  readonly lambda?: LambdaCode;
   /** Local target only: the Wrangler configuration for `dev`. */
   readonly wranglerConfig?: string;
   /** Every module bundled. */
@@ -78,7 +107,15 @@ export function entrySource(options: {
     `import ${appBinding} from ${JSON.stringify(options.appImport)};`,
     `import config from ${JSON.stringify(options.configImport)};`,
   ];
-  if (options.deployment.target === "local") {
+  if (options.deployment.target === "aws") {
+    // The Lambda runtime calls the module's `handler` export (AWS_LAMBDA_CODE.handler).
+    const runtime = JSON.stringify(options.runtimeImport);
+    if (options.deployment.isTestStage) {
+      lines.push(`import { createAuthMock, createAwsLambdaHandler } from ${runtime};`, "export const handler = createAwsLambdaHandler(app, config, { mock: createAuthMock });");
+    } else {
+      lines.push(`import { createAwsLambdaHandler } from ${runtime};`, "export const handler = createAwsLambdaHandler(app, config);");
+    }
+  } else if (options.deployment.target === "local") {
     lines.push(`import { createLocalWorker } from ${JSON.stringify(options.runtimeImport)};`, "export default createLocalWorker(app, config);");
   } else if (options.deployment.isTestStage) {
     lines.push(
@@ -131,6 +168,24 @@ export async function buildApp(options: BuildOptions): Promise<BuildResult> {
       runtimeImport: options.runtimeImport ?? `${PACKAGE_NAME}/targets/${options.target}`,
     }),
   );
+  if (deployment.target === "aws") {
+    const bundleDir = join(outDir, AWS_LAMBDA_CODE.bundleDir);
+    const bundle = join(bundleDir, AWS_LAMBDA_CODE.file);
+    const { modules, externals } = await bundleLambda(entry, bundle);
+    const violations = inspectBundle({
+      text: readFileSync(bundle, "utf8"),
+      bytes: statSync(bundle).size,
+      modules,
+      externals: externals ?? [],
+      production: !deployment.isTestStage,
+      secretValues: [...environmentSecretValues(options.env ?? process.env), ...devVarsSecretValues(appDir)],
+    });
+    if (violations.length > 0) {
+      rmSync(bundleDir, { recursive: true, force: true });
+      throw new FrameworkError("CORE.MISCONFIGURED", `the AWS Lambda bundle for stage ${deployment.stage} failed inspection (CORE-REQ-006): ${violations.join("; ")}`);
+    }
+    return { deployment, resolved, outDir, entry, configModule, bundle, lambda: { bundle: bundleDir, handler: AWS_LAMBDA_CODE.handler }, modules };
+  }
   const bundle = join(outDir, "worker.js");
   const { modules } = await bundleWorker(entry, bundle);
   let wranglerConfig: string | undefined;
@@ -139,4 +194,15 @@ export async function buildApp(options: BuildOptions): Promise<BuildResult> {
     writeFileSync(wranglerConfig, localWranglerConfig(deployment));
   }
   return { deployment, resolved, outDir, entry, configModule, bundle, modules, ...(wranglerConfig === undefined ? {} : { wranglerConfig }) };
+}
+
+/** The values in the app's local secret store (`.dev.vars`), if it has one: none may reach a cloud bundle. */
+function devVarsSecretValues(appDir: string): string[] {
+  let text: string;
+  try {
+    text = readFileSync(join(appDir, DEV_VARS_FILE), "utf8");
+  } catch {
+    return [];
+  }
+  return Object.values(readDevVars(text)).filter((value) => value !== "");
 }

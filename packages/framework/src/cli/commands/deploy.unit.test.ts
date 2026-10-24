@@ -148,3 +148,25 @@ describe("deploy (CLI-REQ-001, PROV-REQ-002, CLI-REQ-003)", () => {
     expect(io.out).not.toContain("callback");
   });
 });
+
+describe("deploy --target aws (G-11)", () => {
+  it("prepares the AWS build, hands its code to the AWS operations, and records the public origin under .framework/aws", async () => {
+    const fake = new FakeTarget({ dialect: "postgres" });
+    const seen: unknown[] = [];
+    const h = harness({ fake, prepared: { code: { bundle: "/apps/notes/.framework/aws/bundle", handler: "index.handler" } } });
+    const deps: DeployDeps = { ...h.deps, operations: (input) => (seen.push(input), h.deps.operations(input)) };
+    const io = captureIo("/apps/notes");
+    expect(await deployCommand(deps)(["--target", "aws", "--stage", "test-abc"], io)).toBe(0);
+    expect(h.events).toEqual(["prepare /apps/notes aws test-abc", "operations aws"]);
+    expect(seen).toEqual([{ appDir: "/apps/notes", target: "aws", code: { bundle: "/apps/notes/.framework/aws/bundle", handler: "index.handler" } }]);
+    expect(h.recorded).toEqual([["/apps/notes", "aws", "test-abc", "https://notes-test-abc.fake.example"]]);
+  });
+
+  it("stops before building when the process cannot use the proxy, as on Cloudflare", async () => {
+    const h = harness({ env: { HTTPS_PROXY: "http://proxy:1" } });
+    const io = captureIo();
+    expect(await deployCommand(h.deps)(["--target", "aws", "--stage", "test-abc"], io)).toBe(1);
+    expect(io.err).toContain("NODE_USE_ENV_PROXY=1");
+    expect(h.events).toEqual([]);
+  });
+});

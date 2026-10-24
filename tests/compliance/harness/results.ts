@@ -4,7 +4,10 @@
  * `passed` only in the record, and the evaluator decides whether the evidence shows it.
  * - failed beats blocked beats passed;
  * - a criterion with no executed tagged test is `not-run`, never `passed`;
- * - skipped tests and parts that are not run each add a `not-run` entry.
+ * - a clause the expected entry names (`clauses`) with no executed test of its own adds a
+ *   `not-run` entry;
+ * - skipped tests and parts that are not run each add a `not-run` entry; a skipped test that gave
+ *   a note (`skip(note)`, the reason it did not run) has its own entry with the note as detail.
  */
 import type { EvidenceResult } from "../../../packages/framework/src/evidence/public.js";
 import { parseTags } from "../../support/tags.js";
@@ -19,6 +22,8 @@ export interface TestOutcome {
   readonly status: "passed" | "failed" | "skipped";
   /** First failure message, for failed tests. */
   readonly message?: string;
+  /** Skipped tests: the note the test gave for skipping (its not-run reason), when any. */
+  readonly note?: string;
   /** The IDs this outcome may evidence, when narrower than its title's tags (unit layer: unit-level IDs only). */
   readonly ids?: readonly string[];
 }
@@ -42,6 +47,12 @@ function firstLine(text: string | undefined): string {
 
 function cap(detail: string): string {
   return detail.length > MAX_DETAIL ? `${detail.slice(0, MAX_DETAIL)}…` : detail;
+}
+
+/** A skip note as a not-run detail: the status already says not-run, so a leading `not-run:` is dropped. */
+function skipNoteDetail(note: string): string {
+  const text = note.trim().replace(/^not-run:\s*/i, "");
+  return text === "" ? note.trim() : text;
 }
 
 function isBlocked(outcome: TestOutcome): boolean {
@@ -83,11 +94,18 @@ export function criterionResults(input: CriterionResultsInput): EvidenceResult[]
     } else if (skipped.length === 0) {
       results.push({ id: entry.id, status: "not-run", detail: `no test tagged [${entry.id}] ran on ${input.target}` });
     }
-    if (skipped.length > 0) {
-      const noun = skipped.length === 1 ? "tagged test" : "tagged tests";
-      results.push({ id: entry.id, status: "not-run", detail: cap(`${String(skipped.length)} ${noun} skipped: ${skipped.map((o) => o.title).join("; ")}`) });
+    for (const o of skipped) if (o.note !== undefined) results.push({ id: entry.id, status: "not-run", detail: cap(skipNoteDetail(o.note)) });
+    const unnoted = skipped.filter((o) => o.note === undefined);
+    if (unnoted.length > 0) {
+      const noun = unnoted.length === 1 ? "tagged test" : "tagged tests";
+      results.push({ id: entry.id, status: "not-run", detail: cap(`${String(unnoted.length)} ${noun} skipped: ${unnoted.map((o) => o.title).join("; ")}`) });
     }
     for (const part of entry.notRunParts) results.push({ id: entry.id, status: "not-run", detail: `${part.part}: ${part.detail}` });
+    // A clause shown by no executed test of its own (plan-aws.md G-T4): the other tests do not stand for it.
+    for (const clause of entry.clauses ?? []) {
+      const pattern = new RegExp(clause.titlePattern, "i");
+      if (!executed.some((o) => pattern.test(o.title))) results.push({ id: entry.id, status: "not-run", detail: `${clause.part}: no test tagged [${entry.id}] for this clause ran on ${input.target}` });
+    }
   }
   return results;
 }

@@ -78,7 +78,12 @@ Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 | --- | --- | --- | --- | --- |
 | PAR-060 | Default AWS region | `us-east-1` | ai-proposed | Used by `setup-account` unless another region is chosen there (SYS-REQ-023, DEC-0075). |
 | PAR-270 | HTTP Lambda timeout | 55 seconds | ai-proposed | Must be below PAR-271 and above PAR-210 + PAR-260. |
-| PAR-271 | API read timeout at the AWS router | 60 seconds | ai-proposed | Must exceed PAR-270. |
+| PAR-271 | API read timeout at the AWS router | 60 seconds | ai-proposed | Must exceed PAR-270. Already the maximum SST and CloudFront allow for `readTimeout`; raising it needs a CloudFront quota change (DEC-0438). |
+| PAR-272 | HTTP Lambda runtime | `nodejs22.x` | ai-proposed | Matches PAR-111's Node.js 22. Set explicitly: SST's default is `nodejs24.x`. The managed runtime's patch level is AWS's choice (DEC-0433). |
+| PAR-273 | HTTP Lambda architecture | `arm64` | ai-proposed | Lower cost; the bundle has no native modules. Set explicitly: SST's default is `x86_64` (DEC-0433). |
+| PAR-274 | HTTP Lambda memory | 1024 MB | ai-proposed | SST's default, set explicitly. Lambda CPU scales with memory; at PAR-001's load the cost is negligible (DEC-0433). |
+| PAR-275 | Data API resume backoff | Wait before retry n: random(0, min(5 s, 250 ms × 2ⁿ)) (base 250 ms, factor 2, cap 5 s, full jitter); retries stop when the next attempt would start after PAR-210 | ai-proposed | SQL-REQ-006 on AWS. A resume usually takes about 15 s; short early waits catch a resume in progress, the cap bounds the wasted wait, and jitter spreads concurrent retries. The SDK client's own retry is off (`maxAttempts: 1`) (DEC-0435, DEC-0452). |
+| PAR-276 | HTTP Lambda bundle size bound | 4 MiB (4,194,304 bytes) for the minified `index.mjs` | ai-proposed | Checked by `build --target aws`. A framework app's bundle is about 0.6 MB; the bound fails fast on a large dependency pulled in by mistake, far below Lambda's own limits, and protects cold starts (DEC-0474). |
 
 ## AI skill
 
@@ -93,6 +98,9 @@ Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 | ID | Parameter | Value | Category | Notes |
 | --- | --- | --- | --- | --- |
 | PAR-280 | Floating-point comparison tolerance in compliance tests | `abs(actual − expected) ≤ max(1e-12, 1e-12 × abs(expected))` | ai-proposed | |
+| PAR-281 | AWS-AC-005 wait for a paused cluster | 15 minutes (PAR-213 plus 10 minutes), polling every 30 seconds | ai-proposed | If the cluster has not observably paused by then, AWS-AC-005 is recorded not-run with the reason and the last observed state. Keeps one slow test under about 20 minutes (DEC-0437). |
+| PAR-282 | AWS API calls by the cloud test hooks per compliance run | 2,000 | ai-proposed | `COMPLIANCE_AWS_MAX_RUN_CALLS` overrides it. Calls the framework CLI makes (deploy, remove, the leftover check) are not counted; a total above the cap fails the run (DEC-0501). |
+| PAR-283 | Test-stage Aurora clusters at once in the AWS account | 3 | ai-proposed | The driver and the stage-lifecycle tests refuse a deploy that would exceed it and record the criteria not-run (DEC-0501). |
 
 ## Names
 
@@ -118,7 +126,7 @@ All pins are **ai-proposed**. They were selected around October 9, 2026; spike A
 | PAR-108 | @pulumi/cloudflare | 6.15.0 | The provider generation SST 4.17.2 pins. A direct framework dependency only if framework code imports it (DEC-0109). |
 | PAR-109 | @pulumi/aws | 7.20.0 | The provider generation SST 4.17.2 pins. |
 | PAR-110 | Aurora PostgreSQL engine | 17.x | The highest 17.x minor that the region supports with Data API and auto-pause, resolved at implementation start; verified per region by `setup-account` and deploy preflight. |
-| PAR-111 | Node.js, TypeScript, ESLint, AWS SDKs | Node.js 22.22.0; TypeScript 6.0.3; ESLint 10.13.0 with typescript-eslint 8.72.0; @types/node 22.20.5 (framework and tests only); AWS SDKs: to be recorded in the AWS phase | TypeScript 7.x is outside typescript-eslint's supported range (`<6.1.0`), which CHECK's type-aware rules need (DEC-0104). `@typescript-eslint/utils` is declared at the typescript-eslint version (DEC-0243). |
+| PAR-111 | Node.js, TypeScript, ESLint, AWS SDKs | Node.js 22.22.0; TypeScript 6.0.3; ESLint 10.13.0 with typescript-eslint 8.72.0; @types/node 22.20.5 (framework and tests only); AWS SDKs: AWS SDK for JavaScript v3 3.1153.0 for every `@aws-sdk/client-*` the framework uses (ec2, iam, lambda, rds, rds-data, resource-groups-tagging-api, s3, secrets-manager, ssm, sts), and `@smithy/node-http-handler` 4.12.1 | TypeScript 7.x is outside typescript-eslint's supported range (`<6.1.0`), which CHECK's type-aware rules need (DEC-0104). `@typescript-eslint/utils` is declared at the typescript-eslint version (DEC-0243). AWS SDK: one version for every client, the one SST 4.17.2 resolves for `client-lambda`; the ten clients share one `@aws-sdk/core` (3.978.5); their transitive ranges are fixed by the root lockfile. `@smithy/node-http-handler` is the version already in the lockfile, imported directly by the Data API adapter. The HTTP Lambda bundle carries only rds-data and ssm, never the runtime's own SDK copy (DEC-0432, DEC-0451, DEC-0455, DEC-0472). |
 | PAR-112 | Zod | 4.6.7 | Re-exported to apps (DEC-0059). Verified by spike A-10 (DEC-0104). |
 | PAR-113 | Vite | 8.3.4 | Client build and local dev server; `/api` proxy to `wrangler dev` verified (DEC-0104). |
 | PAR-114 | Playwright | `@playwright/test` 1.64.1; browser Chrome Headless Shell 156.0.8078.4 (`npx playwright install chromium`) | Browser-level compliance tests (DEC-0104). |
@@ -126,3 +134,5 @@ All pins are **ai-proposed**. They were selected around October 9, 2026; spike A
 | PAR-117 | Miniflare | 5.20261006.1-alpha | Exactly the version Wrangler (PAR-101) depends on, so there is one workerd; declared only if framework code imports Miniflare directly (DEC-0105). Moves with PAR-101. |
 | PAR-118 | @cloudflare/workers-types | 5.20261006.1 | Framework dev dependency only, for Miniflare's type declarations; never in a `types` array (DEC-0105, CHECK §2). Moves with PAR-101. |
 | PAR-119 | esbuild | 0.28.2 | Exactly the version Wrangler (PAR-101) depends on; a framework dependency so npm hoists it for Vite (PAR-113) and the build pipeline, while drizzle-kit keeps its own nested copy (DEC-0114). Moves with PAR-101. |
+| PAR-120 | aws-sdk-client-mock | 4.1.0 | Framework dev dependency for AWS SDK unit tests; works with the PAR-111 clients (DEC-0432). |
+| PAR-121 | @types/aws-lambda | 8.10.164 | Framework dev dependency only, for the Lambda entry's event and result types; the published declarations do not need it (DEC-0432, DEC-0468). |

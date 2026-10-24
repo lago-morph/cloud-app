@@ -11,6 +11,9 @@ describe("evidence records under validation/", () => {
   mkdirSync(join(root, "validation", "local", "r1", "raw"), { recursive: true });
   mkdirSync(join(root, "validation", "local", "phase-B"), { recursive: true });
   writeFileSync(join(root, "validation", "local", "r1.json"), JSON.stringify(good));
+  // G-EV F3: a dry run's record is never evidence, whatever folder it is in.
+  mkdirSync(join(root, "validation", "aws"), { recursive: true });
+  writeFileSync(join(root, "validation", "aws", "d1.json"), JSON.stringify({ ...good, runId: "d1", target: "aws", dryRun: "fake stage operations (OperationsFactory)" }));
   writeFileSync(join(root, "validation", "local", "bad.json"), JSON.stringify({ runId: "x" }));
   writeFileSync(join(root, "validation", "local", "r1", "raw", "vitest.json"), "{}");
   writeFileSync(join(root, "validation", "local", "phase-B", "05a-integration-vitest.json"), "{}");
@@ -18,6 +21,9 @@ describe("evidence records under validation/", () => {
   it("reads the schema-valid records at validation/<target>/*.json only, and names the others", () => {
     const { records, skipped } = readRecords(root);
     expect(records.map((r) => r.runId)).toEqual(["r1"]);
-    expect(skipped).toEqual([expect.stringMatching(/^validation\/local\/bad\.json: \/: missing required property commit/) as unknown]);
+    expect(skipped).toEqual([
+      expect.stringMatching(/^validation\/local\/bad\.json: \/: missing required property commit/) as unknown,
+      "validation/aws/d1.json: a dry run (fake stage operations (OperationsFactory)), never evidence",
+    ]);
   });
 });

@@ -13,7 +13,8 @@ import { afterAll, describe, expect, it } from "vitest";
 import { unstable_startWorker } from "wrangler";
 import { tag } from "../../../../tests/support/tags.js";
 import { FrameworkError } from "../core/errors.js";
-import { buildApp, loadApp, type BuildOptions } from "./public.js";
+import { createDeployment } from "../core/identity.js";
+import { buildApp, entrySource, loadApp, type BuildOptions } from "./public.js";
 
 const SRC = dirname(dirname(fileURLToPath(import.meta.url)));
 const runtimeImport = (target: string) => join(SRC, "targets", target, "public.ts");
@@ -147,6 +148,22 @@ describe("buildApp --target cloudflare", () => {
     const config = readFileSync(result.configModule, "utf8");
     expect(config).toContain('"apiKey"');
     expect(config).toContain('"SECRET_API_KEY"');
+  });
+});
+
+describe("buildApp --target aws (the Lambda bundle itself: aws.unit.test.ts)", () => {
+  it("a missing config/aws/test.json is reported first, naming the file, and nothing is written (CFG-REQ-002)", async () => {
+    const dir = fixture({});
+    await expect(buildApp({ appDir: dir, target: "aws", stage: "test-ab1" })).rejects.toThrow(/config\/aws\/test\.json is missing/);
+    expect(existsSync(join(dir, ".framework", "aws"))).toBe(false);
+  });
+
+  it("the generated entry for aws never falls back to the Cloudflare Worker", () => {
+    const deployment = createDeployment({ app: "notes", stage: "test-ab1", target: "aws" });
+    const source = entrySource({ deployment, appImport: "./app.js", exportName: "app", configImport: "./config.mjs", runtimeImport: "x/targets/aws" });
+    expect(source).toContain("import { app } from");
+    expect(source).toContain("createAwsLambdaHandler(app, config");
+    expect(source).not.toMatch(/createCloudflareWorker|createLocalWorker/);
   });
 });
 

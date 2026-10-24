@@ -120,7 +120,7 @@ A case is `(services: CaseServices, input: unknown) => Promise<unknown>` with `C
 
 ## Configuration and secrets
 
-- Config keys: `greeting` (string, default `"Hello"`), `pageSize` (integer, default `20`), `featureOn` (boolean, default `false`), `tags` (string list, default `[]`). `config/local.json` sets `greeting` to `"Hello from local"`; `config/cloudflare/test.json` sets it to `"Hello from a test stage"`. Both have an empty `framework` section. No `prodcheck.json` in this phase.
+- Config keys: `greeting` (string, default `"Hello"`), `pageSize` (integer, default `20`), `featureOn` (boolean, default `false`), `tags` (string list, default `[]`). `config/local.json` sets `greeting` to `"Hello from local"`; `config/cloudflare/test.json` and `config/aws/test.json` set it to `"Hello from a test stage"`. Both have an empty `framework` section. No `prodcheck.json` in this phase.
 - Secret: `apiKey` (the test secret). Set locally with `npm run secrets -- set apiKey --target local --stage local` (value on stdin).
 
 ## Tables

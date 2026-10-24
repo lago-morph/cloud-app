@@ -4,7 +4,7 @@
  * the framework-internal Worker secrets `frameworkR2AccessKeyId` / `frameworkR2SecretAccessKey`.
  * The token value is returned once by Cloudflare and must never be printed. Web Crypto only.
  */
-import type { S3Credentials } from "./sign.js";
+import type { S3Credentials } from "../s3/sign.js";
 
 /** The part of the token-creation result the credentials come from. */
 export interface R2ApiToken {

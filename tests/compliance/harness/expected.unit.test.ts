@@ -1,6 +1,7 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parseWhere, readCatalogue, type CatalogueEntry } from "./catalogue.js";
-import { AWS_NOT_STARTED, checkRules, expectedCriteria, GOOGLE_MOCKED, PHASE_RULES, type NotRunRule } from "./expected.js";
+import { AWS_LIVE_PENDING, CLAUSE_RULES, checkRules, expectedCriteria, GOOGLE_MOCKED, PHASE_RULES, UNIT_LEVEL, type ClauseRule, type NotRunRule } from "./expected.js";
 
 const docs = new URL("../../../docs/", import.meta.url).pathname;
 
@@ -32,17 +33,27 @@ describe("[COMPL-AC-001] per-target expected criteria", () => {
     const rules: NotRunRule[] = [
       { id: "B-AC-001", targets: ["cloudflare"], mode: "automated", part: "production part", detail: GOOGLE_MOCKED },
       { id: "D-AC-001", targets: ["cloudflare"], mode: "automated", detail: GOOGLE_MOCKED },
-      { id: "*", targets: ["aws"], mode: "automated", detail: AWS_NOT_STARTED },
+      { id: "*", targets: ["aws"], mode: "automated", detail: AWS_LIVE_PENDING },
     ];
     expect(expectedCriteria(catalogue, "cloudflare", "automated", rules)).toEqual([
       { id: "B-AC-001", run: true, parts: [""], notRunParts: [{ part: "production part", detail: GOOGLE_MOCKED }] },
       { id: "D-AC-001", run: false, notRun: GOOGLE_MOCKED, parts: [""], notRunParts: [] },
     ]);
     expect(expectedCriteria(catalogue, "aws", "automated", rules).map((e) => [e.id, e.run, e.notRun])).toEqual([
-      ["B-AC-001", false, AWS_NOT_STARTED],
-      ["D-AC-001", false, AWS_NOT_STARTED],
+      ["B-AC-001", false, AWS_LIVE_PENDING],
+      ["D-AC-001", false, AWS_LIVE_PENDING],
     ]);
     expect(expectedCriteria(catalogue, "local", "automated", rules).every((e) => e.run && e.notRun === undefined)).toBe(true);
+  });
+
+  it("names the clauses a criterion must show by a test of their own, only on the clause's target and tier, and not for a part already not run", () => {
+    const clauses: ClauseRule[] = [{ id: "B-AC-001", targets: ["local"], mode: "automated", part: "x clause", titlePattern: "x clause" }];
+    const local = expectedCriteria(catalogue, "local", "automated", [], clauses);
+    expect(local.find((e) => e.id === "B-AC-001")).toEqual({ id: "B-AC-001", run: true, parts: [""], notRunParts: [], clauses: [{ part: "x clause", titlePattern: "x clause" }] });
+    expect(local.find((e) => e.id === "A-AC-001")).toEqual({ id: "A-AC-001", run: true, parts: [""], notRunParts: [] });
+    expect(expectedCriteria(catalogue, "cloudflare", "automated", [], clauses).find((e) => e.id === "B-AC-001")?.clauses).toBeUndefined();
+    const notRun: NotRunRule[] = [{ id: "B-AC-001", targets: ["local"], mode: "automated", part: "x clause", detail: "not yet" }];
+    expect(expectedCriteria(catalogue, "local", "automated", notRun, clauses).find((e) => e.id === "B-AC-001")).toEqual({ id: "B-AC-001", run: true, parts: [""], notRunParts: [{ part: "x clause", detail: "not yet" }] });
   });
 
   it("names a rule that matches nothing in the catalogue", () => {
@@ -58,6 +69,7 @@ describe("[COMPL-AC-001] this phase's not-run rules (plan §8) against the docum
 
   it("every rule matches a criterion applying on its target and tier", () => {
     expect(checkRules(real, PHASE_RULES)).toEqual([]);
+    expect(checkRules(real, CLAUSE_RULES)).toEqual([]);
   });
 
   it("records the Google-mocked items on Cloudflare as not-run with the prompt's detail", () => {
@@ -90,18 +102,41 @@ describe("[COMPL-AC-001] this phase's not-run rules (plan §8) against the docum
     expect(local.get("CHECK-AC-005")).toEqual({ id: "CHECK-AC-005", run: true, parts: [""], notRunParts: [] });
   });
 
-  it("records the AWS-only parts of Local criteria (CORE-AC-006 AWS bundle, SQL-AC-006 Data API retry loop) as not-run on local", () => {
+  // plan-aws.md G-T4: DEC-0397's not-run parts are gone; each AWS clause of a Local criterion must be shown by its own test.
+  it("runs the AWS clauses of Local criteria on local (CORE-AC-006 AWS bundle, SQL-AC-006 Data API retry loop), each required by name", () => {
+    expect(PHASE_RULES.filter((r) => r.id === "CORE-AC-006" || r.id === "SQL-AC-006")).toEqual([]);
     const local = new Map(expectedCriteria(real, "local", "automated").map((e) => [e.id, e]));
-    expect(local.get("CORE-AC-006")).toEqual({ id: "CORE-AC-006", run: true, parts: [""], notRunParts: [{ part: "AWS-bundle clause", detail: "AWS phase not started" }] });
-    expect(local.get("SQL-AC-006")).toEqual({ id: "SQL-AC-006", run: true, parts: [""], notRunParts: [{ part: "Data API retry-loop clause", detail: "AWS phase not started" }] });
+    expect(local.get("CORE-AC-006")).toEqual({ id: "CORE-AC-006", run: true, parts: [""], notRunParts: [], clauses: [{ part: "AWS-bundle clause", titlePattern: String.raw`\bAWS[- ]bundle\b` }] });
+    expect(local.get("SQL-AC-006")).toEqual({ id: "SQL-AC-006", run: true, parts: [""], notRunParts: [], clauses: [{ part: "Data API retry-loop clause", titlePattern: String.raw`\bData API retry[- ]loop clause\b` }] });
     const cf = new Map(expectedCriteria(real, "cloudflare", "automated").map((e) => [e.id, e]));
-    expect(cf.get("SQL-AC-006")?.notRunParts).toEqual([]);
+    expect(cf.get("SQL-AC-006")).toEqual({ id: "SQL-AC-006", run: true, parts: [""], notRunParts: [] });
+    // The clause patterns match the clause tests' titles and not the Cloudflare bundle's.
+    const [core, sql] = [local.get("CORE-AC-006")?.clauses?.[0]?.titlePattern ?? "", local.get("SQL-AC-006")?.clauses?.[0]?.titlePattern ?? ""].map((p) => new RegExp(p, "i"));
+    expect(core?.test("[CORE-AC-006] AWS bundle part: no Cloudflare-only modules")).toBe(true);
+    expect(core?.test('[CORE-AC-006] Cloudflare bundle part, stage "test-b4t1": no AWS SDK')).toBe(false);
+    expect(sql?.test('[SQL-AC-006] Data API retry-loop clause (longest waits): with a "database resuming" error injected')).toBe(true);
+    expect(sql?.test("[SQL-AC-006] a duplicate unique value yields SQL.CONFLICT")).toBe(false);
   });
 
-  it("records every AWS criterion as not-run 'AWS phase not started', and Local criteria run locally", () => {
+  // plan-aws.md G-T4: the other AWS clauses of Local criteria are G-07's and G-01's tagged tests, selected as they are.
+  it("selects the existing AWS cases of PROV-AC-007 (unit level) and CORE-AC-005 (integration layer) on local", () => {
+    expect(UNIT_LEVEL).toContain("PROV-AC-007");
+    const repo = new URL("../../../", import.meta.url).pathname;
+    const prov = readFileSync(`${repo}packages/framework/src/provision/aws/account.unit.test.ts`, "utf8");
+    expect(prov).toMatch(/"\[PROV-AC-007\] AWS: with HeadBucket stubbed to 403 for the expected owner[^"]*setup-account and deploy stop with a message naming the bucket and change nothing"/);
+    const verify = readFileSync(`${repo}packages/framework/test/integration/cli/verify.test.ts`, "utf8");
+    expect(verify).toContain('tag("CORE-AC-005", "a fixture importing ./targets/aws from app code fails verify")');
+    expect(verify).toContain('tag("CORE-AC-005", "the package\'s exports map equals the subpath table, ./targets/aws included")');
+    const local = new Map(expectedCriteria(real, "local", "automated").map((e) => [e.id, e]));
+    expect(local.get("PROV-AC-007")).toEqual({ id: "PROV-AC-007", run: true, parts: [""], notRunParts: [] });
+    expect(local.get("CORE-AC-005")).toEqual({ id: "CORE-AC-005", run: true, parts: [""], notRunParts: [] });
+  });
+
+  it("records every AWS criterion as not-run 'AWS live run pending (no account)', and Local criteria run locally", () => {
     const aws = expectedCriteria(real, "aws", "automated");
     expect(aws.length).toBeGreaterThan(50);
-    expect(aws.every((e) => !e.run && e.notRun === "AWS phase not started")).toBe(true);
+    expect(aws.every((e) => !e.run && e.notRun === "AWS live run pending (no account)")).toBe(true);
+    expect(expectedCriteria(real, "aws", "milestone").every((e) => !e.run && e.notRun === "AWS live run pending (no account)")).toBe(true);
     expect(aws.map((e) => e.id)).toContain("AWS-AC-001");
     expect(aws.map((e) => e.id)).not.toContain("CF-AC-001");
     const local = expectedCriteria(real, "local", "automated");

@@ -23,7 +23,7 @@ import { envSecretReader } from "../../secrets/service.js";
 import { FRAMEWORK_SECRETS, type FrameworkSecretName } from "../../secrets/names.js";
 import { workerLogBucket, workerPublicOrigin, workerSecretValues, workerSql, workerStore, type WorkerHandler } from "./bindings.js";
 import { cloudflareFilesStore } from "../../files/cloudflare/keys.js";
-import { assembleStage } from "./stage.js";
+import { assembleStage } from "../stage.js";
 import { workerTicketIssuer } from "./tickets.js";
 
 export { createAuthMock } from "../../auth/mock.js";
@@ -51,8 +51,8 @@ export function createCloudflareWorker<C extends ConfigDeclaration, S extends st
     sql: workerSql,
     store: (env) => cloudflareFilesStore(workerStore(env)),
     tickets: workerTicketIssuer,
-    readSecret: (env) => envSecretReader(env, deployment.target),
-    readFrameworkSecret: (env) => envSecretReader(env, deployment.target),
+    readSecret: (env) => envSecretReader(env, "cloudflare"),
+    readFrameworkSecret: (env) => envSecretReader(env, "cloudflare"),
     secretValues: (c) => workerSecretValues(c.env),
     requiredFrameworkSecrets: required,
     // Production stages log in with Google; a test stage uses the mock unless it configures Google.

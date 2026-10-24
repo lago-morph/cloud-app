@@ -5,7 +5,9 @@ import { describe, expect, it } from "vitest";
 import { validateEvidence, writeEvidence, type EvidenceRecord, type GitState, type WriteEvidenceInput } from "../../../packages/framework/src/evidence/public.js";
 import { parseArgs } from "./args.js";
 import { NOT_SELECTED, parseWhere, type CatalogueEntry } from "./catalogue.js";
-import { runCompliance, SecretsNotSetError, type CloudStageOps, type DriverDeps, type RunCall } from "./driver.js";
+import { AWS_CALLS_REPORT_PREFIX } from "./aws-usage.js";
+import { runCompliance, SecretsNotSetError, SKIP_NOTES_REPORTER, type CloudStageOps, type DriverDeps, type RunCall } from "./driver.js";
+import type { NotRunRule } from "./expected.js";
 
 const entry = (id: string, where: string, source = "components/x.md"): CatalogueEntry => ({ id, where, source, applies: parseWhere(where, source) });
 const CATALOGUE = [entry("KV-AC-001", "Local, cloud"), entry("KV-AC-002", "Local, cloud"), entry("CLI-AC-002", "Local"), entry("CLI-AC-001", "Local, cloud"), entry("PROV-AC-003", "Cloud (milestone)")];
@@ -25,12 +27,17 @@ interface Harness {
   readonly pending: Map<string, Set<string>>;
 }
 
-function harness(options: { dirty?: string[]; vitest?: string; vitestStatus?: number; unitVitest?: string; catalogue?: CatalogueEntry[]; cloud?: Partial<CloudStageOps>; pending?: string[] } = {}): Harness {
+function harness(
+  options: { dirty?: string[]; vitest?: string; vitestStatus?: number; vitestOutput?: string; unitVitest?: string; catalogue?: CatalogueEntry[]; cloud?: Partial<CloudStageOps>; pending?: string[]; notRunRules?: NotRunRule[] } = {},
+): Harness {
   const calls: RunCall[] = [];
   const written: WriteEvidenceInput[] = [];
   const logs: string[] = [];
   const events: string[] = [];
-  const pending = new Map<string, Set<string>>([["cloudflare", new Set(options.pending ?? [])]]);
+  const pending = new Map<string, Set<string>>([
+    ["cloudflare", new Set(options.pending ?? [])],
+    ["aws", new Set(options.pending ?? [])],
+  ]);
   const git: GitState = { commit: () => "c0ffee", changedTrackedFiles: () => options.dirty ?? [] };
   const files = new Map<string, string>();
   const deps: DriverDeps = {
@@ -50,7 +57,7 @@ function harness(options: { dirty?: string[]; vitest?: string; vitestStatus?: nu
       const unit = call.args.includes("vitest.unit.config.ts");
       if (call.args[0] === "vitest" && outputFile !== undefined) files.set(outputFile, unit ? (options.unitVitest ?? vitestReport([])) : (options.vitest ?? vitestReport([])));
       if (call.args[0] === "playwright") files.set("/tmp/run/playwright.json", JSON.stringify({ suites: [], errors: [] }));
-      return Promise.resolve({ status: call.args[0] === "vitest" ? (options.vitestStatus ?? 0) : 0, output: `${call.args[0] ?? ""} output` });
+      return Promise.resolve({ status: call.args[0] === "vitest" ? (options.vitestStatus ?? 0) : 0, output: `${call.args[0] ?? ""} output${call.args[0] === "vitest" ? (options.vitestOutput ?? "") : ""}` });
     },
     startLocal: () => {
       events.push("start dev");
@@ -75,6 +82,7 @@ function harness(options: { dirty?: string[]; vitest?: string; vitestStatus?: nu
       return { recordPath: `/repo/validation/${input.record.target}/${input.record.runId}.json`, rawDir: "/raw" };
     },
     log: (line) => logs.push(line),
+    ...(options.notRunRules === undefined ? {} : { notRunRules: options.notRunRules }),
   };
   return { deps, calls, written, logs, events, pending };
 }
@@ -168,12 +176,223 @@ describe("[COMPL-AC-003] compliance driver records", () => {
     expect(result.exitStatus).toBe(0);
   });
 
-  it("runs nothing when nothing is to be run (aws in this phase): every criterion not-run", async () => {
+  it("runs nothing when nothing is to be run (aws without an account): every criterion not-run", async () => {
     const h = harness();
     const result = await runCompliance(parseArgs(["--target", "aws"]), [], h.deps);
     expect(h.calls).toEqual([]);
-    expect(recordOf(h).results.every((r) => r.status === "not-run" && r.detail === "AWS phase not started")).toBe(true);
+    expect(recordOf(h).results.every((r) => r.status === "not-run" && r.detail === "AWS live run pending (no account)")).toBe(true);
     expect(result.exitStatus).toBe(0);
+  });
+});
+
+// G-T2 report / plan-aws.md G-T4: a skipped test's note (AWS-AC-005's not-run reason) reaches the record.
+describe("[COMPL-AC-003] skip notes", () => {
+  it("runs Vitest with the skip-notes reporter before the JSON reporter, and records the note as the not-run detail", async () => {
+    const report = JSON.stringify({
+      testResults: [{ name: "/repo/tests/compliance/criteria/a.test.ts", status: "passed", assertionResults: [{ ancestorTitles: [], title: "[KV-AC-001] put", status: "skipped", failureMessages: [], meta: { skipNote: "not-run: the cluster did not pause" } }] }],
+    });
+    const h = harness({ vitest: report });
+    await runCompliance(parseArgs(["--target", "local", "--only", "KV-AC-001"]), [], h.deps);
+    const args = h.calls.find((c) => c.args[0] === "vitest")?.args ?? [];
+    expect(args.indexOf(`--reporter=${SKIP_NOTES_REPORTER}`)).toBeGreaterThan(-1);
+    expect(args.indexOf(`--reporter=${SKIP_NOTES_REPORTER}`)).toBeLessThan(args.indexOf("--reporter=json"));
+    expect(recordOf(h).results.filter((r) => r.id === "KV-AC-001")).toEqual([{ id: "KV-AC-001", status: "not-run", detail: "the cluster did not pause" }]);
+  });
+});
+
+// plan-aws.md G-T4: `--target aws` against a fake target (the wiring a G-RUN dry run proves). The phase rule keeps every
+// AWS criterion not-run without an account, so these runs pass their own not-run rules.
+describe("[COMPL-AC-004] --target aws: stage naming, leftovers, cluster cap and API-call count", () => {
+  const AWS = ["--target", "aws", "--only", "KV-AC-001"];
+  /** `clusters` null: operations that cannot count clusters; `region` null: operations that cannot read the account's region. */
+  const awsCloud = (clusters: string[] | null = [], extra: Partial<CloudStageOps> = {}, region: string | null = "us-east-1"): Partial<CloudStageOps> => ({
+    deploy: (stage) => Promise.resolve({ baseUrl: "https://d111111abcdef8.cloudfront.net", output: `deployed ${stage}` }),
+    ...(clusters === null ? {} : { testStageClusters: () => Promise.resolve(clusters) }),
+    ...(region === null ? {} : { region: () => Promise.resolve(region) }),
+    apiCalls: () => 3,
+    ...extra,
+  });
+  const ownEnv = (name: string, value: string | undefined): (() => void) => {
+    const saved = process.env[name];
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+    return () => {
+      if (saved === undefined) delete process.env[name];
+      else process.env[name] = saved;
+    };
+  };
+
+  it("deploys test-<runId> after counting clusters, hands the tests the API-call budget, removes the stage and records leftovers and usage", async () => {
+    const restore = ownEnv("COMPLIANCE_AWS_MAX_RUN_CALLS", undefined);
+    try {
+      const events: string[] = [];
+      const h = harness({
+        notRunRules: [],
+        vitest: vitestReport([{ title: "[KV-AC-001] put", status: "passed" }]),
+        vitestOutput: `\n${AWS_CALLS_REPORT_PREFIX}12\n${AWS_CALLS_REPORT_PREFIX}5\n`,
+        cloud: awsCloud(["reference-test-other00000001"], {
+          testStageClusters: () => (events.push("count clusters"), Promise.resolve(["reference-test-other00000001", "prodcluster"])),
+          listStageResources: (s) => (events.push(`leftovers ${s}`), Promise.resolve([`Lambda function reference-${s}-http`])),
+        }),
+      });
+      const result = await runCompliance(parseArgs(AWS), AWS, h.deps);
+      expect(h.events.filter((e) => /^(pending|deploy|remove|secret)/.test(e))).toEqual([
+        "pending+ test-abcdefghij12345",
+        "secret apiKey test-abcdefghij12345",
+        "remove test-abcdefghij12345",
+      ]);
+      expect(events).toEqual(["count clusters", "leftovers test-abcdefghij12345"]);
+      const vitest = h.calls.find((c) => c.args[0] === "vitest");
+      expect(vitest?.env.COMPLIANCE_TARGET).toBe("aws");
+      expect(vitest?.env.COMPLIANCE_STAGE).toBe("test-abcdefghij12345");
+      expect(vitest?.env.COMPLIANCE_BASE_URL).toBe("https://d111111abcdef8.cloudfront.net");
+      expect(vitest?.env.COMPLIANCE_AWS_MAX_CALLS).toBe("2000");
+      expect(h.calls.find((c) => c.args[0] === "playwright")?.env.COMPLIANCE_AWS_MAX_CALLS).toBe(String(2000 - 17));
+      const record = recordOf(h);
+      expect(record).toMatchObject({ target: "aws", stage: "test-abcdefghij12345" });
+      expect(record.results).toEqual([
+        { id: "CLI-AC-001", status: "not-run", detail: "not selected for this run (--only)" },
+        { id: "KV-AC-001", status: "passed" },
+        { id: "KV-AC-002", status: "not-run", detail: "not selected for this run (--only)" },
+      ]);
+      expect(record.leftovers).toEqual(["test-abcdefghij12345: Lambda function reference-test-abcdefghij12345-http"]);
+      const usage = h.written[0]?.raw?.["aws-usage.log"] ?? "";
+      expect(usage).toContain("test-stage Aurora clusters before deploying test-abcdefghij12345: 1 (reference-test-other00000001)");
+      expect(usage).toContain("vitest: 17 AWS API call(s) by the test hooks");
+      expect(usage).toContain("total: 20 of the run's cap 2000");
+      expect(h.logs.join("\n")).toContain("aws api calls by the test hooks: 20 (cap 2000)");
+      expect(result.exitStatus).toBe(1); // the leftover
+    } finally {
+      restore();
+    }
+  });
+
+  it("refuses to deploy a fourth Aurora cluster: nothing deployed or added to the pending list, the reason recorded", async () => {
+    const h = harness({ notRunRules: [], cloud: awsCloud(["reference-test-a00000000000001", "reference-test-b00000000000001", "notes-test-c00000000000001"]) });
+    const result = await runCompliance(parseArgs(AWS), AWS, h.deps);
+    expect(h.events.filter((e) => /^(pending|deploy)/.test(e))).toEqual([]);
+    expect(h.calls.filter((c) => c.args[0] === "vitest")).toEqual([]);
+    expect(recordOf(h).results.find((r) => r.id === "KV-AC-001")?.detail).toMatch(/^not run: setting up the target failed: deploying test-abcdefghij12345 would hold 4 Aurora clusters at once .*at most 3 at once/);
+    expect(result.exitStatus).toBe(1);
+  });
+
+  it("refuses a stage whose AWS names would be invalid, and operations that cannot count clusters", async () => {
+    const bad = harness({ notRunRules: [], cloud: awsCloud() });
+    await runCompliance(parseArgs(["--target", "aws", "--stage", "test-a--b", "--only", "KV-AC-001"]), [], bad.deps);
+    expect(bad.events.filter((e) => e.startsWith("deploy"))).toEqual([]);
+    expect(recordOf(bad).results.find((r) => r.id === "KV-AC-001")?.detail).toMatch(/stage test-a--b cannot be deployed on AWS: .*doubled hyphen/);
+
+    const blind = harness({ notRunRules: [], cloud: awsCloud(null) });
+    await runCompliance(parseArgs(AWS), AWS, blind.deps);
+    expect(blind.events.filter((e) => e.startsWith("deploy"))).toEqual([]);
+    expect(recordOf(blind).results.find((r) => r.id === "KV-AC-001")?.detail).toMatch(/cannot count the account's Aurora clusters/);
+  });
+
+  it("passing the run's API-call cap fails the run, and no further test run starts once the budget is used", async () => {
+    const restore = ownEnv("COMPLIANCE_AWS_MAX_RUN_CALLS", "10");
+    try {
+      const h = harness({ notRunRules: [], vitest: vitestReport([{ title: "[KV-AC-001] put", status: "passed" }]), vitestOutput: `\n${AWS_CALLS_REPORT_PREFIX}12\n`, cloud: awsCloud() });
+      const result = await runCompliance(parseArgs(AWS), AWS, h.deps);
+      expect(h.calls.find((c) => c.args[0] === "vitest")?.env.COMPLIANCE_AWS_MAX_CALLS).toBe("10");
+      expect(h.calls.filter((c) => c.args[0] === "playwright")).toEqual([]);
+      expect(h.written[0]?.raw?.["run-errors.log"]).toContain("playwright: not run: the run's AWS API-call cap (10) is used up");
+      expect(h.logs.join("\n")).toMatch(/passed its AWS API-call cap \(15 > 10/);
+      expect(result.exitStatus).toBe(1);
+      expect(h.events).toContain("remove test-abcdefghij12345");
+    } finally {
+      restore();
+    }
+  });
+
+  it("removes stages an interrupted AWS run left before counting clusters, and keeps one it could not remove", async () => {
+    const h = harness({
+      notRunRules: [],
+      pending: ["test-old000000000001"],
+      cloud: awsCloud([], { listStageResources: (s) => Promise.resolve(s === "test-old000000000001" ? ["Aurora cluster reference-test-old000000000001"] : []) }),
+    });
+    await runCompliance(parseArgs(AWS), AWS, h.deps);
+    expect(h.events.filter((e) => /^(remove|deploy) /.test(e))[0]).toBe("remove test-old000000000001");
+    expect(recordOf(h).leftovers).toEqual(["test-old000000000001: Aurora cluster reference-test-old000000000001"]);
+    expect(h.pending.get("aws")?.has("test-old000000000001")).toBe(true);
+  });
+
+  // G-EV F4: the AWS test hooks take the account region from AWS_REGION; the driver sets it from the account (DEC-0075, DEC-0476).
+  it("gives every test process and the cluster count the account's region as AWS_REGION and AWS_DEFAULT_REGION", async () => {
+    const restore = [ownEnv("AWS_REGION", "us-west-1"), ownEnv("AWS_DEFAULT_REGION", undefined)];
+    try {
+      const asked: string[] = [];
+      const h = harness({
+        notRunRules: [],
+        vitest: vitestReport([{ title: "[KV-AC-001] put", status: "passed" }]),
+        cloud: awsCloud([], { region: () => Promise.resolve("eu-west-2"), testStageClusters: (region) => (asked.push(region), Promise.resolve([])) }),
+      });
+      await runCompliance(parseArgs(AWS), AWS, h.deps);
+      const tests = h.calls.filter((c) => c.args[0] === "vitest" || c.args[0] === "playwright");
+      expect(tests.map((c) => c.args[0])).toEqual(["vitest", "playwright"]);
+      for (const c of tests) expect([c.env.AWS_REGION, c.env.AWS_DEFAULT_REGION]).toEqual(["eu-west-2", "eu-west-2"]);
+      expect(asked).toEqual(["eu-west-2"]);
+      expect(h.written[0]?.raw?.["aws-usage.log"]).toContain("account region: eu-west-2");
+      expect(h.logs.join("\n")).toMatch(/AWS_REGION=us-west-1 is not the account's region eu-west-2/);
+    } finally {
+      for (const r of restore) r();
+    }
+  });
+
+  it("without the account's region, falls back to AWS_REGION, then AWS_DEFAULT_REGION", async () => {
+    for (const [name, value] of [["AWS_REGION", "ap-south-1"], ["AWS_DEFAULT_REGION", "sa-east-1"]] as const) {
+      const restore = [ownEnv("AWS_REGION", undefined), ownEnv("AWS_DEFAULT_REGION", undefined), ownEnv(name, value)];
+      try {
+        const h = harness({ notRunRules: [], vitest: vitestReport([{ title: "[KV-AC-001] put", status: "passed" }]), cloud: awsCloud([], {}, null) });
+        await runCompliance(parseArgs(AWS), AWS, h.deps);
+        expect(h.calls.find((c) => c.args[0] === "vitest")?.env.AWS_REGION).toBe(value);
+      } finally {
+        for (const r of restore.reverse()) r();
+      }
+    }
+  });
+
+  it("with no region to be found, stops with a missing prerequisite before deploying or running any test", async () => {
+    const restore = [ownEnv("AWS_REGION", undefined), ownEnv("AWS_DEFAULT_REGION", undefined)];
+    try {
+      const failing: Partial<CloudStageOps> = { region: () => Promise.reject(new Error("AWS credentials are not usable: STS GetCallerIdentity failed with ExpiredToken")) };
+      for (const [extra, region] of [[{}, null], [failing, "us-east-1"]] as const) {
+        const counted: string[] = [];
+        const h = harness({ notRunRules: [], cloud: awsCloud([], { ...extra, testStageClusters: () => (counted.push("count"), Promise.resolve([])) }, region) });
+        const result = await runCompliance(parseArgs(AWS), AWS, h.deps);
+        expect(h.events.filter((e) => /^(pending|deploy|secret)/.test(e))).toEqual([]);
+        expect(counted).toEqual([]);
+        expect(h.calls.filter((c) => c.args[0] === "vitest" || c.args[0] === "playwright")).toEqual([]);
+        expect(h.written[0]?.raw?.["driver-error.log"]).toMatch(/^PrerequisiteMissingError: PREREQUISITE MISSING: the AWS account's region/);
+        const detail = recordOf(h).results.find((r) => r.id === "KV-AC-001")?.detail ?? "";
+        expect(detail).toMatch(/^not run: setting up the target failed: PREREQUISITE MISSING: the AWS account's region .*(setup-account --target aws|ExpiredToken)/);
+        expect(result.exitStatus).toBe(1);
+      }
+    } finally {
+      for (const r of restore) r();
+    }
+  });
+
+  // G-EV F3: a run against fakes says so in its record, so no report can count it whatever folder it lands in.
+  it("marks the record as a dry run when the not-run rules are overridden or the stage operations are fakes, and only then", async () => {
+    const overridden = harness({ notRunRules: [], cloud: awsCloud() });
+    await runCompliance(parseArgs(AWS), AWS, overridden.deps);
+    expect(recordOf(overridden).dryRun).toBe("not-run rules overridden (DriverDeps.notRunRules)");
+    expect(overridden.logs.join("\n")).toMatch(/dry run \(not-run rules overridden.*\): this record is not evidence/);
+
+    const faked = harness({ notRunRules: [], cloud: awsCloud([], { dryRun: "fake OperationsFactory" }) });
+    await runCompliance(parseArgs(AWS), AWS, faked.deps);
+    expect(recordOf(faked).dryRun).toBe("not-run rules overridden (DriverDeps.notRunRules); fake OperationsFactory");
+
+    const fakeOpsOnly = harness({ cloud: { dryRun: "fake framework CLI runner" } });
+    await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], fakeOpsOnly.deps);
+    expect(recordOf(fakeOpsOnly).dryRun).toBe("fake framework CLI runner");
+
+    const real = harness();
+    await runCompliance(parseArgs(["--target", "aws"]), [], real.deps);
+    expect(recordOf(real)).not.toHaveProperty("dryRun");
+    const local = harness();
+    await runCompliance(parseArgs(["--target", "local"]), [], local.deps);
+    expect(recordOf(local)).not.toHaveProperty("dryRun");
   });
 });
 

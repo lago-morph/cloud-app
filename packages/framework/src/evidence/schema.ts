@@ -45,6 +45,11 @@ export const EVIDENCE_SCHEMA = {
     },
     versions: { type: "object", additionalProperties: { type: "string" }, description: "Exact framework and dependency versions; never secrets." },
     leftovers: { type: "array", items: { type: "string" }, description: "Cloud resources the run could not remove." },
+    dryRun: {
+      type: "string",
+      description:
+        "Present only on a run against fakes (fake stage operations or overridden not-run rules): what was faked. Such a record is never evidence; the traceability and release reports ignore it.",
+    },
   },
 } as const;
 
