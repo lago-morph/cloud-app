@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { validateEvidence, writeEvidence, type EvidenceRecord, type GitState, type WriteEvidenceInput } from "../../../packages/framework/src/evidence/public.js";
 import { parseArgs } from "./args.js";
-import { parseWhere, type CatalogueEntry } from "./catalogue.js";
+import { NOT_SELECTED, parseWhere, type CatalogueEntry } from "./catalogue.js";
 import { runCompliance, SecretsNotSetError, type CloudStageOps, type DriverDeps, type RunCall } from "./driver.js";
 
 const entry = (id: string, where: string, source = "components/x.md"): CatalogueEntry => ({ id, where, source, applies: parseWhere(where, source) });
@@ -145,11 +145,13 @@ describe("[COMPL-AC-003] compliance driver records", () => {
     const pattern = new RegExp(vitest?.args[vitest.args.indexOf("-t") + 1] ?? "");
     expect(pattern.test("[KV-AC-002] y")).toBe(false);
     expect(recordOf(h).results).toEqual([
-      { id: "CLI-AC-001", status: "not-run", detail: "not selected for this run (--only)" },
-      { id: "CLI-AC-002", status: "not-run", detail: "not selected for this run (--only)" },
+      { id: "CLI-AC-001", status: "not-run", detail: NOT_SELECTED },
+      { id: "CLI-AC-002", status: "not-run", detail: NOT_SELECTED },
       { id: "KV-AC-001", status: "passed" },
       { id: "KV-AC-002", status: "blocked", detail: "prerequisite x missing" },
     ]);
+    // Records on disk carry this exact text (DEC-0261); release and traceability match it exactly.
+    expect(NOT_SELECTED).toBe("not selected for this run (--only)");
   });
 
   it("--blocked '*=<reason>' records every criterion it would run as blocked with that detail, and deploys and runs nothing", async () => {

@@ -53,7 +53,7 @@ E6. **With not-selected entries skipped, each ID resolves to its own record** (c
 3. In `summary()` (`:68-72`), ignore not-selected entries as well, so a record that selected one part of an ID is judged on its selected entries only. (Today the driver writes one not-selected entry per ID, so this is defensive.)
 4. Update the DEC-0264 wording, or add a short decision: "An entry `not-run: not selected for this run (--only)` does not count as containing the ID."
 
-**Red test** (add to `tests/compliance/tools/release.unit.test.ts`, under `[COMPL-AC-006]`). I ran it as a scratch file at `ad0e252` and removed it; it fails today with `+ "GOOGLE-AC-005 on cloudflare (milestone): not-run: not selected for this run (--only) (run m2)"`:
+**Red test** (add to `tests/compliance/tools/release.unit.test.ts`, under `[COMPL-AC-006]`). I ran it as a scratch file at `ad0e252` and removed it; it fails today with `+ "GOOGLE-AC-005 on cloudflare (milestone): not-run: not selected for this run (--only) (run r5)"` (the fixture's `rec()` numbers runs, so the extra record is `r5`; corrected per the Review):
 ```ts
 it("a newer milestone record that did not select an ID does not decide it", () => {
   const records = [
@@ -70,6 +70,8 @@ Add the automated twin (E4): a newer `local` record for `c1` with `KV-AC-001` no
 ## How the fix will be verified
 - `npx vitest run tests/compliance/tools/release.unit.test.ts`: the new tests red, then green; existing tests unchanged.
 - `node tests/compliance/tools/report.mjs release --commit 1b474c1` (offline, no Cloudflare call): lines `:145,150,244,246,249` of the current report disappear except PROV-AC-004, which reads `blocked: … (run sysad9rajoir4yt)`. The verdict stays "not working".
+- `npx vitest run tests/compliance/tools/traceability.unit.test.ts`: the new `[COMPL-AC-002]` test red, then green.
+- `node tests/compliance/tools/report.mjs traceability` (offline, no Cloudflare call): the Cloudflare cells for E2E-010, E2E-012, PROV-AC-003 and PROV-AC-006 show `passed` from their own records, PROV-AC-004 shows `blocked` from `sysad9rajoir4yt`, and the GOOGLE "Google login mocked for this phase" cells are unchanged.
 
 ## Review
 Reviewer: independent root-cause reviewer (§8). I did not write this diagnosis or the code under it. Base: `origin/claude/implement-local-cloudflare` `6ef43dc`. No Cloudflare call; the only file changed is this record. The red tests below ran from a scratch test file in `tests/compliance/tools/`, which I deleted afterwards (nothing else in the tree changed).
