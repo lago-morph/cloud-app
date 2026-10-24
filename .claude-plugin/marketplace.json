@@ -1,0 +1,17 @@
+{
+  "name": "lago-morph",
+  "description": "Claude Code plugins for the prototype framework (@lago-morph/prototype-framework)",
+  "owner": {
+    "name": "Lagomorph Labs",
+    "url": "https://github.com/lago-morph"
+  },
+  "plugins": [
+    {
+      "name": "prototype-framework",
+      "source": "./skill",
+      "description": "Skill for building, testing and deploying apps on @lago-morph/prototype-framework (local and Cloudflare)",
+      "category": "development",
+      "tags": ["framework", "cloudflare", "web-apps"]
+    }
+  ]
+}

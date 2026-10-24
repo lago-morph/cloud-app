@@ -14,6 +14,7 @@ Reference material:
 
 - [decisions/decision-log.md](decisions/decision-log.md) — every recorded decision and its origin.
 - [parameters/parameters.md](parameters/parameters.md) — every limit, timeout, default, and version pin.
+- [RELEASING.md](RELEASING.md) — publishing the npm packages and the Claude Code plugin, and the owner's one-time steps.
 
 ## Status
 

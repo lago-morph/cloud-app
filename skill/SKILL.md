@@ -67,7 +67,7 @@ Every `verify` diagnostic ends with `(read skill/reference/<file>.md)`; that fil
 
 Examples are whole files copied unchanged from the framework's template and compliance reference app, which CI type-checks and tests: [endpoint-and-page](examples/endpoint-and-page.md), [notes-sql](examples/notes-sql.md), [status-kv](examples/status-kv.md), [files-tickets](examples/files-tickets.md), [admin-and-current-user](examples/admin-and-current-user.md), [secrets](examples/secrets.md), [configuration](examples/configuration.md), [tests](examples/tests.md). Start from the template, not from any other app.
 
-The scaffolder (`skill/scripts/scaffold <dir>`) copies `apps/template`; [templates/](templates/README.md) holds the other files you fill in.
+A new app starts from the template: `npm create @lago-morph/prototype-app@latest <dir>`, or `skill/scripts/scaffold <dir>` in a checkout of the framework repository ([local-development.md](reference/local-development.md)); [templates/](templates/README.md) holds the other files you fill in.
 
 ## Done means
 

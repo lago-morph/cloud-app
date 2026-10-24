@@ -71,7 +71,8 @@ try {
   process.exit(1);
 }
 
-const rel = relative(process.cwd(), result.target) || ".";
+const relPath = relative(process.cwd(), result.target) || ".";
+const rel = /[^\w./-]/.test(relPath) ? JSON.stringify(relPath) : relPath;
 console.log(`Created ${result.appName} in ${result.target}.`);
 if (result.skill) console.log("Added the Claude Code skill in .claude/skills/prototype-framework/.");
 
