@@ -1,0 +1,8 @@
+start 2026-10-24T03:09:31Z
+(node:3184) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+deploy failed at step 5 (code): required secrets are not set: apiKey
+  stage state: code deployed; the app is stopped
+  next action: set them with secrets set --target cloudflare --stage test-9mfkg261apxm7s2 <name> (value on standard input), then run deploy again
+exit 1 2026-10-24T03:11:27Z
+

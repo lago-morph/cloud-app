@@ -1,0 +1,749 @@
+{
+  "config": {
+    "argv": [
+      "/opt/node22/bin/node",
+      "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/node_modules/.bin/playwright",
+      "test",
+      "tests/compliance/",
+      "--project",
+      "integration",
+      "--project",
+      "e2e",
+      "--grep",
+      "\\[(?:AUTH-AC-004|AUTH-AC-005|AUTH-AC-006|AUTH-AC-007|AUTH-AC-009|CF-AC-001|CFG-AC-003|CFG-AC-004|CFG-AC-005|COMPL-AC-001|COMPL-AC-003|CORE-AC-002|CORE-AC-003|E2E-004|E2E-005|E2E-009|E2E-011|E2E-013|FILES-AC-001|FILES-AC-002|FILES-AC-003|FILES-AC-004|FILES-AC-005|HTTP-AC-001|HTTP-AC-003|HTTP-AC-004|HTTP-AC-005|KV-AC-001|KV-AC-002|KV-AC-003|KV-AC-004|KV-AC-005|LOG-AC-001|LOG-AC-002|LOG-AC-005|SEC-AC-002|SQL-AC-003|SQL-AC-004|SQL-AC-005|SQL-AC-006)\\]",
+      "--reporter=json",
+      "--pass-with-no-tests"
+    ],
+    "configFile": "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/playwright.config.ts",
+    "rootDir": "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 2
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "integration",
+        "name": "integration",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db",
+        "testIgnore": [],
+        "testMatch": [
+          "packages/framework/test/integration/**/*.spec.ts",
+          "tests/compliance/criteria/**/*.spec.ts"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "e2e",
+        "name": "e2e",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/tests/compliance/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "filteredProjects": [
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "name": "integration",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db",
+        "snapshotDir": "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db",
+        "testIgnore": [],
+        "testMatch": [
+          "packages/framework/test/integration/**/*.spec.ts",
+          "tests/compliance/criteria/**/*.spec.ts"
+        ],
+        "timeout": 30000,
+        "use": {
+          "browserName": "chromium"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "integration"
+      },
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "name": "e2e",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/tests/compliance/e2e",
+        "snapshotDir": "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/tests/compliance/e2e",
+        "testIgnore": [],
+        "testMatch": "**/*.spec.ts",
+        "timeout": 30000,
+        "use": {
+          "browserName": "chromium"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "e2e"
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "default",
+    "updateSourceMethod": "patch",
+    "version": "1.64.1",
+    "workers": 2,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "tests/compliance/criteria/files/expired-ticket.spec.ts",
+      "file": "tests/compliance/criteria/files/expired-ticket.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[FILES-AC-003] expired-ticket clause: an expired ticket fails with FILES.TRANSFER_FAILED, storage's status and a rejected by storage (HTTP n) message without storage's error body",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 1200000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "integration",
+              "projectName": "integration",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 934592,
+                  "error": {
+                    "message": "Error: status is storage's HTTP status, got null\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m\"number\"\u001b[39m\nReceived: \u001b[31m\"object\"\u001b[39m",
+                    "stack": "Error: status is storage's HTTP status, got null\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m\"number\"\u001b[39m\nReceived: \u001b[31m\"object\"\u001b[39m\n    at /home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/tests/compliance/criteria/files/expired-ticket.spec.ts:51:93",
+                    "location": {
+                      "file": "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/tests/compliance/criteria/files/expired-ticket.spec.ts",
+                      "column": 93,
+                      "line": 51
+                    },
+                    "snippet": "  49 |\n  50 |     expect(out).toMatchObject({ ok: false, isApiError: true, code: \"FILES.TRANSFER_FAILED\" });\n> 51 |     expect(typeof out.status, `status is storage's HTTP status, got ${String(out.status)}`).toBe(\"number\");\n     |                                                                                             ^\n  52 |     expect(out.status).toBeGreaterThanOrEqual(400);\n  53 |     expect(out.message).toContain(`rejected by storage (HTTP ${String(out.status)})`);\n  54 |     for (const body of storageBodies) expect(out.message ?? \"\").not.toContain(body);"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/tests/compliance/criteria/files/expired-ticket.spec.ts",
+                        "column": 93,
+                        "line": 51
+                      },
+                      "message": "Error: status is storage's HTTP status, got null\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m\"number\"\u001b[39m\nReceived: \u001b[31m\"object\"\u001b[39m\n\n  49 |\n  50 |     expect(out).toMatchObject({ ok: false, isApiError: true, code: \"FILES.TRANSFER_FAILED\" });\n> 51 |     expect(typeof out.status, `status is storage's HTTP status, got ${String(out.status)}`).toBe(\"number\");\n     |                                                                                             ^\n  52 |     expect(out.status).toBeGreaterThanOrEqual(400);\n  53 |     expect(out.message).toContain(`rejected by storage (HTTP ${String(out.status)})`);\n  54 |     for (const body of storageBodies) expect(out.message ?? \"\").not.toContain(body);\n    at /home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/tests/compliance/criteria/files/expired-ticket.spec.ts:51:93"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T03:34:25.951Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/test-results/tests-compliance-criteria--26aa9-ithout-storage-s-error-body-integration/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/tests/compliance/criteria/files/expired-ticket.spec.ts",
+                    "column": 93,
+                    "line": 51
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "9b9ba0c4aa751ffc3bc9-9f09dd21c13566080bd6",
+          "file": "tests/compliance/criteria/files/expired-ticket.spec.ts",
+          "line": 23,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/criteria/files/transfers.spec.ts",
+      "file": "tests/compliance/criteria/files/transfers.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[FILES-AC-003] a 20 MB file uploads through uploadFile and downloads through downloadUrl byte-exact",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 240000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "integration",
+              "projectName": "integration",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 7256,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T03:34:25.908Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "95c249fab52ec4ff3629-759e6cdf63e17cdc4b6a",
+          "file": "tests/compliance/criteria/files/transfers.spec.ts",
+          "line": 49,
+          "column": 1
+        },
+        {
+          "title": "[FILES-AC-003] a ticket for one name cannot write another",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "integration",
+              "projectName": "integration",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 2191,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T03:34:44.917Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "95c249fab52ec4ff3629-04bdb7eefd6b439eb874",
+          "file": "tests/compliance/criteria/files/transfers.spec.ts",
+          "line": 63,
+          "column": 1
+        },
+        {
+          "title": "[FILES-AC-003] an upload with a content type other than the ticket's is rejected and stores nothing",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "integration",
+              "projectName": "integration",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 1802,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T03:34:47.118Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "95c249fab52ec4ff3629-a57e614379ff3293b6c7",
+          "file": "tests/compliance/criteria/files/transfers.spec.ts",
+          "line": 90,
+          "column": 1
+        },
+        {
+          "title": "[FILES-AC-003] uploadFile rejects a Blob whose non-empty type differs from the ticket's before sending: FILES.TRANSFER_FAILED, status null, content type does not match ticket",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "integration",
+              "projectName": "integration",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 519,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T03:34:48.931Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "95c249fab52ec4ff3629-31a4187f3b43124cef7a",
+          "file": "tests/compliance/criteria/files/transfers.spec.ts",
+          "line": 105,
+          "column": 1
+        },
+        {
+          "title": "[FILES-AC-004] browser part: an upload and a download attempted from an unrelated origin are rejected by the browser",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "integration",
+              "projectName": "integration",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 2016,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T03:34:49.470Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "95c249fab52ec4ff3629-29ec1bfef90bb4ae03f2",
+          "file": "tests/compliance/criteria/files/transfers.spec.ts",
+          "line": 123,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/criteria/http/one-origin.spec.ts",
+      "file": "tests/compliance/criteria/http/one-origin.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[HTTP-AC-004] the deployed client's API calls are all same-origin, with no CORS preflight",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "integration",
+              "projectName": "integration",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 1784,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T03:34:52.468Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c129cbb977c78a948998-1327ab53a0fa27de124f",
+          "file": "tests/compliance/criteria/http/one-origin.spec.ts",
+          "line": 9,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/E2E-004.spec.ts",
+      "file": "tests/compliance/e2e/E2E-004.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[E2E-004] coverage part: every criterion and scenario applicable on this target has a tagged test in the suite this run executes",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 1,
+                  "status": "failed",
+                  "duration": 11913,
+                  "error": {
+                    "message": "Error: applicable on cloudflare but no tagged test in this target's suite:\nAUTH-AC-005\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"AUTH-AC-005\",\u001b[39m\n\u001b[31m+ ]\u001b[39m",
+                    "stack": "Error: applicable on cloudflare but no tagged test in this target's suite:\nAUTH-AC-005\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"AUTH-AC-005\",\u001b[39m\n\u001b[31m+ ]\u001b[39m\n    at /home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/tests/compliance/e2e/E2E-004.spec.ts:47:127",
+                    "location": {
+                      "file": "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/tests/compliance/e2e/E2E-004.spec.ts",
+                      "column": 127,
+                      "line": 47
+                    },
+                    "snippet": "  45 |   );\n  46 |   const problems = listing.errors.length === 0 ? \"\" : `\\n(listing problems: ${listing.errors.join(\"; \")})`;\n> 47 |   expect(untested, `applicable on ${t.target} but no tagged test in this target's suite:\\n${untested.join(\"\\n\")}${problems}`).toEqual([]);\n     |                                                                                                                               ^\n  48 | });\n  49 |\n  50 | test(tag(\"E2E-004\", \"record part: the evidence writer accepts a record of this target and rejects an invalid one\"), () => {"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/tests/compliance/e2e/E2E-004.spec.ts",
+                        "column": 127,
+                        "line": 47
+                      },
+                      "message": "Error: applicable on cloudflare but no tagged test in this target's suite:\nAUTH-AC-005\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"AUTH-AC-005\",\u001b[39m\n\u001b[31m+ ]\u001b[39m\n\n  45 |   );\n  46 |   const problems = listing.errors.length === 0 ? \"\" : `\\n(listing problems: ${listing.errors.join(\"; \")})`;\n> 47 |   expect(untested, `applicable on ${t.target} but no tagged test in this target's suite:\\n${untested.join(\"\\n\")}${problems}`).toEqual([]);\n     |                                                                                                                               ^\n  48 | });\n  49 |\n  50 | test(tag(\"E2E-004\", \"record part: the evidence writer accepts a record of this target and rejects an invalid one\"), () => {\n    at /home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/tests/compliance/e2e/E2E-004.spec.ts:47:127"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T03:34:55.383Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/test-results/E2E-004--E2E-004-coverage--61ba7-the-suite-this-run-executes-e2e/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/home/user/cloud-app/.claude/worktrees/agent-a32ee5a8e385354db/tests/compliance/e2e/E2E-004.spec.ts",
+                    "column": 127,
+                    "line": 47
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "c7890dfde9f6f90e5b52-6da7b6a3efa59baef18e",
+          "file": "tests/compliance/e2e/E2E-004.spec.ts",
+          "line": 32,
+          "column": 1
+        },
+        {
+          "title": "[E2E-004] record part: the evidence writer accepts a record of this target and rejects an invalid one",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 10,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T03:35:08.512Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c7890dfde9f6f90e5b52-f169a49cf7dfed4d9239",
+          "file": "tests/compliance/e2e/E2E-004.spec.ts",
+          "line": 50,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/E2E-005.spec.ts",
+      "file": "tests/compliance/e2e/E2E-005.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[E2E-005] anonymous, user and admin each get exactly their permitted actions in a browser, and no API response exposes login-provider details",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 7077,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T03:35:08.840Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8d4d88bfbeab4d4e69d0-7f92d345702830589e2f",
+          "file": "tests/compliance/e2e/E2E-005.spec.ts",
+          "line": 113,
+          "column": 1
+        },
+        {
+          "title": "[E2E-005] no app-facing type exposes login-provider names, tokens, issuers or email addresses",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 26,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T03:35:15.978Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8d4d88bfbeab4d4e69d0-923e83ac288b6807b32a",
+          "file": "tests/compliance/e2e/E2E-005.spec.ts",
+          "line": 163,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/E2E-009-large-photos.spec.ts",
+      "file": "tests/compliance/e2e/E2E-009-large-photos.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[E2E-009] upload a 20 MB and a 100 MB photo from a real browser, view and download them byte-identical; app browser code used only the app's API and framework helpers; no storage or CORS settings in the app",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 1200000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 26701,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T03:35:16.020Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "cfa91347479fbcfcd5a2-f667bfab36f692aab5d9",
+          "file": "tests/compliance/e2e/E2E-009-large-photos.spec.ts",
+          "line": 91,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/E2E-011.spec.ts",
+      "file": "tests/compliance/e2e/E2E-011.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[E2E-011] app and framework entries are stored under the app and stage with timestamps, and the plain-Error request's entry is found by its requestId",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 8065,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [
+                    {
+                      "buffer": "KG5vZGU6MzMyOCkgW1VORElDSS1FSFBBXSBXYXJuaW5nOiBFbnZIdHRwUHJveHlBZ2VudCBpcyBleHBlcmltZW50YWwsIGV4cGVjdCB0aGVtIHRvIGNoYW5nZSBhdCBhbnkgdGltZS4KKFVzZSBgbm9kZSAtLXRyYWNlLXdhcm5pbmdzIC4uLmAgdG8gc2hvdyB3aGVyZSB0aGUgd2FybmluZyB3YXMgY3JlYXRlZCkK"
+                    }
+                  ],
+                  "retry": 0,
+                  "startTime": "2026-10-24T03:35:44.596Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1c2b7b7a65e2d8a56742-c8094429b40efbbaa6fc",
+          "file": "tests/compliance/e2e/E2E-011.spec.ts",
+          "line": 135,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/E2E-013.spec.ts",
+      "file": "tests/compliance/e2e/E2E-013.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[E2E-013] invalid input, unauthenticated, forbidden, unknown route and plain-Error requests get catalogue errors with no stack traces, provider messages or secret values",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 1964,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T03:35:52.700Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "38f9c0c5e655021dda9b-65efecfbd5d029a56d6c",
+          "file": "tests/compliance/e2e/E2E-013.spec.ts",
+          "line": 66,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-24T03:34:19.785Z",
+    "duration": 952531.4500000001,
+    "expected": 12,
+    "skipped": 0,
+    "unexpected": 2,
+    "flaky": 0
+  }
+}

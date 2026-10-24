@@ -1,0 +1,425 @@
+start 2026-10-24T03:14:47Z
+(node:4363) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> prototype-framework-workspace@0.0.0 compliance
+> node tests/compliance/harness/run.mjs --target cloudflare --base-url https://reference-test-9mfkg261apxm7s2.<SUBDOMAIN>.workers.dev --stage test-9mfkg261apxm7s2 --only AUTH-AC-004,AUTH-AC-005,AUTH-AC-006,AUTH-AC-007,AUTH-AC-009,CF-AC-001,CFG-AC-003,CFG-AC-004,CFG-AC-005,COMPL-AC-001,COMPL-AC-003,CORE-AC-002,CORE-AC-003,E2E-004,E2E-005,E2E-009,E2E-011,E2E-013,FILES-AC-001,FILES-AC-002,FILES-AC-003,FILES-AC-004,FILES-AC-005,HTTP-AC-001,HTTP-AC-003,HTTP-AC-004,HTTP-AC-005,KV-AC-001,KV-AC-002,KV-AC-003,KV-AC-004,KV-AC-005,LOG-AC-001,LOG-AC-002,LOG-AC-005,SEC-AC-002,SQL-AC-003,SQL-AC-004,SQL-AC-005,SQL-AC-006
+
+(node:4392) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4415) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @lago-morph/prototype-framework@0.1.0 build
+> tsc -p tsconfig.build.json
+
+(node:4428) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4452) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> prototype-framework-workspace@0.0.0 typecheck
+> tsc -p packages/framework/tsconfig.json && tsc -p tsconfig.json && tsc -p tests/compliance/harness/tsconfig.json
+
+(node:4465) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4539) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4570) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4618) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4631) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v5.0.5 /home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d
+
+(node:4654) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4661) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4655) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4654) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+ ↓ tests/compliance/criteria/prov/test-stages.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/mig/deploys.test.ts (6 tests | 6 skipped)
+(node:4687) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4686) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/prov/deploy-sequence.test.ts (5 tests | 5 skipped)
+(node:4703) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/files/app-facing-types.test.ts (3 tests) 2270ms
+   ✓ FILES-AC-004 app-facing types (3)
+     ✓ [FILES-AC-004] contract type inspection: the contract's FILES types expose no storage names or credentials; tickets have no readable fields 1417ms
+     ✓ [FILES-AC-004] published type inspection: the package's app-facing entry points expose no storage names or credentials; tickets have no readable fields 842ms
+(node:4711) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/cf/stage-resources.test.ts (1 test | 1 skipped)
+(node:4719) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/mig/support/stage.unit.test.ts (11 tests | 11 skipped)
+(node:4719) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(node:4736) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/http/errors.test.ts (2 tests | 2 skipped)
+(node:4750) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/cli/commands.test.ts (1 test | 1 skipped)
+(node:4758) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/secrets/further-stage.test.ts (5 tests | 5 skipped)
+(node:4766) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/compliance/criteria/auth/sessions.test.ts
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+
+(node:4703) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/auth/sessions.test.ts (4 tests) 2236ms
+   ✓ AUTH-AC-006 sessions on the target (4)
+     ✓ [AUTH-AC-006] the session cookie set by mock-login has the specified name and attributes 485ms
+     ✓ [AUTH-AC-006] the login flow's session cookie, and any transaction cookie it sets, have the specified names and attributes 489ms
+     ✓ [AUTH-AC-006] a tampered session cookie is treated as anonymous 950ms
+     ✓ [AUTH-AC-006] logout clears the session cookie 309ms
+(node:4800) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/secrets/no-leak.test.ts (1 test) 10432ms
+   ✓ SEC: values stay secret (1)
+     ✓ [SEC-AC-002] no test secret value in the repository, the build output, the browser assets, the stored log entries or error responses; no session cookie value or ticket URL in the stored entries 10429ms
+(node:4957) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/prov/removal.test.ts (1 test | 1 skipped)
+(node:4965) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/prov/setup-account.test.ts (2 tests | 2 skipped)
+(node:4982) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/prov/template-deploy.test.ts (1 test | 1 skipped)
+(node:4995) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/config/lists.test.ts (1 test) 19ms
+(node:5033) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/prov/clean-machine.test.ts (1 test | 1 skipped)
+(node:5064) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/cf/one-origin.test.ts (2 tests) 1388ms
+   ✓ CF-AC-001 one origin (cloud) (2)
+     ✓ [CF-AC-001] the stage serves the client entry page, its assets and the API from one origin 937ms
+     ✓ [CF-AC-001] unknown API paths return JSON 404s with HTTP.NOT_FOUND 449ms
+(node:5117) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/cli/smoke.test.ts (1 test | 1 skipped)
+(node:5136) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ tests/compliance/criteria/files/server-operations.test.ts (6 tests | 1 failed) 15317ms
+   ❯ FILES-AC-001 server operations (4)
+     ✓ [FILES-AC-001] binary round trip is byte-exact with metadata; default content type is application/octet-stream 1968ms
+     ✓ [FILES-AC-001] put replaces the whole file, content and metadata 811ms
+     ✓ [FILES-AC-001] get and head of a missing file return null; deleting it, and deleting it again, succeeds 1128ms
+     × [FILES-AC-001] list returns exactly the prefix's names in code point order across several pages 2383ms
+   ✓ FILES-AC-002 names (2)
+     ✓ [FILES-AC-002] names with spaces, %, /, .. and non-ASCII characters round-trip unchanged 5363ms
+     ✓ [FILES-AC-002] empty and oversized names, and names containing CR, LF or NUL, are rejected with FILES.INVALID_NAME 1588ms
+(node:5498) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/skill/scaffold.test.ts (0 test) 1ms
+(node:5517) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/compl/targets.test.ts (2 tests) 8019ms
+   ✓ compliance runs per target (2)
+     ✓ [COMPL-AC-001] one command lists, for each target, exactly the automated criteria and scenarios the Where columns and lines name 3701ms
+     ✓ [COMPL-AC-001] one command lists, for each target, exactly the milestone criteria and scenarios the Where columns and lines name 4031ms
+(node:5739) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/prov/support/stage.unit.test.ts (9 tests | 9 skipped)
+(node:5748) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/compl/support.unit.test.ts (7 tests) 24ms
+(node:5772) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/core/deployment.test.ts (2 tests) 4521ms
+   ✓ CORE: one app module, fixed deployment identity (2)
+     ✓ [CORE-AC-002] the committed reference app module, unmodified, builds for this target and the running deployment answers as that app and stage 3310ms
+     ✓ [CORE-AC-003] c.var.deployment has exactly the members app and stage, and forged Host and forwarding headers do not change it 1207ms
+(node:5812) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/compl/evidence.test.ts (5 tests) 16776ms
+   ✓ evidence records of a run (5)
+     ✓ [COMPL-AC-003] a run's evidence record validates against the evidence schema 4472ms
+     ✓ [COMPL-AC-003] a criterion whose test is deliberately omitted from the run is recorded not-run with a reason 2374ms
+     ✓ [COMPL-AC-003] criteria deliberately left out of a run with --only are each recorded not-run with a reason, never passed 1501ms
+     ✓ [COMPL-AC-003] a deliberately failing HTTP check records the observed status, error code and requestId in detail 2882ms
+     ✓ [COMPL-AC-003] a run started from a working tree with a modified tracked file records no evidence 5545ms
+(node:5824) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/prov/deploy-recovery.test.ts (2 tests | 2 skipped)
+(node:5836) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/compliance/criteria/auth/forgery.test.ts
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+
+(node:5812) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/http/input.test.ts (2 tests) 2631ms
+   ✓ HTTP: validated input (2)
+     ✓ [HTTP-AC-003] a JSON body of PAR-200 + 1 bytes is rejected with 413 HTTP.PAYLOAD_TOO_LARGE before the handler runs; PAR-200 bytes reach it 1874ms
+     ✓ [HTTP-AC-003] a schema-invalid JSON body, a non-JSON body and an invalid query are rejected with 400 HTTP.INVALID_INPUT before the handler runs 754ms
+(node:5871) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/log/keys.test.ts (2 tests | 2 skipped)
+(node:5879) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/auth/forgery.test.ts (3 tests) 1989ms
+   ✓ AUTH-AC-007 through the deployed router (3)
+     ✓ [AUTH-AC-007] through the deployed router: a POST with a session and no Origin is rejected with AUTH.REQUEST_FORGERY 1298ms
+     ✓ [AUTH-AC-007] through the deployed router: a POST with a session and a wrong Origin is rejected with AUTH.REQUEST_FORGERY 509ms
+(node:5891) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/core/support/stages.unit.test.ts (4 tests | 4 skipped)
+(node:5899) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/log/entries.test.ts (2 tests) 7412ms
+   ✓ LOG: stored entries (2)
+     ✓ [LOG-AC-002] the entries stored for a failing request and for an app-written entry validate against the log entry schema and carry the request ID of the response 6531ms
+     ✓ [LOG-AC-005] an app route throwing a plain Error leaves exactly one framework error entry for its request, with component CORE 879ms
+ ✓ tests/compliance/criteria/files/private-storage.test.ts (1 test) 2880ms
+   ✓ FILES-AC-005 private storage (1)
+     ✓ [FILES-AC-005] unsigned reads, writes and listings of the stage's storage are refused 2561ms
+(node:5916) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5917) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/config/values.test.ts (1 test) 497ms
+   ✓ CFG: fixed at deploy time (1)
+     ✓ [CFG-AC-003] the run's deployment reports exactly its committed values over the declared defaults 495ms
+(node:5936) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/secrets/read.test.ts (1 test | 1 skipped)
+(node:5944) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/compliance/criteria/log/writer.test.ts > LOG: write-only, never fails the caller > [LOG-AC-001] with a failing and a never-completing injected log writer, a request writing entries succeeds and its median response time grows by at most PAR-260
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+
+(node:5899) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/auth/access.test.ts (4 tests) 2271ms
+   ✓ AUTH-AC-004 route protection (4)
+     ✓ [AUTH-AC-004] anonymous: requireUser and requireAdmin routes answer 401 AUTH.UNAUTHENTICATED; an open route answers 200 1190ms
+     ✓ [AUTH-AC-004] user: requireUser routes answer 200 with the user; requireAdmin routes answer 403 AUTH.FORBIDDEN 438ms
+     ✓ [AUTH-AC-004] admin: requireUser and requireAdmin routes answer 200 with the admin 306ms
+     ✓ [AUTH-AC-004] requireCurrentUser returns the logged-in user and throws AUTH.UNAUTHENTICATED when anonymous 335ms
+(node:5974) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5899) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/secrets/storage.test.ts (1 test | 1 skipped)
+(node:5983) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"time":"2026-10-24T03:15:56.707Z","app":"reference","stage":"local","target":"local","component":"CORE","severity":"error","message":"GET /api/ref/throw-plain failed with CORE.INTERNAL\nError: reference plain error\n    at /home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/apps/reference/src/server/routes/ref.ts:20:11\n    at dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/node_modules/hono/dist/compose.js:35:17)\n    at file:///home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/node_modules/hono/dist/compose.js:35:40\n    at noStore (/home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/packages/framework/dist/http/runtime.js:4:11)\n    at dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/node_modules/hono/dist/compose.js:35:17)\n    at file:///home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/node_modules/hono/dist/compose.js:35:40\n    at forgeryCheck (/home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/packages/framework/dist/auth/runtime.js:94:19)\n    at dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/node_modules/hono/dist/compose.js:35:17)\n    at file:///home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/node_modules/hono/dist/compose.js:35:40\n    at currentUser (/home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/packages/framework/dist/auth/runtime.js:83:19)","requestId":"d30907fa-96e6-463e-bfa2-157079592946"}
+{"time":"2026-10-24T03:15:56.710Z","app":"reference","stage":"local","target":"local","component":"CORE","severity":"error","message":"GET /api/ref/throw-plain failed with CORE.INTERNAL\nError: reference plain error\n    at /home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/apps/reference/src/server/routes/ref.ts:20:11\n    at dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/node_modules/hono/dist/compose.js:35:17)\n    at file:///home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/node_modules/hono/dist/compose.js:35:40\n    at noStore (/home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/packages/framework/dist/http/runtime.js:4:11)\n    at dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/node_modules/hono/dist/compose.js:35:17)\n    at file:///home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/node_modules/hono/dist/compose.js:35:40\n    at forgeryCheck (/home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/packages/framework/dist/auth/runtime.js:94:19)\n    at dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/node_modules/hono/dist/compose.js:35:17)\n    at file:///home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/node_modules/hono/dist/compose.js:35:40\n    at currentUser (/home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/packages/framework/dist/auth/runtime.js:83:19)","requestId":"074071af-344a-4e88-beec-4ca181728aed"}
+{"time":"2026-10-24T03:15:56.713Z","app":"reference","stage":"local","target":"local","component":"CORE","severity":"error","message":"GET /api/ref/throw-plain failed with CORE.INTERNAL\nError: reference plain error\n    at /home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/apps/reference/src/server/routes/ref.ts:20:11\n    at dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/node_modules/hono/dist/compose.js:35:17)\n    at file:///home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/node_modules/hono/dist/compose.js:35:40\n    at noStore (/home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/packages/framework/dist/http/runtime.js:4:11)\n    at dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/node_modules/hono/dist/compose.js:35:17)\n    at file:///home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/node_modules/hono/dist/compose.js:35:40\n    at forgeryCheck (/home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/packages/framework/dist/auth/runtime.js:94:19)\n    at dispatch (file:///home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/node_modules/hono/dist/compose.js:35:17)\n    at file:///home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/node_modules/hono/dist/compose.js:35:40\n    at currentUser (/home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/packages/framework/dist/auth/runtime.js:83:19)","requestId":"bb73f0ab-38af-486d-9bfb-84af5fc9b50b"}
+ ✓ tests/compliance/criteria/auth/mock-login.test.ts (2 tests) 1987ms
+   ✓ AUTH-AC-009 mock-login on the test stage (2)
+     ✓ [AUTH-AC-009] test-stage part: mock-login sets the chosen level, user ID (as given) and display name 1353ms
+     ✓ [AUTH-AC-009] test-stage part: without an ID each level gets a fixed default ID; level anonymous logs out 632ms
+(node:5995) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5899) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5899) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/log/writer.test.ts (1 test) 5424ms
+   ✓ LOG: write-only, never fails the caller (1)
+     ✓ [LOG-AC-001] with a failing and a never-completing injected log writer, a request writing entries succeeds and its median response time grows by at most PAR-260 5422ms
+(node:6013) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/config/secret-locations.test.ts (1 test) 13ms
+(node:6025) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/http/no-store.test.ts (1 test) 1758ms
+   ✓ HTTP: API responses are not cached (1)
+     ✓ [HTTP-AC-005] two mock users and an anonymous client alternately request the same personal routes and each gets its own response, every one marked no-store 1755ms
+(node:6033) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/mig/support/failure-output.unit.test.ts (3 tests | 3 skipped)
+(node:6025) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(node:6046) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/prov/support/restricted-token.unit.test.ts (3 tests | 3 skipped)
+ ✓ tests/compliance/criteria/http/paths.test.ts (1 test) 879ms
+   ✓ HTTP: API and client paths (1)
+     ✓ [HTTP-AC-001] an unknown /api path is 404 HTTP.NOT_FOUND JSON; an unknown non-API deep link serves the client entry page 877ms
+(node:6054) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6056) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/_cloud/api.unit.test.ts (3 tests | 3 skipped)
+ ✓ tests/compliance/criteria/kv/kv.d1.test.ts (0 test) 1ms
+(node:6070) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6076) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/sql/sql.d1.test.ts (0 test) 1ms
+ ✓ tests/compliance/criteria/kv/kv.pglite.test.ts (0 test) 1ms
+(node:6101) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6107) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/compliance/criteria/files/unavailable.test.ts
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+
+ ↓ tests/compliance/criteria/files/unavailable.test.ts (1 test | 1 skipped)
+(node:5995) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/sql/sql.pglite.test.ts (0 test) 1ms
+(node:6128) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/sql/sql.http.test.ts (12 tests) 8022ms
+   ✓ SQL shared case set (reference app over HTTP) (12)
+     ✓ [SQL-AC-003] comparison, boolean, null, inArray, notInArray and between expressions on every column type (reference app over HTTP) 648ms
+     ✓ [SQL-AC-003] containsText: empty needle matches every non-NULL value, %, _ and \ are literal, only ASCII A-Z folds, NULL never matches (reference app over HTTP) 370ms
+     ✓ [SQL-AC-003] values read back in their JS types; inner and left joins, subqueries, select-only CTEs, selectDistinct (reference app over HTTP) 428ms
+     ✓ [SQL-AC-003] writes without returning resolve to undefined; returning lists exactly the affected rows; upserts against declared unique constraints (reference app over HTTP) 698ms
+     ✓ [SQL-AC-004] boundary values per column type are accepted or rejected with SQL.INVALID_VALUE before the database, and read back exactly (reference app over HTTP) 418ms
+     ✓ [SQL-AC-005] control: an atomic call without a violation commits every step and returns each step's RETURNING rows (reference app over HTTP) 907ms
+     ✓ [SQL-AC-006] a duplicate unique value yields SQL.CONFLICT (insert answered as 409 SQL.CONFLICT; composite unique; update) (reference app over HTTP) 1145ms
+     ✓ [SQL-AC-006] a query whose result exceeds PAR-215 yields SQL.RESULT_TOO_LARGE; one within it succeeds (reference app over HTTP) 440ms
+ ✓ tests/compliance/criteria/kv/kv.http.test.ts (6 tests) 8774ms
+   ✓ KV shared case set (reference app over HTTP) (6)
+     ✓ [KV-AC-001][KV-AC-004] put, overwrite, get, missing-key get, delete and repeated delete behave as specified (reference app over HTTP) 661ms
+     ✓ [KV-AC-001][KV-AC-004] list returns exactly the keys that literally start with the prefix (%, _, mixed case), in code point order (reference app over HTTP) 1240ms
+     ✓ [KV-AC-002][KV-AC-004] empty, oversized and malformed keys and oversized and malformed values are rejected with the specified codes; a key of exactly PAR-220 bytes and a value of exactly PAR-223 bytes are accepted (reference app over HTTP) 336ms
+     ✓ [KV-AC-003][KV-AC-004] listing 2.5 pages of keys returns each key once; a cursor used with a different prefix is rejected (reference app over HTTP) 829ms
+     ✓ [KV-AC-005][KV-AC-004] a maximum page (PAR-222) of maximum-size entries (PAR-220-byte keys, PAR-223-byte values) lists successfully (reference app over HTTP) 5064ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/compliance/criteria/files/server-operations.test.ts > FILES-AC-001 server operations > [FILES-AC-001] list returns exactly the prefix's names in code point order across several pages
+AssertionError: expected [ …(7) ] to strictly equal [ …(7) ]
+
+- Expected
++ Received
+
+  [
+    "c-t3/ac001-list/fb9cec40aa54/B",
+    "c-t3/ac001-list/fb9cec40aa54/Z",
+-   "c-t3/ac001-list/fb9cec40aa54/a",
+    "c-t3/ac001-list/fb9cec40aa54/a b",
+    "c-t3/ac001-list/fb9cec40aa54/a/b",
++   "c-t3/ac001-list/fb9cec40aa54/a",
+    "c-t3/ac001-list/fb9cec40aa54/b",
+    "c-t3/ac001-list/fb9cec40aa54/é",
+  ]
+
+ ❯ tests/compliance/criteria/files/server-operations.test.ts:109:18
+    107|       expect(pages).toBeLessThan(10);
+    108|     }
+    109|     expect(seen).toStrictEqual(expected);
+       |                  ^
+    110|     expect(pages).toBeGreaterThanOrEqual(3);
+    111|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 27 passed | 23 skipped (51)
+      Tests  1 failed | 69 passed | 69 skipped (139)
+   Start at  03:15:20
+   Duration  48.32s (tests 84%, import 12%, transform 4%)
+
+    Isolate  51 workers spawned · ~169ms startup each (spawn + environment, per file)
+             at least ~2.70s faster with isolate: false — reuses workers across files instead of one per file
+
+JSON report written to /tmp/compliance-pllMoc/vitest.json
+(node:6149) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6162) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+(node:6162) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 14 tests using 2 workers
+
+(node:6213) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+(node:6220) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/14] [integration] › tests/compliance/criteria/files/expired-ticket.spec.ts:23:1 › [FILES-AC-003] expired-ticket clause: an expired ticket fails with FILES.TRANSFER_FAILED, storage's status and a rejected by storage (HTTP n) message without storage's error body
+[2/14] [integration] › tests/compliance/criteria/files/transfers.spec.ts:49:1 › [FILES-AC-003] a 20 MB file uploads through uploadFile and downloads through downloadUrl byte-exact
+[3/14] [integration] › tests/compliance/criteria/files/transfers.spec.ts:63:1 › [FILES-AC-003] a ticket for one name cannot write another
+[4/14] [integration] › tests/compliance/criteria/files/transfers.spec.ts:90:1 › [FILES-AC-003] an upload with a content type other than the ticket's is rejected and stores nothing
+[5/14] [integration] › tests/compliance/criteria/files/transfers.spec.ts:105:1 › [FILES-AC-003] uploadFile rejects a Blob whose non-empty type differs from the ticket's before sending: FILES.TRANSFER_FAILED, status null, content type does not match ticket
+[6/14] [integration] › tests/compliance/criteria/files/transfers.spec.ts:123:1 › [FILES-AC-004] browser part: an upload and a download attempted from an unrelated origin are rejected by the browser
+[7/14] [integration] › tests/compliance/criteria/http/one-origin.spec.ts:9:1 › [HTTP-AC-004] the deployed client's API calls are all same-origin, with no CORS preflight
+(node:6526) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[8/14] [e2e] › tests/compliance/e2e/E2E-004.spec.ts:32:1 › [E2E-004] coverage part: every criterion and scenario applicable on this target has a tagged test in the suite this run executes
+  1) [e2e] › tests/compliance/e2e/E2E-004.spec.ts:32:1 › [E2E-004] coverage part: every criterion and scenario applicable on this target has a tagged test in the suite this run executes 
+
+    Error: applicable on cloudflare but no tagged test in this target's suite:
+    AUTH-AC-005
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "AUTH-AC-005",
+    + ]
+
+      45 |   );
+      46 |   const problems = listing.errors.length === 0 ? "" : `\n(listing problems: ${listing.errors.join("; ")})`;
+    > 47 |   expect(untested, `applicable on ${t.target} but no tagged test in this target's suite:\n${untested.join("\n")}${problems}`).toEqual([]);
+         |                                                                                                                               ^
+      48 | });
+      49 |
+      50 | test(tag("E2E-004", "record part: the evidence writer accepts a record of this target and rejects an invalid one"), () => {
+        at /home/user/cloud-app/.claude/worktrees/agent-a600b9490db9ad35d/tests/compliance/e2e/E2E-004.spec.ts:47:127
+
+    Error Context: test-results/E2E-004--E2E-004-coverage--61ba7-the-suite-this-run-executes-e2e/error-context.md
+
+
+(node:7054) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[9/14] [e2e] › tests/compliance/e2e/E2E-004.spec.ts:50:1 › [E2E-004] record part: the evidence writer accepts a record of this target and rejects an invalid one
+[10/14] [e2e] › tests/compliance/e2e/E2E-005.spec.ts:113:1 › [E2E-005] anonymous, user and admin each get exactly their permitted actions in a browser, and no API response exposes login-provider details
+[11/14] [e2e] › tests/compliance/e2e/E2E-005.spec.ts:163:1 › [E2E-005] no app-facing type exposes login-provider names, tokens, issuers or email addresses
+[12/14] [e2e] › tests/compliance/e2e/E2E-009-large-photos.spec.ts:91:1 › [E2E-009] upload a 20 MB and a 100 MB photo from a real browser, view and download them byte-identical; app browser code used only the app's API and framework helpers; no storage or CORS settings in the app
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+
+[13/14] [e2e] › tests/compliance/e2e/E2E-011.spec.ts:135:1 › [E2E-011] app and framework entries are stored under the app and stage with timestamps, and the plain-Error request's entry is found by its requestId
+[e2e] › tests/compliance/e2e/E2E-011.spec.ts:135:1 › [E2E-011] app and framework entries are stored under the app and stage with timestamps, and the plain-Error request's entry is found by its requestId
+(node:7054) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[14/14] [e2e] › tests/compliance/e2e/E2E-013.spec.ts:66:1 › [E2E-013] invalid input, unauthenticated, forbidden, unknown route and plain-Error requests get catalogue errors with no stack traces, provider messages or secret values
+[d-t2] cloudflare api requests in this process: 3
+
+
