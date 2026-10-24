@@ -1,10 +1,10 @@
 # Deploying
 
-Read this when you deploy, smoke-test, stop, start or remove a stage on a cloud. Account setup, the API token, secrets and the Google client are in [owner-tasks.md](owner-tasks.md).
+Read this when you deploy, smoke-test, stop, start or remove a stage on a cloud (Cloudflare in §1–§6, AWS in §7). Account setup, the API token, secrets and the Google client are in [owner-tasks.md](owner-tasks.md).
 
-Commands run in the app's directory, with `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` set ([owner-tasks.md](owner-tasks.md) §2). Each `npm run <command> -- …` is the same as `npx prototype-framework <command> …`. Behind an HTTPS proxy, put `NODE_USE_ENV_PROXY=1 ` in front of every cloud command; the command says so if it is needed.
+Commands run in the app's directory, with `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` set ([owner-tasks.md](owner-tasks.md) §2), or for AWS the AWS credentials ([owner-tasks.md](owner-tasks.md) §2a). Each `npm run <command> -- …` is the same as `npx prototype-framework <command> …`. Behind an HTTPS proxy, put `NODE_USE_ENV_PROXY=1 ` in front of every cloud command; the command says so if it is needed.
 
-**Status in this phase:** every command on this page is **not yet verified on Cloudflare in this phase**. The framework's cloud commands have run only against a simulated Cloudflare. Only the Cloudflare API calls for stop and start (§4) were tried on a real Worker. The AWS target is not available yet.
+**Status in this phase:** every command on this page is **not yet verified on Cloudflare in this phase**. The framework's cloud commands have run only against a simulated Cloudflare. Only the Cloudflare API calls for stop and start (§4) were tried on a real Worker. Every AWS step (§7) is **not yet verified on AWS**: it has run only against simulated AWS.
 
 ## 1. Test stages and production stages
 
@@ -96,6 +96,49 @@ npm run remove -- --target cloudflare --stage prod --confirm-production prod
 
 On the free plan, D1 allows about 100,000 rows written per day per account. Keep test data to a few rows and remove test stages promptly.
 
+## 7. AWS (not yet verified on AWS)
+
+Every step here is **not yet verified on AWS**. First set the credentials ([owner-tasks.md](owner-tasks.md) §2a) and run `setup-account --target aws --region <region>` once ([owner-tasks.md](owner-tasks.md) §3). Test stages use `config/aws/test.json`; a production stage needs its own committed `config/aws/<stage>.json`. A stage's address is a CloudFront URL, `https://<id>.cloudfront.net`, which `deploy` prints. Creating a stage takes about 20 minutes, and removing it 15 to 25.
+
+**Deploy and smoke-test a test stage.** On AWS a secret can be set before the first deploy:
+
+```sh
+STAGE=test-<your initials><number>
+npm run verify
+npm run secrets -- set apiKey --target aws --stage "$STAGE"
+npm run deploy -- --target aws --stage "$STAGE"
+git add -A
+git commit -m "Changes before the smoke test"
+npm run smoke -- --target aws --stage "$STAGE"
+```
+
+If `deploy` names secrets that are not set, set each one with `--target aws` and run `deploy` again. `smoke` writes its record under `validation/aws/` and prints the day's log location: the S3 bucket `prototype-logs-<account-id>` with the key prefix, and the CloudWatch log group `/aws/lambda/<app>-<stage>-http` ([troubleshooting.md](troubleshooting.md) §1).
+
+**Production stage:** as §3, with `--target aws`. The Google steps are in [owner-tasks.md](owner-tasks.md) §5 (AWS).
+
+**Stop and start.** There is no stop command. Stopping sets the stage's Lambda function to zero reserved concurrency, so its requests fail; code, data and secrets stay, and storage stays billable. Every `deploy` starts the stage again. `APP` is set as at the top of [troubleshooting.md](troubleshooting.md).
+
+```sh
+aws lambda put-function-concurrency --function-name "$APP-$STAGE-http" --reserved-concurrent-executions 0   # stop
+aws lambda delete-function-concurrency --function-name "$APP-$STAGE-http"   # start
+```
+
+**Remove** a test stage, or a production stage by repeating its name:
+
+```sh
+npm run remove -- --target aws --stage "$STAGE"
+npm run remove -- --target aws --stage prod --confirm-production prod
+```
+
+This empties and deletes the stage's S3 bucket, drops its databases, deletes its parameters under `/<app>/<stage>/` and its database-credentials secret (no recovery window), and removes its Aurora cluster (no final snapshot), Lambda function and CloudFront distribution. Log entries stay. Leftovers are printed as in §5; run `remove` again.
+
+**What stays billable while idle:**
+- each stage's Aurora Serverless v2 cluster. After 5 minutes with no database use it pauses at 0 ACU, so its compute costs nothing, but its storage stays billable until `remove`. Any request that reads the database, a public route too, wakes it; the first request then waits while it resumes;
+- each stage's database-credentials secret (Secrets Manager) and S3 file bucket;
+- the shared `prototype-logs-<account-id>` bucket, which grows with every log entry, and the small deploy-state bucket;
+- the shared network from `setup-account`: one VPC with two private subnets, a DB subnet group and a security group. It has no NAT gateway and no public address, the parts that would cost money while idle. It stays after the last stage is removed;
+- leftover test stages. List them with `aws lambda list-functions --query "Functions[?starts_with(FunctionName, '$APP-test-')].FunctionName"`, then `remove` each.
+
 ## Examples
 
 - [examples/tests.md](../examples/tests.md): the smoke test that `smoke` runs against a deployed test stage.
@@ -103,4 +146,4 @@ On the free plan, D1 allows about 100,000 rows written per day per account. Keep
 
 ## Stopping condition
 
-Stop reading when the stage is deployed and its smoke test passed, or it is stopped, started or removed with no leftovers printed. For a failure, go to [troubleshooting.md](troubleshooting.md).
+Stop reading when the stage is deployed and its smoke test passed, or it is stopped, started or removed with no leftovers printed, on Cloudflare or on AWS. For a failure, go to [troubleshooting.md](troubleshooting.md).

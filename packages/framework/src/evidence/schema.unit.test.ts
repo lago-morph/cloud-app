@@ -29,6 +29,12 @@ describe("[COMPL-AC-003] evidence schema", () => {
     expect(validateEvidence(record({ stage: "test-abc", leftovers: ["worker x"] }))).toEqual([]);
   });
 
+  // G-EV F3: a run against fakes carries what was faked; the reports never count such a record.
+  it("accepts a dry-run marker naming what was faked, as a string", () => {
+    expect(validateEvidence(record({ dryRun: "fake stage operations (OperationsFactory)" }))).toEqual([]);
+    expect(validateEvidence(record({ dryRun: true }))).toEqual(["/dryRun: must be a string"]);
+  });
+
   it("requires every top-level required field", () => {
     const r = record();
     delete r.commit;

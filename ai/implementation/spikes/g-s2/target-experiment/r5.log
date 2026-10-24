@@ -1,0 +1,19 @@
+SST 4.17.2 ready!
+
+➜  App:        gs2tgt
+   Stage:      s1
+
+~  Remove
+
+|  Deleted     FnEdge random:index:RandomString
+|  Deleted     Database gs2:test:Db → DatabaseCluster random:index:RandomString
+|  Deleted     Files random:index:RandomPet → FilesChild random:index:RandomPet
+|  Deleted     FnRouter random:index:RandomString
+|  Deleted     Database gs2:test:Db
+|  Deleted     Router random:index:RandomPet
+|  Deleted     Files random:index:RandomPet
+|  Deleted     FnLiteral random:index:RandomString
+|  Deleted     default_4_16_6 pulumi:providers:random
+
+✓  Removed    
+

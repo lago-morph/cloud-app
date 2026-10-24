@@ -6,6 +6,7 @@
 import type { EvidenceRecord } from "../../../packages/framework/src/evidence/public.js";
 import { parseTags } from "../../support/tags.js";
 import { selectedEntries, TARGETS, type CatalogueEntry, type Target } from "../harness/catalogue.js";
+import { isDryRun } from "./records.js";
 
 export interface ListedTest {
   /** Full title including describe titles. */
@@ -67,7 +68,8 @@ export function buildTraceability(input: { readonly catalogue: readonly Catalogu
       testsById.set(id, [...(testsById.get(id) ?? []), label]);
     }
   }
-  const latest = [...input.records].sort((a, b) => (a.finishedAt < b.finishedAt ? 1 : a.finishedAt > b.finishedAt ? -1 : 0));
+  // A dry run's record (G-EV F3) is never evidence, so it is never shown as a result.
+  const latest = input.records.filter((r) => !isDryRun(r)).sort((a, b) => (a.finishedAt < b.finishedAt ? 1 : a.finishedAt > b.finishedAt ? -1 : 0));
   const rows = input.catalogue.map((entry): TraceRow => {
     const results: Partial<Record<Target, string>> = {};
     for (const target of TARGETS) {

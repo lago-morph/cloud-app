@@ -9,6 +9,7 @@
  */
 import type { EvidenceRecord } from "../../../packages/framework/src/evidence/public.js";
 import { selectedEntries, TARGETS, type CatalogueEntry } from "../harness/catalogue.js";
+import { isDryRun } from "./records.js";
 
 /** GOOGLE and the login-provider interface (auth.md, internal/login-provider.d.ts). */
 export const LOGIN_PROVIDER_PATHS = ["packages/framework/src/google/", "packages/framework/src/auth/login-provider.ts", "docs/contracts/ts/internal/login-provider.d.ts"];
@@ -76,7 +77,8 @@ function summary(record: EvidenceRecord, id: string): { passed: boolean; text: s
 
 export function releaseReport(input: ReleaseInput): ReleaseReport {
   const problems: string[] = [];
-  const sorted = newestFirst(input.records);
+  // A dry run's record (G-EV F3) is never evidence, even when it is the newest.
+  const sorted = newestFirst(input.records.filter((r) => !isDryRun(r)));
   const automated = sorted.filter((r) => !isMilestone(r) && r.commit === input.commit);
   const milestone = sorted.filter(isMilestone);
   let lastCertification: ReleaseReport["lastCertification"];

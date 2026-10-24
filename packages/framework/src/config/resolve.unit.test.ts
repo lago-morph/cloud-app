@@ -124,4 +124,10 @@ describe("build-time resolution: identity and secrets (CFG-REQ-004)", () => {
       { name: "smtpPassword", location: "SECRET_SMTP_PASSWORD" },
     ]);
   });
+
+  it(tag("CFG-AC-004", "on AWS the resolved configuration lists each secret's SSM parameter path"), () => {
+    const deployment = createDeployment({ app: "notes", stage: "test-ab1", target: "aws" });
+    const resolved = resolveConfig({ deployment, declaration, secrets: ["apiKey"], file: "config/aws/test.json", config: values({ title: "t" }) });
+    expect(resolved.secrets).toEqual([{ name: "apiKey", location: "/notes/test-ab1/secrets/apiKey" }]);
+  });
 });

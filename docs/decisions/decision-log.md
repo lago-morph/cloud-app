@@ -889,7 +889,7 @@ Evidence: `ai/implementation/spikes/a-10/RESULT.md` finding 5, command 15.
 These were recorded by build items B-01…B-18 (with B-16a) and test-author items B-T1…B-T4 of `ai/implementation/plan.md`, and integrated by item B-INT. All are `ai-proposed`. Where two drafts recorded the same decision they were merged into one entry (named in its last line). An entry taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue" says so in its body and shows `owner review open` (or `owner decision outstanding`) in its status line; entries without that mark are routine design choices for points the documents leave open (prompt §5).
 
 ### DEC-0110 — No `./targets/aws` subpath until the AWS phase
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open, plan §11 Q3) · Affects: CORE-REQ-005, CORE-AC-005, `packages/framework/package.json`
+Origin: ai-proposed · Status: superseded by DEC-0447 (was: accepted, assumption under the owner's instruction; owner review open, plan §11 Q3) · Affects: CORE-REQ-005, CORE-AC-005, `packages/framework/package.json`
 
 The exports map lists `.`, `./client`, `./testing`, `./targets/local`, `./targets/cloudflare`, `./provision`, `./check`. CORE-REQ-005 says "one subpath per supported target"; AWS is not built in this phase (prompt §4), and an export pointing at placeholder code is not allowed. The AWS phase adds `./targets/aws`. CORE-AC-005's fixture importing `./targets/aws` still fails `verify` (through `allowed-imports`, and because the subpath does not resolve). Plan §11 Q3; open for owner review.
 Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
@@ -2581,7 +2581,7 @@ Evidence: `packages/framework/src/files/cloudflare/{sign,tickets}.unit.test.ts`.
 Item: D-02.
 
 ### DEC-0328 — Names with `.` / `..` segments on R2 URLs
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open); unchanged in effect by DEC-0430, which addresses the stored key (`x%2F..%2Fy%01`) · Affects: FILES-REQ-002, FILES-REQ-003, files.md §2 "Cloudflare"
+Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open); unchanged in effect by DEC-0430, which addresses the stored key (`x%2F..%2Fy%01`); extended on AWS to every operation by DEC-0464 (owner review open) · Affects: FILES-REQ-002, FILES-REQ-003, files.md §2 "Cloudflare"
 
 WHATWG URL parsing, used by aws4fetch, Workers and browsers, resolves `.` and `..` path segments, even when they are percent-encoded. With per-segment encoding, a ticket for `x/../y` would address `y`, and a ticket for `../up.txt` would address `/up.txt` outside the bucket path. That is unit-tested: the test failed before the fix. Fix (simplest): when any segment of the name is `.` or `..`, the issuer encodes the whole name, every `/` as `%2F`. Other names keep the per-segment form that A-07 verified. Assumption, not verified live: R2 decodes `%2F` in the path into `/` in the key, as S3 does, and canonicalises the path from the decoded key, as aws4fetch does. D-RUN checks it with one ticket for a `x/../y` name. A name that is exactly `.` or `..` cannot be put in any path-style or virtual-hosted URL. For such a name, `createUploadTicket`/`createDownloadTicket` on Cloudflare throw `FILES.INVALID_NAME`: "cannot be transferred by the browser on this target". Server operations on such names still work. This is a target difference in a corner case that FILES-REQ-002 allows. Owner: accept it, or forbid the names `.` and `..` in FILES-REQ-002 on every target.
 Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
@@ -3274,7 +3274,7 @@ Open follow-ups from the review (not done here): F1, `cli.ts` gives the usage st
 Item: C-T6.
 
 ### DEC-0397 — AWS not-run parts for CORE-AC-006 and SQL-AC-006
-Origin: ai-proposed · Status: accepted · Affects: CORE-AC-006, SQL-AC-006, tests/compliance/harness/expected.ts
+Origin: ai-proposed · Status: superseded by DEC-0499 · Affects: CORE-AC-006, SQL-AC-006, tests/compliance/harness/expected.ts
 
 `PHASE_RULES` gains two part rules on `local`, automated tier, detail `AWS phase not started` (plan §8.2), shaped like CHECK-AC-005's demo part: CORE-AC-006 part "AWS-bundle clause" (no AWS bundle yet) and SQL-AC-006 part "Data API retry-loop clause" (the Data API adapter is AWS code, not built). Only `local`: the SQL-AC-006 clause is stated as local and deterministic, and CORE-AC-006 is Local only; on Cloudflare SQL-AC-006 has no not-run part. The AWS phase removes both rules when it adds their tests.
 Item: C-T6.
@@ -3773,3 +3773,1074 @@ Still to verify live: the pass-2 re-run (`--only SEC-AC-001,HTTP-AC-002`) passes
 
 Evidence: `ai/implementation/root-causes/2026-10-24-pass2-SEC-AC-001-HTTP-AC-002-delete-read-too-early.md` (diagnosis and Review R1–R3).
 Item: fix-sec001.
+
+## Implementation phase: AWS — phase G, offline (2026-10-24)
+
+Entries DEC-0432 to DEC-0502 were integrated by G-INT from the drafts of items G-S1, G-S2, G-F1, G-01 … G-11 and G-T4 (plan §10.4; G-T1, G-T2, G-T3 and G-12 wrote no draft). They are numbered in that order. Each entry keeps its draft's wording and status: everything here is `ai-proposed` and was built and checked offline, with no AWS call, so "to be confirmed live" and "unverified live" still hold until phase L. Draft-level notes (open points, fidelity notes, live items) are folded into one entry of their item, with their state at integration.
+
+Parameters (docs/parameters/parameters.md): PAR-111's AWS SDK value recorded; new PAR-120 (`aws-sdk-client-mock`), PAR-121 (`@types/aws-lambda`), PAR-272 (Lambda runtime), PAR-273 (architecture), PAR-274 (memory), PAR-275 (Data API resume backoff), PAR-276 (bundle size bound), PAR-281 (AWS-AC-005 pause wait), PAR-282 (AWS hook API-call cap per compliance run) and PAR-283 (Aurora clusters at once); PAR-271's note extended. Each value was checked against the code that uses it.
+
+Marked in place: DEC-0110 (superseded by DEC-0447), DEC-0397 (superseded by DEC-0499), DEC-0328 (extended on AWS by DEC-0464). Amendments between drafts are marked in the later-numbered entries' status lines and in the amended ones': DEC-0449 by DEC-0468 and DEC-0493; DEC-0460 by DEC-0469; DEC-0440 and DEC-0483 by DEC-0490; DEC-0432 by DEC-0472.
+
+Conflict flagged, not resolved: DEC-0464 (on AWS a name that is only `.` or `..` is `FILES.INVALID_NAME`) against FILES-AC-002's shared `".."` round-trip case, which G-T3's pre-check suite runs over the S3 store and which fails there by design. Owner review open on DEC-0464, DEC-0468, DEC-0481, DEC-0491 and DEC-0495; the owner questions are in plan-aws.md §5.1.
+
+Plan-aws.md "Decisions to record": 1 → DEC-0447; 2 → DEC-0432, DEC-0456, DEC-0461; 3 → DEC-0472, DEC-0433; 4 → DEC-0445; 5 → DEC-0498; 6 → DEC-0475; 7 → DEC-0442, DEC-0476, DEC-0478; 8 → DEC-0490; 9 → DEC-0486; 11 → DEC-0441, DEC-0491; 12 → DEC-0438 (the SPA fallback is the router function's `custom404`, G-S2 RESULT); 13 → DEC-0456, DEC-0470; 14 → DEC-0436, DEC-0479, DEC-0495. Decision 10 (COMPL-AC-004's R2-token clause on AWS) has no draft and stays open (plan-aws.md §5 Q7).
+
+Evidence by item (from each draft's head):
+
+- **G-S1** (DEC-0432…DEC-0437): `ai/implementation/spikes/g-s1/RESULT.md`, plus the spike's tests and probe in the same directory. All of it is offline, and no AWS endpoint was contacted.
+- **G-S2** (DEC-0438…DEC-0444): `ai/implementation/spikes/g-s2/RESULT.md`. Everything there was found offline, with no AWS call. Items marked "unverified live" are checked in phase L.
+- **G-F1** (DEC-0445…DEC-0446): `packages/framework/src/sql/data-api-fake.test-support.ts` (the fake; its header lists every fidelity gap) and `packages/framework/src/sql/data-api-fake.unit.test.ts` (54 self-tests, including drizzle `aws-data-api/pg` CRUD and transactions). All of it is offline, and no AWS endpoint was contacted.
+- **G-01** (DEC-0447…DEC-0451): the G-01 commit on `claude/implement-aws-g-01`, its unit tests (`packages/framework/src/core/exports.unit.test.ts`, `src/targets/aws/public.unit.test.ts`, `src/config/{secret-locations,resolve,files}.unit.test.ts`, `src/build/build.unit.test.ts`, `src/cli/args.unit.test.ts`, `src/cli/commands/{deploy-wiring,secrets-cloud,smoke}.unit.test.ts`) and the CORE-AC-005 integration tests (`test/integration/core/package.test.ts`, `test/integration/cli/verify.test.ts`). No AWS endpoint was contacted.
+- **G-02** (DEC-0452…DEC-0455): `packages/framework/src/sql/data-api.ts` (the adapter) and `packages/framework/src/sql/data-api.unit.test.ts` (23 tests against the G-F1 Data API fake, on fake timers where time matters). The fake is a pre-check, never AWS evidence (DEC-0445). No AWS endpoint was contacted.
+- **G-03** (DEC-0456…DEC-0460): the G-03 commit on `claude/implement-aws-g-03` and its unit tests: `packages/framework/src/log/aws/{pending,sink}.unit.test.ts`, `src/secrets/aws.unit.test.ts`, `src/targets/aws/settings.unit.test.ts`, plus the moved `src/log/keys.unit.test.ts`. Each S3 request goes to a fetch stub. Each SSM client is an `aws-sdk-client-mock`. The sink and secrets suites install the G-07 network guard (`provision/aws/aws-network-guard.test-support.ts`). Each suite checks that the guard refuses an unmocked request to `*.amazonaws.com`, and that no other test in the file tried one. No AWS endpoint was contacted. Live behaviour (a real deny, real SSM errors) is phase L's.
+- **G-04** (DEC-0461…DEC-0467): the G-04 commit on `claude/implement-aws-g-04` and its unit tests: `packages/framework/src/files/aws/{store,tickets,cors,xml}.unit.test.ts`, plus the moved `src/files/s3/sign.unit.test.ts` and the unchanged Cloudflare tests. Every AWS test runs under `installAwsNetworkGuard` (`src/provision/aws/aws-network-guard.test-support.ts`), and each file asserts that the guard recorded no attempt. One test shows that a store left on the global `fetch` is refused before a socket opens. No AWS endpoint was contacted. Everything here is a pre-check against the in-process S3 fake (`src/files/aws/s3-fake.test-support.ts`), not AWS evidence (plan-aws.md §2).
+- **G-05** (DEC-0468…DEC-0471): the G-05 commit on `claude/implement-aws-g-05` and its unit tests: `packages/framework/src/targets/aws/handler.unit.test.ts` (18 tests): Function URL (payload 2.0) event fixtures through the fully assembled stage, with the Data API adapter on the G-F1 fake (framework migrations applied), the S3 files store on the G-04 fake, an SSM stub client and a fetch stub for the log bucket; `src/targets/aws/public.unit.test.ts` (the subpath contract); `src/provision/aws/sst.unit.test.ts` (the new variable-equality test). Every AWS suite installs the G-07 network guard (`provision/aws/aws-network-guard.test-support.ts`) and asserts it recorded no attempt. No AWS endpoint was contacted. All of this is a pre-check, never AWS evidence (plan-aws.md §2).
+- **G-06** (DEC-0472…DEC-0474): the G-06 commit on `claude/implement-aws-g-06` and its tests: `packages/framework/src/build/aws.unit.test.ts`: fixture apps built with `--target aws` from the framework's sources (entry, output layout, the stage program taking the build's Lambda code, the SDK bundled, the size bound, the bundle run in Node through the Function URL handler under the AWS network guard, PROV-AC-005 aws build part for `test-g06`, `prod`, `prodcheck`, `mytest-1`, CORE-AC-006 AWS-bundle part, failing builds for Cloudflare-only, provisioning, CLI-only SDK and secret-value bundles, and a positive control: the same app's Cloudflare bundle fails the AWS rules as Cloudflare-only); `packages/framework/src/build/inspect.unit.test.ts`: every rule on a synthetic bundle; `packages/framework/test/integration/build/aws-bundles.test.ts`: the CLI (`npx <package> build --target aws`) on the B-T4 fixture app with the installed `dist/`, inspected like `cloudflare-bundles.test.ts` (DEC-0240). No AWS endpoint was contacted and nothing was deployed. The bundle has not run on Lambda; that is phase L.
+- **G-07** (DEC-0475…DEC-0479): `packages/framework/src/provision/aws/{environment,engine,account}.ts` and their `*.unit.test.ts` (47 tests, all against `aws-sdk-client-mock`; a network guard refuses any `*.amazonaws.com` request and the suites assert it saw none). No AWS endpoint was contacted. Everything marked "unverified live" is checked in phase L (L-0, L-2).
+- **G-08** (DEC-0480…DEC-0484): `packages/framework/src/provision/aws/{sst,names}.ts` and `sst.unit.test.ts` (26 tests). The structural tests evaluate the generated `sst.config.ts` against stand-ins for SST's globals. The type-check test runs strict `tsc` over the generated full, step-3 and CORS programs against a cached SST 4.17.2 platform with `@pulumi/aws` 7.20.0, the way G-S2 did, and a broken program (`nodejs23.x`, `"postgresql"`) fails it. No AWS call was made and no `sst deploy` was run. Everything here is unverified live until phase L's first deploy.
+- **G-09** (DEC-0485…DEC-0487): `packages/framework/src/provision/aws/databases.ts` and `packages/framework/src/provision/aws/databases.unit.test.ts`. The tests run against the G-F1 Data API fake (16 tests). Three of them run PROV's `runDeploy` with the core `FakeTarget`, with its database operations replaced by G-09's: the MIG-AC-003 migration-failure and check-failure paths; the MIG-AC-006 copy-migrate-check-replace sequence; the MIG-AC-002 redeploy with nothing pending. All of this is a pre-check, never AWS evidence (DEC-0445). The AWS network guard records no attempt, and no AWS endpoint was contacted.
+- **G-10** (DEC-0488…DEC-0492): `packages/framework/src/provision/aws/target.ts` and `target.unit.test.ts` (29 tests). The tests run every operation against `aws-sdk-client-mock` (Lambda, RDS, S3, Secrets Manager, SSM, Resource Groups Tagging API) over an in-memory account, with an injected fake SST and injected Data API operations, and run PROV's `runDeploy` and `runRemove` on top. The fake SST models the SST 4.17.2 behaviour from root cause 2026-10-23-pass1 and DEC-0440: `--target` resolves only against the stage's checkpoint, a targeted run adds nothing to state, an untargeted run deletes a Function the program leaves out, `remove` without a checkpoint fails with `Stage not found`, and `state.purge` deletes the stage's state. The AWS network guard records no attempt. No AWS endpoint was contacted and `sst` never ran. Everything here is unverified live until phase L.
+- **G-11** (DEC-0493…DEC-0497): the G-11 commit on `claude/implement-aws-g-11` and its unit tests: `packages/framework/src/cli/commands/aws-operations.unit.test.ts`: the per-target factory's dispatch and refusals; the child environment; the AWS factory's account, target, region, code and `fetch` wiring (injected account and target); the real AWS target built with no request; the SDK clients' proxy-aware handler carrying the child environment; and `runSst` with a fake `SstExec` receiving `SSL_CERT_FILE`, the proxy and `NODE_USE_ENV_PROXY=1`. The AWS network guard is installed for the whole file and records no attempt. `deploy.unit.test.ts`, `deploy-wiring.unit.test.ts`, `remove.unit.test.ts`, `setup-account.unit.test.ts`, `smoke.unit.test.ts` (`--target aws` cases, with a `FakeTarget`) and `secrets-cloud.unit.test.ts` (unchanged AWS case). Cloudflare's CLI tests are unchanged and green. `tests/compliance/harness/node-deps.unit.test.ts`: the leftover check through the new factory, for Cloudflare and AWS. No AWS endpoint was contacted and `sst` never ran. Nothing here has run against AWS. That is phase L.
+- **G-T4** (DEC-0498…DEC-0502): the G-T4 commits on `claude/implement-aws-g-t4`. Unit tests: `tests/compliance/harness/{expected,results,reports,driver,node-deps,aws-usage}.unit.test.ts` and `tests/compliance/criteria/_cloud/aws/{criteria-hooks,usage,secrets-logs}.unit.test.ts`. Integration: `tests/compliance/criteria/sql/data-api-retry.test.ts`. No AWS endpoint was contacted: the hook tests use aws-sdk-client-mock behind the framework's AWS network guard, and the driver tests use a fake target.
+
+### DEC-0432 — One AWS SDK v3 version, 3.1153.0, for every client; client-mock and Lambda types pinned
+Origin: ai-proposed · Status: accepted; the bundle rule amended by DEC-0472 (S3 through signed `fetch`, so `client-s3` is not bundled) · Affects: PAR-111, new PAR-120, PAR-121, `packages/framework/package.json`
+
+The framework pins these at exactly 3.1153.0:
+- `@aws-sdk/client-{rds-data,s3,ssm,lambda,sts,rds,secrets-manager,ec2,iam,resource-groups-tagging-api}`.
+
+The framework also pins these dev dependencies:
+- `aws-sdk-client-mock` 4.1.0;
+- `@types/aws-lambda` 8.10.164.
+
+Reasons:
+- SST 4.17.2 already pulls in `@aws-sdk/client-lambda@3.1153.0`, so the clients share one version with it.
+- All ten clients install together with one `@aws-sdk/core` (3.978.5) and one `@smithy/node-http-handler` (4.12.1).
+- `aws-sdk-client-mock` 4.1.0 intercepts `RDSDataClient` 3.1153.0 in the spike's tests.
+
+The clients' transitive ranges float. The root lockfile fixes them.
+
+Bundle rule:
+- The HTTP Lambda bundle contains only rds-data, s3 and ssm. With drizzle's Data API driver and `hono/aws-lambda`, that is 886 KB minified, 248 KB gzipped.
+- ec2, iam, rds, sts, secrets-manager, lambda and tagging are CLI or provisioning only.
+- The bundle carries its own pinned SDK. It does not rely on the copy in the managed runtime.
+Item: G-S1.
+
+### DEC-0433 — The HTTP Lambda sets runtime `nodejs22.x`, architecture `arm64` and memory 1024 MB explicitly
+Origin: ai-proposed · Status: accepted · Affects: new PAR-272, PAR-273, PAR-274, AWS-REQ-001, G-S2 program
+
+SST 4.17.2 accepts both values: `FunctionArgs.runtime` includes `"nodejs22.x"`, and `architecture` is `"x86_64" | "arm64"`. A type check against the cached 4.17.2 platform gives no errors for these values and rejects `"nodejs23.x"` and `"arm"`.
+
+SST's defaults are `nodejs24.x`, `x86_64` and `1024 MB` (function.ts:1765, 1769, 1888). The program must therefore set runtime and architecture. Otherwise the Lambda runs Node 24, against PAR-111's Node 22.22.0.
+
+- **arm64** costs less per GB-second. The bundle is pure JavaScript with no native modules, so it can run there.
+- **1024 MB** is SST's default. Lambda CPU scales with memory, which shortens cold starts and SigV4/JSON work. At PAR-001's load the cost difference is negligible.
+
+The managed runtime's Node patch level is AWS's choice. The live phase records the deployed `process.version`.
+Item: G-S1.
+
+### DEC-0434 — The Lambda entry uses `hono/aws-lambda` from the pinned Hono, with one boundary cast
+Origin: ai-proposed · Status: accepted · Affects: AWS-REQ-001, AWS-AC-006, AWS-AC-004, `FW/src/targets/aws/`
+
+Hono 4.13.13's `handle(app)` behaves correctly for Function URL (payload 2.0) events:
+- It selects the v2 processor.
+- It joins `event.cookies` into `Cookie`.
+- It returns several Set-Cookie headers as `cookies: [a, b]` and drops them from `headers`.
+- It decodes base64 bodies.
+- It keeps JSON error bodies.
+
+The fixture test is in the spike. It is the offline half of AWS-AC-006.
+
+Hono's event types require fields that real Function URL events and @types/aws-lambda leave out: `body`, `requestContext.authorizer` and `authentication`. So the entry takes the @types/aws-lambda `APIGatewayProxyEventV2` and passes it with `as unknown as LambdaEvent`.
+
+`c.req.url` comes from the `Host` header. The framework's origin keeps coming from configuration (DEC-0044).
+
+`hono/aws-lambda` is marked deprecated in favour of `@hono/aws-lambda`, which is at 1.0.1. It still adds no dependency, so it stays. The switch is a pin change at Hono v5.
+Item: G-S1.
+
+### DEC-0435 — The Data API adapter wraps drizzle `aws-data-api/pg` in `portableHandle` and classifies SDK errors itself
+Origin: ai-proposed · Status: accepted · Affects: SQL-REQ-006, SQL-AC-006, sql.md §2 (AWS), new PAR-275, `FW/src/sql/`
+
+`drizzle(client, { resourceArn, secretArn, database })` passes through `withValueRules` and then `portableHandle` with the existing guard. It type-checks under the framework's strict settings. The driver's database is assignable without a cast to the `PortableDb` members, and the only cast is postgres.ts's `as unknown as DrizzleDb`. It runs selects and inserts correctly against a mocked `RDSDataClient`, and an insert without `returning` gives `undefined`.
+
+The adapter must also do the following:
+- **(a) Resume retry.** It finds `DatabaseResumingException` by `name` on the cause chain, which runs DrizzleQueryError → SDK exception. It retries with PAR-275 backoff until PAR-210, then fails with `SQL.UNAVAILABLE`. Today's guard turns this into `CORE.INTERNAL`.
+- **(b) Constraint errors.** It maps SQLState 23505 and 23503 to `SQL.CONFLICT`. A Data API `DatabaseErrorException` carries the SQLState only in its message and has no pg `code`. The message shape is assumed and must be confirmed live.
+- **(c) SDK retry.** It creates the `RDSDataClient` with `maxAttempts: 1`, so the framework's loop is the only retry. That keeps the time budget exact, and fake timers can test it.
+
+The clock, the random source and the error source are injected (sql.md:157).
+Item: G-S1.
+
+### DEC-0436 — Node-side SDK clients reach a proxy through an explicit `NodeHttpHandler` with a `proxyEnv` agent
+Origin: ai-proposed · Status: accepted · Affects: CLI, PROV AWS operations, compliance harness, live phase L
+
+A local CONNECT proxy shows the following:
+- With or without `NODE_USE_ENV_PROXY=1`, SDK v3's default `NodeHttpHandler` ignores `HTTPS_PROXY`, because it builds its own `https.Agent`.
+- `new NodeHttpHandler({ httpsAgent: new https.Agent({ keepAlive: true, proxyEnv: process.env }) })` goes through the proxy on Node 22.22.0. It honours `NO_PROXY`, and it connects directly when no proxy variable is set.
+
+Every SDK client the CLI, provisioning or the harness creates uses this handler. It needs no `https-proxy-agent` dependency, and it is harmless in Lambda, where no proxy variable is set.
+
+`@types/node` 22.20.5 does not declare `proxyEnv`, so the code needs a local type extension for that option.
+
+Node `fetch` (aws4fetch) honours the proxy only under `NODE_USE_ENV_PROXY=1`. The CLI environment keeps that flag, as A-01 found. Proxy TLS also needs `NODE_EXTRA_CA_CERTS`, which is preset in this sandbox.
+
+Fallback: `httpsAgent: https.globalAgent` with `NODE_USE_ENV_PROXY=1`. It works, but it depends on an experimental code path (`UNDICI-EHPA` warning).
+Item: G-S1.
+
+### DEC-0437 — AWS-AC-005's wait for a paused cluster is bounded
+Origin: ai-proposed · Status: accepted · Affects: AWS-AC-005, new PAR-281
+
+The slow test does the following:
+1. It sends no traffic to the cluster.
+2. Every 30 seconds it polls the cluster's observable pause state. G-S2 or an L item names the API.
+3. It stops after PAR-281 (15 minutes).
+4. If the cluster has not paused by then, it records AWS-AC-005 as not-run, with the reason and the last observed state.
+
+The bound comes from three parts:
+- PAR-213's 5-minute pause delay;
+- up to 10 minutes for the pause to take effect and become visible;
+- a short tail.
+
+That keeps one live run under about 20 minutes, including the timed request.
+
+Note at integration: G-T1's observer (`tests/compliance/criteria/_cloud/aws/cluster.ts`, `PAUSE_WAIT_MS`) and G-T2's AWS-AC-005 test (`tests/compliance/criteria/aws/support.ts`, `pauseBoundMs(PAR-213)` = PAR-213 + 10 minutes) both implement this bound as 15 minutes, polling every 30 s. Recorded as PAR-281.
+Item: G-S1.
+
+### DEC-0438 — The AWS stage program: components, arguments and fixed names
+Origin: ai-proposed · Status: accepted · Affects: AWS-REQ-001…005, PROV-REQ-001/002, aws.md §2, provisioning.md §2 "Stage resources"
+
+The framework writes `sst.config.ts` for an AWS stage from JSON inputs, the same way `provision/cloudflare/sst.ts` does. App settings: `removal: "remove"`, `home: "aws"`, `state: { purge: true }`, `providers.aws = { version: PAR-109, region }`.
+
+The components:
+- `Files`: `sst.aws.Bucket`, with the bucket name fixed by transform to `<app>-<stage>-files-<account-id>`.
+- `Database`: `sst.aws.Aurora`, with:
+  - `engine: "postgres"` and the PAR-110 `version` as an input;
+  - `dataApi: true`;
+  - `scaling` 0–4 ACU with `pauseAfter: "5 minutes"` (PAR-212/213);
+  - `vpc: { subnets, securityGroups }` from setup-account (DEC-0074);
+  - `transform.cluster`: `clusterIdentifier = <app>-<stage>`, `skipFinalSnapshot = true`, `deletionProtection = false`.
+- `Router`: `sst.aws.Router`, with no domain and protection `"none"`.
+- `Site`: `sst.aws.StaticSite`, with the prebuilt client as `path` and `router: { instance: router }`.
+- `Http`: `sst.aws.Function`, with:
+  - `name = <app>-<stage>-http`, the built `bundle` and `handler`;
+  - `runtime: "nodejs22.x"`, `architecture: "arm64"`;
+  - `timeout` PAR-270;
+  - explicit `permissions` that name exact ARNs, and **no `link`**;
+  - `url: { cors: false, router: { instance: router, path: "/api", readTimeout: PAR-271 } }`.
+
+Four physical names are fixed: the files bucket, the cluster, the credentials secret and the Function. With them, IAM statements, `remove` and `listStageResources` work from the stage name alone on a clean machine, as DEC-0331 does on Cloudflare, and the Function can name the long-lived resources without a dependency edge (DEC-0440). The S3 bucket namespace is global, so the bucket name ends with the account ID. Every other physical name is generated by SST (`<app>-<stage>-<logical>-<rand8>`). Those resources are found through state or SST's `sst:app`/`sst:stage` default tags.
+
+Result: the program type-checks against SST 4.17.2's platform types, and evaluates under Pulumi mocks to the resource list in RESULT.md §2. 13 structural tests pass. Fallback: none needed.
+Item: G-S2.
+
+### DEC-0439 — The public origin comes from `router.url` in one phase
+Origin: ai-proposed · Status: accepted · Affects: aws.md §2 (the two-phase sentence), CFG `FRAMEWORK_PUBLIC_ORIGIN`
+
+`router.url` is passed to the Function's environment directly. There is no cycle:
+- the Router takes no input from its routes;
+- the Function attaches its `/api` route by writing the Router's KeyValueStore (`router.ts:3221-3264`, `function.ts:2836-2890`);
+- the recorded edges show `HttpFunction → RouterCdnDistribution`, and nothing under Router depends on Http or Site.
+
+The two-phase update in aws.md:68 is not used. Fallback, if a later SST pin creates a cycle: deploy with the origin from the previous deploy's output, then run one more untargeted deploy when the output changed.
+Item: G-S2.
+
+### DEC-0440 — AWS step 3: the long-lived infrastructure is `Files` and `Database`, named by literals only
+Origin: ai-proposed · Status: accepted; point 4's read-back of the secret ARN from step 3's output amended by DEC-0490 (found by `DescribeSecret`) · Affects: PROV-REQ-002 step 3, DEC-0427 (AWS counterpart), MIG-REQ-006, `FW/src/provision/aws/` (G-1x)
+
+SST 4.17.2 resolves `--target` only against the stage's stored checkpoint, `app/<app>/<stage>.json` in the state bucket. It also always adds `--target-dependents`. The pinned binary, run offline, showed three things:
+- a first deploy fails with `Target not found`;
+- children of a target are deployed;
+- **a resource that depends on a target's output is redeployed with its new inputs (new code) even when the target is unchanged.**
+
+So, on AWS:
+1. **The stage has no database yet** (first deploy): step 3 is an untargeted `sst deploy` of a program that declares only `Files` and `Database`.
+2. **The stage has a database:** step 3 is `sst deploy --target Files,Database` with the full program.
+3. DEC-0427's guards apply unchanged:
+   - choose the target from "the stage has a database";
+   - refuse a database without code;
+   - before an untargeted step 3, refuse when the stage's Function exists.
+4. Nothing under Http, Site or Router may take a component output of `Files` or `Database`. The cluster ARN and the bucket ARNs are built from the fixed names. The credentials secret's full ARN, which has a random suffix and is required by the Data API, is read back from step 3's output (`databaseSecretArn`) and embedded as a literal.
+5. A structural test over the dependency edges recorded under mocks enforces rule 4. Its negative control (`EDGE: database.secretArn`) fails it.
+
+Unverified live: the AWS run of the targeted path on a second deploy.
+Item: G-S2.
+
+### DEC-0441 — The database credentials secret: SST-created, recovery window 0, named by `$transform`
+Origin: ai-proposed · Status: accepted · Affects: PROV §2 "Removal", aws.md "remove", `listStageResources`, DEC-0061
+
+- `sst.aws.Aurora` always creates `aws.secretsmanager.Secret` `<name>ProxySecret`, with `recoveryWindowInDays: 0` hard-coded (`aurora.ts:890-912`), plus a `SecretVersion` holding `{username, password}`.
+- The master password is SST's `RandomPassword`. RDS-managed passwords are not used, so this is the secret `remove` must delete without recovery.
+- No Aurora transform covers the secret. The recovery window needs none, and the name is set with a global `$transform(aws.secretsmanager.Secret)` matched on the logical name: `<app>-<stage>-database-credentials`.
+- `sst remove` deletes the secret with `ForceDeleteWithoutRecovery` (the provider's documented meaning of 0). `remove`'s by-name fallback must pass `ForceDeleteWithoutRecovery: true`.
+
+Unverified live: that the same name can be created again immediately after a forced delete.
+Item: G-S2.
+
+### DEC-0442 — SST's AWS state home: bootstrapped by SST; setup-account triggers it with `sst unlock`
+Origin: ai-proposed · Status: accepted · Affects: provisioning.md §2 "State home", aws.md `setupAccount`/`remove`/`listStageResources`
+
+`home: "aws"` is bootstrapped by SST per region, on every command that loads the home (deploy, remove, diff, refresh, unlock, secret). `sst install` does not load it.
+
+The bootstrap creates:
+- `sst-asset-<rand12>`, which also holds Function code zips;
+- `sst-state-<rand12>`, versioned;
+- TLS-only bucket policies on both buckets;
+- the ECR repository `sst-asset`;
+- the SSM String `/sst/bootstrap`, with version 5 and the bucket names.
+
+Each stage adds the SSM SecureString `/sst/passphrase/<app>/<stage>`, and `app/`, `secret/`, `update/`, `summary/`, `eventlog/` and `snapshot/` objects in the state bucket.
+
+How the framework handles this:
+- `setupAccount` makes SST bootstrap the chosen region by running `sst unlock --stage <setup-stage>` on a minimal app (`home: "aws"`). Then it reads `/sst/bootstrap` to verify the state bucket.
+- `state: { purge: true }` makes a `remove` that leaves no resources delete the stage's state objects and its passphrase. The passphrase is outside `/<app>/<stage>/`, so `listStageResources` lists it, and `remove`'s fallback deletes it by exact name.
+
+Unverified live.
+Item: G-S2.
+
+### DEC-0443 — The Function's role trusts Lambda only (works around an SST 4.17.2 bug)
+Origin: ai-proposed · Status: accepted · Affects: AWS-REQ-003, AWS-AC-003, aws.md §2
+
+SST 4.17.2 tests `!dev` on an `Output` (`function.ts:2279`). An Output is always truthy, so every Function role gets the dev trust policy, which also trusts `arn:aws:iam::<account>:root`. This was observed under mocks.
+
+The program sets `transform.role` to set `assumeRolePolicy` to `aws.iam.assumeRolePolicyForPrincipal({ Service: "lambda.amazonaws.com" })`, and a structural test checks it. Remove the override when an SST pin fixes the bug.
+Item: G-S2.
+
+### DEC-0444 — Offline verification of the generated AWS program: type-check, Pulumi mocks, structural tests
+Origin: ai-proposed · Status: accepted · Affects: plan-aws.md G-1x provisioning items, test economy
+
+Running the program under `@pulumi/pulumi/runtime` `setMocks` is feasible offline. The harness:
+- bundles the program the way SST does (`run.go:136-188`, `js.go:55-145`: define, inject, the provider-globals plugin, the external list);
+- stubs the CLI's RPC calls `Provider.Aws.Bootstrap` and `Runtime.Build`;
+- records each resource's inputs, parent and dependency URNs from `MockMonitor.registerResource`.
+
+The provisioning implementer turns this into the framework's offline check of the AWS program: type-check, mock evaluation, and structural tests for the resource set, names, permissions, timeouts, the Lambda-only trust policy, and the step-3 no-edge rule.
+
+What the mocks cannot show, left to phase L: AWS-side validation, the dynamic providers (KV routes, site files, invalidation), the real `Runtime.Build`, and plans and diffs.
+Item: G-S2.
+
+### DEC-0445 — The Data API fake is a pre-check, never evidence
+Origin: ai-proposed · Status: accepted · Affects: SQL-AC-003…006, KV-AC-001…005, MIG-AC-002/003/006, COMPL-AC-008 (AWS runs), the evaluator, `FW/src/sql/data-api-fake.test-support.ts`
+
+A test that passes against `DataApiFake` shows only that the code path works against an in-process model of the Data API built on PGlite. It is never AWS evidence: sql.md §2 "Local" says PGlite does not prove Data API behavior, and plan-aws §2 says a pre-check must not be counted. So:
+- The evaluator records no AWS criterion as passed on the strength of the fake. An AWS run of a criterion needs the live phase L.
+- Evidence files and RESULT notes that cite the fake call it a "pre-check".
+- Every behaviour of the fake that was not confirmed against AWS is marked "assumed" in the file header. The live phase confirms or corrects each one, and a correction changes the fake, not the adapter's expectations alone.
+
+Reason: the fake shares Postgres with Aurora, but its error shapes, response-size accounting, parameter typing, concurrency and database operations are modelled from the SDK types, drizzle's session and the G-S1 findings, not from observed Data API responses.
+Item: G-F1.
+
+### DEC-0446 — The fake's assumed Data API shapes, for G-02 to code against and L to confirm
+Origin: ai-proposed · Status: accepted (to be confirmed live) · Affects: SQL-REQ-006, SQL-AC-006, G-02, phase L
+
+- **SQL errors** are `BadRequestException` by default, or `DatabaseErrorException` with the `sqlErrorException` option. The SDK marks `BadRequestException` deprecated, so the real service may use either. The message is `ERROR: <message>[\n  Detail: <detail>]; SQLState: <code>`, and there is no pg `code` field. So the adapter (G-02) classifies by the SQLSTATE parsed from the message, under either exception name.
+- **Resuming** is `DatabaseResumingException`, matched by `name`. `resume({ calls })` and `resume({ untilMs })`, with an injected clock, drive the retry loop's tests.
+- **Response size** is `BadRequestException` "Database returned more than the allowed response size limit" when the JSON response is over PAR-214. For a write, the statement has already run.
+- **Parameters**: an unhinted string binds as varchar, an integer as int8 and a double as float8. So SQL that needs an int4 argument (`repeat(text, :n)`) must cast it.
+- **Concurrency**: statements on one database are serialised while a transaction is open. `CommitTransaction` after a failed statement is refused and rolls back.
+- **Databases**: `CREATE DATABASE … TEMPLATE template0 LC_COLLATE 'C' LC_CTYPE 'C'`, `CREATE DATABASE "<new>" TEMPLATE "<old>"` and `DROP DATABASE … WITH (FORCE)` are executed by Postgres itself. Each database is its own PGlite instance. A copy is refused (55006) while a transaction is open on its source. Whether the real Data API leaves a pooled connection open stays the migrations.md "Early spike" question for phase L.
+Item: G-F1.
+
+### DEC-0447 — `./targets/aws` is exported; DEC-0110 is superseded
+Origin: ai-proposed · Status: accepted · Supersedes: DEC-0110 · Affects: CORE-REQ-005, CORE-AC-005, `packages/framework/package.json`, DEC-0111
+
+The exports map now lists all eight subpaths of CORE-REQ-005's table: `.`, `./client`, `./testing`, `./targets/local`, `./targets/cloudflare`, `./targets/aws`, `./provision`, `./check`. `./targets/aws` points at `dist/targets/aws/public.{js,d.ts}`, built from `src/targets/aws/public.ts`, as DEC-0111 does for the other target subpaths.
+
+DEC-0110 kept the subpath out because "an export pointing at placeholder code is not allowed" while AWS was not being built. The AWS phase has started, so the subpath is added now and filled by G-05. Until then it holds a contract stub:
+- `createAwsLambdaHandler(app, resolved, { mock? })`, the name plan-aws.md G-05 gives, returning an `AwsLambdaHandler`. It throws `AwsNotImplementedError` ("AWS target not yet implemented (phase G): …").
+- `createAuthMock`, re-exported for test-stage entries, as `./targets/cloudflare` does.
+- The event and result types are opaque (`unknown`) so the published declarations need no `@types/aws-lambda`. G-05 narrows them.
+
+Nothing generates an AWS entry yet (`build --target aws` stops first, DEC-0449), so the stub is never bundled.
+
+CORE-AC-005's fixture part is unchanged and still passes for the right reason. The fixture importing `./targets/aws` from app server code fails `verify` through `allowed-imports`, whose diagnostic names the subpath. Now that the subpath resolves, that rule is the only thing that rejects the import. The tests' expected subpath sets include `./targets/aws`, and a new unit test checks that every subpath's dist files come from an existing source module.
+Item: G-01.
+
+### DEC-0448 — `"aws"` joins `Target`; the AWS secret location is per stage
+Origin: ai-proposed · Status: accepted · Affects: CORE-REQ-003, SEC-REQ-003, CFG-REQ-004, `core/identity.ts`, `cli/args.ts`, `secrets/set-command.ts`, `config/secret-locations.ts`
+
+- `Target` is `"local" | "cloudflare" | "aws"`. `TARGETS` in `cli/args.ts` and the `secrets set` parser's list include `aws`, so `--target aws` is accepted by every command that takes a target.
+- `secretLocation(target, name, scope?)` gains SEC-REQ-003's AWS row: `/<app>/<stage>/secrets/<name>`, with the logical name unchanged (secrets.md §2). The AWS location depends on the stage, so the AWS form needs `{ app, stage }`. Calling it for AWS without them throws, and the overloads make that a type error for a `Target`-typed argument. The resolved configuration passes the deployment, so CFG-AC-004 lists SSM paths on AWS.
+- `envSecretReader` takes only the env-backed targets (`Exclude<Target, "aws">`), and the local and Cloudflare runtimes pass their own literal target. The AWS SSM reader is G-03's.
+- `secrets set --target aws` reports the location as "… (an SSM SecureString parameter of stage …)". The write itself still goes through the target's operations, which are not built yet.
+Item: G-01.
+
+### DEC-0449 — AWS paths not built yet throw `AwsNotImplementedError`, never fall through to Cloudflare
+Origin: ai-proposed · Status: superseded by DEC-0468 (the `createAwsLambdaHandler` row) and DEC-0493 (every other row; `core/aws-pending.ts` deleted) · Affects: CLI-REQ-001, `core/aws-pending.ts`, the G items named below
+
+Before this item, each target branch below treated "not local" as Cloudflare. With `"aws"` in `Target`, each one now throws `AwsNotImplementedError` (message "AWS target not yet implemented (phase G): <what> (<item>)") until the named item replaces it:
+
+| Place | What it stops | Replaced by |
+| --- | --- | --- |
+| `build/build.ts` `buildApp` | `build --target aws`, after the stage config resolves (so a missing `config/aws/test.json` is still reported first) and before anything is written | G-06 |
+| `build/build.ts` `entrySource` | the generated Lambda entry | G-06 |
+| `cli/commands/deploy.ts` `prepareDeploy` | `deploy --target aws`, before any build | G-06, G-10, G-11 |
+| `cli/commands/deploy.ts` `cloudflareOperations` | the provisioning operations for `deploy`, `remove`, `setup-account` and `secrets set` on AWS | G-07 … G-11 |
+| `cli/commands/smoke.ts` `logLocation` | `smoke --target aws`'s log location | G-11 |
+| `targets/aws/public.ts` `createAwsLambdaHandler` | the Lambda runtime | G-05 |
+
+The places that already handle every cloud target the same way are unchanged: cookie settings, the mock guard, config file selection (`config/<target>/test.json`), `connectTestStage`, and the cloud process check.
+Item: G-01.
+
+### DEC-0450 — The template and reference apps commit `config/aws/test.json`
+Origin: ai-proposed · Status: accepted · Affects: CFG-REQ-002, `apps/template`, `apps/reference`
+
+Each app's `config/aws/test.json` is a copy of its `config/cloudflare/test.json`: template `{ "values": {}, "framework": {} }`; reference `greeting: "Hello from a test stage"`. A unit test reads both apps' files through the build's reader and checks that the AWS file equals the Cloudflare one. Production AWS stages need their own committed files, as on Cloudflare. apps/reference/ROUTES.md names the new file. The template README's AWS steps are G-12's.
+Item: G-01.
+
+### DEC-0451 — The AWS SDK pins of DEC-0432 are installed in the framework
+Origin: ai-proposed · Status: accepted · Affects: PAR-111, PAR-120, PAR-121, DEC-0113, `packages/framework/package.json`, `package-lock.json`
+
+- Dependencies, exact: `@aws-sdk/client-{ec2,iam,lambda,rds,rds-data,resource-groups-tagging-api,s3,secrets-manager,ssm,sts}` 3.1153.0.
+- Dev dependencies, exact: `aws-sdk-client-mock` 4.1.0 and `@types/aws-lambda` 8.10.164.
+- `npm install` regenerated the root lockfile. All ten clients share one `@aws-sdk/core`, 3.978.5.
+
+This extends DEC-0113's dependency set. Its "Not declared: `@pulumi/aws` (AWS phase)" still holds, because G-08 decides whether the program needs it. No framework code imports the clients yet. The bundle rule of DEC-0432 (only rds-data, s3 and ssm in the HTTP Lambda) is G-06's to enforce.
+Item: G-01.
+
+### DEC-0452 — The resume retry wraps each Data API call, inside the shared guard
+Origin: ai-proposed · Status: accepted · Affects: SQL-REQ-006, SQL-AC-006, sql.md §2 (AWS), proposed PAR-275, `FW/src/sql/data-api.ts`
+
+- The adapter hands drizzle a proxy of the `RDSDataClient` whose `send` retries a call that fails with `DatabaseResumingException` (matched by `name`). A resuming error means the call did not run, so the retry is safe for every command, including `BeginTransaction`, `CommitTransaction` and statements inside a transaction.
+- The wait before retry n is random(0, min(5 s, 250 ms × 2ⁿ)) (proposed PAR-275). The loop stops when the next attempt would start after the handle's budget (PAR-210 by default, `budgetMs` otherwise), measured from that call's first attempt. It then fails with `SQL.UNAVAILABLE` and logs it once through `logFailure` when the handle has the request's log (DEC-0140).
+- The clock (`now`, `sleep`) and the random source are injected through `dataApiDb(…, { clock })`. The error source is the client itself, so the SQL-AC-006 clause is tested with the fake's `resume()` on vitest fake timers. With random 0.5 it makes 22 calls and waits 43,875 ms in total.
+- The shared guard's own PAR-210 race still bounds the whole operation, so a whole `atomic` call cannot exceed PAR-210 either.
+
+Reason: per-call retry needs no per-operation state on a client shared across requests, and it does not redo work that already ran. The guard is composed, not changed, so local D1, PGlite and Cloudflare behave as before (their suites are unchanged and green).
+Item: G-02.
+
+### DEC-0453 — Data API error mapping
+Origin: ai-proposed · Status: accepted (shapes to be confirmed live) · Affects: SQL-REQ-006, SQL-AC-006, `FW/src/sql/data-api.ts`
+
+The adapter wraps the shared guard and classifies the failure's cause chain before the guard sees it:
+- `BadRequestException` or `DatabaseErrorException` whose message carries `SQLState: 23505` or `23503` → `SQL.CONFLICT`, with the guard's generic message, so no key value leaks.
+- Either name with "more than the allowed response size limit" → `SQL.RESULT_TOO_LARGE`, naming PAR-214.
+- `ServiceUnavailableError`, and `ETIMEDOUT`/`EAI_AGAIN`/`ENOTFOUND`/`EHOSTUNREACH`/`socket hang up` (through the guard's `unreachable` patterns) → `SQL.UNAVAILABLE`.
+- A `FrameworkError` on the chain (the resume give-up, value checks) passes through. Anything else goes to the shared guard unchanged and becomes `CORE.INTERNAL`.
+
+PAR-215 is still checked by the portable handle on every result, as on every target.
+
+Known gap, for phase L: PAR-214 is measured on the JSON response, PAR-215 on values. A NULL counts 0 bytes towards PAR-215 but about 15 bytes of JSON, so a result of many NULL-heavy rows can be within PAR-215 and still exceed PAR-214. It then fails only on AWS, as `SQL.RESULT_TOO_LARGE`, against the intent of SQL-REQ-006. Non-text values are about 15–25 bytes of JSON against 8 counted, so a result at PAR-215 made only of such values stays under 1 MiB. Proposal: phase L measures the real ratio. If it matters, either count NULL as 8 bytes in sql.md §2.3, or add a row cap.
+
+Fidelity note on the G-F1 fake (from the draft, for its owner): the fake threw its SQL exception with the PGlite error as `cause`, carrying the pg `code`, which the SDK's exceptions do not have. Against the raw fake, the shared guard would find 23505 on the chain and map a constraint violation to `SQL.CONFLICT` without the message parsing AWS needs, so the fake hid G-S1 finding (b). The G-02 tests strip `cause` at the client boundary (`sdkLike`). Resolved before integration by the G-F1 follow-up (commit `96802c6`, "fake errors carry SQLSTATE only in the message").
+Item: G-02.
+
+### DEC-0454 — Value normalisation at the Data API boundary
+Origin: ai-proposed · Status: accepted · Affects: SQL-REQ-004, SQL-AC-004, `FW/src/sql/data-api.ts`
+
+- **Writes.** drizzle sends every integral JS number as `longValue`. A `number()` value that is integral but not a safe integer, such as 1e300, is not an int64, and the fake refuses it. The adapter sends such a value as `doubleValue`. Safe integers stay `longValue`, which is int8: Postgres's assignment casts handle `integer` columns, and comparison operators handle comparisons.
+- **Reads.** A `longValue` that is not a safe JS integer has already lost precision in the SDK's JSON parsing, so it is `SQL.INVALID_VALUE`, as for aggregates. `doubleValue`, `booleanValue` and `isNull` map to number, boolean and null through drizzle. `-0` is stored as 0 by the column rule.
+- The round-trip test covers the int32 bounds, `Number.MAX_SAFE_INTEGER` timestamps, 1e300, 5e-324, −2⁵³−2, `-0`, booleans, NULL and non-BMP text. It also covers `eq` on 1e300 and on −2³¹, and `count`/`sum`/`avg`/`min`/`max`, including empty input.
+Item: G-02.
+
+### DEC-0455 — One client per cold start; the SDK dependencies move to `dependencies`
+Origin: ai-proposed · Status: accepted · Affects: PAR-111, DEC-0432, DEC-0435, DEC-0436, `packages/framework/package.json`
+
+- `dataApiClient()` creates the client on first use and keeps it for the process. It uses `maxAttempts: 1` and `NodeHttpHandler({ httpsAgent: new https.Agent({ keepAlive: true, proxyEnv: process.env }) })`. A local type adds `proxyEnv`, which `@types/node` 22.20.5 does not declare.
+- `createDataApiClient({ region })` is for the CLI (G-09/G-11), which passes the region.
+- `@aws-sdk/client-rds-data` 3.1153.0 moves from `devDependencies` to `dependencies`. `@smithy/node-http-handler` is added at exactly 4.12.1, the version already in the lockfile, because the adapter imports it directly.
+Item: G-02.
+
+### DEC-0456 — The log sink signs one S3 `PutObject` per entry with aws4fetch; the handler waits for pending writes for at most PAR-260
+Origin: ai-proposed · Status: proposed · Affects: LOG-REQ-001, LOG-REQ-004, LOG-AC-001/004, log.md §2 "AWS", aws.md §2, G-05
+
+`src/log/aws/sink.ts`, `s3LogSink({ bucket, pending })`:
+- **Request.** One virtual-hosted `PUT https://<bucket>.s3.<region>.amazonaws.com/<key>` per entry. The key comes from the shared LOG-REQ-004 builder. The body is the entry's JSON and the content type is `application/json`.
+- **Signing.** SigV4 with aws4fetch and the role's temporary credentials. The `x-amz-security-token` header is signed. The headers include `x-amz-expected-bucket-owner: <account-id>`. aws4fetch signs S3 requests as `UNSIGNED-PAYLOAD` by default, so the sink computes the body's SHA-256 itself and signs that (`x-amz-content-sha256`). A unit test recomputes the signature independently with `node:crypto`.
+- **Failures.** The request is sent once (`retries: 0`, and the signed request goes to `fetch` directly). aws4fetch's own retries (10 by default) are not used, so PAR-260 is the only time budget. A non-2xx answer (a denied `PutObject` returns 403), a 5xx or a network error rejects the write. The tracker swallows the rejection, so the entry is dropped and the request is unaffected.
+- **Tracker.** `src/log/aws/pending.ts`, `createPendingWrites()`. There is one per invocation. The sink calls `track(write)`. The handler calls `await settle()` before it returns the response.
+  - `settle()` waits until no write is pending, including writes that start while it waits.
+  - It never waits longer than `LOG_WRITE_WAIT_MS` = PAR-260 (2 s), measured from the call.
+  - It never rejects and leaves no timer behind.
+  - A write still running at the bound is abandoned, not aborted.
+- **Tests.** A Hono app built the way G-05's handler will work gives two results:
+  - With 403 AccessDenied on every write, the response is 200, and both writes were attempted.
+  - Under fake timers, with writes that never complete, the response comes exactly PAR-260 late.
+Item: G-03.
+
+### DEC-0457 — Without complete log-bucket settings, entries are printed as marked output lines
+Origin: ai-proposed · Status: proposed · Affects: LOG-REQ-001, DEC-0323 (the Cloudflare equivalent)
+
+Sometimes `awsLambdaSettings(env).logBucket` is `undefined`: `FRAMEWORK_LOG_BUCKET`, `FRAMEWORK_ACCOUNT_ID`, `AWS_REGION` or the role credentials are missing (a misconfigured Lambda). The sink then prints each entry as `[prototype-framework:log] <json>`, which lands in the function's CloudWatch log stream. No S3 request is made. This mirrors the Cloudflare sink without its `LOGS` binding. Logging never makes a request fail, so this case is not `CORE.MISCONFIGURED`.
+Item: G-03.
+
+### DEC-0458 — The LOG-REQ-004 key builder moves to `src/log/keys.ts`
+Origin: ai-proposed · Status: proposed · Affects: LOG-REQ-004, `src/log/cloudflare/sink.ts`, decision-log references to `log/cloudflare/keys.ts`
+
+`logObjectKey` and `randomKeyPart` moved, unchanged, from `src/log/cloudflare/keys.ts` to `src/log/keys.ts`, and their unit test moved with them. Both sinks import the shared builder, so the AWS bundle pulls in nothing from a Cloudflare directory (core.md:89; G-06's bundle inspection). The decision log's older mentions of the old path are historical and were left as they are.
+Item: G-03.
+
+### DEC-0459 — The SSM reader: `ParameterNotFound` by name → `undefined`; any other failure → a plain error; no cache
+Origin: ai-proposed · Status: proposed · Affects: SEC-REQ-003, SEC-REQ-005, SEC-AC-001/005, secrets.md §2 "AWS", DEC-0157
+
+`src/secrets/aws.ts`, `ssmSecretReader(client, { app, stage })`, is a `SecretReader`:
+- **Request.** `GetParameter { Name: secretLocation("aws", name, scope), WithDecryption: true }`. That is the G-01 path `/<app>/<stage>/secrets/<name>`, used for app and framework-internal secrets alike.
+- **Missing.** `ParameterNotFound`, matched by the error's `name` so that a second copy of the SDK classes in a bundle still matches, resolves `undefined`. An absent or empty `Value` does the same. `createSecretsService` turns `undefined` into `SEC.MISSING`.
+- **Other failures.** Any other failure rejects with a plain `Error("SSM GetParameter failed with <ErrorName>")`. This includes AccessDenied, KMS, throttling, 5xx and network errors. It is deliberately not a `FrameworkError`: the service rethrows those unlogged, so a plain error lets it raise `SEC.UNAVAILABLE` and log it once through `logFailure`. The SDK message never appears in the error or the log.
+- **No cache.** The reader keeps no state, and every call is one `GetParameter`. The only reuse is the per-request `SecretsService`'s, which the SEC-REQ-005 "MAY" allows. A test shows three requests through one shared reader seeing `old`, then `new`, then `SEC.MISSING`.
+- **Client.** `createSsmClient(env, region)` builds the client once per cold start. It gets the G-S1/G-07 proxy-aware handler. That handler moved from `provision/aws/environment.ts` to `src/targets/aws/sdk.ts`, which imports no client, and `environment.ts` re-exports it. The Lambda bundle therefore gets the handler without the EC2, RDS and STS clients. The SDK's default retry (3 attempts) is kept.
+Item: G-03.
+
+### DEC-0460 — `awsLambdaSettings` reads FRAMEWORK_* and Lambda's own variables; it never reads `SECRET_*`, and provisioning refuses to declare it
+Origin: ai-proposed · Status: proposed; the database variable names amended by DEC-0469 (G-08's names kept) · Affects: CFG-REQ (config.md §2 "Delivery", "AWS"), SEC-REQ-002, G-02, G-04, G-05, G-08
+
+`src/targets/aws/settings.ts` is the AWS counterpart of Cloudflare's `bindings.ts` (reader) and `settings.ts` (declaration).
+
+Framework variables (`LAMBDA_VARIABLES`):
+
+| Variable | Holds | Used by |
+| --- | --- | --- |
+| `FRAMEWORK_PUBLIC_ORIGIN` | the stage's public origin | |
+| `FRAMEWORK_ACCOUNT_ID` | the account ID | expected owner |
+| `FRAMEWORK_LOG_BUCKET` | the shared log bucket | LOG |
+| `FRAMEWORK_FILES_BUCKET` | the stage's bucket | G-04 |
+| `FRAMEWORK_DB_CLUSTER_ARN`, `FRAMEWORK_DB_SECRET_ARN`, `FRAMEWORK_DB_NAME` | the cluster, the credentials secret and the current database | G-02 |
+
+Lambda's own variables are `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`.
+
+How each side behaves:
+- **Reader.** `awsLambdaSettings(env)` reads each value when it is used. A missing required value is `CORE.MISCONFIGURED` and names the variable. `logBucket` is `undefined` instead (DEC-0457). The reader returns nothing for a name starting with `SECRET_`.
+- **Declaration.** `awsLambdaEnvironment(input)` builds the variables G-08 puts on the SST Function. `checkLambdaEnvironment` refuses `SECRET_*` names (on AWS, secrets are SSM parameters, and a Lambda's environment can be read through `GetFunctionConfiguration`) and Lambda-reserved names.
+
+Open questions of the G-03 draft, with their state at integration:
+1. Variable names shared with G-02, G-04 and G-08: resolved by DEC-0469 (one list, G-08's names).
+2. Redacting secrets on AWS: resolved by DEC-0471 (every value read in the cold start).
+3. Abort at the bound: resolved by DEC-0470 (abandon, not abort).
+4. The SSM client's retry (SDK default of 3 attempts kept): open, to be decided with AWS-AC-005's timing in phase L.
+5. Live checks (phase L): a denied `PutObject` to the log bucket answers 403 and the request still succeeds (LOG-AC-001's AWS case); the exact SSM error names for a KMS denial and an unreadable path (`AccessDeniedException`).
+Item: G-03.
+
+### DEC-0461 — The AWS `FilesStore` is S3's REST API through aws4fetch, virtual-hosted, header-signed with the role's session credentials
+Origin: ai-proposed · Status: accepted · Affects: FILES-REQ-001, FILES-REQ-006, files.md §2 AWS, aws.md §2, `src/files/aws/store.ts`, `location.ts`, G-05, G-08
+
+`createS3FilesStore({ location: { bucket, region, accountId }, credentials, fetch?, now? })` implements the `FilesStore` the shared service already runs over. The service is unchanged.
+- **Endpoint.** It uses `https://<bucket>.s3.<region>.amazonaws.com/<key>`. The bucket must be a dotless S3 name, because TLS wildcard certificates cover one label. The region and the 12-digit account ID are also checked. A bad value is `CORE.MISCONFIGURED` when the store is created.
+- **Signing.** aws4fetch signs every request in its header (`allHeaders`). The request sends `X-Amz-Security-Token` and `x-amz-expected-bucket-owner: <accountId>` (aws.md §2). A `PUT` signs its payload's SHA-256 (`X-Amz-Content-Sha256`), so S3 checks the bytes. Other requests use `UNSIGNED-PAYLOAD`.
+- **Bodies.** `put` buffers a stream body, because a single S3 `PUT` needs a length. A Lambda request is buffered already.
+- **Mapping.** `get` returns null on 404 `NoSuchKey`; any other 404 (`NoSuchBucket`) is a failure. `head` returns null on any 404, since a `HEAD` has no body. `delete` succeeds on 204, and on 404 `NoSuchKey`. Any other status throws `S3RequestError("S3 <Operation> answered HTTP <n> (<Code>)")`, and a network failure is thrown unchanged. The service turns both into `FILES.UNAVAILABLE` (DEC-0164). S3's error body is never included.
+- **No retry.** This follows DEC-0164: no FILES time budget, and the failure surfaces at once. L-1 may revisit it if S3 throttles (`SlowDown`) at PAR-001's load.
+- **Credentials.** `lambdaSessionCredentials(env)` reads `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`. All three are required, since role credentials are always temporary. A missing one is `CORE.MISCONFIGURED` naming the variable, never a value. The credentials are read for each request and each ticket.
+
+For G-08 (IAM): the role needs `s3:GetObject`, `s3:PutObject` and `s3:DeleteObject` on `arn:aws:s3:::<bucket>/*`, and `s3:ListBucket` on `arn:aws:s3:::<bucket>`. Without `ListBucket`, S3 answers 403 instead of 404 for an absent key, so `get`/`head` of a missing file would become `FILES.UNAVAILABLE`.
+
+For G-05: wire `createFilesService({ store: createS3FilesStore({ location, credentials: () => lambdaSessionCredentials(process.env) }), tickets: createAwsTicketIssuer({ location, credentials: … }) })`, with `location` taken from the deployment settings (CFG).
+
+Live items carried to L-1 (listed in the S3 fake's header as fidelity gaps): S3 list order and `start-after` on the DEC-0462 names; the `encoding-type=url` character set; `+` in a presigned query; `%2F` in key paths (`x/../y`); CORS headers on S3 403s; 403 versus 404 for an absent key with and without `s3:ListBucket`; the exact error codes (`NoSuchKey`, `ExpiredToken`, `RequestTimeTooSkewed`). `HEAD_CONCURRENCY` (8) is an internal constant, not a parameter.
+Item: G-04.
+
+### DEC-0462 — No U+0001 key ending on AWS: S3 already lists in code point order
+Origin: ai-proposed · Status: accepted · Affects: DEC-0430, DEC-0162, FILES-REQ-001, `src/files/aws/store.ts`
+
+DEC-0430 is Cloudflare only. Its point 4 says "the shared service, the local target … and any S3 store keep plain keys", and files.md §2 Cloudflare scopes the ending to `cloudflareFilesStore`. The ending works around R2's order, in which the end of a key ranks like a byte between 0x31 and 0x61, and its `startAfter`, which does not follow its listing order.
+
+S3's documented behaviour has neither problem:
+- ListObjectsV2 returns general purpose bucket keys "in ascending order based on the key name", which is UTF-8 binary order. So a proper prefix comes first.
+- `start-after` "can be any key in the bucket" and returns the keys after it in that order.
+- UTF-8 byte order is code point order (FILES-REQ-001).
+
+So the AWS store uses each name as its key, and `startAfter` is the last name.
+
+The fake implements that order. The tests check it on the R2 failure case (`p/a`, `p/a b`, `p/a+`, `p/a/b`, `p/aa`), and on `U+FFFD` before `U+1F600`, which UTF-16 order would swap. Limit-3 pages over S3 pages capped at 1–10 keys return each name exactly once, in order. Not yet observed on AWS. L-1 lists those names on a real stage bucket.
+Item: G-04.
+
+### DEC-0463 — Listing: `encoding-type=url`, plus one `HEAD` per listed object for its content type
+Origin: ai-proposed · Status: accepted · Affects: FILES-REQ-001, FILES-AC-001, DEC-0162, `src/files/aws/store.ts`, `xml.ts`
+
+`FileInfo` includes `contentType`, but S3 listings carry none. So when the service asks for `httpMetadata`, which it always does, `list` sends a `HEAD` for every listed object, at most 8 at a time (`HEAD_CONCURRENCY`), and keeps the listing order. That is up to PAR-232 + 1 `HEAD`s for one page. That cost is acceptable at PAR-001's load, and storing the content type anywhere else would need a second store.
+
+An object deleted between the listing and its `HEAD` is left out. If every object on a truncated S3 page was deleted, the store lists on from that page's last key, so the service never sees an empty truncated page.
+
+The listing asks for `encoding-type=url`. A name may hold characters XML 1.0 cannot carry (U+FFFE, U+FFFF). Keys are decoded with `+` read as a space, as botocore's `unquote_plus` does; S3 sends `+` itself as `%2B`. The XML is read by a small tag reader (`xml.ts`), because Lambda has no DOM parser and no XML dependency is added. A body that is not a `ListBucketResult` is `FILES.UNAVAILABLE`.
+
+Assumed, live item L-1: S3's exact `encoding-type=url` character set.
+Item: G-04.
+
+### DEC-0464 — On AWS, a name that is only `.` or `..` is `FILES.INVALID_NAME` for every operation (extends DEC-0328)
+Origin: ai-proposed · Status: proposed, owner review open (conflict flagged: FILES-AC-002's `..` case, plan-aws.md §5.1) · Affects: DEC-0328, FILES-REQ-002, FILES-AC-002, `src/files/s3/path.ts`, `packages/framework/test/integration/files/server-operations.test.ts`
+
+On AWS the server operations also go through URLs. WHATWG URL parsing, used by `fetch` and aws4fetch, resolves `.` and `..` path segments, even when they are percent-encoded (`%2e`). So no URL can address the key `.` or `..`.
+
+DEC-0328's rules therefore apply to every AWS operation, through the shared `objectPath`:
+- A name with a dot segment (`a/../b`, `../../etc/passwd`, `./x`) is sent with every `/` as `%2F`, and it works.
+- A name that is only `.` or `..` is `FILES.INVALID_NAME` for `put`, `get`, `head`, `delete` and both tickets, before any request is sent.
+
+On Cloudflare, only the tickets refuse these names.
+
+Consequence: the FILES-AC-002 cloud case lists `".."` among its round-trip names (`server-operations.test.ts:148`), so on AWS it will fail for that one name. Owner options:
+1. Forbid the names `.` and `..` in FILES-REQ-002 on every target. This is recommended: it is one rule, the same on every target, and it removes DEC-0328's ticket corner case too.
+2. Accept a documented target difference and adjust the case.
+3. Send those two names through `@aws-sdk/client-s3`, whose Node handler does not normalise paths. That adds a second S3 path, and S3's own handling of such keys is unverified.
+
+Taken under the owner's instruction "make an assumption and continue".
+
+Conflict, flagged at integration and not resolved: G-T3's offline pre-check suite runs the shared FILES-AC-002 server-operation cases over the S3 store, and its `".."` round-trip case fails there by design (commit `77267c2`, "Known failure, left failing"). This entry and the shared case cannot both hold on AWS. Both stay as written until the owner chooses an option above (plan-aws.md §5.1).
+Item: G-04.
+
+### DEC-0465 — AWS tickets: presigned with the session token signed, content type signed, `attachment` disposition
+Origin: ai-proposed · Status: accepted · Affects: FILES-REQ-003, DEC-0062, DEC-0313, DEC-0414, `src/files/aws/tickets.ts`
+
+`createAwsTicketIssuer({ location, credentials, now? })` uses the same JSON shape as every target, through `presignUrl`: virtual-hosted URL, `X-Amz-Expires` = PAR-233 / 1000 = 900.
+- **Session token.** aws4fetch puts `X-Amz-Security-Token` in the query *before* signing, so the token is signed. The URL carries the key ID, signature and token, never the secret (DEC-0062).
+- **Upload.** It signs `Content-Type` (`X-Amz-SignedHeaders=content-type;host`).
+- **Download.** It signs `host` and `response-content-disposition: attachment; filename*=UTF-8''<name>` from the shared `downloadDisposition` (DEC-0414, no content type). aws4fetch writes the query back form-encoded, so the disposition's space is `+`, as on Cloudflare, where D-RUN verified it.
+
+Fixed vectors pin the exact URLs, including signatures, for an upload and a download. The vectors use the S3 documentation's example key pair, a made-up session token and a fixed time, and the independent reference agrees with both signatures.
+
+Against the fake:
+- another content type, another name or another method is refused with 403;
+- a URL with the token removed is refused with 400;
+- an unsigned request is refused with 403;
+- a ticket works repeatedly through `X-Amz-Date + 900 s`, then gets 403.
+
+A presigned URL also stops working when its signing session expires. files.md §2 already assumes the role session outlasts PAR-233.
+
+Live items (L-1): S3 reading `+` as a space in a presigned query; whether S3 sends CORS headers on its 403s (FILES-AC-003's expired-ticket clause, plan-aws.md §5 Q9); `%2F` in a key path.
+Item: G-04.
+
+### DEC-0466 — The bucket's CORS value is SST's `BucketArgs.cors`, every field set; the preflight is shared with Cloudflare
+Origin: ai-proposed · Status: accepted · Affects: FILES-REQ-004, DEC-0099, `src/files/aws/cors.ts`, G-08, G-10 (health step)
+
+`bucketCorsArgs(publicOrigin)` returns `{ allowOrigins: [origin], allowMethods: ["PUT", "GET"], allowHeaders: ["Content-Type"], exposeHeaders: [], maxAge: "60 seconds" }`. This is the rule Cloudflare's `bucketCorsPolicy` uses, and a test checks that they agree.
+
+It is shaped for `sst.aws.Bucket`'s `cors` argument, and G-08 passes it unchanged. Every field is set because SST 4.17.2 defaults a missing field to `*` origins, all methods, `*` headers and `ETag` exposed (`bucket.ts:1114-1126`). The origin must be exactly one origin, or the call is `CORE.MISCONFIGURED`.
+
+`checkStorageCors({ location, publicOrigin, fetch? })` sends deploy's one unsigned `OPTIONS` to `https://<bucket>.s3.<region>.amazonaws.com/__framework-cors-check`. It passes only on a 2xx whose `Access-Control-Allow-Origin` is that origin. Block Public Access is G-08's.
+Item: G-04.
+
+### DEC-0467 — The S3 protocol code shared by Cloudflare and AWS lives in `src/files/s3/`
+Origin: ai-proposed · Status: accepted · Affects: files.md §2 Cloudflare/AWS, `src/files/cloudflare/{sign,sigv4-reference.test-support,cors,tickets,credentials}.ts`, CORE-REQ-006 (G-06 bundle inspection)
+
+Moved without behaviour change, so the AWS bundle does not depend on `files/cloudflare/` for signing:
+- `cloudflare/sign.ts` → `s3/sign.ts`. `S3Credentials` gains an optional `sessionToken`, and the new `signRequest` does header signing. `presignUrl` is unchanged for Cloudflare.
+- `cloudflare/sigv4-reference.test-support.ts` → `s3/sigv4-reference.test-support.ts`. It gains `expectedHeaderSignature` and `parseAuthorization` for header-signed requests. It now sorts the canonical query by key *and* value, as the specification says, and collapses header whitespace. No existing vector changed.
+- The key-path rule is extracted from `cloudflare/tickets.ts` to `s3/path.ts` (`objectPath(name, key)`). Cloudflare passes its stored key with the U+0001 ending. The refusal message is now "cannot be addressed in a storage URL on this target".
+- `exactOrigin` and the preflight are extracted from `cloudflare/cors.ts` to `s3/cors.ts`. The Cloudflare exports and their behaviour are unchanged.
+
+`cloudflare/disposition.ts` stays where it is, because files.md §2 "Download names" names that file as the one helper for every target. It has no Cloudflare-only imports.
+Item: G-04.
+
+### DEC-0468 — `createAwsLambdaHandler` is `assembleStage` over the AWS adapters, behind `hono/aws-lambda`; it replaces the G-01 stub
+Origin: ai-proposed · Status: accepted (owner review open: CloudFront's `Origin` forwarding, plan-aws.md §5.1) · Supersedes: the `createAwsLambdaHandler` row of DEC-0449 · Affects: AWS-REQ-001, AWS-REQ-004, CORE-REQ-005, `FW/src/targets/aws/{public,handler}.ts`
+
+`public.ts` exports `createAwsLambdaHandler(app, resolved, { mock? })` and `createAuthMock`, as before. It calls `createAwsLambdaRuntime(app, resolved, deps)` (`handler.ts`) with `process.env`, the Data API client of the cold start (`dataApiClient`), `createSsmClient(process.env, region)` and, on production stages or with Google configured, the Google login provider. That mirrors `createCloudflareWorker`. Tests call `createAwsLambdaRuntime` with fakes.
+
+The adapters it wires into `StageOptions`:
+- **SQL/KV:** `dataApiDb(client, { resourceArn, secretArn, database })` from the Lambda variables. The app's handle gets the request's log, and KV's handle does not (DEC-0149).
+- **FILES:** `createS3FilesStore` and `createAwsTicketIssuer`, with `lambdaSessionCredentials(process.env)` read per call. Both are created on first use, so a Lambda with a bad or missing files bucket still serves requests that do not touch files.
+- **SEC:** one `ssmSecretReader` for app and framework-internal secrets alike (path `/<app>/<stage>/secrets/<name>`). The SSM client is created on the first read. Required framework secrets are the same as on Cloudflare: the session key, plus the Google client secret on production.
+- **LOG:** `s3LogSink` per request, with that invocation's tracker (DEC-0470). Entries outside a request go to marked output lines.
+- **Origin and cookies:** the public origin is `FRAMEWORK_PUBLIC_ORIGIN` (`awsLambdaSettings`), and the cookies use the cloud settings.
+
+Construction reads no variable and creates no client. A missing variable is `CORE.MISCONFIGURED` on the request that needs it.
+
+The public event and result types are structural (`FunctionUrlEvent`, `FunctionUrlResult`), so `dist/targets/aws/*.d.ts` need no `@types/aws-lambda`. @types/aws-lambda's `APIGatewayProxyEventV2` is assignable to them, which the fixtures check. There is one boundary cast into Hono's `LambdaEvent`, as DEC-0434 says.
+
+**Origin never from Host (AWS-REQ-004).** Hono builds `c.req.url` from `requestContext.domainName`/`Host`. A fixture with a spoofed host shows the app sees that URL. Even so:
+- a POST with a session and `Origin` equal to the spoofed host, to the Function URL host, or absent is `AUTH.REQUEST_FORGERY`;
+- only `Origin` equal to `FRAMEWORK_PUBLIC_ORIGIN` passes;
+- without that variable the request is `CORE.MISCONFIGURED`, never a fallback to Host.
+
+Note for G-06: `assembleStage` still lives in `targets/cloudflare/stage.ts`. It is target-neutral, and plan-aws G-05 names it. If G-06's bundle inspection forbids anything under a `cloudflare/` directory, move it, unchanged, to a shared place such as `targets/stage.ts`, as G-03 and G-04 did for the key builder and S3 signing.
+
+Open points of the G-05 draft, with their state at integration:
+1. The generated entry and the bundle rule: done by DEC-0472 and DEC-0474.
+2. Live (phase L): AWS-AC-004 and AWS-AC-006 against the real Function URL and CloudFront, and whether CloudFront passes the `Origin` header to the Function URL origin unchanged. The router's origin request policy must forward it, or every POST with a session would be `AUTH.REQUEST_FORGERY` through CloudFront (owner question, plan-aws.md §5.1).
+Item: G-05.
+
+### DEC-0469 — One list of Lambda variable names, `targets/aws/variables.ts`; the G-08 names are kept
+Origin: ai-proposed · Status: accepted · Affects: DEC-0460 (open question 1), DEC-0480, `FW/src/targets/aws/{variables,settings}.ts`, `FW/src/provision/aws/sst.ts`
+
+G-03 and G-08 had chosen the database names independently:
+
+| Value | G-03 (`settings.ts`) | G-08 (`sst.ts`) |
+| --- | --- | --- |
+| cluster | `FRAMEWORK_DB_CLUSTER_ARN` | `FRAMEWORK_DATABASE_CLUSTER_ARN` |
+| secret | `FRAMEWORK_DB_SECRET_ARN` | `FRAMEWORK_DATABASE_SECRET_ARN` |
+| database | `FRAMEWORK_DB_NAME` | `FRAMEWORK_DATABASE` |
+
+All other names agreed. The G-08 names are kept, because the G-S2 spike and the generated program already use them. The runtime side changes.
+
+`targets/aws/variables.ts` holds `LAMBDA_VARIABLES` and `LAMBDA_RUNTIME_VARIABLES`. It is plain data with no imports.
+- `settings.ts` imports both and re-exports them.
+- `provision/aws/sst.ts` imports `LAMBDA_VARIABLES` and re-exports it. Its own copy is deleted, and its `database` key is now `databaseName`.
+
+A new test in `sst.unit.test.ts` runs the generated program and takes the Function's environment (minus the app's own variables). It then runs `awsLambdaSettings` over a recording environment through every getter, and asserts three things:
+- the variables the program sets equal the variables the runtime reads, minus Lambda's own `AWS_*`;
+- both equal `LAMBDA_VARIABLES`;
+- the runtime reads the program's values back as the stage's cluster, secret, database, bucket and account.
+Item: G-05.
+
+### DEC-0470 — The handler awaits that invocation's pending log writes for at most PAR-260; a write still running then is abandoned
+Origin: ai-proposed · Status: accepted · Affects: LOG-REQ-001, LOG-AC-001, AWS-REQ-005, DEC-0456 (open question 3)
+
+- An outer Hono app gives each invocation a fresh `env` object. The stage's `requestSink` looks up that invocation's `createPendingWrites()` tracker in a `WeakMap` keyed by the object, so concurrent invocations never share a tracker, and nothing outlives the request.
+- After the stage answers, in a `finally`, the outer app awaits `settle()`. Only then does `hono/aws-lambda` turn the response into the Function URL result. So the handler returns after every write has finished, or after PAR-260 (2 s), whichever comes first.
+- **Abandon, not abort**, as G-03 proposed. A write still running at the bound is left, with no `AbortSignal`. It may finish after a thaw, and its failure is swallowed. An abort would lose writes that were about to land, and either way the entry is not awaited. AWS-REQ-005's budget (PAR-270 55 s > PAR-210 45 s + PAR-260 2 s) is unchanged.
+- Tests:
+  - A write held open keeps the handler pending until it is released.
+  - Under fake timers, a write that never completes delays the result by exactly PAR-260, and the handler leaves no timer behind.
+  - A 403 AccessDenied on `PutObject` still gives 200.
+  - With no log bucket variable, entries go to marked output lines and no `PutObject` is sent.
+  - A mutation run with the `settle()` removed fails five tests.
+Item: G-05.
+
+### DEC-0471 — Secret redaction on AWS: every secret value the Lambda has read in this cold start
+Origin: ai-proposed · Status: proposed · Affects: SEC-REQ-002, HTTP (DEC-0123), SEC-AC-002 (AWS), DEC-0460 (open question 2)
+
+On Cloudflare and locally, `secretValues` is every `SECRET_*` value in the Worker env, that is, every secret value the runtime holds (http.md §2 "Error handler": "Known secret values (supplied by the runtime from SEC)"). On AWS the runtime holds no value until it reads SSM.
+
+So the runtime wraps its one SSM reader (app and framework secrets) and records every non-empty value it returns in a set kept for the cold start. `secretValues` is that set, and the error handler redacts it from both the response and the log entry.
+- That covers every value this request read before failing. It also covers values earlier requests read in the same environment, such as an app module that cached one, which is as close as AWS gets to "every value the runtime holds".
+- A value the Lambda never read cannot appear in its output, so nothing is missed.
+- The set grows only with distinct values: at most one per secret per rotation, for one cold start.
+
+Alternative not taken: a per-request set. It is equivalent for the normal case but misses a value cached across requests.
+
+Tests:
+- an `HTTP.CONFLICT` carrying the SSM value answers with `[redacted]`;
+- a plain `Error` carrying it answers 500 without it, and none of the `PutObject` bodies contains it.
+Item: G-05.
+
+### DEC-0472 — The AWS build writes one Node 22 ESM file, `.framework/aws/bundle/index.mjs`, handler `index.handler`, with the AWS SDK bundled
+Origin: ai-proposed · Status: accepted · Affects: CORE-REQ-006, AWS-REQ-001, DEC-0432, DEC-0433, DEC-0480, `FW/src/build/{build,bundle}.ts`
+
+- **Entry** (`.framework/aws/entry.mjs`): `export const handler = createAwsLambdaHandler(app, config)` from `<package>/targets/aws`; a test stage imports `createAuthMock` too and passes `{ mock: createAuthMock }`. A production entry does not import the mock, so it is not bundled (PROV-REQ-005). This closes open point 1 of g-05.
+- **Bundle** (`bundleLambda`): esbuild with `platform: "node"`, `target: "node22"` (PAR-272), `format: "esm"`, minified, no legal comments, nothing external. `mainFields: ["module", "main"]` prefers the SDK's ESM builds. A banner defines `require` through `createRequire`, because CommonJS dependencies call `require` for Node built-ins and ESM has none. The framework's side-effect-free plugin is shared with the Worker bundle.
+- **SDK bundled, not the runtime's.** Everything but Node built-ins is in the file: the pinned rds-data and ssm clients, `@smithy/*`, Hono, drizzle and aws4fetch. The bundle does not depend on the SDK copy in the managed runtime (DEC-0432). S3 is signed `fetch` (G-03, G-04), so `client-s3` is not in the bundle at all.
+- **Layout.** `entry.mjs` and `config.mjs` stay in `.framework/aws/`. The bundle has its own directory, `bundle/`, which holds only `index.mjs`, because SST zips the whole `bundle` directory and wants the handler at its root. `buildApp` returns `lambda: { bundle, handler }`, which is exactly `FunctionCode`'s `bundle` and `handler` in `provision/aws/sst.ts` (G-08's test already used `/app/.framework/aws/bundle` and `index.handler`). `AWS_LAMBDA_CODE` holds the names.
+- `.mjs` makes Node load the file as ESM without a `package.json`. Lambda's Node runtime resolves `index.handler` to `index.mjs`.
+- The fixture bundle is about 0.58 MB minified (a framework app with SQL, KV, FILES, SEC, LOG and AUTH).
+
+Open points of the G-06 draft, with their state at integration:
+1. DEC-0397's rule for CORE-AC-006's AWS-bundle clause: removed by DEC-0499.
+2. `deploy --target aws` passing `buildApp`'s `lambda` into `FunctionCode`: done by DEC-0494.
+3. Live (phase L): the bundle's first cold start on `nodejs22.x` arm64, `process.version`, and the cold-start time at 1024 MB.
+Item: G-06.
+
+### DEC-0473 — `assembleStage` and `downloadDisposition` move out of `cloudflare/` directories; re-exports stay
+Origin: ai-proposed · Status: accepted · Affects: CORE-REQ-006, CORE-AC-006, DEC-0468 (note for G-06), `FW/src/targets/stage.ts`, `FW/src/files/disposition.ts`
+
+The AWS bundle inspection forbids every framework module under a `cloudflare/` directory (DEC-0474). Two target-neutral modules lived under one and were reached from the AWS runtime:
+- `targets/cloudflare/stage.ts` (`assembleStage`, `StageOptions`), named by g-05;
+- `files/cloudflare/disposition.ts` (`downloadDisposition`), used by the AWS download ticket (G-04) and the local route.
+
+Both moved unchanged, by `git mv`, to `targets/stage.ts` and `files/disposition.ts`. Every framework importer (the three target runtimes, `createTestApp`, the AWS and Cloudflare ticket issuers, and the local route) now imports the new path. The old paths are one-line re-exports, so the Cloudflare and local behaviour and their tests are unchanged, and the old unit tests (`targets/cloudflare/stage.unit.test.ts`, `files/cloudflare/disposition.unit.test.ts`) run through the re-exports. The Cloudflare bundle still holds no AWS module, and `cloudflare-bundles.test.ts` passes.
+
+Alternative not taken: forbidding only `targets/cloudflare/{public,bindings,tickets,settings}` by name. It would let the next shared helper placed under `cloudflare/` pass unnoticed, and the path rule is what "no Cloudflare-only modules" reads as.
+Item: G-06.
+
+### DEC-0474 — The AWS build inspects its bundle and fails on a forbidden module, a secret value or the size bound
+Origin: ai-proposed · Status: accepted · Affects: CORE-REQ-006, CORE-AC-006, PROV-REQ-005, PROV-AC-005, DEC-0240, new PAR-276, `FW/src/build/inspect.ts`
+
+`buildApp` runs `inspectBundle` on every AWS bundle before it returns. A violation fails the build with `CORE.MISCONFIGURED`, lists every violation, and deletes `bundle/`, so a failed build leaves nothing for `deploy` to upload. The rules mirror the Cloudflare inspection (DEC-0240): module paths from esbuild's metafile, and strings that survive minification.
+- **External imports:** only Node built-ins may be left external (`node:module`'s `builtinModules`).
+- **Cloudflare-only:** framework modules under any `cloudflare/` directory; `wrangler`, `miniflare`, `workerd`, `@cloudflare/*`; `cloudflare:*` imports; `R2Bucket`, `D1Database`.
+- **Provisioning:** framework `provision/`; `sst`, `@pulumi/*`; `setupAccount`, `listStageResources`.
+- **CLI-only AWS SDK clients:** ec2, iam, rds, sts, secrets-manager, lambda, resource-groups-tagging-api (DEC-0432). `@aws-sdk/nested-clients` (the credential chain's STS and SSO) is allowed.
+- **Postgres harness, stub login provider and test helpers (`testing/`, `*.test-support.*`), the local file-transfer route and its ticket key, tooling.** Same strings as DEC-0240.
+- **Authentication mock** (`auth/mock`, `mock-login`): production stages only.
+- **Secret values:** no value of a `SECRET_*` variable, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` or `AWS_SESSION_TOKEN` in the build's environment (`BuildOptions.env`, default `process.env`), and no value in the app's `.dev.vars`. Values shorter than 8 characters are skipped. No AWS access key ID (`AKIA`/`ASIA` + 16) may appear. The violation gives a count and never the value.
+- **Size:** at most PAR-276 bytes.
+
+Framework module rules match only paths under `packages/framework/{src,dist}/` or `@lago-morph/prototype-framework/{src,dist}/`, so an app's own `src/cloudflare/` or `src/testing/` folder is not flagged.
+
+The Cloudflare build is unchanged: it has no build-time inspection, and its tests inspect it as before. Applying `inspectBundle` with a Workers rule set there is possible later, but would change Cloudflare's behaviour, which G-06 must not do.
+Item: G-06.
+
+### DEC-0475 — The shared network is created by SDK calls in `setupAccount`, with fixed names and one tag
+Origin: ai-proposed · Status: accepted · Affects: DEC-0074, PROV-REQ-004, AWS-REQ-002/003, aws.md "Deploy mechanics" (plan-aws decision 6)
+
+`setupAccount` creates the shared network directly through EC2 and RDS, not through an SST account app:
+- one VPC `10.0.0.0/16`, found by the tag `prototype-framework=shared-network` (and named `prototype-shared`);
+- two private subnets, `/20` each from `10.0.0.0/20`, `10.0.16.0/20`, …, in the first two available Availability Zones (sorted by name), one per zone;
+- the DB subnet group `prototype-shared` over those two subnets;
+- the security group `prototype-shared-db` with no ingress rule (Aurora is reached only through the Data API).
+
+It never creates an internet gateway, NAT gateway, route, address or ingress rule. A tagged VPC that has an internet or NAT gateway, several tagged VPCs, or a `prototype-shared` subnet group in another VPC stop `setup-account` and `deploy` with a message naming them. A partial network (for example a run interrupted after the VPC) is reported `absent` and completed on the next run, reusing every part that exists; a subnet group missing one of the subnets is modified to cover both. `readSharedNetwork` gives G-08 the VPC, subnet, subnet-group and security-group identifiers.
+
+Reason: one call sequence with exact names keeps the network outside every stage's SST state, so stage removal cannot touch it (PROV-REQ-003), and keeps `inspectAccount` read-only. Unverified live: subnet creation right after `CreateVpc` (no waiter is used).
+Item: G-07.
+
+### DEC-0476 — The log bucket's location is the account's region; a different `--region` is refused
+Origin: ai-proposed · Status: accepted · Affects: DEC-0075, PROV-REQ-006, PROV §2 "State home" (plan-aws decision 7)
+
+The shared log bucket is `prototype-logs-<account-id>`. Ownership is `HeadBucket` with `ExpectedBucketOwner` = the STS account: 200 owned, 404 absent, 403 foreign (PROV-AC-007's AWS case), anything else an error naming the bucket. `CreateBucket` answered `BucketAlreadyOwnedByYou` is success; `BucketAlreadyExists` is foreign. New buckets get `BucketOwnerEnforced` and a full public-access block.
+
+The account's region is read back on every run with `GetBucketLocation` (with the expected owner); it is never stored on the owner's machine. When the bucket is absent, the region is the one given with `setup-account --region`, else PAR-060. A `--region` that differs from an existing bucket's location stops with a message naming both regions; a re-run without `--region` uses the recorded one.
+Item: G-07.
+
+### DEC-0477 — The engine check: highest 17.x with `MinCapacity` 0 and `SupportsHttpEndpoint` on `db.serverless`
+Origin: ai-proposed · Status: accepted · Affects: PAR-110, PAR-212, PROV-REQ-002 step 1, provisioning.md §2 "State home"
+
+A region passes when `DescribeDBEngineVersions(aurora-postgresql)` lists an `available` 17.x whose `ServerlessV2FeaturesSupport.MinCapacity` is ≤ 0 and for which `DescribeOrderableDBInstanceOptions(db.serverless)` shows `SupportsHttpEndpoint: true`. The highest such minor is PAR-110's value for the region. The check runs:
+- in `createSharedResources`, before the first change, and stops with "…; nothing was created";
+- in the AWS preflight after STS `GetCallerIdentity`, in the recorded region (skipped while the log bucket is absent: `inspectAccount` then tells the owner to run `setup-account`).
+
+A failing check lists each 17.x it saw and why it was rejected. Unverified live: that AWS fills `ServerlessV2FeaturesSupport` and `SupportsHttpEndpoint` for Aurora PostgreSQL 17 (L-0 resolves PAR-110 in us-east-1; if a field is absent there, this check needs another source and the decision is revisited).
+Item: G-07.
+
+### DEC-0478 — The SST state home is bootstrapped with `sst unlock` on a minimal app and inspected through `/sst/bootstrap`
+Origin: ai-proposed · Status: accepted · Affects: PROV §2 "State home", PROV-AC-004 (plan-aws decision 7)
+
+Following G-S2 Q4, `setupAccount` writes a minimal `home: "aws"` app (`prototypeaccount`, provider PAR-109, the account region, no resources) into a temporary directory and runs `sst install --stage account`, then `sst unlock --stage account`. `inspectAccount` reads the SSM parameter `/sst/bootstrap`: missing, or `version` < 5 → absent (SST would bootstrap again); otherwise the state bucket it names is checked with `HeadBucket` and the expected owner (owned or foreign). A record naming a missing bucket is an error telling the owner to delete the parameter. After the bootstrap, the state home must read back as owned. Unverified live.
+Item: G-07.
+
+### DEC-0479 — CLI-side SDK clients get the proxy-aware handler as an options object
+Origin: ai-proposed · Status: accepted · Affects: DEC-0436 (plan-aws decision 14), PAR-111
+
+Every account-setup client is built with `requestHandler: { httpsAgent: new https.Agent({ keepAlive: true, proxyEnv: env }) }`. The SDK turns that options object into `NodeHttpHandler.create(options)`, so the client holds an explicit `NodeHttpHandler` with the G-S1 agent (a unit test checks this for every client) without a direct dependency on `@smithy/node-http-handler`. The S3 client also sets `followRegionRedirects`, since the log bucket may be in another region than the client's.
+
+Credentials are checked by name: `AWS_PROFILE`, a web-identity or container source, or the pair `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`; missing pair members are named. STS failures are reported by the SDK error's name and HTTP status only, never its message.
+
+The ten G-S1 clients (3.1153.0), `aws-sdk-client-mock` 4.1.0 and `@types/aws-lambda` 8.10.164 are now framework dependencies, at exactly the G-S1 versions.
+
+Note at integration: G-02 (DEC-0455) made `@smithy/node-http-handler` 4.12.1 a direct framework dependency, because `sql/data-api.ts` imports it; the account clients described here still get the handler through the options object.
+Item: G-07.
+
+### DEC-0480 — The framework's AWS stage program is G-S2's, generated from the app definition with every input embedded as JSON
+Origin: ai-proposed · Status: accepted · Affects: PROV-REQ-001, AWS-REQ-001…005, DEC-0438…DEC-0443, `FW/src/provision/aws/sst.ts`
+
+`sstProgram` writes G-S2's program, unchanged in shape, from `{ stage, account, filesCors?, http? }`:
+- **App settings:** `removal: "remove"`, `home: "aws"`, `state: { purge: true }`, and `providers.aws = { version: PAR-109, region }`.
+- **`Files`:** the bucket is named `<app>-<stage>-files-<account>`. It keeps SST's default public-access block. It has `cors: false` unless a CORS rule is passed (see 3).
+- **`Database`:** Aurora Postgres at the region's PAR-110 version, with `dataApi`, PAR-212/213 scaling, and the shared network's subnets and security group. Its transform sets the identifier `<app>-<stage>`, `skipFinalSnapshot` and no deletion protection. A global `$transform` names SST's credentials secret `<app>-<stage>-database-credentials`.
+- **`Router`, `Site`, `Http`:** declared only when `http` is given. `Site` is declared only when the app has a client.
+- **The Function:**
+  - name `<app>-<stage>-http`;
+  - **`runtime: "nodejs22.x"` and `architecture: "arm64"` set explicitly** (DEC-0433), and `memory: "1024 MB"` (PAR-274);
+  - timeout PAR-270;
+  - no `vpc` and no `link`;
+  - `url: { cors: false, router: { path: "/api", readTimeout: PAR-271 } }`;
+  - a role trust policy for Lambda only.
+- **Inputs are data only.** They are serialised as one JSON literal typed by an inline interface. That way `tsc` checks them against SST's argument types, and a value can never become code.
+- **Refused before any SST run:**
+  - `SECRET_*` variables;
+  - variables with an `AWS_`, `LAMBDA_` or `SST_` prefix;
+  - variables that collide with one the program sets;
+  - a credentials-secret ARN that is not the stage's;
+  - an RDS-invalid cluster identifier (a leading digit, `--`, or a trailing `-`);
+  - a missing shared network.
+
+The Function's environment is the app's framework variables plus `LAMBDA_VARIABLES`:
+- `FRAMEWORK_DATABASE`;
+- `FRAMEWORK_DATABASE_CLUSTER_ARN` and `FRAMEWORK_DATABASE_SECRET_ARN`;
+- `FRAMEWORK_FILES_BUCKET` and `FRAMEWORK_LOG_BUCKET`;
+- `FRAMEWORK_ACCOUNT_ID`, for the expected-owner header;
+- `FRAMEWORK_PUBLIC_ORIGIN` = `router.url`.
+
+**G-03 and G-05 read these exported names.** If they need different names, the change goes into this one constant.
+Item: G-08.
+
+### DEC-0481 — The Function's IAM statements name exact ARNs; the log bucket is put-only under the stage's prefix
+Origin: ai-proposed · Status: accepted (owner review open: `kms:Decrypt` for SSM, plan-aws.md §5.1) · Affects: AWS-REQ-003, AWS-AC-003, SEC-AC-003, LOG §2 AWS, `functionPermissions`
+
+`functionPermissions` returns six statements:
+- the five `rds-data` transaction and statement actions on `arn:aws:rds:<region>:<acct>:cluster:<app>-<stage>`;
+- `secretsmanager:GetSecretValue` on the secret's full ARN. The ARN is checked against `<name>-` plus 6 alphanumerics, so it can never be a wildcard or another stage's secret;
+- `s3:GetObject`, `PutObject` and `DeleteObject` on `arn:aws:s3:::<files>/*`, plus `s3:ListBucket` on the bucket itself. FILES lists objects (`ListObjectsV2`), and without `ListBucket` a missing key answers 403 instead of 404;
+- `s3:PutObject` only, on `arn:aws:s3:::prototype-logs-<acct>/<app>/<stage>/*` (the LOG-REQ-004 prefix);
+- `ssm:GetParameter` on `arn:aws:ssm:<region>:<acct>:parameter/<app>/<stage>/secrets/*`.
+
+Rules, checked by unit tests:
+- No action has a wildcard.
+- A resource wildcard appears only as a final `/*` under the stage's own key or path prefix.
+- No statement grants anything else on the log bucket.
+
+The `aws` partition is assumed.
+
+Unverified live:
+- whether reading a SecureString encrypted with the AWS-managed `aws/ssm` key needs an explicit `kms:Decrypt`. It is not granted. AWS-managed keys allow use through SSM by principals in the account;
+- the IAM simulation (AWS-AC-003).
+Item: G-08.
+
+### DEC-0482 — The files bucket has no CORS rule unless the caller passes one
+Origin: ai-proposed · Status: accepted · Affects: FILES-AC-003/004 (AWS), G-04, G-10
+
+SST's `Bucket` default CORS allows every origin, header and method. The program sets `cors: false`, so SST creates no `BucketCorsConfiguration` and no cross-origin request is allowed by default. `SstInput.filesCors` passes G-04's rule (allowed origins, methods, headers, exposed headers, max age) through to SST unchanged.
+
+The stage origin is `router.url`, an output of a step-5 component. Two options remain for G-04/G-10:
+- pass it as a literal on later deploys;
+- set the rule by API after step 5, as Cloudflare does. With `cors: false`, SST then never overwrites it.
+
+That choice is G-04's and G-10's. The bucket must not take a Router output: `Files` is a step-3 target.
+Item: G-08.
+
+### DEC-0483 — Step 3 on AWS: untargeted program without the Function on a first deploy, `--target Files,Database` otherwise
+Origin: ai-proposed · Status: accepted; the secret ARN's read-back through `stageOutputs` amended by DEC-0490 (found by `DescribeSecret`) · Affects: PROV-REQ-002 step 3, DEC-0440, root cause 2026-10-23-pass1, G-10
+
+`infrastructureDeploy(input, hasDatabase)` mirrors the Cloudflare fix:
+- **No database** (a first deploy): it returns the input without `http` and no target. The run is an untargeted `sst deploy` of a program that declares only `Files` and `Database`. SST resolves `--target` only in stored state, so a target cannot be used here.
+- **A database exists:** it returns the full program with `--target Files,Database`.
+- **A database exists but there is no built code:** it throws before any SST run. This is R1 of the root-cause review.
+
+The other guard stays with G-10's `deployInfrastructure`: refuse the untargeted run when the stage's Function exists (R2), because that run would delete it.
+
+A structural test checks that nothing under Router, Site or Http takes an output of Files or Database, and that `router.url` is the Function's only output input. So `--target-dependents` never ships new code in step 3.
+
+`stageOutputs(dir, …)` reads `databaseSecretArn` and `clusterArn` back from `.sst/outputs.json` and checks they are the stage's. Unverified live: that the outputs file is at that path and holds the run's return values.
+
+`runSst` is the Cloudflare runner with the AWS SST environment: `AWS_REGION` = the account region, `NODE_USE_ENV_PROXY=1`. It reuses `SstExec` and `processSstExec`.
+Item: G-08.
+
+### DEC-0484 — The platform type-check runs when a cached SST platform is present and is skipped otherwise
+Origin: ai-proposed · Status: accepted · Affects: test economy, G-RUN, the offline `verify`
+
+SST's platform (`.sst/platform`, about 400 MB with `@pulumi/aws`) is created by `sst install` from the npm registry. It is not in the repository. The unit layer makes no network call. So the type-check test looks for a platform in two places:
+- `PROTOTYPE_SST_PLATFORM`;
+- `apps/*/.framework/provision/{aws,cloudflare}/.sst/platform`.
+
+It accepts only `version` 4.17.2 with `@pulumi/aws` 7.20.0.
+
+It builds a view of the platform with the `providers: { aws }` `config.d.ts` (G-S2 `setup-platform.mjs`) and runs strict `tsc`. **Without a platform it is reported as skipped, not passed.** G-RUN should set `PROTOTYPE_SST_PLATFORM` so that the check counts.
+
+The Pulumi-mock run (DEC-0444) is not ported. The structural tests cover the same names, arguments, permissions, trust policy and step-3 edge rule with no platform or Pulumi runtime. The mock harness stays in the spike for a later item if wanted.
+Item: G-08.
+
+### DEC-0485 — AWS database operations: resume wait, create/copy/drop on `postgres`, unclear answers
+Origin: ai-proposed · Status: accepted (to be confirmed live) · Affects: MIG-REQ-003, MIG-REQ-006, migrations.md §2 (AWS), aws.md "Deploy mechanics", G-10, `FW/src/provision/aws/databases.ts`
+
+- **Resume.** Every Data API call goes through sql/data-api.ts's resume loop (proposed PAR-275 backoff), with PAR-210 per call. `whileResuming` is now exported for this. Each operations instance also waits once, before its first operation, with `SELECT 1` on `postgres`. That wait is exposed as `waitForResume()` for G-10. If the cluster is still resuming after PAR-210, the operation fails as "the stage's Aurora cluster did not answer", carrying the `SQL.UNAVAILABLE` text.
+- **Statements.** All three statements run connected to `postgres`, outside any transaction, with names quoted:
+  - create: `CREATE DATABASE "<n>" TEMPLATE template0 LC_COLLATE 'C' LC_CTYPE 'C'`;
+  - copy: `CREATE DATABASE "<new>" TEMPLATE "<old>"`;
+  - drop: `DROP DATABASE "<n>" WITH (FORCE)`. A drop that fails with SQLSTATE 3D000 (the database is gone) counts as done, as a 404 does on Cloudflare.
+- **Name length.** A name longer than 63 bytes is refused, because Postgres would silently truncate it.
+- **`StageDatabase.id` is the database name.** A name is unique within a cluster, and the cluster belongs to the stage.
+- **Listing** returns the `datname` values of `pg_database` that are not templates. `postgres` is included; the core's anchored pattern drops it.
+- **Unclear answers (DEC-0094).**
+  - A Data API SQL error (`BadRequestException` or `DatabaseErrorException` with `SQLState:` in the message) is definitive: nothing was created.
+  - Any other failure of a create or copy is unclear. The CLI then looks up the exact name in `pg_database`, and a database found there counts as created. `CREATE DATABASE` is atomic, so a database that exists is complete.
+  - A failed copy therefore leaves no database behind, so the Cloudflare-style cleanup drop is not needed. The core's restore path still drops the new database when one is listed.
+- **Hints in error messages.**
+  - 55006 on a copy: another session is connected to the source.
+  - 42P04: a leftover database; the next deploy removes it first.
+
+Questions for phase L:
+- Does `CREATE DATABASE … TEMPLATE` of a large database fit within the Data API's 45 s statement limit? `continueAfterTimeout` is not modelled by the fake.
+- After such a timeout, the database may appear only later. It is then a leftover, which the next deploy deletes.
+- The migrations.md "Early spike": does the Data API leave a pooled connection to the old database open?
+
+Fidelity note on the G-F1 fake (from the draft): the tests strip the `cause` the fake attached to its SQL exceptions (`sdkLike`, as in the G-02 tests), so the operations classify errors by the SQLSTATE in the message, as on AWS. No test depends on `cause`; the G-F1 follow-up (commit `96802c6`) that removed it changes nothing here.
+Item: G-09.
+
+### DEC-0486 — One Data API transaction per migration file
+Origin: ai-proposed · Status: accepted · Affects: MIG-REQ-003, migrations.md §2 "Record" (AWS), `FW/src/provision/aws/databases.ts`
+
+- Each pending file is applied as follows:
+  1. `BeginTransaction` on the new database;
+  2. each of its statements unchanged, one `ExecuteStatement` per statement, split at drizzle-kit's breakpoints as locally;
+  3. its `__framework_migrations` row, with `applied_at` as `longValue`/int8 into the `bigint` column;
+  4. `CommitTransaction`.
+- Any failure sends `RollbackTransaction`, best effort, and rethrows. MIG's `applyMigrations` then re-reads the record (DEC-0094). So a commit whose answer was lost counts as applied when its row is present.
+- Postgres has transactional DDL, so a failing file leaves nothing of itself. This matches the PGlite applier and Cloudflare's one batch per file.
+- Each file is its own transaction, not one transaction for the whole deploy. The reasons:
+  - it keeps each transaction well inside the Data API's limits (3 minutes idle, 24 hours total);
+  - it matches the per-file atomicity every other target has;
+  - on failure the whole copy is dropped anyway (MIG-REQ-003).
+Item: G-09.
+
+### DEC-0487 — The Postgres side of the MIG step-4 check
+Origin: ai-proposed · Status: accepted · Affects: MIG-REQ-006 step 4, SQL §2.1, `FW/src/mig/cloud/check.ts` consumers
+
+The Postgres `CheckReader` reads through the Data API:
+- **Tables.** Base tables of schema `public`, with columns from `information_schema.columns` (`data_type` in lower case, NOT NULL from `is_nullable`), and exact `count(*)` row counts in one `UNION ALL` statement.
+- **References.** Every foreign key in `pg_constraint` (`contype = 'f'`) on a `public` table, using MATCH SIMPLE: a row counts as violating only when all its referencing columns are non-null and no parent row matches. The counts are summed per child table. Postgres enforces foreign keys itself, so a violation can arise only from a `NOT VALID` constraint or from a dropped and re-added constraint. The test models the second case.
+- **Column rules** of added columns, from the declared type and NOT NULL (sql.md §2.1):
+  - `double precision`/`real` must be finite (not NaN or ±Infinity);
+  - `bigint` (only `timestamp()`) must be in 0…2⁵³−1;
+  - `integer`, `boolean` and `text` are enforced by Postgres's own types (int4 range; UTF-8 text never holds NUL), so only NULL is checked.
+  - Negative zero is not checked, as on D1.
+- The comparison itself is the target-neutral `checkMigrated`. It reports a changed row count, a missing table that no applied migration drops, orphaned references, broken added-column rules and a record that lacks a migration.
+Item: G-09.
+
+### DEC-0488 — Step 3 and step 5 on AWS, with the R1/R2 guards
+Origin: ai-proposed · Status: accepted · Affects: PROV-REQ-002 steps 3 and 5, DEC-0440, DEC-0483, root cause 2026-10-23-pass1
+
+- **Step 3** goes through G-08's `infrastructureDeploy` and `runSst`:
+  - with a database: the full program and `sst deploy --target Files,Database`;
+  - without one: an untargeted run of the program without the Function.
+- **R1:** step 3 of a stage that has a database but no built code is refused before any AWS or SST call.
+- **R2 (the guard G-08 left to G-10):** before the untargeted run, `GetFunction` on `<app>-<stage>-http`. If the Function exists, step 3 fails with "the stage has a Lambda function … but no database; step 3 would delete the function; restore the database or run remove". SST is not run.
+- **Step 5** is a full untargeted `sst deploy` against the current database. The public origin is `router.url`, read from the run's `.sst/outputs.json` through `stageOutputs`, with the trailing slash removed.
+- **Session key:** `deployCode` writes `frameworkSessionKey` (PAR-253) as a SecureString when it is absent. This happens before the SST run, since the parameter does not depend on the Function. An existing key is never replaced.
+- The tests pin the first deploy as `install`, `deploy` (untargeted, `"http": null`), create and migrate db-1, the session key, `deploy` (untargeted, with the Function), CORS, start. A later deploy runs `deploy --target Files,Database`, then `deploy`, and the targeted run leaves the Function untouched.
+Item: G-10.
+
+### DEC-0489 — The files bucket's CORS rule is set by API after step 5
+Origin: ai-proposed · Status: accepted · Affects: DEC-0482, DEC-0466, FILES-REQ-004, DEC-0099
+
+The origin is a step-5 output, and `Files` is a step-3 target. So the program keeps `cors: false` (SST manages no CORS resource), and `deployCode` sends `PutBucketCors` with `bucketCorsArgs(origin)` translated field for field into the S3 rule, with the expected bucket owner. This is G-08's second option, the same pattern as Cloudflare. It needs no previous-deploy output, so it also works from a clean machine. Step 7 then checks the rule with FILES' unsigned preflight (`checkStorageCors`) through the shared `checkStageHealth`.
+
+Parameter note from the draft: the health check reuses DEC-0090's 30 s retry window. CloudFront propagation may need more; phase L measures it.
+Item: G-10.
+
+### DEC-0490 — Identifiers are found by fixed name and lookup, never from local state
+Origin: ai-proposed · Status: accepted · Affects: PROV-AC-006, DEC-0438, DEC-0441, DEC-0442, plan-aws decision 8 (`listStageResources` sources)
+
+- **Account and region:** G-07's `awsAccount` (STS and the log bucket's location).
+- **Credentials secret ARN:** `DescribeSecret` on `<app>-<stage>-database-credentials`, checked with `checkDatabaseSecretArn`. It is not read from `.sst/outputs.json`, so step 5, the databases and `listStageResources` work without the outputs of an earlier run on the same machine.
+- **Engine version:** an existing cluster keeps its own `EngineVersion` (`DescribeDBClusters`). Only a new cluster gets the engine check's PAR-110 value. A newer minor in the region therefore never upgrades a stage's cluster as a side effect of a deploy.
+- **Data API operations** (G-09) are built per stage once the secret exists. `migrationDatabase` is synchronous and takes no stage, so the stage is read from the database name `<app>-<stage>-db-<n>`. App names have no hyphens (PAR-290).
+
+`listStageResources` returns the following, de-duplicated by identifier:
+1. the Function's ARN (`GetFunction`), the files bucket's ARN (`HeadBucket` with the expected owner), the cluster's ARN and the secret's ARN;
+2. every SSM parameter under `/<app>/<stage>/` (recursive), and SST's passphrase `/sst/passphrase/<app>/<stage>`;
+3. the stage's SST state objects in the state bucket named by `/sst/bootstrap`, as `<bucket>/<key>`. It lists every version and delete marker of SST's own purge set: `app/<app>/<stage>.json` and `secret/<app>/<stage>.json` as exact keys, and `update/`, `summary/`, `eventlog/` and `snapshot/` as `…/<app>/<stage>/` prefixes. Another stage whose name starts with this one's never matches;
+4. every other resource tagged `sst:app=<app>` and `sst:stage=<stage>`, through the Tagging API in the account's region and in us-east-1 (CloudFront). These are reported by ARN, with the kind taken from the ARN. Tag entries of the four fixed-name resources are skipped, since those were checked directly;
+5. the databases: `pg_database` through the Data API when the cluster exists, else none.
+
+Unverified live: the Tagging API can keep returning a deleted resource's ARN for a while. A leftover check right after `remove` could then report a resource that is already gone. Phase L's first `remove` must look for this. The fix, if needed, is a per-kind existence check for the ARNs it returns.
+
+Small change outside `target.ts` (from the draft): `account.ts` exports `bootstrapStateBucket` (its parameter narrowed to `{ ssm, region }`), so the target finds the state bucket the way `inspectAccount` does.
+Item: G-10.
+
+### DEC-0491 — `removeStage` order and fallbacks
+Origin: ai-proposed · Status: accepted (owner review open: a failed `sst remove` keeps the stage's SST state, plan-aws.md §5.1) · Affects: PROV-REQ-003, provisioning.md §2 "Removal", aws.md "remove", DEC-0441, DEC-0442, DEC-0084
+
+The core first deletes the databases by the exact pattern. Then each of these steps is attempted even when an earlier one failed. The failures are thrown together, and the core reports leftovers:
+1. **Empty the files bucket.** Every version and every delete marker (`ListObjectVersions`, then versioned `DeleteObjects` in batches of 1000, with the expected owner). A missing bucket counts as done.
+2. **Delete the parameters under `/<app>/<stage>/`** (recursive), in batches of 10.
+3. **`sst remove`**, skipped only when a successful `HeadObject` shows that the state bucket has no `app/<app>/<stage>.json`, or when the state home does not exist. If the check fails, the failure is recorded and `sst remove` still runs (R3).
+4. **Force-delete the credentials secret:** `DeleteSecret` with `ForceDeleteWithoutRecovery: true`. Not-found counts as done. This also covers an `sst remove` that failed or was skipped.
+5. **Delete the stage's SST state:** every version of the purge set above, then the passphrase parameter. This step runs only when `sst remove` succeeded or was skipped.
+
+There is no by-name fallback for the cluster, the Function or the CloudFront resources. Unlike Cloudflare's Worker and bucket, they have dependents (instances, routes, the KeyValueStore) that only SST's state knows. So, **unlike Cloudflare (DEC-0084)**, a failed `sst remove` keeps the stage's SST state and passphrase. The failure says so, the state objects appear as leftovers, and a later `remove` runs SST again. A test shows that this retry then removes everything.
+
+`stopApp` treats a missing Function as already stopped. This is the case when step 5 of a first deploy failed. `startApp` reports it as a failure.
+Item: G-10.
+
+### DEC-0492 — Where the AWS target is registered
+Origin: ai-proposed · Status: proposed · Affects: G-11
+
+The Cloudflare target is registered only in `cli/commands/deploy.ts` `cloudflareOperations`, which builds it from the process environment. That is CLI wiring, so it was left to G-11: `--target aws` still raises `AwsNotImplementedError` there. G-11 should call `createAwsTarget({ env, appDir, code })` with the G-06 `FunctionCode`, and its proxy and CA environment. `createAwsStageClients` already gives every client the proxy-aware handler.
+Item: G-10.
+
+### DEC-0493 — One operations factory per cloud target, behind `targetOperations`
+Origin: ai-proposed · Status: accepted · Affects: D-05, DEC-0492, DEC-0449, DEC-0501, `cli/commands/{operations,aws-operations,deploy,remove,setup-account,secrets-cloud}.ts`, `tests/compliance/harness/node-deps.ts`
+
+- `cli/commands/operations.ts` holds the registration point `OPERATIONS_FACTORIES = { cloudflare, aws }` and `targetOperations(options)`. `targetOperations` dispatches on `--target`. It refuses `local`, an unknown target, and a region for any target but AWS.
+- `cloudflareOperations` moved there unchanged. `deploy.ts` re-exports it, so existing importers keep working. It now refuses every target but Cloudflare with a plain error. Before this item, `aws` threw `AwsNotImplementedError` there. The AWS factory refuses every target but AWS in the same way, so neither target can fall through to the other's code.
+- `awsOperations` (`aws-operations.ts`) builds G-07's `awsAccount({ env, region? })` and G-10's `createAwsTarget({ env, appDir, account, code?, fetch? })`. With `requireCredentials` (`remove`, `setup-account`, `secrets set`, the harness), it names the missing credential variables before anything is built. `AWS_PROFILE` or another SDK credential source counts as present. `deploy` leaves that check to its step-1 preflight, as on Cloudflare.
+- `deploy`, `remove`, `setup-account` and `secrets set` bind `targetOperations`. So does the compliance harness's leftover check (G-T4). With no AWS credentials, the AWS leftover check now fails with "missing AWS credentials: …" and is recorded as a failed check, never as "no leftovers".
+- `AwsNotImplementedError` (`core/aws-pending.ts`) has no caller left, so the file is deleted. `smoke`'s log location and `deploy`'s prepare are built (below), and the G-01 table's last entries are closed.
+
+Which commands this covers: the CLI's cloud commands are `build`, `deploy`, `smoke`, `remove`, `secrets set`, `setup-account` and `certify-auth` (cli.md CLI-REQ-001). The CLI has no `stop`, `start` or `logs` command. `stopApp` and `startApp` run inside `deploy` (PROV-REQ-002 steps 2 and 6). Logs are reached through the location `smoke` prints. `build --target aws` is G-06's. `certify-auth --target aws` needs no AWS call and was already target-neutral.
+Item: G-11.
+
+### DEC-0494 — `deploy --target aws` hands `buildApp().lambda` to the stage program as `FunctionCode`
+Origin: ai-proposed · Status: accepted · Affects: DEC-0472 (open point 2), PROV-REQ-002, `cli/commands/deploy.ts` `prepareDeploy`
+
+- `prepareDeploy` builds the stage, then the client's assets into `.framework/aws/client/`, which is separate from `bundle/`, the directory SST zips. The code is `{ bundle: lambda.bundle, handler: lambda.handler, assetsDirectory? }`, exactly G-08's `FunctionCode`.
+- It adds no `variables`, because the stage program sets every framework Lambda variable itself (`LAMBDA_VARIABLES`).
+- A build that returns no `lambda` stops before any operations are built.
+- The migration histories are the Postgres ones (`migrations/postgres/`), the dialect of the AWS target (`dialect: "postgres"`). Cloudflare keeps the SQLite ones.
+Item: G-11.
+
+### DEC-0495 — The AWS child environment: `SSL_CERT_FILE` from `NODE_EXTRA_CA_CERTS`, both proxy spellings
+Origin: ai-proposed · Status: accepted (to be confirmed live; owner review open: Go TLS via `SSL_CERT_FILE`, plan-aws.md §5.1) · Affects: DEC-0436, DEC-0479, DEC-0107, `provision/aws/environment.ts` `sstEnvironment`
+
+`awsChildEnvironment(env)` is the environment of every AWS SDK client and child process the AWS operations create: SST, which runs Pulumi and `pulumi-resource-aws`, and the state-home bootstrap.
+- `SSL_CERT_FILE` is set to `NODE_EXTRA_CA_CERTS` when the owner has not set it. Go programs ignore `NODE_EXTRA_CA_CERTS`. An owner's own `SSL_CERT_FILE` is never replaced.
+- `HTTPS_PROXY`/`https_proxy` and `NO_PROXY`/`no_proxy` are each set to the same value when either spelling is set.
+- `sstEnvironment` still adds `AWS_REGION`, `NODE_USE_ENV_PROXY=1` and the telemetry settings on top.
+
+The SDK clients get `targets/aws/sdk.ts`'s proxy-aware handler, with this environment as `proxyEnv`, through `createAwsClients` and `createAwsStageClients`.
+
+Cloudflare's operations are unchanged and get no such variables, so Cloudflare behaves as before.
+
+Notes:
+- In Go, `SSL_CERT_FILE` replaces the default system roots file. The sandbox's bundle (`/root/.ccr/ca-bundle.crt`) holds 123 certificates, which suggests it carries the public roots as well as the proxy CA. Phase L-0 confirms that SST and the Pulumi provider reach AWS through the proxy with this setting.
+- The stage clients' Data API client (`createDataApiClient`, G-02) takes its `proxyEnv` from `process.env`, not from the passed environment. In the CLI they are the same process environment apart from the variables added here, and `SSL_CERT_FILE` does not affect Node. This was left unchanged.
+
+Open points of the G-11 draft, with their state at integration:
+1. Phase L: the first live `setup-account --target aws` and `deploy --target aws` through the sandbox proxy confirm this entry, that is, Go TLS with `SSL_CERT_FILE` and the Pulumi provider through `HTTPS_PROXY` (owner question, plan-aws.md §5.1).
+2. G-12's owner copy-and-paste steps: done (commit `d248f1f`).
+Item: G-11.
+
+### DEC-0496 — `setup-account --target aws --region <r>`
+Origin: ai-proposed · Status: accepted · Affects: PROV-REQ-004, PROV-REQ-006, DEC-0476, cli.md CLI-REQ-001 table
+
+- `--region` is accepted only with `--target aws`; with any other target it is a usage error (exit 2).
+- The value must look like an AWS region name (`^[a-z]{2}(-[a-z]+)+-\d{1,2}$`, for example `us-east-1` or `us-gov-west-1`). Otherwise it is a usage error, before any operations are built.
+- The region is passed to `awsAccount` as its chosen region. G-07's rules then apply:
+  - a new account's log bucket is created there;
+  - without `--region`, a new account gets PAR-060 and an existing one keeps the log bucket's location;
+  - a region that differs from an existing log bucket's is refused, naming both regions.
+- `deploy` and the other commands never pass a region.
+Item: G-11.
+
+### DEC-0497 — `smoke --target aws` prints the S3 prefix and the CloudWatch log group; the account ID is redacted in evidence
+Origin: ai-proposed · Status: accepted · Affects: LOG-REQ-003, LOG-REQ-004, CLI-AC-005, DEC-0086, `cli/commands/smoke.ts`
+
+The line printed is "log for today: S3 bucket prototype-logs-<account-id> (<region>), keys under <app>/<stage>/<yyyy>/<mm>/<dd>/ (s3://…/); Lambda output: CloudWatch log group /aws/lambda/<app>-<stage>-http (<region>)".
+- The log group is the Lambda runtime's own output. The program sets no `logging`, so it is SST's default group for the Function's name.
+- The account ID and region come from G-07's account operations (STS `GetCallerIdentity`, the log bucket's location), using the child environment.
+- If they cannot be read (no credentials, for example), the line shows `<account-id>` and the reason, and the run continues. The log location never decides the result, and `smoke` otherwise needs no AWS credentials.
+- The account ID is added to the evidence record's redactions (`<account-id>`), the same way the `workers.dev` subdomain is (DEC-0086), because the line is part of the raw smoke log.
+Item: G-11.
+
+### DEC-0498 — The AWS not-run detail is "AWS live run pending (no account)"
+Origin: ai-proposed · Status: accepted · Affects: `tests/compliance/harness/expected.ts` (`PHASE_RULES` `*`/aws, `AWS_LIVE_PENDING`), plan-aws.md §2, G-EV
+
+The `*` rule on `aws`, in any tier, now has the detail "AWS live run pending (no account)" instead of "AWS phase not started". Phase G builds and pre-checks the AWS code offline. Only phase L records AWS evidence. The rule stays until L-RUN. A dry run of the wiring against fakes (G-RUN) passes its own rules through `DriverDeps.notRunRules`.
+Item: G-T4.
+
+### DEC-0499 — DEC-0397's not-run parts become required clauses
+Origin: ai-proposed · Status: accepted · Supersedes: DEC-0397 · Affects: CORE-AC-006, SQL-AC-006, `expected.ts` (`CLAUSE_RULES`), `results.ts`
+
+The two part rules of DEC-0397 are removed. In their place, `CLAUSE_RULES` names each clause and a title pattern on `local`, automated tier:
+- CORE-AC-006 "AWS-bundle clause": `\bAWS[- ]bundle\b`. This is G-06's bundle inspection; its test title must name the AWS bundle.
+- SQL-AC-006 "Data API retry-loop clause": `\bData API retry[- ]loop clause\b`. This is the new criteria test `tests/compliance/criteria/sql/data-api-retry.test.ts`.
+
+A clause with no executed test of its own whose title matches is recorded as its own `not-run` entry: "<part>: no test tagged [ID] for this clause ran on local". So the criterion's other tests passing never stands in for the clause. Until G-06 lands, a local run therefore records CORE-AC-006's AWS-bundle clause as not-run.
+
+The SQL-AC-006 clause test is a criteria-side test in the integration layer, not G-02's unit test. SQL-AC-006 is not unit-level (DEC-0319), so the unit layer would not count G-02's test. Making SQL-AC-006 unit-level would also have counted G-02's Data API fake tests (conflict, too large), which are a pre-check (DEC-0445). The clause test injects the error source (a client whose every call is rejected with `DatabaseResumingException`) and a virtual clock. It runs at three jitter levels.
+
+PROV-AC-007's AWS case (G-07, unit level) and CORE-AC-005's `./targets/aws` tests (G-01, integration layer) were already tagged and selected, so they are not duplicated. `expected.unit.test.ts` checks that they are still there.
+Item: G-T4.
+
+### DEC-0500 — Skip notes become the not-run detail
+Origin: ai-proposed · Status: accepted · Affects: compliance.md "Driver" ("each skipped tagged test adds a `not-run` entry"), AWS-AC-005, `tests/compliance/harness/{skip-notes-reporter,reports,results,driver}.ts`
+
+Vitest's JSON report has no field for a `skip(note)` note. The driver now adds a reporter, `tests/compliance/harness/skip-notes-reporter.ts`, before the JSON reporter. It copies the note into the test's `meta.skipNote`, which the JSON report does carry. Playwright notes are read from the `skip` annotation.
+
+A skipped test with a note gets its own `not-run` entry, and its detail is the note (a leading "not-run:" is dropped, and the detail is capped at 1,000 characters). Skipped tests without a note are still listed together by title.
+Item: G-T4.
+
+### DEC-0501 — Driver `--target aws`: names, leftovers, usage caps
+Origin: ai-proposed · Status: accepted (to be confirmed live); the "until then" fallback of the leftover check ended by DEC-0493 · Affects: compliance.md "Driver" and "Test stages", plan §1 "Cloud usage limits", `tests/compliance/harness/{aws-usage,driver,node-deps}.ts`, `criteria/_cloud/aws/usage.ts`, `criteria/prov/support/stage.ts`
+
+- **Names.** The run stage is still `test-<run ID>`. Before deploying, the driver checks the stage's fixed AWS names (DEC-0438/DEC-0480):
+  - the cluster `<app>-<stage>`: at most 63 characters, starting with a letter, with no doubled, leading or trailing hyphen;
+  - the Function `<app>-<stage>-http`: at most 64 characters;
+  - the bucket `<app>-<stage>-files-<account-id>`: at most 63 characters.
+
+  With PAR-290 and PAR-291 every run stage passes. The check stops a hand-given `--stage` that would break a rule.
+- **Leftovers.** The leftover check uses the framework's own operations factory, the one `remove` wires (`cloudflareOperations`, which G-11 extends to AWS with G-10's `TargetOperations`). Until then it throws "AWS target not yet implemented", and the record lists that as a failed leftover check. Tests pass a `FakeTarget` through `OperationsFactory`. The AWS deploy output's public origin is the CloudFront URL, never the Function URL.
+- **At most 3 Aurora clusters at once.** Before deploying, the driver counts the account's test-stage clusters (`<app>-test-…`, RDS `DescribeDBClusters` through the counted hooks). It refuses a fourth: the deploy is not attempted, the stage is not added to the pending list, and the criteria are recorded not-run with the reason. Further stages made by stage-lifecycle tests take the same check (`requireClusterRoom` in `takeStageRoom`), which reports a missing prerequisite on AWS. On Cloudflare that check is still the D1 database cap.
+- **API-call count.** Each process that uses the hooks prints `[g-t1] aws api calls in this process: <n>`. The driver sums these lines per test run, adds its own process's count, and writes the result to `raw/aws-usage.log`. It sets `COMPLIANCE_AWS_MAX_CALLS` to what is left of the run's cap for each run, and starts no further run once the cap is used up. A total above the cap gives exit 1. The proposed run cap is 2,000 hook calls, `COMPLIANCE_AWS_MAX_RUN_CALLS` overrides it. Calls the framework CLI makes (deploy, remove, the leftover check) are not counted.
+
+Note at integration: the run cap is PAR-282 and the cluster cap PAR-283.
+Item: G-T4.
+
+### DEC-0502 — `cloudHooks("aws")` carries the `AwsCloudHooks` members
+Origin: ai-proposed · Status: accepted (to be confirmed live) · Affects: `tests/compliance/criteria/_cloud/aws/{criteria-hooks,index,api}.ts`, AWS-AC-002…006
+
+`awsCloudHooks()` returns G-T2's `AwsCloudHooks`:
+- `simulatePrincipalPolicy`, `functionUrl` and `observeCluster` are G-T1's simulation, Function URL and pause observer. An observer that reports "never pauses" maps to not paused, and the detail says so.
+- `stageResources` reads the role from the Function, the cluster ARN and the credentials secret's ARN.
+- `stageFunctions` lists Lambda functions with the stage's name prefix.
+- `stageNatGateways` lists NAT gateways that are not `deleted` and are in the shared VPC (found by the tag `prototype-framework=shared-network`, DEC-0475), in any VPC a stage function names, or tagged with the stage. An EC2 client is added to the hooks' clients.
+Item: G-T4.
+
+### DEC-0503 — The driver gives the AWS test hooks the account's region
+Origin: ai-proposed · Status: accepted · Affects: `tests/compliance/harness/{driver,node-deps}.ts`, `tests/compliance/criteria/_cloud/aws/{api,usage}.ts`, plan-aws.md §4 (`AWS_REGION` item)
+
+On `--target aws`, right after building the stage operations and before removing old stages or deploying, the driver reads the account's region. It reads it the way `deploy` and `smoke` do (DEC-0075, DEC-0476): G-07's `awsAccount(...).region()` with the CLI's AWS child environment. That is the log bucket's location, or PAR-060 when the account has no log bucket yet. Operations that cannot read it fall back to `AWS_REGION`, then `AWS_DEFAULT_REGION`. When the account has a region, it wins over a different `AWS_REGION`, and the driver prints a note. With no region, or when reading it fails, the driver stops with a `PrerequisiteMissingError` before deploying. Every criterion that would have run is then recorded not-run with that reason. Every test process gets `AWS_REGION` and `AWS_DEFAULT_REGION` set to the region. The cluster count in the driver's own process gets it too, through `testStageClusters(region)`. `raw/aws-usage.log` records it. Reading the region costs STS `GetCallerIdentity` plus the log bucket's head and location, 2 or 3 calls. Like the framework CLI's own calls, they are not counted against the hooks' cap. The owner no longer needs to export `AWS_REGION`.
+Item: G-EV fixes (F4, F3).
+
+### DEC-0504 — A run against fakes is marked `dryRun` and never counted
+Origin: ai-proposed · Status: accepted · Affects: `docs/contracts/schemas/evidence.schema.json` (new optional `dryRun` string), `packages/framework/src/evidence/{schema,writer}.ts`, `tests/compliance/harness/{driver,node-deps}.ts`, `tests/compliance/tools/{records,release,traceability}.ts`
+
+The evidence record gets an optional `dryRun` string, which says what was faked. The driver sets it when `DriverDeps.notRunRules` is not `PHASE_RULES`. It also sets it when the stage operations carry a `dryRun` of their own. `cliStageOps` gives them one when it is built on a fake CLI runner or a fake `OperationsFactory`. `readRecords` lists such a record among the skipped files ("a dry run (…), never evidence"). The release and traceability reports also drop it themselves, so a marked record never counts, wherever it is stored. GD (`validation/local/phase-G/aws-dry-run/…/rx3n81izmc4esca.json`) predates the field. It stays unmarked as committed and must still never be moved under `validation/aws/`.
+Item: G-EV fixes (F4, F3).

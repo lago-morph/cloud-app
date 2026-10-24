@@ -6,13 +6,13 @@
  * R2 omits CORS headers on its 403s, so in a browser an expired or mismatched ticket fails with
  * status null (DEC-0101); nothing here works around that. Workers-compatible (Web Crypto).
  */
-import { FrameworkError } from "../../core/errors.js";
 import { FRAMEWORK_SECRETS, type FrameworkSecretName } from "../../secrets/names.js";
 import type { TicketIssuer } from "../service.js";
 import { TICKET_LIFETIME_MS, type DownloadTicketData, type UploadTicketData } from "../tickets.js";
-import { downloadDisposition } from "./disposition.js";
+import { downloadDisposition } from "../disposition.js";
 import { storedKey } from "./keys.js";
-import { presignUrl, type S3Credentials } from "./sign.js";
+import { objectPath } from "../s3/path.js";
+import { presignUrl, type S3Credentials } from "../s3/sign.js";
 
 /** R2's SigV4 region. */
 const R2_REGION = "auto";
@@ -28,27 +28,13 @@ export interface CloudflareTicketOptions {
   readonly now?: () => number;
 }
 
-/** RFC 3986 encoding of one path segment (every byte except unreserved), as SigV4 canonicalises it. */
-function encodeSegment(segment: string): string {
-  return encodeURIComponent(segment).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
-}
-
-const DOT_SEGMENT = /^\.\.?$/;
-
 /**
  * The name's stored key (`storedKey`: the name with its U+0001 ending, sent as `%01`) as a URL
- * path: each `/`-separated segment encoded (the form A-07 verified). URL parsers resolve `.` and
- * `..` segments, even percent-encoded, so a name with one is sent with every `/` as `%2F`;
- * storage decodes the path back to the same key. A name that is only `.` or `..` cannot be sent
- * at all. Both rules test the *name*, not the stored key, so they behave as before the ending
- * was added (DEC-0328, DEC-0430).
+ * path (`objectPath`, DEC-0328): the dot-segment rules test the *name*, not the stored key, so
+ * they behave as before the ending was added (DEC-0430).
  */
 function keyPath(name: string): string {
-  if (DOT_SEGMENT.test(name)) {
-    throw new FrameworkError("FILES.INVALID_NAME", `the file name ${JSON.stringify(name)} cannot be transferred by the browser on this target`);
-  }
-  const key = storedKey(name);
-  return name.split("/").some((s) => DOT_SEGMENT.test(s)) ? encodeSegment(key) : key.split("/").map(encodeSegment).join("/");
+  return objectPath(name, storedKey(name));
 }
 
 /** The Cloudflare issuer. A download is always an `attachment` named after the file (DEC-0313, DEC-0414). */

@@ -9,9 +9,10 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { COMPATIBILITY_DATE } from "../../build/build.js";
 import { createDeployment } from "../../core/identity.js";
+import type { FunctionCode } from "../../provision/aws/sst.js";
 import type { WorkerCode } from "../../provision/cloudflare/sst.js";
 import { BINDINGS } from "../../targets/cloudflare/bindings.js";
-import { buildClientAssets, cloudflareOperations, prepareDeploy, type PrepareDeps } from "./deploy.js";
+import { buildClientAssets, cloudflareOperations, prepareDeploy, targetOperations, type PrepareDeps } from "./deploy.js";
 
 function appDir(files: Record<string, string> = {}): string {
   const dir = mkdtempSync(join(tmpdir(), "d05-deploy-"));
@@ -122,5 +123,62 @@ describe("cloud commands: the Cloudflare operations from the process environment
   it("for deploy (no requireCredentials) the target is built, so its preflight names every missing credential", async () => {
     const ops = cloudflareOperations({ env: {}, fetch: async () => new Response("{}"), requireCredentials: false })({ appDir: appDir(), target: "cloudflare" });
     expect(await ops.preflight({ app: "notes", stage: "test-abc" })).toEqual(["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"]);
+  });
+});
+
+describe("deploy: preparing an AWS deployment (G-11)", () => {
+  function awsDeps(overrides: Partial<PrepareDeps> = {}) {
+    return prepareDeps({
+      frameworkMigrationsDir: appDir({ "sqlite/0000_framework_tables.sql": "CREATE TABLE a (x text);", "postgres/0000_framework_tables.sql": "CREATE TABLE a (x text);" }),
+      build: async (o) => ({
+        deployment: createDeployment({ app: "notes", stage: o.stage, target: o.target }),
+        resolved: { deployment: createDeployment({ app: "notes", stage: o.stage, target: o.target }), values: {}, admins: [], secrets: [{ name: "apiKey", location: "/notes/test-abc/secrets/apiKey" }] },
+        outDir: join(o.appDir, ".framework", o.target),
+        bundle: join(o.appDir, ".framework", o.target, "bundle", "index.mjs"),
+        lambda: { bundle: join(o.appDir, ".framework", o.target, "bundle"), handler: "index.handler" },
+      }),
+      ...overrides,
+    });
+  }
+
+  it("passes G-06's buildApp().lambda into the program's FunctionCode, with the client's assets, and reads the Postgres histories", async () => {
+    const dir = appDir({ "migrations/sqlite/0000_init.sql": "CREATE TABLE notes (id text);", "migrations/postgres/0000_init.sql": "CREATE TABLE notes (id text);" });
+    const deps = awsDeps();
+    const prepared = await prepareDeploy(deps)(dir, "aws", "test-abc");
+    expect(deps.built).toEqual(["client /.framework/aws/client"]);
+    const code = prepared.code as FunctionCode;
+    expect(code).toEqual({ bundle: join(dir, ".framework", "aws", "bundle"), handler: "index.handler", assetsDirectory: join(dir, ".framework", "aws", "client") });
+    expect(prepared.app).toBe("notes");
+    expect(prepared.requiredSecrets).toEqual(["apiKey"]);
+    expect(prepared.googleClientId).toBeUndefined();
+    expect(prepared.migrations.framework.map((m) => m.file)).toEqual([join(deps.frameworkMigrationsDir, "postgres", "0000_framework_tables.sql")]);
+    expect(prepared.migrations.app.map((m) => m.file)).toEqual([join(dir, "migrations", "postgres", "0000_init.sql")]);
+  });
+
+  it("an app without a client deploys its Function without assets; no Cloudflare variable is added", async () => {
+    const prepared = await prepareDeploy(awsDeps({ buildClient: async () => undefined }))(appDir(), "aws", "test-abc");
+    expect(prepared.code).toEqual({ bundle: expect.stringMatching(/\/\.framework\/aws\/bundle$/), handler: "index.handler" });
+  });
+
+  it("a build that returns no Lambda code stops before the operations are asked for", async () => {
+    const deps = awsDeps();
+    const build = deps.build;
+    const noLambda: PrepareDeps["build"] = async (o) => {
+      const { lambda: _lambda, ...rest } = await build(o);
+      return rest;
+    };
+    await expect(prepareDeploy({ ...deps, build: noLambda })(appDir(), "aws", "test-abc")).rejects.toThrow(/returned no Lambda code/);
+  });
+
+  it("a target with no provisioning is refused before anything is built", async () => {
+    const deps = prepareDeps();
+    await expect(prepareDeploy(deps)(appDir(), "local", "local")).rejects.toThrow(/no provisioning for target local/);
+    expect(deps.built).toEqual([]);
+  });
+
+  it("deploy's binding takes the AWS operations from the per-target factory, never Cloudflare's", () => {
+    const make = targetOperations({ env: { AWS_PROFILE: "sandbox", CLOUDFLARE_API_TOKEN: "placeholder", CLOUDFLARE_ACCOUNT_ID: "acc123" }, requireCredentials: false });
+    expect(make({ appDir: appDir(), target: "aws", code: { bundle: "/b", handler: "index.handler" } }).target).toBe("aws");
+    expect(make({ appDir: appDir(), target: "cloudflare" }).target).toBe("cloudflare");
   });
 });

@@ -4,6 +4,7 @@
  */
 import { posix, relative } from "node:path";
 import type { TestOutcome } from "./results.js";
+import { SKIP_NOTE_META } from "./skip-notes-reporter.js";
 
 export interface ParsedReport {
   readonly outcomes: TestOutcome[];
@@ -16,6 +17,8 @@ interface VitestAssertion {
   readonly title: string;
   readonly status: string;
   readonly failureMessages?: readonly string[];
+  /** The test's meta; the skip-notes reporter puts a `skip(note)` there as `skipNote`. */
+  readonly meta?: Readonly<Record<string, unknown>>;
 }
 
 interface VitestFile {
@@ -27,6 +30,17 @@ interface VitestFile {
 
 function unreadable(kind: string, text: string): ParsedReport {
   return { outcomes: [], errors: [`${kind} JSON report unreadable: ${text.slice(0, 200)}`] };
+}
+
+/** A usable skip note, or undefined for none or a blank one. */
+function noteOf(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
+}
+
+/** A skipped outcome, with its note when the test gave one. */
+function skipped(title: string, file: string, note: unknown): TestOutcome {
+  const text = noteOf(note);
+  return text === undefined ? { title, file, status: "skipped" } : { title, file, status: "skipped", note: text };
 }
 
 function toPosix(path: string): string {
@@ -51,7 +65,7 @@ export function parseVitestJson(text: string, root: string): ParsedReport {
       const title = [...(a.ancestorTitles ?? []), a.title].join(" > ");
       if (a.status === "passed") outcomes.push({ title, file: path, status: "passed" });
       else if (a.status === "failed") outcomes.push({ title, file: path, status: "failed", message: a.failureMessages?.[0] ?? "failed" });
-      else outcomes.push({ title, file: path, status: "skipped" });
+      else outcomes.push(skipped(title, path, a.meta?.[SKIP_NOTE_META]));
     }
   }
   return { outcomes, errors };
@@ -62,10 +76,17 @@ interface PlaywrightResult {
   readonly error?: { readonly message?: string };
 }
 
+interface PlaywrightTest {
+  readonly status?: string;
+  /** `test.skip(condition, description)` adds `{ type: "skip", description }`. */
+  readonly annotations?: readonly { readonly type?: string; readonly description?: string }[];
+  readonly results?: readonly PlaywrightResult[];
+}
+
 interface PlaywrightSuite {
   readonly title: string;
   readonly file?: string;
-  readonly specs?: readonly { readonly title: string; readonly file?: string; readonly tests?: readonly { readonly status?: string; readonly results?: readonly PlaywrightResult[] }[] }[];
+  readonly specs?: readonly { readonly title: string; readonly file?: string; readonly tests?: readonly PlaywrightTest[] }[];
   readonly suites?: readonly PlaywrightSuite[];
 }
 
@@ -86,7 +107,7 @@ export function parsePlaywrightJson(text: string, prefix: string): ParsedReport 
         const results = test.results ?? [];
         const firstError = results.find((r) => r.error?.message !== undefined)?.error?.message ?? "failed";
         if (test.status === "expected") outcomes.push({ title, file, status: "passed" });
-        else if (test.status === "skipped") outcomes.push({ title, file, status: "skipped" });
+        else if (test.status === "skipped") outcomes.push(skipped(title, file, test.annotations?.find((x) => x.type === "skip" && noteOf(x.description) !== undefined)?.description));
         else if (test.status === "flaky") outcomes.push({ title, file, status: "failed", message: `flaky (failed, then passed on retry): ${firstError}` });
         else outcomes.push({ title, file, status: "failed", message: firstError });
       }

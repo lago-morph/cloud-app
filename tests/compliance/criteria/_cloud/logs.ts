@@ -7,6 +7,7 @@
  * the token's, no D1). Callers keep the day's entry count small (tens of entries per run).
  */
 import { prerequisiteMissing } from "../../harness/index.js";
+import { listAwsLogEntries } from "./aws/logs.js";
 import { LOG_BUCKET, listKeys, readObject } from "./r2.js";
 
 export interface StoredLogEntry {
@@ -22,7 +23,8 @@ export function dayPrefix(app: string, stage: string, day: string): string {
 
 /** DEC-0279 hook: every object under `<app>/<stage>/<day>/` in the shared log bucket, with its body, sorted by key. */
 export async function listLogEntries(input: { readonly target: string; readonly app: string; readonly stage: string; readonly day: string }): Promise<StoredLogEntry[]> {
-  if (input.target !== "cloudflare") return prerequisiteMissing(`no log-bucket listing for target ${input.target} (AWS phase not started)`);
+  if (input.target === "aws") return listAwsLogEntries(input);
+  if (input.target !== "cloudflare") return prerequisiteMissing(`no log-bucket listing for target ${input.target}`);
   const keys = await listKeys(LOG_BUCKET, dayPrefix(input.app, input.stage, input.day));
   const out: StoredLogEntry[] = [];
   for (const key of keys) out.push({ key, body: await readObject(LOG_BUCKET, key) });

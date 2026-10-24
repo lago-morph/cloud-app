@@ -9,7 +9,7 @@
 import type { LogEntry } from "../entry.js";
 import { formatLogLine } from "../local.js";
 import type { LogSink } from "../writer.js";
-import { logObjectKey } from "./keys.js";
+import { logObjectKey } from "../keys.js";
 
 /** The part of an R2 bucket binding the sink uses. */
 export interface LogBucket {

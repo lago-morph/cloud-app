@@ -10,11 +10,8 @@ import { tag } from "../../../../../tests/support/tags.js";
 import { ERROR_CATALOGUE } from "../../../src/index.js";
 import { FRAMEWORK_DIR, listFiles } from "./harness/harness.js";
 
-/**
- * CORE-REQ-005's subpath table, without `./targets/aws`: this phase supports the local and
- * Cloudflare targets only ("one subpath per supported target"; DEC-0110, plan §11 Q3).
- */
-const SUBPATHS = [".", "./client", "./testing", "./targets/local", "./targets/cloudflare", "./provision", "./check"];
+/** CORE-REQ-005's subpath table: one `./targets/<target>` subpath per supported target (G-01 superseded DEC-0110). */
+const SUBPATHS = [".", "./client", "./testing", "./targets/local", "./targets/cloudflare", "./targets/aws", "./provision", "./check"];
 
 /** Owning-component prefixes of the catalogue (errors.d.ts). */
 const PREFIXES = [...new Set(Object.keys(ERROR_CATALOGUE).map((c) => c.split(".")[0]))];

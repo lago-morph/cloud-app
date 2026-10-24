@@ -19,12 +19,12 @@ import { LOCAL_COOKIES } from "../../auth/local-cookies.js";
 import { createLocalTicketIssuer } from "../../files/local/tickets.js";
 import { registerLocalTransferRoute } from "../../files/local/route.js";
 import { workerPublicOrigin, workerSecretValues, workerSql, workerStore, type WorkerHandler } from "../cloudflare/bindings.js";
-import { assembleStage } from "../cloudflare/stage.js";
+import { assembleStage } from "../stage.js";
 
 export type { WorkerHandler } from "../cloudflare/bindings.js";
 
 export function createLocalWorker<C extends ConfigDeclaration, S extends string>(app: DefinedApp<C, S>, resolved: ResolvedConfig): WorkerHandler {
-  const target = resolved.deployment.target;
+  const target = "local";
   const ticketKey = (c: RuntimeContext) => createFrameworkSecrets({ read: envSecretReader(c.env, target), log: c.var.log, extra: LOCAL_FRAMEWORK_SECRETS }).get(LOCAL_TICKET_KEY);
   const hono = assembleStage(app, {
     resolved,

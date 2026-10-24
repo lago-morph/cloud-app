@@ -1,0 +1,31 @@
+{
+  "name": "spike-g-s1",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ec2": "3.1153.0",
+    "@aws-sdk/client-iam": "3.1153.0",
+    "@aws-sdk/client-lambda": "3.1153.0",
+    "@aws-sdk/client-rds": "3.1153.0",
+    "@aws-sdk/client-rds-data": "3.1153.0",
+    "@aws-sdk/client-resource-groups-tagging-api": "3.1153.0",
+    "@aws-sdk/client-s3": "3.1153.0",
+    "@aws-sdk/client-secrets-manager": "3.1153.0",
+    "@aws-sdk/client-ssm": "3.1153.0",
+    "@aws-sdk/client-sts": "3.1153.0",
+    "drizzle-orm": "0.45.4",
+    "hono": "4.13.13"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "8.10.164",
+    "@types/node": "22.20.5",
+    "aws-sdk-client-mock": "4.1.0",
+    "typescript": "6.0.3",
+    "vitest": "5.0.5"
+  }
+}

@@ -4,8 +4,8 @@
  * UTC time, `<id>` the request ID or a random value.
  */
 import { describe, expect, it } from "vitest";
-import { tag } from "../../../../../tests/support/tags.js";
-import type { LogEntry } from "../entry.js";
+import { tag } from "../../../../tests/support/tags.js";
+import type { LogEntry } from "./entry.js";
 import { logObjectKey } from "./keys.js";
 
 const base: LogEntry = {

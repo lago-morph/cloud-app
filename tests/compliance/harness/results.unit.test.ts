@@ -75,6 +75,50 @@ describe("[COMPL-AC-003] criterion results from test outcomes", () => {
     ]);
   });
 
+  // G-T2 report: AWS-AC-005's not-run reason travels as the skip note and must become the detail.
+  it("a skipped test's note becomes its not-run detail (a leading 'not-run:' dropped); skips without a note are listed as before", () => {
+    const noted = (title: string, note: string): TestOutcome => ({ ...outcome(title, "skipped"), note });
+    expect(
+      criterionResults({
+        target: "aws",
+        expected: [run("AWS-AC-005")],
+        outcomes: [noted("[AWS-AC-005] paused cluster", "not-run: the cluster did not pause within 15 minutes (PAR-281); last observed: running")],
+      }),
+    ).toEqual([{ id: "AWS-AC-005", status: "not-run", detail: "the cluster did not pause within 15 minutes (PAR-281); last observed: running" }]);
+    expect(
+      criterionResults({
+        target: "local",
+        expected: [run("X-AC-001")],
+        outcomes: [outcome("[X-AC-001] a", "passed"), noted("[X-AC-001] b", "needs a second region"), outcome("[X-AC-001] c", "skipped"), noted("[X-AC-001] d", "x".repeat(3000))],
+      }),
+    ).toEqual([
+      { id: "X-AC-001", status: "passed" },
+      { id: "X-AC-001", status: "not-run", detail: "needs a second region" },
+      { id: "X-AC-001", status: "not-run", detail: `${"x".repeat(1000)}…` },
+      { id: "X-AC-001", status: "not-run", detail: "1 tagged test skipped: [X-AC-001] c" },
+    ]);
+  });
+
+  // plan-aws.md G-T4: a clause of a criterion (CORE-AC-006's AWS bundle, SQL-AC-006's retry loop) needs its own test.
+  it("records a required clause not-run when no executed test of its own shows it, even when the criterion's other tests pass", () => {
+    const clauses = [{ part: "Data API retry-loop clause", titlePattern: String.raw`\bData API retry[- ]loop clause\b` }];
+    const entry = run("SQL-AC-006", { clauses });
+    expect(criterionResults({ target: "local", expected: [entry], outcomes: [outcome("[SQL-AC-006] duplicate is SQL.CONFLICT", "passed")] })).toEqual([
+      { id: "SQL-AC-006", status: "passed" },
+      { id: "SQL-AC-006", status: "not-run", detail: "Data API retry-loop clause: no test tagged [SQL-AC-006] for this clause ran on local" },
+    ]);
+    // A skipped clause test does not show it either.
+    expect(criterionResults({ target: "local", expected: [entry], outcomes: [outcome("[SQL-AC-006] conflict", "passed"), outcome("[SQL-AC-006] Data API retry-loop clause", "skipped")] }).map((r) => r.detail)).toEqual([
+      undefined,
+      "1 tagged test skipped: [SQL-AC-006] Data API retry-loop clause",
+      "Data API retry-loop clause: no test tagged [SQL-AC-006] for this clause ran on local",
+    ]);
+    expect(criterionResults({ target: "local", expected: [entry], outcomes: [outcome("[SQL-AC-006] conflict", "passed"), outcome("sql > [SQL-AC-006] Data API retry-loop clause (short waits): gives up", "passed")] })).toEqual([{ id: "SQL-AC-006", status: "passed" }]);
+    expect(criterionResults({ target: "local", expected: [entry], outcomes: [outcome("[SQL-AC-006] Data API retry-loop clause: gives up", "failed", "expected SQL.UNAVAILABLE")] })).toEqual([
+      { id: "SQL-AC-006", status: "failed", detail: "1 of 1 tests failed: [SQL-AC-006] Data API retry-loop clause: gives up: expected SQL.UNAVAILABLE" },
+    ]);
+  });
+
   it("names the milestone part a result covers", () => {
     expect(criterionResults({ target: "local", expected: [run("E2E-016", { parts: ["review"] })], outcomes: [outcome("[E2E-016] review", "passed")] })).toEqual([
       { id: "E2E-016", status: "passed", detail: "milestone part: review" },
