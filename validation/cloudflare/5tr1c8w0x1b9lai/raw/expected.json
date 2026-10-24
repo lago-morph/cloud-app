@@ -1,0 +1,631 @@
+[
+  {
+    "id": "AUTH-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "AUTH-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "AUTH-AC-006",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "AUTH-AC-007",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "AUTH-AC-009",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "AUTH-AC-011",
+    "run": false,
+    "notRun": "Google login mocked for this phase",
+    "parts": [
+      ""
+    ],
+    "notRunParts": []
+  },
+  {
+    "id": "CF-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CF-AC-002",
+    "run": true,
+    "parts": [
+      ""
+    ],
+    "notRunParts": []
+  },
+  {
+    "id": "CFG-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CFG-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CFG-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CLI-AC-001",
+    "run": false,
+    "notRun": "Google login mocked for this phase",
+    "parts": [
+      ""
+    ],
+    "notRunParts": []
+  },
+  {
+    "id": "CLI-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CLI-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "COMPL-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "COMPL-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "COMPL-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "COMPL-AC-005",
+    "run": false,
+    "notRun": "Google login mocked for this phase",
+    "parts": [
+      ""
+    ],
+    "notRunParts": []
+  },
+  {
+    "id": "CORE-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CORE-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "DEMO-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "DEMO-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "DEMO-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "DEMO-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "DEMO-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "DEMO-AC-007",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "DEMO-AC-008",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "DEMO-AC-009",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "DEMO-AC-010",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-006",
+    "run": false,
+    "notRun": "Google login mocked for this phase",
+    "parts": [
+      ""
+    ],
+    "notRunParts": []
+  },
+  {
+    "id": "E2E-009",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-011",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-013",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-014",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "FILES-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "FILES-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "FILES-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "FILES-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "FILES-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "GOOGLE-AC-001",
+    "run": false,
+    "notRun": "Google login mocked for this phase",
+    "parts": [
+      ""
+    ],
+    "notRunParts": []
+  },
+  {
+    "id": "HTTP-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "HTTP-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "HTTP-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "HTTP-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "HTTP-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "KV-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "KV-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "KV-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "KV-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "KV-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "LOG-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "LOG-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "LOG-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "LOG-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "MIG-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "MIG-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "MIG-AC-006",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "PROV-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "PROV-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SEC-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SEC-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SEC-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SEC-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SQL-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SQL-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SQL-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SQL-AC-006",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  }
+]

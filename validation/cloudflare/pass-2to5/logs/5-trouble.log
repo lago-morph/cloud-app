@@ -1,0 +1,9 @@
+start 2026-10-24T04:12:16Z
+GET /api/ref/throw-plain -> {"error":{"code":"CORE.INTERNAL","message":"Unexpected failure. Details are logged, never returned.","requestId":"927948a9-1f58-41f7-a22b-741125737ddd"}}
+requestId=927948a9-1f58-41f7-a22b-741125737ddd
+--- command 1 (list day's keys) | grep requestId
+rc=0 keys-listed=39
+match: reference/test-9mfkg261apxm7s2/2026/10/24/041217.000-error-927948a9-1f58-41f7-a22b-741125737ddd.json
+--- command 2 (read entry)
+{"time":"2026-10-24T04:12:17.000Z","app":"reference","stage":"test-9mfkg261apxm7s2","target":"cloudflare","component":"CORE","severity":"error","message":"GET /api/ref/throw-plain failed with CORE.INTERNAL\nError: reference plain error\n    at placeholder:14864:11\n    at a (placeholder:16412:17)\n    at placeholder:16412:28\n    at S0 (placeholder:16984:9)\n    at a (placeholder:16412:17)\n    at placeholder:16412:28\n    at forgeryCheck (placeholder:17192:11)\n    at a (placeholder:16412:17)\n    at placeholder:16412:28\n    at currentUser (placeholder:17189:43)","requestId":"927948a9-1f58-41f7-a22b-741125737ddd"}
+exit 0 2026-10-24T04:12:28Z
