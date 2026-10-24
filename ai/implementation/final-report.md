@@ -1,11 +1,11 @@
 # Final report: local and Cloudflare phase (interim)
 
-Date: 2026-10-24 (first written 2026-10-20 at `faced8b`; previous update 2026-10-21 at `c016e7e`). Base: `origin/claude/implement-local-cloudflare` at `1b474c1`. Pull request: https://github.com/lago-morph/cloud-app/pull/5.
+Date: 2026-10-24 (first written 2026-10-20 at `faced8b`; updates 2026-10-21 at `c016e7e` and 2026-10-24 at `1b474c1`). Base: `origin/claude/implement-local-cloudflare` at `ce53772`. Pull request: https://github.com/lago-morph/cloud-app/pull/5.
 
-**Status: interim.** Local work is complete, and the Cloudflare runs (D-RUN, D-RUN-M, F-03) are done. Five Cloudflare criteria wait on owner decisions or owner-supplied credentials, and the local evidence must be refreshed at the head (L1). This report is written from committed files only. No test suite was run and no Cloudflare call was made for it.
+**Status: interim.** Local work is complete, and the Cloudflare runs (D-RUN, D-RUN-M, F-03, C-1) are done. Five Cloudflare criteria wait on owner decisions or owner-supplied credentials. The local evidence is current at `1b474c1` (L1 closed). This report is written from committed files only. No test suite was run and no Cloudflare call was made for it.
 
-**Overall verdict: "not working"** (COMPL-REQ-006, prompt §11). Release report: `validation/release/2026-10-24-1b474c1.md`.
-- **Local:** 110 of 110 IDs passed (full run `pzeugkxrk1xcu2w` at `a5b2164`). That run predates the phase-D fixes, so a full local run at the head is outstanding (§6.5, L1).
+**Overall verdict: "not working"** (COMPL-REQ-006, prompt §11). Release report: `validation/release/2026-10-24-33b3df7.md`.
+- **Local:** 110 of 110 IDs passed (full run `kex4v2xk3522i52` at `1b474c1`, after every phase-D fix, with `verify` passing online and offline at the same commit).
 - **Cloudflare:** 67 of 81 IDs passed. 2 failed (FILES-AC-003, SEC-AC-005) and 3 are blocked (PROV-AC-002, PROV-AC-004, LOG-AC-004); all five need the owner (§6.1, §6.2). 9 are `not-run` (Google).
 - **AWS:** not started.
 - **Google:** the real Google login is not certified.
@@ -26,7 +26,7 @@ Date: 2026-10-24 (first written 2026-10-20 at `faced8b`; previous update 2026-10
 
 ## 2. Checks
 
-Sources: `ai/implementation/evaluations/final.md` (update 4, base `1b474c1`) and `ai/implementation/evaluations/D-cloudflare.md` (the D-EV verdict). Local evidence R4 is `validation/local/pzeugkxrk1xcu2w.json` at `a5b2164`: one full, unfiltered run with exit 0. Cloudflare evidence is 18 driver records and 1 smoke record under `validation/cloudflare/`, at five commits from `93e6d7d` to `321e41c`; the latest record that selected an ID decides it (DEC-0264).
+Sources: `ai/implementation/evaluations/final.md` (update 5, base `ce53772`) and `ai/implementation/evaluations/D-cloudflare.md` (the D-EV verdict, update 1). Local evidence R5 is `validation/local/kex4v2xk3522i52.json` at `1b474c1`: one full, unfiltered run with exit 0, with batch verify BV5 (`validation/local/batch-verify-5/`) at the same commit. Cloudflare evidence is 19 driver records and 1 smoke record under `validation/cloudflare/`, at six commits from `93e6d7d` to `ad0e252`; the latest record that selected an ID decides it (DEC-0264).
 
 | Target | Applicable | passed | failed | blocked | not-run |
 | --- | --- | --- | --- | --- | --- |
@@ -44,16 +44,17 @@ Cloudflare, notable entries:
 - **Demo on Cloudflare (F-03):** DEMO-AC-001…-005, -007, -008, -009 passed; the demo smoke passed on Cloudflare and locally from one commit with no source difference, which is the Cloudflare part of DEMO-AC-010 and E2E-002. E2E-015's cloud part is met. E2E-002, E2E-004 and DEMO-AC-010 stay unmet as scenarios until AWS passes, and E2E-004's pass part also needs the two failures resolved.
 - **E2E-011:** the skill's two troubleshooting `curl` commands found a forced error's log entry by its requestId on Cloudflare. E-EV's open item is closed.
 - **Stage removal:** every test stage was removed with no leftovers (every record `leftovers: []`; COMPL-AC-004 passed).
-- **Caveat C-1:** E2E-009's Cloudflare record predates fix-r2order and was not re-run.
+- **E2E-009 after the R2 key fix (C-1, closed):** re-run alone in pass C-1 (`5nfl3uhrzxpuz4m`, `ad0e252`), passed, stage removed with no leftovers (32 D1 rows written, 41 read, 106 API requests).
 
-Local, notable entries (unchanged from the 2026-10-21 report):
-- **R4 layer counts:** Playwright 42/42, 0 flaky. Integration 586 tests: 564 passed and 22 skipped (Cloud-only tests, 2 untagged controls G4, 4 untagged regression tests). None was skipped to obtain a pass. **Batch verify BV4** at the same commit: online and offline, exit 0, unit 1706/1706.
-- **MIG-AC-002 failed once**, in R3b (`r5nndia2aediccu`, `760e7b7`); cause unproven (U1), port race fixed (DEC-0417), passed in R4.
+Local, notable entries:
+- **R5 layer counts:** 109 passed and 2 §8.2 clause entries (CORE-AC-006, SQL-AC-006), 0 failed, 0 blocked, exit 0. Playwright 42/42, 0 flaky. Integration 632 tests: 570 passed and 62 skipped (Cloud-only tests, 2 untagged controls G4, and untagged regression and support unit tests that the ID filter skips; the 40 new ones since R4 are phase-D support unit tests that ran in the unit suite). None was skipped to obtain a pass. **Batch verify BV5** at the same commit: online and offline, exit 0, unit 1780/1780.
+- **L1 closed:** R5 and BV5 are at `1b474c1`, after every phase-D fix, and R5 ran with the local `apiKey` set (SEC-AC-001 and HTTP-AC-002 passed). R5 repeats R4's result (`pzeugkxrk1xcu2w`, `a5b2164`) ID for ID.
+- **MIG-AC-002 failed once**, in R3b (`r5nndia2aediccu`, `760e7b7`); cause unproven (U1), port race fixed (DEC-0417), passed in R4 and R5.
 - **DEMO-AC-003:** `passed`, with the weak assertion W5 still open (Q10).
-- **E2E-015, E2E-016:** judged `passed` on local, without milestone evidence records (G5).
-- **L1 (new):** the phase-D fixes changed 62 files under `packages`, `apps`, `tests` and `skill` after R4, and no full local run or batch verify has run since.
+- **E2E-015, E2E-016:** judged `passed` on local, without milestone evidence records (G5). E2E-015 rests on `apps/demo/BUILD-RECORD.md` (round 4) and R5's demo results.
+- **L2 (new, minor):** after `1b474c1` only the G6 fix (report tools and their unit tests) and the S-1 skill sentence changed. No committed run covers them yet.
 
-The release report lists every automated entry as "no record for commit", because no record is for `1b474c1` itself. It also misreads five milestone items from a record that did not select them (G6, §6.5).
+The release report lists every automated entry as "no record for commit", because no record is for `33b3df7` itself. With G6 fixed, it reads the milestone items from the records that ran them: E2E-010, E2E-012, PROV-AC-003, PROV-AC-006 and COMPL-AC-008 have no Cloudflare line (passed), and PROV-AC-004 reads `blocked`. It says "no record" for E2E-015 (local and Cloudflare) and E2E-016 (local), because no `--milestone` record has selected them (G5). Their statuses are judged without one: E2E-015 from BUILD-RECORD plus R5 on local and from F-03's records on Cloudflare. The evaluator's hand-written note at the end of the report says this.
 
 ## 3. Spikes
 
@@ -274,12 +275,9 @@ Every AWS entry is `not-run` ("AWS phase not started"): 85 IDs, including AWS-AC
 
 | Item | What | What to do |
 | --- | --- | --- |
-| **U1** | **The cause of MIG-AC-002's failure in R3b (`r5nndia2aediccu`, `760e7b7`) is unproven.** The visible workerd frames fit a port-bind error but also any other startup fatal or crash signal; the first line was cut off, and the run was not repeated. The port race was fixed as a confirmed defect (DEC-0417), and MIG-AC-002 passed in R4. One clean run cannot confirm the cause. | Agent work, no owner action. **Evidence that would settle it:** the first fatal line of workerd's stderr from a recurrence. The MIG deploy messages now keep it (`failureOutput`), so any recurrence in a later full run is self-diagnosing; or a runner can do the next full local run under the root-cause record's `MINIFLARE_WORKERD_PATH` wrapper, which stores every workerd's full stderr and arguments. A fatal that is not `bind(): Address already in use` sends the record back to §8 step 1. |
+| **U1** | **The cause of MIG-AC-002's failure in R3b (`r5nndia2aediccu`, `760e7b7`) is unproven.** The visible workerd frames fit a port-bind error but also any other startup fatal or crash signal; the first line was cut off, and the run was not repeated. The port race was fixed as a confirmed defect (DEC-0417), and MIG-AC-002 passed in R4 and again in R5 (`kex4v2xk3522i52`). Clean runs cannot confirm the cause. | Agent work, no owner action. **Evidence that would settle it:** the first fatal line of workerd's stderr from a recurrence. The MIG deploy messages now keep it (`failureOutput`), so any recurrence in a later full run is self-diagnosing; or a runner can do the next full local run under the root-cause record's `MINIFLARE_WORKERD_PATH` wrapper, which stores every workerd's full stderr and arguments. A fatal that is not `bind(): Address already in use` sends the record back to §8 step 1. |
 | O2 | fix-mig002's integration regression test (`test/integration/local/dev.test.ts`, "serves even when every port freePort returns is taken …") is untagged and not in `verify`, so no committed runner output covers it; only the fixer's red-green does. | Agent work: run it in the next batch, or tag it. No owner action. |
-| **L1** | **The local evidence is stale.** R4 (`a5b2164`) predates the phase-D fixes, which changed 62 files under `packages`, `apps`, `tests` and `skill`. No full local run or batch verify has run since. | Agent work: one full `npm run compliance -- --target local` and `verify` online and offline at the head, with the reference app's local `apiKey` set. No owner action. |
-| C-1 | E2E-009's Cloudflare record predates fix-r2order (the U+0001 keys) and was not re-run. | Agent work: `--only E2E-009` on one Cloudflare stage at a later commit. No owner action. |
-| G6 | The release generator reads milestone IDs from the newest milestone record even when that record lists them as "not selected", so it misreports E2E-010, E2E-012 and PROV-AC-003/-004/-006. | Agent work: fix `tests/compliance/tools/release.ts`, with a unit test. No owner action. |
-| S-1 | `skill/reference/troubleshooting.md` §1 still calls the two Cloudflare `curl` commands "not yet verified on Cloudflare in this phase"; they are verified now. | Agent work (docs): update that wording for those two commands only. |
+| L2 | The G6 fix (`tests/compliance/harness/catalogue.ts`, `driver.ts`, `tools/release.ts`, `tools/traceability.ts` and their unit tests) and the S-1 sentence in `skill/reference/troubleshooting.md` came after R5 and BV5 (`1b474c1`), so no committed run covers them. | Agent work: the next batch `verify` at the head, online and offline. No criterion status depends on it. No owner action. |
 | O3 | The order-dependence scan covers 29 of 84 integration files. | Optional: the shuffle runs the accepted record names (`kv/*`, `sql/*`, `files/server-operations`, `local/dev`). No owner action. |
 | W1 | DEMO-AC-001 "paginated": only the page size is shown. | Optional: a test author adds a check of the next page. No owner action. |
 | W2 | The smoke-test clauses of DEMO-AC-001 and -003 count through E2E-002's tag. | None (accepted). |
@@ -288,6 +286,8 @@ Every AWS entry is `not-run` ("AWS phase not started"): 85 IDs, including AWS-AC
 | W5 | DEMO-AC-003's warn-clause test cannot delete a stored photo. | Answer Q10. A test author then strengthens the test, and a runner re-runs it. |
 | G4 | The untagged controls for CFG-AC-002 and CORE-AC-007 are filtered out of driver runs. | Optional: tag them. No owner action. |
 | G5 | E2E-015 (local and cloud parts) and E2E-016 (review part) have no milestone evidence record. | Agent work: record the milestones with `--milestone`, or write a record for the review. No owner action. |
+
+Closed on 2026-10-24 (final.md update 5): **L1** (full local run `kex4v2xk3522i52` and batch verify 5 at `1b474c1`), **C-1** (E2E-009 passed on Cloudflare after fix-r2order, `5nfl3uhrzxpuz4m`), **G6** (release and traceability reports skip not-selected entries, `33b3df7`; report regenerated as `validation/release/2026-10-24-33b3df7.md`) and **S-1** (the troubleshooting page calls the two `curl` commands verified). No Cloudflare agent run is outstanding; the remaining Cloudflare items are the owner's (§6.1, §6.2).
 
 Closed since the first version of this report: O1 (`expected.unit.test.ts` ran in BV3 and BV4), and the missing Reviews of the D-01, D-03 and order-scan records (`8f3ab0f`). Closed by the Cloudflare runs: E-EV's open item for E2E-011 on Cloudflare (the troubleshooting check passed) and the missing record of the Cloudflare `blocked` set (G5's second half; real records exist now).
 
@@ -316,6 +316,8 @@ So the two shared buckets are the only billable resources, both at near-zero cos
 | Cap (DEC-0418, DEC-0419) | | ≤ 50,000 per day | ≤ 2,500,000 per day | ≤ 2,000 per pass, ≤ 1,000 per 5 min | ≤ 8 |
 
 The largest pass (pass M) counted 1,018 requests, at most 268 in any 5 minutes. No pass got an HTTP 429. D1 usage was about 2 % of the free plan's daily rows written (100,000) and 0.1 % of rows read (5,000,000). API requests are not billed. Workers and R2 operations stayed within the free allowances by a wide margin (tens of deploys and a few hundred object operations), but no Workers or R2 usage was measured.
+
+Pass C-1 (E2E-009 re-run) came after these readings, on 2026-10-24: 32 D1 rows written, 41 read, 106 API requests (at most 78 in 5 minutes), peak 1 D1 database, no HTTP 429. Afterwards the account held 0 Workers, 0 D1 databases, 0 `sst-state` objects and only the two shared R2 buckets (`validation/cloudflare/pass-C1/SUMMARY.md`), so the account state above is unchanged.
 
 **Owner check (optional):**
 - Dashboard: Storage & databases → R2 (expect only `prototype-logs` and `sst-state`), Workers & Pages (expect no Workers), D1 (expect none), My Profile → API Tokens (expect no `compliance-*`, `spike*` or per-stage tokens).
