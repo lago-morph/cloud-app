@@ -1,0 +1,3 @@
+hash by default (96 ms in Node) -> verify ok/wrong: default:true/false  node:true/false  noble:true/false
+hash by node    (120 ms in Node) -> verify ok/wrong: default:true/false  node:true/false  noble:true/false
+hash by noble   (136 ms in Node) -> verify ok/wrong: default:true/false  node:true/false  noble:true/false

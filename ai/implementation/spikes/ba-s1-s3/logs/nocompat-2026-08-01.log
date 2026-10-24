@@ -1,0 +1,24 @@
+service core:user:spike: Uncaught Error: No such module "node:crypto".
+  imported from "dist-nocompat/worker-min.js"
+/home/user/cloud-app/.claude/worktrees/agent-ac814747a8cd6a50b/ai/implementation/spikes/ba-s1-s3/node_modules/miniflare/dist/src/index.js:116963
+      throw new MiniflareCoreError(
+            ^
+
+MiniflareCoreError [ERR_RUNTIME_FAILURE]: The Workers runtime failed to start. There was likely a problem with the workerd binary or your configuration.
+Runtime stderr:
+{"timestamp":"1792885648903","level":"error","source":"src/workerd/server/json-logger.c++:127","message":"service core:user:spike: Uncaught Error: No such module \"node:crypto\".\n  imported from \"dist-nocompat/worker-min.js\"","context_depth":0}
+    at StartupLogBuffer.handleStartupFailure (/home/user/cloud-app/.claude/worktrees/agent-ac814747a8cd6a50b/ai/implementation/spikes/ba-s1-s3/node_modules/miniflare/dist/src/index.js:116963:13)
+    at Runtime.updateConfig (/home/user/cloud-app/.claude/worktrees/agent-ac814747a8cd6a50b/ai/implementation/spikes/ba-s1-s3/node_modules/miniflare/dist/src/index.js:117043:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async #assembleAndUpdateConfigInternal (/home/user/cloud-app/.claude/worktrees/agent-ac814747a8cd6a50b/ai/implementation/spikes/ba-s1-s3/node_modules/miniflare/dist/src/index.js:134629:30)
+    at async #assembleAndUpdateConfig (/home/user/cloud-app/.claude/worktrees/agent-ac814747a8cd6a50b/ai/implementation/spikes/ba-s1-s3/node_modules/miniflare/dist/src/index.js:134556:7)
+    at async /home/user/cloud-app/.claude/worktrees/agent-ac814747a8cd6a50b/ai/implementation/spikes/ba-s1-s3/node_modules/miniflare/dist/src/index.js:133333:7
+    at async Mutex.runWith (/home/user/cloud-app/.claude/worktrees/agent-ac814747a8cd6a50b/ai/implementation/spikes/ba-s1-s3/node_modules/miniflare/dist/src/index.js:80693:16)
+    at async #waitForReady (/home/user/cloud-app/.claude/worktrees/agent-ac814747a8cd6a50b/ai/implementation/spikes/ba-s1-s3/node_modules/miniflare/dist/src/index.js:134764:5)
+    at async _Miniflare._getProxyClient (/home/user/cloud-app/.claude/worktrees/agent-ac814747a8cd6a50b/ai/implementation/spikes/ba-s1-s3/node_modules/miniflare/dist/src/index.js:135102:5)
+    at async #getProxy (/home/user/cloud-app/.claude/worktrees/agent-ac814747a8cd6a50b/ai/implementation/spikes/ba-s1-s3/node_modules/miniflare/dist/src/index.js:135164:25) {
+  code: 'ERR_RUNTIME_FAILURE',
+  cause: undefined
+}
+
+Node.js v22.22.0

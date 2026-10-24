@@ -1,0 +1,2 @@
+bundle=dist/worker.js date=2026-10-01 flags=["nodejs_compat"]: 12 concurrent sign-ups (bad 0), 12 concurrent sign-ins (wrong/failed 0)
+bundle=dist-browser/worker-min.js date=2026-08-01 flags=[]: 12 concurrent sign-ups (bad 0), 12 concurrent sign-ins (wrong/failed 0)

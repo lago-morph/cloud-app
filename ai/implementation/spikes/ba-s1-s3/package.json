@@ -1,0 +1,14 @@
+{
+  "name": "spike-ba-s1-s3",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "better-auth": "1.7.12",
+    "drizzle-orm": "0.45.4",
+    "@electric-sql/pglite": "0.5.8"
+  },
+  "devDependencies": {
+    "miniflare": "5.20261006.1-alpha",
+    "esbuild": "0.28.2"
+  }
+}
