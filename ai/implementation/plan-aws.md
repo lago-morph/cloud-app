@@ -294,6 +294,26 @@ That is roughly 12–14 h of active time. Allow an account lifetime of 2–3 day
 - No NAT gateway, no public IPv4.
 - Expected total $5–15. The risk is a cluster forgotten at 4 ACU, which would cost about $0.50 an hour. The leftover check and the budget alarm cover that.
 
+### Readiness verdict (G-EV, 2026-10-24)
+
+Full evaluation: `ai/implementation/evaluations/G-aws-offline.md` (§7 has each item, §8 the owner's list). **Phase G passes with findings.** The code and harness are ready for L-0, except for two gaps:
+- **F4 (not-ready, agent):** the AWS test hooks need `AWS_REGION`, but the driver does not set it. Until it does, the owner exports `AWS_REGION=us-east-1`.
+- **F5 (not-ready, owner allowlist):** add `*.cloudfront-kvs.global.api.aws` to the allowlist. SST's Router writes routes to the CloudFront KeyValueStore there. L-0 confirms the host.
+
+**Ready:**
+- the regions (PAR-060, `setup-account --region`);
+- the credential preflight, which names `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` or accepts `AWS_PROFILE`, web-identity or container sources, then calls STS;
+- the usage caps (PAR-282/283);
+- the schedule and cost estimates.
+
+**Owner-action:**
+- the account (AdministratorAccess recommended; the least-privilege list above also needs `iam:CreateServiceLinkedRole`, `cloudfront-keyvaluestore` and `ssm` on `/sst/*`);
+- the credential variables;
+- the allowlist, including the Pulumi plugin hosts in a fresh sandbox;
+- CloudFront verification and the quotas;
+- the $25 budget alarm;
+- answers to §5 Q4–Q5 and §5.1 Q1/Q3/Q4/Q7 before L-1.
+
 ## 5. Risks and open questions for you
 
 1. Does Google stay mocked in the AWS phase? I assumed yes, so the Google-dependent criteria stay not-run.
