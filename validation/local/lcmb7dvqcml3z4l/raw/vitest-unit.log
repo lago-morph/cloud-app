@@ -1,0 +1,286 @@
+
+ RUN  v5.0.5 /home/user/cloud-app/.claude/worktrees/agent-aa216f593c236c214
+
+ ↓ packages/framework/src/check/migrations/checker.unit.test.ts (10 tests | 10 skipped)
+ ↓ tests/compliance/harness/selection.unit.test.ts (6 tests | 6 skipped)
+stderr | packages/framework/src/kv/service.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/src/kv/service.unit.test.ts (21 tests | 21 skipped)
+stderr | packages/framework/src/mig/apply.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+stderr | packages/framework/src/testing/test-app.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/src/testing/test-app.unit.test.ts (23 tests | 23 skipped)
+stderr | packages/framework/src/provision/cloudflare/d1/copy.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/src/mig/apply.unit.test.ts (12 tests | 12 skipped)
+ ↓ packages/framework/src/provision/cloudflare/d1/copy.unit.test.ts (6 tests | 6 skipped)
+ ↓ packages/framework/src/check/fixtures.unit.test.ts (90 tests | 90 skipped)
+stderr | packages/framework/src/sql/queries.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/src/check/migrations/databases.unit.test.ts (3 tests | 3 skipped)
+ ↓ packages/framework/src/sql/queries.unit.test.ts (38 tests | 38 skipped)
+ ↓ packages/framework/src/targets/cloudflare/stage.unit.test.ts (6 tests | 6 skipped)
+ ↓ packages/framework/src/sql/postgres.unit.test.ts (3 tests | 3 skipped)
+stderr | packages/framework/src/build/build.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+stderr | packages/framework/src/sql/databases.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/src/sql/databases.unit.test.ts (77 tests | 77 skipped)
+ ↓ packages/framework/src/build/build.unit.test.ts (14 tests | 14 skipped)
+stderr | packages/framework/src/provision/cloudflare/d1/check.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/src/provision/cloudflare/d1/check.unit.test.ts (4 tests | 4 skipped)
+(node:958) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ packages/framework/src/check/rules/allowed-imports.unit.test.ts (35 tests | 35 skipped)
+ ↓ tests/compliance/criteria/mig/support/stage.unit.test.ts (11 tests | 11 skipped)
+stderr | packages/framework/src/provision/cloudflare/d1/migration-database.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/src/provision/cloudflare/d1/migration-database.unit.test.ts (5 tests | 5 skipped)
+stderr | packages/framework/src/provision/cloudflare/d1/fake-d1-api.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/src/provision/cloudflare/d1/fake-d1-api.unit.test.ts (5 tests | 5 skipped)
+stderr | packages/framework/src/provision/cloudflare/d1/deploy-d1.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/src/provision/cloudflare/d1/deploy-d1.unit.test.ts (2 tests | 2 skipped)
+ ↓ packages/framework/src/check/rules/no-dialect-features.unit.test.ts (22 tests | 22 skipped)
+stderr | packages/framework/src/targets/cloudflare/settings.workerd.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/src/check/rules/browser-api-only.unit.test.ts (12 tests | 12 skipped)
+ ↓ packages/framework/src/targets/cloudflare/settings.workerd.unit.test.ts (3 tests | 3 skipped)
+ ↓ packages/framework/src/check/rules/no-raw-sql.unit.test.ts (10 tests | 10 skipped)
+ ↓ packages/framework/src/check/rules/no-env-access.unit.test.ts (11 tests | 11 skipped)
+ ↓ packages/framework/src/check/rules/framework-ids.unit.test.ts (7 tests | 7 skipped)
+stderr | packages/framework/src/provision/cloudflare/d1/operations.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/src/cli/verify/type-check.unit.test.ts (3 tests | 3 skipped)
+ ↓ packages/framework/src/check/rules/db-handles.unit.test.ts (10 tests | 10 skipped)
+ ↓ packages/framework/src/provision/cloudflare/d1/operations.unit.test.ts (4 tests | 4 skipped)
+ ↓ packages/framework/src/check/rules/app-error-codes.unit.test.ts (8 tests | 8 skipped)
+ ↓ packages/framework/src/check/rules/framework-order.unit.test.ts (8 tests | 8 skipped)
+ ↓ tests/compliance/criteria/prov/support/stage.unit.test.ts (9 tests | 9 skipped)
+ ↓ packages/framework/src/check/engine.unit.test.ts (3 tests | 3 skipped)
+ ↓ packages/framework/src/cli/main.unit.test.ts (7 tests | 7 skipped)
+ ↓ tests/compliance/e2e/support/apps.unit.test.ts (5 tests | 5 skipped)
+ ↓ packages/framework/src/check/type-escapes.unit.test.ts (16 tests | 16 skipped)
+ ↓ packages/framework/src/check/rules/no-raw-html.unit.test.ts (8 tests | 8 skipped)
+ ↓ packages/framework/src/evidence/writer.unit.test.ts (9 tests | 9 skipped)
+ ↓ tests/compliance/criteria/core/support/stages.unit.test.ts (4 tests | 4 skipped)
+stderr | packages/framework/src/targets/cloudflare/worker.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+stderr | packages/framework/src/targets/workers.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/src/cli/commands/deploy-wiring.unit.test.ts (10 tests | 10 skipped)
+ ↓ packages/framework/src/auth/runtime.unit.test.ts (25 tests | 25 skipped)
+ ↓ packages/framework/src/targets/cloudflare/worker.unit.test.ts (8 tests | 8 skipped)
+ ↓ packages/framework/src/targets/workers.unit.test.ts (9 tests | 9 skipped)
+ ↓ packages/framework/src/mig/generate.unit.test.ts (14 tests | 14 skipped)
+ ↓ packages/framework/src/check/app-config.unit.test.ts (10 tests | 10 skipped)
+ ↓ packages/framework/src/provision/cloudflare/target.unit.test.ts (19 tests | 19 skipped)
+ ↓ packages/framework/src/files/local/route.unit.test.ts (18 tests | 18 skipped)
+ ✓ tests/compliance/harness/driver.unit.test.ts (31 tests | 23 skipped) 49ms
+ ✓ packages/framework/src/google/provider.unit.test.ts (25 tests | 17 skipped) 73ms
+ ↓ packages/framework/src/provision/cloudflare/sst.unit.test.ts (11 tests | 11 skipped)
+ ↓ packages/framework/src/http/server.unit.test.ts (13 tests | 13 skipped)
+ ↓ tests/compliance/criteria/core/support/secrets.unit.test.ts (10 tests | 10 skipped)
+ ↓ tests/compliance/harness/node-deps.unit.test.ts (15 tests | 15 skipped)
+ ↓ packages/framework/src/cli/commands/dev.unit.test.ts (11 tests | 11 skipped)
+ ↓ packages/framework/src/files/cloudflare/tickets.unit.test.ts (23 tests | 23 skipped)
+ ↓ packages/framework/src/files/service.unit.test.ts (25 tests | 25 skipped)
+ ↓ packages/framework/src/http/validation.unit.test.ts (7 tests | 7 skipped)
+ ↓ packages/framework/src/testing/connect.unit.test.ts (25 tests | 25 skipped)
+ ↓ packages/framework/src/core/assemble.unit.test.ts (16 tests | 16 skipped)
+ ↓ packages/framework/src/sql/guard.unit.test.ts (8 tests | 8 skipped)
+ ↓ packages/framework/src/log/writer.unit.test.ts (7 tests | 7 skipped)
+ ↓ packages/framework/src/log/request.unit.test.ts (5 tests | 5 skipped)
+ ↓ packages/framework/src/files/cloudflare/keys.unit.test.ts (13 tests | 13 skipped)
+ ↓ tests/compliance/harness/http.unit.test.ts (6 tests | 6 skipped)
+ ↓ packages/framework/src/auth/guards.unit.test.ts (5 tests | 5 skipped)
+ ↓ packages/framework/src/http/client.unit.test.ts (6 tests | 6 skipped)
+ ↓ packages/framework/src/check/migrations/files.unit.test.ts (10 tests | 10 skipped)
+ ✓ tests/compliance/tools/traceability.unit.test.ts (10 tests) 55ms
+ ↓ packages/framework/src/files/s3/sign.unit.test.ts (2 tests | 2 skipped)
+ ✓ tests/compliance/harness/cli.unit.test.ts (5 tests) 26ms
+ ↓ packages/framework/src/targets/cloudflare/tickets.unit.test.ts (4 tests | 4 skipped)
+ ↓ packages/framework/src/files/cloudflare/cors.unit.test.ts (14 tests | 14 skipped)
+ ↓ packages/framework/src/auth/client.unit.test.ts (4 tests | 4 skipped)
+ ↓ packages/framework/src/google/certify.unit.test.ts (19 tests | 19 skipped)
+ ↓ packages/framework/src/provision/cloudflare/health.unit.test.ts (5 tests | 5 skipped)
+ ↓ skill/scripts/scaffold.unit.test.ts (6 tests | 6 skipped)
+ ↓ packages/framework/src/cli/commands/certify-auth.unit.test.ts (8 tests | 8 skipped)
+ ↓ tests/compliance/criteria/compl/support.unit.test.ts (7 tests | 7 skipped)
+ ↓ packages/framework/src/provision/cloudflare/api.unit.test.ts (4 tests | 4 skipped)
+ ↓ packages/framework/src/secrets/local.unit.test.ts (3 tests | 3 skipped)
+ ↓ packages/framework/src/cli/commands/smoke.unit.test.ts (20 tests | 20 skipped)
+ ↓ packages/framework/src/secrets/service.unit.test.ts (14 tests | 14 skipped)
+ ↓ packages/framework/src/secrets/set-command.unit.test.ts (16 tests | 16 skipped)
+ ✓ tests/compliance/harness/catalogue.unit.test.ts (18 tests | 16 skipped) 5ms
+ ↓ packages/framework/src/core/errors.unit.test.ts (4 tests | 4 skipped)
+ ↓ packages/framework/src/sql/values.unit.test.ts (64 tests | 64 skipped)
+ ✓ packages/framework/src/provision/core/deploy.unit.test.ts (20 tests | 15 skipped) 9ms
+ ↓ packages/framework/src/files/local/tickets.unit.test.ts (5 tests | 5 skipped)
+ ↓ packages/framework/src/mig/framework.unit.test.ts (3 tests | 3 skipped)
+ ✓ packages/framework/src/provision/core/remove.unit.test.ts (4 tests | 2 skipped) 6ms
+ ↓ packages/framework/src/mig/history.unit.test.ts (4 tests | 4 skipped)
+ ✓ packages/framework/src/provision/cloudflare/account.unit.test.ts (15 tests | 14 skipped) 5ms
+ ↓ packages/framework/src/log/failures.unit.test.ts (5 tests | 5 skipped)
+ ↓ packages/framework/src/cli/commands/reset-local.unit.test.ts (2 tests | 2 skipped)
+ ↓ packages/framework/src/auth/session.unit.test.ts (5 tests | 5 skipped)
+ ↓ packages/framework/src/config/schema.unit.test.ts (19 tests | 19 skipped)
+ ↓ packages/framework/src/auth/stub-provider.unit.test.ts (4 tests | 4 skipped)
+ ↓ packages/framework/src/files/names.unit.test.ts (36 tests | 36 skipped)
+ ↓ packages/framework/src/sql/names.unit.test.ts (36 tests | 36 skipped)
+ ↓ packages/framework/src/cli/verify/zod-version.unit.test.ts (2 tests | 2 skipped)
+ ↓ packages/framework/src/auth/transaction.unit.test.ts (3 tests | 3 skipped)
+ ↓ packages/framework/src/files/cloudflare/credentials.unit.test.ts (1 test | 1 skipped)
+ ↓ packages/framework/src/evidence/schema.unit.test.ts (9 tests | 9 skipped)
+ ↓ packages/framework/src/secrets/dev-vars.unit.test.ts (18 tests | 18 skipped)
+ ↓ packages/framework/src/files/client.unit.test.ts (12 tests | 12 skipped)
+ ↓ packages/framework/src/log/cloudflare/sink.unit.test.ts (5 tests | 5 skipped)
+ ✓ packages/framework/src/cli/commands/deploy.unit.test.ts (12 tests | 10 skipped) 6ms
+ ↓ tests/compliance/harness/expected.unit.test.ts (10 tests | 10 skipped)
+ ↓ packages/framework/src/check/migrations/compare.unit.test.ts (11 tests | 11 skipped)
+ ↓ tests/compliance/harness/results.unit.test.ts (11 tests | 11 skipped)
+ ↓ packages/framework/src/cli/dev/runtime.unit.test.ts (6 tests | 6 skipped)
+ ✓ tests/compliance/tools/release.unit.test.ts (14 tests) 13ms
+ ↓ packages/framework/src/cli/dev/plan.unit.test.ts (7 tests | 7 skipped)
+ ↓ packages/framework/src/config/files.unit.test.ts (8 tests | 8 skipped)
+ ↓ tests/skill/example-copies.unit.test.ts (6 tests | 6 skipped)
+ ↓ packages/framework/src/sql/table.unit.test.ts (16 tests | 16 skipped)
+ ↓ packages/framework/src/targets/cloudflare/settings.unit.test.ts (6 tests | 6 skipped)
+ ✓ packages/framework/src/cli/commands/remove.unit.test.ts (7 tests | 6 skipped) 5ms
+ ↓ packages/framework/src/sql/build.unit.test.ts (8 tests | 8 skipped)
+ ↓ packages/framework/src/sql/handle.unit.test.ts (3 tests | 3 skipped)
+ ↓ tests/support/tags.unit.test.ts (16 tests | 16 skipped)
+ ↓ packages/framework/src/config/resolve.unit.test.ts (20 tests | 20 skipped)
+ ↓ packages/framework/src/auth/signing.unit.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/tools/records.unit.test.ts (1 test | 1 skipped)
+ ↓ packages/framework/src/cli/commands/verify.unit.test.ts (9 tests | 9 skipped)
+ ↓ packages/framework/src/evidence/run-id.unit.test.ts (4 tests | 4 skipped)
+ ↓ packages/framework/src/cli/commands/secrets-cloud.unit.test.ts (5 tests | 5 skipped)
+ ↓ packages/framework/src/cli/commands/secrets.unit.test.ts (4 tests | 4 skipped)
+ ↓ packages/framework/src/core/exports.unit.test.ts (8 tests | 8 skipped)
+ ↓ packages/framework/src/provision/cloudflare/worker.unit.test.ts (6 tests | 6 skipped)
+ ↓ packages/framework/src/provision/cloudflare/r2-token.unit.test.ts (5 tests | 5 skipped)
+ ↓ packages/framework/src/cli/verify/tests.unit.test.ts (2 tests | 2 skipped)
+ ↓ packages/framework/src/cli/dev/logs.unit.test.ts (1 test | 1 skipped)
+ ↓ packages/framework/src/kv/cursor.unit.test.ts (4 tests | 4 skipped)
+ ↓ tests/compliance/harness/args.unit.test.ts (7 tests | 7 skipped)
+ ↓ packages/framework/src/sql/columns.unit.test.ts (19 tests | 19 skipped)
+ ↓ packages/framework/src/core/identity.unit.test.ts (20 tests | 20 skipped)
+ ↓ packages/framework/src/log/entry.unit.test.ts (16 tests | 16 skipped)
+ ↓ packages/framework/src/provision/cloudflare/objects.unit.test.ts (4 tests | 4 skipped)
+ ↓ packages/framework/src/secrets/names.unit.test.ts (6 tests | 6 skipped)
+ ↓ packages/framework/src/log/keys.unit.test.ts (4 tests | 4 skipped)
+ ↓ packages/framework/src/auth/cookies.unit.test.ts (6 tests | 6 skipped)
+ ↓ tests/compliance/harness/env.unit.test.ts (5 tests | 5 skipped)
+ ↓ tests/compliance/harness/reports.unit.test.ts (6 tests | 6 skipped)
+ ↓ packages/framework/src/auth/user-id.unit.test.ts (2 tests | 2 skipped)
+ ↓ packages/framework/src/kv/rules.unit.test.ts (9 tests | 9 skipped)
+ ↓ packages/framework/src/check/paths.unit.test.ts (10 tests | 10 skipped)
+ ↓ packages/framework/src/cli/args.unit.test.ts (3 tests | 3 skipped)
+ ↓ packages/framework/src/core/deferred.unit.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/prov/support/restricted-token.unit.test.ts (3 tests | 3 skipped)
+ ↓ packages/framework/src/log/memory.unit.test.ts (3 tests | 3 skipped)
+ ✓ packages/framework/src/provision/core/setup-account.unit.test.ts (4 tests | 2 skipped) 6ms
+ ↓ tests/compliance/harness/wait.unit.test.ts (4 tests | 4 skipped)
+ ↓ packages/framework/src/files/cursor.unit.test.ts (9 tests | 9 skipped)
+ ↓ packages/framework/src/log/capture.unit.test.ts (6 tests | 6 skipped)
+ ↓ packages/framework/src/config/embed.unit.test.ts (4 tests | 4 skipped)
+ ↓ packages/framework/src/files/local-only.unit.test.ts (1 test | 1 skipped)
+ ↓ packages/framework/src/check/references.unit.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/harness/index.unit.test.ts (1 test | 1 skipped)
+ ↓ packages/framework/src/provision/cloudflare/environment.unit.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/harness/compare.unit.test.ts (5 tests | 5 skipped)
+ ↓ packages/framework/src/cli/commands/smoke-cloud.unit.test.ts (5 tests | 5 skipped)
+ ✓ packages/framework/src/cli/commands/setup-account.unit.test.ts (5 tests | 4 skipped) 4ms
+ ↓ packages/framework/src/files/cloudflare/disposition.unit.test.ts (11 tests | 11 skipped)
+ ↓ packages/framework/src/cli/commands/build.unit.test.ts (2 tests | 2 skipped)
+ ↓ packages/framework/src/sql/dialect.unit.test.ts (4 tests | 4 skipped)
+ ↓ packages/framework/src/config/keys.unit.test.ts (4 tests | 4 skipped)
+ ↓ packages/framework/src/auth/levels.unit.test.ts (3 tests | 3 skipped)
+ ↓ packages/framework/src/cli/commands/generate-migration.unit.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/harness/leftovers.unit.test.ts (2 tests | 2 skipped)
+ ↓ packages/framework/src/log/local.unit.test.ts (2 tests | 2 skipped)
+ ↓ packages/framework/src/config/service.unit.test.ts (4 tests | 4 skipped)
+ ↓ packages/framework/src/sql/expressions.unit.test.ts (2 tests | 2 skipped)
+ ↓ packages/framework/src/check/public.unit.test.ts (3 tests | 3 skipped)
+ ↓ packages/framework/src/core/types.unit.test.ts (1 test | 1 skipped)
+ ↓ packages/framework/src/provision/cloudflare/names.unit.test.ts (5 tests | 5 skipped)
+ ↓ packages/framework/src/check/format.unit.test.ts (4 tests | 4 skipped)
+ ↓ packages/framework/src/kv/range.unit.test.ts (5 tests | 5 skipped)
+ ↓ packages/framework/src/config/secret-locations.unit.test.ts (6 tests | 6 skipped)
+ ↓ packages/framework/src/mig/cloud/check.unit.test.ts (3 tests | 3 skipped)
+ ✓ packages/framework/src/provision/core/databases.unit.test.ts (3 tests | 2 skipped) 4ms
+ ↓ packages/framework/src/auth/return-to.unit.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/_cloud/api.unit.test.ts (3 tests | 3 skipped)
+ ↓ packages/framework/src/core/define-app.unit.test.ts (1 test | 1 skipped)
+ ↓ packages/framework/src/check/resolve.unit.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/mig/support/failure-output.unit.test.ts (3 tests | 3 skipped)
+(node:2222) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ packages/framework/src/check/migrations/exports.unit.test.ts (1 test | 1 skipped)
+ ↓ packages/framework/src/sql/types.unit.test.ts (1 test | 1 skipped)
+stderr | packages/framework/src/testing/public.unit.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/src/testing/public.unit.test.ts (1 test | 1 skipped)
+
+ Test Files  14 passed | 174 skipped (188)
+      Tests  62 passed | 1758 skipped (1820)
+   Start at  19:48:25
+   Duration  30.69s (import 95%, transform 3%, worker 1%)
+
+     Import  440 modules were evaluated 983 times · 64.30s total, 95% of tracked time
+             ~5.23s faster with isolate: false — shared modules are evaluated once per worker instead of once per file
+             learn more: https://vitest.dev/guide/improving-performance#test-isolation
+
+JSON report written to /tmp/compliance-SLTAA1/vitest-unit.json
