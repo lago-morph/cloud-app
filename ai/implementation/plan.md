@@ -562,6 +562,7 @@ Deps: C-EV.
 ### 8.1 Google mocked (detail: "Google login mocked for this phase")
 From prompt §4: GOOGLE-AC-001 (cloud part: certification step-1 check against a production deployment), GOOGLE-AC-005; AUTH-AC-005 (admin-list part), AUTH-AC-009 (cloud production part), AUTH-AC-011; COMPL-AC-005; SKILL-AC-006; E2E-006, E2E-007 (cloud part), E2E-008.
 Added by the planner for the evaluator to confirm: **CLI-AC-001** (`certify-auth` on cloud: needs a production stage with a Google client).
+Added for the evaluator to confirm (fix-auth005; root cause `2026-10-24-pass1c-E2E-004-AUTH-AC-005-no-cloud-test`): **AUTH-AC-005 contract part: successful callback (needs a real login provider)** on cloud. A test stage has the mock and no real provider (DEC-0171), so the 302 to `returnTo` with a session cookie first exists on `prodcheck` with Google. The rest of the contract part runs on cloud (`tests/compliance/criteria/auth/contract.test.ts`); locally the successful callback is covered in-process with the stub provider.
 
 ### 8.2 AWS (detail: "AWS phase not started")
 - All of AWS-AC-001…-006.

@@ -40,6 +40,9 @@ export const PHASE_RULES: readonly NotRunRule[] = [
   { id: "GOOGLE-AC-001", targets: CLOUD, mode: "automated", detail: GOOGLE_MOCKED },
   { id: "GOOGLE-AC-005", targets: CLOUD, mode: "milestone", detail: GOOGLE_MOCKED },
   { id: "AUTH-AC-005", targets: CLOUD, mode: "milestone", detail: GOOGLE_MOCKED },
+  // Added for the evaluator to confirm (plan §8.1; fix-auth005): a test stage has no real login provider (DEC-0171),
+  // so the successful-callback response first exists on prodcheck with Google, like AUTH-AC-009's cloud production part.
+  { id: "AUTH-AC-005", targets: CLOUD, mode: "automated", part: "contract part: successful callback (needs a real login provider)", detail: GOOGLE_MOCKED },
   { id: "AUTH-AC-009", targets: CLOUD, mode: "automated", part: "cloud production part", detail: GOOGLE_MOCKED },
   { id: "AUTH-AC-011", targets: CLOUD, mode: "automated", detail: GOOGLE_MOCKED },
   { id: "COMPL-AC-005", targets: CLOUD, mode: "automated", detail: GOOGLE_MOCKED },
