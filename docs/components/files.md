@@ -62,13 +62,37 @@ Unreachable storage MUST surface as `FILES.UNAVAILABLE`. When a browser transfer
 
 Fetch fresh download tickets with each listing; do not cache URLs.
 
+**Download names** (DEC-0313, DEC-0414). A download is saved under the file's whole name: storage's response carries `Content-Disposition: attachment; filename*=UTF-8''<name>` (RFC 6266 / RFC 8187; every byte outside `attr-char` percent-encoded, `/` included) for every content type, raster images included, on every target. Images still display through `<img src>`, which ignores the header. Nothing in the name is interpreted as a path; browsers replace unsafe characters when they save. One helper (`src/files/cloudflare/disposition.ts`) builds the value for every target. On Cloudflare the download ticket signs it as R2's `response-content-disposition`.
+
+**Shared runtime shape** (DEC-0160, DEC-0162, DEC-0164):
+- One target-neutral service runs over the object store (the R2 Worker binding, locally and on Cloudflare), with a ticket issuer supplied by each target.
+- Both kinds of ticket are plain JSON with `url` and `expiresAt` (milliseconds). An upload ticket also holds `method` (`PUT`) and `headers` (always `Content-Type`). The browser helpers read only these fields, so they behave the same on every target.
+- A `list` cursor encodes the prefix and the last name returned. The next page asks the store for names after that name, and the service fills each page to its limit even when the store returns short pages. A `limit` is clamped to 1…PAR-232.
+- Every store failure that is not already a `FrameworkError` becomes `FILES.UNAVAILABLE` and is logged once. `createUploadTicket` asks the store for the name's metadata first, so it also fails when storage is unreachable.
+
 **Cross-origin configuration.** The bucket's CORS policy (the rules a browser checks before cross-origin requests) is set by provisioning. It allows `PUT` and `GET` from the stage's public origin only, with the `Content-Type` request header. App code and app configuration never touch it.
 
 ### Local
-Server operations use the local R2 emulation through its Worker binding. Tickets point to a same-origin framework route, `/api/__framework/files/*`, which checks an HMAC-signed ticket and streams the body to or from local storage. Its responses always carry `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`, plus `Content-Disposition: attachment` for content types other than raster images, so uploaded HTML or SVG never runs as the app's origin. There is no cross-origin traffic and no use of Wrangler's experimental local S3 endpoint.
+Server operations use the local R2 emulation through its Worker binding. Tickets point to a same-origin framework route, `/api/__framework/files/*`, which checks an HMAC-signed ticket and streams the body to or from local storage. Its responses always carry `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`, and a download carries the named `Content-Disposition: attachment` above, so uploaded HTML or SVG never runs as the app's origin. There is no cross-origin traffic and no use of Wrangler's experimental local S3 endpoint.
+
+Implementation details (DEC-0161, DEC-0163):
+- A local ticket's URL is the relative path `/api/__framework/files/<token>`. The token is base64url JSON of operation, name, content type (uploads) and expiry time, followed by `.` and its HMAC-SHA-256 signature. The signing key is the framework-internal local secret that `dev` generates into `.dev.vars` (SEC).
+- The route accepts `PUT` with an upload ticket and `GET` with a download ticket. An upload must send exactly the ticket's `Content-Type`.
+- A ticket that is malformed, tampered with, expired, used for the other operation, or used with a different content type gets an empty 403. A download of a file deleted after the ticket was issued gets an empty 404. These refusals are not logged, so ticket URLs never reach the log.
+- The route sends no CORS headers, so other origins cannot use it.
+- The route reads an upload body completely before storing it. R2's binding accepts only streams of known length, and a request body in the Node process of `createTestApp` is not one. This is local only, so the limit is the machine's memory, not a framework limit.
+- The route, its tickets and the key's name live only in `src/files/local/`. Nothing else in FILES imports them, so cloud bundles can leave them out (CORE-REQ-006).
 
 ### Cloudflare
 Server operations use the R2 Worker binding. Tickets are SigV4-signed URLs for R2's S3-compatible endpoint, created with aws4fetch (PAR-105), because the binding cannot sign URLs. The signing credentials are an R2 API token scoped to the stage's bucket. Provisioning creates it and stores it as a framework-internal Worker secret.
+
+Implementation details (DEC-0098…DEC-0100, DEC-0327…DEC-0330; code in `src/files/cloudflare/`):
+- A ticket URL is path-style, `https://<account>.r2.cloudflarestorage.com/<bucket>/<key>`, with each `/`-separated segment of the name RFC 3986-encoded. URL parsers resolve `.` and `..` segments even when percent-encoded, so a name with such a segment is sent with every `/` as `%2F` (storage decodes it back to the same key); a name that is only `.` or `..` gets no ticket (`FILES.INVALID_NAME`).
+- Signing: aws4fetch, `service: "s3"`, `region: "auto"`, query signing with every passed header signed (`allHeaders`), and `X-Amz-Expires` = PAR-233 in seconds. An upload ticket signs `Content-Type` (`X-Amz-SignedHeaders=content-type;host`), so storage refuses another content type. A download ticket signs only `host`, plus the `response-content-disposition` query parameter, which names the file (see "Download names").
+- Credentials: the Worker secrets `frameworkR2AccessKeyId` and `frameworkR2SecretAccessKey`, read for each ticket. Provisioning derives them from the token it creates: access key ID = token `id`, secret access key = lowercase hex SHA-256 of token `value` (`s3CredentialsFromToken`).
+- The bucket's CORS policy body and API path come from `bucketCorsPolicy(publicOrigin)` / `bucketCorsPath` (one rule, max age 60 s; the origin must be exactly one origin). Deploy's health step sends one preflight with `checkStorageCors`: `OPTIONS` to the bucket from the public origin asking for `PUT` with `content-type`; it passes only on a 2xx whose `Access-Control-Allow-Origin` is that origin.
+
+Note: R2 sends no CORS headers on its 403 responses (expired or mismatched ticket), so the browser cannot read storage's status there; on Cloudflare such a transfer fails with status null and the `no response: network or cross-origin blocked` message. This conflicts with FILES-AC-003's expired-ticket clause and is an open owner item: see DEC-0101.
 
 ### AWS
 Server operations and tickets use S3 with the Lambda's role credentials, including the session token, through aws4fetch. Tickets last PAR-233, on the assumption that role sessions outlast it; a ticket whose credentials expire early fails in the browser with `FILES.TRANSFER_FAILED` and storage's status. Lambdas access S3 directly, outside any VPC. File content reaches the browser only through `downloadUrl`, never as an API route's response body: Lambda buffers responses and refuses those above its response payload limit, so a route returning a `files.get` stream fails on AWS for large files.

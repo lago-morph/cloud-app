@@ -1,0 +1,33 @@
+{
+  "name": "prototype-framework-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "22.22.0"
+  },
+  "workspaces": [
+    "packages/framework",
+    "apps/template",
+    "apps/reference",
+    "apps/demo",
+    "tests/compliance"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p packages/framework/tsconfig.json && tsc -p tsconfig.json && tsc -p tests/compliance/harness/tsconfig.json",
+    "lint": "eslint packages/framework/src packages/framework/bin packages/framework/test",
+    "test:unit": "vitest run --config vitest.unit.config.ts",
+    "test:integration": "npm run build -w packages/framework && vitest run --config vitest.integration.config.ts && playwright test --project integration --pass-with-no-tests",
+    "test:e2e": "playwright test --project e2e",
+    "compliance": "node tests/compliance/harness/run.mjs",
+    "verify": "npm run build -w packages/framework && npm run typecheck && npm run lint && npm run test:unit && npm --workspace apps/template run verify && npm --workspace apps/reference run verify && vitest run --config vitest.integration.config.ts tests/skill/example-pages.test.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "22.20.5",
+    "eslint": "10.13.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.0",
+    "vitest": "5.0.5"
+  }
+}

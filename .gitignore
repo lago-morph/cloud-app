@@ -1,0 +1,16 @@
+node_modules/
+
+# Framework build output and generated entry points
+dist/
+.framework/
+
+# Local runtime state, logs and dev-only secrets
+.wrangler/
+.logs/
+.dev.vars
+
+# Playwright output
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/

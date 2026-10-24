@@ -1,0 +1,5 @@
+{
+  // Framework lib set: ES + Web APIs + Node types (tsconfig.node.json). Type-checks sources and tests.
+  "extends": "../../tsconfig.node.json",
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

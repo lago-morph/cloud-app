@@ -38,7 +38,11 @@ Configuration files MUST NOT contain secret values; the schema provides no place
 
 ## 2. Design
 
-**Files.** Values live in `config/<target>/<stage>.json`; local development uses `config/local.json`; every test stage (`test-*`) of a target shares `config/<target>/test.json`. A build for a stage not named `test-*` reads only that stage's own file and never falls back to `test.json`.
+**Files.** Values live in `config/<target>/<stage>.json`; local development uses `config/local.json` (for every local stage, DEC-0151); every test stage (`test-*`) of a cloud target shares `config/<target>/test.json`. A build for a stage not named `test-*` reads only that stage's own file and never falls back to `test.json`.
+
+**Declared keys.** Key names are lowerCamelCase (`^[a-z][a-zA-Z0-9]*$`). A default must have the key's type. Integers are JSON numbers without a fractional part.
+
+**Build failures.** Every problem in a values file (schema violation, missing file, missing value, wrong type, undeclared key, bad declared key or default) fails the build with one `CORE.MISCONFIGURED` error that names the file and lists every offending field or key (DEC-0152). `framework.google` is not required by the build; deploy preflight checks it for production stages (PROV-REQ-002).
 
 **Admin and users lists.** `framework.admins` and the optional `framework.users` hold user IDs as shown by `/api/auth/me`, with the same item rules (non-empty, unique). AUTH evaluates both per request (AUTH-REQ-003). Like every value, a change takes effect at the next deploy.
 
@@ -49,7 +53,9 @@ Configuration files MUST NOT contain secret values; the schema provides no place
 - values known only once resources exist, such as the database, bucket and log bucket identifiers, and the stage's generated public origin;
 - secret locations, derived by SEC's naming convention.
 
-**Delivery.** Committed values are embedded in the build as a generated module (DEC-0063). Provisioning-derived values reach the runtime through the platform's deployment-time settings (Worker variables on Cloudflare, Lambda environment variables on AWS). Only framework adapters read those settings; app code reads configuration through `c.var.config` only.
+The build-time result (`ResolvedConfig`, framework-internal) holds the deployment, every declared key's value, `admins`, `users` (only when present in the file), `google` (only when present), and each declared secret as `{ name, location }`. Provisioning-derived values are not part of it; the adapters that need them read them from the target's deployment-time settings (DEC-0153).
+
+**Delivery.** Committed values are embedded in the build as a generated module (DEC-0063): a JavaScript module with no imports whose default export is the resolved configuration as JSON data. The runtime `ConfigService` is built over its `values`; reading any other key throws `CFG.UNDECLARED_KEY` naming the key. Provisioning-derived values reach the runtime through the platform's deployment-time settings (Worker variables on Cloudflare, Lambda environment variables on AWS). Only framework adapters read those settings; app code reads configuration through `c.var.config` only.
 
 ### Local
 `config/local.json`, with local fixed values in place of provisioning outputs.

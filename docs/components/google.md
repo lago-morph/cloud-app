@@ -55,6 +55,14 @@ The CLI MUST provide a guided manual certification against a production deployme
 
 Only the automatic redirect check (step 1) is part of routine verification of production deployments.
 
+**Implementation** (`src/google/`, framework-internal; never app-facing):
+- `createGoogleLoginProvider({ fetch?, now? })` returns the `LoginProvider` with `id` `"google"`. It reads the client ID from config key `framework.google.clientId` (missing → `CORE.MISCONFIGURED`) and the client secret from the framework-internal secret `frameworkGoogleClientSecret` (DEC-0176). `fetch` is looked up on each call, defaulting to the global one.
+- Discovery is fetched once per provider instance from the fixed URL; a failure is not cached. Its `authorization_endpoint`, `token_endpoint` and `jwks_uri` must be https URLs. Signing keys come only from that `jwks_uri` (jose `createRemoteJWKSet`); token header URLs such as `jku` and `x5u` are ignored.
+- The transaction state is JSON `{ state, nonce, verifier }`, each 32 random bytes in base64url. AUTH signs and stores it (auth.md).
+- Validation: RS256 only; issuer `https://accounts.google.com` or `accounts.google.com`; audience = client ID; `sub`, `iat` and `exp` required; `exp` and `iat` checked with PAR-252 tolerance (a future `iat` is checked explicitly, because jose checks it only together with a maximum age); nonce equal to the transaction's.
+- Every failure is `AUTH.LOGIN_FAILED`, and its message is exactly one of AUTH's fixed reasons: `transaction missing or expired`, `state mismatch`, `provider refused` (an `error` parameter or no code), `token exchange rejected (HTTP n)` (or `(no response)`), `token check failed: <check>` with check `signature`, `issuer`, `audience`, `expiry`, `issued-at`, `nonce`, or `subject`. The message never contains a code, state or token. A discovery failure is `provider discovery failed (…)` (DEC-0177).
+- Certification: `checkLoginRedirect({ origin, clientId, fetch? })` is step 1. It sends `GET <origin>/api/auth/login` with `redirect: "manual"` and lists each failed check: the target must be `https://accounts.google.com`, with `response_type=code`, the client ID, the `<origin>/api/auth/callback` callback, scope exactly `openid profile`, an S256 challenge, a state and a nonce. `certifyAuth(options, io)` runs steps 1–5 with injected I/O (`print`, `ask`, `writeEvidence`, `now`, `fetch`). It refuses `test-` stages, stops at the first failed step, and always writes one evidence record. The record has results for `GOOGLE-AC-001` (step 1) and `GOOGLE-AC-005` (all steps) and exit status 0 only if every step passed. Step 3 accepts a user ID matching `u_` plus 26 base32 characters in either letter case (DEC-0178).
+
 ## 3. Uses
 
 AUTH (provider interface, transaction state), CFG (client ID, public origin), SEC (client secret), COMPL (evidence format).
