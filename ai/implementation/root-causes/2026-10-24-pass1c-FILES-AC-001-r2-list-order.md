@@ -117,3 +117,54 @@ Before the probe, the `r2-observed` comparator in the fake is a hypothesis. Afte
 3. S3 API (SigV4 via `sign.ts` in a Node scratch script): `GET /<bucket>?list-type=2&prefix=q/` and `…&prefix=q/&start-after=q/a`, which decide the S3-list alternative. Then `…&prefix=t/` without `encoding-type=url` (is the XML well-formed?) and with it.
 4. Presigned GET of `t/a\u0001` (path `t/a%01`): expect 200 and 1 byte. Presigned PUT to `t/up\u0001`, then a binding `head`: it must exist under exactly that key. One `head` of a 1,024-byte key, to confirm R2's limit counts bytes.
 5. Delete every object, then `wrangler r2 bucket delete`. Add the raw outputs and the predictions they match as an addendum to this record. About 30 requests in all.
+
+## Live probe (2026-10-24)
+
+Runner: Cloudflare probe runner (probe only, no source changed). Base `60c6c78`. Executed the Review's probe on a temporary bucket `spike-r2order-<6 hex>` (not stage R), with a temporary Worker (`wrangler deploy`, Wrangler 4.149.0, binding `B`, deleted afterwards) and a temporary account API token with "Workers R2 Storage Bucket Item Write" on that bucket only (1-hour expiry as a backstop, deleted afterwards). No D1. Scripts and redacted raw logs: `ai/implementation/spikes/r2-order/` (`probe.mjs`, `worker.js`, `logs/requests.json` = every request in order, `logs/results.json`, `logs/wrangler-*.log`). Keys below are UTF-8 hex; the Worker reported `objects[].key` as hex and as `JSON.stringify`.
+
+Objects written through the binding (all 11 accepted, stored key = written key): `q/a` 712f61, `q/a b` 712f612062, `q/a!` 712f6121, `q/a/b` 712f612f62, `q/a0` 712f6130, `q/aa` 712f6161, `q/aé` 712f61c3a9, `q/b` 712f62, `t/a\u0001` 742f6101, `t/a b\u0001` 742f61206201, `t/a/b\u0001` 742f612f6201.
+
+### Binding listings (exact order)
+| | Call | Keys returned, in order (suffix after `q/`, hex of the whole key) |
+| --- | --- | --- |
+| L1 | `{prefix:"q/"}` | `a b` 712f612062, `a!` 712f6121, `a/b` 712f612f62, `a0` 712f6130, **`a` 712f61**, `aa` 712f6161, `aé` 712f61c3a9, `b` 712f62 |
+| L2 | L1 + `include:["httpMetadata"]` | identical to L1 (httpMetadata present on every object) |
+| L3 | `{prefix:"q/", startAfter:"q/a"}` | `a b`, `a!`, `a/b`, `a0`, `aa`, `aé`, `b` (all but `q/a`) |
+| L4 | `{prefix:"q/", startAfter:"q/a b"}` | `a!`, `a/b`, `a0`, **`a`**, `aa`, `aé`, `b` |
+| L5 | `{prefix:"q/", limit:2}` + R2 `cursor` | `[a b, a!]` `[a/b, a0]` `[a, aa]` `[aé, b]`, truncated true, true, true, false; concatenation = L1 |
+| L6 | `{prefix:"q/a"}` | `a b`, `a!`, `a/b`, `a0`, `a`, `aa`, `aé` (L1 without `b`) |
+| L7 | `{prefix:"q/", delimiter:"/"}` | objects `a b`, `a!`, `a0`, `a`, `aa`, `aé`, `b`; `delimitedPrefixes` `["q/a/"]` |
+| L8 | `{prefix:"t/"}` | `t/a\u0001` 742f6101, `t/a b\u0001` 742f61206201, `t/a/b\u0001` 742f612f6201 |
+
+Predictions for L1 against the observation:
+- E5 ("a key sorts after all its extensions"): `a b, a!, a/b, a0, aa, aé, a, b`. **Refuted** (`a` came before `aa`, `aé`).
+- "End of key sorts between 0x2F and 0x30": `a b, a!, a/b, a, a0, aa, aé, b`. **Refuted** (`a` came after `a0`).
+- Byte (= code point) order: `a, a b, a!, a/b, a0, aa, aé, b`. **Refuted.**
+- **Observed rule:** byte order, except that the end of a key ranks as if it were one more byte with a value above 0x30 and at most 0x61. A key sorts after its extensions whose next byte is 0x20, 0x21, 0x2F or 0x30, and before those whose next byte is 0x61 or 0xC3. Brute force over a virtual end byte 0x00–0xFF: L1 matches exactly for 0x31–0x61 and no other value. These keys cannot narrow that range further. This also fits pass 1c (end between 0x2F and 0x62). None of the Review's three candidate rules holds.
+- **`startAfter` does not follow the listing order.** L3 (`startAfter:"q/a"`) returns `a b`, `a!`, `a/b`, `a0`, which L1 lists *before* `q/a`. L4 (`startAfter:"q/a b"`) returns `q/a`, which is byte-wise *below* `q/a b`. Both results fit this description: return every key except `startAfter` itself whose ranked form (key + virtual end byte) is greater than the plain `startAfter` bytes. This is inferred from two calls, not proven. Consequence for the current service: a page that ends at a name with listed extensions (for example `q/a`), followed by `startAfter` = that name, returns again the extensions already emitted. Pass 1c happened not to hit this case. R2's own `cursor` (L5) is consistent with the listing order.
+- **Terminated keys:** L8 is in byte order, as the terminator fix needs. With no stored key a proper prefix of another, the end-of-key rank never decides an order.
+
+### S3 API (`ListObjectsV2`, path style, SigV4, temporary token)
+| | Query | Status | Keys in order |
+| --- | --- | --- | --- |
+| S1 | `prefix=q/` | 200 | `a b, a!, a/b, a0, a, aa, aé, b`: same as L1 |
+| S2 | `prefix=q/&start-after=q/a` | 200 | `a b, a!, a/b, a0, aa, aé, b`: same as L3 |
+| S3 | `prefix=q/&encoding-type=url` | 200 | same as L1 |
+| S4 | `prefix=t/` (no encoding) | 200 | `t/a\u0001, t/a b\u0001, t/a/b\u0001`; the XML carries **raw 0x01 bytes** in `<Key>`, so it is not well-formed XML 1.0 |
+| S5 | `prefix=t/&encoding-type=url` | 200 | `t%2Fa%01`, `t%2Fa%20b%01`, `t%2Fa%2Fb%01`, which decode to the same three keys; well-formed |
+
+**The S3 API does not give code point (byte) order.** It has the same order and the same `start-after` behaviour as the binding, so the Review's alternative "list through R2's S3 API" is ruled out. Without `encoding-type=url`, terminated keys make the response invalid XML (Review item 7, confirmed).
+
+### Presigned URLs (aws4fetch query signing, as `tickets.ts`)
+- P1 presigned GET `/<bucket>/t/a%01` → 200, body `x` (1 byte).
+- P2 presigned PUT `/<bucket>/t/up%01` → 200. Binding `head("t/up\u0001")` found it (size 1, key 5 bytes). `head("t/up")` → null. So the object is stored under exactly the terminated key.
+- P3 presigned PUT of a 1,024-byte key (`z/` + 1,022 × `k`) → 200. P4 presigned GET of it → 200, body `z`. Binding `head` found it (key 1,024 bytes).
+- P5 presigned PUT of a 1,025-byte key → **400 `InvalidObjectName`**. Binding `head` of that key throws `The specified object name is not valid. (10020)`. R2's limit is 1,024 **bytes**, so Review item 1 (PAR-230 blocking) is confirmed: a 1,024-byte name plus U+0001 cannot be stored.
+
+### Requests and cleanup
+37 requests to Cloudflare in total (cap 100; no 429; the only retry was the Worker readiness check). The probe script made 36: 8 direct REST API calls (permission groups, bucket create, token create, bucket delete, token delete, and 3 confirmation listings); 11 REST API calls made by Wrangler (9 by `deploy`, 2 by `delete`, from its debug log); 7 to the Worker (one 404 while the workers.dev route propagated, then 200s; these covered 11 puts, 11 list calls, 4 heads and one bulk delete); 10 to the S3 endpoint. Afterwards the Worker deleted all 13 objects (11 + `t/up\u0001` + the 1,024-byte key) and a re-list showed 0 remaining. Then the Worker (`wrangler delete`), the bucket (`DELETE r2/buckets/…`, 200) and the token (`DELETE tokens/…`, 200) were deleted. **Confirmed by listing:** no bucket matches `spike-r2order` (`r2/buckets?name_contains=`), no Worker script matches `spike-r2order` (`workers/scripts`), and no account token has the probe's id or a `spike-r2order` name (`tokens`, 1 page). One more REST call afterwards (37th) read the workers.dev subdomain into a shell variable, only so the committed files could be grepped for it; it was never printed.
+
+### What this means for the fix (for the reviewer and implementer; no decision taken here)
+- The cause stands: R2 orders a key that is a proper prefix of other keys by a rule that is not code point order, through both the binding and the S3 API. E5's exact rule is refuted. The fake's `r2-observed` comparator must implement the measured rule (end of key ranked as a byte in 0x31–0x61, for example 0x31), and the `startAfter` behaviour above, not E5.
+- The terminator (U+0001) is accepted everywhere: binding put/list/head, presigned GET/PUT (`%01`), and S3 listing with `encoding-type=url`. It yields byte order (L8). Review items 1 (keys of 1,024 bytes without a terminator) and 7 (S3 XML without `encoding-type=url`) are confirmed as real constraints.
+- Listing through S3 is not an alternative.
