@@ -1,7 +1,0 @@
-01-verify-online 0
-02-verify-offline 0
-03-test-integration 1
-04a-build-framework 0
-04b-secrets-set 0
-04c-compliance-local 0
-05-compliance-aws-dry-run 1
