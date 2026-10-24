@@ -131,8 +131,8 @@ function unavailable(why: string, log: DataApiOptions["log"]): FrameworkError {
   return failure;
 }
 
-/** Runs `call`, retrying while the cluster resumes, within `budgetMs` from the first attempt. */
-async function whileResuming<T>(call: () => Promise<T>, budgetMs: number, clock: DataApiClock, log: DataApiOptions["log"]): Promise<T> {
+/** Runs `call`, retrying while the cluster resumes, within `budgetMs` from the first attempt (also used by the CLI's database operations, provision/aws/databases.ts). */
+export async function whileResuming<T>(call: () => Promise<T>, budgetMs: number, clock: DataApiClock, log: DataApiOptions["log"]): Promise<T> {
   const start = clock.now();
   for (let retry = 0; ; retry++) {
     try {
