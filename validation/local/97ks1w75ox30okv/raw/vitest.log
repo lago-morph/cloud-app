@@ -1,0 +1,260 @@
+
+ RUN  v5.0.5 /home/user/cloud-app/.claude/worktrees/agent-a794f1f40ff3d6883
+
+ ↓ packages/framework/test/integration/local/dev.test.ts (5 tests | 5 skipped)
+stderr | packages/framework/test/integration/sql/schema-identical.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/sql/schema-identical.test.ts (3 tests | 3 skipped)
+ ↓ packages/framework/test/integration/mig/deploy-local.test.ts (3 tests | 3 skipped)
+(node:9074) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ packages/framework/test/integration/cli/verify.test.ts (12 tests | 12 skipped)
+ ↓ packages/framework/test/integration/core/types.test.ts (4 tests | 4 skipped)
+ ↓ packages/framework/test/integration/google/provider.test.ts (11 tests | 11 skipped)
+stderr | packages/framework/test/integration/http/errors.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/http/errors.test.ts (11 tests | 11 skipped)
+ ↓ packages/framework/test/integration/config/build.test.ts (12 tests | 12 skipped)
+ ↓ packages/framework/test/integration/files/app-facing-types.test.ts (4 tests | 4 skipped)
+ ↓ packages/framework/test/integration/check/migration-diagnostics.test.ts (5 tests | 5 skipped)
+ ↓ packages/framework/test/integration/check/portability-rules.test.ts (106 tests | 106 skipped)
+stderr | tests/compliance/criteria/auth/sessions.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ tests/compliance/criteria/auth/sessions.test.ts (7 tests | 7 skipped)
+(node:9167) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/prov/support/stage.unit.test.ts (9 tests | 9 skipped)
+stderr | packages/framework/test/integration/auth/login-flow.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/auth/login-flow.test.ts (13 tests | 13 skipped)
+ ↓ tests/compliance/criteria/mig/support/stage.unit.test.ts (11 tests | 11 skipped)
+ ↓ tests/compliance/criteria/core/support/stages.unit.test.ts (4 tests | 4 skipped)
+ ↓ tests/compliance/criteria/core/support/secrets.unit.test.ts (10 tests | 10 skipped)
+ ↓ packages/framework/test/integration/secrets/cli.test.ts (4 tests | 4 skipped)
+ ↓ tests/compliance/criteria/_cloud/aws/criteria-hooks.unit.test.ts (7 tests | 7 skipped)
+ ↓ tests/compliance/criteria/_cloud/aws/secrets-logs.unit.test.ts (11 tests | 11 skipped)
+ ↓ packages/framework/test/integration/check/migration-checker.test.ts (6 tests | 6 skipped)
+stderr | packages/framework/test/integration/secrets/secrets.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/secrets/secrets.test.ts (5 tests | 5 skipped)
+ ↓ packages/framework/test/integration/build/cloudflare-bundles.test.ts (16 tests | 16 skipped)
+ ↓ packages/framework/test/integration/build/aws-bundles.test.ts (8 tests | 8 skipped)
+stderr | packages/framework/test/integration/auth/current-user.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/auth/current-user.test.ts (7 tests | 7 skipped)
+stderr | packages/framework/test/integration/auth/admin-and-users-lists.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/auth/admin-and-users-lists.test.ts (6 tests | 6 skipped)
+stderr | packages/framework/test/integration/auth/routes-contract.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/auth/routes-contract.test.ts (4 tests | 4 skipped)
+stderr | packages/framework/test/integration/auth/sessions.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/auth/sessions.test.ts (7 tests | 7 skipped)
+ ↓ tests/compliance/criteria/_cloud/aws/api.unit.test.ts (9 tests | 9 skipped)
+ ↓ tests/compliance/criteria/_cloud/aws/stage-resources.unit.test.ts (7 tests | 7 skipped)
+stderr | packages/framework/test/integration/log/log.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/log/log.test.ts (5 tests | 5 skipped)
+ ↓ tests/skill/example-copies.unit.test.ts (6 tests | 6 skipped)
+ ↓ tests/compliance/criteria/_cloud/aws/iam.unit.test.ts (10 tests | 10 skipped)
+ ↓ tests/compliance/criteria/auth/contract.test.ts (6 tests | 6 skipped)
+ ↓ tests/compliance/criteria/aws/direct-function-url.test.ts (1 test | 1 skipped)
+ ↓ tests/skill/example-pages.test.ts (2 tests | 2 skipped)
+ ↓ tests/skill/budgets-and-links.test.ts (9 tests | 9 skipped)
+ ↓ tests/compliance/criteria/_cloud/aws/cluster-url.unit.test.ts (10 tests | 10 skipped)
+ ↓ tests/skill/structure.test.ts (3 tests | 3 skipped)
+ ↓ tests/skill/hard-rules.test.ts (9 tests | 9 skipped)
+ ↓ packages/framework/test/integration/log/dev-files.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/_cloud/aws/usage.unit.test.ts (6 tests | 6 skipped)
+ ↓ packages/framework/test/integration/mig/generate.test.ts (3 tests | 3 skipped)
+ ↓ packages/framework/test/integration/check/rules-not-switchable.test.ts (2 tests | 2 skipped)
+ ↓ packages/framework/test/integration/core/package.test.ts (2 tests | 2 skipped)
+stderr | packages/framework/test/integration/core/runtime.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/core/runtime.test.ts (4 tests | 4 skipped)
+stderr | tests/compliance/criteria/auth/forgery.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ tests/compliance/criteria/auth/forgery.test.ts (4 tests | 4 skipped)
+stderr | packages/framework/test/integration/auth/forgery.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/auth/forgery.test.ts (3 tests | 3 skipped)
+stderr | tests/compliance/criteria/files/unavailable.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ tests/compliance/criteria/files/unavailable.test.ts (1 test | 1 skipped)
+stderr | packages/framework/test/integration/auth/user-id.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/auth/user-id.test.ts (3 tests | 3 skipped)
+ ↓ packages/framework/test/integration/http/dev-paths.test.ts (2 tests | 2 skipped)
+ ↓ packages/framework/test/integration/core/build.test.ts (3 tests | 3 skipped)
+ ↓ packages/framework/test/integration/config/dev.test.ts (1 test | 1 skipped)
+ ↓ packages/framework/test/integration/aws-precheck/kv.data-api.test.ts (6 tests | 6 skipped)
+stderr | packages/framework/test/integration/files/server-operations.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/aws-precheck/sql.data-api.test.ts (12 tests | 12 skipped)
+stderr | packages/framework/test/integration/config/config.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/config/config.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/aws/support.unit.test.ts (11 tests | 11 skipped)
+ ↓ tests/compliance/criteria/compl/support.unit.test.ts (7 tests | 7 skipped)
+ ↓ tests/compliance/criteria/prov/support/restricted-token.unit.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/mig/support/failure-output.unit.test.ts (3 tests | 3 skipped)
+(node:9695) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/skill/scaffold.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/sql/sql.pglite.test.ts (12 tests | 12 skipped)
+stderr | packages/framework/test/integration/aws-precheck/files.s3.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/aws-precheck/files.s3.test.ts (15 tests | 15 skipped)
+ ↓ tests/compliance/criteria/kv/kv.pglite.test.ts (8 tests | 8 skipped)
+ ↓ tests/compliance/criteria/sql/sql.d1.test.ts (12 tests | 12 skipped)
+ ↓ tests/compliance/criteria/kv/kv.d1.test.ts (8 tests | 8 skipped)
+ ↓ tests/compliance/criteria/auth/access.test.ts (4 tests | 4 skipped)
+ ↓ tests/compliance/criteria/auth/mock-login.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/aws/network.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/aws/runtime-shape.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/aws/two-cookies.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/cli/smoke.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/cf/one-origin.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/compl/targets.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/config/lists.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/config/values.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/cf/stage-resources.test.ts (1 test | 1 skipped)
+ ✓ packages/framework/test/integration/files/server-operations.test.ts (17 tests | 8 skipped) 5194ms
+   ✓ FILES names (9)
+     ✓ [FILES-AC-002] names with spaces, %, /, .. and non-ASCII characters round-trip unchanged through put/get/head/list 1133ms
+     ✓ [FILES-AC-002] empty name is rejected with FILES.INVALID_NAME by every operation that takes a name 484ms
+     ✓ [FILES-AC-002] oversized ASCII (1,025 bytes) name is rejected with FILES.INVALID_NAME by every operation that takes a name 498ms
+     ✓ [FILES-AC-002] oversized UTF-8 (1,026 bytes) name is rejected with FILES.INVALID_NAME by every operation that takes a name 535ms
+     ✓ [FILES-AC-002] CR name is rejected with FILES.INVALID_NAME by every operation that takes a name 519ms
+     ✓ [FILES-AC-002] LF name is rejected with FILES.INVALID_NAME by every operation that takes a name 490ms
+     ✓ [FILES-AC-002] NUL name is rejected with FILES.INVALID_NAME by every operation that takes a name 478ms
+     ✓ [FILES-AC-002] exactly . name is rejected with FILES.INVALID_NAME by every operation that takes a name 546ms
+     ✓ [FILES-AC-002] exactly .. name is rejected with FILES.INVALID_NAME by every operation that takes a name 508ms
+ ↓ tests/compliance/criteria/core/deployment.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/http/errors.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/http/no-store.test.ts (1 test | 1 skipped)
+ ↓ tests/skill/examples.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/files/app-facing-types.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/_cloud/api.unit.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/aws/least-privilege.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/aws/paused-cluster.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/cli/commands.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/compl/evidence.test.ts (5 tests | 5 skipped)
+ ↓ tests/compliance/criteria/config/secret-locations.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/files/private-storage.test.ts (1 test | 1 skipped)
+ ✓ tests/compliance/criteria/files/server-operations.test.ts (6 tests | 4 skipped) 1094ms
+   ✓ FILES-AC-002 names (2)
+     ✓ [FILES-AC-002] names with spaces, %, /, .. and non-ASCII characters round-trip unchanged 687ms
+     ✓ [FILES-AC-002] empty and oversized names, the names . and .., and names containing CR, LF or NUL, are rejected with FILES.INVALID_NAME 388ms
+ ↓ tests/compliance/criteria/http/input.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/http/paths.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/kv/kv.http.test.ts (6 tests | 6 skipped)
+ ↓ tests/compliance/criteria/log/entries.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/log/keys.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/log/writer.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/prov/clean-machine.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/prov/deploy-recovery.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/mig/deploys.test.ts (6 tests | 6 skipped)
+(node:9996) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/prov/deploy-sequence.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/prov/removal.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/prov/setup-account.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/prov/template-deploy.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/secrets/no-leak.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/secrets/read.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/secrets/storage.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/secrets/further-stage.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/prov/test-stages.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/sql/data-api-retry.test.ts (3 tests | 3 skipped)
+stderr | packages/framework/test/integration/kv/kv.postgres.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/kv/kv.postgres.test.ts (9 tests | 9 skipped)
+stderr | packages/framework/test/integration/kv/kv.sqlite.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/kv/kv.sqlite.test.ts (9 tests | 9 skipped)
+ ↓ tests/compliance/criteria/sql/sql.http.test.ts (12 tests | 12 skipped)
+stderr | packages/framework/test/integration/sql/sql.postgres.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/sql/sql.postgres.test.ts (46 tests | 46 skipped)
+stderr | packages/framework/test/integration/sql/sql.sqlite.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/sql/sql.sqlite.test.ts (46 tests | 46 skipped)
+
+ Test Files  2 passed | 113 skipped (115)
+      Tests  11 passed | 744 skipped (755)
+   Start at  17:11:24
+   Duration  34.18s (import 88%, tests 7%, transform 4%, worker 1%)
+
+     Import  458 modules were evaluated 920 times · 74.77s total, 88% of tracked time
+             ~5.80s faster with isolate: false — shared modules are evaluated once per worker instead of once per file
+             learn more: https://vitest.dev/guide/improving-performance#test-isolation
+
+JSON report written to /tmp/compliance-bRqJSb/vitest.json

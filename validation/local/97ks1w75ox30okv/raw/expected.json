@@ -1,0 +1,994 @@
+[
+  {
+    "id": "AUTH-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "AUTH-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "AUTH-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "AUTH-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "AUTH-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "AUTH-AC-006",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "AUTH-AC-007",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "AUTH-AC-008",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "AUTH-AC-009",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "AUTH-AC-010",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "AUTH-AC-012",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CF-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CFG-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CFG-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CFG-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CFG-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CFG-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CFG-AC-006",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CHECK-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CHECK-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CHECK-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CHECK-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CHECK-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CHECK-AC-006",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CLI-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CLI-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CLI-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CLI-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CLI-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "COMPL-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "COMPL-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "COMPL-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "COMPL-AC-006",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "COMPL-AC-007",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CORE-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CORE-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CORE-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CORE-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CORE-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CORE-AC-006",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "clauses": [
+      {
+        "part": "AWS-bundle clause",
+        "titlePattern": "\\bAWS[- ]bundle\\b"
+      }
+    ],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CORE-AC-007",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "CORE-AC-008",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "DEMO-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "DEMO-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "DEMO-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "DEMO-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "DEMO-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "DEMO-AC-006",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "DEMO-AC-007",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "DEMO-AC-008",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "DEMO-AC-009",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "DEMO-AC-010",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "DEMO-AC-011",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-007",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-009",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-011",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-013",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-014",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-016",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "FILES-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "FILES-AC-002",
+    "run": true,
+    "parts": [
+      ""
+    ],
+    "notRunParts": []
+  },
+  {
+    "id": "FILES-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "FILES-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "FILES-AC-006",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "GOOGLE-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "GOOGLE-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "GOOGLE-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "HTTP-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "HTTP-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "HTTP-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "HTTP-AC-006",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "HTTP-AC-007",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "KV-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "KV-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "KV-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "KV-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "KV-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "LOCAL-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "LOCAL-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "LOCAL-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "LOCAL-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "LOG-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "LOG-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "LOG-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "LOG-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "MIG-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "MIG-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "MIG-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "PROV-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "PROV-AC-007",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SEC-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SEC-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SEC-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SEC-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SKILL-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SKILL-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SKILL-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SKILL-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SKILL-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SQL-AC-001",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SQL-AC-002",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SQL-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SQL-AC-004",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SQL-AC-005",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SQL-AC-006",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "clauses": [
+      {
+        "part": "Data API retry-loop clause",
+        "titlePattern": "\\bData API retry[- ]loop clause\\b"
+      }
+    ],
+    "notRun": "not selected for this run (--only)"
+  }
+]
