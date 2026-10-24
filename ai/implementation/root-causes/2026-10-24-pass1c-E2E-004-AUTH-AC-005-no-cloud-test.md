@@ -58,3 +58,21 @@ E5. **The contract part can be checked over HTTP on a test stage, except one res
 - Pass 2 on Cloudflare: AUTH-AC-005 `passed`, with a `not-run` part entry "successful-callback response: Google login mocked for this phase", and the milestone admin-list part still on the outstanding list. E2E-004's coverage part passes.
 
 ## Review
+
+Reviewer: independent root-cause reviewer (prompt §8). I did not write this diagnosis or the code under it. Base `ff16516`. No Cloudflare call, no suite run.
+
+**Verdict: cause accepted. Fix approved with the changes below.**
+
+### Cause: confirmed
+- `docs/components/auth.md:96`: the Where of AUTH-AC-005 is "Local, cloud; admin-list part: cloud (milestone)". So the contract part, "`/api/auth/*` responses validate against the HTTP contract", is automated on cloud.
+- `tests/compliance/harness/expected.ts:42` has only the milestone rule. `expectedCriteria` (`expected.ts:70-86`) therefore yields `run: true, parts: [""]` for cloudflare/automated, which matches `raw/expected.json`.
+- `selection.ts:28-31` restricts cloud Vitest to `tests/compliance/criteria`. The only AUTH-AC-005 tests are `packages/framework/test/integration/auth/routes-contract.test.ts:39,69,92`, which run in-process (`newApp()`). The alternatives the record rules out are correctly ruled out. In particular, adding the in-process suite to the cloud selection would count local evidence for the cloud target.
+
+### Fix: required changes
+1. **Do not import `packages/framework/test/integration/auth/support.ts` into the compliance suite.** It imports `createTestApp` and `node:crypto` (`support.ts:8-19`). Move only the pure schema checks (`isCurrentUserResponse`, `isErrorResponse`) to a module without in-process dependencies, and have both suites import them. `expectContractError` is local to `routes-contract.test.ts:31-36` and depends on `ERROR_CATALOGUE`. The cloud version must assert the catalogue status for the code, as that one does, and not only "4xx".
+2. **Leave out the "On local only (in-process, openReference)" successful-callback test.** The local selection already runs `routes-contract.test.ts:69`, which covers the stub-provider success. A copy adds nothing to local evidence. Keep the new file target-neutral over `client()`, as `sessions.test.ts:31-45` is.
+3. **Name the part rule after a clause, and record it as an addition.** The AUTH-AC-005 text names only the admin-list part. The plan's §8.1 list comes from prompt §4 (`ai/implementation/plan.md:563`), which does not include this response. Add it as the plan already does for CLI-AC-001: "Added … for the evaluator to confirm" (`plan.md:564`). Use the detail `GOOGLE_MOCKED`. Use a part name that states the clause, for example `"contract part: successful callback (needs a real login provider)"`. The reason is correct: test stages have no provider (DEC-0171), so this response first exists on `prodcheck` with Google, like AUTH-AC-009's cloud production part (`expected.ts:43`). `checkRules` (`expected.ts:90-107`) accepts the rule, because AUTH-AC-005 is automated on cloud.
+4. **Fix the red-test order.** The `expected.unit.test.ts` expectation (Cloudflare automated `notRunParts` = [that part]; local none; next to the existing `expected.unit.test.ts:72`) is red until step 2, not step 1. The offline coverage check (`uncovered` over `listDriverTests("cloudflare")`) is red until step 1. Commit both red first, then step 1, then step 2.
+5. Tests that use mock-login must use per-test ids, as `sessions.test.ts` does. The `login?returnTo` assertion must accept `[302, 303]` and the test-stage mock-session behaviour (DEC-0171), as `sessions.test.ts:33` does.
+
+No live probe needed. Pass 2 verifies the fix: AUTH-AC-005 `passed` on Cloudflare, plus a `not-run` part entry, and E2E-004's coverage part passes.

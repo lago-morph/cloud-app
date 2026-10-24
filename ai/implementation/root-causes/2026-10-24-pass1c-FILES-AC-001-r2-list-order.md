@@ -72,3 +72,48 @@ E5. **The observed R2 order fits one simple rule, which is not yet proven.** All
 3. Pass 2: FILES-AC-001 on Cloudflare `passed` in the evidence record, and FILES-AC-002 (names with `/`, `%`, `..`, non-ASCII) and FILES-AC-003/-004 transfers still pass with terminated keys.
 
 ## Review
+
+Reviewer: independent root-cause reviewer (prompt §8). I did not write this diagnosis or the code under it. Base `ff16516`. No Cloudflare call, no suite run.
+
+**Verdict: cause accepted. The proposed fix is not approved as written.** The live probe must run first. If the fix is a terminator, it needs the changes below.
+
+### Cause: accepted
+- **The test is correct.** `server-operations.test.ts:89-94` sorts by code points, and FILES-REQ-001 asks for code point order (`docs/components/files.md:16`). For these names that is also UTF-8 byte order. So "R2 sorts by UTF-8 bytes" does not explain the result: byte order puts `…/a` third, and the test expects it third.
+- **Paging cannot produce this sequence.** Under byte order, the cursor, `startAfter` and the limit+1 overfetch (`service.ts:117-139`, `cursor.ts:9-28`) give `[B,Z,a]` `[a b,a/b,b]` `[é]`, which is correct. A short truncated page, or a page that missed `a` through eventual consistency, cannot put `a` after `a/b` either. A `startAfter` greater than or equal to `a b` excludes `a` under byte order. So at least one R2 call returned `a` after one of its extensions, which is E3. The test was not retried (`raw/vitest.json`, one attempt, 2.16 s).
+- **No delimiter or prefix-listing artefact.** No `delimiter` is passed (`service.ts:125-130`). Also, `a b` contains no `/` and still sorted before `a`. So a hierarchy or "directory" ordering alone cannot explain the result. The prefix is a fresh random id, so leftovers from an earlier run cannot interfere.
+- **What remains unproven.** Is it the binding's order only, or also the S3 API's? And is the rule E5's ("a key sorts after its extensions", the same as byte order of `name + 0xFF`)? The probe below answers both.
+
+### Fix: what the terminator breaks (each one must be handled)
+1. **PAR-230 (blocking).** PAR-230 is 1,024 bytes *because* that is R2's key limit (`docs/parameters/parameters.md:54`, `names.ts:8,18`). The record's check "PAR-230 + 1 ≤ 1,024" is false. A valid 1,024-byte name would become a 1,025-byte key, and R2 would reject it with `FILES.UNAVAILABLE`. That violates FILES-REQ-002 (`files.md:23`). The FILES-AC-002 tests check only "one byte over" (`server-operations.test.ts:137-140`), so they would not catch this. **Required change:** terminate a name only when its UTF-8 length is below PAR-230. An unterminated key of 1,024 bytes can never be a proper prefix of another key, so the order still holds. Decoding stays unambiguous: strip a trailing U+0001, and keep a 1,024-byte key as it is. Add a unit test with a 1,024-byte name and a 1,023-byte name that is its prefix. Do not shrink PAR-230 instead: it is platform-origin and documented as the R2/S3 limit.
+2. **Existing objects (blocking).** After deploy, `get`, `head` and `delete` address `name + U+0001` (`service.ts:105,110,115`). Every object stored before the deploy then reads as missing and cannot be deleted through the API. `list` skips it with only a log line. A silent change that looks like data loss is not acceptable. **Required:** (a) Before pass 2, inventory every `*-files` bucket in the account (owner-visible list) and record the result. (b) If any bucket other than a test stage's holds objects, add an explicit read fallback (`get`/`head` try the terminated key, then the legacy key) or a one-time rename. The decision must name which. (c) If only test stages hold objects, clear them in pass 2 and record that. In every case, list must not drop legacy keys silently: return them, or fail the call.
+3. **Tickets.** `createUploadTicket`/`createDownloadTicket` `head` the store key (`service.ts:144,149`). The issuer must sign the store key (`tickets.ts:74`), but `downloadDisposition` must keep the *name*, so a download is not saved with a trailing control character. Tickets issued before the deploy point at legacy keys. The 15-minute lifetime bounds this risk, so note it but do not engineer around it.
+4. **DEC-0328 changes meaning.** `keyPath` tests segments for `.`/`..` (`tickets.ts:43-49`). With the terminator, `..` becomes `..\u0001`, which is no longer a dot segment. The documented rule "a name that is only `.` or `..` gets no ticket" (`files.md:90`, DEC-0328) would then lapse silently. `x/../y` still needs the `%2F` form, because only the last segment is changed. **Required:** decide on purpose. Either apply the `.`/`..` check to the *name*, which keeps the documented limitation, or lift it and amend DEC-0328 and files.md:90. A ticket unit test must cover each case, and D-RUN's live `x/../y` check must be repeated with terminated keys.
+5. **Local parity is fine.** The local route goes through `FilesService` (`local/route.ts:33,40`), and Miniflare orders by bytes, so the local target gets the same keys. The local route's own token carries the *name*. Keep it that way.
+6. **Owners will see the character.** In the R2 dashboard and in `wrangler r2 object get <bucket>/<name>`, every key carries an invisible U+0001, and a lookup by the plain name fails. Document this in files.md §2 Cloudflare and in the decision. Because it is visible to owners, flag it in the plan's owner questions next to the FILES-REQ-001 alternative.
+7. **S3 API and AWS.** U+0001 cannot appear in XML 1.0, so an S3 `ListObjectsV2` response without `encoding-type=url` cannot carry these keys. That affects owner tooling (`aws s3 ls`, rclone) against R2 now, and the AWS target's S3 later, because `service.ts` is target-neutral. The probe must check this. The AWS phase must list with `encoding-type=url`. Record this in the decision, or limit the terminator to the Cloudflare store (wrap the store in `targets/cloudflare`, not in the service), since S3 lists in byte order anyway. I prefer limiting it to Cloudflare. The fix stays local to the cause, and AWS keeps plain keys.
+
+### Smaller fixes considered
+- **Sort within one bounded overfetch: not sufficient.** I agree with "Alternatives ruled out". Under E5, a name follows all of its extensions, and their number is unbounded. A `head` on every proper prefix of each listed key costs up to PAR-230 calls per key. That is not bounded in any useful sense.
+- **List through R2's S3 API instead of the binding: a real candidate, decided by the probe.** If S3 `ListObjectsV2` (with `start-after`) on R2 returns byte order while the binding does not, then `list` alone can use the S3 API with the stage's existing R2 token (`cloudflare/credentials.ts`, already used for tickets). The storage format does not change, legacy objects stay visible, PAR-230 is untouched, and nothing changes for owners. The cost is an extra signed `fetch` per page and XML parsing. If both paths show E5, use the terminator, as amended above.
+- The owner alternative (change FILES-REQ-001) still stands, as the record says.
+
+### Red test: one change
+Before the probe, the `r2-observed` comparator in the fake is a hypothesis. After the probe, implement the rule the probe measured, cite the probe in `fake-store.test-support.ts`'s header, and change its line 3 ("Lists in code point order like R2"), which is false on Cloudflare. If the S3-list fix is chosen, the red test is a unit test of the S3 list adapter, using signed-request vectors and fixtures of the XML response.
+
+### Probe (replaces "How the fix will be verified" step 1: a temporary bucket, not stage R; 11 objects)
+1. `wrangler r2 bucket create rc-probe-r2order-<6 hex>`. Make a temporary R2 API token scoped to it, or use the stage token if it is account-scoped. Write each 1-byte object through the **binding** with a scratch Worker run by `wrangler dev --remote`, with binding `B` set to that bucket. Its routes are `put?k=`, `list?…` and `head?k=`, and they return JSON with `JSON.stringify` keys:
+   `q/a`, `q/a b` (0x20), `q/a!` (0x21), `q/a/b` (0x2F), `q/a0` (0x30), `q/aa` (0x61), `q/aé` (0xC3A9), `q/b`, and the terminated keys `t/a\u0001`, `t/a b\u0001`, `t/a/b\u0001`.
+2. Binding listings. Record each `objects[].key` array exactly:
+   - L1 `list({prefix:"q/"})`
+   - L2 the same with `include:["httpMetadata"]`
+   - L3 `{prefix:"q/", startAfter:"q/a"}`
+   - L4 `{prefix:"q/", startAfter:"q/a b"}`
+   - L5 `{prefix:"q/", limit:2}`, following R2's own `cursor` to the end
+   - L6 `{prefix:"q/a"}`
+   - L7 `{prefix:"q/", delimiter:"/"}` (objects and `delimitedPrefixes`)
+   - L8 `{prefix:"t/"}`
+
+   What each rule predicts for L1. E5: `a b, a!, a/b, a0, aa, aé, a, b`. "End sorts between 0x2F and 0x30": `a b, a!, a/b, a, a0, aa, aé, b`. Byte order: `a, a b, a!, a/b, a0, aa, aé, b`. L3 shows whether `startAfter` follows the same order: under E5 it gives `[q/b]`. For the terminator fix, L8 must be `t/a\u0001, t/a b\u0001, t/a/b\u0001`.
+3. S3 API (SigV4 via `sign.ts` in a Node scratch script): `GET /<bucket>?list-type=2&prefix=q/` and `…&prefix=q/&start-after=q/a`, which decide the S3-list alternative. Then `…&prefix=t/` without `encoding-type=url` (is the XML well-formed?) and with it.
+4. Presigned GET of `t/a\u0001` (path `t/a%01`): expect 200 and 1 byte. Presigned PUT to `t/up\u0001`, then a binding `head`: it must exist under exactly that key. One `head` of a 1,024-byte key, to confirm R2's limit counts bytes.
+5. Delete every object, then `wrangler r2 bucket delete`. Add the raw outputs and the predictions they match as an addendum to this record. About 30 requests in all.
