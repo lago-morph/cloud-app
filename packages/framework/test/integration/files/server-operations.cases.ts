@@ -160,7 +160,7 @@ export function defineFilesServerCases<A>(host: FilesCaseHost<A>, { t, suffix }:
       "a/b/c.txt",
       "/leading-slash",
       "trailing/",
-      "..",
+      "...",
       "../../etc/passwd",
       "a/../b",
       "./x",
@@ -208,6 +208,8 @@ export function defineFilesServerCases<A>(host: FilesCaseHost<A>, { t, suffix }:
       ["CR", "bad\rname"],
       ["LF", "bad\nname"],
       ["NUL", "bad\u0000name"],
+      ["exactly .", "."],
+      ["exactly ..", ".."],
     ];
     for (const [label, name] of rejected) {
       it(t("FILES-AC-002", `${label} name is rejected with FILES.INVALID_NAME by every operation that takes a name`), async () => {

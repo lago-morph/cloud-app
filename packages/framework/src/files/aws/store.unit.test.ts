@@ -133,7 +133,7 @@ describe("[FILES-AC-002 pre-check] names on S3 keys (FILES-REQ-002, DEC-0328)", 
     expect([...fake.objects.keys()]).toEqual(["x/../y"]);
   });
 
-  it.each([".", ".."])("the name %j cannot be an S3 URL path, so every operation on it is FILES.INVALID_NAME (target difference, DEC-0328)", async (name) => {
+  it.each([".", ".."])("the name %j cannot be an S3 URL path, so every operation on it is FILES.INVALID_NAME (DEC-0328; invalid on every target, DEC-0505)", async (name) => {
     const { fake, files } = setup();
     for (const run of [() => files.put(name, new Uint8Array([1])), () => files.get(name), () => files.head(name), () => files.delete(name)]) {
       expect((await codeOf(run)).code).toBe("FILES.INVALID_NAME");
