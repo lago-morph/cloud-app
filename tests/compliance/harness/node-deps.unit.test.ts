@@ -6,6 +6,8 @@ import { ACCOUNT, FakeCloud } from "../../../packages/framework/src/provision/cl
 import { stageLeftovers } from "./leftovers.js";
 import { cloudflareOperations } from "../../../packages/framework/src/cli/commands/deploy.js";
 import { FakeTarget } from "../../../packages/framework/src/provision/core/fake-target.js";
+import { installAwsNetworkGuard } from "../../../packages/framework/src/provision/aws/aws-network-guard.test-support.js";
+import type { TargetOperations } from "../../../packages/framework/src/provision/core/operations.js";
 import { AWS_CALLS_REPORT_PREFIX } from "./aws-usage.js";
 import { cliStageOps, deployOrigin, devOrigin, generateTestSecret, pendingStageStore, readVersions, runProcess, secretsNotSet, stageResourceOperations, type OperationsFactory } from "./node-deps.js";
 
@@ -110,11 +112,24 @@ describe("the driver's Cloudflare leftover check (D-06-2; COMPL-REQ-004, PROV §
     const fetch = cloudFetch(FakeCloud.withSharedResources(), [], seen);
     await expect(stageResourceOperations(repo, "cloudflare", { env: {}, fetch })).rejects.toThrow(/CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID/);
     await expect(stageResourceOperations(repo, "cloudflare", { env: { ...ENV, HTTPS_PROXY: "http://proxy:1" }, fetch })).rejects.toThrow(/NODE_USE_ENV_PROXY=1/);
-    // Until G-10/G-11 the framework's operations factory refuses AWS: recorded as a failed leftover check, never as none.
-    await expect(stageResourceOperations(repo, "aws", { env: ENV, fetch })).rejects.toThrow(/AWS target not yet implemented/);
+    // AWS goes through the framework's per-target factory (G-11): without AWS credentials it refuses before any
+    // request, which the driver records as a failed leftover check, never as none.
+    await expect(stageResourceOperations(repo, "aws", { env: ENV, fetch })).rejects.toThrow(/missing AWS credentials: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY/);
     expect(seen).toEqual([]);
     const proxied = await stageResourceOperations(repo, "cloudflare", { env: { ...ENV, HTTPS_PROXY: "http://proxy:1", NODE_USE_ENV_PROXY: "1" }, fetch });
     expect(await stageLeftovers(proxied, stage)).toEqual([]);
+  });
+
+  it("with AWS credentials the default factory gives the AWS operations (G-10), built without any request", async () => {
+    const guard = installAwsNetworkGuard();
+    try {
+      const ops = await stageResourceOperations(repo, "aws", { env: { AWS_ACCESS_KEY_ID: "AKIDPLACEHOLDER", AWS_SECRET_ACCESS_KEY: "placeholder" } });
+      expect((ops as TargetOperations).target).toBe("aws");
+      expect(typeof ops.listStageResources).toBe("function");
+      expect(guard.attempts).toEqual([]);
+    } finally {
+      guard.uninstall();
+    }
   });
 });
 
@@ -161,7 +176,7 @@ describe("the run stage's test secret (D-07; DEC-0277)", () => {
 });
 
 // plan-aws.md G-T4: the AWS leftover check goes through the AWS `listStageResources` (PROV §2), here a fake
-// target behind the operations interface until G-10 lands. No AWS request is made.
+// target behind the operations interface (the real factory is the CLI's `targetOperations`, G-11). No AWS request is made.
 describe("[COMPL-AC-004] AWS leftovers through listStageResources (fake target)", () => {
   const STAGE = "test-awsleft0000001";
   /** The leftover check runs in the driver process: with no proxy variable it needs no NODE_USE_ENV_PROXY. */
