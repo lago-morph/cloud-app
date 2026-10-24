@@ -17,6 +17,11 @@ import {
   type ErrorCode,
 } from "../../../src/index.js";
 import { createTestApp, type TestApp, type TestAppOptions } from "../../../src/testing/index.js";
+import { isCurrentUserResponse, isErrorResponse } from "../../../../../tests/support/http-schemas.js";
+
+// The pure contract schema checks live in tests/support/http-schemas.ts, shared with the
+// compliance criteria that run over HTTP (fix-auth005).
+export { isCurrentUserResponse, isErrorResponse };
 
 /** Local session cookie name (auth.md §2 "Session cookie"). */
 export const SESSION_COOKIE = "session_local";
@@ -182,51 +187,6 @@ export async function expectError(res: Response, code: ErrorCode): Promise<{ req
   const error = (body as { error: { code: string; requestId: string } }).error;
   expect(error.code).toBe(code);
   return { requestId: error.requestId };
-}
-
-/**
- * `ErrorResponse` of framework.openapi.yaml: `{ error: { code, message, requestId } }`, all
- * strings, no other properties at either level, and a code from the catalogue.
- */
-export function isErrorResponse(body: unknown): boolean {
-  if (!isPlainObject(body) || !hasExactKeys(body, ["error"], [])) return false;
-  const error = body["error"];
-  if (!isPlainObject(error) || !hasExactKeys(error, ["code", "message", "requestId"], [])) return false;
-  return (
-    typeof error["code"] === "string" &&
-    Object.hasOwn(ERROR_CATALOGUE, error["code"]) &&
-    typeof error["message"] === "string" &&
-    typeof error["requestId"] === "string" &&
-    error["requestId"] !== ""
-  );
-}
-
-/**
- * `CurrentUser` of framework.openapi.yaml (oneOf): `{ level: "anonymous", unlistedId? }` or
- * `{ level: "user" | "admin", id, displayName: string | null }`, no additional properties.
- */
-export function isCurrentUserResponse(body: unknown): boolean {
-  if (!isPlainObject(body)) return false;
-  if (body["level"] === "anonymous") {
-    return hasExactKeys(body, ["level"], ["unlistedId"]) && (body["unlistedId"] === undefined || typeof body["unlistedId"] === "string");
-  }
-  if (body["level"] === "user" || body["level"] === "admin") {
-    return (
-      hasExactKeys(body, ["level", "id", "displayName"], []) &&
-      typeof body["id"] === "string" &&
-      (body["displayName"] === null || typeof body["displayName"] === "string")
-    );
-  }
-  return false;
-}
-
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
-function hasExactKeys(obj: Record<string, unknown>, required: string[], optional: string[]): boolean {
-  const keys = Object.keys(obj);
-  return required.every((k) => keys.includes(k)) && keys.every((k) => required.includes(k) || optional.includes(k));
 }
 
 /** The path and query of a Location header, resolved against any base. */
