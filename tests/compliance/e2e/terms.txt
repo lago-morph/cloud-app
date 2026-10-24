@@ -1,0 +1,20 @@
+# E2E-016 scan term list (docs/acceptance/e2e-scenarios.md E2E-016): provider and protocol
+# terms that must not appear in any app-facing contract (docs/contracts/ts/ excluding
+# internal/, and docs/contracts/http/framework.openapi.yaml). One term per line; matching is
+# case-sensitive and whole-word over identifiers, string literals and comments. Blank lines
+# and lines starting with # are ignored. The E2E-016 test checks this list equals the
+# scenario's list, so it cannot be shortened silently.
+S3
+R2
+D1
+Aurora
+Lambda
+Worker
+Cloudflare
+AWS
+Google
+OIDC
+OAuth
+ID token
+access token
+issuer
