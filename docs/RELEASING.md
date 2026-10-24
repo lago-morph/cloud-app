@@ -12,6 +12,12 @@ What is released, together and at one version (`v<version>` tag):
 
 ## Owner steps, once
 
+0. **Install the two workflows.** The session that prepared this could not push to `.github/workflows/` (its GitHub token lacks the `workflow` scope), so they wait in `.github/workflows-to-install/`. Move them, commit and push with your own credentials:
+   ```sh
+   git mv .github/workflows-to-install .github/workflows
+   git commit -m "Install CI and release workflows"
+   git push
+   ```
 1. **npm account and org.** Sign up at https://www.npmjs.com/signup and turn on two-factor authentication (Account → Two-Factor Authentication). Then create the free organization `lago-morph`: avatar menu → **Add Organization** → name `lago-morph` → **Unlimited public packages** (free). The scope `@lago-morph` belongs to the user or organization of that name. If your npm user name is itself `lago-morph`, skip the organization.
 2. **First publish, by hand** (npm can configure a trusted publisher only for a package that already exists). On a clean checkout of `main` at the commit you will tag, with Node 22.22.0:
    ```sh
