@@ -1,0 +1,376 @@
+{
+  "runId": "cwcrlz8fxgo3ud4",
+  "commit": "71ac98de4682229025053f7fabe5b650425d0dd9",
+  "target": "cloudflare",
+  "stage": "test-9mfkg261apxm7s2",
+  "command": "npm run compliance -- --target cloudflare --base-url https://reference-test-9mfkg261apxm7s2.<account-subdomain>.workers.dev --stage test-9mfkg261apxm7s2 --only SEC-AC-001,SEC-AC-003,SEC-AC-005,HTTP-AC-002,LOG-AC-004,CLI-AC-004",
+  "startedAt": "2026-10-24T03:56:37.454Z",
+  "finishedAt": "2026-10-24T04:00:34.245Z",
+  "exitStatus": 1,
+  "results": [
+    {
+      "id": "AUTH-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "AUTH-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "AUTH-AC-006",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "AUTH-AC-007",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "AUTH-AC-009",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "AUTH-AC-011",
+      "status": "not-run",
+      "detail": "Google login mocked for this phase"
+    },
+    {
+      "id": "CF-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CF-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CFG-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CFG-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CFG-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CLI-AC-001",
+      "status": "not-run",
+      "detail": "Google login mocked for this phase"
+    },
+    {
+      "id": "CLI-AC-004",
+      "status": "passed"
+    },
+    {
+      "id": "CLI-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "COMPL-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "COMPL-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "COMPL-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "COMPL-AC-005",
+      "status": "not-run",
+      "detail": "Google login mocked for this phase"
+    },
+    {
+      "id": "CORE-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CORE-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-007",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-008",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-009",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-010",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-006",
+      "status": "not-run",
+      "detail": "Google login mocked for this phase"
+    },
+    {
+      "id": "E2E-009",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-011",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-013",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-014",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "FILES-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "FILES-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "FILES-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "FILES-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "FILES-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "GOOGLE-AC-001",
+      "status": "not-run",
+      "detail": "Google login mocked for this phase"
+    },
+    {
+      "id": "HTTP-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "HTTP-AC-002",
+      "status": "failed",
+      "detail": "1 of 3 tests failed: further reference stage: secrets and stage removal (cloud) > [SEC-AC-001][HTTP-AC-002] on the cloud, the declared secret without a value fails with SEC.MISSING as a schema-valid ErrorResponse with the request's ID: HttpCheckError: HTTP check failed: GET /api/ref/secret → status 200, code none, requestId none (expected status 500 with code SEC.MISSING)"
+    },
+    {
+      "id": "HTTP-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "HTTP-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "HTTP-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "KV-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "KV-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "KV-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "KV-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "KV-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "LOG-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "LOG-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "LOG-AC-004",
+      "status": "blocked",
+      "detail": "LOG: key layout in the shared bucket > [LOG-AC-004] an entry written outside a request has a random final part in its key: LOG-AC-004 (outside-request clause): the reference app has no way to write a log entry outside an HTTP request (needs a fixture; see DEC-0277…DEC-0280 in docs/decisions/decision-log.md)"
+    },
+    {
+      "id": "LOG-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "MIG-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "MIG-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "MIG-AC-006",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "PROV-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "PROV-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SEC-AC-001",
+      "status": "failed",
+      "detail": "1 of 2 tests failed: further reference stage: secrets and stage removal (cloud) > [SEC-AC-001][HTTP-AC-002] on the cloud, the declared secret without a value fails with SEC.MISSING as a schema-valid ErrorResponse with the request's ID: HttpCheckError: HTTP check failed: GET /api/ref/secret → status 200, code none, requestId none (expected status 500 with code SEC.MISSING)"
+    },
+    {
+      "id": "SEC-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SEC-AC-003",
+      "status": "passed"
+    },
+    {
+      "id": "SEC-AC-005",
+      "status": "failed",
+      "detail": "1 of 1 tests failed: further reference stage: secrets and stage removal (cloud) > [SEC-AC-005] after secrets set the next request sees the new value; after the secret is deleted through the store, the next request fails with SEC.MISSING: AssertionError: the next request after secrets set: expected { Object (sha256) } to deeply equal { Object (sha256) }"
+    },
+    {
+      "id": "SQL-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SQL-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SQL-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SQL-AC-006",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    }
+  ],
+  "versions": {
+    "node": "v22.22.0",
+    "@lago-morph/prototype-framework": "0.1.0",
+    "vitest": "5.0.5",
+    "@playwright/test": "1.64.1",
+    "wrangler": "4.149.0",
+    "typescript": "6.0.3",
+    "drizzle-orm": "0.45.4",
+    "drizzle-kit": "0.31.11",
+    "hono": "4.13.13",
+    "zod": "4.6.7",
+    "@electric-sql/pglite": "0.5.8",
+    "esbuild": "0.28.2",
+    "sst": "4.17.2"
+  },
+  "leftovers": []
+}

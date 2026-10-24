@@ -1,0 +1,17 @@
+Updating (test-9mfkg261apxm7s2):
+
+@ updating.......
+ ~  cloudflare:index:WorkersScript WorkerScript updating (0s) [diff: ~assets,contentFile]
+@ updating......
+ ~  cloudflare:index:WorkersScript WorkerScript updated (2s) [diff: ~assets,contentFile]
+@ updating....
+    pulumi:pulumi:Stack reference-test-9mfkg261apxm7s2  
+Outputs:
+    _protect: false
+
+Resources:
+    ~ 1 updated
+    7 unchanged
+
+Duration: 8s
+
