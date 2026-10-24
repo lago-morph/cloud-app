@@ -1,10 +1,10 @@
 # Owner tasks
 
-Read this when the app's owner must do something only a person can do: set up the Cloudflare account and token, set secrets, set up the Google login client, add admin or user IDs, or keep costs down. Give the owner these steps as written. The owner does not read code.
+Read this when the app's owner must do something only a person can do: set up the Cloudflare account and token or the AWS credentials, set secrets, set up the Google login client, add admin or user IDs, or keep costs down. Give the owner these steps as written. The owner does not read code.
 
 Commands run in a terminal, in the app's directory, on macOS or Linux with Node 22.22.0. Replace `<…>` parts. Never paste a secret value into a command line, a file in the repository, or a chat.
 
-**Status in this phase.** The local steps are verified. Every Cloudflare step is **not yet verified on Cloudflare in this phase**: the framework's cloud commands have run only against a simulated Cloudflare. The Google steps have never been run, because Google login is mocked in this phase. If a step fails, follow [troubleshooting.md](troubleshooting.md).
+**Status in this phase.** The local steps are verified. Every Cloudflare step is **not yet verified on Cloudflare in this phase**: the framework's cloud commands have run only against a simulated Cloudflare. The Google steps have never been run, because Google login is mocked in this phase. Every AWS step is **not yet verified on AWS**: it has run only against simulated AWS. If a step fails, follow [troubleshooting.md](troubleshooting.md).
 
 ## 1. Before anything else (once per checkout)
 
@@ -46,6 +46,18 @@ STAGE='<stage>'
    curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/tokens/verify"
    ```
 
+## 2a. AWS account and credentials (once; not yet verified on AWS)
+
+1. Use a temporary AWS account and an IAM user or role (not root) with `AdministratorAccess`. Install the AWS CLI v2 (`aws`).
+2. Create an access key, or get temporary credentials (with a session token) from your sign-in portal. Never paste them into a chat or a file.
+3. In each new terminal where you deploy, set them. Paste each value when `read` waits, then press Enter. Skip the last line for a permanent key. `export AWS_PROFILE=<name>` also works.
+   ```sh
+   read -rs AWS_ACCESS_KEY_ID && export AWS_ACCESS_KEY_ID
+   read -rs AWS_SECRET_ACCESS_KEY && export AWS_SECRET_ACCESS_KEY
+   read -rs AWS_SESSION_TOKEN && export AWS_SESSION_TOKEN
+   ```
+4. Check them. The output must show your account ID: `aws sts get-caller-identity`
+
 ## 3. One-time account setup
 
 ```sh
@@ -53,6 +65,14 @@ npm run setup-account -- --target cloudflare
 ```
 
 This creates the shared resources once per account: the log bucket `prototype-logs`, the deploy-state bucket `sst-state`, and the account's `workers.dev` address. Running it again changes nothing. `deploy` never creates these resources. If they are missing, `deploy` stops and tells you to run this command. Not yet verified on Cloudflare in this phase.
+
+**AWS** (the region is chosen once and used by every stage; the default is `us-east-1`):
+
+```sh
+npm run setup-account -- --target aws --region <region>
+```
+
+It checks that the region offers Aurora PostgreSQL 17 Serverless v2 with the Data API, then creates the log bucket `prototype-logs-<account-id>`, one shared network (a VPC with two private subnets and no NAT or internet gateway) and the deploy-state home. Running it again changes nothing; another `--region` is refused. Not yet verified on AWS.
 
 ## 4. Secrets
 
@@ -68,6 +88,10 @@ A secret is read from standard input. Run the command, paste the value, press En
   npm run secrets -- set apiKey --target cloudflare --stage "$STAGE"
   ```
   Not yet verified on Cloudflare in this phase.
+- **AWS** (not yet verified on AWS): a secret can be set before the stage's first deploy:
+  ```sh
+  npm run secrets -- set apiKey --target aws --stage "$STAGE"
+  ```
 
 ## 5. Google login client (production stages only)
 
@@ -97,6 +121,8 @@ Test stages and local development use a built-in mock login and need none of thi
    ```
 7. Run `npm run deploy -- --target cloudflare --stage "$STAGE"` again. It prints `Google callback URL to register: …`, which must match step 4 exactly.
 
+**AWS** (not yet verified on AWS): the callback URL is known only after the first deploy. Skip step 1, create the client without a redirect URI, and write `aws` for `cloudflare` in steps 5–7 and §6. Deploy ([deploying.md](deploying.md) §7), then add the printed `Google callback URL to register` to the client.
+
 ## 6. Admins and allowed users
 
 These steps work only on a production stage, which uses Google. Every person's user ID is shown at `/api/auth/me`.
@@ -122,6 +148,7 @@ These steps work only on a production stage, which uses Google. Every person's u
 - Stopped or idle stages cost nothing for compute, but storage remains: the stage's D1 database and R2 file bucket, the shared `prototype-logs` bucket, and the `sst-state` bucket. Log entries are never deleted automatically.
 - On Cloudflare's free plan, D1 allows about **100,000 rows written per day** per account. The limit for reads is larger. When a limit is used up, database requests fail until it resets at 00:00 UTC.
 - Keep test stages small: a few rows of data, one test stage at a time, and `remove` it right after use. An account holds at most **10 D1 databases**, and a deploy that changes the schema briefly uses two per stage.
+- AWS idle costs (paused database, shared VPC): [deploying.md](deploying.md) §7.
 - See [deploying.md](deploying.md) for deploy, stop/start and remove.
 
 ## Examples
