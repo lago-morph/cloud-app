@@ -18,6 +18,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { buildApp, COMPATIBILITY_DATE, type BuildOptions, type BuildResult } from "../../build/build.js";
+import { AwsNotImplementedError } from "../../core/aws-pending.js";
 import type { Target } from "../../core/identity.js";
 import { bucketCorsPolicy, checkStorageCors } from "../../files/cloudflare/cors.js";
 import type { Histories } from "../../mig/apply.js";
@@ -122,6 +123,7 @@ export interface PrepareDeps {
 /** `deploy`'s `prepare` on Cloudflare: build, client, migrations, secrets and the Worker code. */
 export function prepareDeploy(deps: PrepareDeps): DeployDeps["prepare"] {
   return async (appDir, target, stage) => {
+    if (target === "aws") throw new AwsNotImplementedError("deploy's build, migrations and Lambda code for --target aws (G-06, G-10, G-11)");
     if (target !== "cloudflare") throw new Error(`deploy has no provisioning for target ${target}`);
     const built = await deps.build({ appDir, target, stage });
     const assetsDirectory = await deps.buildClient(appDir, join(built.outDir, "client"));
@@ -180,6 +182,7 @@ export interface OperationsOptions {
 /** The target's PROV operations from the process environment (Cloudflare: D-03 with D-04's databases and D-02's CORS parts). */
 export function cloudflareOperations(options: OperationsOptions): DeployDeps["operations"] {
   return ({ appDir, target, code }) => {
+    if (target === "aws") throw new AwsNotImplementedError("the AWS provisioning operations (G-07…G-11)");
     if (target !== "cloudflare") throw new Error(`there are no provisioning operations for target ${target}`);
     const env = options.env;
     if (options.requireCredentials) {

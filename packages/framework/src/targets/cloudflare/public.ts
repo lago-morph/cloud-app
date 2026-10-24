@@ -51,8 +51,8 @@ export function createCloudflareWorker<C extends ConfigDeclaration, S extends st
     sql: workerSql,
     store: (env) => cloudflareFilesStore(workerStore(env)),
     tickets: workerTicketIssuer,
-    readSecret: (env) => envSecretReader(env, deployment.target),
-    readFrameworkSecret: (env) => envSecretReader(env, deployment.target),
+    readSecret: (env) => envSecretReader(env, "cloudflare"),
+    readFrameworkSecret: (env) => envSecretReader(env, "cloudflare"),
     secretValues: (c) => workerSecretValues(c.env),
     requiredFrameworkSecrets: required,
     // Production stages log in with Google; a test stage uses the mock unless it configures Google.

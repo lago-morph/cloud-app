@@ -124,3 +124,16 @@ describe("cloud commands: the Cloudflare operations from the process environment
     expect(await ops.preflight({ app: "notes", stage: "test-abc" })).toEqual(["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"]);
   });
 });
+
+describe("deploy wiring for target aws (AWS phase G)", () => {
+  it("preparing an AWS deployment stops before anything is built: phase G has not implemented it yet", async () => {
+    const deps = prepareDeps();
+    await expect(prepareDeploy(deps)(appDir(), "aws", "test-abc")).rejects.toThrow(/AWS target not yet implemented \(phase G\)/);
+    expect(deps.built).toEqual([]);
+  });
+
+  it("the provisioning operations for aws are not implemented yet, and never fall back to Cloudflare's", () => {
+    const make = cloudflareOperations({ env: { CLOUDFLARE_API_TOKEN: "placeholder", CLOUDFLARE_ACCOUNT_ID: "acc123" }, fetch: async () => new Response("{}"), requireCredentials: true });
+    expect(() => make({ appDir: appDir(), target: "aws" })).toThrow(/AWS target not yet implemented \(phase G\)/);
+  });
+});

@@ -186,12 +186,12 @@ describe("LOCAL-REQ-003 Postgres-dialect check", () => {
 });
 
 describe("CORE-REQ-005 export list", () => {
-  it(tag("CORE-AC-005", "the package's exports map equals the subpath table (without ./targets/aws this phase: DEC-0110)"), async () => {
+  it(tag("CORE-AC-005", "the package's exports map equals the subpath table, ./targets/aws included"), async () => {
     const pkg: unknown = JSON.parse(await readFile(join(FW_DIR, "package.json"), "utf8"));
     const exportsMap: unknown = pkg !== null && typeof pkg === "object" ? Reflect.get(pkg, "exports") : undefined;
     expect(exportsMap).toBeTypeOf("object");
     const keys = Object.keys(exportsMap !== null && typeof exportsMap === "object" ? exportsMap : {}).sort();
-    expect(keys).toEqual([".", "./check", "./client", "./provision", "./targets/cloudflare", "./targets/local", "./testing"]);
+    expect(keys).toEqual([".", "./check", "./client", "./provision", "./targets/aws", "./targets/cloudflare", "./targets/local", "./testing"]);
   });
 
   it(
@@ -204,8 +204,8 @@ describe("CORE-REQ-005 export list", () => {
       expect(result.code, show(result)).not.toBe(0);
       // B-T5 (flag F8): the failure must be the portability rule that enforces CORE-REQ-005's
       // "Importable by" column (check.md: allowed-imports rejects framework subpaths outside the
-      // importer's row), naming the subpath, not just any diagnostic (an unresolved-module type
-      // error alone would otherwise satisfy it while no ./targets/aws export exists).
+      // importer's row), naming the subpath, not just any diagnostic. Now that ./targets/aws
+      // resolves, the portability rule is the only thing that rejects this import.
       const lines = diagnosticsFor(result.output, "aws-runtime.ts");
       expect(
         lines.some((l) => namesRule(l, "allowed-imports") && /targets\/aws/.test(l)),
