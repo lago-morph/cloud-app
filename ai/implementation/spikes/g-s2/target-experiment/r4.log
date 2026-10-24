@@ -1,0 +1,12 @@
+SST 4.17.2 ready!
+
+➜  App:        gs2tgt
+   Stage:      s1
+
+~  Deploy
+
+|  Created     FnEdge random:index:RandomString
+|  Deleted     FnEdge random:index:RandomString
+
+✓  Complete    
+

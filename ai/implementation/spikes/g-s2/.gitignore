@@ -1,0 +1,6 @@
+out/.sst/
+out/step3/.sst
+out/edge/.sst
+out/fixture/
+out/negative.sst.config.ts
+out/package.json
