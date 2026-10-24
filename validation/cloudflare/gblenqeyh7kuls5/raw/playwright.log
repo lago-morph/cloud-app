@@ -1,0 +1,58 @@
+(node:1575) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1588) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+(node:1588) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 8 tests using 2 workers
+
+(node:1627) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+(node:1622) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/8] [integration] › tests/compliance/criteria/files/expired-ticket.spec.ts:23:1 › [FILES-AC-003] expired-ticket clause: an expired ticket fails with FILES.TRANSFER_FAILED, storage's status and a rejected by storage (HTTP n) message without storage's error body
+[2/8] [integration] › tests/compliance/criteria/files/transfers.spec.ts:49:1 › [FILES-AC-003] a 20 MB file uploads through uploadFile and downloads through downloadUrl byte-exact
+[3/8] [integration] › tests/compliance/criteria/files/transfers.spec.ts:63:1 › [FILES-AC-003] a ticket for one name cannot write another
+[4/8] [integration] › tests/compliance/criteria/files/transfers.spec.ts:90:1 › [FILES-AC-003] an upload with a content type other than the ticket's is rejected and stores nothing
+[5/8] [integration] › tests/compliance/criteria/files/transfers.spec.ts:105:1 › [FILES-AC-003] uploadFile rejects a Blob whose non-empty type differs from the ticket's before sending: FILES.TRANSFER_FAILED, status null, content type does not match ticket
+[6/8] [integration] › tests/compliance/criteria/files/transfers.spec.ts:123:1 › [FILES-AC-004] browser part: an upload and a download attempted from an unrelated origin are rejected by the browser
+(node:1912) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[7/8] [e2e] › tests/compliance/e2e/E2E-004.spec.ts:32:1 › [E2E-004] coverage part: every criterion and scenario applicable on this target has a tagged test in the suite this run executes
+[8/8] [e2e] › tests/compliance/e2e/E2E-004.spec.ts:50:1 › [E2E-004] record part: the evidence writer accepts a record of this target and rejects an invalid one
+  1) [integration] › tests/compliance/criteria/files/expired-ticket.spec.ts:23:1 › [FILES-AC-003] expired-ticket clause: an expired ticket fails with FILES.TRANSFER_FAILED, storage's status and a rejected by storage (HTTP n) message without storage's error body 
+
+    Error: status is storage's HTTP status, got null
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "number"
+    Received: "object"
+
+      49 |
+      50 |     expect(out).toMatchObject({ ok: false, isApiError: true, code: "FILES.TRANSFER_FAILED" });
+    > 51 |     expect(typeof out.status, `status is storage's HTTP status, got ${String(out.status)}`).toBe("number");
+         |                                                                                             ^
+      52 |     expect(out.status).toBeGreaterThanOrEqual(400);
+      53 |     expect(out.message).toContain(`rejected by storage (HTTP ${String(out.status)})`);
+      54 |     for (const body of storageBodies) expect(out.message ?? "").not.toContain(body);
+        at /home/user/cloud-app/.claude/worktrees/agent-a4665bc84e87d6f2c/tests/compliance/criteria/files/expired-ticket.spec.ts:51:93
+
+    Error Context: test-results/tests-compliance-criteria--26aa9-ithout-storage-s-error-body-integration/error-context.md
+
+
+  Slow test file: [integration] › tests/compliance/criteria/files/expired-ticket.spec.ts (15.6m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  1 failed
+    [integration] › tests/compliance/criteria/files/expired-ticket.spec.ts:23:1 › [FILES-AC-003] expired-ticket clause: an expired ticket fails with FILES.TRANSFER_FAILED, storage's status and a rejected by storage (HTTP n) message without storage's error body 
+  7 passed (15.9m)

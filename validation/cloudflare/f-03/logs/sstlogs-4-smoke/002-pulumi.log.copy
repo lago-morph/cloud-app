@@ -1,0 +1,12 @@
+Updating (test-s6jca41ew34ahz3):
+
+@ updating.......
+    pulumi:pulumi:Stack demo-test-s6jca41ew34ahz3  
+Outputs:
+    _protect: false
+
+Resources:
+    8 unchanged
+
+Duration: 5s
+
