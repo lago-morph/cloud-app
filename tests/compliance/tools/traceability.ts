@@ -5,7 +5,7 @@
  */
 import type { EvidenceRecord } from "../../../packages/framework/src/evidence/public.js";
 import { parseTags } from "../../support/tags.js";
-import { TARGETS, type CatalogueEntry, type Target } from "../harness/catalogue.js";
+import { selectedEntries, TARGETS, type CatalogueEntry, type Target } from "../harness/catalogue.js";
 
 export interface ListedTest {
   /** Full title including describe titles. */
@@ -48,8 +48,9 @@ export function scanSourceTags(source: string): string[] {
   return [...ids].sort();
 }
 
+/** Undefined when the record has no entry for the ID other than the not-selected one (DEC-0265). */
 function describeResults(record: EvidenceRecord, id: string): string | undefined {
-  const entries = record.results.filter((r) => r.id === id);
+  const entries = selectedEntries(record, id);
   if (entries.length === 0) return undefined;
   const text = entries.map((r) => (r.detail === undefined ? r.status : `${r.status}: ${r.detail}`)).join("; ");
   return `${text} (${record.finishedAt})`;

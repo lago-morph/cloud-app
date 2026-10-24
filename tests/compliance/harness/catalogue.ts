@@ -14,6 +14,23 @@ import { join, relative } from "node:path";
 export type Target = "local" | "cloudflare" | "aws";
 export const TARGETS: readonly Target[] = ["local", "cloudflare", "aws"];
 
+/**
+ * The detail of the `not-run` entry the driver writes for an expected criterion outside `--only`
+ * (DEC-0261). Records on disk carry this exact text; keep it byte-identical.
+ */
+export const NOT_SELECTED = "not selected for this run (--only)";
+
+/**
+ * True for an entry that only records that the run did not select the ID (exact match, never a
+ * prefix). Such an entry does not count as the record containing the ID (DEC-0264, DEC-0265;
+ * root cause 2026-10-24-G6-release-milestone-misread).
+ */
+export const isNotSelected = (result: { readonly status: string; readonly detail?: string }): boolean => result.status === "not-run" && result.detail === NOT_SELECTED;
+
+/** The entries of a record for an ID that the run selected, i.e. all but the not-selected one. */
+export const selectedEntries = <R extends { readonly id: string; readonly status: string; readonly detail?: string }>(record: { readonly results: readonly R[] }, id: string): R[] =>
+  record.results.filter((r) => r.id === id && !isNotSelected(r));
+
 /** How a criterion applies on one target. */
 export interface TargetApplicability {
   /** Run on every commit (the automated tier). */
