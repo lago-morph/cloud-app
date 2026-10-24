@@ -38,8 +38,9 @@ describe("[COMPL-AC-002] traceability report", () => {
         tests: ["tests/compliance/criteria/kv/kv.test.ts › kv > [KV-AC-001] put", "tests/compliance/criteria/kv/kv.test.ts › [KV-AC-001][KV-AC-002] list"],
         results: { local: "passed (2026-10-20T11:00:00Z)", cloudflare: "blocked: D1 unavailable (2026-10-20T12:00:00Z)" },
         untested: false,
+        deferred: false,
       },
-      { id: "KV-AC-002", where: "Local", source: "components/kv.md", tests: ["tests/compliance/criteria/kv/kv.test.ts › [KV-AC-001][KV-AC-002] list"], results: {}, untested: false },
+      { id: "KV-AC-002", where: "Local", source: "components/kv.md", tests: ["tests/compliance/criteria/kv/kv.test.ts › [KV-AC-001][KV-AC-002] list"], results: {}, untested: false, deferred: false },
     ]);
   });
 
@@ -67,12 +68,12 @@ describe("[COMPL-AC-002] traceability report", () => {
   // G-EV F3: a record marked as a dry run is never shown as a result.
   it("never shows a result from a record marked as a dry run", () => {
     const records = [
-      rec("aws", "2026-10-20T10:00:00Z", [{ id: "KV-AC-001", status: "not-run", detail: "AWS live run pending (no account)" }]),
-      { ...rec("aws", "2026-10-20T11:00:00Z", [{ id: "KV-AC-001", status: "passed" }]), dryRun: "fake stage operations (OperationsFactory)" },
+      rec("cloudflare", "2026-10-20T10:00:00Z", [{ id: "KV-AC-001", status: "not-run", detail: "D1 unavailable" }]),
+      { ...rec("cloudflare", "2026-10-20T11:00:00Z", [{ id: "KV-AC-001", status: "passed" }]), dryRun: "fake stage operations (OperationsFactory)" },
       { ...rec("local", "2026-10-20T12:00:00Z", [{ id: "KV-AC-002", status: "passed" }]), dryRun: "not-run rules overridden (DriverDeps.notRunRules)" },
     ];
     const rows = buildTraceability({ catalogue, tests: [], records }).rows;
-    expect(rows[0]?.results).toEqual({ aws: "not-run: AWS live run pending (no account) (2026-10-20T10:00:00Z)" });
+    expect(rows[0]?.results).toEqual({ cloudflare: "not-run: D1 unavailable (2026-10-20T10:00:00Z)" });
     expect(rows[1]?.results).toEqual({});
   });
 
@@ -85,6 +86,30 @@ describe("[COMPL-AC-002] traceability report", () => {
     const results = buildTraceability({ catalogue, tests: [], records }).rows[0]?.results;
     expect(results).toEqual({ cloudflare: "passed (2026-10-20T12:00:00Z)" });
     expect(renderTraceability(buildTraceability({ catalogue, tests: [], records }))).not.toContain("not selected for this run");
+  });
+
+  // DEC-0508: release 1 judges local and Cloudflare; an AWS-only criterion is deferred, never untested or missing.
+  it("lists an AWS-only criterion as deferred, never untested, and shows no AWS results or column", () => {
+    const aws: CatalogueEntry = { id: "AWS-AC-001", where: "Cloud", source: "components/aws.md", applies: parseWhere("Cloud", "components/aws.md") };
+    const records = [rec("aws", "2026-10-20T10:00:00Z", [{ id: "AWS-AC-001", status: "failed", detail: "boom" }, { id: "KV-AC-001", status: "passed" }])];
+    const report = buildTraceability({ catalogue: [...catalogue, aws], tests: [{ title: "[KV-AC-001][KV-AC-002] list", file: "a.test.ts" }], records });
+    expect(report.rows.find((r) => r.id === "AWS-AC-001")).toMatchObject({ tests: [], untested: false, deferred: true, results: {} });
+    expect(report.rows.find((r) => r.id === "KV-AC-001")?.results).toEqual({});
+    expect(report.untested).toEqual([]);
+    expect(report.deferred).toEqual(["AWS-AC-001"]);
+    const text = renderTraceability(report);
+    expect(text).toContain("| ID | Where | Tests | local | cloudflare |\n");
+    expect(text).toMatch(/\| AWS-AC-001 \| Cloud \| deferred \(branch `aws`\) \|/);
+    expect(text).toContain("Untested: 0 of 2.");
+    expect(text).not.toMatch(/UNTESTED/);
+  });
+
+  it("the real documents' AWS criteria are all deferred, and nothing else is", () => {
+    const real = readCatalogue(new URL("../../../docs/", import.meta.url).pathname);
+    const report = buildTraceability({ catalogue: real, tests: [], records: [] });
+    expect(report.deferred.length).toBeGreaterThan(0);
+    expect(report.deferred.every((id) => id.startsWith("AWS-AC-"))).toBe(true);
+    expect(report.untested.filter((id) => id.startsWith("AWS-AC-"))).toEqual([]);
   });
 
   it("lists every ID defined in the real documents", () => {

@@ -101,7 +101,7 @@ export function criterionResults(input: CriterionResultsInput): EvidenceResult[]
       results.push({ id: entry.id, status: "not-run", detail: cap(`${String(unnoted.length)} ${noun} skipped: ${unnoted.map((o) => o.title).join("; ")}`) });
     }
     for (const part of entry.notRunParts) results.push({ id: entry.id, status: "not-run", detail: `${part.part}: ${part.detail}` });
-    // A clause shown by no executed test of its own (plan-aws.md G-T4): the other tests do not stand for it.
+    // A clause shown by no executed test of its own (DEC-0499): the other tests do not stand for it.
     for (const clause of entry.clauses ?? []) {
       const pattern = new RegExp(clause.titlePattern, "i");
       if (!executed.some((o) => pattern.test(o.title))) results.push({ id: entry.id, status: "not-run", detail: `${clause.part}: no test tagged [${entry.id}] for this clause ran on ${input.target}` });

@@ -1,11 +1,12 @@
 /**
- * `npm run compliance -- --target <local|cloudflare|aws> [--stage <s>] [--milestone]
+ * `npm run compliance -- --target <local|cloudflare> [--stage <s>] [--milestone]
  *   [--base-url <url>] [--only <ID,…>] [--blocked <ID,…|*>=<reason>]… [--out <dir>] [--self-test]`
  */
-import type { Target } from "./catalogue.js";
+import { DEFERRED, type ReleaseTarget } from "./catalogue.js";
 
 export interface ComplianceArgs {
-  readonly target: Target;
+  /** Release 1's targets only (DEC-0508). */
+  readonly target: ReleaseTarget;
   /** Cloud only: an existing or chosen test stage (`test-…`); default `test-<runId>`. */
   readonly stage?: string;
   readonly milestone: boolean;
@@ -51,8 +52,9 @@ export function parseArgs(argv: readonly string[]): ComplianceArgs {
   const one = (name: string): string | undefined => values.get(name)?.at(-1);
   const selfTest = flags.has("--self-test");
   const target = one("--target") ?? (selfTest ? "local" : undefined);
-  if (target === undefined) throw new Error("--target <local|cloudflare|aws> is required");
-  if (target !== "local" && target !== "cloudflare" && target !== "aws") throw new Error(`--target ${target}: use local, cloudflare or aws`);
+  if (target === undefined) throw new Error("--target <local|cloudflare> is required");
+  if (target === "aws") throw new Error(`--target aws: the AWS target is ${DEFERRED}; use local or cloudflare`);
+  if (target !== "local" && target !== "cloudflare") throw new Error(`--target ${target}: use local or cloudflare`);
   const stage = one("--stage");
   if (stage !== undefined && target === "local") throw new Error("--stage applies to cloud targets only");
   if (stage !== undefined && !stage.startsWith("test-")) throw new Error(`--stage ${stage}: compliance runs use test stages only (names starting with test-)`);

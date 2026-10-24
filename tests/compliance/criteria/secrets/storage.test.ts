@@ -3,7 +3,7 @@
  * target (docs/components/secrets.md §4; locations: SEC-REQ-003). Locally: `secrets set` on a
  * scratch copy of the reference app writes `SECRET_API_KEY` to its git-ignored `.dev.vars`, and the
  * app started there reads that value. The cloud part sets the secret on a further stage
- * (secrets/further-stage.test.ts); the AWS IAM simulation clause belongs to the AWS phase.
+ * (secrets/further-stage.test.ts); the AWS IAM simulation clause is deferred with the AWS target (DEC-0508, branch `aws`).
  */
 import { describe, expect, it } from "vitest";
 import { createClient, tag } from "../../harness/index.js";

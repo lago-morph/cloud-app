@@ -3,7 +3,7 @@
  * branch on the target except where a criterion states a per-target expectation
  * (COMPL-REQ-001); they use `baseUrl` and the harness helpers.
  */
-import type { Target } from "./catalogue.js";
+import type { ReleaseTarget } from "./catalogue.js";
 import { USER_AGENT } from "./http.js";
 
 export const ENV = {
@@ -19,7 +19,7 @@ export const ENV = {
 } as const;
 
 export interface TargetEnv {
-  readonly target: Target;
+  readonly target: ReleaseTarget;
   readonly stage?: string;
   /** Base URL of the reference app on this target; throws when the driver did not set one. */
   readonly baseUrl: string;
@@ -30,7 +30,7 @@ type Env = Readonly<Record<string, string | undefined>>;
 
 export function readTargetEnv(env: Env = process.env): TargetEnv {
   const target = env[ENV.target] ?? "local";
-  if (target !== "local" && target !== "cloudflare" && target !== "aws") throw new Error(`${ENV.target}=${target} is not one of local, cloudflare, aws`);
+  if (target !== "local" && target !== "cloudflare") throw new Error(`${ENV.target}=${target} is not one of local, cloudflare (AWS is deferred to a later release, DEC-0508)`);
   const stage = env[ENV.stage];
   const runId = env[ENV.runId];
   const baseUrl = env[ENV.baseUrl];
@@ -48,7 +48,7 @@ export function readTargetEnv(env: Env = process.env): TargetEnv {
 }
 
 /** The environment for a test process: the parent's, plus the target variables. */
-export function childEnv(base: Env, t: { readonly target: Target; readonly stage?: string; readonly baseUrl?: string; readonly runId: string; readonly testSecret?: string }): Record<string, string> {
+export function childEnv(base: Env, t: { readonly target: ReleaseTarget; readonly stage?: string; readonly baseUrl?: string; readonly runId: string; readonly testSecret?: string }): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(base)) if (v !== undefined) out[k] = v;
   out[ENV.target] = t.target;

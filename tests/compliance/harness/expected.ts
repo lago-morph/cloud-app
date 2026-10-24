@@ -2,17 +2,14 @@
  * Per-target expected criteria (COMPL-AC-001): which criteria and scenarios a run on one target
  * and tier must report, derived from the Where columns and lines, with this phase's not-run
  * rules (plan §8; prompt §4, §11) applied, and the clauses a tagged test must show by name.
+ * Release 1 runs local and Cloudflare only (DEC-0508): no AWS criterion is ever expected, and the
+ * AWS clauses of Local criteria are deferred with the AWS target (branch `aws`).
  */
 import type { CatalogueEntry, Target } from "./catalogue.js";
 
 export type RunMode = "automated" | "milestone";
 
 export const GOOGLE_MOCKED = "Google login mocked for this phase";
-/**
- * Every AWS criterion while there is no AWS account (plan-aws.md G-T4, §2): the offline phase G
- * builds and pre-checks everything, and only the live phase L records AWS evidence.
- */
-export const AWS_LIVE_PENDING = "AWS live run pending (no account)";
 
 export interface NotRunRule {
   /** A criterion or scenario ID, or "*" for every one on the rule's targets. */
@@ -43,7 +40,7 @@ export interface ExpectedEntry {
 }
 
 /**
- * A clause of a criterion that its own tagged test must show by name (plan-aws.md G-T4): the
+ * A clause of a criterion that its own tagged test must show by name (DEC-0499): the
  * criterion's other tests passing does not cover it. Replaces DEC-0397's static not-run parts:
  * the clause is now expected to run, and a run in which no test for it ran records that part
  * `not-run` instead of letting the criterion's other tests stand for it.
@@ -57,11 +54,11 @@ export interface ClauseRule {
   readonly titlePattern: string;
 }
 
-const CLOUD: readonly Target[] = ["cloudflare", "aws"];
+/** Release 1's cloud targets (DEC-0508: AWS is deferred to a later release). */
+const CLOUD: readonly Target[] = ["cloudflare"];
 
 /** This phase's not-run rules (plan §8.1, §8.2). §8.3's outstanding milestone items follow from them. */
 export const PHASE_RULES: readonly NotRunRule[] = [
-  { id: "*", targets: ["aws"], mode: "any", detail: AWS_LIVE_PENDING },
   { id: "GOOGLE-AC-001", targets: CLOUD, mode: "automated", detail: GOOGLE_MOCKED },
   { id: "GOOGLE-AC-005", targets: CLOUD, mode: "milestone", detail: GOOGLE_MOCKED },
   { id: "AUTH-AC-005", targets: CLOUD, mode: "milestone", detail: GOOGLE_MOCKED },
@@ -76,19 +73,15 @@ export const PHASE_RULES: readonly NotRunRule[] = [
   { id: "E2E-007", targets: CLOUD, mode: "milestone", detail: GOOGLE_MOCKED },
   { id: "E2E-008", targets: CLOUD, mode: "milestone", detail: GOOGLE_MOCKED },
   { id: "CLI-AC-001", targets: CLOUD, mode: "automated", detail: GOOGLE_MOCKED },
-  // DEC-0397's AWS parts of Local criteria (CORE-AC-006 AWS bundle, SQL-AC-006 Data API retry loop) are no longer
-  // not-run rules: plan-aws.md G-T4 adds their tests, and CLAUSE_RULES below requires each to run.
 ];
 
 /**
- * The AWS clauses of Local criteria (plan-aws.md §1, G-T4). Each runs on local, by its own tagged
- * test: SQL-AC-006's in `tests/compliance/criteria/sql/data-api-retry.test.ts`, CORE-AC-006's in
- * the framework's AWS bundle inspection (G-06; its title names the AWS bundle).
+ * Clauses that must be shown by their own tagged test. None in release 1: the only ones were the
+ * AWS clauses of Local criteria (CORE-AC-006's AWS bundle, SQL-AC-006's Data API retry loop),
+ * which are deferred with the AWS target and their tests (DEC-0508, branch `aws`). The rule kind
+ * stays for the AWS release.
  */
-export const CLAUSE_RULES: readonly ClauseRule[] = [
-  { id: "CORE-AC-006", targets: ["local"], mode: "automated", part: "AWS-bundle clause", titlePattern: String.raw`\bAWS[- ]bundle\b` },
-  { id: "SQL-AC-006", targets: ["local"], mode: "automated", part: "Data API retry-loop clause", titlePattern: String.raw`\bData API retry[- ]loop clause\b` },
-];
+export const CLAUSE_RULES: readonly ClauseRule[] = [];
 
 /**
  * Unit-level criteria (plan §10.3; DEC-0319, decision log Item: fix-c3): the

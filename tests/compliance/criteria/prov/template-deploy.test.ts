@@ -1,7 +1,7 @@
 /**
  * PROV-AC-001 (Cloudflare part; provisioning.md §4): the template app deploys with no files
- * other than its app definition, code, and configuration values. The AWS deploy is recorded
- * not-run by the driver ("AWS phase not started").
+ * other than its app definition, code, and configuration values. The AWS deploy is deferred
+ * with the AWS target to a later release (DEC-0508, branch `aws`) and is not judged in release 1.
  *
  * Reading (D-T.md):
  * - the template's committed files are each the app definition (`src/app.ts`), code

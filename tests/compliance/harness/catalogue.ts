@@ -11,8 +11,26 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
+/** Every target the documents' Where columns and lines can name. */
 export type Target = "local" | "cloudflare" | "aws";
 export const TARGETS: readonly Target[] = ["local", "cloudflare", "aws"];
+
+/**
+ * The targets release 1 runs and judges (DEC-0508, SYS-REQ-001 and SYS-REQ-026 as amended): local
+ * and Cloudflare. The AWS target is deferred to a later release (branch `aws`); its criteria stay
+ * in the documents and the catalogue, but no run, traceability row or release report demands them.
+ */
+export type ReleaseTarget = Exclude<Target, "aws">;
+export const RELEASE_TARGETS: readonly ReleaseTarget[] = ["local", "cloudflare"];
+
+/** How the reports name a target or criterion that release 1 does not judge. */
+export const DEFERRED = "deferred to a later release (DEC-0508, branch `aws`)";
+
+/** True for a release target. */
+export const isReleaseTarget = (target: string): target is ReleaseTarget => (RELEASE_TARGETS as readonly string[]).includes(target);
+
+/** True when no release target applies to the entry (an AWS-only criterion): it is deferred with the AWS target. */
+export const isDeferred = (entry: { readonly applies: Applicability }): boolean => RELEASE_TARGETS.every((target) => entry.applies[target] === undefined);
 
 /**
  * The detail of the `not-run` entry the driver writes for an expected criterion outside `--only`

@@ -2,7 +2,7 @@
  * Cross-origin configuration of a stage's R2 bucket (files.md §2 "Cross-origin configuration";
  * DEC-0099; FILES-REQ-004): the policy provisioning sets, and the one CORS preflight deploy's
  * health step sends to storage (provisioning.md §2 step 7). App code never sees either. The
- * origin check and the preflight are shared with AWS (`../s3/cors.ts`).
+ * origin check and the preflight are shared S3 code (`../s3/cors.ts`; AWS uses it on branch `aws`, DEC-0508).
  * Workers- and Node-compatible (`fetch` only).
  */
 import { CORS_PROBE_KEY, exactOrigin, preflightStorageCors, type StorageCorsOutcome } from "../s3/cors.js";

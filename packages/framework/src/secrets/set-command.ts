@@ -18,8 +18,8 @@ export interface SecretsSetArgs {
   readonly stage: string;
 }
 
-const USAGE = "usage: secrets set <name> --target <local|cloudflare|aws> --stage <stage>; the value is read from standard input";
-const TARGETS: readonly Target[] = ["local", "cloudflare", "aws"];
+const USAGE = "usage: secrets set <name> --target <local|cloudflare> --stage <stage>; the value is read from standard input";
+const TARGETS: readonly Target[] = ["local", "cloudflare"];
 
 /**
  * The value from standard input: every chunk, decoded as UTF-8, with one trailing line ending

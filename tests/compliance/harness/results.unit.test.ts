@@ -75,16 +75,16 @@ describe("[COMPL-AC-003] criterion results from test outcomes", () => {
     ]);
   });
 
-  // G-T2 report: AWS-AC-005's not-run reason travels as the skip note and must become the detail.
+  // DEC-0500: a test's not-run reason travels as the skip note and must become the detail.
   it("a skipped test's note becomes its not-run detail (a leading 'not-run:' dropped); skips without a note are listed as before", () => {
     const noted = (title: string, note: string): TestOutcome => ({ ...outcome(title, "skipped"), note });
     expect(
       criterionResults({
-        target: "aws",
-        expected: [run("AWS-AC-005")],
-        outcomes: [noted("[AWS-AC-005] paused cluster", "not-run: the cluster did not pause within 15 minutes (PAR-281); last observed: running")],
+        target: "cloudflare",
+        expected: [run("KV-AC-005")],
+        outcomes: [noted("[KV-AC-005] expiry", "not-run: the key did not expire within 15 minutes; last observed: present")],
       }),
-    ).toEqual([{ id: "AWS-AC-005", status: "not-run", detail: "the cluster did not pause within 15 minutes (PAR-281); last observed: running" }]);
+    ).toEqual([{ id: "KV-AC-005", status: "not-run", detail: "the key did not expire within 15 minutes; last observed: present" }]);
     expect(
       criterionResults({
         target: "local",
@@ -99,7 +99,7 @@ describe("[COMPL-AC-003] criterion results from test outcomes", () => {
     ]);
   });
 
-  // plan-aws.md G-T4: a clause of a criterion (CORE-AC-006's AWS bundle, SQL-AC-006's retry loop) needs its own test.
+  // A clause of a criterion that needs its own test (the rule kind is kept for the AWS release, DEC-0508).
   it("records a required clause not-run when no executed test of its own shows it, even when the criterion's other tests pass", () => {
     const clauses = [{ part: "Data API retry-loop clause", titlePattern: String.raw`\bData API retry[- ]loop clause\b` }];
     const entry = run("SQL-AC-006", { clauses });

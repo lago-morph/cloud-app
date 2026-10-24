@@ -12,7 +12,7 @@
  * target's run selects, as the driver's runners list them), and the evidence writer validates records against the schema — and
  * the pass part ("every applicable criterion passed; the record is valid") is read by the
  * evaluator from the same run's evidence record (DEC-0279, DEC-0302…DEC-0310, decision log Item: C-T4). The
- * AWS run is not run in this phase ("AWS phase not started").
+ * AWS run is deferred with the AWS target (DEC-0508, branch `aws`); release 1 does not judge it.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";

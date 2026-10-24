@@ -1,8 +1,7 @@
 /**
- * FILES-AC-001/-002 server-operation cases, shared by the local suite (server-operations.test.ts,
- * local R2 through createTestApp) and the AWS pre-check (../aws-precheck/files.s3.test.ts, the S3
- * store over the S3 fake). The host decides where `files` comes from; the expectations are the
- * same. Literals from docs/components/files.md; PAR-230 (1,024 UTF-8 bytes), PAR-231 (default
+ * FILES-AC-001/-002 server-operation cases, run by the local suite (server-operations.test.ts,
+ * local R2 through createTestApp). The host decides where `files` comes from, so another store
+ * can run the same expectations (the AWS pre-check on branch `aws` does; DEC-0508). Literals from docs/components/files.md; PAR-230 (1,024 UTF-8 bytes), PAR-231 (default
  * page 100), PAR-232 (max page 1,000).
  */
 import { describe, expect, it } from "vitest";

@@ -1,7 +1,7 @@
 /**
  * PROV-AC-006 (provisioning.md §4; milestone), Cloudflare part (plan §11 Q2): stages deploy
  * "from a clean machine with no local CLI state". The region part is AWS (DEC-0075) and is
- * recorded not-run by the driver ("AWS phase not started").
+ * deferred with the AWS target (DEC-0508, branch `aws`); release 1 does not judge it.
  *
  * A "machine" here is a fresh scratch copy of apps/reference (committed files only: no
  * `.framework/`, `.wrangler/` or other generated state) run with a fresh, empty HOME and XDG

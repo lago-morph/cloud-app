@@ -25,7 +25,6 @@ import { readHistory } from "../../mig/history.js";
 import { FRAMEWORK_MIGRATIONS_DIR } from "../../mig/migrations-dir.js";
 import { filesBucketName } from "../../provision/cloudflare/names.js";
 import type { WorkerCode } from "../../provision/cloudflare/sst.js";
-import type { FunctionCode } from "../../provision/aws/sst.js";
 import { runDeploy, type AbortPoint } from "../../provision/core/deploy.js";
 import type { TargetOperations } from "../../provision/core/operations.js";
 import { BINDINGS } from "../../targets/cloudflare/bindings.js";
@@ -104,50 +103,39 @@ export function deployCommand(deps: DeployDeps): Command {
 
 // ---------------------------------------------------------------------------------------------
 // Real dependencies. The Cloudflare API is reached only through `fetch`, which the unit tests
-// stub, and the AWS operations are injected or mocked: no test of this module contacts a cloud.
+// stub: no test of this module contacts a cloud.
 
 export interface PrepareDeps {
   /** The build pipeline (`buildApp`). */
-  build(options: BuildOptions): Promise<Pick<BuildResult, "deployment" | "resolved" | "outDir" | "bundle" | "lambda">>;
+  build(options: BuildOptions): Promise<Pick<BuildResult, "deployment" | "resolved" | "outDir" | "bundle">>;
   /** Builds the client's static assets into `outDir`; undefined when the app has no client. */
   buildClient(appDir: string, outDir: string): Promise<string | undefined>;
   /** The package's framework migration histories (`FRAMEWORK_MIGRATIONS_DIR`). */
   readonly frameworkMigrationsDir: string;
-  /** `CLOUDFLARE_ACCOUNT_ID`, delivered to the Worker for its R2 tickets (Cloudflare only). */
+  /** `CLOUDFLARE_ACCOUNT_ID`, delivered to the Worker for its R2 tickets. */
   readonly accountId: string | undefined;
 }
 
-/** `deploy`'s `prepare`: build, client, migrations, secrets and the target's code (Cloudflare: the Worker; AWS: the Lambda). */
+/** `deploy`'s `prepare` on Cloudflare: build, client, migrations, secrets and the Worker code. */
 export function prepareDeploy(deps: PrepareDeps): DeployDeps["prepare"] {
   return async (appDir, target, stage) => {
-    if (target !== "cloudflare" && target !== "aws") throw new Error(`deploy has no provisioning for target ${target}`);
+    if (target !== "cloudflare") throw new Error(`deploy has no provisioning for target ${target}`);
     const built = await deps.build({ appDir, target, stage });
     const assetsDirectory = await deps.buildClient(appDir, join(built.outDir, "client"));
     const app = built.deployment.app;
-    const withAssets = assetsDirectory === undefined ? {} : { assetsDirectory };
-    let code: WorkerCode | FunctionCode;
-    if (target === "aws") {
-      // G-06's build output is exactly the stage program's FunctionCode (DEC-0472); the
-      // program sets the framework's Lambda variables itself, so the code adds none.
-      if (built.lambda === undefined) throw new Error(`the AWS build of stage ${stage} returned no Lambda code`);
-      code = { bundle: built.lambda.bundle, handler: built.lambda.handler, ...withAssets };
-    } else {
-      const accountId = deps.accountId ?? "";
-      code = {
-        bundle: built.bundle,
-        ...withAssets,
-        compatibilityDate: COMPATIBILITY_DATE,
-        variables: { ...(accountId === "" ? {} : { [BINDINGS.r2AccountId]: accountId }), [BINDINGS.filesBucket]: filesBucketName({ app, stage }) },
-        logBucketBinding: BINDINGS.logs,
-      };
-    }
-    // D1 runs the SQLite histories; Aurora (through the Data API) the Postgres ones.
-    const dialect = target === "aws" ? "postgres" : "sqlite";
+    const accountId = deps.accountId ?? "";
+    const code: WorkerCode = {
+      bundle: built.bundle,
+      ...(assetsDirectory === undefined ? {} : { assetsDirectory }),
+      compatibilityDate: COMPATIBILITY_DATE,
+      variables: { ...(accountId === "" ? {} : { [BINDINGS.r2AccountId]: accountId }), [BINDINGS.filesBucket]: filesBucketName({ app, stage }) },
+      logBucketBinding: BINDINGS.logs,
+    };
     return {
       app,
       migrations: {
-        framework: readHistory(deps.frameworkMigrationsDir, dialect, "framework"),
-        app: readHistory(join(appDir, "migrations"), dialect, "app"),
+        framework: readHistory(deps.frameworkMigrationsDir, "sqlite", "framework"),
+        app: readHistory(join(appDir, "migrations"), "sqlite", "app"),
       },
       requiredSecrets: built.resolved.secrets.map((s) => s.name),
       ...(built.resolved.google === undefined ? {} : { googleClientId: built.resolved.google.clientId }),

@@ -4,8 +4,7 @@
  * not survive), and resolved with the Workers export conditions. Worker runtimes import no
  * Node-only framework module (the Postgres harness is `sql/postgres.ts`, the migrations
  * directory `mig/migrations-dir.ts`), so a Node built-in reaching the bundle fails the build
- * (DEC-0196, DEC-0197). `bundleLambda` composes the AWS Lambda bundle the same way, for Node 22
- * (plan-aws G-06).
+ * (DEC-0196, DEC-0197).
  */
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
@@ -34,8 +33,6 @@ const frameworkSideEffectFree: esbuild.Plugin = {
 export interface BundleResult {
   /** Every module with code in the bundle (paths as esbuild reports them). */
   readonly modules: readonly string[];
-  /** Imports left external (the bundle loads them at run time); only Node built-ins on AWS. */
-  readonly externals?: readonly string[];
 }
 
 export async function bundleWorker(entry: string, outfile: string): Promise<BundleResult> {
@@ -53,49 +50,11 @@ export async function bundleWorker(entry: string, outfile: string): Promise<Bund
     logLevel: "silent",
     plugins: [frameworkSideEffectFree],
   });
-  return { modules: contributedModules(result.metafile) };
-}
-
-/** Modules with code in the output (an import whose code is tree-shaken away contributes 0 bytes). */
-function contributedModules(metafile: esbuild.Metafile): string[] {
-  const contributed = Object.values(metafile.outputs).flatMap((output) =>
+  // Modules with code in the output (an import whose code is tree-shaken away contributes 0 bytes).
+  const contributed = Object.values(result.metafile.outputs).flatMap((output) =>
     Object.entries(output.inputs)
       .filter(([, input]) => input.bytesInOutput > 0)
       .map(([path]) => path),
   );
-  return [...new Set(contributed)];
-}
-
-/**
- * ESM output from CommonJS dependencies (the AWS SDK's `dist-cjs` fallbacks) calls `require` for
- * Node built-ins; Node's ESM scope has none, so the bundle defines it first.
- */
-const LAMBDA_BANNER = 'import { createRequire as __frameworkCreateRequire } from "node:module";\nconst require = __frameworkCreateRequire(import.meta.url);';
-
-/**
- * The AWS Lambda bundle (plan-aws G-06; aws.md §2; DEC-0432, DEC-0433): Node 22 (PAR-272,
- * `nodejs22.x`), ESM, fully self-contained. The AWS SDK clients the runtime uses (rds-data, s3,
- * ssm) are bundled at the framework's pinned version (PAR-111), never taken from the copy in
- * the managed runtime, so nothing is external. ESM entry points of dependencies are preferred
- * (`module` before `main`), which lets esbuild drop unused SDK code. Minified without legal
- * comments, so comments and source paths do not survive (DEC-0240).
- */
-export async function bundleLambda(entry: string, outfile: string): Promise<BundleResult> {
-  const result = await esbuild.build({
-    entryPoints: [entry],
-    outfile,
-    bundle: true,
-    format: "esm",
-    platform: "node",
-    target: "node22",
-    mainFields: ["module", "main"],
-    banner: { js: LAMBDA_BANNER },
-    minify: true,
-    legalComments: "none",
-    metafile: true,
-    logLevel: "silent",
-    plugins: [frameworkSideEffectFree],
-  });
-  const externals = Object.values(result.metafile.outputs).flatMap((output) => output.imports.filter((i) => i.external).map((i) => i.path));
-  return { modules: contributedModules(result.metafile), externals: [...new Set(externals)] };
+  return { modules: [...new Set(contributed)] };
 }

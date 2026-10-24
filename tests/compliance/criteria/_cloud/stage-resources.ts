@@ -26,7 +26,6 @@
 import { createHash } from "node:crypto";
 import { prerequisiteMissing } from "../../harness/index.js";
 import { accountId, cfApi, cfList, cfOk, failure } from "./api.js";
-import { listAwsStageResources } from "./aws/stage-resources.js";
 import { bucketExists, LOG_BUCKET, listKeys, STATE_BUCKET } from "./r2.js";
 
 export interface StageRef {
@@ -139,8 +138,7 @@ export function leftoverStrings(d: StageResourceDetails): string[] {
 
 /** DEC-0279 hook: every resource of PROV's removal list still present for the stage. */
 export async function listStageResources(input: { readonly target: string; readonly app: string; readonly stage: string }): Promise<string[]> {
-  if (input.target === "aws") return listAwsStageResources(input);
-  if (input.target !== "cloudflare") return prerequisiteMissing(`no stage-resource probe for target ${input.target}`);
+  if (input.target !== "cloudflare") return prerequisiteMissing(`no stage-resource probe for target ${input.target} (AWS deferred to a later release, DEC-0508)`);
   if (!input.stage.startsWith("test-")) throw new Error(`the stage-resource probe handles test stages only, not ${input.stage}`);
   return leftoverStrings(await stageResourceDetails(input));
 }

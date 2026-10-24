@@ -2,7 +2,7 @@
  * The cross-origin parts every S3 endpoint shares (files.md §2 "Cross-origin configuration";
  * DEC-0099; FILES-REQ-004): the stage's public origin as exactly one origin, and the one CORS
  * preflight deploy's health step sends to storage (provisioning.md §2 step 7). The Cloudflare and
- * AWS modules wrap these with their bucket URLs and policy shapes. Workers- and Node-compatible
+ * AWS modules (branch `aws`, DEC-0508) wrap these with their bucket URLs and policy shapes. Workers- and Node-compatible
  * (`fetch` only).
  */
 import { FrameworkError } from "../../core/errors.js";

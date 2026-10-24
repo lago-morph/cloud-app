@@ -1,6 +1,6 @@
 /**
  * The URL path of an object key on an S3 endpoint (R2's S3-compatible endpoint and AWS S3),
- * shared by the Cloudflare tickets and the AWS store and tickets (DEC-0328).
+ * shared by the Cloudflare tickets and the AWS store and tickets (branch `aws`, DEC-0508) (DEC-0328).
  *
  * Each `/`-separated segment is RFC 3986-encoded (the form A-07 verified). URL parsers (aws4fetch,
  * `fetch`, browsers) resolve `.` and `..` segments, even percent-encoded, so a name with one is

@@ -1,6 +1,6 @@
 /**
  * FILES server operations against local R2 (createTestApp, DEC-0105). The FILES-AC-001/-002
- * cases live in server-operations.cases.ts, shared with the AWS pre-check.
+ * cases live in server-operations.cases.ts.
  * FILES-AC-001 (FILES-REQ-001), FILES-AC-002 (FILES-REQ-002), FILES-AC-006 server part
  * (FILES-REQ-006: unreachable storage → FILES.UNAVAILABLE). docs/components/files.md;
  * PAR-230 (1,024 UTF-8 bytes), PAR-231 (default page 100), PAR-232 (max page 1,000).

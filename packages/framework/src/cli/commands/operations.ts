@@ -1,13 +1,11 @@
 /**
- * The cloud commands' PROV operations, one factory per cloud target (D-05; G-11;
- * DEC-0492). `deploy`, `remove`, `setup-account`, `secrets set` and the compliance
+ * The cloud commands' PROV operations, one factory per cloud target (D-05; DEC-0492). `deploy`, `remove`, `setup-account`, `secrets set` and the compliance
  * harness's leftover check all take their target's operations from `targetOperations`, which
  * dispatches on `--target` to the target's own factory:
  * - `cloudflare`: `cloudflareOperations` (D-03 with D-04's databases and D-02's CORS parts),
- *   unchanged from D-05;
- * - `aws`: `awsOperations` (`aws-operations.ts`: G-10's `createAwsTarget` on G-07's account,
- *   with the child environment for SST, Pulumi and the Go providers).
- * A target never falls through to another target's factory.
+ *   unchanged from D-05.
+ * Release 1 has the one cloud target; the AWS factory is deferred to a later release (DEC-0508,
+ * branch `aws`). A target never falls through to another target's factory.
  */
 import type { Target } from "../../core/identity.js";
 import { bucketCorsPolicy, checkStorageCors } from "../../files/cloudflare/cors.js";
@@ -17,7 +15,6 @@ import { missingCredentials } from "../../provision/cloudflare/environment.js";
 import type { WorkerCode } from "../../provision/cloudflare/sst.js";
 import { createCloudflareTarget } from "../../provision/cloudflare/target.js";
 import type { TargetOperations } from "../../provision/core/operations.js";
-import { awsOperations } from "./aws-operations.js";
 import type { ProcessEnvironment } from "./smoke-cloud.js";
 
 export interface OperationsOptions {
@@ -37,8 +34,6 @@ export interface OperationsInput {
   readonly target: Target;
   /** `deploy` only: the built code, as the target's `prepare` made it. */
   readonly code?: unknown;
-  /** `setup-account --region` (AWS only): the region chosen for the account. */
-  readonly region?: string;
 }
 
 /** Builds the operations of one command run. */
@@ -80,7 +75,6 @@ export const cloudflareOperations: OperationsFactory =
 /** The registration point: each cloud target's factory. */
 export const OPERATIONS_FACTORIES: Readonly<Record<CloudTarget, OperationsFactory>> = Object.freeze({
   cloudflare: cloudflareOperations,
-  aws: awsOperations,
 });
 
 /** The operations of `--target` from its own factory; `local` has none. */
@@ -89,7 +83,6 @@ export function targetOperations(options: OperationsOptions, factories: Readonly
     if (input.target === "local") throw new Error("there are no provisioning operations for target local");
     const factory = Object.hasOwn(factories, input.target) ? factories[input.target] : undefined;
     if (factory === undefined) throw new Error(`there are no provisioning operations for target ${String(input.target)}`);
-    if (input.region !== undefined && input.target !== "aws") throw new Error(`a region is chosen only for target aws, not ${input.target}`);
     return factory(options)(input);
   };
 }

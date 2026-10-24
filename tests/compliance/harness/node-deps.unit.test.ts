@@ -6,9 +6,6 @@ import { ACCOUNT, FakeCloud } from "../../../packages/framework/src/provision/cl
 import { stageLeftovers } from "./leftovers.js";
 import { cloudflareOperations } from "../../../packages/framework/src/cli/commands/deploy.js";
 import { FakeTarget } from "../../../packages/framework/src/provision/core/fake-target.js";
-import { installAwsNetworkGuard } from "../../../packages/framework/src/provision/aws/aws-network-guard.test-support.js";
-import type { TargetOperations } from "../../../packages/framework/src/provision/core/operations.js";
-import { AWS_CALLS_REPORT_PREFIX } from "./aws-usage.js";
 import { cliStageOps, deployOrigin, devOrigin, generateTestSecret, pendingStageStore, readVersions, runProcess, secretsNotSet, stageResourceOperations, type OperationsFactory } from "./node-deps.js";
 
 const repo = new URL("../../../", import.meta.url).pathname;
@@ -29,13 +26,6 @@ describe("driver process helpers", () => {
     expect(deployOrigin("deploy: done\n")).toBeUndefined();
   });
 
-  it("finds the stage's CloudFront origin in AWS deploy output, never the Function URL", () => {
-    const out = "deploy: done\nFunction https://abc123.lambda-url.eu-west-1.on.aws/\nPublic origin: https://d1a2b3c4d5e6f7.cloudfront.net\n";
-    expect(deployOrigin(out, "aws")).toBe("https://d1a2b3c4d5e6f7.cloudfront.net");
-    expect(deployOrigin("Public origin: https://reference-test-abc.sub.workers.dev\n", "aws")).toBeUndefined();
-    expect(deployOrigin("Function https://abc123.lambda-url.eu-west-1.on.aws/\n", "aws")).toBeUndefined();
-  });
-
   it("keeps pending test stages in a file, per target", () => {
     dir = mkdtempSync(join(tmpdir(), "pending-"));
     const store = pendingStageStore(join(dir, "sub", "pending-stages.json"));
@@ -45,7 +35,6 @@ describe("driver process helpers", () => {
     store.add("cloudflare", "test-a");
     store.remove("cloudflare", "test-b");
     expect(pendingStageStore(join(dir, "sub", "pending-stages.json")).list("cloudflare")).toEqual(["test-a"]);
-    expect(store.list("aws")).toEqual([]);
   });
 
   it("reads exact framework and dependency versions from the installed packages", () => {
@@ -112,25 +101,14 @@ describe("the driver's Cloudflare leftover check (D-06-2; COMPL-REQ-004, PROV §
     const fetch = cloudFetch(FakeCloud.withSharedResources(), [], seen);
     await expect(stageResourceOperations(repo, "cloudflare", { env: {}, fetch })).rejects.toThrow(/CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID/);
     await expect(stageResourceOperations(repo, "cloudflare", { env: { ...ENV, HTTPS_PROXY: "http://proxy:1" }, fetch })).rejects.toThrow(/NODE_USE_ENV_PROXY=1/);
-    // AWS goes through the framework's per-target factory (G-11): without AWS credentials it refuses before any
-    // request, which the driver records as a failed leftover check, never as none.
-    await expect(stageResourceOperations(repo, "aws", { env: ENV, fetch })).rejects.toThrow(/missing AWS credentials: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY/);
+    // Release 1 has no AWS operations (DEC-0508): the per-target factory refuses before any request, which the driver
+    // would record as a failed leftover check, never as none.
+    await expect(stageResourceOperations(repo, "aws" as never, { env: ENV, fetch })).rejects.toThrow(/no provisioning operations for target aws/);
     expect(seen).toEqual([]);
     const proxied = await stageResourceOperations(repo, "cloudflare", { env: { ...ENV, HTTPS_PROXY: "http://proxy:1", NODE_USE_ENV_PROXY: "1" }, fetch });
     expect(await stageLeftovers(proxied, stage)).toEqual([]);
   });
 
-  it("with AWS credentials the default factory gives the AWS operations (G-10), built without any request", async () => {
-    const guard = installAwsNetworkGuard();
-    try {
-      const ops = await stageResourceOperations(repo, "aws", { env: { AWS_ACCESS_KEY_ID: "AKIDPLACEHOLDER", AWS_SECRET_ACCESS_KEY: "placeholder" } });
-      expect((ops as TargetOperations).target).toBe("aws");
-      expect(typeof ops.listStageResources).toBe("function");
-      expect(guard.attempts).toEqual([]);
-    } finally {
-      guard.uninstall();
-    }
-  });
 });
 
 describe("the run stage's test secret (D-07; DEC-0277)", () => {
@@ -175,16 +153,16 @@ describe("the run stage's test secret (D-07; DEC-0277)", () => {
   });
 });
 
-// plan-aws.md G-T4: the AWS leftover check goes through the AWS `listStageResources` (PROV §2), here a fake
-// target behind the operations interface (the real factory is the CLI's `targetOperations`, G-11). No AWS request is made.
-describe("[COMPL-AC-004] AWS leftovers through listStageResources (fake target)", () => {
-  const STAGE = "test-awsleft0000001";
+// The leftover check goes through the target's `listStageResources` (PROV §2), here a fake target behind the operations
+// interface (the real factory is the CLI's `targetOperations`). No cloud request is made.
+describe("[COMPL-AC-004] leftovers through listStageResources (fake target)", () => {
+  const STAGE = "test-cfleft00000001";
   /** The leftover check runs in the driver process: with no proxy variable it needs no NODE_USE_ENV_PROXY. */
-  const AWS_ENV = { AWS_REGION: "eu-west-1" };
+  const CF_ENV = {};
 
-  function fakeAws(): { fake: FakeTarget; factory: OperationsFactory; seen: { target: string; requireCredentials: boolean; appDir: string }[] } {
-    const fake = new FakeTarget({ dialect: "postgres", databases: [{ name: `reference-${STAGE}-db-2` }, { name: `reference-${STAGE}x-db-1` }, { name: "reference-prodcheck-db-1" }] });
-    fake.stageState({ app: "reference", stage: STAGE }).resources.push({ kind: "Lambda function", id: `reference-${STAGE}-http` }, { kind: "SSM parameter", id: `/reference/${STAGE}/secrets/apiKey` });
+  function fakeCloudflare(): { fake: FakeTarget; factory: OperationsFactory; seen: { target: string; requireCredentials: boolean; appDir: string }[] } {
+    const fake = new FakeTarget({ databases: [{ name: `reference-${STAGE}-db-2` }, { name: `reference-${STAGE}x-db-1` }, { name: "reference-prodcheck-db-1" }] });
+    fake.stageState({ app: "reference", stage: STAGE }).resources.push({ kind: "Worker", id: `reference-${STAGE}` }, { kind: "R2 bucket", id: `reference-${STAGE}-files` });
     const seen: { target: string; requireCredentials: boolean; appDir: string }[] = [];
     const factory: OperationsFactory = (options) => (input) => {
       seen.push({ target: input.target, requireCredentials: options.requireCredentials, appDir: input.appDir });
@@ -194,58 +172,35 @@ describe("[COMPL-AC-004] AWS leftovers through listStageResources (fake target)"
   }
 
   it("lists the stage's databases by the exact pattern and its resources by exact identifier, wired as remove wires them", async () => {
-    const { fake, factory, seen } = fakeAws();
-    const ops = cliStageOps(repo, "aws", { operations: factory, env: AWS_ENV });
-    expect(await ops.listStageResources(STAGE)).toEqual([`database reference-${STAGE}-db-2`, `Lambda function reference-${STAGE}-http`, `SSM parameter /reference/${STAGE}/secrets/apiKey`]);
-    expect(seen).toEqual([{ target: "aws", requireCredentials: true, appDir: join(repo, "apps", "reference") }]);
+    const { fake, factory, seen } = fakeCloudflare();
+    const ops = cliStageOps(repo, "cloudflare", { operations: factory, env: CF_ENV });
+    expect(await ops.listStageResources(STAGE)).toEqual([`database reference-${STAGE}-db-2`, `Worker reference-${STAGE}`, `R2 bucket reference-${STAGE}-files`]);
+    expect(seen).toEqual([{ target: "cloudflare", requireCredentials: true, appDir: join(repo, "apps", "reference") }]);
     expect(fake.calls).toEqual([`listStageResources reference/${STAGE}`]);
   });
 
   it("a removed stage has no leftovers; a failing listing rejects (the driver records it as a failed check)", async () => {
-    const { fake, factory } = fakeAws();
+    const { fake, factory } = fakeCloudflare();
     fake.stages.clear();
     fake.databases.delete(`reference-${STAGE}-db-2`);
-    expect(await cliStageOps(repo, "aws", { operations: factory, env: AWS_ENV }).listStageResources(STAGE)).toEqual([]);
+    expect(await cliStageOps(repo, "cloudflare", { operations: factory, env: CF_ENV }).listStageResources(STAGE)).toEqual([]);
     fake.fail("listStageResources", new Error("AccessDenied"));
-    await expect(cliStageOps(repo, "aws", { operations: factory, env: AWS_ENV }).listStageResources(STAGE)).rejects.toThrow("AccessDenied");
+    await expect(cliStageOps(repo, "cloudflare", { operations: factory, env: CF_ENV }).listStageResources(STAGE)).rejects.toThrow("AccessDenied");
   });
 
   it("refuses non-test stages", async () => {
-    const { factory } = fakeAws();
-    await expect(cliStageOps(repo, "aws", { operations: factory, env: AWS_ENV }).listStageResources("prodcheck")).rejects.toThrow(/test stages only/);
+    const { factory } = fakeCloudflare();
+    await expect(cliStageOps(repo, "cloudflare", { operations: factory, env: CF_ENV }).listStageResources("prodcheck")).rejects.toThrow(/test stages only/);
   });
 
-  it("deploys through the CLI with --target aws and takes the CloudFront origin; Cloudflare operations count no clusters", async () => {
-    const calls: string[][] = [];
-    const run = (call: { args: readonly string[] }): Promise<{ status: number; output: string }> => {
-      calls.push([...call.args]);
-      return Promise.resolve({ status: 0, output: `deploy: done\nPublic origin: https://d111111abcdef8.cloudfront.net\n${AWS_CALLS_REPORT_PREFIX}0\n` });
-    };
-    const ops = cliStageOps(repo, "aws", { run });
-    expect((await ops.deploy(STAGE)).baseUrl).toBe("https://d111111abcdef8.cloudfront.net");
-    expect(calls).toEqual([["prototype-framework", "deploy", "--target", "aws", "--stage", STAGE]]);
-    expect(typeof ops.testStageClusters).toBe("function");
-    expect(ops.apiCalls?.()).toBe(0);
-    expect(cliStageOps(repo, "cloudflare").testStageClusters).toBeUndefined();
-  });
-
-  // G-EV F4: the account's region, read as the framework reads it (the log bucket's location); G-EV F3: fakes mark the record.
-  it("reads the account's region through the given account reader, on AWS only", async () => {
-    const seen: (string | undefined)[] = [];
-    const ops = cliStageOps(repo, "aws", { env: { AWS_REGION: "us-west-1", HTTPS_PROXY: "http://proxy:3128" }, accountRegion: (env) => (seen.push(env.https_proxy), Promise.resolve("eu-north-1")) });
-    expect(await ops.region?.()).toBe("eu-north-1");
-    // The reader gets the CLI's AWS child environment (proxy variables paired), as deploy and smoke build it.
-    expect(seen).toEqual(["http://proxy:3128"]);
-    expect(cliStageOps(repo, "cloudflare").region).toBeUndefined();
-  });
-
+  // G-EV F3 (DEC-0504): fakes mark the record.
   it("says it is a dry run when the CLI runner or the operations factory is a fake, and not otherwise", () => {
-    const { factory } = fakeAws();
+    const { factory } = fakeCloudflare();
     const run = (): Promise<{ status: number; output: string }> => Promise.resolve({ status: 0, output: "" });
-    expect(cliStageOps(repo, "aws", { operations: factory }).dryRun).toBe("fake stage operations (OperationsFactory)");
-    expect(cliStageOps(repo, "aws", { run, operations: factory }).dryRun).toBe("fake framework CLI runner; fake stage operations (OperationsFactory)");
+    expect(cliStageOps(repo, "cloudflare", { operations: factory }).dryRun).toBe("fake stage operations (OperationsFactory)");
+    expect(cliStageOps(repo, "cloudflare", { run, operations: factory }).dryRun).toBe("fake framework CLI runner; fake stage operations (OperationsFactory)");
     expect(cliStageOps(repo, "cloudflare", { run }).dryRun).toBe("fake framework CLI runner");
-    expect(cliStageOps(repo, "aws").dryRun).toBeUndefined();
-    expect(cliStageOps(repo, "aws", { env: AWS_ENV })).not.toHaveProperty("dryRun");
+    expect(cliStageOps(repo, "cloudflare").dryRun).toBeUndefined();
+    expect(cliStageOps(repo, "cloudflare", { env: CF_ENV })).not.toHaveProperty("dryRun");
   });
 });

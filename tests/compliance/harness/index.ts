@@ -34,7 +34,7 @@ export { prerequisiteMissing, PrerequisiteMissingError, PREREQUISITE_MARKER } fr
 export { readTargetEnv, type TargetEnv } from "./env.js";
 export { REFERENCE_APP } from "./leftovers.js";
 
-/** The target this run is on (`local`, `cloudflare`, `aws`), its stage and base URL. */
+/** The target this run is on (`local` or `cloudflare`; AWS is deferred, DEC-0508), its stage and base URL. */
 export function target(): TargetEnv {
   return readTargetEnv();
 }

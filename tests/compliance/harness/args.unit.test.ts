@@ -4,8 +4,12 @@ import { parseArgs } from "./args.js";
 describe("compliance command options", () => {
   it("needs a target and defaults to the automated tier", () => {
     expect(parseArgs(["--target", "local"])).toEqual({ target: "local", milestone: false, blocked: new Map(), selfTest: false });
-    expect(() => parseArgs([])).toThrow(/--target <local\|cloudflare\|aws> is required/);
+    expect(() => parseArgs([])).toThrow(/--target <local\|cloudflare> is required/);
     expect(() => parseArgs(["--target", "gcp"])).toThrow(/--target/);
+  });
+
+  it("refuses --target aws: the AWS target is deferred to a later release (DEC-0508)", () => {
+    expect(() => parseArgs(["--target", "aws"])).toThrow(/--target aws: the AWS target is deferred to a later release \(DEC-0508, branch `aws`\); use local or cloudflare/);
   });
 
   it("reads --stage, --milestone, --base-url, --only and --out", () => {

@@ -1,7 +1,7 @@
 /**
  * A Vitest reporter the driver adds before the JSON reporter (compliance.md "Driver": each skipped
  * tagged test adds a `not-run` entry). Vitest's JSON report has no field for the note a test passes
- * to `skip(note)`, so the reason a test gives for not running (AWS-AC-005: "the cluster did not
+ * to `skip(note)`, so the reason a test gives for not running (for example "the cluster did not
  * pause …") would be lost. This reporter copies the note into the test's `meta` as `skipNote`, which
  * the JSON report does carry (`assertionResults[].meta`), and `parseVitestJson` reads it from there.
  * It prints nothing.

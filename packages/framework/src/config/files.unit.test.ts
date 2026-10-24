@@ -1,7 +1,6 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { tag } from "../../../../tests/support/tags.js";
 import { FrameworkError } from "../core/errors.js";
@@ -24,7 +23,6 @@ describe("per-stage values file selection (CFG-REQ-002, DEC-0081)", () => {
 
   it(tag("CFG-AC-002", "a stage named test-<id> uses config/<target>/test.json"), () => {
     expect(stageConfigPath(deployment("cloudflare", "test-a1b2c3"))).toBe("config/cloudflare/test.json");
-    expect(stageConfigPath(deployment("aws", "test-a1b2c3"))).toBe("config/aws/test.json");
   });
 
   it("a stage not named test-* uses its own file, even when the name contains test", () => {
@@ -54,18 +52,6 @@ describe("per-stage values file selection (CFG-REQ-002, DEC-0081)", () => {
       expect((err as FrameworkError).message).not.toContain("test.json");
     },
   );
-});
-
-describe("the workspace apps' committed test-stage files (CFG-REQ-002)", () => {
-  const appsDir = fileURLToPath(new URL("../../../../apps", import.meta.url));
-  for (const app of ["template", "reference"]) {
-    it(`apps/${app} commits config/<target>/test.json for every cloud target, and AWS mirrors Cloudflare`, () => {
-      const read = nodeFileReader(join(appsDir, app));
-      const files = (["cloudflare", "aws"] as const).map((target) => readStageConfig(deployment(target, "test-x"), read));
-      expect(files.map((f) => f.file)).toEqual(["config/cloudflare/test.json", "config/aws/test.json"]);
-      expect(files[1]?.config).toEqual(files[0]?.config);
-    });
-  }
 });
 
 describe("nodeFileReader", () => {

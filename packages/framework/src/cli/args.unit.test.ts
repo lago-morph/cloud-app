@@ -1,15 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { parseTargetStage, TARGETS, UsageError } from "./args.js";
+import { parseTargetStage, UsageError } from "./args.js";
 
 describe("--target / --stage options (CLI-REQ-001)", () => {
   it("reads both options in the space and = forms", () => {
     expect(parseTargetStage(["--target", "local", "--stage", "local"])).toEqual({ target: "local", stage: "local" });
     expect(parseTargetStage(["--stage=test-ab1", "--target=cloudflare"])).toEqual({ target: "cloudflare", stage: "test-ab1" });
-  });
-
-  it("accepts every supported target, aws included (CORE-REQ-005)", () => {
-    expect(TARGETS).toEqual(["local", "cloudflare", "aws"]);
-    expect(parseTargetStage(["--target", "aws", "--stage", "test-ab1"])).toEqual({ target: "aws", stage: "test-ab1" });
   });
 
   it("refuses missing, repeated, unknown or valueless options, positionals and unknown targets", () => {
@@ -20,7 +15,7 @@ describe("--target / --stage options (CLI-REQ-001)", () => {
       ["--target", "local", "--stage", "local", "--force"],
       ["--target", "local", "--stage"],
       ["--target", "local", "--stage", "local", "extra"],
-      ["--target", "gcp", "--stage", "prod"],
+      ["--target", "aws", "--stage", "prod"],
     ]) {
       expect(() => parseTargetStage(args), args.join(" ")).toThrow(UsageError);
     }

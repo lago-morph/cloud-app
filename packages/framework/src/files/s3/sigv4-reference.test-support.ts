@@ -2,7 +2,7 @@
  * Test support: an independent SigV4 signature check, written from the specification (AWS
  * "Create a signed request" steps; S3 canonical URI = each decoded path segment URI-encoded) with
  * node:crypto, modelling what storage computes for a presigned URL (`expectedSignature`) and for a
- * header-signed request (`expectedHeaderSignature`). Shared by the Cloudflare and AWS tests and
+ * header-signed request (`expectedHeaderSignature`). Shared by the Cloudflare tests (and the AWS ones on branch `aws`) and
  * the in-process S3 fake. Not shipped.
  */
 import { createHash, createHmac } from "node:crypto";

@@ -8,14 +8,12 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { gitState, newRunId, redact, writeEvidence } from "../../../packages/framework/src/evidence/public.js";
-import { readCatalogue, type Target } from "./catalogue.js";
+import { readCatalogue, type ReleaseTarget as Target } from "./catalogue.js";
 import { SecretsNotSetError, TEST_SECRET, type CloudStageOps, type DriverDeps, type LocalSession, type PendingStages, type RunCall } from "./driver.js";
 import { REFERENCE_APP, stageLeftovers } from "./leftovers.js";
 import { waitFor } from "./wait.js";
 import type { TargetOperations } from "../../../packages/framework/src/provision/core/operations.js";
 import { targetOperations } from "../../../packages/framework/src/cli/commands/operations.js";
-import { awsChildEnvironment } from "../../../packages/framework/src/cli/commands/aws-operations.js";
-import { awsAccount } from "../../../packages/framework/src/provision/aws/account.js";
 import { cloudProcessProblems } from "../../../packages/framework/src/cli/commands/smoke-cloud.js";
 
 /** The origin `dev` prints once the client and `/api` answer (cli.md `dev`). */
@@ -23,13 +21,8 @@ export function devOrigin(output: string): string | undefined {
   return /is running at (http:\/\/localhost:\d+)\//.exec(output)?.[1];
 }
 
-/**
- * The stage's public origin in `deploy` output (PROV-REQ-002 "Publishing the result"): the
- * `workers.dev` URL on Cloudflare, the CloudFront URL on AWS (aws.md §2: the public origin is the
- * CloudFront URL, never the Function URL).
- */
-export function deployOrigin(output: string, target: Target = "cloudflare"): string | undefined {
-  if (target === "aws") return /(https:\/\/[a-z0-9]+\.cloudfront\.net)\b/.exec(output)?.[1];
+/** The stage's public origin in `deploy` output (PROV-REQ-002 "Publishing the result"): the `workers.dev` URL on Cloudflare. */
+export function deployOrigin(output: string): string | undefined {
   return /(https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.workers\.dev)\b/.exec(output)?.[1];
 }
 
@@ -163,14 +156,14 @@ function startReferenceDev(repoRoot: string): Promise<LocalSession> {
   });
 }
 
-/** Builds a target's PROV operations as `remove` builds them (the framework's per-target `targetOperations`, D-05, G-11). */
+/** Builds a target's PROV operations as `remove` builds them (the framework's per-target `targetOperations`, D-05). */
 export type OperationsFactory = (options: { readonly env: Readonly<Record<string, string | undefined>>; readonly requireCredentials: boolean; readonly fetch?: typeof fetch }) => (input: { readonly appDir: string; readonly target: Target }) => Pick<TargetOperations, "listStageResources">;
 
 /**
  * The target's PROV operations (PROV §2), for the leftover check (compliance.md "Test stages":
  * by exact name, using `listStageResources`). These are the framework's own operations, wired
  * exactly as `remove` wires them (`targetOperations`, the per-target factory; decision D-06-2):
- * Cloudflare's D-03 operations, or on AWS G-10's `TargetOperations` (wired by G-11). A failure to
+ * Cloudflare's D-03 operations (the AWS ones are on branch `aws`, DEC-0508). A failure to
  * build them (missing credentials, for example) rejects, and the driver records it as a failed
  * leftover check, never as "no leftovers". Tests pass a fake target's operations as `operations`.
  * The check runs in the driver's process, so behind a proxy the driver itself must be started with
@@ -184,27 +177,11 @@ export async function stageResourceOperations(
 ): Promise<Pick<TargetOperations, "listStageResources">> {
   if (target === "local") throw new Error("the local target has no stage resources");
   const problems = cloudProcessProblems(options.env);
-  if (problems.length > 0) throw new Error(`the leftover check cannot reach ${target === "aws" ? "AWS" : "Cloudflare"}: ${problems.join("; ")}`);
+  if (problems.length > 0) throw new Error(`the leftover check cannot reach ${target}: ${problems.join("; ")}`);
   const factory: OperationsFactory = options.operations ?? targetOperations;
   const make = factory({ env: options.env, requireCredentials: true, ...(options.fetch === undefined ? {} : { fetch: options.fetch }) });
   return make({ appDir: join(repoRoot, "apps", REFERENCE_APP), target });
 }
-
-/** The AWS usage parts of the stage operations: the cluster count and the driver's own call count (the G-T1 hooks, loaded only on AWS). */
-async function awsUsageHooks(): Promise<{ testStageClusters(env: Readonly<Record<string, string | undefined>>): Promise<string[]>; awsCallCount(): number }> {
-  const [usage, api] = await Promise.all([import("../criteria/_cloud/aws/usage.js"), import("../criteria/_cloud/aws/api.js")]);
-  return { testStageClusters: usage.testStageClusters, awsCallCount: api.awsCallCount };
-}
-
-/** Reads the AWS account's region, given the CLI's AWS child environment (default: `defaultAccountRegion`). */
-export type AccountRegionReader = (env: Readonly<Record<string, string | undefined>>) => Promise<string>;
-
-/**
- * The AWS account's region as the framework reads it for `deploy` and `smoke` (DEC-0075, DEC-0476):
- * G-07's account operations, so STS `GetCallerIdentity` and the log bucket's location (PAR-060
- * when the account has no log bucket yet, whose deploy preflight then fails on its own).
- */
-export const defaultAccountRegion: AccountRegionReader = (env) => awsAccount({ env }).region();
 
 export function cliStageOps(
   repoRoot: string,
@@ -213,14 +190,12 @@ export function cliStageOps(
     readonly operations?: OperationsFactory;
     readonly run?: (call: RunCall) => Promise<{ status: number; output: string }>;
     readonly env?: Readonly<Record<string, string | undefined>>;
-    readonly accountRegion?: AccountRegionReader;
   } = {},
 ): CloudStageOps {
   const runner = options.run ?? runProcess;
   const env = options.env ?? process.env;
   // G-EV F3: operations built on a fake runner or factory say so, and the driver marks the record.
   const fakes = [...(options.run === undefined ? [] : ["fake framework CLI runner"]), ...(options.operations === undefined ? [] : ["fake stage operations (OperationsFactory)"])];
-  let ownCalls = (): number => 0;
   const cli = (args: string[], input?: string): Promise<{ status: number; output: string }> =>
     runner({
       command: "npx",
@@ -237,8 +212,8 @@ export function cliStageOps(
         const message = `deploy --target ${target} --stage ${stage} failed with status ${String(result.status)}\n${result.output.slice(-2000)}`;
         throw secretsNotSet(result.output) ? new SecretsNotSetError(message, result.output) : new Error(message);
       }
-      const baseUrl = deployOrigin(result.output, target);
-      if (baseUrl === undefined) throw new Error(`deploy --target ${target} --stage ${stage} printed no ${target === "aws" ? "CloudFront" : "workers.dev"} origin`);
+      const baseUrl = deployOrigin(result.output);
+      if (baseUrl === undefined) throw new Error(`deploy --target ${target} --stage ${stage} printed no workers.dev origin`);
       return { baseUrl, output: result.output };
     },
     async remove(stage) {
@@ -256,17 +231,6 @@ export function cliStageOps(
     async listStageResources(stage) {
       return stageLeftovers(await stageResourceOperations(repoRoot, target, { env, ...(options.operations === undefined ? {} : { operations: options.operations }) }), { app: REFERENCE_APP, stage });
     },
-    ...(target === "aws"
-      ? {
-          region: () => (options.accountRegion ?? defaultAccountRegion)(awsChildEnvironment(env)),
-          async testStageClusters(region) {
-            const hooks = await awsUsageHooks();
-            ownCalls = hooks.awsCallCount;
-            return hooks.testStageClusters({ ...env, AWS_REGION: region, AWS_DEFAULT_REGION: region });
-          },
-          apiCalls: () => ownCalls(),
-        }
-      : {}),
   };
 }
 
