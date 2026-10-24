@@ -41,7 +41,7 @@ const DOT_SEGMENT = /^\.\.?$/;
  * `..` segments, even percent-encoded, so a name with one is sent with every `/` as `%2F`;
  * storage decodes the path back to the same key. A name that is only `.` or `..` cannot be sent
  * at all. Both rules test the *name*, not the stored key, so they behave as before the ending
- * was added (DEC-0328, DEC-PENDING-fix-r2order-1).
+ * was added (DEC-0328, DEC-0430).
  */
 function keyPath(name: string): string {
   if (DOT_SEGMENT.test(name)) {

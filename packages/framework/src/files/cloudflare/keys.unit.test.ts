@@ -72,7 +72,7 @@ describe("[FILES-AC-001] Cloudflare: list is in code point order over R2's real 
   });
 });
 
-describe("Cloudflare stored keys (DEC-PENDING-fix-r2order-1)", () => {
+describe("Cloudflare stored keys (DEC-0430)", () => {
   it("storedKey adds U+0001 below PAR-230 bytes and not at it; nameOfKey strips it", () => {
     expect(storedKey("a/b")).toBe("a/b\u0001");
     expect(storedKey(`${"é".repeat(511)}x`)).toBe(`${"é".repeat(511)}x\u0001`); // 1,023 bytes
