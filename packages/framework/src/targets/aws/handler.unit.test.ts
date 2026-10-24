@@ -229,9 +229,20 @@ async function login(level: "user" | "admin", id?: string): Promise<string> {
   return (session ?? "").split(";")[0] ?? "";
 }
 
+/**
+ * The longest `untilTrue` waits. The wait is bounded by wall time, not by a count of event-loop turns: signing
+ * (WebCrypto) runs on libuv's thread pool, so under CPU load a fixed number of turns can pass before it finishes.
+ * 10,000 turns lasted only 112 ms in a loaded run and failed (ai/implementation/root-causes/
+ * 2026-10-24-data-api-fake-template-intermittent.md). Passing loaded runs needed at most 31 ms. 10 s leaves
+ * ample headroom, still fails a condition that never holds, and stays inside these suites' 60 s timeout.
+ * `performance.now()` is real time here: the tests fake only setTimeout and clearTimeout.
+ */
+const UNTIL_TRUE_MS = 10_000;
+
 /** Lets real I/O (signing, PGlite) progress while timers are faked. */
 async function untilTrue(condition: () => boolean): Promise<void> {
-  for (let i = 0; i < 10_000 && !condition(); i++) await new Promise((resolve) => setImmediate(resolve));
+  const start = performance.now();
+  while (!condition() && performance.now() - start < UNTIL_TRUE_MS) await new Promise((resolve) => setImmediate(resolve));
   expect(condition()).toBe(true);
 }
 
