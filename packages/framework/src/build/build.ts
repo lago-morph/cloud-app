@@ -17,6 +17,7 @@
  */
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
+import { AwsNotImplementedError } from "../core/aws-pending.js";
 import { createDeployment, type Deployment, type Target } from "../core/identity.js";
 import { nodeFileReader, resolveStageConfig } from "../config/files.js";
 import { generateConfigModule } from "../config/embed.js";
@@ -78,6 +79,7 @@ export function entrySource(options: {
     `import ${appBinding} from ${JSON.stringify(options.appImport)};`,
     `import config from ${JSON.stringify(options.configImport)};`,
   ];
+  if (options.deployment.target === "aws") throw new AwsNotImplementedError("the generated Lambda entry for --target aws (G-06)");
   if (options.deployment.target === "local") {
     lines.push(`import { createLocalWorker } from ${JSON.stringify(options.runtimeImport)};`, "export default createLocalWorker(app, config);");
   } else if (options.deployment.isTestStage) {
@@ -114,6 +116,7 @@ export async function buildApp(options: BuildOptions): Promise<BuildResult> {
   checkSecretDeclarations(definition.secrets);
   const deployment = createDeployment({ app: definition.name, stage: options.stage, target: options.target });
   const resolved = resolveStageConfig(deployment, { config: definition.config, secrets: definition.secrets }, nodeFileReader(appDir));
+  if (deployment.target === "aws") throw new AwsNotImplementedError("build --target aws: the Lambda bundle (G-06)");
 
   const outDir = join(appDir, BUILD_DIR, options.target);
   rmSync(outDir, { recursive: true, force: true });

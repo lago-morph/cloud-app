@@ -36,7 +36,8 @@ function refuse(env: ProcessEnvironment, stage: string, io: { stderr(text: strin
 async function setWith(deps: Omit<CloudSecretsDeps, "env">, appDir: string, target: Target, stage: string, name: string, value: string): Promise<string> {
   const app = await deps.appName(appDir);
   await deps.operations({ appDir, target }).setSecret({ app, stage }, name, value);
-  return `${secretLocation(target, name)} (a Worker secret of stage ${stage})`;
+  const location = secretLocation(target, name, { app, stage });
+  return target === "aws" ? `${location} (an SSM SecureString parameter of stage ${stage})` : `${location} (a Worker secret of stage ${stage})`;
 }
 
 export function cloudSecrets(deps: CloudSecretsDeps): CloudSecrets {

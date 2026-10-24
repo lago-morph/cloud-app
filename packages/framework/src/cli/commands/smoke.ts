@@ -24,6 +24,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { createRequire } from "node:module";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { AwsNotImplementedError } from "../../core/aws-pending.js";
 import type { Target } from "../../core/identity.js";
 import type { EvidencePaths, EvidenceResult, GitState, Redaction, WriteEvidenceInput } from "../../evidence/writer.js";
 import { LOG_BUCKET } from "../../provision/cloudflare/account.js";
@@ -143,6 +144,7 @@ const utcDay = (d: Date) => ({ y: String(d.getUTCFullYear()), m: String(d.getUTC
 function logLocation(target: Target, app: string, stage: string, at: Date): string {
   const { y, m, d } = utcDay(at);
   if (target === "local") return `.logs/${y}-${m}-${d}.log (in the app directory)`;
+  if (target === "aws") throw new AwsNotImplementedError("smoke's log location on AWS (G-11)");
   return `R2 bucket ${LOG_BUCKET}, keys under ${app}/${stage}/${y}/${m}/${d}/`;
 }
 

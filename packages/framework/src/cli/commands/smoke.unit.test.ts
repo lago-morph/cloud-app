@@ -180,8 +180,16 @@ describe("smoke --target local (CLI-REQ-001; CLI-AC-005 local part)", () => {
 
   it("usage errors: missing or unknown target, unexpected argument", async () => {
     await expect(harness().smoke([], captureIo())).rejects.toThrow(/--target is missing/);
-    await expect(harness().smoke(["--target", "aws"], captureIo())).rejects.toThrow(/--target must be one of/);
+    await expect(harness().smoke(["--target", "gcp"], captureIo())).rejects.toThrow(/--target must be one of/);
     await expect(harness().smoke(["--target", "local", "secretvalue"], captureIo())).rejects.toThrow(UsageError);
+  });
+});
+
+describe("smoke --target aws (AWS phase G)", () => {
+  it("is accepted as a target and stops at the AWS log location, which phase G has not implemented yet", async () => {
+    const h = harness();
+    await expect(h.smoke(["--target", "aws", "--stage", "test-abc"], captureIo())).rejects.toThrow(/AWS target not yet implemented \(phase G\)/);
+    expect(h.ran).toEqual([]);
   });
 });
 
