@@ -17,7 +17,20 @@ const body = (text: string) => ({ transformToString: () => Promise.resolve(text)
 
 describe("AWS CloudHooks: cloudHooks('aws') is the AWS implementation", () => {
   it("returns the AWS hooks for target aws", () => {
-    expect(Object.keys(cloudHooks("aws")).sort()).toEqual(["deleteSecret", "listLogKeys", "logBucketExists", "readLogObject", "secretLocations"]);
+    // C-T1's CloudHooks plus G-T2's AwsCloudHooks members (G-T4).
+    expect(Object.keys(cloudHooks("aws")).sort()).toEqual([
+      "deleteSecret",
+      "functionUrl",
+      "listLogKeys",
+      "logBucketExists",
+      "observeCluster",
+      "readLogObject",
+      "secretLocations",
+      "simulatePrincipalPolicy",
+      "stageFunctions",
+      "stageNatGateways",
+      "stageResources",
+    ]);
   });
 });
 

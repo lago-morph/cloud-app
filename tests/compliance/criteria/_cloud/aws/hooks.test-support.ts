@@ -6,6 +6,7 @@
  * - The region and fake credentials are set in the environment for the test only; the hooks'
  *   process state (clients, account, call count) is reset around each test.
  */
+import { EC2Client } from "@aws-sdk/client-ec2";
 import { IAMClient } from "@aws-sdk/client-iam";
 import { LambdaClient } from "@aws-sdk/client-lambda";
 import { RDSClient } from "@aws-sdk/client-rds";
@@ -28,6 +29,7 @@ const ENV_KEYS = ["AWS_REGION", "AWS_DEFAULT_REGION", "AWS_ACCESS_KEY_ID", "AWS_
 
 export function createMocks() {
   return {
+    ec2: mockClient(EC2Client),
     ssm: mockClient(SSMClient),
     s3: mockClient(S3Client),
     lambda: mockClient(LambdaClient),
