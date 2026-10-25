@@ -30,7 +30,7 @@ function prepareDeps(overrides: Partial<PrepareDeps> = {}): PrepareDeps & { buil
       built.push(`${o.target} ${o.stage}`);
       return {
         deployment: createDeployment({ app: "notes", stage: o.stage, target: o.target }),
-        resolved: { deployment: createDeployment({ app: "notes", stage: o.stage, target: o.target }), values: {}, admins: [], secrets: [{ name: "apiKey", location: "SECRET_API_KEY" }], email: { senderName: "Notes" } },
+        resolved: { deployment: createDeployment({ app: "notes", stage: o.stage, target: o.target }), values: {}, secrets: [{ name: "apiKey", location: "SECRET_API_KEY" }], email: { senderName: "Notes" } },
         outDir: join(o.appDir, ".framework", o.target),
         bundle: join(o.appDir, ".framework", o.target, "worker.js"),
       };

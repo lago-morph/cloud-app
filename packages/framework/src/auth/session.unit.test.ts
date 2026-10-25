@@ -1,49 +1,67 @@
 import { describe, expect, it } from "vitest";
 import { tag } from "../../../../tests/support/tags.js";
-import { signToken } from "./signing.js";
-import { SESSION_LIFETIME_SECONDS, issueSession, readSession } from "./session.js";
+import { signToken, verifyToken } from "./signing.js";
+import { SESSION_FORMAT_VERSION, SESSION_LIFETIME_SECONDS, issueSession, readSession } from "./session.js";
 
 const KEY = "unit-test-key-0123456789abcdefghijklmnop";
 const T0 = Date.parse("2026-03-01T12:00:00Z");
+const REAL = { id: "u_ABC", displayName: "Ada", provider: "password", subject: "ba-user-1" } as const;
 
 describe("session tokens", () => {
-  it("PAR-250 is 7 days", () => {
+  it("PAR-250 is 7 days; the format is version 2 (DEC-0524)", () => {
     expect(SESSION_LIFETIME_SECONDS).toBe(7 * 24 * 60 * 60);
+    expect(SESSION_FORMAT_VERSION).toBe(2);
   });
 
-  it(tag("AUTH-AC-006", "a session reads back its user ID and display name until it expires"), async () => {
-    const token = await issueSession(KEY, { id: "u_ABC", displayName: "Ada" }, T0);
-    expect(await readSession(KEY, token, T0)).toStrictEqual({ id: "u_ABC", displayName: "Ada" });
-    expect(await readSession(KEY, token, T0 + (SESSION_LIFETIME_SECONDS - 60) * 1000)).toStrictEqual({ id: "u_ABC", displayName: "Ada" });
+  it(tag("AUTH-AC-006", "a real-provider session reads back its user ID, display name, provider and subject until it expires"), async () => {
+    const token = await issueSession(KEY, REAL, T0);
+    expect(await readSession(KEY, token, T0)).toStrictEqual(REAL);
+    expect(await readSession(KEY, token, T0 + (SESSION_LIFETIME_SECONDS - 60) * 1000)).toStrictEqual(REAL);
     expect(await readSession(KEY, token, T0 + SESSION_LIFETIME_SECONDS * 1000)).toBeUndefined();
   });
 
-  it(tag("AUTH-AC-006", "a future-dated session is rejected beyond the PAR-252 skew"), async () => {
-    const token = await issueSession(KEY, { id: "u_ABC", displayName: null }, T0 + 24 * 3600 * 1000);
-    expect(await readSession(KEY, token, T0)).toBeUndefined();
-    const slight = await issueSession(KEY, { id: "u_ABC", displayName: null }, T0 + 30 * 1000);
-    expect(await readSession(KEY, slight, T0)).toStrictEqual({ id: "u_ABC", displayName: null });
+  it("version 2 carries the provider id and the subject of a real session, and no level", async () => {
+    const payload = await verifyToken(KEY, "session", await issueSession(KEY, REAL, T0));
+    expect(payload).toStrictEqual({ v: 2, id: "u_ABC", name: "Ada", iat: T0 / 1000, exp: T0 / 1000 + SESSION_LIFETIME_SECONDS, prv: "password", sub: "ba-user-1" });
   });
 
-  it("a mock session carries its level; a real session carries none", async () => {
+  it(tag("AUTH-AC-006", "a future-dated session is rejected beyond the PAR-252 skew"), async () => {
+    const token = await issueSession(KEY, { ...REAL, displayName: null }, T0 + 24 * 3600 * 1000);
+    expect(await readSession(KEY, token, T0)).toBeUndefined();
+    const slight = await issueSession(KEY, { ...REAL, displayName: null }, T0 + 30 * 1000);
+    expect(await readSession(KEY, slight, T0)).toStrictEqual({ ...REAL, displayName: null });
+  });
+
+  it("a mock session carries its level and no provider or subject", async () => {
     const mock = await issueSession(KEY, { id: "x", displayName: null, mockLevel: "admin" }, T0);
     expect(await readSession(KEY, mock, T0)).toStrictEqual({ id: "x", displayName: null, mockLevel: "admin" });
+    expect(await verifyToken(KEY, "session", mock)).not.toHaveProperty("sub");
   });
 
-  it("well-signed payloads of another shape or version are rejected", async () => {
+  it(tag("AUTH-AC-012", "a version 1 cookie, and well-signed payloads of another shape, are no session"), async () => {
     const iat = Math.floor(T0 / 1000);
     const exp = iat + 100;
     for (const payload of [
+      // Version 1, as issued before DEC-0524 (real and mock).
+      { v: 1, id: "x", name: null, iat, exp },
+      { v: 1, id: "x", name: null, iat, exp, lvl: "admin" },
+      { v: 3, id: "x", name: null, iat, exp, prv: "p", sub: "s" },
+      // Version 2 without provider and subject, or with only one, or with both kinds.
       { v: 2, id: "x", name: null, iat, exp },
-      { v: 1, id: "", name: null, iat, exp },
-      { v: 1, id: 5, name: null, iat, exp },
-      { v: 1, id: "x", name: 5, iat, exp },
-      { v: 1, id: "x", name: null, iat: "a", exp },
-      { v: 1, id: "x", name: null, iat, exp, lvl: "anonymous" },
-      ["v", 1],
+      { v: 2, id: "x", name: null, iat, exp, prv: "p" },
+      { v: 2, id: "x", name: null, iat, exp, sub: "s" },
+      { v: 2, id: "x", name: null, iat, exp, prv: "", sub: "s" },
+      { v: 2, id: "x", name: null, iat, exp, prv: "p", sub: 5 },
+      { v: 2, id: "x", name: null, iat, exp, prv: "p", sub: "s", lvl: "admin" },
+      { v: 2, id: "", name: null, iat, exp, prv: "p", sub: "s" },
+      { v: 2, id: 5, name: null, iat, exp, prv: "p", sub: "s" },
+      { v: 2, id: "x", name: 5, iat, exp, prv: "p", sub: "s" },
+      { v: 2, id: "x", name: null, iat: "a", exp, prv: "p", sub: "s" },
+      { v: 2, id: "x", name: null, iat, exp, lvl: "anonymous" },
+      ["v", 2],
       null,
     ]) {
-      expect(await readSession(KEY, await signToken(KEY, "session", payload), T0)).toBeUndefined();
+      expect(await readSession(KEY, await signToken(KEY, "session", payload), T0), JSON.stringify(payload)).toBeUndefined();
     }
   });
 });

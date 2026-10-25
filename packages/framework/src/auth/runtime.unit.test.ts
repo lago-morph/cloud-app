@@ -7,8 +7,10 @@ import { createHttpParts } from "../http/runtime.js";
 import type { Severity } from "../log/public.js";
 import { FRAMEWORK_SECRETS } from "../secrets/names.js";
 import { LOCAL_COOKIES } from "./local-cookies.js";
+import type { AccountStatus, LoginProvider } from "./login-provider.js";
 import { createAuthParts, type AuthOptions } from "./runtime.js";
 import { issueSession } from "./session.js";
+import { signToken } from "./signing.js";
 
 // Generated dummy key for tests only.
 const KEY = "unit-test-key-0123456789abcdefghijklmnop";
@@ -20,13 +22,35 @@ interface Written {
   message: string;
 }
 
+/**
+ * A real (non-mock) provider for level evaluation: `accounts` by subject, an Error to make the
+ * read fail. Every `accountStatus` call is counted (AUTH-AC-015).
+ */
+function fakeProvider(accounts: Map<string, AccountStatus | Error> = new Map([["s-user", { verified: true, roles: [] }]])) {
+  const reads: string[] = [];
+  const provider: LoginProvider = {
+    id: "fake",
+    beginLogin: () => Promise.reject(new Error("not used")),
+    completeLogin: () => Promise.reject(new Error("not used")),
+    async accountStatus(subject) {
+      reads.push(subject);
+      const account = accounts.get(subject);
+      if (account instanceof Error) throw account;
+      return account ?? null;
+    },
+  };
+  return { provider, accounts, reads };
+}
+
+/** A real-provider session of the fake provider. */
+const real = (id: string, displayName: string | null, subject = "s-user") => ({ id, displayName, provider: "fake", subject });
+
 function harness(options: Partial<AuthOptions> = {}, target: Target = "local", stage = "dev") {
   const written: Written[] = [];
   const deployment = createDeployment({ app: "notes", stage, target });
   const auth = createAuthParts({
     deployment,
     publicOrigin: ORIGIN,
-    framework: { admins: [] },
     secret: async (_c, name) => {
       if (name === FRAMEWORK_SECRETS.sessionKey) return KEY;
       throw new Error(`unexpected secret ${name}`);
@@ -43,6 +67,7 @@ function harness(options: Partial<AuthOptions> = {}, target: Target = "local", s
     tables: {},
     routes: (api) => {
       api.get("/whoami", (c) => c.json(c.var.user));
+      api.get("/twice", (c) => c.json({ first: c.var.user.level, second: c.var.user.level }));
       for (const method of ["post", "put", "patch", "delete"] as const) api[method]("/change", (c) => c.json({ changed: true }));
     },
   });
@@ -72,20 +97,89 @@ describe("current user", () => {
     expect(await (await request("/api/whoami")).json()).toStrictEqual({ level: "anonymous" });
   });
 
-  it(tag("AUTH-AC-003", "a real-provider session is user, or admin when its ID is in framework.admins"), async () => {
-    const { request } = harness({ framework: { admins: ["u_ADMIN"] } });
-    const asUser = await request("/api/whoami", { headers: { cookie: await session({ id: "u_USER", displayName: "U" }) } });
-    expect(await asUser.json()).toStrictEqual({ level: "user", id: "u_USER", displayName: "U" });
-    const asAdmin = await request("/api/whoami", { headers: { cookie: await session({ id: "u_ADMIN", displayName: null }) } });
+  it(tag("AUTH-AC-003", "a real-provider session is user for a verified account, admin when its roles hold admin, and a change shows on the next request"), async () => {
+    const fake = fakeProvider(new Map([["s-user", { verified: true, roles: [] }], ["s-admin", { verified: true, roles: ["editor", "admin"] }]]));
+    const { request } = harness({ provider: fake.provider });
+    const userCookie = await session(real("u_USER", "U"));
+    expect(await (await request("/api/whoami", { headers: { cookie: userCookie } })).json()).toStrictEqual({ level: "user", id: "u_USER", displayName: "U" });
+    const asAdmin = await request("/api/whoami", { headers: { cookie: await session(real("u_ADMIN", null, "s-admin")) } });
     expect(await asAdmin.json()).toStrictEqual({ level: "admin", id: "u_ADMIN", displayName: null });
+    // Grant on the account: the very next request with the same session is admin; revoke: user again.
+    fake.accounts.set("s-user", { verified: true, roles: ["admin"] });
+    expect(await (await request("/api/whoami", { headers: { cookie: userCookie } })).json()).toMatchObject({ level: "admin" });
+    fake.accounts.set("s-user", { verified: true, roles: [] });
+    expect(await (await request("/api/whoami", { headers: { cookie: userCookie } })).json()).toMatchObject({ level: "user" });
+  });
+
+  it("unknown role names are ignored; there is no user role", async () => {
+    const fake = fakeProvider(new Map([["s-user", { verified: true, roles: ["user", "Admin", "superuser"] }]]));
+    const { request } = harness({ provider: fake.provider });
+    expect(await (await request("/api/whoami", { headers: { cookie: await session(real("u_USER", null)) } })).json()).toStrictEqual({ level: "user", id: "u_USER", displayName: null });
+  });
+
+  it(tag("AUTH-AC-012", "an unverified, unknown or failing account is anonymous, never user or admin; a failed read logs one warn entry"), async () => {
+    const failure = Object.assign(new Error("no such table: __framework_auth_user"), { code: "SQLITE_ERROR" });
+    const fake = fakeProvider(
+      new Map<string, AccountStatus | Error>([
+        ["s-unverified", { verified: false, roles: ["admin"] }],
+        ["s-failing", failure],
+        ["s-opaque", new Error("something with s-opaque in it")],
+      ]),
+    );
+    const { request, written } = harness({ provider: fake.provider });
+    for (const subject of ["s-unverified", "s-missing", "s-failing", "s-opaque"]) {
+      const res = await request("/api/whoami", { headers: { cookie: await session(real("u_X", "X", subject)) } });
+      expect(await res.json(), subject).toStrictEqual({ level: "anonymous" });
+    }
+    expect(written).toStrictEqual([
+      { component: "AUTH", severity: "warn", message: "role lookup failed (SQLITE_ERROR)" },
+      { component: "AUTH", severity: "warn", message: "role lookup failed (unknown)" },
+    ]);
+  });
+
+  it("a session of a provider the stage does not install, or of one without accountStatus, is anonymous with no read", async () => {
+    const fake = fakeProvider();
+    const { request } = harness({ provider: fake.provider });
+    const other = await session({ id: "u_X", displayName: null, provider: "other", subject: "s-user" });
+    expect(await (await request("/api/whoami", { headers: { cookie: other } })).json()).toStrictEqual({ level: "anonymous" });
+    const { accountStatus: _dropped, ...withoutStatus } = fake.provider;
+    const bare = harness({ provider: withoutStatus });
+    expect(await (await bare.request("/api/whoami", { headers: { cookie: await session(real("u_X", null)) } })).json()).toStrictEqual({ level: "anonymous" });
+    expect(fake.reads).toEqual([]);
+  });
+
+  it(tag("AUTH-AC-015", "no account read without a valid real-provider session; exactly one per request with one, however often c.var.user is read"), async () => {
+    const fake = fakeProvider();
+    const { createAuthMock } = await import("./mock.js");
+    const { request } = harness({ provider: fake.provider, mock: createAuthMock() });
+    const valid = await session(real("u_USER", null));
+    const tampered = `${valid.slice(0, -3)}${valid.at(-3) === "A" ? "B" : "A"}${valid.slice(-2)}`;
+    const expired = await session(real("u_USER", null), Date.now() - 8 * 24 * 3600 * 1000);
+    const mockSession = await session({ id: "m", displayName: null, mockLevel: "admin" });
+    for (const headers of [{}, { cookie: tampered }, { cookie: expired }, { cookie: mockSession }, { cookie: "session_local=garbage" }]) {
+      await request("/api/whoami", { headers });
+      await request("/api/auth/me", { headers });
+    }
+    expect(fake.reads).toEqual([]);
+    expect(await (await request("/api/twice", { headers: { cookie: valid } })).json()).toStrictEqual({ first: "user", second: "user" });
+    expect(fake.reads).toEqual(["s-user"]);
+  });
+
+  it(tag("AUTH-AC-012", "a version 1 session cookie is anonymous, with no read"), async () => {
+    const fake = fakeProvider();
+    const { request } = harness({ provider: fake.provider });
+    const iat = Math.floor(Date.now() / 1000);
+    const v1 = await signToken(KEY, "session", { v: 1, id: "u_USER", name: null, iat, exp: iat + 3600 });
+    expect(await (await request("/api/whoami", { headers: { cookie: `session_local=${v1}` } })).json()).toStrictEqual({ level: "anonymous" });
+    expect(fake.reads).toEqual([]);
   });
 
   it(tag("AUTH-AC-006", "a tampered or expired session cookie is anonymous"), async () => {
-    const { request } = harness();
-    const cookie = await session({ id: "u_USER", displayName: null });
+    const { request } = harness({ provider: fakeProvider().provider });
+    const cookie = await session(real("u_USER", null));
     const tampered = `${cookie.slice(0, -3)}${cookie.at(-3) === "A" ? "B" : "A"}${cookie.slice(-2)}`;
     expect(await (await request("/api/whoami", { headers: { cookie: tampered } })).json()).toStrictEqual({ level: "anonymous" });
-    const old = await session({ id: "u_USER", displayName: null }, Date.now() - 8 * 24 * 3600 * 1000);
+    const old = await session(real("u_USER", null), Date.now() - 8 * 24 * 3600 * 1000);
     expect(await (await request("/api/whoami", { headers: { cookie: old } })).json()).toStrictEqual({ level: "anonymous" });
   });
 
@@ -104,7 +198,7 @@ describe("request forgery check", () => {
 
   it(tag("AUTH-AC-007", "state-changing requests with a session need Origin equal to the public origin"), async () => {
     const { request } = harness();
-    const cookie = await session({ id: "u_USER", displayName: null });
+    const cookie = await session(real("u_USER", null));
     for (const method of METHODS) {
       for (const origin of [undefined, "https://evil.example", "null", "http://localhost:8788", `${ORIGIN}/`]) {
         const headers: Record<string, string> = { cookie, ...(origin === undefined ? {} : { origin }) };
@@ -126,7 +220,7 @@ describe("request forgery check", () => {
   it("requests without a session, and safe methods, are not checked", async () => {
     const { request } = harness();
     expect((await request("/api/change", { method: "POST", headers: { origin: "https://evil.example" } })).status).toBe(200);
-    const cookie = await session({ id: "u_USER", displayName: null });
+    const cookie = await session(real("u_USER", null));
     expect((await request("/api/whoami", { headers: { cookie, origin: "https://evil.example" } })).status).toBe(200);
   });
 
@@ -288,7 +382,7 @@ describe("authentication mock", () => {
 
   it(tag("AUTH-AC-009", "mock-login sets the chosen identity with the ID used as given; anonymous clears the session"), async () => {
     const { createAuthMock } = await import("./mock.js");
-    const { request } = harness({ mock: createAuthMock(), framework: { admins: [], users: [] } });
+    const { request } = harness({ mock: createAuthMock() });
     for (const identity of [
       { level: "user", id: "chosen-user", displayName: "Ada" },
       { level: "admin", id: "chosen-admin", displayName: null },
@@ -347,7 +441,7 @@ describe("authentication mock", () => {
 describe("POST /api/auth/logout", () => {
   it(tag("AUTH-AC-006", "clears the session cookie with 204"), async () => {
     const { request } = harness();
-    const res = await request("/api/auth/logout", { method: "POST", headers: { cookie: await session({ id: "u_X", displayName: null }), origin: ORIGIN } });
+    const res = await request("/api/auth/logout", { method: "POST", headers: { cookie: await session(real("u_X", null)), origin: ORIGIN } });
     expect(res.status).toBe(204);
     expect(await res.text()).toBe("");
     expect(cookiesOf(res).get("session_local")).toBe("; Path=/; Max-Age=0; HttpOnly; SameSite=Lax");
@@ -356,8 +450,8 @@ describe("POST /api/auth/logout", () => {
 
 describe("GET /api/auth/me", () => {
   it(tag("AUTH-AC-005", "returns the current user with Cache-Control: no-store"), async () => {
-    const { request } = harness();
-    const res = await request("/api/auth/me", { headers: { cookie: await session({ id: "u_USER", displayName: null }) } });
+    const { request } = harness({ provider: fakeProvider().provider });
+    const res = await request("/api/auth/me", { headers: { cookie: await session(real("u_USER", null)) } });
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
     expect(await res.json()).toStrictEqual({ level: "user", id: "u_USER", displayName: null });
@@ -373,10 +467,10 @@ describe("GET /api/auth/me", () => {
     }
   });
 
-  it(tag("AUTH-AC-012", "an unlisted login is anonymous to app code; /me alone adds unlistedId"), async () => {
-    const { request } = harness({ framework: { admins: [], users: ["u_LISTED"] } });
-    const cookie = await session({ id: "u_OTHER", displayName: "O" });
-    expect(await (await request("/api/whoami", { headers: { cookie } })).json()).toStrictEqual({ level: "anonymous" });
-    expect(await (await request("/api/auth/me", { headers: { cookie } })).json()).toStrictEqual({ level: "anonymous", unlistedId: "u_OTHER" });
+  it(tag("AUTH-AC-012", "/me never has an unlistedId: an unverified account is plain anonymous"), async () => {
+    const fake = fakeProvider(new Map([["s-user", { verified: false, roles: [] }]]));
+    const { request } = harness({ provider: fake.provider });
+    const cookie = await session(real("u_OTHER", "O"));
+    expect(await (await request("/api/auth/me", { headers: { cookie } })).json()).toStrictEqual({ level: "anonymous" });
   });
 });

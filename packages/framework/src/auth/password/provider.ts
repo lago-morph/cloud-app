@@ -21,6 +21,7 @@ import { FrameworkError } from "../../core/errors.js";
 import type { LogService } from "../../log/public.js";
 import { FRAMEWORK_SECRETS } from "../../secrets/names.js";
 import type { CredentialContext, CredentialProvider, ProviderIdentity } from "../login-provider.js";
+import { readAccountStatus } from "./account.js";
 import { forward, type BridgeAnswer, type BridgeRequest } from "./bridge.js";
 import { mailLink, passwordMessage, sendLater, type MailSender } from "./mail.js";
 import { BA_PATHS, createPasswordAuth, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, type BaUser, type PasswordDatabase } from "./options.js";
@@ -166,5 +167,7 @@ export function createPasswordProvider(options: PasswordProviderOptions): Creden
       if (answer.status === 400 && answer.code !== undefined && /PASSWORD/.test(answer.code)) throw invalidInput("the password does not meet the length rule");
       if (answer.status !== 200) throw refuse("invalid token", new FrameworkError("AUTH.LOGIN_FAILED", "the reset link is invalid, used or expired"));
     },
+
+    accountStatus: (subject) => readAccountStatus(database, subject),
   };
 }

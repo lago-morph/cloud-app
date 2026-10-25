@@ -40,6 +40,7 @@ function scripted(fail: Partial<Record<Op, ErrorCode>> = {}) {
     verify: (_ctx, input) => run("verify", input),
     requestReset: (_ctx, input) => run("requestReset", input),
     reset: (_ctx, input) => run("reset", input),
+    accountStatus: async () => ({ verified: true, roles: [] }),
   };
   return { provider, calls };
 }
@@ -50,7 +51,6 @@ function harness(fail: Partial<Record<Op, ErrorCode>> = {}, withMock = false) {
   const auth = createAuthParts({
     deployment,
     publicOrigin: ORIGIN,
-    framework: { admins: [] },
     secret: async (_c, name) => {
       if (name === FRAMEWORK_SECRETS.sessionKey) return KEY;
       throw new Error(`unexpected secret ${name}`);

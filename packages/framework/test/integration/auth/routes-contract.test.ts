@@ -14,7 +14,6 @@ import {
   clearsCookie,
   cookieHeader,
   disposeAll,
-  frameworkConfig,
   isCurrentUserResponse,
   isErrorResponse,
   locationOf,
@@ -54,16 +53,16 @@ describe("AUTH routes against the HTTP contract", () => {
       expect(body).toStrictEqual({ level, id: `ac005-${level}`, displayName: null });
     }
 
-    // The unlistedId form (stub provider, users list without this login's ID).
-    const listed = await newApp({ stubLoginProvider: true, config: frameworkConfig({ users: ["u_SOMEONEELSE"] }) });
-    await listed.loginWithStub("ac005-unlisted");
-    const unlisted = await listed.request("/api/auth/me");
-    expect(unlisted.status).toBe(200);
-    expect(unlisted.headers.get("cache-control")).toBe("no-store");
-    const body = (await unlisted.json()) as Record<string, unknown>;
+    // A real-provider login (stub): level and ID, never an unlistedId (DEC-0522).
+    const stub = await newApp({ stubLoginProvider: true });
+    await stub.loginWithStub("ac005-stub");
+    const real = await stub.request("/api/auth/me");
+    expect(real.status).toBe(200);
+    expect(real.headers.get("cache-control")).toBe("no-store");
+    const body = (await real.json()) as Record<string, unknown>;
     expect(isCurrentUserResponse(body)).toBe(true);
-    expect(body["level"]).toBe("anonymous");
-    expect(typeof body["unlistedId"]).toBe("string");
+    expect(body["level"]).toBe("user");
+    expect(body).not.toHaveProperty("unlistedId");
   });
 
   it(tag("AUTH-AC-005", "contract part: login 302, callback 302 (success and failure), logout 204"), async () => {

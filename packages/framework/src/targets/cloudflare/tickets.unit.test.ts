@@ -45,7 +45,7 @@ describe("createCloudflareWorker issues signed R2 tickets (D-02 wired by D-05)",
         api.post("/ticket", async (c) => c.json(await c.var.files.createUploadTicket("a.txt", { contentType: "text/plain" })));
       },
     });
-    const resolved: ResolvedConfig = { deployment: createDeployment({ app: "cfticket", stage: "test-unit", target: "cloudflare" }), values: {}, admins: [], secrets: [] };
+    const resolved: ResolvedConfig = { deployment: createDeployment({ app: "cfticket", stage: "test-unit", target: "cloudflare" }), values: {}, secrets: [] };
     const origin = "https://cfticket-test-unit.example.workers.dev";
     const heads: string[] = [];
     const env = {

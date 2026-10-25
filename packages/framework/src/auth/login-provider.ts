@@ -26,6 +26,23 @@ export interface ProviderIdentity {
   readonly displayName: string | null;
 }
 
+/**
+ * Roles the framework acts on. `admin` is the only role defined (DEC-0521); there is no "user"
+ * role, because "user" is an access level. Unknown names in a role list are ignored.
+ */
+export type { Role } from "./roles.js";
+
+/**
+ * An account's current state, read by AUTH once per request that carries a valid session from
+ * this provider (AUTH-REQ-003, DEC-0524). The level is `anonymous` unless `verified` is true;
+ * then it is `admin` when `roles` contains "admin", and `user` otherwise.
+ */
+export interface AccountStatus {
+  readonly verified: boolean;
+  /** The account's roles, parsed from its comma-separated role list; empty for a new account. */
+  readonly roles: readonly string[];
+}
+
 /** A redirect provider (release 1: only the test-only stub). */
 export interface LoginProvider {
   /** Short, stable provider name, e.g. "stub". Part of the user ID derivation. */
@@ -36,6 +53,14 @@ export interface LoginProvider {
    * All protocol checks happen here.
    */
   completeLogin(ctx: ProviderContext, callbackQuery: URLSearchParams, transactionState: string): Promise<ProviderIdentity>;
+  /**
+   * The account's verification state and roles, or null when the provider has no account for
+   * `subject`. Throws when it cannot tell (AUTH then treats the request as anonymous). The stub
+   * answers from its in-memory accounts (DEC-0525). Optional only so that the retired Google
+   * adapter still type-checks; AUTH treats a session from a provider without it as anonymous
+   * (fail closed).
+   */
+  accountStatus?(subject: string): Promise<AccountStatus | null>;
 }
 
 /** Per-request context for a credential provider. Built by AUTH; never visible to app code. */
@@ -81,4 +106,10 @@ export interface CredentialProvider {
   requestReset(ctx: CredentialContext, input: { readonly email: string }): Promise<void>;
   /** Sets a new password with a valid reset token and uses the token up. */
   reset(ctx: CredentialContext, input: { readonly token: string; readonly newPassword: string }): Promise<void>;
+  /**
+   * The account's verification state and roles, or null when no account has this subject.
+   * One primary-key read of `__framework_auth_user` (`email_verified`, `role`; PWD-REQ-008).
+   * Throws when the read fails (AUTH then treats the request as anonymous).
+   */
+  accountStatus(subject: string): Promise<AccountStatus | null>;
 }

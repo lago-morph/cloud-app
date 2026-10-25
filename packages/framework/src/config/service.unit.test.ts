@@ -18,7 +18,7 @@ const resolved = resolveConfig({
   declaration,
   secrets: [],
   file: "config/local.json",
-  config: { values: { title: "Notes", tags: ["a", "b"] }, framework: { admins: [] } },
+  config: { values: { title: "Notes", tags: ["a", "b"] }, framework: {} },
 });
 
 describe("ConfigService (CFG-REQ-001, CFG-REQ-003)", () => {

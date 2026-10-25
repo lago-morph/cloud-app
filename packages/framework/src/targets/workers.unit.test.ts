@@ -28,7 +28,7 @@ const app = defineApp({
 });
 
 function resolved(target: Target, stage: string): ResolvedConfig {
-  return { deployment: createDeployment({ app: "workerunit", stage, target }), values: {}, admins: [], secrets: [{ name: "apiKey", location: "SECRET_API_KEY" }] };
+  return { deployment: createDeployment({ app: "workerunit", stage, target }), values: {}, secrets: [{ name: "apiKey", location: "SECRET_API_KEY" }] };
 }
 
 type Proxy = Awaited<ReturnType<typeof getPlatformProxy<{ DB: D1Like }>>>;

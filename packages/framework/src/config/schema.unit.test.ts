@@ -19,20 +19,18 @@ function rejection(text: string): FrameworkError {
 const json = (value: unknown) => JSON.stringify(value);
 
 describe("stage values file schema (stage-config.schema.json)", () => {
-  it("accepts a minimal file; admins default to an empty list and users stay absent", () => {
-    const file = parseStageConfig(json({ values: {}, framework: {} }), FILE);
-    expect(file).toEqual({ values: {}, framework: { admins: [] } });
-    expect("users" in file.framework).toBe(false);
+  it("accepts a minimal file", () => {
+    expect(parseStageConfig(json({ values: {}, framework: {} }), FILE)).toEqual({ values: {}, framework: {} });
   });
 
   it("accepts every value type and every framework field", () => {
     const text = json({
       values: { title: "Notes", limit: 3, open: true, tags: ["a", "b"] },
-      framework: { admins: ["password:1"], users: ["password:2"], email: { senderName: "Notes Demo" } },
+      framework: { email: { senderName: "Notes Demo" } },
     });
     expect(parseStageConfig(text, FILE)).toEqual({
       values: { title: "Notes", limit: 3, open: true, tags: ["a", "b"] },
-      framework: { admins: ["password:1"], users: ["password:2"], email: { senderName: "Notes Demo" } },
+      framework: { email: { senderName: "Notes Demo" } },
     });
   });
 
@@ -40,8 +38,15 @@ describe("stage values file schema (stage-config.schema.json)", () => {
     expect(parseStageConfig(json({ values: {}, framework: { email: {} } }), FILE).framework.email).toEqual({});
   });
 
-  it("an empty users list is a users list (present, admitting nobody but admins)", () => {
-    expect(parseStageConfig(json({ values: {}, framework: { users: [] } }), FILE).framework.users).toEqual([]);
+  it.each([
+    ["an admins list", { admins: ["u_1"] }, "framework.admins"],
+    ["an empty admins list", { admins: [] }, "framework.admins"],
+    ["a users list", { users: ["u_1"] }, "framework.users"],
+    ["an empty users list", { users: [] }, "framework.users"],
+  ])("rejects %s as an unknown field (DEC-0521, DEC-0522)", (_label, framework, field) => {
+    const err = rejection(json({ values: {}, framework }));
+    expect(err.code).toBe("CORE.MISCONFIGURED");
+    expect(err.message).toContain(`unknown field "${field}"`);
   });
 
   it.each([
@@ -63,9 +68,6 @@ describe("stage values file schema (stage-config.schema.json)", () => {
     ["a value of an unsupported type", { values: { limit: 1.5 }, framework: {} }, '"values.limit"'],
     ["a list value with a non-string item", { values: { tags: ["a", 1] }, framework: {} }, '"values.tags'],
     ["a nested object value", { values: { opts: { a: 1 } }, framework: {} }, '"values.opts"'],
-    ["an empty admin ID", { values: {}, framework: { admins: [""] } }, '"framework.admins.0"'],
-    ["a repeated admin ID", { values: {}, framework: { admins: ["u1", "u1"] } }, '"framework.admins"'],
-    ["a repeated users ID", { values: {}, framework: { users: ["u1", "u1"] } }, '"framework.users"'],
     ["an empty senderName", { values: {}, framework: { email: { senderName: "" } } }, '"framework.email.senderName"'],
     ["a senderName over 64 characters", { values: {}, framework: { email: { senderName: "n".repeat(65) } } }, '"framework.email.senderName"'],
     ["a senderName holding an address", { values: {}, framework: { email: { senderName: "Me <me@example.test>" } } }, '"framework.email.senderName"'],
@@ -96,8 +98,7 @@ describe("the Zod mirror matches the contract schema's fields", () => {
   it("required top-level fields and framework fields are the ones validated here", () => {
     expect(contract.required.sort()).toEqual(["framework", "values"]);
     expect(Object.keys(contract.properties).sort()).toEqual(["framework", "values"]);
-    // DEC-0513/DEC-0514: no `google`; `email` holds only `senderName`. DEC-0521/DEC-0522: no `admins` or `users`
-    // (the Zod mirror drops them in the implementation follow-up of DEC-0526; until then it still accepts them).
+    // DEC-0513/DEC-0514: no `google`; `email` holds only `senderName`. DEC-0521/DEC-0522: no `admins` or `users`.
     expect(Object.keys(contract.properties.framework.properties).sort()).toEqual(["email"]);
     expect(contract.properties.framework.properties["email"]?.required).toBeUndefined();
     expect(Object.keys(contract.properties.framework.properties["email"]?.properties ?? {})).toEqual(["senderName"]);

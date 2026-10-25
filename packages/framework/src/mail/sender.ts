@@ -18,10 +18,17 @@ export interface MailInput {
   readonly html: string;
 }
 
-/** One message as a capture keeps it (testing.d.ts `MailMessage`). */
-export interface MailMessage extends MailInput {
+/**
+ * One message as a capture keeps it (testing.d.ts `MailMessage`). Spelled out rather than
+ * extending `MailInput`, which is internal: `./testing` exports exactly the contract's names.
+ */
+export interface MailMessage {
+  readonly to: string;
   /** `"<sender name> <no-reply@...>"`. */
   readonly from: string;
+  readonly subject: string;
+  readonly text: string;
+  readonly html: string;
   /** ISO 8601 time the message was handed to the sender. */
   readonly sentAt: string;
 }

@@ -11,15 +11,15 @@ import type { Deployment } from "../core/identity.js";
 import { FRAMEWORK_SECRETS } from "../secrets/names.js";
 import { deferredCheck } from "../core/deferred.js";
 import { clearCookie, cookieSettings, readCookie, setCookie, type CookieSettings } from "./cookies.js";
-import { evaluateLogin, type AccessLists } from "./levels.js";
-import type { CredentialContext, CredentialProvider, LoginProvider, ProviderContext, ProviderIdentity } from "./login-provider.js";
+import { levelFromAccount } from "./levels.js";
+import type { AccountStatus, CredentialContext, CredentialProvider, LoginProvider, ProviderContext, ProviderIdentity } from "./login-provider.js";
 import { MOCK_DEFAULT_IDS } from "./mock-ids.js";
 import { PAGES } from "./password/pages.js";
 import { registerPasswordRoutes } from "./password/routes.js";
 import type { AuthMock } from "./mock.js";
 import type { CurrentUser } from "./public.js";
 import { sanitizeReturnTo } from "./return-to.js";
-import { SESSION_LIFETIME_SECONDS, issueSession, readSession, type SessionData } from "./session.js";
+import { SESSION_LIFETIME_SECONDS, isMockSession, issueSession, readSession, type ProviderSessionData, type SessionData } from "./session.js";
 import { LOGIN_LIFETIME_SECONDS, issueTransaction, readTransaction } from "./transaction.js";
 import { deriveUserId } from "./user-id.js";
 
@@ -27,8 +27,11 @@ export interface AuthOptions {
   readonly deployment: Deployment;
   /** The deployment's resolved public origin (never request headers), e.g. `http://localhost:8787`. */
   readonly publicOrigin: string | ((c: RuntimeContext) => string);
-  /** The stage's `framework` configuration (CFG's resolved `admins`, `users`). */
-  readonly framework: AccessLists;
+  /**
+   * The stage's `framework` configuration, read by providers through `getConfig`. It holds no
+   * admin or users list (DEC-0521, DEC-0522): the level comes from the account (AUTH-REQ-003).
+   */
+  readonly framework?: Readonly<Record<string, unknown>>;
   /** Reads a framework-internal secret (SEC) for this request: the session key and provider secrets. */
   readonly secret: (c: RuntimeContext, name: string) => Promise<string>;
   /** The stage's redirect login provider: the stub in some tests. */
@@ -80,6 +83,15 @@ const STATE_CHANGING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 /** Every POST under this path needs the public origin, session or not (AUTH-REQ-007, DEC-0516). */
 const AUTH_PREFIX = "/api/auth/";
 
+/** Only codes of this shape are logged (`SQL.UNAVAILABLE`, `SQLITE_ERROR`, ...); never an error's text. */
+const ERROR_CODE = /^[A-Z][A-Z0-9_.]{0,63}$/;
+
+/** The code named by `role lookup failed (<code>)`: the error's code, or `unknown`. */
+export function lookupErrorCode(thrown: unknown): string {
+  const code = typeof thrown === "object" && thrown !== null ? (thrown as { code?: unknown }).code : undefined;
+  return typeof code === "string" && ERROR_CODE.test(code) ? code : "unknown";
+}
+
 /** Dotted-path read for the provider's `getConfig` (e.g. `framework.google.clientId`). */
 function lookup(root: unknown, key: string): unknown {
   let value = root;
@@ -106,8 +118,6 @@ export function checkAuthSettings(options: Pick<AuthOptions, "deployment" | "moc
 export function createAuthParts(options: AuthOptions): AuthParts {
   const cookies = deferredCheck(() => checkAuthSettings(options));
   const { mock } = options;
-  /** `/api/auth/me` alone reports the ID of a login that `framework.users` makes anonymous. */
-  const unlisted = new WeakMap<Request, string>();
 
   function originOf(c: RuntimeContext): string {
     const configured = typeof options.publicOrigin === "string" ? options.publicOrigin : options.publicOrigin(c);
@@ -125,7 +135,7 @@ export function createAuthParts(options: AuthOptions): AuthParts {
 
   /** AUTH-REQ-008: the callback URL comes from the resolved public origin, never from request headers. */
   function providerContext(c: RuntimeContext): ProviderContext {
-    const config = { framework: options.framework };
+    const config = { framework: options.framework ?? {} };
     return {
       callbackUrl: `${originOf(c)}/api/auth/callback`,
       getSecret: (name) => options.secret(c, name),
@@ -134,7 +144,7 @@ export function createAuthParts(options: AuthOptions): AuthParts {
   }
 
   function credentialContext(c: RuntimeContext): CredentialContext {
-    const config = { framework: options.framework };
+    const config = { framework: options.framework ?? {} };
     return {
       publicOrigin: originOf(c),
       origin: c.req.header("origin") ?? "",
@@ -161,7 +171,8 @@ export function createAuthParts(options: AuthOptions): AuthParts {
         const provider = factory(c);
         const identity = await provider.signIn(credentialContext(c), input);
         const id = await deriveUserId(provider.id, identity.subject);
-        c.header("Set-Cookie", await issueSessionCookie(c, { id, displayName: identity.displayName }), { append: true });
+        const session = { id, displayName: identity.displayName, provider: provider.id, subject: identity.subject };
+        c.header("Set-Cookie", await issueSessionCookie(c, session), { append: true });
         return { id };
       },
       sendVerification: (c, input) => factory(c).sendVerification(credentialContext(c), input),
@@ -179,12 +190,35 @@ export function createAuthParts(options: AuthOptions): AuthParts {
     const key = await options.secret(c, FRAMEWORK_SECRETS.sessionKey);
     const data = await readSession(key, token, Date.now());
     if (data === undefined) return ANONYMOUS;
-    if (data.mockLevel !== undefined) {
+    if (isMockSession(data)) {
+      // AUTH-REQ-009: the mock's level is used directly, with no read; only where the mock is installed.
       return mock === undefined ? ANONYMOUS : { level: data.mockLevel, id: data.id, displayName: data.displayName };
     }
-    const evaluated = evaluateLogin(data, options.framework);
-    if (evaluated.unlistedId !== undefined) unlisted.set(c.req.raw, evaluated.unlistedId);
-    return evaluated.user;
+    return levelOf(c, data);
+  }
+
+  /**
+   * AUTH-REQ-003, DEC-0524: a valid real-provider session's level, from one read of its account
+   * through the session's provider. A provider the stage does not install, or one without
+   * `accountStatus`, is anonymous (fail closed); a failed read is anonymous with one `warn` entry.
+   */
+  async function levelOf(c: RuntimeContext, session: ProviderSessionData): Promise<CurrentUser> {
+    let read: ((subject: string) => Promise<AccountStatus | null>) | undefined;
+    const credential = options.credentialProvider?.(c);
+    if (credential !== undefined && credential.id === session.provider) read = (subject) => credential.accountStatus(subject);
+    else if (options.provider !== undefined && options.provider.id === session.provider && options.provider.accountStatus !== undefined) {
+      const { provider } = options;
+      read = (subject) => (provider.accountStatus as (s: string) => Promise<AccountStatus | null>).call(provider, subject);
+    }
+    if (read === undefined) return ANONYMOUS;
+    let status: AccountStatus | null;
+    try {
+      status = await read(session.subject);
+    } catch (thrown) {
+      c.var.log.write("AUTH", "warn", `role lookup failed (${lookupErrorCode(thrown)})`);
+      return ANONYMOUS;
+    }
+    return levelFromAccount(session, status);
   }
 
   const credentials = options.credentialProvider === undefined ? undefined : credentialOperations(options.credentialProvider);
@@ -263,7 +297,8 @@ export function createAuthParts(options: AuthOptions): AuthParts {
           throw thrown;
         }
         const id = await deriveUserId(provider.id, identity.subject);
-        c.header("Set-Cookie", await issueSessionCookie(c, { id, displayName: identity.displayName }), { append: true });
+        const session = { id, displayName: identity.displayName, provider: provider.id, subject: identity.subject };
+        c.header("Set-Cookie", await issueSessionCookie(c, session), { append: true });
         return c.redirect(tx.returnTo, 302);
       });
 
@@ -279,11 +314,10 @@ export function createAuthParts(options: AuthOptions): AuthParts {
         clear: () => clearCookie(cookies(), cookies().session),
       });
 
+      // AUTH-REQ-005: the level and user ID; there is no `unlistedId` (DEC-0522).
       api.get("/auth/me", (c) => {
-        const id = unlisted.get(c.req.raw);
-        const body = id === undefined ? c.var.user : { level: "anonymous", unlistedId: id };
         c.header("Cache-Control", "no-store");
-        return c.json(body);
+        return c.json(c.var.user);
       });
     },
   };
