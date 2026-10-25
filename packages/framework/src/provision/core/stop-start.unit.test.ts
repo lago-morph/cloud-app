@@ -184,7 +184,8 @@ describe("production remove: backup first (DEC-0543)", () => {
     const at = (c: string) => t.calls.indexOf(c);
     expect(at("stopApp notes/prod")).toBeGreaterThan(-1);
     expect(at("stopApp notes/prod")).toBeLessThan(at("writeStageRecord notes/prod stopped"));
-    expect(at("writeStageRecord notes/prod stopped")).toBeLessThan(at("listStageBackups notes/prod"));
+    expect(at("writeStageRecord notes/prod stopped")).toBeLessThan(at("waitForInFlight notes/prod"));
+    expect(at("waitForInFlight notes/prod")).toBeLessThan(at("listStageBackups notes/prod"));
     expect(at("listStageBackups notes/prod")).toBeLessThan(at("backupStage notes/prod notes-prod-db-1"));
   });
 

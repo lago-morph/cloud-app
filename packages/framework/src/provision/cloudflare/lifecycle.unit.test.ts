@@ -186,6 +186,18 @@ describe("production remove backs up first (DEC-0543)", () => {
     });
   }
 
+  it("after turning the route off, remove waits PAR-315 for requests in flight before it reads anything for the backup", async () => {
+    const waits: { ms: number; route: boolean | undefined; exports: number }[] = [];
+    let s!: ReturnType<typeof setup>;
+    s = setup({ sleep: async (ms) => void waits.push({ ms, route: route(s.cloud, prod), exports: s.databases.calls.filter((c) => c.startsWith("export")).length }) });
+    expect((await runDeploy(s.target, request(prod), captureIo())).status).toBe(0);
+    waits.length = 0;
+    const io = captureIo();
+    expect((await runRemove(s.target, prod, io)).status).toBe(0);
+    expect(waits).toContainEqual({ ms: 60_000, route: false, exports: 0 });
+    expect(io.out).toMatch(/waited 60 s \(PAR-315\) for requests in flight/);
+  });
+
   it("a stored key of R2's full 1024 bytes is backed up (numbered backup keys, the key in the manifest)", async () => {
     const { cloud, target } = await deployedProd();
     const longKey = `${"k".repeat(1023)}\u0001`;

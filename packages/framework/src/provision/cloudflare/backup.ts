@@ -41,6 +41,8 @@ export const BACKUP_BUCKET = "prototype-backups";
 export const BACKUP_BUCKET_RESOURCE = `R2 bucket ${BACKUP_BUCKET}`;
 /** PAR-311 in seconds (30 days). */
 export const BACKUP_RETENTION_SECONDS = 30 * 86_400;
+/** PAR-315: how long a production `remove` waits, after turning the route off, for requests already in flight (DEC-0557). */
+export const IN_FLIGHT_DRAIN_MS = 60_000;
 export const BACKUP_LIFECYCLE_RULE_ID = "framework-backups-retention";
 export const BACKUP_LIFECYCLE_RESOURCE = `lifecycle rule of R2 bucket ${BACKUP_BUCKET} (PAR-311)`;
 

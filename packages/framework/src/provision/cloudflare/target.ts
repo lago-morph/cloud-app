@@ -48,7 +48,7 @@ import { accountSubdomain, createSharedResources, inspectSharedResources, type S
 import { readAccountSettings, writeAccountSettings } from "./account-settings.js";
 import { createCloudflareEmailSetup, type CloudflareEmailSetup } from "./email.js";
 import { describeFailure, succeeded, type CloudflareApi, type CloudflareBytesApi } from "./api.js";
-import { backupStage, listStageBackups } from "./backup.js";
+import { backupStage, IN_FLIGHT_DRAIN_MS, listStageBackups } from "./backup.js";
 import { readStageRecord, writeStageRecord } from "./stage-record.js";
 import type { CloudflareDatabases } from "./databases.js";
 import { missingCredentials, type Environment } from "./environment.js";
@@ -221,6 +221,12 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
         stage,
         stageDatabases,
       );
+    },
+
+    async waitForInFlight() {
+      // A request the route took before it was turned off may still be writing: wait PAR-315 for it.
+      await (options.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms))))(IN_FLIGHT_DRAIN_MS);
+      return `waited ${IN_FLIGHT_DRAIN_MS / 1000} s (PAR-315) for requests in flight`;
     },
 
     async listStageBackups(stage) {

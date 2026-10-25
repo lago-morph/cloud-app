@@ -260,6 +260,11 @@ export class FakeTarget implements TargetOperations {
     return { location, items: [...databases.map((d) => `database ${d.name}`), "files"], listing: { location, stamp: String(n).padStart(4, "0"), complete: true, databases: databases.length, files: 0 } };
   }
 
+  async waitForInFlight(stage: Stage): Promise<string> {
+    this.enter("waitForInFlight", key(stage));
+    return "no requests to wait for";
+  }
+
   async listStageBackups(stage: Stage): Promise<readonly BackupListing[]> {
     this.enter("listStageBackups", key(stage));
     return this.backups

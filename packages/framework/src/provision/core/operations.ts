@@ -240,4 +240,9 @@ export interface TargetOperations {
   backupStage(stage: Stage, databases: readonly StageDatabase[]): Promise<StageBackup>;
   /** Every backup of the stage in the account's backup store, in any order (DEC-0556). Reads only. */
   listStageBackups(stage: Stage): Promise<readonly BackupListing[]>;
+  /**
+   * After `stopApp` before a production backup: waits, bounded, for requests already in flight to
+   * finish (Cloudflare: PAR-315); returns what it did, for the owner (DEC-0557).
+   */
+  waitForInFlight(stage: Stage): Promise<string>;
 }

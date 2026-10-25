@@ -142,6 +142,12 @@ async function stopForBackup(ops: TargetOperations, stage: Stage, io: ProvisionI
     return fail("recording the stop for the backup", error, `nothing was deleted; the app is stopped (to serve it again: start --target ${ops.target} --stage ${stage.stage})`);
   }
   line(io, `stopped stage ${stage.stage} for the backup`);
+  // Requests the app took before it stopped may still be writing: a bounded wait for them (PAR-315 on Cloudflare).
+  try {
+    line(io, `${await ops.waitForInFlight(stage)} before the backup`);
+  } catch (error) {
+    return fail("waiting for requests in flight", error, `nothing was deleted; the app is stopped (to serve it again: start --target ${ops.target} --stage ${stage.stage})`);
+  }
   return "stopped";
 }
 
