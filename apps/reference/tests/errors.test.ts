@@ -46,8 +46,8 @@ const CASES: Record<string, { call?: Call; options?: Parameters<typeof open>[0] 
   },
 };
 
-/** Codes no app route can produce (ROUTES.md): login failures redirect; status-null codes never cross HTTP. */
-const NO_ROUTE = ["AUTH.LOGIN_FAILED"];
+/** Codes no app route can produce (ROUTES.md): login failures redirect, and the password provider's refusals come only from its own routes; status-null codes never cross HTTP. */
+const NO_ROUTE = ["AUTH.LOGIN_FAILED", "AUTH.NOT_VERIFIED", "AUTH.RATE_LIMITED"];
 
 describe("error routes", () => {
   it("cover every catalogue code with a status", () => {

@@ -90,8 +90,13 @@ export interface PasswordAuthSettings {
 /** The logger's one entry: a fixed reason, never BA's message (it can carry an address, P10). */
 export const LIBRARY_ERROR_MESSAGE = "credential library error";
 
+/** What the framework uses of a BA instance: its request handler (the bridge's only entry point). */
+export interface PasswordAuth {
+  handler(request: Request): Promise<Response>;
+}
+
 /** One BA instance (about 0.6 ms to build, RESULT.md S2) over the request's database. */
-export function createPasswordAuth(settings: PasswordAuthSettings) {
+export function createPasswordAuth(settings: PasswordAuthSettings): PasswordAuth {
   const { publicOrigin, mail } = settings;
   const provider = settings.database.dialect === "sqlite" ? "sqlite" : "pg";
   return betterAuth({
@@ -159,5 +164,3 @@ export function createPasswordAuth(settings: PasswordAuthSettings) {
     },
   });
 }
-
-export type PasswordAuth = ReturnType<typeof createPasswordAuth>;

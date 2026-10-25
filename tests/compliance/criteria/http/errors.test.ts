@@ -19,6 +19,8 @@ import { testSecretValue } from "../core/support/stores.js";
 /** Codes with a status that no app route can raise, with the reason (ROUTES.md; DEC-0168). */
 const NO_ROUTE: Readonly<Record<string, string>> = {
   "AUTH.LOGIN_FAILED": "app code may not raise it and the framework's callback answers a failed login with a redirect, not an ErrorResponse (DEC-0168, ROUTES.md)",
+  "AUTH.NOT_VERIFIED": "app code may not raise it; only the password provider's routes do (PWD §2, DEC-0520, ROUTES.md)",
+  "AUTH.RATE_LIMITED": "app code may not raise it; only the password provider's routes do (PWD §2, DEC-0520, ROUTES.md)",
 };
 
 /** Codes raised only by an outage or a missing secret value: in-process, local only (see header). */
