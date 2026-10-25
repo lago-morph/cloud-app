@@ -1,0 +1,6 @@
+(node:22586) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22599) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+deleted database reference-test-ykpjdoi5gccpsdv-db-1
+removed stage test-ykpjdoi5gccpsdv of reference from cloudflare; its log entries stay in the shared log bucket

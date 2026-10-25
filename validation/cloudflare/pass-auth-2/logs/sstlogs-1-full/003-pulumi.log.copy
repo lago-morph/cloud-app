@@ -1,0 +1,20 @@
+Updating (test-wxnforn019mo5ic):
+
+@ updating.....
+ +  pulumi:pulumi:Stack reference-test-wxnforn019mo5ic creating (0s) 
+@ updating....
+ +  sst:cloudflare:Bucket Files creating (0s) 
+@ updating....
+ +  cloudflare:index:R2Bucket FilesBucket creating (0s) 
+ +  cloudflare:index:R2Bucket FilesBucket created (0.73s) 
+ +  sst:sst:LinkRef FilesLinkRef creating (0s) 
+@ updating....
+ +  pulumi:pulumi:Stack reference-test-wxnforn019mo5ic created (2s) 
+Outputs:
+    _protect: false
+
+Resources:
+    + 4 created
+
+Duration: 5s
+

@@ -1,0 +1,19 @@
+Updating (test-ykpjdoi5gccpsdv):
+
+@ updating......
+ +  pulumi:pulumi:Stack reference-test-ykpjdoi5gccpsdv creating (0s) 
+@ updating.....
+ +  sst:cloudflare:Bucket Files creating (0s) 
+ +  cloudflare:index:R2Bucket FilesBucket creating (0s) 
+@ updating....
+ +  cloudflare:index:R2Bucket FilesBucket created (0.70s) 
+ +  sst:sst:LinkRef FilesLinkRef creating (0s) 
+ +  pulumi:pulumi:Stack reference-test-ykpjdoi5gccpsdv created (3s) 
+Outputs:
+    _protect: false
+
+Resources:
+    + 4 created
+
+Duration: 6s
+
