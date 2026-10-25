@@ -16,6 +16,7 @@
  *   deploy"); `deployReady` then sets them with `secrets set` and deploys again.
  */
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -112,7 +113,7 @@ export interface CloudStage {
   /** Deploys; when the first deploy stops naming unset secrets, sets them and deploys again. Throws unless it ends with status 0. */
   deployReady(): Promise<CommandResult>;
   setSecret(name: string, value: string): Promise<CommandResult>;
-  /** `remove` (once; later calls return the first result). */
+  /** `remove` (once; later calls return the first result that exited 0, or the last one). A production stage's carries `--confirm-production`. */
   remove(options?: Omit<RunOptions, "cwd">): Promise<CommandResult>;
   /**
    * Records a removal of the stage made by another actor (a clean machine, the driver's
@@ -145,6 +146,30 @@ export interface StageOptions {
    * stage it opens (`holdStages`), e.g. a criterion with two stages at once.
    */
   readonly held?: boolean;
+  /**
+   * A production stage of this name instead of a `test-<random>` one (`newProductionStage`): the
+   * copy gets `config/<target>/<stage>.json` from prodcheck's committed values file (CFG-REQ-002),
+   * and `remove` passes `--confirm-production <stage>` (PROV-REQ-003). Only for a criterion about
+   * production stages (DEC-0543, DEC-0553); never `prodcheck`.
+   */
+  readonly productionStage?: string;
+}
+
+/**
+ * A new production stage name for a criterion about production stages: `prefix` and 10
+ * random lowercase letters and digits (PAR-291's alphabet), never starting with `test-`
+ * (PROV-REQ-005) and never `prodcheck`.
+ */
+export function newProductionStage(prefix: string): string {
+  const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let out = "";
+  while (out.length < 10) {
+    const byte = randomBytes(1)[0] ?? 255;
+    if (byte < 252) out += alphabet[byte % 36] ?? "";
+  }
+  const stage = `${prefix}${out}`;
+  if (stage.startsWith("test-") || stage === "prodcheck") throw new Error(`${stage} is not a new production stage name`);
+  return stage;
 }
 
 /** Copies one overlay of apps/reference over a copy (remove the app's migrations first, then copy). */
@@ -225,7 +250,10 @@ export async function withCloudStage<T>(options: StageOptions, body: (stage: Clo
   try {
     copy = await scratchCopy(options.appDir, `d-t1-${options.app}`);
     const dir = copy.dir;
-    const stageName = newTestStage();
+    const production = options.productionStage;
+    if (production === "prodcheck" || production?.startsWith("test-") === true) throw new Error(`productionStage ${production} is not a criterion's own production stage`);
+    const stageName = production ?? newTestStage();
+    if (production !== undefined) await copy.write(`config/${t}/${production}.json`, await copy.read(`config/${t}/prodcheck.json`));
     const outputs: CommandResult[] = [];
     let origin: string | undefined;
     const cli = async (args: readonly string[], o: Omit<RunOptions, "cwd"> = {}): Promise<CommandResult> => {
@@ -269,7 +297,8 @@ export async function withCloudStage<T>(options: StageOptions, body: (stage: Clo
       },
       setSecret,
       async remove(o = {}) {
-        removed ??= await cli(["remove", "--target", t, "--stage", stageName], o);
+        if (removed?.status === 0) return removed;
+        removed = await cli(["remove", "--target", t, "--stage", stageName, ...(production === undefined ? [] : ["--confirm-production", stageName])], o);
         return removed;
       },
       removedElsewhere(result, remaining) {

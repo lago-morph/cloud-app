@@ -830,11 +830,15 @@ describe("[COMPL-AC-003] the cloud account at the start and end of a run: D1 pla
     expect(recordOf(h2).leftovers).toEqual(["test token check failed: listing the account's API tokens failed: HTTP 500 (10000 internal error)"]);
   });
 
-  it("milestone: creates PROV-AC-004's token and records the fresh-account clause as deferred", async () => {
+  it("milestone: creates PROV-AC-004's tokens and records the fresh-account clause as deferred", async () => {
     const api = fakeCfApi({ subscriptions: 403 });
     const h = harness({ catalogue: TOKEN_CATALOGUE, vitest: vitestReport([{ title: "[PROV-AC-004] twice", status: "passed" }]) });
     await runCompliance(parseArgs(["--target", "cloudflare", "--milestone"]), [], withAccount(h, api));
-    expect(posts(api).map((r) => (r.body as { name: string }).name)).toEqual(["prototype-compliance-abcdefghij12345-no-email"]);
+    expect(posts(api).map((r) => (r.body as { name: string }).name)).toEqual([
+      "prototype-compliance-abcdefghij12345-no-email",
+      "prototype-compliance-abcdefghij12345-no-tokens-write",
+      "prototype-compliance-abcdefghij12345-no-sending-read",
+    ]);
     expect(h.calls.find((c) => c.args[0] === "vitest")?.env[NO_EMAIL_PERMISSION_ENV]).toMatch(/^fake-value-/);
     expect(h.calls.find((c) => c.args[0] === "vitest")?.env.COMPLIANCE_D1_PLAN).toBe("free");
     expect(recordOf(h).results).toEqual([

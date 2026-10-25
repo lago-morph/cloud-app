@@ -1,7 +1,22 @@
 // Self-created restricted test tokens (DEC-0531; PAR-286), against the fake API. No network.
 import { describe, expect, it } from "vitest";
 import { addForeignToken, FAKE_ACCOUNT, fakeCfApi } from "./fake-cf-api.test-support.js";
-import { cloudflareAccountOps, createRestrictedToken, deleteToken, expiresOn, listTestTokens, NO_EMAIL_PERMISSION_ENV, NO_R2_TOKEN_PERMISSION_ENV, RESTRICTED_TOKENS, TEST_TOKEN_LIFETIME_MS } from "./test-tokens.js";
+import {
+  cloudflareAccountOps,
+  createRestrictedToken,
+  deleteToken,
+  EVERYDAY_TOKEN,
+  expiresOn,
+  listTestTokens,
+  NO_API_TOKENS_WRITE_ENV,
+  NO_EMAIL_PERMISSION_ENV,
+  NO_EMAIL_SENDING_READ_ENV,
+  NO_R2_STORAGE_WRITE_ENV,
+  NO_R2_TOKEN_PERMISSION_ENV,
+  RESTRICTED_TOKENS,
+  SETUP_TOKEN,
+  TEST_TOKEN_LIFETIME_MS,
+} from "./test-tokens.js";
 import { EMAIL_PERMISSIONS } from "../../../packages/framework/src/provision/cloudflare/email-permissions.js";
 
 const NOW = new Date("2026-10-25T10:00:00.123Z");
@@ -13,15 +28,33 @@ const spec = (suffix: string) => {
 type Policy = { effect: string; permission_groups: { id: string }[]; resources: Record<string, unknown> };
 
 describe("restricted test tokens (DEC-0531)", () => {
-  it("the specs: PROV-AC-002's lacks Account API Tokens; PROV-AC-004's lacks exactly one DEC-0515 email permission", () => {
-    expect(spec("no-r2-token")).toMatchObject({ env: NO_R2_TOKEN_PERMISSION_ENV, criterion: "PROV-AC-002" });
-    expect(spec("no-r2-token").account.some((g) => g.startsWith("Account API Tokens"))).toBe(false);
+  it("the specs model DEC-0551's two tokens: PROV-AC-002's is the everyday token; each other lacks one permission of its set", () => {
+    expect(EVERYDAY_TOKEN).toEqual({ account: ["Workers Scripts Write", "Workers R2 Storage Write", "D1 Write", "Email Sending Read"], zone: ["Zone Read", "Analytics Read"] });
+    expect(SETUP_TOKEN).toEqual({
+      account: ["Workers Scripts Write", "Workers R2 Storage Write", "Account API Tokens Write", "Email Sending Write", "Email Routing Addresses Write"],
+      zone: ["Email Routing Rules Write", "DNS Write", "Zone Settings Write", "Zone Read"],
+    });
+    const everyday = spec("no-r2-token");
+    expect(everyday).toMatchObject({ env: NO_R2_TOKEN_PERMISSION_ENV, criterion: "PROV-AC-002", account: [...EVERYDAY_TOKEN.account], zone: [...EVERYDAY_TOKEN.zone] });
+    expect([...everyday.account, ...everyday.zone].some((g) => g.startsWith("Account API Tokens"))).toBe(false);
+
     const email = spec("no-email");
     expect(email).toMatchObject({ env: NO_EMAIL_PERMISSION_ENV, criterion: "PROV-AC-004", omitted: "Email Routing Addresses Write" });
     const granted = new Set([...email.account, ...email.zone]);
     expect(EMAIL_PERMISSIONS.filter((p) => !granted.has(p.name)).map((p) => p.name)).toEqual(["Email Routing Addresses Write"]);
-    expect(granted.has("Account API Tokens Write")).toBe(false);
-    expect(granted.has("Account API Tokens Read")).toBe(true);
+    expect([...SETUP_TOKEN.account, ...SETUP_TOKEN.zone].filter((g) => !granted.has(g))).toEqual(["Email Routing Addresses Write"]);
+
+    const tokensWrite = spec("no-tokens-write");
+    expect(tokensWrite).toMatchObject({ env: NO_API_TOKENS_WRITE_ENV, criterion: "PROV-AC-004", omitted: "Account API Tokens Write" });
+    expect(tokensWrite.account).not.toContain("Account API Tokens Write");
+    expect(tokensWrite.account).toContain("Account API Tokens Read");
+    expect(EMAIL_PERMISSIONS.every((p) => [...tokensWrite.account, ...tokensWrite.zone].includes(p.name))).toBe(true);
+
+    const sendingRead = spec("no-sending-read");
+    expect(sendingRead).toMatchObject({ env: NO_EMAIL_SENDING_READ_ENV, criterion: "PROV-AC-004", omitted: "Email Sending Read", account: ["Workers Scripts Write", "Workers R2 Storage Write", "D1 Write"], zone: ["Zone Read", "Analytics Read"] });
+
+    const r2Write = spec("no-r2-write");
+    expect(r2Write).toMatchObject({ env: NO_R2_STORAGE_WRITE_ENV, criterion: "PROV-AC-003", omitted: "Workers R2 Storage Write", account: ["Workers Scripts Write", "Workers R2 Storage Read", "D1 Write", "Email Sending Read"] });
   });
 
   it("creates a named, expiring token with only the spec's groups, account-scoped and zone groups on the account's zones", async () => {
@@ -44,8 +77,9 @@ describe("restricted test tokens (DEC-0531)", () => {
 
     const r2 = await createRestrictedToken(api.call, FAKE_ACCOUNT, spec("no-r2-token"), "run12345", NOW);
     const r2Policies = api.tokens.get(r2.id)?.policies as Policy[];
-    expect(r2Policies).toHaveLength(1);
-    expect(names(r2Policies[0])).toEqual(["Workers Scripts Write", "Workers R2 Storage Write", "D1 Write"]);
+    expect(r2Policies).toHaveLength(2);
+    expect(names(r2Policies[0])).toEqual(["Workers Scripts Write", "Workers R2 Storage Write", "D1 Write", "Email Sending Read"]);
+    expect(names(r2Policies[1])).toEqual(["Zone Read", "Analytics Read"]);
   });
 
   it("the expiry is PAR-286 (6 hours) in Cloudflare's form", () => {

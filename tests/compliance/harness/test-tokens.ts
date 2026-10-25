@@ -2,17 +2,29 @@
  * Restricted Cloudflare API tokens the compliance driver creates for itself (DEC-0531; owner,
  * 2026-10-25: "Create your own test token."), and the account reads of a cloud run.
  *
- * Two clauses need a credential that lacks one permission:
- * - PROV-AC-002: a token without "Account API Tokens" (Read and Write), so it cannot create the
- *   stage's R2 signing token (`COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_R2_TOKEN_PERMISSION`);
- * - PROV-AC-004: a token lacking exactly one email permission of DEC-0515, here "Email Routing
- *   Addresses Write" (`COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_EMAIL_PERMISSION`).
+ * The tokens model the two tokens of DEC-0551: the everyday token (`prototype-framework`, every
+ * command but `setup-account`) and the setup token (`prototype-framework-setup`, `setup-account`
+ * only). Each clause that needs a restricted credential gets one of them, with one permission
+ * removed or replaced:
+ * - PROV-AC-002: the everyday token itself, which has no "Account API Tokens" permission at all:
+ *   deploy needs none (DEC-0550), so the deploy must succeed with it
+ *   (`COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_R2_TOKEN_PERMISSION`, the name kept from DEC-0531);
+ * - PROV-AC-003: the everyday token with "Workers R2 Storage Read" instead of "Write", so a
+ *   production `remove` cannot write its backup (DEC-0543: nothing is deleted)
+ *   (`COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_R2_STORAGE_WRITE`);
+ * - PROV-AC-004: the setup token lacking exactly one email permission of DEC-0515, here "Email
+ *   Routing Addresses Write" (`COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_EMAIL_PERMISSION`);
+ * - PROV-AC-004: the setup token without "Account API Tokens Write" (it keeps "Account API Tokens
+ *   Read", with which `setup-account` reads its own policies), so it cannot create the account's
+ *   R2 signing credential (DEC-0550) (`COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_API_TOKENS_WRITE`);
+ * - PROV-AC-004: the everyday token without "Email Sending Read", with which a production deploy
+ *   reads its email prerequisites (DEC-0553) (`COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_EMAIL_SENDING_READ`).
  *
  * When the run selects such a clause's criterion and the operator did not set the variable, the
  * driver creates the token at the start of the cloud run with the main token
  * (`POST /accounts/<account>/tokens`, an account-owned token; the main token has "Account API
- * Tokens Write"). The token grants only what the command under test needs besides the omitted
- * permission, account-scoped (zone permissions on the account's zones), and expires after
+ * Tokens Write"). The token grants only its DEC-0551 set besides the omitted permission,
+ * account-scoped (zone permissions on the account's zones), and expires after
  * PAR-286 (6 hours) as a backstop. Its value is held in memory, handed to the test processes in
  * the variable, and redacted from every output and the evidence; it is never written to disk or
  * logged. The driver deletes it at the end of the run, also when the run failed, and the leftover
@@ -26,7 +38,12 @@ export const TEST_TOKEN_PREFIX = "prototype-compliance-";
 export const TEST_TOKEN_LIFETIME_MS = 6 * 60 * 60_000;
 
 export const NO_R2_TOKEN_PERMISSION_ENV = "COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_R2_TOKEN_PERMISSION";
+/** PROV-AC-002's token is DEC-0551's everyday token: the variable keeps DEC-0531's name. */
+export const EVERYDAY_TOKEN_ENV = NO_R2_TOKEN_PERMISSION_ENV;
 export const NO_EMAIL_PERMISSION_ENV = "COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_EMAIL_PERMISSION";
+export const NO_API_TOKENS_WRITE_ENV = "COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_API_TOKENS_WRITE";
+export const NO_EMAIL_SENDING_READ_ENV = "COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_EMAIL_SENDING_READ";
+export const NO_R2_STORAGE_WRITE_ENV = "COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_R2_STORAGE_WRITE";
 
 export interface RestrictedTokenSpec {
   /** Name suffix: the token is `prototype-compliance-<run ID>-<suffix>`. */
@@ -43,20 +60,35 @@ export interface RestrictedTokenSpec {
   readonly omitted: string;
 }
 
-/** The stage permissions of DEC-0374 without "Account API Tokens". */
-const STAGE = ["Workers Scripts Write", "Workers R2 Storage Write", "D1 Write"] as const;
+/** A token's permission groups: on the account, and on the account's zones. */
+export interface TokenSet {
+  readonly account: readonly string[];
+  readonly zone: readonly string[];
+}
+
+/**
+ * DEC-0551's everyday token (`prototype-framework`): the union of every command but
+ * `setup-account`. No permission on API tokens, and no write permission on email or DNS.
+ */
+export const EVERYDAY_TOKEN: TokenSet = Object.freeze({
+  account: Object.freeze(["Workers Scripts Write", "Workers R2 Storage Write", "D1 Write", "Email Sending Read"]),
+  zone: Object.freeze(["Zone Read", "Analytics Read"]),
+});
+
+/** DEC-0551's setup token (`prototype-framework-setup`): `setup-account`'s set, DEC-0515's email permissions included. */
+export const SETUP_TOKEN: TokenSet = Object.freeze({
+  account: Object.freeze(["Workers Scripts Write", "Workers R2 Storage Write", "Account API Tokens Write", "Email Sending Write", "Email Routing Addresses Write"]),
+  zone: Object.freeze(["Email Routing Rules Write", "DNS Write", "Zone Settings Write", "Zone Read"]),
+});
+
+const without = (list: readonly string[], omitted: string, replacement?: string): string[] => list.flatMap((g) => (g === omitted ? (replacement === undefined ? [] : [replacement]) : [g]));
 
 export const RESTRICTED_TOKENS: readonly RestrictedTokenSpec[] = Object.freeze([
-  { suffix: "no-r2-token", env: NO_R2_TOKEN_PERMISSION_ENV, criterion: "PROV-AC-002", account: [...STAGE], zone: [], omitted: "Account API Tokens (Read and Write)" },
-  {
-    suffix: "no-email",
-    env: NO_EMAIL_PERMISSION_ENV,
-    criterion: "PROV-AC-004",
-    // Reads its own policies (the DEC-0515 check) and the token reads of the deploy preflight, but creates no token.
-    account: [...STAGE, "Account API Tokens Read", "Email Sending Write"],
-    zone: ["Email Routing Rules Write", "DNS Write", "Zone Settings Write", "Zone Read"],
-    omitted: "Email Routing Addresses Write",
-  },
+  { suffix: "no-r2-token", env: NO_R2_TOKEN_PERMISSION_ENV, criterion: "PROV-AC-002", account: [...EVERYDAY_TOKEN.account], zone: [...EVERYDAY_TOKEN.zone], omitted: "Account API Tokens (Read and Write)" },
+  { suffix: "no-r2-write", env: NO_R2_STORAGE_WRITE_ENV, criterion: "PROV-AC-003", account: without(EVERYDAY_TOKEN.account, "Workers R2 Storage Write", "Workers R2 Storage Read"), zone: [...EVERYDAY_TOKEN.zone], omitted: "Workers R2 Storage Write" },
+  { suffix: "no-email", env: NO_EMAIL_PERMISSION_ENV, criterion: "PROV-AC-004", account: without(SETUP_TOKEN.account, "Email Routing Addresses Write"), zone: [...SETUP_TOKEN.zone], omitted: "Email Routing Addresses Write" },
+  { suffix: "no-tokens-write", env: NO_API_TOKENS_WRITE_ENV, criterion: "PROV-AC-004", account: without(SETUP_TOKEN.account, "Account API Tokens Write", "Account API Tokens Read"), zone: [...SETUP_TOKEN.zone], omitted: "Account API Tokens Write" },
+  { suffix: "no-sending-read", env: NO_EMAIL_SENDING_READ_ENV, criterion: "PROV-AC-004", account: without(EVERYDAY_TOKEN.account, "Email Sending Read"), zone: [...EVERYDAY_TOKEN.zone], omitted: "Email Sending Read" },
 ]);
 
 export interface CreatedToken {
