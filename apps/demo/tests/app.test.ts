@@ -217,8 +217,11 @@ describe("photos (DEMO-REQ-003, DEMO-AC-003)", () => {
   });
 
   it("logs a file-deletion failure at warn and still deletes the post", async () => {
-    const t = await open({ user: mockUsers.user("alice"), unavailable: ["files"] });
+    const t = await open({ user: mockUsers.user("alice") });
     const id = await createDraft(t, "cleanup fails");
+    // A stored photo, then file storage fails for the deletion (DEC-0537).
+    expect((await addPhoto(t, id, "image/png", pngBytes(64), "a.png")).status).toBe(201);
+    t.setUnavailable(["files"]);
     expect((await t.request(`/api/posts/${id}`, { method: "DELETE" })).status).toBe(204);
     expect(await errorCode(await t.request(`/api/posts/${id}`), 404)).toBe("HTTP.NOT_FOUND");
     const warnings = t.logs().filter((e) => e.component === "photos" && e.severity === "warn");

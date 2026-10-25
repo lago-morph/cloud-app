@@ -72,7 +72,7 @@ The owner decided that anyone who signs up is a user, and configuration no longe
 
 ## 2. Acceptance criteria
 
-The smoke test (DEMO-REQ-010) covers each criterion on a deployed stage, except: DEMO-AC-006, which needs a rebuild, the failure clause of DEMO-AC-003, and the expiry clause of DEMO-AC-007 (with the test runner's fake timers) are verified by local tests; DEMO-AC-008 on cloud is verified by the compliance driver.
+The smoke test (DEMO-REQ-010) covers each criterion on a deployed stage, except: DEMO-AC-006, which needs a rebuild, the failure clause of DEMO-AC-003 (a local test stores the photos, then calls `t.setUnavailable(["files"])` before deleting the post, DEC-0537), and the expiry clause of DEMO-AC-007 (with the test runner's fake timers) are verified by local tests; DEMO-AC-008 on cloud is verified by the compliance driver.
 
 | ID | Criterion | Verifies | Where |
 | --- | --- | --- | --- |

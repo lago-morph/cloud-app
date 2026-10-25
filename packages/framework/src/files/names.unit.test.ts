@@ -11,7 +11,7 @@ function codeOf(fn: () => unknown): string | undefined {
 }
 
 describe("[FILES-AC-002] file names (FILES-REQ-002)", () => {
-  it.each(["a", "with space.txt", "100%.bin", "a/b/c", "../../etc/passwd", "a/../b", "./x", "a/.", ".x", "x.", "...", ".a.", "naïve.pdf", "文件/照片.jpg", "emoji-😀", "é".repeat(512)])(
+  it.each(["a", "with space.txt", "100%.bin", "a/b/c", "notes..txt", "..x", "x..", "a/..b/c", "a/.../b", "./x", "a/.", "a/./b", ".hidden", "a/.b", ".x", "x.", "...", ".a.", "naïve.pdf", "文件/照片.jpg", "emoji-😀", "é".repeat(512)])(
     "accepts %# unchanged",
     (name) => {
       expect(checkName(name)).toBe(name);
@@ -31,6 +31,12 @@ describe("[FILES-AC-002] file names (FILES-REQ-002)", () => {
     ["a lone low surrogate", "\udc00"],
     ["exactly . (owner decision, DEC-0505)", "."],
     ["exactly .. (owner decision, DEC-0505)", ".."],
+    ["a/../b (a .. segment, DEC-0533)", "a/../b"],
+    ["a/.. (ends with /.., DEC-0533)", "a/.."],
+    ["../x (starts with ../, DEC-0533)", "../x"],
+    ["../../etc/passwd (DEC-0533)", "../../etc/passwd"],
+    ["a//../b (DEC-0533)", "a//../b"],
+    ["../ (DEC-0533)", "../"],
   ])("rejects a name that is %s with FILES.INVALID_NAME", (_label, name) => {
     expect(codeOf(() => checkName(name))).toBe("FILES.INVALID_NAME");
   });

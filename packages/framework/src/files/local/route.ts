@@ -2,14 +2,16 @@
  * The local transfer route (files.md §2 "Local"): checks a signed local ticket and streams the
  * body to or from local storage through the request's `FilesService`. Its responses always carry
  * `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`, and a download's
- * `Content-Disposition` names the file (DEC-0313): `attachment` for every content type, as on
- * Cloudflare (DEC-0414), so uploaded HTML or SVG never runs as the app's origin. It sends no CORS headers: other origins cannot use it.
+ * `Content-Disposition` names the file (DEC-0313). As on Cloudflare (DEC-0535), the common raster
+ * image types are `inline` and served as exactly that type, so they display; every other type
+ * (SVG and HTML included) is an `attachment`, so uploaded HTML or SVG never runs as the app's
+ * origin. It sends no CORS headers: other origins cannot use it.
  * Refusals are plain 403 / 404 responses and are not logged (ticket URLs never reach the log).
  * LOCAL ONLY (CORE-REQ-006).
  */
 import type { Context, Hono } from "hono";
 import type { RuntimeEnv } from "../../core/assemble.js";
-import { downloadDisposition } from "../disposition.js";
+import { downloadDisposition, inlineImageType } from "../disposition.js";
 import { LOCAL_TRANSFER_PATH, verifyLocalTicket } from "./tickets.js";
 
 const SAFE_HEADERS = { "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "sandbox" } as const;
@@ -41,9 +43,9 @@ export function registerLocalTransferRoute(api: Hono<RuntimeEnv>, options: Local
     if (file === null) return refuse(c, 404);
     const headers: Record<string, string> = {
       ...SAFE_HEADERS,
-      "Content-Type": file.contentType,
+      "Content-Type": inlineImageType(file.contentType) ?? file.contentType,
       "Content-Length": String(file.size),
-      "Content-Disposition": downloadDisposition(grant.name),
+      "Content-Disposition": downloadDisposition(grant.name, file.contentType),
     };
     return c.body(file.body, 200, headers);
   });

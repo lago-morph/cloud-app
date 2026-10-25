@@ -133,19 +133,24 @@ describe("files", () => {
     expect(await mine.json()).toHaveProperty("ticket");
   });
 
-  it("deletes an upload that is too large or of a type it does not accept", async () => {
+  it("deletes an upload of a type it does not accept", async () => {
     const t = await open({ user: mockUsers.user() });
-    const big = await upload(t, "text/plain", new Uint8Array(10 * 1024 * 1024 + 1));
-    const zip = await upload(t, "application/zip", new Uint8Array(4));
-    for (const id of [big, zip]) {
-      const res = await t.request("/api/files/finalize", json("POST", { id, name: "x" }));
-      expect(res.status).toBe(409);
-      expect(await res.json()).toMatchObject({ error: { code: "HTTP.CONFLICT" } });
-      // The upload is gone, so a second finalize finds nothing.
-      expect((await t.request("/api/files/finalize", json("POST", { id, name: "x" }))).status).toBe(404);
-    }
+    const id = await upload(t, "application/zip", new Uint8Array(4));
+    const res = await t.request("/api/files/finalize", json("POST", { id, name: "x" }));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: { code: "HTTP.CONFLICT" } });
+    // The upload is gone, so a second finalize finds nothing.
+    expect((await t.request("/api/files/finalize", json("POST", { id, name: "x" }))).status).toBe(404);
     const list: FileList = await (await t.request("/api/files")).json();
     expect(list).toEqual({ files: [] });
+  });
+
+  it("sets no size cap of its own: a file over 10 MiB is accepted", async () => {
+    const t = await open({ user: mockUsers.user() });
+    const id = await upload(t, "application/pdf", new Uint8Array(10 * 1024 * 1024 + 1));
+    const res = await t.request("/api/files/finalize", json("POST", { id, name: "big.pdf" }));
+    expect(res.status).toBe(201);
+    expect(await res.json()).toMatchObject({ size: 10 * 1024 * 1024 + 1 });
   });
 
   it("refuses to finalize a missing upload and a name with a slash", async () => {

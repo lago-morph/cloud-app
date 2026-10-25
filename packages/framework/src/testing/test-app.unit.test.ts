@@ -2,7 +2,7 @@
  * `createTestApp` (testing.d.ts; core.md §2 "Testing"): the app in the test process over fresh
  * local D1 and R2 (Wrangler's getPlatformProxy, DEC-0105) — this process runs the SQLite
  * dialect — with migrations applied, the authentication mock or the stub provider, the
- * `unavailable` option, `logs()`, `as`, `loginWithStub` and `dispose`.
+ * `unavailable` option, `setUnavailable`, `logs()`, `as`, `loginWithStub` and `dispose`.
  */
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -29,6 +29,10 @@ const app = defineApp({
     });
     api.get("/kv", async (c) => c.json({ value: await c.var.kv.get("k") }));
     api.get("/files", async (c) => c.json(await c.var.files.head("x")));
+    api.put("/files", async (c) => {
+      await c.var.files.put("x", new Uint8Array([1, 2, 3]));
+      return c.json({ ok: true });
+    });
     api.get("/secret", async (c) => c.json({ value: await c.var.secrets.get("apiKey") }));
     api.get("/me", (c) => c.json(c.var.user));
     api.get("/log", (c) => {
@@ -129,6 +133,39 @@ describe("createTestApp", { timeout: 60_000 }, () => {
   it("unavailable: [\"sql\"] also makes KV unavailable", async () => {
     const t = await open({ ...base, unavailable: ["sql"] });
     expect(await code(await t.request("/api/kv"))).toBe("KV.UNAVAILABLE");
+  });
+
+  it("setUnavailable flips a capability mid-test: a stored file, then a failing files operation, then back (DEC-0537)", async () => {
+    const t = await open();
+    expect((await t.request("/api/files", { method: "PUT" })).status).toBe(200);
+    expect(await (await t.request("/api/files")).json()).toMatchObject({ name: "x", size: 3 });
+    t.setUnavailable(["files"]);
+    expect(await code(await t.request("/api/files"))).toBe("FILES.UNAVAILABLE");
+    // Shared with apps made by as(); other capabilities still work.
+    expect(await code(await t.as(mockUsers.user("u2")).request("/api/files"))).toBe("FILES.UNAVAILABLE");
+    expect((await t.request("/api/notes", { method: "POST" })).status).toBe(200);
+    t.setUnavailable([]);
+    expect(await (await t.request("/api/files")).json()).toMatchObject({ name: "x", size: 3 });
+  });
+
+  for (const [capability, path, expected] of [
+    ["sql", "/api/notes", "SQL.UNAVAILABLE"],
+    ["kv", "/api/kv", "KV.UNAVAILABLE"],
+    ["secrets", "/api/secret", "SEC.UNAVAILABLE"],
+  ] as const) {
+    it(`setUnavailable(["${capability}"]) makes it fail with ${expected} from the next request, and replaces the option's set`, async () => {
+      const t = await open({ ...base, secrets: { apiKey: "abc" }, unavailable: ["files"] });
+      t.setUnavailable([capability]);
+      expect(await code(await t.request(path, { method: capability === "sql" ? "POST" : "GET" }))).toBe(expected);
+      expect((await t.request("/api/files")).status).toBe(200);
+    });
+  }
+
+  it("setUnavailable rejects an unknown capability and a disposed app", async () => {
+    const t = await open();
+    expect(() => t.setUnavailable(["mail" as "files"])).toThrow(/unknown capability "mail"/);
+    await t.dispose();
+    expect(() => t.setUnavailable([])).toThrow(/disposed/);
   });
 
   it("sends the user option's identity, and as() returns an app sending another identity over the same storage", async () => {

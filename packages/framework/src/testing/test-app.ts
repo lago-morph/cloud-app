@@ -60,7 +60,7 @@ export interface TestAppOptions {
   /** Secret values for the test, by logical name. */
   readonly secrets?: Record<string, string>;
   /** Capabilities that fail as unavailable: every operation of each one named throws its `*.UNAVAILABLE` code. */
-  readonly unavailable?: readonly ("sql" | "kv" | "files" | "secrets")[];
+  readonly unavailable?: readonly TestCapability[];
   /** Use the test-only stub login provider instead of the authentication mock. Default false. */
   readonly stubLoginProvider?: boolean;
   /**
@@ -74,6 +74,11 @@ export interface TestAppOptions {
   /** LOG-AC-001: a log writer that fails on every write, or whose writes never complete (DEC-0210). */
   readonly logWriter?: "failing" | "never-completing";
 }
+
+/** A capability `unavailable` and `TestApp.setUnavailable` can make fail. */
+export type TestCapability = "sql" | "kv" | "files" | "secrets";
+
+const CAPABILITIES: readonly TestCapability[] = ["sql", "kv", "files", "secrets"];
 
 export type { TestMail } from "../mail/outbox.js";
 export type { MailMessage } from "../mail/sender.js";
@@ -93,6 +98,12 @@ export interface TestApp {
   grantRole(userId: string, role: TestRole): Promise<void>;
   /** The reverse of `grantRole`; with no role left the account has none (NULL), never "user". */
   revokeRole(userId: string, role: TestRole): Promise<void>;
+  /**
+   * Replaces the set of unavailable capabilities from the next operation on, for this test app and
+   * every one made from it with `as` (DEC-0537). `[]` makes everything available again. Throws on
+   * a connected stage.
+   */
+  setUnavailable(capabilities: readonly TestCapability[]): void;
   dispose(): Promise<void>;
 }
 
@@ -203,6 +214,8 @@ interface Shared {
   readonly stub: boolean;
   /** Present with the stub or password provider (DEC-0525). */
   readonly changeRole: RoleChanger | undefined;
+  /** The capabilities that fail now (`unavailable`, then `setUnavailable`); read on every request. */
+  readonly unavailable: Set<TestCapability>;
   session: string | undefined;
   disposed: boolean;
   readonly dispose: () => Promise<void>;
@@ -268,6 +281,15 @@ function testApp(shared: Shared, user: CurrentUser | undefined): TestApp {
     },
     grantRole: (userId, role) => changeRole(shared, userId, role, "grant"),
     revokeRole: (userId, role) => changeRole(shared, userId, role, "revoke"),
+    setUnavailable(capabilities) {
+      if (shared.disposed) throw new Error("this test app was disposed");
+      if (!Array.isArray(capabilities)) throw new Error("setUnavailable takes an array of capabilities, such as [\"files\"] (or [] for none)");
+      for (const name of capabilities) {
+        if (!CAPABILITIES.includes(name)) throw new Error(`setUnavailable: unknown capability ${JSON.stringify(name)}; use ${CAPABILITIES.map((c) => JSON.stringify(c)).join(", ")}`);
+      }
+      shared.unavailable.clear();
+      for (const name of capabilities) shared.unavailable.add(name);
+    },
     dispose: () => shared.dispose(),
   };
   return self;
@@ -278,7 +300,7 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
   const deployment = createDeployment({ app: defined.definition.name, stage: "local", target: "local" });
   checkSecretDeclarations(defined.definition.secrets);
   const resolved = resolveTestConfig(defined, deployment, options.config ?? {});
-  const unavailable = new Set(options.unavailable ?? []);
+  const unavailable = new Set<TestCapability>(options.unavailable ?? []);
   const stub = options.stubLoginProvider === true;
   const password = options.passwordLoginProvider === true;
   if (stub && password) throw new Error("stubLoginProvider and passwordLoginProvider cannot be combined");
@@ -307,26 +329,27 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
   };
   for (const [name, value] of Object.entries(options.secrets ?? {})) secretEnv[secretLocation("local", name)] = value;
   const frameworkReader = envSecretReader(secretEnv, "local");
-  const appReader: SecretReader = unavailable.has("secrets")
-    ? async () => {
-        throw new Error("the local secret store is unavailable (forced for this test app)");
-      }
-    : frameworkReader;
+  const failingReader: SecretReader = async () => {
+    throw new Error("the local secret store is unavailable (forced for this test app)");
+  };
+  // Decided per request, so `setUnavailable` takes effect mid-test (DEC-0537).
+  const appReader = (): SecretReader => (unavailable.has("secrets") ? failingReader : frameworkReader);
   const ticketKey = async (): Promise<string> => (await frameworkReader(LOCAL_TICKET_KEY)) ?? "";
 
   const memory = createMemorySink();
   const sink = options.logWriter === "failing" ? failingSink() : options.logWriter === "never-completing" ? neverCompletingSink() : memory.sink;
   const fixed = new WeakMap<Request, CurrentUser>();
   const env = proxy.env as unknown as RuntimeEnv["Bindings"];
-  const store = unavailable.has("files") ? unreachableStore() : proxy.env.FILES;
+  const unreachable = unreachableStore();
+  const store = (): FilesStore => (unavailable.has("files") ? unreachable : proxy.env.FILES);
   const outbox = createOutbox({ senderName: mailSenderName(resolved) });
   const mailSender = options.mailSender === "failing" ? failingMailSender() : options.mailSender === "never-completing" ? neverCompletingMailSender() : outbox.sender;
   // The request's background tasks (`waitUntil`): sends run after the response, as on a Worker.
   const executionCtx = { waitUntil: (pending: Promise<unknown>) => void pending.catch(() => undefined), passThroughOnException: () => undefined, props: {} };
   // PWD's database: BA's Drizzle adapter over the same local D1 or PGlite as the app.
   const passwordDatabase: PasswordDatabase = pg === undefined ? { dialect: "sqlite", db: drizzleD1(proxy.env.DB) } : { dialect: "postgres", db: drizzlePglite(pg) };
-  const sqlUnavailable = unavailable.has("sql");
-  const kvUnavailable = sqlUnavailable || unavailable.has("kv");
+  const sqlUnavailable = (): boolean => unavailable.has("sql");
+  const kvUnavailable = (): boolean => sqlUnavailable() || unavailable.has("kv");
 
   const stubProvider = stub ? createStubLoginProvider() : undefined;
   const roleChanger: RoleChanger | undefined =
@@ -345,11 +368,11 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
     publicOrigin: () => TEST_APP_ORIGIN,
     sql: (_env, log) =>
       pg === undefined
-        ? { sql: sqliteDb(proxy.env.DB, { unavailable: sqlUnavailable, log }), kv: sqliteDb(proxy.env.DB, { unavailable: kvUnavailable }) }
-        : { sql: postgresDb(pg, { unavailable: sqlUnavailable, log }), kv: postgresDb(pg, { unavailable: kvUnavailable }) },
-    store: () => store,
+        ? { sql: sqliteDb(proxy.env.DB, { unavailable: sqlUnavailable(), log }), kv: sqliteDb(proxy.env.DB, { unavailable: kvUnavailable() }) }
+        : { sql: postgresDb(pg, { unavailable: sqlUnavailable(), log }), kv: postgresDb(pg, { unavailable: kvUnavailable() }) },
+    store: () => store(),
     tickets: () => createLocalTicketIssuer({ key: ticketKey }),
-    readSecret: () => appReader,
+    readSecret: () => appReader(),
     readFrameworkSecret: () => frameworkReader,
     secretValues: () => Object.values(secretEnv),
     requiredFrameworkSecrets: [FRAMEWORK_SECRETS.sessionKey, FRAMEWORK_SECRETS.authSecret, ...LOCAL_FRAMEWORK_SECRETS],
@@ -371,6 +394,7 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
     noMock: stub ? "stub" : password ? "password" : undefined,
     stub,
     changeRole: roleChanger,
+    unavailable,
     session: undefined,
     disposed: false,
     dispose: async () => {

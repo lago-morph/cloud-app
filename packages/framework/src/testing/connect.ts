@@ -214,6 +214,9 @@ function connectedApp(c: Connection, user: CurrentUser | undefined): TestApp {
     grantRole() {
       return Promise.reject(new Error("grantRole is not available on a connected stage: use the admins command (npm run admins -- grant <email> ...)"));
     },
+    setUnavailable() {
+      throw new Error("setUnavailable is not available on a connected stage: a deployed stage's storage cannot be made to fail from a test");
+    },
     revokeRole() {
       return Promise.reject(new Error("revokeRole is not available on a connected stage: use the admins command (npm run admins -- revoke <email> ...)"));
     },

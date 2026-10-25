@@ -60,8 +60,11 @@ export interface TestAppOptions {
   readonly config?: Record<string, unknown>;
   /** Secret values for the test. */
   readonly secrets?: Record<string, string>;
-  /** Capabilities that fail as unavailable: every operation of each one named throws its `*.UNAVAILABLE` code. */
-  readonly unavailable?: readonly ("sql" | "kv" | "files" | "secrets")[];
+  /**
+   * Capabilities that fail as unavailable from creation: every operation of each one named throws
+   * its `*.UNAVAILABLE` code (`sql` also makes `kv` unavailable). `TestApp.setUnavailable` changes the set later.
+   */
+  readonly unavailable?: readonly TestCapability[];
   /**
    * Use the test-only stub login provider instead of the authentication mock. Logins then
    * go through the real login, callback, user-ID derivation, and level code paths
@@ -87,6 +90,9 @@ export interface TestAppOptions {
    */
   readonly logWriter?: "failing" | "never-completing";
 }
+
+/** A capability that `unavailable` and `TestApp.setUnavailable` can make fail. */
+export type TestCapability = "sql" | "kv" | "files" | "secrets";
 
 export interface TestApp {
   /**
@@ -141,6 +147,15 @@ export interface TestApp {
    * changes nothing. Same availability as `grantRole`.
    */
   revokeRole(userId: string, role: TestRole): Promise<void>;
+  /**
+   * In-process only: replaces the set of unavailable capabilities (initially the `unavailable`
+   * option), from the next operation on. It applies to this test app and every test app made from
+   * it with `as`, since they share one app. `[]` makes every capability available again. Stored
+   * data is kept: a test can store a file, call `setUnavailable(["files"])`, and see a later
+   * files operation fail with `FILES.UNAVAILABLE` (DEC-0537). Throws for an unknown capability,
+   * after `dispose`, and on a connected stage.
+   */
+  setUnavailable(capabilities: readonly TestCapability[]): void;
   /**
    * Discards all state created by this test app. In-process, the original and every test
    * app made from it with `as` share one app: disposing any of them disposes all, and later

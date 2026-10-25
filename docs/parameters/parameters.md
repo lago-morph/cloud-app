@@ -55,7 +55,7 @@ Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 | PAR-231 | Default list page size | 100 | ai-proposed | |
 | PAR-232 | Maximum list page size | 1,000 | platform | S3 `ListObjectsV2` returns at most 1,000 keys per call. |
 | PAR-233 | Transfer ticket lifetime | 15 minutes | ai-proposed | Assumes on AWS that the Lambda role's session credentials outlast PAR-233. If they expire earlier, the transfer fails in the browser as `FILES.TRANSFER_FAILED` with storage's status, and nothing is logged on the server. |
-| PAR-234 | Maximum single-upload file size | About 5 GB (S3: 5 GB; R2: 5 GiB) | platform | Not a framework limit; larger files would need multipart upload (DEC-0062). |
+| PAR-234 | Maximum single-upload file size | About 5 GB (S3: 5 GB; R2: 4.995 GiB, i.e. 5 GiB less 5 MiB, per developers.cloudflare.com/r2/platform/limits/, read 2026-10-25) | platform | Not a framework limit; larger files would need multipart upload (DEC-0062). The template sets no lower cap (DEC-0539). |
 
 ## Authentication
 

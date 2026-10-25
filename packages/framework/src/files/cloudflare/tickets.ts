@@ -3,13 +3,14 @@
  * path-style URLs for R2's S3-compatible endpoint, signed with the stage's R2 API token (the
  * framework-internal Worker secrets `frameworkR2AccessKeyId` / `frameworkR2SecretAccessKey`,
  * DEC-0100). Same JSON shape as every target's tickets, so the browser helpers are unchanged.
- * R2 omits CORS headers on its 403s, so in a browser an expired or mismatched ticket fails with
- * status null (DEC-0101); nothing here works around that. Workers-compatible (Web Crypto).
+ * R2 omits CORS headers on its 403s, so in a browser a mismatched ticket fails with status null
+ * (DEC-0101); the browser helper refuses an expired upload ticket before sending (DEC-0534).
+ * Workers-compatible (Web Crypto).
  */
 import { FRAMEWORK_SECRETS, type FrameworkSecretName } from "../../secrets/names.js";
 import type { TicketIssuer } from "../service.js";
 import { TICKET_LIFETIME_MS, type DownloadTicketData, type UploadTicketData } from "../tickets.js";
-import { downloadDisposition } from "../disposition.js";
+import { downloadDisposition, inlineImageType } from "../disposition.js";
 import { storedKey } from "./keys.js";
 import { objectPath } from "../s3/path.js";
 import { presignUrl, type S3Credentials } from "../s3/sign.js";
@@ -37,10 +38,14 @@ function keyPath(name: string): string {
   return objectPath(name, storedKey(name));
 }
 
-/** The Cloudflare issuer. A download is always an `attachment` named after the file (DEC-0313, DEC-0414). */
+/**
+ * The Cloudflare issuer. A download is named after the file (DEC-0313). The common raster image
+ * types are `inline` and served as exactly that type (`response-content-type`); every other type,
+ * and a download whose content type is not given, is an `attachment` (DEC-0535).
+ */
 export interface CloudflareTicketIssuer extends TicketIssuer {
   upload(name: string, contentType: string): Promise<UploadTicketData>;
-  download(name: string): Promise<DownloadTicketData>;
+  download(name: string, contentType?: string): Promise<DownloadTicketData>;
 }
 
 export function createCloudflareTicketIssuer(options: CloudflareTicketOptions): CloudflareTicketIssuer {
@@ -63,10 +68,15 @@ export function createCloudflareTicketIssuer(options: CloudflareTicketOptions): 
       const url = await sign("PUT", `${base}${keyPath(name)}`, signedAt, headers);
       return { url, method: "PUT", headers, expiresAt: signedAt + TICKET_LIFETIME_MS };
     },
-    async download(name) {
+    async download(name, contentType) {
       const signedAt = now();
-      // R2's S3 GetObject override names the saved file; it is a signed query parameter.
-      const query = new URLSearchParams({ "response-content-disposition": downloadDisposition(name) });
+      // R2's S3 GetObject overrides, signed query parameters: the disposition names the saved
+      // file; an inline image is also served as exactly its checked type (DEC-0535).
+      const image = inlineImageType(contentType);
+      const query = new URLSearchParams({
+        "response-content-disposition": downloadDisposition(name, contentType),
+        ...(image === undefined ? {} : { "response-content-type": image }),
+      });
       const url = await sign("GET", `${base}${keyPath(name)}?${query.toString()}`, signedAt);
       return { url, expiresAt: signedAt + TICKET_LIFETIME_MS };
     },

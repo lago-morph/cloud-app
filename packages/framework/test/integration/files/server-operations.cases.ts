@@ -160,8 +160,10 @@ export function defineFilesServerCases<A>(host: FilesCaseHost<A>, { t, suffix }:
       "/leading-slash",
       "trailing/",
       "...",
-      "../../etc/passwd",
-      "a/../b",
+      "notes..txt",
+      ".hidden",
+      "a/.b",
+      "a/./b",
       "./x",
       "naïve résumé.pdf",
       "文件/照片.jpg",
@@ -169,7 +171,7 @@ export function defineFilesServerCases<A>(host: FilesCaseHost<A>, { t, suffix }:
       "é".repeat(512), // exactly PAR-230 bytes
     ];
 
-    it(t("FILES-AC-002", "names with spaces, %, /, .. and non-ASCII characters round-trip unchanged through put/get/head/list"), async () => {
+    it(t("FILES-AC-002", "names with spaces, %, /, dots, . segments and non-ASCII characters round-trip unchanged through put/get/head/list"), async () => {
       const app = await host.newApp();
       const result = await host.withFiles(app, async (files) => {
         const out: { name: string; got: string | null; head: string | null; body: string | null }[] = [];
@@ -187,8 +189,8 @@ export function defineFilesServerCases<A>(host: FilesCaseHost<A>, { t, suffix }:
           });
         }
         const listed = await files.list("", { limit: 1000 });
-        // Not interpreted as paths: "a/../b" and "b" are different files.
-        const plainB = await files.head("b");
+        // Not interpreted as paths: "a/./b" and "a/b" are different files.
+        const plainB = await files.head("a/b");
         return { out, listed: listed.items.map((i) => i.name), plainB };
       });
       for (const [i, row] of result.out.entries()) {
@@ -209,6 +211,9 @@ export function defineFilesServerCases<A>(host: FilesCaseHost<A>, { t, suffix }:
       ["NUL", "bad\u0000name"],
       ["exactly .", "."],
       ["exactly ..", ".."],
+      ["a/../b (a .. segment, DEC-0533)", "a/../b"],
+      ["../x (DEC-0533)", "../x"],
+      ["a/.. (DEC-0533)", "a/.."],
     ];
     for (const [label, name] of rejected) {
       it(t("FILES-AC-002", `${label} name is rejected with FILES.INVALID_NAME by every operation that takes a name`), async () => {

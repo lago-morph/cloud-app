@@ -89,7 +89,7 @@ Each code's meaning, HTTP status and whether it is retryable are in the framewor
 | `AUTH.UNAUTHENTICATED` / `AUTH.FORBIDDEN` | Not logged in / not admin or not allowed | See §3 and the admin steps in [owner-tasks.md](owner-tasks.md) §7. |
 | `AUTH.REQUEST_FORGERY` | A POST/PUT/PATCH/DELETE with a session came from another origin | Use the stage's own URL, not a copy behind another host. |
 | `HTTP.NETWORK_ERROR` | The browser got no framework response | Check that the stage is started and the URL is right. |
-| `FILES.TRANSFER_FAILED` | A direct upload or download failed or its ticket expired | Request a new ticket and retry. On Cloudflare an expired ticket shows status null (DEC-0101; not yet verified). |
+| `FILES.TRANSFER_FAILED` | A direct upload or download failed or its ticket expired | Request a new ticket and retry. An expired upload ticket is refused before sending (`rejected before sending: ticket expired`, status null) on every target. |
 
 ## 3. Login failures
 

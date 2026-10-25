@@ -92,13 +92,13 @@ describe("local transfer route: downloads (FILES-REQ-003, files.md §2 Local)", 
     const res = await app.request(urlOf(await files.createDownloadTicket("p.png")));
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("image/png");
-    expect(res.headers.get("Content-Disposition")).toBe("attachment; filename*=UTF-8''p.png");
+    expect(res.headers.get("Content-Disposition")).toBe("inline; filename*=UTF-8''p.png");
     expectSafeHeaders(res);
     expect(Array.from(new Uint8Array(await res.arrayBuffer()))).toEqual([137, 80, 78, 71]);
   });
 
-  it.each(["text/html", "image/svg+xml", "application/octet-stream", "application/pdf"])(
-    "content of type %s is served as an attachment named after the file (DEC-0313)",
+  it.each(["text/html", "image/svg+xml", "application/xhtml+xml", "application/octet-stream", "application/pdf", "image/avif", "image/bmp"])(
+    "content of type %s is served as an attachment named after the file (DEC-0313, DEC-0535)",
     async (contentType) => {
       const { app, files } = setup();
       await files.put("f", new TextEncoder().encode("<svg onload=alert(1)>"), { contentType });
@@ -109,17 +109,29 @@ describe("local transfer route: downloads (FILES-REQ-003, files.md §2 Local)", 
     },
   );
 
-  it.each(["image/jpeg", "image/gif", "image/webp", "image/avif", "image/bmp"])("raster image type %s is served as an attachment, named after the file (DEC-0313, DEC-0414)", async (contentType) => {
+  it.each([
+    ["image/jpeg", "image/jpeg"],
+    ["image/gif", "image/gif"],
+    ["image/webp", "image/webp"],
+    ["IMAGE/PNG; x=1", "image/png"],
+  ])("raster image type %j is served inline as exactly %j, named after the file, with nosniff and sandbox (DEC-0535)", async (contentType, served) => {
     const { app, files } = setup();
     await files.put("i", new Uint8Array([1]), { contentType });
     const res = await app.request(urlOf(await files.createDownloadTicket("i")));
-    expect(res.headers.get("Content-Disposition")).toBe("attachment; filename*=UTF-8''i");
+    expect(res.headers.get("Content-Disposition")).toBe("inline; filename*=UTF-8''i");
+    expect(res.headers.get("Content-Type")).toBe(served);
+    expectSafeHeaders(res);
   });
 
-  it("a raster image downloads with the same Content-Disposition on local and Cloudflare (DEC-0313, DEC-0414)", async () => {
+  it.each([
+    ["image/png", "inline"],
+    ["image/svg+xml", "attachment"],
+    ["text/html", "attachment"],
+  ])("a %s download gets the same disposition (%s) on local and Cloudflare (DEC-0313, DEC-0535)", async (contentType, kind) => {
     const { app, store, files } = setup();
-    await files.put("p.png", new Uint8Array([137, 80, 78, 71]), { contentType: "image/png" });
-    const local = (await app.request(urlOf(await files.createDownloadTicket("p.png")))).headers.get("Content-Disposition");
+    await files.put("p.png", new Uint8Array([137, 80, 78, 71]), { contentType });
+    const res = await app.request(urlOf(await files.createDownloadTicket("p.png")));
+    const local = { disposition: res.headers.get("Content-Disposition"), type: res.headers.get("Content-Type") };
     // The Cloudflare path: the same store behind the service, with a Cloudflare issuer and dummy credentials.
     const cloudflare = createFilesService({
       store,
@@ -130,8 +142,13 @@ describe("local transfer route: downloads (FILES-REQ-003, files.md §2 Local)", 
         now: () => Date.parse("2026-10-20T00:00:00Z"),
       }),
     });
-    const signed = new URL(urlOf(await cloudflare.createDownloadTicket("p.png"))).searchParams.get("response-content-disposition");
-    expect({ local, cloudflare: signed }).toEqual({ local: "attachment; filename*=UTF-8''p.png", cloudflare: "attachment; filename*=UTF-8''p.png" });
+    const query = new URL(urlOf(await cloudflare.createDownloadTicket("p.png"))).searchParams;
+    const expected = `${kind}; filename*=UTF-8''p.png`;
+    expect(local.disposition).toBe(expected);
+    expect(query.get("response-content-disposition")).toBe(expected);
+    // An inline image is served as exactly its type on both; other types keep the stored type (no override).
+    expect(local.type).toBe(contentType);
+    expect(query.get("response-content-type")).toBe(kind === "inline" ? contentType : null);
   });
 
   it("a download is saved under the whole file name, percent-encoded, never the ticket token (DEC-0313)", async () => {
