@@ -4,7 +4,8 @@ import { browserOptions, childEnv, ENV, readTargetEnv } from "./env.js";
 describe("target environment shared by the driver and the tests", () => {
   it("reads target, stage, base URL and run ID that the driver set", () => {
     const env = { [ENV.target]: "cloudflare", [ENV.stage]: "test-abc", [ENV.baseUrl]: "https://w.x.workers.dev", [ENV.runId]: "abc" };
-    expect(readTargetEnv(env)).toEqual({ target: "cloudflare", stage: "test-abc", baseUrl: "https://w.x.workers.dev", runId: "abc" });
+    expect(readTargetEnv(env)).toEqual({ target: "cloudflare", mode: "automated", stage: "test-abc", baseUrl: "https://w.x.workers.dev", runId: "abc" });
+    expect(readTargetEnv({ ...env, [ENV.mode]: "milestone" }).mode).toBe("milestone");
   });
 
   it("defaults to local and explains a missing base URL when a test needs it", () => {

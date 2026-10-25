@@ -323,7 +323,43 @@ describe("[COMPL-AC-004] cloud runs use a disposable test stage", () => {
     await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], h.deps);
     expect(h.events.filter((e) => e.includes("prodcheck"))).toEqual([]);
     expect(recordOf(h).leftovers).toEqual([]);
-    expect(h.logs.join("\n")).toMatch(/prodcheck.*test stages only/);
+    expect(h.logs.join("\n")).toMatch(/prodcheck.*handles test stages/);
+  });
+
+  it("removes only stale marked criterion production stages (DEC-0560), deletes their markers, and warns about unmarked ones", async () => {
+    // p003…: stale marker, deployed. p004…: stale marker, its removal leaves a bucket. Fresh-marked and unmarked stages are not in `stale`.
+    const stale = new Set(["p003abcdefghij", "p004klmnopqrst"]);
+    const forgotten: string[] = [];
+    const h = harness({
+      cloud: {
+        criterionStages: () => Promise.resolve({ stale: [...stale], unmarked: ["p003ownerstage1"] }),
+        forgetCriterionStage: (s) => (forgotten.push(s), stale.delete(s), Promise.resolve()),
+        listStageResources: (s) => Promise.resolve(s === "p004klmnopqrst" ? ["R2 bucket reference-p004klmnopqrst-files"] : []),
+      },
+    });
+    const result = await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], h.deps);
+    expect(h.events.filter((e) => /^remove /.test(e))).toEqual(["remove p003abcdefghij", "remove p004klmnopqrst", "remove test-abcdefghij12345", "remove p004klmnopqrst"]);
+    expect(forgotten, "markers deleted only after a removal that left nothing").toEqual(["p003abcdefghij"]);
+    expect(recordOf(h).leftovers).toEqual(["p004klmnopqrst: R2 bucket reference-p004klmnopqrst-files", "p004klmnopqrst: R2 bucket reference-p004klmnopqrst-files"]);
+    expect(h.events.some((e) => e.includes("p003ownerstage1")), "an unmarked stage is never removed").toBe(false);
+    expect(h.logs.join("\n")).toContain("warning: p003ownerstage1 has the shape of a criterion production stage but no marker; it is not removed");
+    expect(h.logs.join("\n")).toContain("removing the stale criterion production stage p003abcdefghij (start of run)");
+    expect(result.exitStatus).toBe(1);
+  });
+
+  it("a criterion production stage listing that fails is a leftover entry (DEC-0560)", async () => {
+    const h = harness({ cloud: { criterionStages: () => Promise.reject(new Error("HTTP 403")) } });
+    await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], h.deps);
+    expect(recordOf(h).leftovers).toEqual(["criterion production stage check failed: HTTP 403", "criterion production stage check failed: HTTP 403"]);
+  });
+
+  it("passes the run's tier to the tests (COMPLIANCE_RUN_MODE, DEC-0560)", async () => {
+    const h = harness();
+    await runCompliance(parseArgs(["--target", "local", "--only", "KV-AC-001"]), [], h.deps);
+    expect(h.calls.find((c) => c.args[0] === "vitest")?.env.COMPLIANCE_RUN_MODE).toBe("automated");
+    const m = harness();
+    await runCompliance(parseArgs(["--target", "local", "--milestone"]), [], m.deps);
+    expect(m.calls.filter((c) => c.args[0] === "vitest").every((c) => c.env.COMPLIANCE_RUN_MODE === "milestone")).toBe(true);
   });
 
   it("a leftover check that cannot run is recorded, never read as no leftovers", async () => {
@@ -830,11 +866,15 @@ describe("[COMPL-AC-003] the cloud account at the start and end of a run: D1 pla
     expect(recordOf(h2).leftovers).toEqual(["test token check failed: listing the account's API tokens failed: HTTP 500 (10000 internal error)"]);
   });
 
-  it("milestone: creates PROV-AC-004's token and records the fresh-account clause as deferred", async () => {
+  it("milestone: creates PROV-AC-004's tokens and records the fresh-account clause as deferred", async () => {
     const api = fakeCfApi({ subscriptions: 403 });
     const h = harness({ catalogue: TOKEN_CATALOGUE, vitest: vitestReport([{ title: "[PROV-AC-004] twice", status: "passed" }]) });
     await runCompliance(parseArgs(["--target", "cloudflare", "--milestone"]), [], withAccount(h, api));
-    expect(posts(api).map((r) => (r.body as { name: string }).name)).toEqual(["prototype-compliance-abcdefghij12345-no-email"]);
+    expect(posts(api).map((r) => (r.body as { name: string }).name)).toEqual([
+      "prototype-compliance-abcdefghij12345-no-email",
+      "prototype-compliance-abcdefghij12345-no-tokens-write",
+      "prototype-compliance-abcdefghij12345-no-sending-read",
+    ]);
     expect(h.calls.find((c) => c.args[0] === "vitest")?.env[NO_EMAIL_PERMISSION_ENV]).toMatch(/^fake-value-/);
     expect(h.calls.find((c) => c.args[0] === "vitest")?.env.COMPLIANCE_D1_PLAN).toBe("free");
     expect(recordOf(h).results).toEqual([

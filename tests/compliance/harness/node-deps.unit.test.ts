@@ -192,7 +192,7 @@ describe("[COMPL-AC-004] leftovers through listStageResources (fake target)", ()
 
   it("refuses non-test stages", async () => {
     const { factory } = fakeCloudflare();
-    await expect(cliStageOps(repo, "cloudflare", { operations: factory, env: CF_ENV }).listStageResources("prodcheck")).rejects.toThrow(/test stages only/);
+    await expect(cliStageOps(repo, "cloudflare", { operations: factory, env: CF_ENV }).listStageResources("prodcheck")).rejects.toThrow(/handles test stages/);
   });
 
   // G-EV F3 (DEC-0504): fakes mark the record.
@@ -241,6 +241,45 @@ describe("check-login's sign-up within prodcheck's PAR-259 budget (sign-up-budge
     const calls: string[] = [];
     await cliStageOps(repo, "cloudflare", { run: fakeRun(calls) }).checkLogin?.("prodcheck");
     expect(calls).toHaveLength(1);
+  });
+});
+
+describe("criterion production stages on Cloudflare (DEC-0560)", () => {
+  const ok = (result: unknown) => ({ status: 200, body: { success: true, result } });
+
+  it("are listed from the account's Worker, database and bucket names; only stale marked ones are swept; removal is --confirm-production", async () => {
+    const asked: string[] = [];
+    const cfCall = (method: string, path: string) => {
+      asked.push(`${method} ${path}`);
+      if (path.endsWith("/workers/scripts")) return Promise.resolve(ok([{ id: "reference-p003abcdefghij" }, { id: "reference-prodcheck" }, { id: "prototype-mailsink" }, { id: "reference-p003ownerstage" }]));
+      if (path.includes("/d1/database")) return Promise.resolve(ok([{ name: "reference-p004klmnopqrst-db-1" }, { name: "reference-test-x-db-1" }]));
+      return Promise.resolve(ok({ buckets: [{ name: "reference-p003abcdefghij-files" }] }));
+    };
+    const old = new Date(Date.now() - 7 * 3_600_000).toISOString();
+    const markers = new Map([
+      ["p003abcdefghij", JSON.stringify({ stage: "p003abcdefghij", runId: "r1", createdAt: old })],
+      ["p004klmnopqrst", JSON.stringify({ stage: "p004klmnopqrst", runId: "r2", createdAt: new Date().toISOString() })],
+      ["p004zzzzzzzzzz", JSON.stringify({ stage: "p004zzzzzzzzzz", runId: "r3", createdAt: old })],
+    ]);
+    const removed: string[] = [];
+    const store = { list: () => Promise.resolve(markers), remove: (st: string) => (removed.push(st), Promise.resolve()) };
+    const calls: string[] = [];
+    const run = (call: RunCall): Promise<{ status: number; output: string }> => (calls.push(call.args.join(" ")), Promise.resolve({ status: 0, output: "removed" }));
+    const ops = cliStageOps(repo, "cloudflare", { run, cfCall, markers: store, env: { CLOUDFLARE_ACCOUNT_ID: "a1" } });
+    // p004klmnopqrst is another run's live stage (fresh marker); p003ownerstage has no marker; p004zzzzzzzzzz is a stale marker without resources.
+    expect(await ops.criterionStages?.()).toEqual({ stale: ["p003abcdefghij", "p004zzzzzzzzzz"], unmarked: ["p003ownerstage"] });
+    expect(asked).toEqual(["GET /accounts/a1/workers/scripts", "GET /accounts/a1/d1/database?per_page=100&page=1", "GET /accounts/a1/r2/buckets?per_page=1000"]);
+    await ops.forgetCriterionStage?.("p003abcdefghij");
+    expect(removed).toEqual(["p003abcdefghij"]);
+    await ops.remove("p003abcdefghij");
+    await ops.remove("test-abc");
+    expect(calls).toEqual(["prototype-framework remove --target cloudflare --stage p003abcdefghij --confirm-production p003abcdefghij", "prototype-framework remove --target cloudflare --stage test-abc"]);
+  });
+
+  it("a refused listing rejects (the driver records it as a leftover entry)", async () => {
+    const store = { list: () => Promise.resolve(new Map<string, string>()), remove: () => Promise.resolve() };
+    const ops = cliStageOps(repo, "cloudflare", { run: () => Promise.resolve({ status: 0, output: "" }), cfCall: () => Promise.resolve({ status: 403, body: { success: false } }), markers: store, env: { CLOUDFLARE_ACCOUNT_ID: "a1" } });
+    await expect(ops.criterionStages?.()).rejects.toThrow("listing Worker scripts for the criterion production stages failed: HTTP 403");
   });
 });
 

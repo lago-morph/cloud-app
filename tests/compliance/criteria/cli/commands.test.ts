@@ -5,7 +5,8 @@
  *
  * Both forms run every command on a scratch copy of apps/template (a git repository of its own,
  * so `smoke` can record evidence from a clean tree). Commands that need a cloud (`deploy`,
- * `remove`, `setup-account`, `check-login`) are run with `--target local`, so a local run never
+ * `deploy --start`, `remove`, `stop`, `start`, `setup-account`, `check-login`; `stop`, `start`
+ * and `--start` from DEC-0544) are run with `--target local`, so a local run never
  * creates cloud resources; for them "runs" means the package dispatches them as commands (not as
  * unknown ones) and both forms behave the same. Their cloud part is not-run in this phase
  * (CLI-AC-001's cloud rule in the driver). `check-login` replaces the retired `certify-auth`
@@ -21,8 +22,8 @@ const FORMS: readonly Form[] = ["npx", "npm"];
 
 /** Commands that run fully locally: they must succeed. */
 const LOCAL_COMMANDS = ["secrets", "build", "generate-migration", "verify", "reset-local", "dev", "smoke"] as const;
-/** Commands that need a cloud: dispatched with `--target local` only. */
-const CLOUD_COMMANDS = ["deploy", "remove", "setup-account", "check-login"] as const;
+/** Commands that need a cloud: dispatched with `--target local` only. A label's first word is the command. */
+const CLOUD_COMMANDS = ["deploy", "deploy --start", "remove", "stop", "start", "setup-account", "check-login"] as const;
 
 const ARGS: Readonly<Record<string, readonly string[]>> = {
   secrets: ["set", "apiKey", "--target", "local", "--stage", "local"],
@@ -32,10 +33,18 @@ const ARGS: Readonly<Record<string, readonly string[]>> = {
   "reset-local": [],
   smoke: ["--target", "local", "--stage", "local"],
   deploy: ["--target", "local", "--stage", "local"],
+  "deploy --start": ["--target", "local", "--stage", "local", "--start"],
+  stop: ["--target", "local", "--stage", "local"],
+  start: ["--target", "local", "--stage", "local"],
   remove: ["--target", "local", "--stage", "local"],
   "setup-account": ["--target", "local"],
   "check-login": ["--target", "local", "--stage", "local"],
 };
+
+/** The command of a table label (`deploy --start` → `deploy`). */
+function commandOf(label: string): string {
+  return label.split(" ")[0] ?? label;
+}
 
 function run(form: Form, command: string, args: readonly string[], cwd: string, stdin?: string): Promise<CommandResult> {
   const options = { cwd, timeoutMs: 15 * 60_000, ...(stdin === undefined ? {} : { stdin }) };
@@ -90,7 +99,7 @@ if (isLocal()) {
           let r: CommandResult;
           if (command === "dev") r = await runDev(form, copy.dir);
           else if (command === "smoke") r = await runSmoke(form, copy.dir);
-          else r = await run(form, command, ARGS[command] ?? [], copy.dir, command === "secrets" ? `${secret}\n` : undefined);
+          else r = await run(form, commandOf(command), ARGS[command] ?? [], copy.dir, command === "secrets" ? `${secret}\n` : undefined);
           results.set(`${form} ${command}`, r);
           await delay(100);
         }
@@ -112,7 +121,7 @@ if (isLocal()) {
       expect(failed, "commands that did not succeed").toEqual([]);
     });
 
-    it(tag("CLI-AC-001", "the cloud commands of the table (deploy, remove, setup-account, check-login) are dispatched by the package in both forms, with the same result"), () => {
+    it(tag("CLI-AC-001", "the cloud commands of the table (deploy, deploy --start, remove, stop, start, setup-account, check-login) are dispatched by the package in both forms, with the same result"), () => {
       const unknownLine = (unknown?.output ?? "").trim().split("\n")[0] ?? "";
       expect(unknown?.status, "an unknown command is refused").not.toBe(0);
       const problems: string[] = [];
@@ -121,7 +130,8 @@ if (isLocal()) {
         const npm = results.get(`npm ${command}`);
         for (const r of [npx, npm]) {
           if (r === undefined || r.status === null || r.status === 127) problems.push(`${r?.command ?? command}: did not run (status ${String(r?.status)})`);
-          else if (unknownLine !== "" && r.output.includes(unknownLine.replace("definitely-not-a-command", command))) problems.push(`${r.command}: answered as an unknown command`);
+          else if (unknownLine !== "" && r.output.includes(unknownLine.replace("definitely-not-a-command", commandOf(command)))) problems.push(`${r.command}: answered as an unknown command`);
+          else if (command === "deploy --start" && /unknown option/i.test(r.output)) problems.push(`${r.command}: --start answered as an unknown option`);
         }
         if (npx?.status !== npm?.status) problems.push(`${command}: npx status ${String(npx?.status)} differs from npm script status ${String(npm?.status)}`);
       }

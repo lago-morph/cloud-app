@@ -120,6 +120,6 @@ describe("[COMPL-AC-001] milestoneItemsNamed reads COMPL-REQ-006's list as last 
   });
 
   it("on the real compliance.md, gives DEC-0526's release 1 list", () => {
-    expect(sorted(milestoneItemsNamed())).toEqual(["COMPL-AC-008", "E2E-010", "E2E-012", "E2E-015", "E2E-016", "MAIL-AC-007", "PROV-AC-003", "PROV-AC-004", "PROV-AC-006", "SKILL-AC-006"]);
+    expect(sorted(milestoneItemsNamed())).toEqual(["COMPL-AC-008", "E2E-010", "E2E-012", "E2E-015", "E2E-016", "MAIL-AC-007", "PROV-AC-002", "PROV-AC-003", "PROV-AC-004", "PROV-AC-006", "SKILL-AC-006"]);
   });
 });

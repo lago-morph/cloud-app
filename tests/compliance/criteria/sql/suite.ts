@@ -314,9 +314,13 @@ export function defineSqlSuite(place: Place, makeRunner: () => Promise<CaseRunne
       expect(valueOf(await run("duplicateUnique"))).toEqual({ composite: "SQL.CONFLICT", updateToDuplicate: "SQL.CONFLICT", stillOne: 1 });
     }, TEST_MS);
 
-    it(t("SQL-AC-006", "a query whose result exceeds PAR-215 yields SQL.RESULT_TOO_LARGE; one within it succeeds"), async () => {
+    it(t("SQL-AC-006", "a select whose result exceeds PAR-215 yields SQL.RESULT_TOO_LARGE; one within it succeeds"), async () => {
       expectCaseError(await run("resultSize", { ns, chars: OVERSIZED_CHARS }), 500, "SQL.RESULT_TOO_LARGE");
       expect(valueOf(await run("resultSize", { ns, chars: FITTING_CHARS }))).toEqual({ rows: 1, length: FITTING_CHARS });
+    }, TEST_MS);
+
+    it(t("SQL-AC-006", "a committed insert whose RETURNING rows exceed PAR-215 resolves with all of them, and its row is stored once (DEC-0542)"), async () => {
+      expect(valueOf(await run("writeResultSize", { ns, chars: OVERSIZED_CHARS }))).toEqual({ returned: 1, length: OVERSIZED_CHARS, stored: 1 });
     }, TEST_MS);
   });
 }

@@ -16,6 +16,8 @@
  *   deploy"); `deployReady` then sets them with `secrets set` and deploys again.
  */
 import { spawn } from "node:child_process";
+import { isCriterionProductionStage, newCriterionProductionStage } from "../../../harness/criterion-stages.js";
+import { deleteCriterionMarker, writeCriterionMarker } from "../../_cloud/criterion-markers.js";
 import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -112,7 +114,7 @@ export interface CloudStage {
   /** Deploys; when the first deploy stops naming unset secrets, sets them and deploys again. Throws unless it ends with status 0. */
   deployReady(): Promise<CommandResult>;
   setSecret(name: string, value: string): Promise<CommandResult>;
-  /** `remove` (once; later calls return the first result). */
+  /** `remove` (once; later calls return the first result that exited 0, or the last one). A production stage's carries `--confirm-production`. */
   remove(options?: Omit<RunOptions, "cwd">): Promise<CommandResult>;
   /**
    * Records a removal of the stage made by another actor (a clean machine, the driver's
@@ -145,6 +147,23 @@ export interface StageOptions {
    * stage it opens (`holdStages`), e.g. a criterion with two stages at once.
    */
   readonly held?: boolean;
+  /**
+   * A production stage of this name instead of a `test-<random>` one (`newProductionStage`): the
+   * copy gets `config/<target>/<stage>.json` from prodcheck's committed values file (CFG-REQ-002),
+   * and `remove` passes `--confirm-production <stage>` (PROV-REQ-003). Only for a criterion about
+   * production stages (DEC-0543, DEC-0553); never `prodcheck`.
+   */
+  readonly productionStage?: string;
+}
+
+/**
+ * A new criterion production stage name (DEC-0560): one of the reserved prefixes
+ * (`CRITERION_PRODUCTION_PREFIXES`, `harness/criterion-stages.ts`) and 10 random lowercase
+ * letters and digits. Never `test-…` (PROV-REQ-005) and never `prodcheck`; the driver's cleanup
+ * removes such stages at the start and end of every cloud run.
+ */
+export function newProductionStage(prefix: string): string {
+  return newCriterionProductionStage(prefix);
 }
 
 /** Copies one overlay of apps/reference over a copy (remove the app's migrations first, then copy). */
@@ -225,7 +244,14 @@ export async function withCloudStage<T>(options: StageOptions, body: (stage: Clo
   try {
     copy = await scratchCopy(options.appDir, `d-t1-${options.app}`);
     const dir = copy.dir;
-    const stageName = newTestStage();
+    const production = options.productionStage;
+    if (production !== undefined && !isCriterionProductionStage(production)) throw new Error(`productionStage ${production} is not a criterion production stage name (DEC-0560: a reserved prefix and 10 random characters)`);
+    const stageName = production ?? newTestStage();
+    if (production !== undefined) {
+      await copy.write(`config/${t}/${production}.json`, await copy.read(`config/${t}/prodcheck.json`));
+      // DEC-0560: marked before anything is deployed, so a later run's sweep can find it if this process dies.
+      await writeCriterionMarker(production);
+    }
     const outputs: CommandResult[] = [];
     let origin: string | undefined;
     const cli = async (args: readonly string[], o: Omit<RunOptions, "cwd"> = {}): Promise<CommandResult> => {
@@ -269,7 +295,9 @@ export async function withCloudStage<T>(options: StageOptions, body: (stage: Clo
       },
       setSecret,
       async remove(o = {}) {
-        removed ??= await cli(["remove", "--target", t, "--stage", stageName], o);
+        if (removed?.status === 0) return removed;
+        removed = await cli(["remove", "--target", t, "--stage", stageName, ...(production === undefined ? [] : ["--confirm-production", stageName])], o);
+        if (removed.status === 0 && production !== undefined) await deleteCriterionMarker(production);
         return removed;
       },
       removedElsewhere(result, remaining) {
@@ -286,6 +314,8 @@ export async function withCloudStage<T>(options: StageOptions, body: (stage: Clo
       if (options.removeAfter !== false && deployedOnce) {
         const r = await stage.remove();
         if (r.status !== 0) process.stderr.write(`[d-t1] removing stage ${stageName} failed (status ${String(r.status)}); it may be left over:\n${tail(r.output)}\n`);
+      } else if (production !== undefined && !deployedOnce) {
+        await deleteCriterionMarker(production);
       }
     }
   } finally {
