@@ -7,11 +7,20 @@
  *   (30 days) after it was written. Stage removal never touches it.
  * - **Backup.** Under `<app>/<stage>/<UTC time yyyymmddThhmmssZ>/`:
  *   - `database/<database name>.sql`: D1's own export of each of the stage's databases;
- *   - `files/<key>`: each object of the stage bucket, its bytes and content type unchanged
- *     (keys keep their U+0001 ending, DEC-0430);
- *   - `manifest.json`, written last: app, stage, time, the databases and the number of files.
+ *   - `database/<database name>.lossless.json` and `.lossless.sql`, only for a database with a
+ *     table D1's export does not keep exactly (a NUL in text, an integer beyond ±2^53; DEC-0096):
+ *     those tables' rows read row by row (`d1/lossless.ts`, DEC-0556);
+ *   - `files/<nnnnnn>`: each object of the stage bucket, numbered from `000001` in key order, its
+ *     bytes and content type unchanged. A stored key may be R2's full 1024 bytes, so no prefix
+ *     would fit before it; the manifest maps each number to its key (keys keep their U+0001
+ *     ending, DEC-0430);
+ *   - `manifest.json`, written last: app, stage, time, the databases, the number of files,
+ *     `fileObjects` (`{ object, key, contentType, bytes }` per file) and `lossless`
+ *     (`{ database, tables, json, sql }` per database that has it).
  *   Afterwards the prefix is listed again and must hold every object written; otherwise the
  *   backup fails and `remove` deletes nothing.
+ * - **Listing** (`listStageBackups`): every `<app>/<stage>/<time>/` prefix; complete when its
+ *   manifest exists, with the manifest's numbers of databases and files.
  *
  * Objects travel through the R2 object endpoints of `api.cloudflare.com` as bytes
  * (`CloudflareBytesApi`), with the deploy token. Not yet exercised against the live API: the

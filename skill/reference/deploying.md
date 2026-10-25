@@ -86,7 +86,7 @@ A production stage holds real data. `remove` refuses unless you repeat the stage
 npm run remove -- --target cloudflare --stage prod --confirm-production prod
 ```
 
-The backup goes to the bucket `prototype-backups`, under `<app>/<stage>/<time>/`: `database/<name>.sql` (the D1 export), `files/…` (every stored file) and `manifest.json`. It is deleted automatically after 30 days. If any part of the backup fails, `remove` deletes nothing and exits non-zero. Secrets are not backed up.
+The backup goes to the bucket `prototype-backups`, under `<app>/<stage>/<time>/`: `database/<name>.sql` (the D1 export), `database/<name>.lossless.json` and `.lossless.sql` when a table holds a value the D1 export does not keep exactly (a NUL character in text, or an integer beyond ±2^53), `files/000001`, `files/000002`, … (every stored file, numbered; `manifest.json` names each one's original key) and `manifest.json`. `remove` prints every backup of the stage, the one to restore from first; one marked "do not restore from it" is incomplete (for example written by a second `remove` after the first had already deleted the database). It is deleted automatically after 30 days. If any part of the backup fails, `remove` deletes nothing and exits non-zero. Secrets are not backed up.
 
 **Restore a removed production stage** (within the 30 days; download the backup's objects from the R2 dashboard or with an S3 client first, using an R2 API token of your own: the stages' file-signing credential cannot read this bucket):
 1. `npm run deploy -- --target cloudflare --stage prod`, set the app's secrets with `secrets set`, then `npm run stop -- --target cloudflare --stage prod`.
@@ -96,8 +96,13 @@ The backup goes to the bucket `prototype-backups`, under `<app>/<stage>/<time>/`
    npx wrangler d1 create "$APP-prod-db-1"
    npx wrangler d1 execute "$APP-prod-db-1" --remote --file database/<name>.sql
    ```
-   A row larger than about 100 KB is refused by the import; insert it by hand.
-3. Copy the `files/` objects back into the bucket `<app>-prod-files` with an S3 client on the R2 endpoint, which keeps each key exactly (keys end in an invisible U+0001).
+   A row larger than about 100 KB is refused by the import; insert it by hand. If `manifest.json` has a `lossless` entry for the database, run one combined file instead of `database/<name>.sql`:
+   ```sh
+   grep -av '^INSERT INTO "<table>"' database/<name>.sql > restore.sql   # once per table the entry lists
+   cat database/<name>.lossless.sql >> restore.sql
+   npx wrangler d1 execute "$APP-prod-db-1" --remote --file restore.sql
+   ```
+3. Copy each `files/<number>` object back into the bucket `<app>-prod-files` under the key its `fileObjects` entry in `manifest.json` names, with its content type, using an S3 client on the R2 endpoint, which keeps each key exactly (keys end in an invisible U+0001).
 4. `npm run deploy -- --target cloudflare --stage prod --start`.
 
 ## 6. What stays billable while idle

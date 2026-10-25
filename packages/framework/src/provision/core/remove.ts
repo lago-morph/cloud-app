@@ -10,6 +10,12 @@
  * target exports its databases and copies its files to the account's backup bucket. Only when
  * that succeeded is anything deleted; a failed backup deletes nothing and exits 1. A test stage
  * is removed without a backup.
+ *
+ * Before the backup, the stage's earlier backups are listed (a failed listing also deletes
+ * nothing). After it, every backup is printed, the usable ones first, newest first; a backup
+ * without a manifest, or holding fewer databases than the most any backup of the stage holds (one
+ * written by a retry after the databases were deleted), is flagged "do not restore from it", and
+ * the closing line names the backup to restore from (DEC-0556).
  */
 import { matchStageDatabases } from "./databases.js";
 import type { BackupListing, Stage, StageBackup, TargetOperations } from "./operations.js";

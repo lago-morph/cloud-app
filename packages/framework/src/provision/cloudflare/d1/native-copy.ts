@@ -3,17 +3,20 @@
  * `copyDatabase` when a quick pre-check shows the database has none of the shapes spike A-06
  * found to break it (DEC-0096), and by the production `remove`'s backup (DEC-0543).
  *
- * **Pre-check** (`nativeCopyPrecheck`): reads only, two requests.
+ * **Pre-check** (`nativeCopyPrecheck`): reads only, three requests (the tables in
+ * `sqlite_master`; each table's columns and references; each table's sizes and unsafe values).
  * - every reference points to a table created earlier (the dump writes tables in creation
  *   order, and the import's foreign-key deferral spans only about 4 KB): no self-reference, no
- *   reference to a later table, no cycle;
+ *   reference to a later table, no cycle; table names compare without regard to ASCII case, as
+ *   SQLite's do;
  * - no row's values are larger than PAR-312 bytes (the dump writes each row as one INSERT with
  *   inline literals, and D1 refuses a statement over PAR-217; quoting can double a value);
  * - no text value holds a NUL (an import silently stops at it) and no integer is beyond ±2^53
  *   (the dump rounds it);
  * - the values add up to at most PAR-313 bytes (within the sizes A-06 exercised).
  * Any of these, or a table with a WITHOUT ROWID, virtual or other shape the check cannot read,
- * makes the copy take the row-by-row path; the reason is reported.
+ * makes the copy take the row-by-row path; the reason is reported. So does a pre-check that
+ * throws (D1 refusing one of its reads, e.g. on a large database): `copyDatabase` catches it.
  *
  * **Export**: `POST …/export {"output_format":"polling"}`, re-sent with `current_bookmark` until
  * `status` is `complete`; then the dump is downloaded from `result.signed_url` (a Cloudflare-owned
