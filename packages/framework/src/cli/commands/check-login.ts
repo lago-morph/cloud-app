@@ -7,7 +7,10 @@
  * - the base URL from the stage's recorded deploy output (`deploy`, DEC-0272);
  * - the email domain from the account settings record (DEC-0514), read on every run;
  * - the mail from the account's sink (`provision/cloudflare/mail-sink.ts`, the reader `mail last
- *   --target cloudflare` uses), polled within `SINK_WAIT_MS`;
+ *   --target cloudflare` uses), polled within `SINK_WAIT_MS`; when a mail does not arrive, the
+ *   failure names Email Sending's last delivery event for the recipient (`emailSendingAdaptive`,
+ *   `provision/cloudflare/email-delivery.ts`), since the send API answers `queued` even for mail
+ *   the receiving side rejects (live, 2026-10-25; decision note i-g.md);
  * - the role change through the `admins` code (`changeAdminRole`) against the stage's current D1.
  *
  * The steps, stopping at the first failure (`runLoginCheck`):
@@ -75,6 +78,13 @@ export interface LoginCheckIo {
   readonly sink: LoginCheckSink;
   /** `admins grant|revoke <address>` on the stage (the `admins` code, `changeAdminRole`). */
   changeRole(action: "grant" | "revoke", address: string): Promise<void>;
+  /**
+   * Email Sending's last delivery event for messages to `address` sent since `since`, as one
+   * sentence (status, errorCause, errorDetail), read when a mail does not arrive in time.
+   */
+  deliveryStatus?(address: string, since: Date): Promise<string>;
+  /** The wall-clock time, for `deliveryStatus`'s `since`. */
+  now?(): Date;
   sleep(ms: number): Promise<void>;
   /** A monotonic clock in milliseconds, for the sink wait. */
   clock(): number;
@@ -197,7 +207,7 @@ export async function runLoginCheck(options: LoginCheckOptions, io: LoginCheckIo
     return who.id as string;
   };
   /** Waits (bounded) until the sink holds more than `after` messages for the address, and returns the latest. */
-  const awaitMail = async (what: string, after: number): Promise<MailMessage> => {
+  const awaitMail = async (what: string, after: number, since: Date): Promise<MailMessage> => {
     const deadline = io.clock() + SINK_WAIT_MS;
     for (;;) {
       let count: number;
@@ -210,7 +220,17 @@ export async function runLoginCheck(options: LoginCheckOptions, io: LoginCheckIo
         const message = await io.sink.latest(options.address);
         if (message !== undefined) return message;
       }
-      if (io.clock() >= deadline) return fail(`no ${what} mail reached the mail sink within ${String(SINK_WAIT_MS / 1000)} s`);
+      if (io.clock() >= deadline) {
+        let delivery = "";
+        if (io.deliveryStatus !== undefined) {
+          try {
+            delivery = `; ${await io.deliveryStatus(options.address, since)}`;
+          } catch (error) {
+            delivery = `; the delivery status could not be read (${describeFailure(error)})`;
+          }
+        }
+        return fail(`no ${what} mail reached the mail sink within ${String(SINK_WAIT_MS / 1000)} s${delivery}`);
+      }
       await io.sleep(SINK_POLL_MS);
     }
   };
@@ -228,8 +248,12 @@ export async function runLoginCheck(options: LoginCheckOptions, io: LoginCheckIo
   const passed = (text: string): void => io.print(`step ${String(step)} passed: ${text}`);
 
   try {
+    const wallClock = io.now ?? (() => new Date());
+    // A minute of margin: the analytics events carry the provider's time, not ours.
+    const sentSince = (): Date => new Date(wallClock().getTime() - 60_000);
     step = 1;
     auth011 = "running";
+    const signUpSince = sentSince();
     expectAnswer(
       "sign-up with a forged host",
       await send("POST", "/api/auth/password/sign-up", { email: options.address, password: options.password, displayName: "check-login" }, { "x-forwarded-host": FORGED_HOST, forwarded: `host=${FORGED_HOST};proto=https` }),
@@ -243,7 +267,7 @@ export async function runLoginCheck(options: LoginCheckOptions, io: LoginCheckIo
     if (cookies.size > 0) fail("the refused sign-in set a cookie");
 
     step = 3;
-    const verification = await awaitMail("verification", 0);
+    const verification = await awaitMail("verification", 0, signUpSince);
     const verifyToken = tokenIn(verification, "verify", "verification");
     {
       step = 2;
@@ -291,8 +315,9 @@ export async function runLoginCheck(options: LoginCheckOptions, io: LoginCheckIo
     if (out.status !== 204 && out.status !== 200) fail(`log out: expected 204, got ${describe(out)}`);
     await expectLevel("after log out", "anonymous");
     const before = await io.sink.count(options.address).catch((error: unknown) => fail(`reading the mail sink failed: ${describeFailure(error)}`));
+    const forgotSince = sentSince();
     expectAnswer("forgot", await send("POST", "/api/auth/password/forgot", { email: options.address }), 200, { result: "check-email" });
-    const resetMail = await awaitMail("password reset", before);
+    const resetMail = await awaitMail("password reset", before, forgotSince);
     const resetToken = tokenIn(resetMail, "reset", "password reset");
     expectAnswer("reset with the mailed token", await send("POST", "/api/auth/password/reset", { token: resetToken, password: options.newPassword }), 200, { result: "password-reset" });
     passed("log out, forgot, the reset mail and the reset to a new password work");
@@ -361,6 +386,8 @@ export interface CheckLoginDeps {
   newPassword(): string;
   now(): Date;
   versions(): Record<string, string>;
+  /** Email Sending's last delivery event for `address` since `since`, as one sentence (email-delivery.ts). */
+  deliveryStatus?(emailDomain: string, address: string, since: Date): Promise<string>;
   sleep?(ms: number): Promise<void>;
   clock?(): number;
 }
@@ -427,6 +454,8 @@ export function checkLoginCommand(deps: CheckLoginDeps): Command {
         changeRole: (action, to) => deps.changeRole(io.cwd, stage, action, to),
         sleep: deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
         clock: deps.clock ?? (() => performance.now()),
+        now: () => deps.now(),
+        ...(deps.deliveryStatus === undefined ? {} : { deliveryStatus: (to: string, since: Date) => (deps.deliveryStatus as NonNullable<CheckLoginDeps["deliveryStatus"]>)(domain, to, since) }),
         print: (line) => io.stdout(`${scrub(line)}\n`),
         hide: (value) => {
           if (value !== "") hidden.push({ value, replacement: "<token>" });
@@ -481,6 +510,7 @@ export async function checkLoginBinding(env: ProcessEnvironment = process.env, f
       import("./admins.js"),
       import("../../build/load.js"),
     ]);
+  const delivery = await import("../../provision/cloudflare/email-delivery.js");
   const api = createCloudflareApi({ token: env.CLOUDFLARE_API_TOKEN ?? "", ...(fetchImpl === undefined ? {} : { fetch: fetchImpl }) });
   const accountId = env.CLOUDFLARE_ACCOUNT_ID ?? "";
   const frameworkVersion = (): string | undefined => {
@@ -512,6 +542,7 @@ export async function checkLoginBinding(env: ProcessEnvironment = process.env, f
       }
     },
     address: sinkAddress,
+    deliveryStatus: async (emailDomain, address, since) => delivery.describeDelivery(await delivery.lastDeliveryEvent(api, accountId, emailDomain, address, since)),
     fetch: fetchImpl ?? globalThis.fetch,
     writeEvidence: evidence.writeEvidence,
     newRunId: () => evidence.newRunId(),

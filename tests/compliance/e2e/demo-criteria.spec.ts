@@ -1,17 +1,17 @@
 /**
- * Demo criteria DEMO-AC-002, -004, -005, -007, -008 and -011, and DEMO-AC-003's file-deletion
+ * Demo criteria DEMO-AC-002, -004, -005, -007 and -008, and DEMO-AC-003's file-deletion
  * failure clause (docs/demo/demo-spec.md §2), checked against the running demo in Chromium, and
  * in-process (`createTestApp`) for the clauses the specification gives to local tests: the expiry
- * clause of DEMO-AC-007 (with a shifted clock, the stand-in for the test runner's fake timers),
- * DEMO-AC-003's failure clause (`unavailable: ["files"]`) and DEMO-AC-011 (the stub login
- * provider).
+ * clause of DEMO-AC-007 (with a shifted clock, the stand-in for the test runner's fake timers)
+ * and DEMO-AC-003's failure clause (`unavailable: ["files"]`). DEMO-AC-011 is retired with
+ * DEMO-REQ-011 (DEC-0522), and its test with it.
  *
  * Written from the specification, not from the demo's code (tests/compliance/e2e/support/demo.ts
  * says how): the page is driven by role and accessible name (support `ASSUMED`), identities come
  * from the framework's authentication mock, and the demo's API routes are never named. They are
  * learned at run time by recording the requests the page itself sends, then replayed as other
  * identities to check that forbidden actions are refused, and in-process for the local-only
- * clauses. "Refused" is 401, 403 or 404 (`REFUSED`); DEMO-AC-011 names 401 exactly.
+ * clauses. "Refused" is 401, 403 or 404 (`REFUSED`).
  *
  * Target: `COMPLIANCE_DEMO_BASE_URL`, else on `local` a fresh `dev` copy of `apps/demo` (as
  * demo-pages.spec.ts, decision fix-f4b-1); on a cloud target without it every test reports a
@@ -22,7 +22,6 @@
  *
  * Data: a handful of posts per test, each deleted through the page or by the admin afterwards.
  */
-import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { mockUsers, type TestApp } from "@lago-morph/prototype-framework/testing";
@@ -31,7 +30,6 @@ import { prerequisiteMissing, tag, target } from "../harness/index.js";
 import { expect, test } from "../harness/playwright.js";
 import { randomSuffix } from "./support/apps.js";
 import { cloudLogEntries, utcDay } from "./support/cloud.js";
-import { REPO_ROOT } from "./support/process.js";
 import {
   ASSUMED,
   capture,
@@ -56,7 +54,6 @@ import {
   session,
   substitute,
   theMutation,
-  visibleThrough,
   type Recorded,
   type RunningDemo,
   type Session,
@@ -704,83 +701,6 @@ if (local()) {
       if (app !== undefined) await app.dispose();
       if (created) await deleteAsAdmin(author, author.page.url());
       await closeAll(author);
-    }
-  });
-}
-
-if (local()) {
-  test(tag("DEMO-AC-011", "every committed production values file sets framework.users; in-process with the stub login provider, a login on the users list creates a draft and a login on neither list is refused with 401 and sees only published posts"), async ({ browser }) => {
-    test.setTimeout(6 * 60_000);
-    // 1. Every committed production values file (config/<target>/<stage>.json, stage not `test`; not config/local.json).
-    const tracked = execFileSync("git", ["ls-files", "apps/demo/config"], { cwd: REPO_ROOT, encoding: "utf8" })
-      .split("\n")
-      .filter((p) => /^apps\/demo\/config\/[^/]+\/[^/]+\.json$/.test(p) && !p.endsWith("/test.json"));
-    expect(tracked.length, "the demo commits at least one production values file (DEMO-REQ-011)").toBeGreaterThan(0);
-    for (const path of tracked) {
-      const file = JSON.parse(readFileSync(join(REPO_ROOT, path), "utf8")) as { framework?: { users?: unknown } };
-      expect(Array.isArray(file.framework?.users), `${path} sets framework.users`).toBe(true);
-    }
-
-    // 2. Learn the requests from the running demo: create a draft, publish it, list the front page anonymously.
-    const o = origin();
-    const sfx = randomSuffix(4);
-    const admin = await session(browser, o, "admin", `demo-ac011-admin-${sfx}`);
-    const anon = await session(browser, o, "anonymous");
-    const learned = `AC011 learned ${sfx}`;
-    let app: TestApp | undefined;
-    let ids: TestApp | undefined;
-    try {
-      const createRec = theMutation(await record(admin.page, o, async () => void (await createDraftAndOpen(admin.page, learned))), "creating a draft");
-      const publishRec = await act(admin, ASSUMED.publishButton, "publishing the post");
-      const listRec = (await record(anon.page, o, () => openSettled(anon.page, "/"))).filter((r) => r.method === "GET" && r.status === 200 && r.response.includes(learned));
-      expect(listRec.length, "the front page lists published posts through the API").toBeGreaterThan(0);
-      await deleteAsAdmin(admin, admin.page.url());
-
-      // The user IDs the stub provider's subjects get (a build with no lists: every login is at least a user).
-      const subject = { listed: `ac011-listed-${sfx}`, admin: `ac011-admin-${sfx}`, other: `ac011-other-${sfx}` };
-      ids = await demoTestApp({ stubLoginProvider: true, config: { framework: {} } });
-      const idOf = async (s: string): Promise<string> => {
-        await (ids as TestApp).loginWithStub(s);
-        const body = (await (await (ids as TestApp).request("/api/auth/me")).json()) as { id?: string };
-        expect(typeof body.id, `the stub login of ${s} has a user ID`).toBe("string");
-        return body.id ?? "";
-      };
-      const listedId = await idOf(subject.listed);
-      const adminId = await idOf(subject.admin);
-      await ids.dispose();
-      ids = undefined;
-
-      app = await demoTestApp({ stubLoginProvider: true, config: { framework: { users: [listedId], admins: [adminId] } } });
-      const level = async (): Promise<string> => ((await (await (app as TestApp).request("/api/auth/me")).json()) as { level: string }).level;
-      const tPublished = `AC011 published ${sfx}`;
-      const tDraft = `AC011 listed draft ${sfx}`;
-
-      // An admin publishes a post, so there is something published to see.
-      await app.loginWithStub(subject.admin);
-      expect(await level()).toBe("admin");
-      const subs: Substitutions = new Map([[learned, tPublished]]);
-      const created = await replayInProcess(app, substitute(createRec, subs));
-      expectAllowed(created, "in-process: an admin creates a draft");
-      learn(subs, createRec.response, created.text);
-      expectAllowed(await replayInProcess(app, substitute(publishRec, subs)), "in-process: the admin publishes it");
-
-      // A login on the users list can create a draft.
-      await app.loginWithStub(subject.listed);
-      expect(await level(), "a login on the users list is a user").toBe("user");
-      expectAllowed(await replayInProcess(app, withText(createRec, learned, tDraft)), "a login on the users list creates a draft");
-
-      // A login on neither list: refused with 401, and sees only published posts.
-      await app.loginWithStub(subject.other);
-      expect(await level(), "a login on neither list is anonymous").toBe("anonymous");
-      const refused = await replayInProcess(app, withText(createRec, learned, `AC011 unlisted ${sfx}`));
-      expect(refused.status, `a login on neither list creating a draft is refused with 401 (got ${String(refused.status)}: ${refused.text.slice(0, 200)})`).toBe(401);
-      const seen = await visibleThrough((r) => replayInProcess(app as TestApp, r), listRec.map((r) => substitute(r, subs)));
-      expect(seen, "the unlisted login sees the published post").toContain(tPublished);
-      expect(seen, "the unlisted login does not see the draft").not.toContain(tDraft);
-    } finally {
-      if (ids !== undefined) await ids.dispose();
-      if (app !== undefined) await app.dispose();
-      await closeAll(admin, anon);
     }
   });
 }

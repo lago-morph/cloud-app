@@ -5,10 +5,11 @@
  *
  * Both forms run every command on a scratch copy of apps/template (a git repository of its own,
  * so `smoke` can record evidence from a clean tree). Commands that need a cloud (`deploy`,
- * `remove`, `setup-account`, `certify-auth`) are run with `--target local`, so a local run never
+ * `remove`, `setup-account`, `check-login`) are run with `--target local`, so a local run never
  * creates cloud resources; for them "runs" means the package dispatches them as commands (not as
  * unknown ones) and both forms behave the same. Their cloud part is not-run in this phase
- * (Google login mocked; CLI-AC-001's cloud rule in the driver).
+ * (CLI-AC-001's cloud rule in the driver). `check-login` replaces the retired `certify-auth`
+ * in the CLI-REQ-001 table (DEC-0512, DEC-0513).
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { tag } from "../../harness/index.js";
@@ -21,7 +22,7 @@ const FORMS: readonly Form[] = ["npx", "npm"];
 /** Commands that run fully locally: they must succeed. */
 const LOCAL_COMMANDS = ["secrets", "build", "generate-migration", "verify", "reset-local", "dev", "smoke"] as const;
 /** Commands that need a cloud: dispatched with `--target local` only. */
-const CLOUD_COMMANDS = ["deploy", "remove", "setup-account", "certify-auth"] as const;
+const CLOUD_COMMANDS = ["deploy", "remove", "setup-account", "check-login"] as const;
 
 const ARGS: Readonly<Record<string, readonly string[]>> = {
   secrets: ["set", "apiKey", "--target", "local", "--stage", "local"],
@@ -33,7 +34,7 @@ const ARGS: Readonly<Record<string, readonly string[]>> = {
   deploy: ["--target", "local", "--stage", "local"],
   remove: ["--target", "local", "--stage", "local"],
   "setup-account": ["--target", "local"],
-  "certify-auth": ["--target", "local", "--stage", "local"],
+  "check-login": ["--target", "local", "--stage", "local"],
 };
 
 function run(form: Form, command: string, args: readonly string[], cwd: string, stdin?: string): Promise<CommandResult> {
@@ -111,7 +112,7 @@ if (isLocal()) {
       expect(failed, "commands that did not succeed").toEqual([]);
     });
 
-    it(tag("CLI-AC-001", "the cloud commands of the table (deploy, remove, setup-account, certify-auth) are dispatched by the package in both forms, with the same result"), () => {
+    it(tag("CLI-AC-001", "the cloud commands of the table (deploy, remove, setup-account, check-login) are dispatched by the package in both forms, with the same result"), () => {
       const unknownLine = (unknown?.output ?? "").trim().split("\n")[0] ?? "";
       expect(unknown?.status, "an unknown command is refused").not.toBe(0);
       const problems: string[] = [];

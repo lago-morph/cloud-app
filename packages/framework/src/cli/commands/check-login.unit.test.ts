@@ -11,6 +11,7 @@ import type { EvidenceRecord, WriteEvidenceInput } from "../../evidence/writer.j
 import { RATE_LIMITS } from "../../auth/password/options.js";
 import { MAIL_SINK_BINDING, MAIL_SINK_SOURCE } from "../../mail/sink-worker.js";
 import { sinkAddress } from "../../provision/cloudflare/email.js";
+import { describeDelivery, lastDeliveryEvent } from "../../provision/cloudflare/email-delivery.js";
 import { ACCOUNT, FakeCloud } from "../../provision/cloudflare/fake-cloud.test-support.js";
 import { latestSinkMail, sinkKeys } from "../../provision/cloudflare/mail-sink.js";
 import { readAccountSettings } from "../../provision/cloudflare/account-settings.js";
@@ -152,7 +153,7 @@ function fakeStage(cloud: FakeCloud, fault?: Fault) {
   return { fetch: fetch as typeof globalThis.fetch, db, accounts, seen };
 }
 
-function harness(options: { fault?: Fault; changed?: string[]; origin?: string | null; domain?: string | null; env?: Record<string, string>; missing?: string[] } = {}) {
+function harness(options: { fault?: Fault; changed?: readonly string[]; origin?: string | null; domain?: string | null; env?: Readonly<Record<string, string>>; missing?: readonly string[] } = {}) {
   const cloud = FakeCloud.withSharedResources();
   cloud.buckets.set("prototype-mailsink", new Set());
   if (options.domain !== null) {
@@ -167,12 +168,13 @@ function harness(options: { fault?: Fault; changed?: string[]; origin?: string |
   const deps: CheckLoginDeps = {
     env: options.env ?? {},
     deployedOrigin: () => (options.origin === null ? undefined : (options.origin ?? ORIGIN)),
-    repo: () => ({ root: "/repo", git: { commit: () => "c0ffee", changedTrackedFiles: () => options.changed ?? [] } }),
+    repo: () => ({ root: "/repo", git: { commit: () => "c0ffee", changedTrackedFiles: () => [...(options.changed ?? [])] } }),
     missingCredentials: () => options.missing ?? [],
     emailDomain: async () => (await readAccountSettings(cloud.api, ACCOUNT)).emailDomain,
     sink: { count: async (a) => (await sinkKeys(cloud.api, ACCOUNT, a)).length, latest: (a) => latestSinkMail(cloud.api, ACCOUNT, a) },
     changeRole: async (_appDir, stageName, action, address) => void (await changeAdminRole(stage.db, { action, stage: stageName }, address)),
     address: sinkAddress,
+    deliveryStatus: async (domain, to, since) => describeDelivery(await lastDeliveryEvent(cloud.api, ACCOUNT, domain, to, since)),
     fetch: stage.fetch,
     writeEvidence: (input) => {
       records.push(input);
@@ -310,5 +312,33 @@ describe("check-login: the steps (password.md §2)", () => {
     expect(r.status).toBe(1);
     expect(r.io.err).toMatch(/step 5: the next request after admins grant: \/api\/auth\/me shows level user, expected admin/);
     expect(h.stage.accounts.get(ADDRESS)?.role, "revoked after the failure").toBeNull();
+  });
+
+  it("a mail that does not arrive names Email Sending's last delivery event for the recipient (emailSendingAdaptive)", async () => {
+    const h = harness({ fault: "no-verification-mail" });
+    h.cloud.emailEvents.push(
+      { zoneTag: h.cloud.zones.get("example.test")!.id, to: ADDRESS, datetime: "2026-10-25T12:00:03Z", status: "failed", errorCause: "routing_unknown_address", errorDetail: `550 5.1.1 <${ADDRESS}>: Address does not exist` },
+      { zoneTag: h.cloud.zones.get("example.test")!.id, to: "sink+other@t.example.test", datetime: "2026-10-25T12:00:04Z", status: "delivered" },
+    );
+    const r = await h.run();
+    expect(r.status).toBe(1);
+    expect(r.io.err).toMatch(
+      /step 3: no verification mail reached the mail sink within 180 s; Email Sending's last event for the recipient \(emailSendingAdaptive, 2026-10-25T12:00:03Z\): status failed, errorCause routing_unknown_address, errorDetail "550 5\.1\.1 <<test-address>>: Address does not exist"/,
+    );
+    expect(h.record().results[0]?.detail).toMatch(/errorCause routing_unknown_address/);
+    const query = h.cloud.requests.filter((q) => q === "POST /graphql");
+    expect(query).toHaveLength(1);
+    expectNothingSecret(r.out);
+    expectNothingSecret(JSON.stringify(h.record()));
+  });
+
+  it("with no delivery event yet, or a failing analytics query, the timeout says so", async () => {
+    const none = harness({ fault: "no-reset-mail" });
+    const a = await none.run();
+    expect(a.io.err).toMatch(/step 6: no password reset mail reached the mail sink within 180 s; Email Sending has recorded no delivery event for the recipient yet \(emailSendingAdaptive lags by over a minute\)/);
+    const failing = harness({ fault: "no-verification-mail" });
+    failing.cloud.graphqlErrors = [{ message: "not authorized for that dataset" }];
+    const b = await failing.run();
+    expect(b.io.err).toMatch(/within 180 s; the delivery status could not be read \(the Email Sending analytics query failed: not authorized for that dataset\)/);
   });
 });
