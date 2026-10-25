@@ -1,0 +1,6 @@
+(node:20458) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20472) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+deployed reference stage test-ykpjdoi5gccpsdv to cloudflare; database reference-test-ykpjdoi5gccpsdv-db-1
+public origin: https://reference-test-ykpjdoi5gccpsdv.<account-subdomain>.workers.dev

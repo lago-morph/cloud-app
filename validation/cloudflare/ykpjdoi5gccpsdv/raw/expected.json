@@ -1,0 +1,81 @@
+[
+  {
+    "id": "COMPL-AC-008",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-010",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-012",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "E2E-015",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "MAIL-AC-007",
+    "run": true,
+    "parts": [
+      ""
+    ],
+    "notRunParts": []
+  },
+  {
+    "id": "PROV-AC-003",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "PROV-AC-004",
+    "run": true,
+    "parts": [
+      ""
+    ],
+    "notRunParts": []
+  },
+  {
+    "id": "PROV-AC-006",
+    "run": false,
+    "parts": [
+      ""
+    ],
+    "notRunParts": [],
+    "notRun": "not selected for this run (--only)"
+  },
+  {
+    "id": "SKILL-AC-006",
+    "run": false,
+    "notRun": "password login provider not implemented yet (DEC-0509)",
+    "parts": [
+      ""
+    ],
+    "notRunParts": []
+  }
+]

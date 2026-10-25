@@ -1,0 +1,72 @@
+{
+  "runId": "ykpjdoi5gccpsdv",
+  "commit": "dc00996411a933083d80f6eb388cc4f38aace023",
+  "target": "cloudflare",
+  "stage": "test-ykpjdoi5gccpsdv",
+  "command": "npm run compliance -- --target cloudflare --milestone --only PROV-AC-004,MAIL-AC-007",
+  "startedAt": "2026-10-25T09:27:30.565Z",
+  "finishedAt": "2026-10-25T09:33:03.090Z",
+  "exitStatus": 1,
+  "results": [
+    {
+      "id": "COMPL-AC-008",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-010",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-012",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-015",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "MAIL-AC-007",
+      "status": "passed"
+    },
+    {
+      "id": "PROV-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "PROV-AC-004",
+      "status": "blocked",
+      "detail": "PROV-AC-004 setup-account (cloud, milestone, no D1) > [PROV-AC-004] deploying on an account without setup-account fails with a clear message and creates nothing: needs a Cloudflare account on which setup-account has never run (set COMPLIANCE_CLOUDFLARE_FRESH_ACCOUNT=1 on such an account); this test never deletes the shared log bucket or state home, which hold other stages' state and retained log entries; PROV-AC-004 setup-account (cloud, milestone, no D1) > [PROV-AC-004] with a token lacking one email permission of DEC-0515, setup-account and a production stage's deploy name that permission and change nothing: needs a Cloudflare API token lacking exactly one email permission of DEC-0515 in COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_EMAIL_PERMISSION"
+    },
+    {
+      "id": "PROV-AC-006",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SKILL-AC-006",
+      "status": "not-run",
+      "detail": "password login provider not implemented yet (DEC-0509)"
+    }
+  ],
+  "versions": {
+    "node": "v22.22.0",
+    "@lago-morph/prototype-framework": "0.1.0",
+    "vitest": "5.0.5",
+    "@playwright/test": "1.64.1",
+    "wrangler": "4.149.0",
+    "typescript": "6.0.3",
+    "drizzle-orm": "0.45.4",
+    "drizzle-kit": "0.31.11",
+    "hono": "4.13.13",
+    "zod": "4.6.7",
+    "@electric-sql/pglite": "0.5.8",
+    "esbuild": "0.28.2",
+    "sst": "4.17.2"
+  },
+  "leftovers": []
+}
