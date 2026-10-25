@@ -7,6 +7,12 @@
  *
  * Tokens are told apart by their value, which is held in memory only (as its SHA-256 digest) and
  * never printed.
+ *
+ * The state is per process, by design: each Vitest worker (`pool: "forks"`), each Playwright
+ * worker and the driver process keeps its own. A token refused in one worker is still tried once
+ * by another, which then stops too; nothing is shared through files or the environment, so no
+ * token value (or digest) leaves the process, and a token the operator replaces between runs is
+ * not blocked by an earlier run.
  */
 import { createHash } from "node:crypto";
 
@@ -18,6 +24,8 @@ export class InvalidTokenError extends Error {
   constructor(
     readonly purpose: string,
     what: string,
+    /** The output of the CLI call that showed the 401, when one did (Cloudflare error texts hold no credential). */
+    readonly output?: string,
   ) {
     super(`${what}: the Cloudflare API answered HTTP 401 to ${purpose}; no further Cloudflare call is made with it in this process`);
     this.name = "InvalidTokenError";
@@ -56,9 +64,39 @@ export function checkTokenStatus(token: string | undefined, purpose: string, sta
   throw new InvalidTokenError(purpose, what);
 }
 
-/** True when a framework CLI call's output shows a Cloudflare API answer of HTTP 401 (`describeFailure`'s `HTTP 401:`). */
+/**
+ * Cloudflare API error codes of an authentication failure: 10000 "Authentication error", 10001
+ * "Unable to authenticate request", 9106 missing credentials, 9109 "Invalid access token", 1000
+ * "Invalid API Token" (tokens/verify).
+ */
+const AUTH_ERROR_CODES = "10000|10001|9106|9109|1000";
+
+/**
+ * True when a framework CLI call's output shows that the Cloudflare API refused its token: the
+ * CLI's API failure form (`provision/cloudflare/api.ts` `describeFailure`, and the D1 client's,
+ * `HTTP 401: <message> (code <n>)`) with an authentication error code, or the CLI's `tokens/verify`
+ * failure (`CLOUDFLARE_API_TOKEN is not usable: HTTP 401`, `provision/cloudflare/target.ts`). Not
+ * the health check's `health check failed: HTTP 401: …` (`provision/cloudflare/health.ts`): that
+ * 401 is the app's own answer, and says nothing about the token.
+ */
 export function outputShowsRefusedToken(output: string): boolean {
-  return /\bHTTP 401\b/.test(output);
+  if (/CLOUDFLARE_API_TOKEN is not usable: HTTP 401\b/.test(output)) return true;
+  return new RegExp(`(?<!health check failed: )\\bHTTP 401: [^\\n]*\\(code (?:${AUTH_ERROR_CODES})\\)`).test(output);
+}
+
+/**
+ * One framework CLI call with `token`: not run when the token was refused earlier in this
+ * process; when its output shows the Cloudflare API refused the token, the token is recorded as
+ * refused and the call rejects with `InvalidTokenError` (naming `purpose`, carrying the output).
+ */
+export async function guardCliCall<R extends { readonly status: number | null; readonly output: string }>(token: string | undefined, purpose: string, what: string, run: () => Promise<R>): Promise<R> {
+  assertTokenUsable(token, what);
+  const result = await run();
+  if (result.status !== 0 && token !== undefined && token !== "" && outputShowsRefusedToken(result.output)) {
+    markTokenRefused(token, purpose);
+    throw new InvalidTokenError(purpose, what, result.output);
+  }
+  return result;
 }
 
 const CLOUDFLARE_API_HOST = "api.cloudflare.com";

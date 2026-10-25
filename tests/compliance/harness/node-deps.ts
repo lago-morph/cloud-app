@@ -16,7 +16,7 @@ import { defaultBudgetDeps, rateLimitIn, withSignUpSlot, type BudgetDeps } from 
 import type { EvidenceRecord } from "../../../packages/framework/src/evidence/public.js";
 import { waitFor } from "./wait.js";
 import { cloudflareAccountOps, fetchCfCall, type CloudAccountOps } from "./test-tokens.js";
-import { assertTokenUsable, guardFetch, InvalidTokenError, MAIN_TOKEN_PURPOSE, markTokenRefused, outputShowsRefusedToken } from "./token-guard.js";
+import { guardCliCall, guardFetch, MAIN_TOKEN_PURPOSE } from "./token-guard.js";
 import type { CfCall } from "./d1-budget.js";
 import { classifyCriterionStages, criterionStagesIn, isCriterionProductionStage, markerKey, MARKER_PREFIX, stageOfMarkerKey } from "./criterion-stages.js";
 import { TEST_TOKEN_LIFETIME_MS } from "./test-tokens.js";
@@ -221,23 +221,16 @@ export function cliStageOps(
    * HTTP 401, the token is invalid: that call rejects with `InvalidTokenError` (naming the token's
    * purpose, never its value), and no further CLI call or harness request is made with it.
    */
-  const cli = async (args: string[], input?: string): Promise<{ status: number; output: string }> => {
-    const token = process.env.CLOUDFLARE_API_TOKEN;
-    const what = `prototype-framework ${args.slice(0, 1).join(" ")}`;
-    assertTokenUsable(token, what);
-    const result = await runner({
-      command: "npx",
-      args: ["prototype-framework", ...args],
-      cwd: join(repoRoot, "apps", "reference"),
-      env: { ...(process.env as Record<string, string>), NODE_USE_ENV_PROXY: "1" },
-      ...(input === undefined ? {} : { input, redact: [input] }),
-    });
-    if (result.status !== 0 && token !== undefined && token !== "" && outputShowsRefusedToken(result.output)) {
-      markTokenRefused(token, MAIN_TOKEN_PURPOSE);
-      throw new InvalidTokenError(MAIN_TOKEN_PURPOSE, what);
-    }
-    return result;
-  };
+  const cli = (args: string[], input?: string): Promise<{ status: number; output: string }> =>
+    guardCliCall(process.env.CLOUDFLARE_API_TOKEN, MAIN_TOKEN_PURPOSE, `prototype-framework ${args.slice(0, 1).join(" ")}`, () =>
+      runner({
+        command: "npx",
+        args: ["prototype-framework", ...args],
+        cwd: join(repoRoot, "apps", "reference"),
+        env: { ...(process.env as Record<string, string>), NODE_USE_ENV_PROXY: "1" },
+        ...(input === undefined ? {} : { input, redact: [input] }),
+      }),
+    );
   return {
     ...(fakes.length === 0 ? {} : { dryRun: fakes.join("; ") }),
     async deploy(stage) {

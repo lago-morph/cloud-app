@@ -45,6 +45,14 @@ import { idsFor, runnerSelection, scopeTests } from "./selection.js";
 import { d1Budget, describeBudget, RUN_PLAN_ENV, type D1Plan } from "./d1-budget.js";
 import { RESTRICTED_TOKENS, staleTestTokens, type CloudAccountOps, type CreatedToken } from "./test-tokens.js";
 
+/** The start of every record command the driver writes (`npm run compliance -- <argv>`). */
+const DRIVER_COMMAND_PREFIX = "npm run compliance --";
+
+/** True when an evidence record's command is one the compliance driver writes (not, for example, `check-login`'s). */
+export function isDriverCommand(command: string | undefined): boolean {
+  return command !== undefined && (command === DRIVER_COMMAND_PREFIX || command.startsWith(`${DRIVER_COMMAND_PREFIX} `));
+}
+
 /** How evidence and the driver's output show a self-created test token's value (DEC-0531). */
 export const TEST_TOKEN_REPLACEMENT = "<test-token>";
 
@@ -505,7 +513,7 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
     commit,
     target: args.target,
     ...(stage === undefined ? {} : { stage }),
-    command: `npm run compliance -- ${argv.join(" ")}`.trimEnd(),
+    command: `${DRIVER_COMMAND_PREFIX} ${argv.join(" ")}`.trimEnd(),
     startedAt,
     finishedAt: deps.now().toISOString(),
     exitStatus,

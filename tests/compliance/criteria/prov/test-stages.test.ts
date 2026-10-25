@@ -36,7 +36,7 @@ import { describe, expect, it } from "vitest";
 import { newRunId, testStageName, type EvidencePaths, type WriteEvidenceInput } from "../../../../packages/framework/src/evidence/public.js";
 import { newTestStage, tag, target } from "../../harness/index.js";
 import { parseArgs } from "../../harness/args.js";
-import { runCompliance, type CloudStageOps, type DriverDeps } from "../../harness/driver.js";
+import { isDriverCommand, runCompliance, type CloudStageOps, type DriverDeps } from "../../harness/driver.js";
 import { nodeDeps, pendingStageStore } from "../../harness/node-deps.js";
 import { accountId, cfApi, cfOk } from "../_cloud/api.js";
 import { listStageResources, stageBucketName } from "../_cloud/stage-resources.js";
@@ -46,11 +46,6 @@ import { withCloudStage } from "./support/stage.js";
 function stageForm(): RegExp {
   const length = parameterNumber("PAR-291") - "test-".length;
   return new RegExp(`^test-[a-z0-9]{${String(length)}}$`);
-}
-
-/** True when an evidence record's command shows that the compliance driver wrote it. */
-function isDriverRecord(command: string | undefined): boolean {
-  return (command ?? "").startsWith("npm run compliance ");
 }
 
 interface DriverRun {
@@ -108,15 +103,17 @@ if (!isLocal()) {
       } catch {
         // no committed Cloudflare evidence yet
       }
-      const stages = files
-        .map((f) => (JSON.parse(readFileSync(join(dir, f), "utf8")) as { stage?: string; command?: string }))
-        // Only records the compliance driver wrote (its command is `npm run compliance -- …`) are cloud
-        // runs that may have created a test stage, and a run given --base-url created none (COMPL-AC-004).
-        // Other records, such as `check-login` on `prodcheck` (PWD-AC-009, COMPL-AC-006), are not test
-        // stages: COMPL-REQ-004 exempts `prodcheck`.
-        .filter((r) => isDriverRecord(r.command) && !(r.command ?? "").includes("--base-url"))
-        .map((r) => r.stage)
-        .filter((s): s is string => s !== undefined);
+      const records = files.map((f) => ({ file: f, ...(JSON.parse(readFileSync(join(dir, f), "utf8")) as { stage?: string; command?: string }) }));
+      // Only records the compliance driver wrote (`isDriverCommand`, the form driver.ts writes and its
+      // unit test pins) are cloud runs that may have created a test stage, and a run given --base-url
+      // created none (COMPL-AC-004). Other records, such as `check-login` on `prodcheck` (PWD-AC-009,
+      // COMPL-AC-006), are not test stages: COMPL-REQ-004 exempts `prodcheck`.
+      const driverRecords = records.filter((r) => isDriverCommand(r.command));
+      // Not vacuous: when Cloudflare evidence is committed, the driver's records are among it.
+      if (records.length > 0) expect(driverRecords.map((r) => r.file), `driver records among ${records.map((r) => `${r.file} (${r.command ?? "no command"})`).join(", ")}`).not.toEqual([]);
+      const stageRuns = driverRecords.filter((r) => !(r.command ?? "").includes("--base-url"));
+      for (const r of stageRuns) expect(r.stage, `${r.file}: a cloud driver run without --base-url records its run stage`).toBeDefined();
+      const stages = stageRuns.map((r) => r.stage).filter((s): s is string => s !== undefined);
       for (const s of stages) expect(s, "a recorded run's stage").toMatch(form);
       expect(new Set(stages).size, "recorded runs' stages are distinct").toBe(stages.length);
     });

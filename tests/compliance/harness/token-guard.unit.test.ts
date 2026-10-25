@@ -5,8 +5,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cfApi } from "../criteria/_cloud/api.js";
 import { cliStageOps } from "./node-deps.js";
-import { fetchCfCall } from "./test-tokens.js";
-import { guardFetch, InvalidTokenError, isRefusedToken, MAIN_TOKEN_PURPOSE, outputShowsRefusedToken, resetRefusedTokens } from "./token-guard.js";
+import { fetchCfCall, NO_R2_TOKEN_PERMISSION_ENV, purposeOfToken } from "./test-tokens.js";
+import { guardCliCall, guardFetch, InvalidTokenError, isRefusedToken, MAIN_TOKEN_PURPOSE, outputShowsRefusedToken, resetRefusedTokens } from "./token-guard.js";
 
 const FAKE = "fake-main-token-not-a-credential";
 const OTHER = "fake-other-token-not-a-credential";
@@ -85,9 +85,47 @@ describe("a Cloudflare API token refused with HTTP 401", () => {
     expect(ran).toEqual(["remove"]);
   });
 
-  it("outputShowsRefusedToken reads the framework's HTTP 401 form only", () => {
-    expect(outputShowsRefusedToken("failed: HTTP 401: Authentication error (code 10000)")).toBe(true);
-    expect(outputShowsRefusedToken("failed: HTTP 403: forbidden")).toBe(false);
-    expect(outputShowsRefusedToken("HTTP 4010")).toBe(false);
+  it("outputShowsRefusedToken reads only the CLI's Cloudflare API authentication failures, not an app's 401", () => {
+    // provision/cloudflare/api.ts describeFailure: `HTTP <status>: <message> (code <n>)`; target.ts: the tokens/verify failure.
+    expect(outputShowsRefusedToken("listing Worker scripts failed: HTTP 401: Authentication error (code 10000)")).toBe(true);
+    expect(outputShowsRefusedToken("reading the D1 databases was refused: HTTP 401: Invalid access token (code 9109)")).toBe(true);
+    expect(outputShowsRefusedToken("CLOUDFLARE_API_TOKEN is not usable: HTTP 401: Invalid API Token (code 1000)")).toBe(true);
+    // provision/cloudflare/health.ts: the app itself answered 401; the token is fine.
+    expect(outputShowsRefusedToken('health check failed: HTTP 401: {"error":{"code":"AUTH.UNAUTHENTICATED"}}')).toBe(false);
+    expect(outputShowsRefusedToken("health check failed: HTTP 401: Authentication error (code 10000)")).toBe(false);
+    expect(outputShowsRefusedToken("failed: HTTP 403: Authentication error (code 10000)")).toBe(false);
+    expect(outputShowsRefusedToken("failed: HTTP 401: Unauthorized (code 7003)")).toBe(false);
+  });
+
+  it("framework CLI calls: a deploy whose health check got 401 from the app does not stop the token", async () => {
+    vi.stubEnv("CLOUDFLARE_API_TOKEN", FAKE);
+    const ran: string[] = [];
+    const ops = cliStageOps("/repo-not-read", "cloudflare", {
+      run: (c) => (ran.push(c.args[1] ?? ""), Promise.resolve({ status: 1, output: "deploy: step 9: health check failed: HTTP 401: unauthorized\n" })),
+      env: { CLOUDFLARE_ACCOUNT_ID: "a1" },
+    });
+    await expect(ops.deploy("test-abcdefghij12345")).rejects.not.toBeInstanceOf(InvalidTokenError);
+    expect(isRefusedToken(FAKE)).toBe(false);
+    await expect(ops.remove("test-abcdefghij12345")).rejects.toThrow("remove --target cloudflare");
+    expect(ran).toEqual(["deploy", "remove"]);
+  });
+
+  it("guardCliCall (withCloudStage's CLI calls): after an API 401 the token's next call is not run, and the error names the token's purpose and keeps the output", async () => {
+    const env = { CLOUDFLARE_API_TOKEN: FAKE, [NO_R2_TOKEN_PERMISSION_ENV]: OTHER };
+    const purpose = purposeOfToken(OTHER, env);
+    expect(purpose).toContain("PROV-AC-002");
+    expect(purpose).toContain(NO_R2_TOKEN_PERMISSION_ENV);
+    expect(purposeOfToken(FAKE, env)).toBe(MAIN_TOKEN_PURPOSE);
+    let runs = 0;
+    const refused = (): Promise<{ status: number; output: string }> => (runs++, Promise.resolve({ status: 1, output: "deploy: HTTP 401: Authentication error (code 10000)\n" }));
+    const first = await guardCliCall(OTHER, purpose, "prototype-framework deploy", refused).catch((e: unknown) => e);
+    expect(first).toBeInstanceOf(InvalidTokenError);
+    expect((first as InvalidTokenError).message).toContain("PROV-AC-002");
+    expect((first as InvalidTokenError).message).not.toContain(OTHER);
+    expect((first as InvalidTokenError).output).toContain("HTTP 401: Authentication error");
+    await expect(guardCliCall(OTHER, purpose, "prototype-framework remove", refused)).rejects.toThrow("PROV-AC-002");
+    expect(runs, "CLI runs with the refused token").toBe(1);
+    expect(isRefusedToken(FAKE), "the main token is not stopped by another token's 401").toBe(false);
+    expect((await guardCliCall(FAKE, MAIN_TOKEN_PURPOSE, "x", () => Promise.resolve({ status: 0, output: "ok" }))).output).toBe("ok");
   });
 });

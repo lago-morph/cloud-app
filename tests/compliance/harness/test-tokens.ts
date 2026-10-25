@@ -187,6 +187,16 @@ export async function deleteToken(call: CfCall, accountId: string, id: string): 
   throw failure(`deleting API token ${id}`, r);
 }
 
+/**
+ * What a Cloudflare API token is for, for messages (never its value): the main token, a
+ * restricted test token by its criterion and variable, or else a token a test gave a CLI call.
+ */
+export function purposeOfToken(token: string | undefined, env: Readonly<Record<string, string | undefined>> = process.env): string {
+  if (token !== undefined && token !== "" && token === env.CLOUDFLARE_API_TOKEN) return MAIN_TOKEN_PURPOSE;
+  const spec = token === undefined || token === "" ? undefined : RESTRICTED_TOKENS.find((s) => env[s.env] === token);
+  return spec === undefined ? "a Cloudflare API token a test gave this CLI call (CLOUDFLARE_API_TOKEN)" : `the ${spec.criterion} test token (${spec.env}, lacks ${spec.omitted})`;
+}
+
 /** What the driver does on a cloud account besides the stage operations. */
 export interface CloudAccountOps {
   /** The account's Workers plan and its D1 budget (one request). */

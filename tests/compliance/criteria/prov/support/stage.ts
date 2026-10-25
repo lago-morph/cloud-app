@@ -22,6 +22,8 @@ import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createClient, newTestStage, target, type ComplianceClient } from "../../../harness/index.js";
+import { purposeOfToken } from "../../../harness/test-tokens.js";
+import { guardCliCall, InvalidTokenError } from "../../../harness/token-guard.js";
 import { requireCloudD1, requireDatabaseRoom } from "../../_cloud/d1.js";
 import { acquireLock, requireBuiltFramework, scratchCopy, type ScratchApp } from "../../core/support/processes.js";
 import { BIN, REFERENCE_DIR } from "../../core/support/repo.js";
@@ -83,6 +85,29 @@ export function runCli(args: readonly string[], options: RunOptions): Promise<Co
     if (options.stdin !== undefined) child.stdin.write(options.stdin);
     child.stdin.end();
   });
+}
+
+/** The Cloudflare API token a CLI call with these options sends: the override, else the parent's, unless unset. */
+export function cliToken(options: Pick<RunOptions, "env" | "unset">, parent: Readonly<Record<string, string | undefined>> = process.env): string | undefined {
+  if ((options.unset ?? []).includes("CLOUDFLARE_API_TOKEN")) return undefined;
+  return options.env?.CLOUDFLARE_API_TOKEN ?? parent.CLOUDFLARE_API_TOKEN;
+}
+
+/**
+ * `runCli` through the token guard (harness/token-guard.ts): once the Cloudflare API refused the
+ * call's token with 401 in this process (a deleted PROV-AC-002 token, say), no further call is
+ * run with it, also not the cleanup's `remove`. Such a call answers status 1 with an output that
+ * names the token's purpose (never its value), so the caller reports it like any failed command.
+ */
+export async function guardedCli(args: readonly string[], options: RunOptions, run: (args: readonly string[], options: RunOptions) => Promise<CommandResult> = runCli): Promise<CommandResult> {
+  const token = cliToken(options);
+  const command = `prototype-framework ${args.join(" ")}`;
+  try {
+    return await guardCliCall(token, purposeOfToken(token), `prototype-framework ${args[0] ?? ""}`.trimEnd(), () => run(args, options));
+  } catch (error) {
+    if (!(error instanceof InvalidTokenError)) throw error;
+    return { command, status: 1, output: `${error.output ?? ""}${error.output === undefined || error.output.endsWith("\n") ? "" : "\n"}[d-t1] ${error.message}\n` };
+  }
 }
 
 /** The stage's public origin in `deploy` output (PROV §2 "Publishing the result"). */
@@ -255,7 +280,8 @@ export async function withCloudStage<T>(options: StageOptions, body: (stage: Clo
     const outputs: CommandResult[] = [];
     let origin: string | undefined;
     const cli = async (args: readonly string[], o: Omit<RunOptions, "cwd"> = {}): Promise<CommandResult> => {
-      const r = await runCli(args, { ...o, cwd: dir, env: { ...(options.env ?? {}), ...(o.env ?? {}) } });
+      const env = { ...(options.env ?? {}), ...(o.env ?? {}) };
+      const r = await guardedCli(args, { ...o, cwd: dir, env });
       outputs.push(r);
       return r;
     };

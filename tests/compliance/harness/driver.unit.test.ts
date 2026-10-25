@@ -7,7 +7,7 @@ import { cloudflareAccountOps, NO_EMAIL_PERMISSION_ENV, NO_R2_TOKEN_PERMISSION_E
 import { validateEvidence, writeEvidence, type EvidenceRecord, type GitState, type WriteEvidenceInput } from "../../../packages/framework/src/evidence/public.js";
 import { parseArgs } from "./args.js";
 import { NOT_SELECTED, parseWhere, type CatalogueEntry } from "./catalogue.js";
-import { runCompliance, SecretsNotSetError, SKIP_NOTES_REPORTER, type CloudStageOps, type DriverDeps, type RunCall } from "./driver.js";
+import { isDriverCommand, runCompliance, SecretsNotSetError, SKIP_NOTES_REPORTER, type CloudStageOps, type DriverDeps, type RunCall } from "./driver.js";
 import type { NotRunRule } from "./expected.js";
 import { buildApp } from "../../../packages/framework/src/build/public.js";
 import { readDeployedOrigin, recordDeployOutput } from "../../../packages/framework/src/cli/commands/smoke.js";
@@ -120,6 +120,10 @@ describe("[COMPL-AC-003] compliance driver records", () => {
     expect(vitest?.env.NODE_USE_ENV_PROXY).toBeUndefined();
     const record = recordOf(h);
     expect(record).toMatchObject({ runId: "abcdefghij12345", commit: "c0ffee", target: "local", command: "npm run compliance -- --target local", exitStatus: 1 });
+    // COMPL-AC-004's naming check selects the driver's records by this form (test-stages.test.ts).
+    expect(isDriverCommand(record.command), "the driver's record is recognised as the driver's").toBe(true);
+    expect(isDriverCommand("check-login --target cloudflare --stage prodcheck")).toBe(false);
+    expect(isDriverCommand(undefined)).toBe(false);
     expect(record.stage).toBeUndefined();
     expect(record.results).toEqual([
       { id: "CLI-AC-001", status: "not-run", detail: "no test tagged [CLI-AC-001] ran on local" },
