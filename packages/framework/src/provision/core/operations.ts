@@ -128,6 +128,11 @@ export interface TargetOperations {
    */
   setUpEmail(emailDomain: string): Promise<readonly string[]>;
   /**
+   * `setup-account`, before anything changes: the email setup's missing prerequisites by name
+   * (the domain's zone, the credentials' email permissions; DEC-0515). Changes nothing.
+   */
+  emailSetupProblems(emailDomain: string): Promise<readonly string[]>;
+  /**
    * Deploy step 1 of a production stage: the email prerequisites that are missing (the domain's
    * sending entry verified, the credentials' email permissions; DEC-0515), by name. Changes nothing.
    */

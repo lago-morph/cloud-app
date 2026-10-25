@@ -25,6 +25,51 @@ export interface FakeWorker {
   enabled: boolean;
   previews: boolean;
   bindings: { type: string; name: string }[];
+  /** Tags of a Worker uploaded through the scripts API (the mail sink). */
+  tags?: string[];
+  /** The uploaded modules by part name (the mail sink). */
+  modules?: Map<string, string>;
+}
+
+/** The fake's own token: its ID and its policies (`GET /accounts/<a>/tokens/<id>`). */
+export const SELF_TOKEN_ID = "selftoken";
+
+/** Policies granting every permission the framework needs, in the live token's shape (2026-10-25). */
+export const FULL_POLICIES = [
+  {
+    id: "p1",
+    effect: "allow",
+    resources: { [`com.cloudflare.api.account.${ACCOUNT}`]: "*" },
+    permission_groups: ["Email Sending Write", "Email Routing Addresses Write", "Workers Scripts Write", "Workers R2 Storage Write", "Account API Tokens Write", "D1 Write"].map((name, i) => ({ id: `g${i}`, name })),
+  },
+  {
+    id: "p2",
+    effect: "allow",
+    resources: { [`com.cloudflare.api.account.${ACCOUNT}`]: { "com.cloudflare.api.account.zone.*": "*" } },
+    permission_groups: ["Email Routing Rules Write", "DNS Write", "Zone Settings Write", "Zone Read"].map((name, i) => ({ id: `z${i}`, name })),
+  },
+];
+
+export interface FakeRoutingRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  matchers: { type: string; field?: string; value?: string }[];
+  actions: { type: string; value?: string[] }[];
+}
+
+/** One zone's email state. */
+export interface FakeZone {
+  readonly id: string;
+  readonly name: string;
+  status: string;
+  sending: { id: string; name: string; enabled: boolean; pollsUntilEnabled: number }[];
+  /** Subdomains whose Email Routing MX/SPF records exist. */
+  routedSubdomains: Set<string>;
+  /** GETs of a subdomain's routing records after enabling, before the records show (propagation). */
+  routingPollsLeft: number;
+  supportSubaddress: boolean;
+  rules: FakeRoutingRule[];
 }
 
 export class FakeCloud {
@@ -34,6 +79,18 @@ export class FakeCloud {
   readonly cors = new Map<string, unknown>();
   readonly tokens = new Map<string, { name: string; resources: unknown }>();
   readonly workers = new Map<string, FakeWorker>();
+  /** Zones by name: by default `example.test`, `one.example` and `two.example`, active. */
+  readonly zones = new Map<string, FakeZone>();
+  /** Lifecycle rules per bucket; a new bucket gets R2's default multipart-abort rule. */
+  readonly lifecycles = new Map<string, unknown[]>();
+  /** The policies `GET /accounts/<a>/tokens/<SELF_TOKEN_ID>` answers. */
+  tokenPolicies: unknown[] = FULL_POLICIES;
+  /** Polls a newly onboarded sending entry needs before it is enabled. */
+  sendingPolls = 0;
+  /** GETs of a newly routed subdomain's records before they show. */
+  routingPolls = 0;
+  /** Uploads whose parts `settleUploads` reads (FormData parts are Blobs, read asynchronously). */
+  readonly pendingUploads: { name: string; form: FormData }[] = [];
   subdomain: string | undefined = "example";
   readonly requests: string[] = [];
   readonly sstRuns: string[] = [];
@@ -45,20 +102,45 @@ export class FakeCloud {
   /** SST's state per `<app>/<stage>`: the logical names of the components it holds. */
   readonly sstState = new Map<string, Set<string>>();
   private nextToken = 1;
+  private nextZoneThing = 1;
+
+  constructor() {
+    for (const name of ["example.test", "one.example", "two.example"]) this.addZone(name);
+  }
+
+  /** Adds an active zone with the live account's initial email state (routing off, a disabled catch-all drop rule). */
+  addZone(name: string): FakeZone {
+    const zone: FakeZone = {
+      id: `zone${this.nextZoneThing++}`,
+      name,
+      status: "active",
+      sending: [],
+      routedSubdomains: new Set(),
+      routingPollsLeft: 0,
+      supportSubaddress: false,
+      rules: [{ id: `rule${this.nextZoneThing++}`, name: "", enabled: false, matchers: [{ type: "all" }], actions: [{ type: "drop" }] }],
+    };
+    this.zones.set(name, zone);
+    return zone;
+  }
   private nextUpdate = 1;
 
   readonly api: CloudflareApi = async (method, path, body) => {
     this.requests.push(`${method} ${path}`);
     const o = this.override.get(`${method} ${path}`);
     if (o) return typeof o === "function" ? o() : o;
-    return this.handle(method, path, body);
+    const reply = this.handle(method, path, body);
+    if (this.pendingUploads.length > 0) await this.settleUploads();
+    return reply;
   };
 
   private handle(method: string, path: string, body: unknown): ApiReply {
     const url = new URL(`https://api${path}`);
     const p = url.pathname;
     const b = body as Record<string, unknown>;
-    if (p === `${A}/tokens/verify`) return ok({ status: "active" });
+    if (p === `${A}/tokens/verify`) return ok({ id: SELF_TOKEN_ID, status: "active" });
+    if (p === `${A}/tokens/${SELF_TOKEN_ID}` && method === "GET") return ok({ id: SELF_TOKEN_ID, name: "admin", status: "active", policies: this.tokenPolicies });
+    if (p.startsWith("/zones")) return this.handleZone(method, url, body);
     if (p === `${A}/tokens/permission_groups`) return ok([{ id: "2efd5506f9c8494dacb1fa10a3e7d5b6", name: "Workers R2 Storage Bucket Item Write" }]);
     if (p === `${A}/tokens` && method === "GET") return ok([...this.tokens].map(([id, t]) => ({ id, name: t.name })), { result_info: { page: 1, total_pages: 1 } });
     if (p === `${A}/tokens` && method === "POST") {
@@ -77,11 +159,12 @@ export class FakeCloud {
       return this.subdomain === undefined ? err(404, 10007, "no subdomain") : ok({ subdomain: this.subdomain });
     }
     m = /^\/accounts\/[^/]+\/workers\/scripts\/([^/]+)(\/.*)?$/.exec(p);
+    if (m && m[2] === undefined && method === "PUT") return this.upload(m[1]!, body);
     if (m) {
       const w = this.workers.get(m[1]!);
       const rest = m[2] ?? "";
       if (!w) return err(404, 10007, "This Worker does not exist on your account.");
-      if (rest === "/settings") return ok({ bindings: w.bindings });
+      if (rest === "/settings") return ok({ bindings: w.bindings, ...(w.tags === undefined ? {} : { tags: w.tags }) });
       if (rest === "" && method === "DELETE") {
         this.workers.delete(m[1]!);
         return ok(null);
@@ -102,6 +185,7 @@ export class FakeCloud {
     if (p === `${A}/r2/buckets` && method === "POST") {
       if (this.buckets.has(String(b.name))) return err(409, 10004, "The bucket you tried to create already exists, and you own it.");
       this.buckets.set(String(b.name), new Set());
+      this.lifecycles.set(String(b.name), [{ id: "Default Multipart Abort Rule", enabled: true, conditions: { prefix: "" }, abortMultipartUploadsTransition: { condition: { type: "Age", maxAge: 604800 } } }]);
       return ok({ name: b.name });
     }
     m = /^\/accounts\/[^/]+\/r2\/buckets\/([^/]+)(\/.*)?$/.exec(p);
@@ -116,6 +200,15 @@ export class FakeCloud {
         this.buckets.delete(name);
         return ok(null);
       }
+      if (rest === "/lifecycle" && method === "GET") return ok({ rules: this.lifecycles.get(name) ?? [] });
+      if (rest === "/lifecycle" && method === "PUT") {
+        this.lifecycles.set(name, JSON.parse(JSON.stringify((body as { rules: unknown[] }).rules)) as unknown[]);
+        return ok(null);
+      }
+      if (rest === "/objects" && method === "GET" && url.searchParams.has("prefix")) {
+        const prefix = url.searchParams.get("prefix") ?? "";
+        return ok([...objects].filter((k) => k.startsWith(prefix)).sort().map((key) => ({ key })), { result_info: { is_truncated: false } });
+      }
       if (rest === "/cors" && method === "PUT") {
         this.cors.set(name, body);
         return ok(null);
@@ -127,7 +220,7 @@ export class FakeCloud {
         this.objectBodies.delete(`${name}/${key}`);
         return ok({});
       }
-      // An object's own bytes (JSON here); the R2 object endpoints answer them unwrapped.
+      // An object's own bytes (JSON, or text such as a raw message); the R2 object endpoints answer them unwrapped.
       if (rest.startsWith("/objects/") && method === "GET") {
         const key = decodeURIComponent(rest.slice("/objects/".length));
         if (!objects.has(key)) return err(404, 10007, "The specified key does not exist.");
@@ -141,6 +234,91 @@ export class FakeCloud {
       }
     }
     throw new Error(`fake Cloudflare: unexpected request ${method} ${path}`);
+  }
+
+  /** `PUT …/workers/scripts/<name>` with a multipart body: the metadata part and the modules. */
+  private upload(name: string, body: unknown): ApiReply {
+    if (!(body instanceof FormData)) return err(400, 10021, "expected multipart/form-data");
+    if (body.get("metadata") === null) return err(400, 10021, "no metadata part");
+    this.pendingUploads.push({ name, form: body });
+    const existing = this.workers.get(name);
+    this.workers.set(name, { secrets: existing?.secrets ?? new Map(), enabled: existing?.enabled ?? true, previews: false, bindings: [], tags: [] });
+    return ok({ id: name });
+  }
+
+  /** Reads every pending upload's metadata and modules into its fake Worker. */
+  async settleUploads(): Promise<void> {
+    for (const { name, form } of this.pendingUploads.splice(0)) {
+      const w = this.workers.get(name)!;
+      const meta = JSON.parse(await (form.get("metadata") as Blob).text()) as { bindings: { type: string; name: string }[]; tags?: string[] };
+      w.bindings = meta.bindings;
+      w.tags = meta.tags ?? [];
+      w.modules = new Map();
+      for (const [key, value] of form.entries()) if (key !== "metadata" && value instanceof Blob) w.modules.set(key, await value.text());
+    }
+  }
+
+  private zoneById(id: string): FakeZone | undefined {
+    return [...this.zones.values()].find((z) => z.id === id);
+  }
+
+  private handleZone(method: string, url: URL, body: unknown): ApiReply {
+    const p = url.pathname;
+    const b = body as Record<string, unknown>;
+    if (p === "/zones" && method === "GET") {
+      const name = url.searchParams.get("name");
+      const zone = name === null ? undefined : this.zones.get(name);
+      return ok(zone ? [{ id: zone.id, name: zone.name, status: zone.status, account: { id: ACCOUNT } }] : [], { result_info: { page: 1, total_pages: 1 } });
+    }
+    const m = /^\/zones\/([^/]+)\/email\/(sending\/subdomains|routing)(\/.*)?$/.exec(p);
+    const zone = m ? this.zoneById(m[1]!) : undefined;
+    if (!m || !zone) return err(404, 1001, "zone not found");
+    const rest = m[3] ?? "";
+    if (m[2] === "sending/subdomains") {
+      const view = (e: FakeZone["sending"][number]) => ({ id: e.id, tag: e.id, name: e.name, enabled: e.enabled, return_path_domain: `cf-bounce.${e.name}` });
+      if (rest === "" && method === "GET") return ok(zone.sending.map(view));
+      if (rest === "" && method === "POST") {
+        if (zone.sending.some((e) => e.name === b.name)) return err(409, 10000, "already exists");
+        const e = { id: `send${this.nextZoneThing++}`, name: String(b.name), enabled: this.sendingPolls === 0, pollsUntilEnabled: this.sendingPolls };
+        zone.sending.push(e);
+        return ok(view(e));
+      }
+      const e = zone.sending.find((x) => rest === `/${x.id}`);
+      if (e && method === "GET") {
+        if (!e.enabled && --e.pollsUntilEnabled <= 0) e.enabled = true;
+        return ok(view(e));
+      }
+      return err(404, 1002, "not found");
+    }
+    if (rest === "" && method === "GET") return ok({ name: zone.name, enabled: false, support_subaddress: zone.supportSubaddress, status: "unconfigured" });
+    if (rest === "" && method === "PATCH") {
+      if (typeof b.support_subaddress === "boolean") zone.supportSubaddress = b.support_subaddress;
+      return ok({ name: zone.name, enabled: false, support_subaddress: zone.supportSubaddress });
+    }
+    if (rest === "/dns" && method === "GET") {
+      const sub = url.searchParams.get("subdomain") ?? zone.name;
+      const records = [1, 2, 3].map((n) => ({ name: sub, content: `route${n}.mx.cloudflare.net.`, type: "MX", priority: n === 1 ? 96 : 97, ttl: 1 }));
+      const present = zone.routedSubdomains.has(sub) && zone.routingPollsLeft-- <= 0;
+      return ok({ errors: present ? [] : records.map((r) => ({ code: "mx.missing", missing: r })), records });
+    }
+    if (rest === "/dns" && method === "POST") {
+      const sub = String(b.name ?? zone.name);
+      zone.routedSubdomains.add(sub);
+      zone.routingPollsLeft = this.routingPolls;
+      return ok({ name: sub, enabled: true, status: "ready" });
+    }
+    if (rest === "/rules" && method === "GET") return ok(zone.rules, { result_info: { page: 1, per_page: 50, count: zone.rules.length, total_count: zone.rules.length } });
+    if (rest === "/rules" && method === "POST") {
+      const rule = { id: `rule${this.nextZoneThing++}`, ...(JSON.parse(JSON.stringify(body)) as Omit<FakeRoutingRule, "id">) };
+      zone.rules.push(rule);
+      return ok(rule);
+    }
+    const r = zone.rules.find((x) => rest === `/rules/${x.id}`);
+    if (r && method === "PUT") {
+      Object.assign(r, JSON.parse(JSON.stringify(body)) as object);
+      return ok(r);
+    }
+    return err(404, 1003, "not found");
   }
 
   /**
@@ -224,6 +402,13 @@ export class FakeCloud {
     this.sstState.set(id, components);
     return { code: 0, output: "✓ Removed" };
   };
+
+  /** Stores an object as the sink Worker would (its bytes as text). */
+  putObject(bucket: string, key: string, text: string): void {
+    if (!this.buckets.has(bucket)) this.buckets.set(bucket, new Set());
+    this.buckets.get(bucket)!.add(key);
+    this.objectBodies.set(`${bucket}/${key}`, text);
+  }
 
   /** A deployed-looking account with its shared resources. */
   static withSharedResources(): FakeCloud {
