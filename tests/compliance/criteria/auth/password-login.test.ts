@@ -2,33 +2,27 @@
  * AUTH-AC-013 (docs/components/auth.md §4; AUTH-REQ-002, -003, -008, -010 as amended): "With
  * `createTestApp` using `passwordLoginProvider`: after sign-up, verification through `app.mail`
  * and sign-in, the user ID equals the specified derivation from provider id `password` and the
- * provider's subject, a second sign-in yields the same ID, and the ID's presence in
- * `framework.admins` or `framework.users` decides the level as with the stub provider. A failed
- * sign-in creates no session, answers as the internal HTTP contract specifies, and writes one log
- * entry naming a fixed reason."
+ * provider's subject, a second sign-in yields the same ID, and the account's role decides the
+ * level as in AUTH-AC-003. A failed sign-in creates no session, answers as the internal HTTP
+ * contract specifies, and writes one log entry naming a fixed reason."
  *
- * In-process: the ID's form and stability, `framework.users` and `framework.admins` without the
- * ID, and the failed sign-ins. The provider's subject (the credential library's user ID) is not
- * visible in-process, and each `createTestApp` call is a fresh database, so the exact derivation
- * and the admin-list clause with the account's own ID run under a scratch `dev` of the reference
- * app: its local D1 database gives the subject, and a rebuild with the ID in `framework.admins`
- * keeps the account.
+ * Here, in-process: the ID's form and stability, and the failed sign-ins. The exact derivation
+ * (the subject read from the test app's `__framework_auth_user`) and the role deciding the level
+ * (`grantRole`, `revokeRole`) run on both dialects in the levels suite (roles.suite.ts, through
+ * roles.d1.test.ts and roles.pglite.test.ts). There is no admin or users list any more
+ * (DEC-0521, DEC-0522), so no clause here edits configuration.
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { tag } from "../../harness/index.js";
-import { startDev, scratchCopy } from "../core/support/processes.js";
-import { errorResponseViolations, isLocal, REFERENCE_DIR } from "../core/support/repo.js";
+import { errorResponseViolations, isLocal } from "../core/support/repo.js";
 import {
   createVerifiedAccount,
-  deriveUserId,
   disposePasswordApps,
   expectAnswer,
   expectResult,
   FAILED_LOGIN_REASONS,
   hasLink,
-  httpBrowser,
   inProcessBrowser,
-  localSubjectOf,
   me,
   newAccount,
   openPasswordApp,
@@ -48,7 +42,7 @@ async function signedInId(b: AuthBrowser, a: Account, ip: string): Promise<strin
   b.clearCookies();
   expectAnswer(await signIn(b, a.email, a.password, { ip }), 200);
   const who = await me(b);
-  expect(who.level, "a validated sign-in without lists is level user").toBe("user");
+  expect(who.level, "a verified account with no role is level user").toBe("user");
   expect(who.id ?? "", "the user ID's form (auth.md §2)").toMatch(USER_ID);
   return who.id ?? "";
 }
@@ -74,26 +68,6 @@ if (isLocal()) {
       expect(second, "a second sign-in yields the same ID").toBe(first);
       expect(await signedInId(b, other, ip), "another account has another ID").not.toBe(first);
       expect(first.toLowerCase(), "the ID is opaque").not.toContain(a.email.split("@")[0]?.toLowerCase() ?? "");
-    });
-
-    it(tag("AUTH-AC-013", "framework.users without the ID makes the signed-in account anonymous with its ID as unlistedId; framework.admins without the ID leaves it user"), async () => {
-      const outsider = deriveUserId("password", "auth-ac-013-someone-else");
-      const listed = inProcessBrowser(await openPasswordApp({ config: { framework: { users: [outsider] } } }));
-      const a = newAccount("auth-ac-013-users");
-      const ip = testIp();
-      await createVerifiedAccount(listed, a, ip);
-      expectAnswer(await signIn(listed, a.email, a.password, { ip }), 200);
-      const who = await me(listed);
-      expect(who.level).toBe("anonymous");
-      expect(who.unlistedId ?? "", "/api/auth/me shows the login's ID as unlistedId").toMatch(USER_ID);
-      expectAnswer(await listed.get("/api/levels/user"), 401, "AUTH.UNAUTHENTICATED");
-
-      const admins = inProcessBrowser(await openPasswordApp({ config: { framework: { admins: [outsider] } } }));
-      const u = newAccount("auth-ac-013-admins");
-      await createVerifiedAccount(admins, u, ip);
-      expectAnswer(await signIn(admins, u.email, u.password, { ip }), 200);
-      expect((await me(admins)).level).toBe("user");
-      expectAnswer(await admins.get("/api/levels/admin"), 403, "AUTH.FORBIDDEN");
     });
 
     it(tag("AUTH-AC-013", "a failed sign-in creates no session, answers as the internal HTTP contract specifies, and writes one log entry naming a fixed reason"), async () => {
@@ -134,44 +108,5 @@ if (isLocal()) {
       expect(form.setCookies).toEqual([]);
       expect(await me(b)).toStrictEqual({ level: "anonymous" });
     });
-  });
-
-  describe("AUTH-AC-013 under a scratch dev (subject from the local D1 database)", () => {
-    it(
-      tag("AUTH-AC-013", "under dev: the ID equals the derivation from provider id password and the provider's subject, and with that ID in framework.admins the account is admin after the rebuild"),
-      async () => {
-        const copy = await scratchCopy(REFERENCE_DIR, "auth-ac-013");
-        try {
-          const a = newAccount("auth-ac-013-dev");
-          const ip = testIp();
-          let id = "";
-          const first = await startDev(copy.dir);
-          try {
-            const b = httpBrowser({ baseUrl: first.baseUrl, appDir: copy.dir });
-            await createVerifiedAccount(b, a, ip);
-            id = await signedInId(b, a, ip);
-            const subject = localSubjectOf(a.email, copy.dir);
-            expect(id.toUpperCase(), "u_ + base32(SHA-256(\"password:\" + subject))[0..26]").toBe(deriveUserId("password", subject).toUpperCase());
-          } finally {
-            await first.stop();
-          }
-
-          const values = JSON.parse(await copy.read("config/local.json")) as { framework?: Record<string, unknown> };
-          await copy.write("config/local.json", JSON.stringify({ ...values, framework: { ...(values.framework ?? {}), admins: [id] } }, null, 2));
-          const second = await startDev(copy.dir);
-          try {
-            const b = httpBrowser({ baseUrl: second.baseUrl, appDir: copy.dir });
-            expectAnswer(await signIn(b, a.email, a.password, { ip: testIp() }), 200);
-            expect(await me(b), "with the ID in framework.admins").toMatchObject({ level: "admin", id });
-            expectAnswer(await b.get("/api/levels/admin"), 200);
-          } finally {
-            await second.stop();
-          }
-        } finally {
-          await copy.remove();
-        }
-      },
-      900_000,
-    );
   });
 }

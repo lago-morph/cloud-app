@@ -1,21 +1,23 @@
 /**
- * AUTH-AC-006 (docs/components/auth.md AUTH-REQ-006, §2 "Session cookie", "Login"):
- * "On each target, session and transaction cookie attributes are as specified, a tampered
- * session cookie is treated as anonymous, and logout clears the cookie. Locally, expired and
- * future-dated session cookies are also treated as anonymous."
+ * AUTH-AC-006 (docs/components/auth.md AUTH-REQ-006, §2 "Session cookie", "Login", "Credential
+ * login"): "On each target, session and transaction cookie attributes are as specified, a
+ * tampered session cookie is treated as anonymous, and logout clears the cookie. Locally, expired
+ * and future-dated session cookies are also treated as anonymous."
  *
- * On the run's target (`dev`, or the test stage): the session cookie from both ways a test
- * stage logs in (`/api/auth/mock-login`, and `/api/auth/login`, which without a real provider
- * logs in as the mock's default user: DEC-0171), any transaction cookie the login flow sets,
- * tampering, and logout. A test stage has no real login provider, so its login flow sets no
- * transaction cookie; the transaction cookie is exercised with the stub login provider, which
- * exists only in-process (`createTestApp(…, { stubLoginProvider: true })`), so that part and the
- * "Locally, …" clauses (a moved clock) run in-process on the local target only.
+ * On the run's target (`dev`, or the test stage): the session cookie from both ways a test logs
+ * in there (`/api/auth/mock-login`, and a password sign-in through the provider's routes, with the
+ * mail read from `.mail/` or the test-mail route), tampering, and logout. `GET /api/auth/login`
+ * only redirects to the sign-in page (DEC-0516; DEC-0171's default-user login is retired), and a
+ * credential login uses no transaction cookie, so login sets neither cookie. The transaction
+ * cookie belongs to a redirect provider, which only the in-process stub is
+ * (`createTestApp(…, { stubLoginProvider: true })`), so that part and the "Locally, …" clauses
+ * (a moved clock) run in-process on the local target only.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { client, tag, target } from "../../harness/index.js";
 import { disposeReference, openReference } from "../files/in-process.js";
-import { clears, cookieProblems, isCloud, LOGIN_LIFETIME_S, loginCookieName, SESSION_LIFETIME_S, sessionCookieName, setCookies, tamper } from "./support.js";
+import { createVerifiedAccount, expectAnswer, httpBrowser, me, newAccount, signIn, testIp } from "../pwd/support.js";
+import { clears, cookieProblems, isCloud, LOGIN_LIFETIME_S, loginCookieName, parseSetCookie, SESSION_LIFETIME_S, sessionCookieName, setCookies, tamper } from "./support.js";
 
 describe("AUTH-AC-006 sessions on the target", () => {
   it(tag("AUTH-AC-006", "the session cookie set by mock-login has the specified name and attributes"), async () => {
@@ -28,20 +30,28 @@ describe("AUTH-AC-006 sessions on the target", () => {
     expect(cookieProblems(session, { name: sessionCookieName(), lifetimeS: SESSION_LIFETIME_S, cloud: isCloud() })).toStrictEqual([]);
   });
 
-  it(tag("AUTH-AC-006", "the login flow's session cookie, and any transaction cookie it sets, have the specified names and attributes"), async () => {
+  it(tag("AUTH-AC-006", "GET /api/auth/login sets neither a session nor a transaction cookie: it only redirects to the sign-in page"), async () => {
     const c = client();
-    const res = await c.get("/api/auth/login?returnTo=%2F");
-    c.expectStatus(res, [302, 303]);
-    const cookies = setCookies(res.headers);
-    const login = cookies.filter((k) => k.name === loginCookieName() && !clears(k));
-    for (const k of login) expect(cookieProblems(k, { name: loginCookieName(), lifetimeS: LOGIN_LIFETIME_S, cloud: isCloud() }), k.raw).toStrictEqual([]);
-    const sessions = cookies.filter((k) => k.name === sessionCookieName() && !clears(k));
-    // Without a real provider (test stages, dev) login sets the session at once (DEC-0171);
-    // with one, it sets the transaction cookie and redirects to the provider.
-    expect(sessions.length + login.length, `Set-Cookie: ${res.headers.getSetCookie().join(" | ")}`).toBeGreaterThan(0);
-    for (const k of sessions) expect(cookieProblems(k, { name: sessionCookieName(), lifetimeS: SESSION_LIFETIME_S, cloud: isCloud() }), k.raw).toStrictEqual([]);
+    const res = c.expectStatus(await c.get("/api/auth/login?returnTo=%2F"), 302);
+    const location = new URL(res.headers.get("location") ?? "", c.baseUrl);
+    expect(location.pathname).toBe("/api/auth/sign-in");
+    const set = setCookies(res.headers).filter((k) => !clears(k));
+    expect(set.filter((k) => k.name === sessionCookieName() || k.name === loginCookieName()), `Set-Cookie: ${res.headers.getSetCookie().join(" | ")}`).toEqual([]);
     // No cookie of the other target's naming leaks through.
-    for (const k of cookies) expect([sessionCookieName(!isCloud()), loginCookieName(!isCloud())]).not.toContain(k.name);
+    for (const k of setCookies(res.headers)) expect([sessionCookieName(!isCloud()), loginCookieName(!isCloud())]).not.toContain(k.name);
+  });
+
+  it(tag("AUTH-AC-006", "the session cookie set by a password sign-in on the target has the specified name and attributes, and is the only cookie set"), async () => {
+    const b = httpBrowser();
+    const a = newAccount("auth-ac-006");
+    await createVerifiedAccount(b, a, testIp());
+    const r = expectAnswer(await signIn(b, a.email, a.password, { ip: testIp() }), 200);
+    const cookies = r.setCookies.map(parseSetCookie);
+    expect(cookies.map((k) => k.name), "only the framework session cookie (PWD-REQ-003)").toStrictEqual([sessionCookieName()]);
+    const [session] = cookies;
+    if (session === undefined) throw new Error("the sign-in set no session cookie");
+    expect(cookieProblems(session, { name: sessionCookieName(), lifetimeS: SESSION_LIFETIME_S, cloud: isCloud() })).toStrictEqual([]);
+    expect((await me(b)).level).toBe("user");
   });
 
   it(tag("AUTH-AC-006", "a tampered session cookie is treated as anonymous"), async () => {

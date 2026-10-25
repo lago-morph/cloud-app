@@ -2,8 +2,10 @@
  * AUTH-AC-009, test-stage part (docs/components/auth.md AUTH-REQ-009; framework.openapi.yaml
  * `/api/auth/mock-login`): on the run's target — local `dev` or a `test-` stage — the
  * authentication mock lets a test choose any identity: access level, user ID used as given (not
- * derived), and display name. The "404 on a production deployment" part needs a production
- * stage (not-run: Google login mocked for this phase, plan §8.1); "production bundles contain no
+ * derived), and display name. The mock is reached only through mock-login: `/api/auth/login`
+ * goes to the sign-in page (DEC-0516; contract.test.ts). The "404 on a production deployment"
+ * part needs the redeployed `prodcheck` stage (not-run until the password provider runs on a
+ * cloud stage: tests/compliance/harness/expected.ts, DEC-0509); "production bundles contain no
  * mock module" is a build inspection, not checked here.
  */
 import { describe, expect, it } from "vitest";
