@@ -67,6 +67,35 @@ const fail = (status: number, code: number, message: string): FakeResponse => ({
 });
 const ok = (result: unknown, extra: Record<string, unknown> = {}): FakeResponse => ({ status: 200, body: { success: true, errors: [], messages: [], result, ...extra } });
 
+/** A-06: an import's foreign-key deferral spans only about 4 KB of the dump. */
+export const FK_DEFERRAL_BYTES = 4096;
+const PROBE = `"fake_fk_probe"`;
+
+/**
+ * The import's statements with A-06's deferral limit enforced: after each INSERT, the foreign-key
+ * violations then open are recorded with the dump offset where they appeared, those resolved are
+ * dropped, and the import fails (rolled back, as live) when one stays open for more than
+ * FK_DEFERRAL_BYTES of the dump.
+ */
+function withDeferralLimit(lines: readonly string[]): string[] {
+  if (!lines.some((l) => /^PRAGMA defer_foreign_keys/i.test(l))) return [...lines];
+  const encoder = new TextEncoder();
+  const out = [`CREATE TABLE ${PROBE} ("t" TEXT, "r" INTEGER, "at" INTEGER)`];
+  let at = 0;
+  for (const line of lines) {
+    at += encoder.encode(line).length + 1;
+    out.push(line);
+    if (!/^INSERT\b/i.test(line)) continue;
+    out.push(
+      `INSERT INTO ${PROBE} SELECT p."table", p."rowid", ${at} FROM pragma_foreign_key_check() AS p WHERE NOT EXISTS (SELECT 1 FROM ${PROBE} AS f WHERE f."t" = p."table" AND f."r" IS p."rowid")`,
+      `DELETE FROM ${PROBE} WHERE NOT EXISTS (SELECT 1 FROM pragma_foreign_key_check() AS p WHERE p."table" = ${PROBE}."t" AND p."rowid" IS ${PROBE}."r")`,
+      `SELECT CASE WHEN EXISTS (SELECT 1 FROM ${PROBE} WHERE "at" < ${at - FK_DEFERRAL_BYTES}) THEN json('FOREIGN KEY constraint failed: a row waited for its parent beyond the import deferral (A-06)') END`,
+    );
+  }
+  out.push(`DROP TABLE ${PROBE}`);
+  return out;
+}
+
 export async function openFakeD1Api(options: { accountId: string; maxDatabases?: number }): Promise<FakeD1Api> {
   // Outside the dev registry; guarded by "fake D1 HTTP API and the dev registry" in fake-d1-api.unit.test.ts.
   const proxy = await startPlatformProxy<Record<string, BatchBinding>>(new URL("./fixtures/wrangler.jsonc", import.meta.url).pathname);
@@ -106,7 +135,7 @@ export async function openFakeD1Api(options: { accountId: string; maxDatabases?:
       lines.push(`${String(t["sql"])};`);
       const cols = (await all(`PRAGMA table_info(${q(name)})`)).map((c) => String(c["name"]));
       const values = cols.map((c) => `replace(replace(quote(${q(c)}), char(13), '''||char(13)||'''), char(10), '''||char(10)||''')`).join(` || ',' || `);
-      for (const r of await all(`SELECT 'INSERT INTO ${q(name).replace(/'/g, "''")} (${cols.map(q).join(",").replace(/'/g, "''")}) VALUES(' || ${values} || ');' AS "line" FROM ${q(name)} ORDER BY rowid`)) lines.push(String(r["line"]));
+      for (const r of await all(`SELECT 'INSERT INTO ${q(name).replace(/'/g, "''")} (${cols.map(q).join(",").replace(/'/g, "''")}) VALUES(' || ${values} || ');' AS "line" FROM ${q(name)}${/WITHOUT\s+ROWID/i.test(String(t["sql"])) ? "" : " ORDER BY rowid"}`)) lines.push(String(r["line"]));
     }
     if ((await all(`SELECT 1 FROM sqlite_master WHERE "name" = 'sqlite_sequence'`)).length > 0) {
       lines.push("DELETE FROM sqlite_sequence;");
@@ -136,11 +165,11 @@ export async function openFakeD1Api(options: { accountId: string; maxDatabases?:
     if (b.action === "ingest") {
       const upload = [...signed].find(([u]) => u.startsWith("https://fake-d1-import.invalid/") && createHash("md5").update(signed.get(u)!).digest("hex") === b.etag);
       if (!upload) return ok({ type: "import", success: false, status: "error", error: "no uploaded file matches the etag" });
-      const statements = new TextDecoder()
+      const lines = new TextDecoder()
         .decode(upload[1])
         .split("\n")
-        .filter((l) => l.trim() !== "")
-        .map((l) => binding.prepare(l.replace(/^PRAGMA defer_foreign_keys=TRUE;$/, "PRAGMA defer_foreign_keys = on")));
+        .filter((l) => l.trim() !== "");
+      const statements = withDeferralLimit(lines).map((l) => binding.prepare(l.replace(/^PRAGMA defer_foreign_keys=TRUE;$/, "PRAGMA defer_foreign_keys = on")));
       const bookmark = `import-${nextUrl++}`;
       try {
         await binding.batch(statements);

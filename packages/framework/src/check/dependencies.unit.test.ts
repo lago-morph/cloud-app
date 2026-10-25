@@ -131,6 +131,31 @@ describe("the installed dependency tree check (DEC-0554)", () => {
     ]);
   });
 
+  it("an npm alias of a denied package is caught, directly and deeper in the tree, by its lock entry's name or its npm: spec", () => {
+    const root = app(
+      { dependencies: { s3: "npm:@aws-sdk/client-s3@^3.700.0", "nice-uploads": "1.0.0" } },
+      {
+        "node_modules/s3": { name: "@aws-sdk/client-s3", version: "3.700.0" },
+        "node_modules/nice-uploads": { version: "1.0.0", dependencies: { db: "npm:pg@^8" } },
+        // An older lockfile entry without `name`: the parent's `npm:` spec still names the package.
+        "node_modules/db": { version: "8.0.0" },
+      },
+    );
+    expect(checkDependencyTree(root).map((d) => d.message)).toEqual([
+      'Dependency "nice-uploads" installs the platform SDK or database driver "pg" (nice-uploads → db (npm:pg)); use a package without it, or the framework\'s API.',
+      'Dependency "s3" is an npm alias of the platform SDK or database driver "@aws-sdk/client-s3"; app code uses the framework\'s APIs instead.',
+    ]);
+  });
+
+  it("without an npm lockfile (pnpm, yarn, or nothing installed) the tree check is skipped with a warning", () => {
+    const root = dir();
+    write(join(root, "package.json"), { name: "notes", dependencies: { helper: "1.0.0" } });
+    write(join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+    const warnings: string[] = [];
+    expect(checkDependencyTree(root, (w) => warnings.push(w))).toEqual([]);
+    expect(warnings).toEqual([expect.stringMatching(/no package-lock\.json.*pnpm-lock\.yaml.*installed dependency tree was not checked/)]);
+  });
+
   it("the repository's own apps pass against the real lockfile", () => {
     for (const name of ["template", "reference", "demo"]) expect(checkDependencyTree(fileURLToPath(new URL(`../../../../apps/${name}`, import.meta.url)))).toEqual([]);
   });

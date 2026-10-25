@@ -12,7 +12,7 @@ import type { MigrationDatabase } from "../../mig/apply.js";
 import type { ListedDatabase, StageDatabase } from "../core/operations.js";
 import type { ApiReply, CloudflareApi, CloudflareBytesApi } from "./api.js";
 import { BACKUP_LIFECYCLE_RULE } from "./backup.js";
-import type { CloudflareDatabases } from "./databases.js";
+import type { CloudflareDatabases, DatabaseExport } from "./databases.js";
 import type { SstExec } from "./sst.js";
 
 export const ACCOUNT = "0123456789abcdef0123456789abcdef";
@@ -491,6 +491,8 @@ export class FakeCloud {
     const objects = this.buckets.get(bucket);
     if (!objects) return { status: 404, bytes: none, body: { success: false, errors: [{ code: 10006, message: "The specified bucket does not exist." }] } };
     if (method === "PUT") {
+      // R2 refuses an object key longer than 1024 bytes.
+      if (new TextEncoder().encode(key).length > 1024) return { status: 400, bytes: none, body: { success: false, errors: [{ code: 10011, message: "The specified object name is not valid (longer than 1024 bytes)." }] } };
       objects.add(key);
       this.objectBytes.set(`${bucket}/${key}`, { bytes: body!.bytes.slice(), contentType: body!.contentType ?? "application/octet-stream" });
       return { status: 200, bytes: none, contentType: "application/json", body: { success: true, result: { key } } };
@@ -575,10 +577,16 @@ export class FakeDatabases implements CloudflareDatabases {
   }
   /** Databases whose export fails. */
   readonly failingExports = new Set<string>();
-  async exportDatabase(database: StageDatabase): Promise<Uint8Array> {
+  /** Databases (by name) whose tables the dump would not keep: the export's lossless part (DEC-0556). */
+  readonly lossyTables = new Map<string, string[]>();
+  async exportDatabase(database: StageDatabase): Promise<DatabaseExport> {
     this.calls.push(`export ${database.name}`);
     if (this.failingExports.has(database.name)) throw new Error(`exporting D1 database ${database.name}: injected failure`);
     const db = this.dbs.get(database.id)!;
-    return new TextEncoder().encode(`-- dump of ${db.name}\n${[...db.recorded].map((id) => `-- ${id}`).join("\n")}\n`);
+    const dump = new TextEncoder().encode(`-- dump of ${db.name}\n${[...db.recorded].map((id) => `-- ${id}`).join("\n")}\n`);
+    const tables = this.lossyTables.get(database.name);
+    if (tables === undefined) return { dump };
+    const encode = (text: string) => new TextEncoder().encode(text);
+    return { dump, lossless: { tables, json: encode(`{"database":"${db.name}","tables":${JSON.stringify(tables)}}\n`), restore: encode(`-- restore file with the lossless rows of ${tables.join(", ")}\n`) } };
   }
 }

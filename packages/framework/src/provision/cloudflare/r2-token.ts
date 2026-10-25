@@ -144,10 +144,13 @@ async function writeSigningRecord(api: CloudflareApi, accountId: string, credent
 /**
  * `setup-account`: creates the account signing token and its record. A token of that name left
  * without a record (its value is shown only once), or one whose record predates an account bucket,
- * is deleted first, so exactly one exists.
+ * is replaced: the new token is created and its record written first, and only then are the old
+ * ones deleted, so a failure on the way leaves the old key (the one every deployed stage holds)
+ * working. `replaced`: the ids of the old tokens deleted; each deployed stage still holds the old
+ * key in its Worker secrets until it is redeployed.
  */
-export async function createAccountSigningCredential(api: CloudflareApi, accountId: string): Promise<void> {
-  for (const t of (await listTokens(api, accountId)).filter((x) => x.name === SIGNING_TOKEN_NAME)) await deleteSigningToken(api, accountId, t.id);
+export async function createAccountSigningCredential(api: CloudflareApi, accountId: string): Promise<{ readonly replaced: readonly string[] }> {
+  const old = (await listTokens(api, accountId)).filter((x) => x.name === SIGNING_TOKEN_NAME);
   const credentials = await createSigningToken(api, accountId);
   try {
     await writeSigningRecord(api, accountId, credentials);
@@ -155,6 +158,19 @@ export async function createAccountSigningCredential(api: CloudflareApi, account
     await deleteSigningToken(api, accountId, credentials.id).catch(() => undefined);
     throw error;
   }
+  const replaced: string[] = [];
+  for (const t of old.filter((x) => x.id !== credentials.id)) {
+    try {
+      await deleteSigningToken(api, accountId, t.id);
+    } catch (error) {
+      throw new Error(
+        `the new ${SIGNING_RESOURCE} and its record are in place, but ${error instanceof Error ? error.message : String(error)}; ` +
+          `delete the old token ${t.id} named ${SIGNING_TOKEN_NAME} in the Cloudflare dashboard after redeploying every deployed stage`,
+      );
+    }
+    replaced.push(t.id);
+  }
+  return { replaced };
 }
 
 /** `setup-account`, before anything changes: the token permission by name when the credential lacks it. Reads only. */

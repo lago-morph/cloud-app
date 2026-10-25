@@ -10,6 +10,7 @@ import type { MigrationDatabase } from "../../mig/apply.js";
 import type { Migration } from "../../mig/history.js";
 import type { Dialect } from "../../sql/dialect.js";
 import type {
+  BackupListing,
   AccountSettings,
   DeployedCode,
   DeployInput,
@@ -58,6 +59,7 @@ const key = (s: Stage) => `${s.app}/${s.stage}`;
 export class FakeTarget implements TargetOperations {
   readonly target = "fake";
   readonly dialect: Dialect;
+  readonly appResourceKind = "runtime";
   /** Every operation call, in order, as `<operation> <detail>`. */
   readonly calls: string[] = [];
   readonly shared = new Map<string, SharedResource["state"]>();
@@ -162,7 +164,8 @@ export class FakeTarget implements TargetOperations {
     return [...this.shared].map(([name, state]) => ({ name, state }));
   }
 
-  async createSharedResources(absent: readonly SharedResource[]): Promise<void> {
+  async createSharedResources(absent: readonly SharedResource[], note?: (message: string) => void): Promise<void> {
+    void note;
     this.enter("createSharedResources", absent.map((r) => r.name).join(","));
     for (const r of absent) {
       if (this.shared.get(r.name) === "foreign") throw new Error(`${r.name} belongs to another account`);
@@ -252,7 +255,21 @@ export class FakeTarget implements TargetOperations {
   async backupStage(stage: Stage, databases: readonly StageDatabase[]): Promise<StageBackup> {
     this.enter("backupStage", `${key(stage)} ${databases.map((d) => d.name).join(",")}`);
     this.backups.push({ stage: key(stage), databases: databases.map((d) => d.name) });
-    return { location: `fake backups/${key(stage)}/`, items: [...databases.map((d) => `database ${d.name}`), "files"] };
+    const n = this.backups.filter((b) => b.stage === key(stage)).length;
+    const location = `fake backups/${key(stage)}/${n}/`;
+    return { location, items: [...databases.map((d) => `database ${d.name}`), "files"], listing: { location, stamp: String(n).padStart(4, "0"), complete: true, databases: databases.length, files: 0 } };
+  }
+
+  async waitForInFlight(stage: Stage): Promise<string> {
+    this.enter("waitForInFlight", key(stage));
+    return "no requests to wait for";
+  }
+
+  async listStageBackups(stage: Stage): Promise<readonly BackupListing[]> {
+    this.enter("listStageBackups", key(stage));
+    return this.backups
+      .filter((b) => b.stage === key(stage))
+      .map((b, i) => ({ location: `fake backups/${key(stage)}/${i + 1}/`, stamp: String(i + 1).padStart(4, "0"), complete: true, databases: b.databases.length, files: 0 }));
   }
 
   async createDatabase(stage: Stage, name: string): Promise<StageDatabase> {

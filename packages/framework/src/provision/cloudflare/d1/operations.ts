@@ -14,6 +14,8 @@ import { d1CheckReader } from "./check-reader.js";
 import { copyD1Database, DEFAULT_COPY_LIMITS, type CopyLimits } from "./copy.js";
 import { DEFAULT_NATIVE_LIMITS, exportDump, fetchTransfer, nativeCopy, nativeCopyPrecheck, type DumpOptions, type NativeCopyLimits, type SignedTransfer } from "./native-copy.js";
 import { databaseLimitText, type WorkersPlanReader } from "../plan.js";
+import type { DatabaseExport } from "../databases.js";
+import { buildLossless, readLossyTables } from "./lossless.js";
 import { d1HttpMigrationDatabase } from "./migration-database.js";
 import { d1Client, D1RequestError, DATABASE_LIMIT_CODE, type D1Client } from "./client.js";
 
@@ -36,8 +38,12 @@ export interface D1Options {
 export type D1DatabaseOperations = Pick<TargetOperations, "createDatabase" | "copyDatabase" | "dropDatabase" | "migrationDatabase" | "checkMigratedDatabase"> & {
   /** Every D1 database of the account, for `listStageResources`. */
   listDatabases(): Promise<ListedDatabase[]>;
-  /** The database's SQL dump through D1's export (the production `remove`'s backup, DEC-0543). */
-  exportDatabase(database: StageDatabase): Promise<Uint8Array>;
+  /**
+   * The database's SQL dump through D1's export (the production `remove`'s backup, DEC-0543).
+   * First the tables are scanned for values the dump does not keep (DEC-0096); those tables are
+   * also exported losslessly, row by row (`lossless.ts`, DEC-0556).
+   */
+  exportDatabase(database: StageDatabase): Promise<DatabaseExport>;
 };
 
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -87,7 +93,13 @@ export function d1DatabaseOperations(options: D1Options): D1DatabaseOperations {
    */
   async function tryNative(from: StageDatabase, next: StageDatabase): Promise<{ done: true } | { done: false; why: string; dirty: boolean }> {
     if (options.native === undefined) return { done: false, why: "the native copy is not configured", dirty: false };
-    const check = await nativeCopyPrecheck(client, from.id, nativeLimits);
+    let check;
+    try {
+      check = await nativeCopyPrecheck(client, from.id, nativeLimits);
+    } catch (error) {
+      // The pre-check only reads; D1 may refuse its scan (a big database, a limit). The row-by-row copy needs no pre-check.
+      return { done: false, why: `the native copy's pre-check failed (${messageOf(error)})`, dirty: false };
+    }
     if (!check.safe) return { done: false, why: check.reason, dirty: false };
     try {
       await nativeCopy(client, from.id, next.id, check.tables, dump);
@@ -137,9 +149,11 @@ export function d1DatabaseOperations(options: D1Options): D1DatabaseOperations {
       if (problems.length > 0) throw new Error(`database ${input.next.name}: ${problems.join("; ")}`);
     },
     listDatabases: () => client.list(),
-    async exportDatabase(database: StageDatabase) {
+    async exportDatabase(database: StageDatabase): Promise<DatabaseExport> {
       try {
-        return await exportDump(client, database.id, dump);
+        const lossy = await readLossyTables(client, database.id, limits.pageRows);
+        const exported = await exportDump(client, database.id, dump);
+        return { dump: exported, ...(lossy === undefined ? {} : { lossless: buildLossless(lossy, exported, database.name) }) };
       } catch (error) {
         throw new Error(`exporting D1 database ${database.name}: ${messageOf(error)}`);
       }

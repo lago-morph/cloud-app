@@ -15,7 +15,9 @@
  * A stopped stage (its record says `stopped`, written by `stop`; DEC-0544) stays stopped: step 6
  * turns the app off again instead of starting it (the code deploy may itself turn the route
  * on, DEC-0091), the health check is skipped, and a failed migration leaves the previous version
- * stopped. `start: true` (`deploy --start`) clears the record and starts the app as usual.
+ * stopped. A failure at or after step 5 (the code deploy itself, the deferred secrets check, the
+ * runner's after-code abort) turns the app off again too, and the failure says whether that worked.
+ * `start: true` (`deploy --start`) clears the record and starts the app as usual.
  * A database copy's method (native export/import or row by row, DEC-0545) is printed.
  */
 import { applyMigrations, MigrationFailedError, type Histories } from "../../mig/apply.js";
@@ -102,15 +104,23 @@ export async function runDeploy(ops: TargetOperations, request: DeployRequest, i
     if (migrated.copyMethod !== undefined) line(io, `copied database ${current?.name} into ${database.name}: ${migrated.copyMethod}`);
     const copied = migrated.copyMethod === undefined ? {} : { copyMethod: migrated.copyMethod };
 
-    const deployed = await step(
-      "code",
-      `database ${database.name} is current; the app may be stopped`,
-      "fix the problem and run deploy again",
-      () => ops.deployCode({ stage, database, ...mail }),
-    );
-    if (request.abortAt === "after-code") throw abort("after the code deploy", `code deployed against database ${database.name}; the app is not started`);
+    let deployed: DeployedCode;
+    try {
+      deployed = await step(
+        "code",
+        keepStopped ? `database ${database.name} is current; the code deploy may be partial` : `database ${database.name} is current; the app may be stopped`,
+        "fix the problem and run deploy again",
+        () => ops.deployCode({ stage, database, ...mail }),
+      );
+      if (request.abortAt === "after-code") throw abort("after the code deploy", `code deployed against database ${database.name}; the app is not started`);
 
-    if (firstSecretsCheckDeferred) await checkSecretsAfterFirstCode(ops, request);
+      if (firstSecretsCheckDeferred) await checkSecretsAfterFirstCode(ops, request);
+    } catch (error) {
+      // The code deploy may have turned the route on (DEC-0091) before it failed: a stage recorded
+      // as stopped is turned off again on every path after the code step (DEC-0544).
+      if (keepStopped && error instanceof StepFailure) throw await stopAgain(ops, stage, error);
+      throw error;
+    }
 
     if (keepStopped) {
       // The code deploy may have turned the route on (DEC-0091): turn it off again.
@@ -151,6 +161,22 @@ async function step<T>(name: DeployStep, stageState: string, nextAction: string,
   } catch (error) {
     if (error instanceof StepFailure) throw error;
     throw new StepFailure({ step: name, message: messageOf(error), stageState, nextAction });
+  }
+}
+
+/** After a failure at or after the code step of a stage recorded as stopped: turns the app off again and says whether that worked. */
+async function stopAgain(ops: TargetOperations, stage: Stage, failure: StepFailure): Promise<StepFailure> {
+  const f = failure.failure;
+  try {
+    await ops.stopApp(stage);
+    return new StepFailure({ ...f, stageState: `${f.stageState}; the app was turned off again, as recorded by stop` });
+  } catch (error) {
+    return new StepFailure({
+      ...f,
+      cleanupErrors: [...(f.cleanupErrors ?? []), `turning the app off again (the stage is recorded as stopped): ${messageOf(error)}`],
+      stageState: `${f.stageState}; the app may be answering although the stage is recorded as stopped`,
+      nextAction: `run stop --target ${ops.target} --stage ${stage.stage} now, then ${f.nextAction}`,
+    });
   }
 }
 

@@ -37,7 +37,7 @@ import { failingSink, neverCompletingSink } from "../log/test-sinks.js";
 import type { LogEntry } from "../log/entry.js";
 import { processDialect } from "../sql/dialect.js";
 import { sqliteDb } from "../sql/d1.js";
-import { openPostgres, postgresDb } from "../sql/postgres.js";
+import { openPostgres, postgresDb, queuedClient } from "../sql/postgres.js";
 import type { AnyTable } from "../sql/types.js";
 import { d1MigrationDatabase, migrateLocal, pgliteMigrationDatabase, type D1Like } from "../mig/apply.js";
 import { generateAppMigrations } from "../mig/generate.js";
@@ -346,8 +346,9 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
   const mailSender = options.mailSender === "failing" ? failingMailSender() : options.mailSender === "never-completing" ? neverCompletingMailSender() : outbox.sender;
   // The request's background tasks (`waitUntil`): sends run after the response, as on a Worker.
   const executionCtx = { waitUntil: (pending: Promise<unknown>) => void pending.catch(() => undefined), passThroughOnException: () => undefined, props: {} };
-  // PWD's database: BA's Drizzle adapter over the same local D1 or PGlite as the app.
-  const passwordDatabase: PasswordDatabase = pg === undefined ? { dialect: "sqlite", db: drizzleD1(proxy.env.DB) } : { dialect: "postgres", db: drizzlePglite(pg) };
+  // PWD's database: BA's Drizzle adapter over the same local D1 or PGlite as the app; on PGlite it takes the
+  // handles' connection turns, so a guarded operation behind an auth transaction stays bounded (DEC-0557).
+  const passwordDatabase: PasswordDatabase = pg === undefined ? { dialect: "sqlite", db: drizzleD1(proxy.env.DB) } : { dialect: "postgres", db: drizzlePglite(queuedClient(pg)) };
   const sqlUnavailable = (): boolean => unavailable.has("sql");
   const kvUnavailable = (): boolean => sqlUnavailable() || unavailable.has("kv");
 

@@ -57,6 +57,23 @@ export interface StageBackup {
   readonly location: string;
   /** What was backed up, e.g. `database notes-prod-db-3`, `12 files`. */
   readonly items: readonly string[];
+  /** The backup as `listStageBackups` lists it. */
+  readonly listing: BackupListing;
+}
+
+/** One backup of a stage in the target's backup store (DEC-0543, DEC-0556). */
+export interface BackupListing {
+  /** For the owner, as `StageBackup.location`. */
+  readonly location: string;
+  /** Its time, `yyyymmddThhmmssZ`; listings sort by it. */
+  readonly stamp: string;
+  /** Whether its manifest exists (written last, so the backup finished). */
+  readonly complete: boolean;
+  /** From the manifest: the number of databases and files it holds. */
+  readonly databases?: number;
+  readonly files?: number;
+  /** From the manifest: the target's ids of the databases it holds (absent in an older manifest). */
+  readonly databaseIds?: readonly string[];
 }
 
 /** A database as a target lists it, before the core matches its name against the anchored pattern. */
@@ -128,6 +145,8 @@ export interface TargetOperations {
   readonly target: string;
   /** The SQL dialect of this target's databases (selects the migration histories). */
   readonly dialect: Dialect;
+  /** The `StageResource.kind` of the stage resource that serves the app (Cloudflare: `Worker`): while it is listed, the app exists. */
+  readonly appResourceKind: string;
 
   /**
    * Deploy step 1, target part: names of missing or unusable prerequisites (credentials, by
@@ -137,8 +156,11 @@ export interface TargetOperations {
 
   /** The account's shared resources and their state. Changes nothing (PROV-REQ-004; deploy step 1). */
   inspectAccount(): Promise<readonly SharedResource[]>;
-  /** Creates the given absent shared resources. Called only when none is foreign. */
-  createSharedResources(absent: readonly SharedResource[]): Promise<void>;
+  /**
+   * Creates the given absent shared resources. Called only when none is foreign. `note` receives
+   * what the owner must do afterwards (e.g. redeploy every stage after a replaced credential).
+   */
+  createSharedResources(absent: readonly SharedResource[], note?: (message: string) => void): Promise<void>;
 
   /**
    * The account settings record (provisioning.md §2; Cloudflare: `framework/account.json` in the
@@ -216,4 +238,11 @@ export interface TargetOperations {
    * everything arrived. Throws when any step fails; it never deletes anything of the stage.
    */
   backupStage(stage: Stage, databases: readonly StageDatabase[]): Promise<StageBackup>;
+  /** Every backup of the stage in the account's backup store, in any order (DEC-0556). Reads only. */
+  listStageBackups(stage: Stage): Promise<readonly BackupListing[]>;
+  /**
+   * After `stopApp` before a production backup: waits, bounded, for requests already in flight to
+   * finish (Cloudflare: PAR-315); returns what it did, for the owner (DEC-0557).
+   */
+  waitForInFlight(stage: Stage): Promise<string>;
 }

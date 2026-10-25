@@ -94,11 +94,15 @@ function wrapBuilder(target: object, adapter: Adapter, marks: WeakSet<object> | 
   const execute = (): Promise<unknown> =>
     marks !== undefined
       ? Promise.reject(new FrameworkError("CORE.INTERNAL", "a write built on an atomic step's handle is executed only by atomic; return it from the step instead of awaiting it"))
-      : adapter.guard(async () => {
-      const result = normalizeResult(await (target as { execute(): Promise<unknown> }).execute());
-      // A write has committed by now: its RETURNING rows are returned, never refused (DEC-0542).
-      return kind === "write" ? result : checkResultSize(result);
-    });
+      : adapter.guard(
+          async () => {
+            const result = normalizeResult(await (target as { execute(): Promise<unknown> }).execute());
+            // A write has committed by now: its RETURNING rows are returned, never refused (DEC-0542).
+            return kind === "write" ? result : checkResultSize(result);
+          },
+          // A write is never cut off by PAR-210: it may commit after the deadline (DEC-0556).
+          { write: kind === "write" },
+        );
   const proxy: object = new Proxy(target, {
     get(t, property) {
       switch (property) {

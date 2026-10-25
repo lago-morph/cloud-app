@@ -40,6 +40,14 @@ describe("verify (CLI-REQ-002)", () => {
     expect(io.out).toMatch(/verify failed: type checking, portability rules/);
   });
 
+  it("prints the portability rules' warnings (an unchecked dependency tree) without failing the step", async () => {
+    const io = captureIo();
+    const code = await verifyCommand(deps({ portabilityRules: async (_dir, warn) => (warn("no package-lock.json; the installed dependency tree was not checked"), []) }))([], io);
+    expect(code).toBe(0);
+    expect(io.out).toContain("verify: warning: no package-lock.json; the installed dependency tree was not checked\n");
+    expect(io.out).toContain("verify: portability rules: passed");
+  });
+
   it("[CLI-AC-002] fails on migration-checker diagnostics and on a zod version other than PAR-112's", async () => {
     const io = captureIo();
     const code = await verifyCommand(

@@ -24,7 +24,7 @@
  * - `setSecret`, `listSetSecrets`, `stopApp`, `startApp`: `worker.ts`.
  * - `readStageRecord`, `writeStageRecord`: the stage record in `sst-state` (`stage-record.ts`,
  *   DEC-0544); `removeStage` deletes it with the stage's state objects.
- * - `backupStage`: the production `remove`'s backup into `prototype-backups` (`backup.ts`,
+ * - `backupStage`, `listStageBackups`: the production `remove`'s backup into `prototype-backups` (`backup.ts`,
  *   DEC-0543), through `bytes` and the databases' `exportDatabase`.
  * - Databases: D-04's operations through `databases.ts`.
  * - `checkHealth`: `health.ts` with FILES' storage preflight.
@@ -48,7 +48,7 @@ import { accountSubdomain, createSharedResources, inspectSharedResources, type S
 import { readAccountSettings, writeAccountSettings } from "./account-settings.js";
 import { createCloudflareEmailSetup, type CloudflareEmailSetup } from "./email.js";
 import { describeFailure, succeeded, type CloudflareApi, type CloudflareBytesApi } from "./api.js";
-import { backupStage } from "./backup.js";
+import { backupStage, IN_FLIGHT_DRAIN_MS, listStageBackups } from "./backup.js";
 import { readStageRecord, writeStageRecord } from "./stage-record.js";
 import type { CloudflareDatabases } from "./databases.js";
 import { missingCredentials, type Environment } from "./environment.js";
@@ -146,6 +146,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
   return {
     target: "cloudflare",
     dialect: "sqlite",
+    appResourceKind: "Worker",
 
     async preflight(stage) {
       const clash = accountResourceClash(stage);
@@ -158,7 +159,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
     },
 
     inspectAccount: () => inspectSharedResources(api, accountId),
-    createSharedResources: (absent) => createSharedResources(api, accountId, absent, options.newSubdomain === undefined ? {} : { newSubdomain: options.newSubdomain }),
+    createSharedResources: (absent, note) => createSharedResources(api, accountId, absent, options.newSubdomain === undefined ? {} : { newSubdomain: options.newSubdomain }, note),
     readAccountSettings: () => readAccountSettings(api, accountId),
     writeAccountSettings: (settings) => writeAccountSettings(api, accountId, settings),
     async emailSetupProblems(emailDomain) {
@@ -220,6 +221,18 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
         stage,
         stageDatabases,
       );
+    },
+
+    async waitForInFlight() {
+      // A request the route took before it was turned off may still be writing: wait PAR-315 for it.
+      await (options.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms))))(IN_FLIGHT_DRAIN_MS);
+      return `waited ${IN_FLIGHT_DRAIN_MS / 1000} s (PAR-315) for requests in flight`;
+    },
+
+    async listStageBackups(stage) {
+      refuseAccountResourceClash(stage);
+      if (!options.bytes) throw new Error("no byte transfer for R2 objects is configured, so the stage's backups cannot be read");
+      return listStageBackups({ api, bytes: options.bytes, accountId }, stage);
     },
 
     createDatabase: (stage, name) => databases.createDatabase(stage, name),
