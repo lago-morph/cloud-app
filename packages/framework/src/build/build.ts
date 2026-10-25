@@ -12,7 +12,8 @@
  *    authentication mock and the mail capture with its test-mail route (production bundles
  *    contain none);
  * 5. bundle the entry for Workers (esbuild) and inspect it: no Node.js module other than
- *    `node:crypto` and `node:async_hooks` (CF-REQ-003, `inspect.ts`);
+ *    `node:crypto` and `node:async_hooks`, and no provider SDK by module path or marker string
+ *    (CF-REQ-003, DEC-0554, `inspect.ts`);
  * 6. locally, write the `wrangler.jsonc` `dev` runs (local D1 `DB`, local R2 `FILES`).
  * Everything goes under `<app>/.framework/<target>/`, which is replaced on every build except `stages/`, the deploy records (DEC-0529).
  * Node only.
@@ -27,7 +28,7 @@ import { checkSecretDeclarations } from "../secrets/names.js";
 import { BINDINGS } from "../targets/cloudflare/bindings.js";
 import { APP_ENTRY, BUILD_DIR, loadAppModule } from "./load.js";
 import { bundleWorker } from "./bundle.js";
-import { ALLOWED_NODE_MODULES, disallowedNodeModules } from "./inspect.js";
+import { ALLOWED_NODE_MODULES, disallowedNodeModules, providerSdksIn } from "./inspect.js";
 import { FrameworkError } from "../core/errors.js";
 
 /** The framework's package name, as generated entry points import it. */
@@ -165,6 +166,13 @@ export async function buildApp(options: BuildOptions): Promise<BuildResult> {
     throw new FrameworkError(
       "CORE.MISCONFIGURED",
       `the Worker bundle references Node.js modules a Worker may not use: ${disallowed.join(", ")}; only ${ALLOWED_NODE_MODULES.join(" and ")} are allowed (CF-REQ-003)`,
+    );
+  }
+  const sdks = providerSdksIn(readFileSync(bundle, "utf8"), modules);
+  if (sdks.length > 0) {
+    throw new FrameworkError(
+      "CORE.MISCONFIGURED",
+      `the Worker bundle contains a provider SDK: ${sdks.join(", ")}; app code uses the framework's APIs, and a package that brings in a provider SDK cannot be used (CF-REQ-003, DEC-0554)`,
     );
   }
   let wranglerConfig: string | undefined;
