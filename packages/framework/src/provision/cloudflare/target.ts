@@ -146,6 +146,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
   return {
     target: "cloudflare",
     dialect: "sqlite",
+    appResourceKind: "Worker",
 
     async preflight(stage) {
       const clash = accountResourceClash(stage);

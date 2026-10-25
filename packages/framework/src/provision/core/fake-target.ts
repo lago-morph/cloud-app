@@ -59,6 +59,7 @@ const key = (s: Stage) => `${s.app}/${s.stage}`;
 export class FakeTarget implements TargetOperations {
   readonly target = "fake";
   readonly dialect: Dialect;
+  readonly appResourceKind = "runtime";
   /** Every operation call, in order, as `<operation> <detail>`. */
   readonly calls: string[] = [];
   readonly shared = new Map<string, SharedResource["state"]>();

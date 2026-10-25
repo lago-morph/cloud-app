@@ -9,7 +9,10 @@
  * A production stage (any name not starting with `test-`) is backed up first (DEC-0543): the
  * target exports its databases and copies its files to the account's backup bucket. Only when
  * that succeeded is anything deleted; a failed backup deletes nothing and exits 1. A test stage
- * is removed without a backup.
+ * is removed without a backup. Before the backup the app is stopped and the stop recorded, as
+ * `stop` does, so nothing writes while it is copied; a failed backup leaves the stage stopped and
+ * names the `start` command. A stop that fails because the app no longer exists (a retry after a
+ * partial removal) does not block the backup; any other failed stop deletes nothing (DEC-0557).
  *
  * Before the backup, the stage's earlier backups are listed (a failed listing also deletes
  * nothing). After it, every backup is printed, the usable ones first, newest first; a backup
@@ -41,6 +44,13 @@ export async function runRemove(ops: TargetOperations, stage: Stage, io: Provisi
   let backup: StageBackup | undefined;
   let restoreFrom: BackupListing | undefined;
   if (!isTestStage(stage)) {
+    // Nothing may write while the backup copies the stage: it is stopped first, as `stop` does (DEC-0557).
+    const stopped = await stopForBackup(ops, stage, io);
+    if (stopped === "failed") return { status: EXIT.failed, leftovers: [] };
+    const stoppedState =
+      stopped === "stopped"
+        ? `nothing was deleted; remove stopped the stage for the backup, and it stays stopped (to serve it again: start --target ${ops.target} --stage ${stage.stage})`
+        : "nothing was deleted; the stage's app no longer exists";
     let earlier: readonly BackupListing[];
     try {
       const databases = matchStageDatabases(stage, (await ops.listStageResources(stage)).databases);
@@ -50,7 +60,7 @@ export async function runRemove(ops: TargetOperations, stage: Stage, io: Provisi
       backup = await ops.backupStage(stage, databases);
     } catch (error) {
       errorLine(io, `remove of production stage ${stage.stage} failed: the backup failed: ${messageOf(error)}`);
-      errorLine(io, "  stage state: nothing was deleted; the stage is unchanged");
+      errorLine(io, `  stage state: ${stoppedState}`);
       errorLine(io, `  next action: fix the problem (run setup-account --target ${ops.target} if the backup bucket is missing) and run remove again`);
       return { status: EXIT.failed, leftovers: [] };
     }
@@ -101,6 +111,38 @@ export async function runRemove(ops: TargetOperations, stage: Stage, io: Provisi
     line(io, `its data stays in the backups above until the backup bucket's lifecycle rule deletes them; to restore it, use ${restoreFrom.location} and follow "Restore a removed production stage" in the skill's reference/deploying.md`);
   }
   return { status: EXIT.ok, leftovers, ...withBackup };
+}
+
+/**
+ * Stops the app and records the stop, as `stop` does, before a production backup. `gone`: the
+ * stop failed because the app no longer exists (a retry after a partial removal), so nothing can
+ * write. `failed`: printed; nothing was deleted or backed up.
+ */
+async function stopForBackup(ops: TargetOperations, stage: Stage, io: ProvisionIo): Promise<"stopped" | "gone" | "failed"> {
+  const fail = (what: string, error: unknown, state: string) => {
+    errorLine(io, `remove of production stage ${stage.stage} failed: ${what} failed: ${messageOf(error)}`);
+    errorLine(io, `  stage state: ${state}`);
+    errorLine(io, "  next action: fix the problem and run remove again");
+    return "failed" as const;
+  };
+  try {
+    await ops.stopApp(stage);
+  } catch (error) {
+    let exists: boolean;
+    try {
+      exists = (await ops.listStageResources(stage)).resources.some((r) => r.kind === ops.appResourceKind);
+    } catch {
+      exists = true;
+    }
+    return exists ? fail("stopping the app for the backup", error, "nothing was deleted; the app may still be running") : "gone";
+  }
+  try {
+    await ops.writeStageRecord(stage, { stopped: true });
+  } catch (error) {
+    return fail("recording the stop for the backup", error, `nothing was deleted; the app is stopped (to serve it again: start --target ${ops.target} --stage ${stage.stage})`);
+  }
+  line(io, `stopped stage ${stage.stage} for the backup`);
+  return "stopped";
 }
 
 /**

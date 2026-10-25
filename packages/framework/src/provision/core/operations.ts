@@ -145,6 +145,8 @@ export interface TargetOperations {
   readonly target: string;
   /** The SQL dialect of this target's databases (selects the migration histories). */
   readonly dialect: Dialect;
+  /** The `StageResource.kind` of the stage resource that serves the app (Cloudflare: `Worker`): while it is listed, the app exists. */
+  readonly appResourceKind: string;
 
   /**
    * Deploy step 1, target part: names of missing or unusable prerequisites (credentials, by

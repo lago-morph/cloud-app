@@ -178,13 +178,41 @@ describe("production remove: backup first (DEC-0543)", () => {
     expect(u.calls.some((c) => c.startsWith("backupStage"))).toBe(false);
   });
 
+  it("a production remove stops the app, as stop does, before the backup starts, so nothing writes while it is copied", async () => {
+    const t = deployed(prod);
+    expect((await runRemove(t, prod, captureIo())).status).toBe(0);
+    const at = (c: string) => t.calls.indexOf(c);
+    expect(at("stopApp notes/prod")).toBeGreaterThan(-1);
+    expect(at("stopApp notes/prod")).toBeLessThan(at("writeStageRecord notes/prod stopped"));
+    expect(at("writeStageRecord notes/prod stopped")).toBeLessThan(at("listStageBackups notes/prod"));
+    expect(at("listStageBackups notes/prod")).toBeLessThan(at("backupStage notes/prod notes-prod-db-1"));
+  });
+
+  it("a stop that fails while the app still exists deletes nothing and backs up nothing; one whose app is already gone (a retry) goes on", async () => {
+    const t = deployed(prod).fail("stopApp", new Error("route API down"));
+    const io = captureIo();
+    expect(await runRemove(t, prod, io)).toEqual({ status: 1, leftovers: [] });
+    expect(t.calls.some((c) => /^(listStageBackups|backupStage|dropDatabase|removeStage)/.test(c))).toBe(false);
+    expect(io.err).toMatch(/stopping the app for the backup failed: route API down/);
+    expect(io.err).toMatch(/nothing was deleted/);
+
+    const gone = deployed(prod).fail("stopApp", new Error("Worker not found"));
+    const st = gone.stageState(prod);
+    st.resources = st.resources.filter((r) => r.kind !== "runtime");
+    expect((await runRemove(gone, prod, captureIo())).status).toBe(0);
+    expect(gone.backups).toHaveLength(1);
+  });
+
   it("a backup listing that cannot be read deletes nothing and exits 1", async () => {
     const t = deployed(prod).fail("listStageBackups", new Error("listing failed"));
     const io = captureIo();
     expect(await runRemove(t, prod, io)).toEqual({ status: 1, leftovers: [] });
     expect(t.calls.some((c) => /^(backupStage|dropDatabase|removeStage)/.test(c))).toBe(false);
     expect(io.err).toMatch(/listing failed/);
-    expect(io.err).toMatch(/nothing was deleted; the stage is unchanged/);
+    expect(io.err).toMatch(/nothing was deleted; remove stopped the stage for the backup, and it stays stopped/);
+    expect(io.err).toMatch(/start --target fake --stage prod/);
+    expect(t.answering(prod)).toBeNull();
+    expect(t.stageState(prod).stopped).toBe(true);
   });
 
   it("a failed backup deletes nothing and exits 1", async () => {
@@ -193,6 +221,9 @@ describe("production remove: backup first (DEC-0543)", () => {
     expect(await runRemove(t, prod, io)).toEqual({ status: 1, leftovers: [] });
     expect(t.calls.some((c) => /^(dropDatabase|removeStage)/.test(c))).toBe(false);
     expect(io.err).toMatch(/the backup failed: the R2 bucket prototype-backups is missing/);
-    expect(io.err).toMatch(/nothing was deleted; the stage is unchanged/);
+    expect(io.err).toMatch(/nothing was deleted; remove stopped the stage for the backup, and it stays stopped/);
+    expect(io.err).toMatch(/start --target fake --stage prod/);
+    expect(t.answering(prod)).toBeNull();
+    expect(t.stageState(prod).stopped).toBe(true);
   });
 });
