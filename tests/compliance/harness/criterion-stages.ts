@@ -51,6 +51,62 @@ export function criterionStagesIn(names: readonly string[], app: string): string
   return [...found].sort();
 }
 
+/**
+ * The marker a test writes in the state home `sst-state` before it deploys a criterion production
+ * stage, and deletes after the stage's successful removal: `compliance/criterion-stages/<stage>.json`,
+ * `{ stage, runId, createdAt }`. The driver sweeps only marked stages whose marker is stale, so a
+ * concurrent run's stage and an owner's stage of the same shape (no marker) are never removed.
+ */
+export const MARKER_PREFIX = "compliance/criterion-stages/";
+
+export function markerKey(stage: string): string {
+  if (!isCriterionProductionStage(stage)) throw new Error(`${stage} is not a criterion production stage name`);
+  return `${MARKER_PREFIX}${stage}.json`;
+}
+
+export interface CriterionMarker {
+  readonly stage: string;
+  readonly runId: string;
+  readonly createdAt: string;
+}
+
+export function markerText(stage: string, runId: string, now: Date = new Date()): string {
+  return `${JSON.stringify({ stage, runId, createdAt: now.toISOString() } satisfies CriterionMarker)}\n`;
+}
+
+/**
+ * A marker is stale once it is older than the longest criterion run, PAR-286 (6 hours, the
+ * lifetime of the run's own test tokens). A marker that cannot be read as one counts as stale
+ * (only the harness writes under the prefix).
+ */
+export function markerIsStale(text: string, now: Date, maxAgeMs: number): boolean {
+  try {
+    const created = Date.parse((JSON.parse(text) as Partial<CriterionMarker>).createdAt ?? "");
+    return !Number.isFinite(created) || now.getTime() - created > maxAgeMs;
+  } catch {
+    return true;
+  }
+}
+
+/** The stage a marker key names, or undefined. */
+export function stageOfMarkerKey(key: string): string | undefined {
+  if (!key.startsWith(MARKER_PREFIX) || !key.endsWith(".json")) return undefined;
+  const stage = key.slice(MARKER_PREFIX.length, -".json".length);
+  return isCriterionProductionStage(stage) ? stage : undefined;
+}
+
+/**
+ * Which criterion production stages the driver sweeps (DEC-0560): `stale` are marked stages whose
+ * marker is stale (deployed or not: a marker without resources is deleted too); `unmarked` have
+ * the reserved shape and resources but no marker, and are only warned about (an owner's stage,
+ * never removed). A fresh marker is another run's live stage: left alone.
+ */
+export function classifyCriterionStages(input: { readonly deployed: readonly string[]; readonly markers: ReadonlyMap<string, string>; readonly now: Date; readonly maxAgeMs: number }): { stale: string[]; unmarked: string[] } {
+  const stale = [...input.markers].filter(([, text]) => markerIsStale(text, input.now, input.maxAgeMs)).map(([stage]) => stage).sort();
+  const unmarked = input.deployed.filter((s) => !input.markers.has(s)).sort();
+  return { stale, unmarked };
+}
+
 /** Whether the compliance cleanup may remove `stage`: a test stage or a criterion production stage, never `prodcheck`. */
 export function isCleanableStage(stage: string): boolean {
   return stage.startsWith("test-") || isCriterionProductionStage(stage);

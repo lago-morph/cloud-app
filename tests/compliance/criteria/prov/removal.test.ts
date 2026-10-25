@@ -34,8 +34,8 @@
  *   with its bytes and content type, and `manifest.json` (app, stage, databases, number of
  *   files), written last. The object could only be copied before the bucket was emptied. Then
  *   nothing of P remains and the shared resources are unchanged. The test deletes the backup.
- * P carries a reserved prefix (DEC-0560): a process killed mid-test can leave it behind, and the
- * driver removes it at the start and end of the next cloud run (with `--confirm-production`).
+ * P carries a reserved prefix and a marker (DEC-0560): a process killed mid-test can leave it, and
+ * a cloud run starting or ending more than PAR-286 later removes it (`--confirm-production`).
  *
  * Passes (DEC-0318): two D1 databases at once, so this runs in a milestone pass with no run
  * stage (the database cap is checked first).

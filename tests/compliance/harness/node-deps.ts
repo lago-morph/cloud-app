@@ -17,7 +17,9 @@ import type { EvidenceRecord } from "../../../packages/framework/src/evidence/pu
 import { waitFor } from "./wait.js";
 import { cloudflareAccountOps, fetchCfCall, type CloudAccountOps } from "./test-tokens.js";
 import type { CfCall } from "./d1-budget.js";
-import { criterionStagesIn, isCriterionProductionStage } from "./criterion-stages.js";
+import { classifyCriterionStages, criterionStagesIn, isCriterionProductionStage, markerKey, MARKER_PREFIX, stageOfMarkerKey } from "./criterion-stages.js";
+import { TEST_TOKEN_LIFETIME_MS } from "./test-tokens.js";
+import { STATE_BUCKET, withR2Access } from "../criteria/_cloud/r2.js";
 import type { TargetOperations } from "../../../packages/framework/src/provision/core/operations.js";
 import { targetOperations } from "../../../packages/framework/src/cli/commands/operations.js";
 import { cloudProcessProblems } from "../../../packages/framework/src/cli/commands/smoke-cloud.js";
@@ -198,6 +200,8 @@ export function cliStageOps(
     readonly env?: Readonly<Record<string, string | undefined>>;
     /** The Cloudflare API with the main token, for the criterion production stage listing (DEC-0560). Default: `fetchCfCall(env)`. */
     readonly cfCall?: CfCall;
+    /** The criterion stage markers (DEC-0560). Default: the objects under `compliance/criterion-stages/` in `sst-state`. */
+    readonly markers?: CriterionMarkers;
     /**
      * The stage sign-up budget `check-login` takes its one sign-up from (sign-up-budget.ts).
      * Default: the shared one, unless the runner is a fake (which sends no sign-up).
@@ -261,13 +265,45 @@ export function cliStageOps(
       }
       return { status: result.status, output: result.output, ...(record === undefined ? {} : { record }) };
     },
-    async listCriterionStages() {
-      if (target !== "cloudflare") return [];
-      return listCloudflareCriterionStages(options.cfCall ?? fetchCfCall(env), env.CLOUDFLARE_ACCOUNT_ID ?? "");
+    async criterionStages() {
+      if (target !== "cloudflare") return { stale: [], unmarked: [] };
+      const deployed = await listCloudflareCriterionStages(options.cfCall ?? fetchCfCall(env), env.CLOUDFLARE_ACCOUNT_ID ?? "");
+      const markers = await (options.markers ?? stateHomeMarkers()).list();
+      return classifyCriterionStages({ deployed, markers, now: new Date(), maxAgeMs: TEST_TOKEN_LIFETIME_MS });
+    },
+    async forgetCriterionStage(stage) {
+      await (options.markers ?? stateHomeMarkers()).remove(stage);
     },
     async listStageResources(stage) {
       return stageLeftovers(await stageResourceOperations(repoRoot, target, { env, ...(options.operations === undefined ? {} : { operations: options.operations }) }), { app: REFERENCE_APP, stage });
     },
+  };
+}
+
+/** The markers tests write for criterion production stages (DEC-0560, `criterion-stages.ts`): stage → marker text. */
+export interface CriterionMarkers {
+  list(): Promise<Map<string, string>>;
+  remove(stage: string): Promise<void>;
+}
+
+/**
+ * The markers in the state home `sst-state`, read and deleted through a write token scoped to
+ * that bucket (`withR2Access`, created with the main token and deleted after each call; 4
+ * Cloudflare API requests per call, the S3 requests not counted).
+ */
+export function stateHomeMarkers(): CriterionMarkers {
+  return {
+    list: () =>
+      withR2Access([STATE_BUCKET], "read", async (r2) => {
+        const out = new Map<string, string>();
+        for (const o of await r2.list(STATE_BUCKET, MARKER_PREFIX)) {
+          const stage = stageOfMarkerKey(o.key);
+          if (stage === undefined) continue;
+          out.set(stage, (await r2.get(STATE_BUCKET, o.key))?.bytes.toString("utf8") ?? "");
+        }
+        return out;
+      }),
+    remove: (stage) => withR2Access([STATE_BUCKET], "write", (r2) => r2.remove(STATE_BUCKET, markerKey(stage))),
   };
 }
 

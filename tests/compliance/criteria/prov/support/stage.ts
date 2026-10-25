@@ -17,6 +17,7 @@
  */
 import { spawn } from "node:child_process";
 import { isCriterionProductionStage, newCriterionProductionStage } from "../../../harness/criterion-stages.js";
+import { deleteCriterionMarker, writeCriterionMarker } from "../../_cloud/criterion-markers.js";
 import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -246,7 +247,11 @@ export async function withCloudStage<T>(options: StageOptions, body: (stage: Clo
     const production = options.productionStage;
     if (production !== undefined && !isCriterionProductionStage(production)) throw new Error(`productionStage ${production} is not a criterion production stage name (DEC-0560: a reserved prefix and 10 random characters)`);
     const stageName = production ?? newTestStage();
-    if (production !== undefined) await copy.write(`config/${t}/${production}.json`, await copy.read(`config/${t}/prodcheck.json`));
+    if (production !== undefined) {
+      await copy.write(`config/${t}/${production}.json`, await copy.read(`config/${t}/prodcheck.json`));
+      // DEC-0560: marked before anything is deployed, so a later run's sweep can find it if this process dies.
+      await writeCriterionMarker(production);
+    }
     const outputs: CommandResult[] = [];
     let origin: string | undefined;
     const cli = async (args: readonly string[], o: Omit<RunOptions, "cwd"> = {}): Promise<CommandResult> => {
@@ -292,6 +297,7 @@ export async function withCloudStage<T>(options: StageOptions, body: (stage: Clo
       async remove(o = {}) {
         if (removed?.status === 0) return removed;
         removed = await cli(["remove", "--target", t, "--stage", stageName, ...(production === undefined ? [] : ["--confirm-production", stageName])], o);
+        if (removed.status === 0 && production !== undefined) await deleteCriterionMarker(production);
         return removed;
       },
       removedElsewhere(result, remaining) {
@@ -308,6 +314,8 @@ export async function withCloudStage<T>(options: StageOptions, body: (stage: Clo
       if (options.removeAfter !== false && deployedOnce) {
         const r = await stage.remove();
         if (r.status !== 0) process.stderr.write(`[d-t1] removing stage ${stageName} failed (status ${String(r.status)}); it may be left over:\n${tail(r.output)}\n`);
+      } else if (production !== undefined && !deployedOnce) {
+        await deleteCriterionMarker(production);
       }
     }
   } finally {

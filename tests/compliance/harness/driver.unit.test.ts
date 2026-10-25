@@ -326,42 +326,29 @@ describe("[COMPL-AC-004] cloud runs use a disposable test stage", () => {
     expect(h.logs.join("\n")).toMatch(/prodcheck.*handles test stages/);
   });
 
-  it("removes criterion production stages (DEC-0560) at the start and the end of a cloud run; one that stays is a leftover", async () => {
-    const left = new Set(["p003abcdefghij"]);
-    let late = false;
+  it("removes only stale marked criterion production stages (DEC-0560), deletes their markers, and warns about unmarked ones", async () => {
+    // p003…: stale marker, deployed. p004…: stale marker, its removal leaves a bucket. Fresh-marked and unmarked stages are not in `stale`.
+    const stale = new Set(["p003abcdefghij", "p004klmnopqrst"]);
+    const forgotten: string[] = [];
     const h = harness({
       cloud: {
-        listCriterionStages: () => Promise.resolve([...left]),
-        remove: (s) => (left.delete(s), Promise.resolve("removed")),
-        // A test of this run creates p004…; its removal at the end fails and leaves its bucket.
+        criterionStages: () => Promise.resolve({ stale: [...stale], unmarked: ["p003ownerstage1"] }),
+        forgetCriterionStage: (s) => (forgotten.push(s), stale.delete(s), Promise.resolve()),
         listStageResources: (s) => Promise.resolve(s === "p004klmnopqrst" ? ["R2 bucket reference-p004klmnopqrst-files"] : []),
       },
-      vitestOutput: "",
     });
-    const run = h.deps.run;
-    const deps: DriverDeps = {
-      ...h.deps,
-      run: (c) => {
-        if (c.args[0] === "vitest" && !late) {
-          late = true;
-          left.add("p004klmnopqrst");
-        }
-        return run(c);
-      },
-      cloud: (t) => {
-        const ops = h.deps.cloud(t);
-        return { ...ops, remove: (s) => (h.events.push(`remove ${s}`), s === "p004klmnopqrst" ? Promise.reject(new Error("remove failed")) : ops.remove(s)) };
-      },
-    };
-    const result = await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], deps);
-    expect(h.events.filter((e) => /^remove /.test(e))).toEqual(["remove p003abcdefghij", "remove test-abcdefghij12345", "remove p004klmnopqrst"]);
-    expect(recordOf(h).leftovers).toEqual(["p004klmnopqrst: R2 bucket reference-p004klmnopqrst-files"]);
-    expect(h.logs.join("\n")).toContain("removing the criterion production stage p003abcdefghij (start of run)");
+    const result = await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], h.deps);
+    expect(h.events.filter((e) => /^remove /.test(e))).toEqual(["remove p003abcdefghij", "remove p004klmnopqrst", "remove test-abcdefghij12345", "remove p004klmnopqrst"]);
+    expect(forgotten, "markers deleted only after a removal that left nothing").toEqual(["p003abcdefghij"]);
+    expect(recordOf(h).leftovers).toEqual(["p004klmnopqrst: R2 bucket reference-p004klmnopqrst-files", "p004klmnopqrst: R2 bucket reference-p004klmnopqrst-files"]);
+    expect(h.events.some((e) => e.includes("p003ownerstage1")), "an unmarked stage is never removed").toBe(false);
+    expect(h.logs.join("\n")).toContain("warning: p003ownerstage1 has the shape of a criterion production stage but no marker; it is not removed");
+    expect(h.logs.join("\n")).toContain("removing the stale criterion production stage p003abcdefghij (start of run)");
     expect(result.exitStatus).toBe(1);
   });
 
   it("a criterion production stage listing that fails is a leftover entry (DEC-0560)", async () => {
-    const h = harness({ cloud: { listCriterionStages: () => Promise.reject(new Error("HTTP 403")) } });
+    const h = harness({ cloud: { criterionStages: () => Promise.reject(new Error("HTTP 403")) } });
     await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], h.deps);
     expect(recordOf(h).leftovers).toEqual(["criterion production stage check failed: HTTP 403", "criterion production stage check failed: HTTP 403"]);
   });

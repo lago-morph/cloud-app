@@ -72,6 +72,7 @@ import { newTestStage, prerequisiteMissing, tag, target } from "../../harness/in
 import { NO_API_TOKENS_WRITE_ENV, NO_EMAIL_PERMISSION_ENV, NO_EMAIL_SENDING_READ_ENV } from "../../harness/test-tokens.js";
 import {
   ACCOUNT_BUCKETS,
+  REPAIR_COMMAND,
   backupLifecycle,
   legacySigningRecordText,
   parseSigningRecord,
@@ -86,13 +87,20 @@ import {
 } from "../_cloud/account.js";
 import { accountId, cfApi, cfOk } from "../_cloud/api.js";
 import { BACKUP_BUCKET, LOG_BUCKET, listObjects, STATE_BUCKET } from "../_cloud/r2.js";
+import { randomBytes } from "node:crypto";
 import { accountWorkers, listStageResources, MAIL_SINK, sharedResources } from "../_cloud/stage-resources.js";
-import { criterionStagesIn } from "../../harness/criterion-stages.js";
+import { MARKER_PREFIX, stageOfMarkerKey } from "../../harness/criterion-stages.js";
+import { deleteCriterionMarker, writeCriterionMarker } from "../_cloud/criterion-markers.js";
+import { requireCloudD1 } from "../_cloud/d1.js";
+import { listKeys } from "../_cloud/r2.js";
+import { sinkAddress } from "../../../../packages/framework/src/provision/cloudflare/email.js";
+import { sinkMail } from "../cli/support/admins.js";
+import { createVerifiedAccount, expectAnswer, httpBrowser, signIn, testDisplayName, testIp, testPassword, type Account, type AuthBrowser } from "../pwd/support.js";
 import { emailState, zoneOf } from "../_cloud/email.js";
 import { emailDomain } from "../cli/support/admins.js";
 import { scratchCopy } from "../core/support/processes.js";
 import { isLocal, parameterNumber, REFERENCE_DIR } from "../core/support/repo.js";
-import { newProductionStage, runCli, tail } from "./support/stage.js";
+import { deployOrigin, newProductionStage, runCli, tail } from "./support/stage.js";
 
 const FRESH_ENV = "COMPLIANCE_CLOUDFLARE_FRESH_ACCOUNT";
 const FRESH_DOMAIN_ENV = "COMPLIANCE_CLOUDFLARE_EMAIL_DOMAIN";
@@ -156,20 +164,64 @@ async function signingCredentialProblems(): Promise<string[]> {
   return problems;
 }
 
+/** The reference app's long-lived production stage's Worker (COMPL §2 "Production-check stage"). */
+const PRODCHECK_WORKER = "reference-prodcheck";
+
 /**
  * Clause 3 replaces the account's signing token, so it refuses (a missing prerequisite) while any
- * other stage is deployed (DEC-0560): every Worker of the account except the mail sink, a
- * `prodcheck` stage (redeployed at the start of every automated cloud run, which copies the new
- * credential, PROV-REQ-002 step 5) and the criterion production stages (reserved prefixes, removed
- * by the driver's cleanup). 1 Cloudflare API request.
+ * other stage is deployed (DEC-0560). Exempt are exactly the reference app's `prodcheck` (which the
+ * clause redeploys with the new credential) and the reference app's criterion production stages
+ * that carry a marker (`compliance/criterion-stages/<stage>.json`); the mail sink's Worker is an
+ * account resource, not a stage. 1 Cloudflare API request and one state-home listing.
  */
 async function requireNoOtherStages(): Promise<void> {
-  const others = (await accountWorkers()).filter((w) => w !== MAIL_SINK && !/-prodcheck$/.test(w) && criterionStagesIn([w], w.split("-")[0] ?? "").length === 0).sort();
+  const marked = new Set((await listKeys(STATE_BUCKET, MARKER_PREFIX)).map(stageOfMarkerKey).filter((x): x is string => x !== undefined).map((stage) => `reference-${stage}`));
+  const others = (await accountWorkers()).filter((w) => w !== MAIL_SINK && w !== PRODCHECK_WORKER && !marked.has(w)).sort();
   if (others.length > 0) {
     prerequisiteMissing(
       `the re-run clause replaces the account's R2 signing token, which every deployed stage holds until its next deploy, so it runs only with no other stage deployed; deployed now: ${others.join(", ")}. ` +
         "Remove them (or let the next cloud run clean its test stages), then run the milestone pass for PROV-AC-004 alone, with no run stage: npm run compliance -- --target cloudflare --milestone --only PROV-AC-004 --base-url https://unused.invalid",
     );
+  }
+}
+
+/**
+ * After the signing token was replaced: redeploys the reference app's `prodcheck` (when it
+ * exists) from a scratch copy, so its Worker secrets hold the new credential (every deploy copies
+ * the record, PROV-REQ-002 step 5), then shows a ticket round trip on it: a verified user (a
+ * sink address under `t.<domain>`, as COMPL §2's prodcheck parts do; it is left with no role),
+ * an upload through an upload ticket (R2 checks the ticket's signature) and the bytes read back
+ * through a download ticket. The file is deleted afterwards.
+ */
+async function refreshProdcheck(t: string): Promise<void> {
+  if (!(await accountWorkers()).includes(PRODCHECK_WORKER)) return;
+  const copy = await scratchCopy(REFERENCE_DIR, "d-t1-prov004-prodcheck");
+  try {
+    const r = await runCli(["deploy", "--target", t, "--stage", "prodcheck"], { cwd: copy.dir, timeoutMs: 20 * 60_000 });
+    expect(r.status, `redeploy of prodcheck with the new signing credential:\n${tail(r.output)}`).toBe(0);
+    const origin = deployOrigin(r.output);
+    expect(origin, "the prodcheck deploy printed its origin").toBeDefined();
+    const domain = await emailDomain();
+    const a: Account = { email: sinkAddress(domain, `prov-ac-004-${randomBytes(6).toString("hex")}`), password: testPassword(), displayName: testDisplayName("PROV 004") };
+    const b: AuthBrowser = { ...httpBrowser({ baseUrl: origin ?? "" }), mail: sinkMail() };
+    await createVerifiedAccount(b, a, testIp());
+    expectAnswer(await signIn(b, a.email, a.password, { ip: testIp() }), 200);
+    const name = `dt1/prov004-${randomBytes(6).toString("hex")}.txt`;
+    const bytes = new TextEncoder().encode(`prov-ac-004 ${name}`);
+    const cookie = Object.entries(b.cookies()).map(([k, v]) => `${k}=${v}`).join("; ");
+    try {
+      const up = expectAnswer(await b.post("/api/files/upload-ticket", { name, contentType: "text/plain" }), 200).json<{ ticket: { url: string } }>().ticket;
+      const put = await fetch(new URL(up.url, b.publicOrigin), { method: "PUT", headers: { "content-type": "text/plain" }, body: bytes, signal: AbortSignal.timeout(30_000) });
+      expect(put.status >= 200 && put.status < 300, `the upload through prodcheck's ticket (signed with the new credential): HTTP ${String(put.status)}`).toBe(true);
+      const down = expectAnswer(await b.post("/api/files/download-ticket", { name }), 200).json<{ ticket: { url: string } }>().ticket;
+      const got = await fetch(new URL(down.url, b.publicOrigin), { signal: AbortSignal.timeout(30_000) });
+      expect(got.status, "the download through prodcheck's ticket").toBe(200);
+      expect(new Uint8Array(await got.arrayBuffer()), "the downloaded bytes").toEqual(bytes);
+    } finally {
+      await fetch(new URL(`/api/files/content?name=${encodeURIComponent(name)}`, b.publicOrigin), { method: "DELETE", headers: { cookie, origin: b.publicOrigin }, signal: AbortSignal.timeout(30_000) });
+    }
+  } finally {
+    await copy.remove();
   }
 }
 
@@ -231,25 +283,35 @@ if (!isLocal()) {
         expect(r.output.includes(restricted), "the output does not print the token").toBe(false);
         expect(await accountSnapshot(), "the account after the refused setup-account").toEqual(before);
       } finally {
+        await copy.remove();
+        const problems: string[] = [];
         try {
           if (original !== undefined) await writeSigningRecordText(original);
-        } finally {
-          await copy.remove();
+          if ((await readSigningRecordText()) !== original) problems.push("the signing record read back differs from the original");
+        } catch (error) {
+          problems.push(`restoring the signing record: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        if (problems.length > 0) {
+          const message = `PROV-AC-004: RESTORING THE ACCOUNT FAILED (${problems.join("; ")}). Every deploy on this account now stops at its preflight. Repair it now with: ${REPAIR_COMMAND}`;
+          process.stderr.write(`\n[d-t1] ${message}\n\n`);
+          throw new Error(message);
         }
       }
-      expect(await readSigningRecordText(), "the signing record was restored").toBe(original);
     }, 30 * 60_000);
 
-    it(tag("PROV-AC-004", "a re-run of setup-account replaces a signing record written before the backup bucket existed: a new token with every account bucket denied, the old token deleted"), async () => {
-      await requireNoOtherStages();
+    it(tag("PROV-AC-004", "a re-run of setup-account replaces a signing record written before the backup bucket existed: a new token with every account bucket denied, the old token deleted; prodcheck, redeployed, signs working tickets with it"), async () => {
       const t = target().target;
+      if ((await accountWorkers()).includes(PRODCHECK_WORKER)) requireCloudD1(t);
+      await requireNoOtherStages();
       const copy = await scratchCopy(REFERENCE_DIR, "d-t1-prov004-rerun");
+      let old: string | undefined;
+      let oldTokenId: unknown;
       try {
         const first = await runCli(["setup-account", "--target", t], { cwd: copy.dir, timeoutMs: 10 * 60_000 });
         expect(first.status, `setup-account:\n${tail(first.output)}`).toBe(0);
         expect(await signingCredentialProblems(), "the signing credential after setup-account").toEqual([]);
-        const old = await readSigningRecordText();
-        const oldTokenId = parseSigningRecord(old ?? "{}").tokenId;
+        old = await readSigningRecordText();
+        oldTokenId = parseSigningRecord(old ?? "{}").tokenId;
 
         await writeSigningRecordText(legacySigningRecordText(old ?? "{}"));
         const rerun = await runCli(["setup-account", "--target", t], { cwd: copy.dir, timeoutMs: 10 * 60_000 });
@@ -259,10 +321,30 @@ if (!isLocal()) {
         expect(fresh.tokenId, "the re-run created a new token").not.toBe(oldTokenId);
         expect([...((fresh.deniedBuckets as unknown[] | undefined) ?? [])].sort(), "the new record's denied buckets").toEqual(expect.arrayContaining([...ACCOUNT_BUCKETS].sort()));
         expect((await signingTokens()).map((x) => x.id), "the old prototype-r2-signing token was deleted").not.toContain(oldTokenId);
+
+        // Stages deployed before hold the old credential: prodcheck picks up the new one by a deploy.
+        await refreshProdcheck(t);
       } finally {
         await copy.remove();
+        // Never leave the account without a working credential: restore the old record while its
+        // token still exists, or fail loudly with the repair command.
+        let problems: string[];
+        try {
+          problems = await signingCredentialProblems();
+          if (problems.length > 0 && old !== undefined && (await signingTokens()).some((x) => x.id === oldTokenId)) {
+            await writeSigningRecordText(old);
+            problems = await signingCredentialProblems();
+          }
+        } catch (error) {
+          problems = [`checking the signing credential: ${error instanceof Error ? error.message : String(error)}`];
+        }
+        if (problems.length > 0) {
+          const message = `PROV-AC-004: THE ACCOUNT'S R2 SIGNING CREDENTIAL IS BROKEN (${problems.join("; ")}). Every deploy on this account now stops at its preflight. Repair it now with: ${REPAIR_COMMAND}`;
+          process.stderr.write(`\n[d-t1] ${message}\n\n`);
+          throw new Error(message);
+        }
       }
-    }, 30 * 60_000);
+    }, 60 * 60_000);
 
     it(tag("PROV-AC-004", "running setup-account twice changes nothing the second time, including in the state home, the account settings record, the email setup, the backup bucket and the R2 signing credential"), async () => {
       const t = target().target;
@@ -308,12 +390,16 @@ if (!isLocal()) {
       const copy = await scratchCopy(REFERENCE_DIR, "t2-prov004-send");
       // A production stage: any name not starting with test- (PROV-REQ-005), with a committed values file of its own.
       const stage = newProductionStage("p004");
+      // DEC-0560: marked before the deploy, so a later run's sweep removes it if this process dies.
+      await writeCriterionMarker(stage);
+      let cleaned = false;
       try {
         const before = await accountSnapshot();
         await copy.write(`config/${t}/${stage}.json`, await copy.read(`config/${t}/prodcheck.json`));
         const deploy = await runCli(["deploy", "--target", t, "--stage", stage], { cwd: copy.dir, timeoutMs: 10 * 60_000, env: { CLOUDFLARE_API_TOKEN: restricted } });
         const left = await listStageResources({ target: t, app: "reference", stage, production: true });
         if (left.length > 0) await runCli(["remove", "--target", t, "--stage", stage, "--confirm-production", stage], { cwd: copy.dir, timeoutMs: 20 * 60_000 });
+        cleaned = (await listStageResources({ target: t, app: "reference", stage, production: true })).length === 0;
         expect(deploy.status, `deploy of the production stage with the restricted token must fail:\n${tail(deploy.output)}`).not.toBe(0);
         expect(deploy.output, "deploy names Email Sending Read").toMatch(EMAIL_SENDING_READ);
         expect(deploy.output.includes(restricted), "the output does not print the token").toBe(false);
@@ -321,6 +407,8 @@ if (!isLocal()) {
         expect(await accountSnapshot(), "the account after the refused deploy").toEqual(before);
       } finally {
         await copy.remove();
+        // The marker goes once nothing of the stage is left; otherwise a later run's sweep removes the stage.
+        if (cleaned) await deleteCriterionMarker(stage);
       }
     }, 45 * 60_000);
   });

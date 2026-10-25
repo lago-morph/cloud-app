@@ -212,3 +212,6 @@ export async function signingAndBackupState(): Promise<{ backupBucketLifecycle: 
     signingTokenIds: (await signingTokens()).map((t) => t.id).sort(),
   };
 }
+
+/** The command that repairs the account's shared resources (PROV-REQ-004), with DEC-0551's setup token. */
+export const REPAIR_COMMAND = "CLOUDFLARE_API_TOKEN=<setup token> npx @lago-morph/prototype-framework setup-account --target cloudflare";

@@ -68,7 +68,7 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { CLOUD_WAITS, newTestStage, tag, target, waitFor, type ComplianceClient } from "../../harness/index.js";
 import { TEST_TOKEN_PREFIX } from "../../harness/test-tokens.js";
-import { accountTokens, backupLifecycle, BACKUP_RULE_ID, legacySigningRecordText, putBackupLifecycle, readSigningRecordText, writeSigningRecordText, type LifecycleRule } from "../_cloud/account.js";
+import { accountTokens, backupLifecycle, BACKUP_RULE_ID, REPAIR_COMMAND, legacySigningRecordText, putBackupLifecycle, readSigningRecordText, writeSigningRecordText, type LifecycleRule } from "../_cloud/account.js";
 import { cloudHooks as hooksFor } from "../_cloud/index.js";
 import { readObjectIfExists, STATE_BUCKET } from "../_cloud/r2.js";
 import { listStageResources, stageDatabases, stageRecordKey, stageResourceDetails } from "../_cloud/stage-resources.js";
@@ -110,18 +110,32 @@ async function deployNewStage(
   const stage = newTestStage();
   try {
     await requireDatabaseRoom(1, "PROV-AC-002 (stopped deploy)");
-    let result: CommandResult;
+    let result: CommandResult | undefined;
+    let restoreError: unknown;
     try {
       await around?.before();
       result = await runCli(["deploy", "--target", t, "--stage", stage], { cwd: copy.dir, timeoutMs: 10 * 60_000, ...env });
     } finally {
-      await around?.after();
+      try {
+        await around?.after();
+      } catch (error) {
+        restoreError = error;
+      }
     }
-    const left = await listStageResources({ target: t, app: "reference", stage });
-    if (left.length > 0) {
-      // A defect: clean up what the failed deploy created, then report it through the assertion.
-      await runCli(["remove", "--target", t, "--stage", stage], { cwd: copy.dir, timeoutMs: 20 * 60_000 });
+    let left: string[] = [];
+    try {
+      left = await listStageResources({ target: t, app: "reference", stage });
+      if (left.length > 0) {
+        // A defect: clean up what the failed deploy created, then report it through the assertion.
+        await runCli(["remove", "--target", t, "--stage", stage], { cwd: copy.dir, timeoutMs: 20 * 60_000 });
+      }
+    } catch (error) {
+      if (restoreError === undefined) throw error;
+      process.stderr.write(`[d-t1] listing or removing what the deploy of ${stage} created failed: ${error instanceof Error ? error.message : String(error)}\n`);
     }
+    // A failed restore (its message names the repair) fails the test even when the cleanup ran.
+    if (restoreError !== undefined) throw restoreError;
+    if (result === undefined) throw new Error("the deploy did not run");
     return { result, left, stage };
   } finally {
     await copy.remove();
@@ -130,7 +144,7 @@ async function deployNewStage(
 }
 
 /** The command that repairs the account's shared resources (PROV-REQ-004), with DEC-0551's setup token. */
-const REPAIR = "CLOUDFLARE_API_TOKEN=<setup token> npx @lago-morph/prototype-framework setup-account --target cloudflare";
+const REPAIR = REPAIR_COMMAND;
 
 /** This pass's tier (DEC-0560): clause 2b changes shared account state, so it runs in the milestone pass only. */
 const MILESTONE = target().mode === "milestone";
