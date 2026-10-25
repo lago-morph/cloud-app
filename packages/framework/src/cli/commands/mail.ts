@@ -2,12 +2,35 @@
  * `mail last --to <address> [--target local|cloudflare]` (cli.md §2; mail.md §2 "Reading mail";
  * MAIL-AC-003): prints the latest framework email sent to an address as JSON. Locally (the
  * default) it reads the app's `.mail/`, which `dev` writes. On Cloudflare it reads the account's
- * mail sink, for an address under `t.<emailDomain>` only; that reader is part of the sink's
- * provisioning and is passed in as `cloud`. Exit 1 when there is no such message.
+ * mail sink, for an address under `t.<emailDomain>` only (`cloudflareSinkReader`, over
+ * `provision/cloudflare/mail-sink.ts`), passed in as `cloud`. Exit 1 when there is no such message.
  */
 import { parseOptions, UsageError } from "../args.js";
 import { EXIT, type Command } from "../io.js";
 import { latestLocalMail } from "../../mail/local-files.js";
+import type { MailMessage } from "../../mail/sender.js";
+import { cloudProcessProblems, type ProcessEnvironment } from "./smoke-cloud.js";
+
+/**
+ * The Cloudflare mail-sink reader from the process environment: the proxy setting and the
+ * credentials (by name) are checked before any request (CLI §2), then `readSinkMail` reads the
+ * latest message for the address. `check-login` uses the same reader.
+ */
+export function cloudflareSinkReader(env: ProcessEnvironment, fetchImpl?: typeof fetch): (address: string) => Promise<MailMessage | undefined> {
+  return async (address) => {
+    const problems = cloudProcessProblems(env);
+    if (problems.length > 0) throw new Error(problems.join("; "));
+    const [{ createCloudflareApi }, { missingCredentials }, { readSinkMail }] = await Promise.all([
+      import("../../provision/cloudflare/api.js"),
+      import("../../provision/cloudflare/environment.js"),
+      import("../../provision/cloudflare/mail-sink.js"),
+    ]);
+    const missing = missingCredentials(env);
+    if (missing.length > 0) throw new Error(`missing Cloudflare credentials: ${missing.join(", ")} (set them in the environment; values are never printed)`);
+    const api = createCloudflareApi({ token: env.CLOUDFLARE_API_TOKEN ?? "", ...(fetchImpl === undefined ? {} : { fetch: fetchImpl }) });
+    return readSinkMail(api, env.CLOUDFLARE_ACCOUNT_ID ?? "", address);
+  };
+}
 
 export interface MailCommandDeps {
   /** The latest message in the Cloudflare mail sink to `address` (mail.md §2), when available. */

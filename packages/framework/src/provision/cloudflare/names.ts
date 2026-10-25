@@ -24,6 +24,28 @@ export const publicOrigin = (stage: Stage, accountSubdomain: string): string => 
 /** SST's state home on Cloudflare: one R2 bucket per account, name fixed by SST (DEC-0084). */
 export const STATE_BUCKET = "sst-state";
 
+/** The account-level mail sink (MAIL §2, DEC-0518): its Worker and its R2 bucket share this name. */
+export const MAIL_SINK_NAME = "prototype-mailsink";
+
+/** Worker scripts that are account resources, never a stage's (PROV-REQ-003, PROV-REQ-004). */
+export const ACCOUNT_WORKERS: readonly string[] = Object.freeze([MAIL_SINK_NAME]);
+/** R2 buckets that are account resources, never a stage's: the log bucket, the state home and the mail sink's. */
+export const ACCOUNT_BUCKETS: readonly string[] = Object.freeze(["prototype-logs", STATE_BUCKET, MAIL_SINK_NAME]);
+
+/**
+ * Why the stage's fixed names would collide with an account resource, or undefined. App names
+ * have no hyphens, so only app `prototype` with stage `mailsink` names the sink's Worker; `deploy`,
+ * `remove` and the stage-resource listing refuse such a stage, so stage removal can never delete
+ * an account resource.
+ */
+export function accountResourceClash(stage: Stage): string | undefined {
+  const worker = workerName(stage);
+  if (ACCOUNT_WORKERS.includes(worker)) return `stage ${stage.stage} of app ${stage.app} would use the Worker name ${worker}, which is an account resource (the mail sink); choose another stage name`;
+  const bucket = filesBucketName(stage);
+  if (ACCOUNT_BUCKETS.includes(bucket)) return `stage ${stage.stage} of app ${stage.app} would use the R2 bucket name ${bucket}, which is an account resource; choose another stage name`;
+  return undefined;
+}
+
 /** True when `key` is one of the stage's SST state objects: `<kind>/<app>/<stage>` or below it. */
 export function isStageStateObject(stage: Stage, key: string): boolean {
   const parts = key.split("/");

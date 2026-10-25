@@ -65,6 +65,8 @@ export class FakeTarget implements TargetOperations {
   accountSettings: AccountSettings;
   /** Returned by `emailPrerequisites`. */
   missingEmailPrerequisites: string[] = [];
+  /** Returned by `emailSetupProblems`. */
+  missingEmailSetup: string[] = [];
   /** Returned by the next `setUpEmail` (then emptied: a second run finds everything in place). */
   emailToCreate: string[] = [];
   /** The `emailDomain` of each `deployInfrastructure` and `deployCode` input, in order. */
@@ -175,6 +177,11 @@ export class FakeTarget implements TargetOperations {
     const created = this.emailToCreate;
     this.emailToCreate = [];
     return created;
+  }
+
+  async emailSetupProblems(emailDomain: string): Promise<readonly string[]> {
+    this.enter("emailSetupProblems", emailDomain);
+    return [...this.missingEmailSetup];
   }
 
   async emailPrerequisites(stage: Stage, emailDomain: string): Promise<readonly string[]> {

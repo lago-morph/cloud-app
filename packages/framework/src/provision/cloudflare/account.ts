@@ -33,7 +33,7 @@ export const LOG_BUCKET_RESOURCE = `R2 bucket ${LOG_BUCKET}`;
 export const STATE_HOME_RESOURCE = `R2 bucket ${STATE_BUCKET}`;
 export const SUBDOMAIN_RESOURCE = "workers.dev subdomain";
 
-async function inspectBucket(api: CloudflareApi, accountId: string, bucket: string): Promise<SharedResource> {
+export async function inspectBucket(api: CloudflareApi, accountId: string, bucket: string): Promise<SharedResource> {
   const name = `R2 bucket ${bucket}`;
   const r = await api("GET", `/accounts/${accountId}/r2/buckets/${bucket}`);
   if (succeeded(r)) return { name, state: "owned" };
@@ -42,7 +42,7 @@ async function inspectBucket(api: CloudflareApi, accountId: string, bucket: stri
   throw new Error(`checking ${name} failed: ${describeFailure(r)}`);
 }
 
-async function createBucket(api: CloudflareApi, accountId: string, bucket: string): Promise<void> {
+export async function createBucket(api: CloudflareApi, accountId: string, bucket: string): Promise<void> {
   const name = `R2 bucket ${bucket}`;
   const r = await api("POST", `/accounts/${accountId}/r2/buckets`, { name: bucket });
   if (succeeded(r)) return;

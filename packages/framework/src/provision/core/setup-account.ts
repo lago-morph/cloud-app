@@ -2,7 +2,9 @@
  * `setup-account` sequence (PROV-REQ-004 and its amendment; DEC-0514): create the account's
  * shared resources that do not exist, record the account settings, set up the email domain, and
  * change nothing when all of that is already in place. It stops before changing anything when a
- * shared resource exists but this account does not own it, or when no email domain is known.
+ * shared resource exists but this account does not own it, when no email domain is known, or
+ * when the email setup's prerequisites (the domain's zone, the credentials' email permissions,
+ * DEC-0515) are missing; each missing one is named.
  *
  * The email domain is the account settings record's `emailDomain`: `--email-domain` sets it
  * (required while the record has none) and is also how the owner changes it; the record is
@@ -53,6 +55,9 @@ export async function runSetupAccount(ops: TargetOperations, io: ProvisionIo, re
     const settings = await ops.readAccountSettings();
     const emailDomain = request.emailDomain ?? settings.emailDomain;
     if (emailDomain === undefined) return failed(`${noEmailDomainMessage(ops.target)}; nothing was changed`);
+    // The email permissions and the domain's zone are checked before anything changes (PROV-REQ-004 amendment, PROV-AC-004).
+    const emailProblems = await ops.emailSetupProblems(emailDomain);
+    if (emailProblems.length > 0) return failed(`${emailProblems.join("; ")}; nothing was changed`);
 
     const absent = resources.filter((r) => r.state === "absent");
     const present = resources.filter((r) => r.state === "owned").map((r) => r.name);
