@@ -10,7 +10,21 @@
  *   `<app>-<stage>`, `url: true` for its `workers.dev` route) running the framework's built
  *   bundle, with the static assets, the framework variables plus `FRAMEWORK_PUBLIC_ORIGIN`, and
  *   the bindings `DB` (the current D1 database, an input never in SST's state), `FILES` (the
- *   stage bucket) and the shared log bucket.
+ *   stage bucket) and the shared log bucket; the compatibility flag `nodejs_compat`; and, on a
+ *   production stage, the Email Service binding `EMAIL` restricted to `no-reply@<emailDomain>`,
+ *   with the variable `FRAMEWORK_MAIL_FROM` (also set on a test stage when the account settings
+ *   record names a domain). All of these come from `cloudflareWorkerSettings` (CF §2).
+ *
+ * The `send_email` binding (spike S5's first question, DEC-0518): SST 4.17.2 has no component or
+ * `link` for Email Service, but its `sst.cloudflare.Worker` creates a `cloudflare.WorkersScript`
+ * (Pulumi Cloudflare 6.15.0, PAR-108) and the program appends its own bindings to that script's
+ * `bindings` in the `transform.worker` hook, as for D1 and R2. Pulumi Cloudflare 6.15.0's
+ * `types/input.d.ts` (`WorkersScriptBinding`) lists `send_email` among the binding types and has
+ * `allowedSenderAddresses?: string[]` (with `destinationAddress` and
+ * `allowedDestinationAddresses`), so the binding is
+ * `{ type: "send_email", name: "EMAIL", allowedSenderAddresses: ["no-reply@<emailDomain>"] }`.
+ * Read from the type definitions of the platform `sst install` puts in `.sst/platform/`; no
+ * fallback is needed. Not yet deployed live (with DEC-0336's list).
  * `removal: "remove"` so nothing is retained; `home: "cloudflare"` keeps state in `sst-state`.
  * Secrets are never declared: a binding with a secret's name would replace it (DEC-0087), so a
  * `SECRET_*` variable or binding name is refused, and `keepBindings` keeps the Worker's
@@ -43,7 +57,6 @@ export interface WorkerCode {
   /** The client's static assets, if the app has a client. */
   readonly assetsDirectory?: string;
   readonly compatibilityDate: string;
-  readonly compatibilityFlags?: readonly string[];
   /** Framework variables (CFG delivery); never `SECRET_*`. The public origin is added here. */
   readonly variables?: Readonly<Record<string, string>>;
   /** The Worker binding name of the shared log bucket (D-01's log writer). */
@@ -58,6 +71,8 @@ export interface SstInput {
     /** The current database: an input, never in SST's state. */
     readonly database: { readonly id: string; readonly name: string };
     readonly code: WorkerCode;
+    /** The account settings record's email domain (DEC-0514); required for a production stage. */
+    readonly emailDomain?: string;
   };
 }
 
@@ -70,41 +85,51 @@ function refuseSecretNames(names: readonly string[]): void {
   }
 }
 
-/**
- * SST's Worker `assets` argument from D-01's Worker settings (DEC-0356): the built
- * client, entry-page fallback, the Worker first for `/api` and `/api/*`. SST 4.17.2 passes
- * `notFoundHandling` and `runWorkerFirst` on as the script's `assets.config`.
- */
-function workerAssets(stage: Stage, w: NonNullable<SstInput["worker"]>, directory: string) {
-  const { assets } = cloudflareWorkerSettings({
+/** D-01's Worker settings for the stage (cloudflare.md §2), the one source of the program's Worker. */
+function workerSettings(stage: Stage, w: NonNullable<SstInput["worker"]>) {
+  return cloudflareWorkerSettings({
     workerName: workerName(stage),
     bundle: w.code.bundle,
-    assetsDirectory: directory,
+    assetsDirectory: w.code.assetsDirectory ?? "",
     publicOrigin: w.publicOrigin,
     database: w.database,
     filesBucket: filesBucketName(stage),
+    isTestStage: stage.stage.startsWith("test-"),
+    ...(w.emailDomain === undefined ? {} : { emailDomain: w.emailDomain }),
   });
+}
+
+/**
+ * SST's Worker `assets` argument from the Worker settings (DEC-0356): the built client,
+ * entry-page fallback, the Worker first for `/api` and `/api/*`. SST 4.17.2 passes
+ * `notFoundHandling` and `runWorkerFirst` on as the script's `assets.config`.
+ */
+function workerAssets(settings: ReturnType<typeof cloudflareWorkerSettings>) {
+  const { assets } = settings;
   return { directory: assets.directory, notFoundHandling: assets.notFoundHandling, runWorkerFirst: [...assets.runWorkerFirst] };
 }
 
 /** The generated `sst.config.ts`. */
 export function sstProgram(input: SstInput): string {
   const w = input.worker;
-  const worker = w
-    ? {
-        name: workerName(input.stage),
-        handler: w.code.bundle,
-        ...(w.code.assetsDirectory === undefined ? {} : { assets: workerAssets(input.stage, w, w.code.assetsDirectory) }),
-        compatibilityDate: w.code.compatibilityDate,
-        compatibilityFlags: [...(w.code.compatibilityFlags ?? [])],
-        environment: { ...w.code.variables, [BINDINGS.publicOrigin]: w.publicOrigin },
-        bindings: [
-          { type: "d1", name: BINDINGS.database, id: w.database.id },
-          { type: "r2_bucket", name: BINDINGS.files, bucketName: filesBucketName(input.stage) },
-          { type: "r2_bucket", name: w.code.logBucketBinding, bucketName: LOG_BUCKET },
-        ],
-      }
-    : undefined;
+  const settings = w ? workerSettings(input.stage, w) : undefined;
+  const worker =
+    w && settings
+      ? {
+          name: workerName(input.stage),
+          handler: w.code.bundle,
+          ...(w.code.assetsDirectory === undefined ? {} : { assets: workerAssets(settings) }),
+          compatibilityDate: w.code.compatibilityDate,
+          compatibilityFlags: [...settings.compatibilityFlags],
+          environment: { ...w.code.variables, ...settings.vars },
+          bindings: [
+            { type: "d1", name: BINDINGS.database, id: w.database.id },
+            { type: "r2_bucket", name: BINDINGS.files, bucketName: filesBucketName(input.stage) },
+            { type: "r2_bucket", name: w.code.logBucketBinding, bucketName: LOG_BUCKET },
+            ...settings.sendEmail.map((e) => ({ type: "send_email", name: e.binding, allowedSenderAddresses: [...e.allowedSenderAddresses] })),
+          ],
+        }
+      : undefined;
   if (worker) refuseSecretNames([...Object.keys(worker.environment), ...worker.bindings.map((b) => b.name)]);
   const data = { app: input.stage.app, provider: CLOUDFLARE_PROVIDER, filesBucket: filesBucketName(input.stage), worker };
   return `/// <reference path="./.sst/platform/config.d.ts" />

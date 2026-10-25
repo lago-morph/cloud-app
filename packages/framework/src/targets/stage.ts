@@ -72,7 +72,7 @@ export interface StageOptions {
   readonly cookies?: CookieSettings;
   /** The authentication mock: only locally and on test stages. */
   readonly mock?: AuthMock;
-  /** The stage's real login provider (GOOGLE), or the stub in tests. */
+  /** The stage's real login provider, or the stub in tests. */
   readonly provider?: LoginProvider;
   /** Further framework routes under `/api` (the local file-transfer route). */
   readonly routes?: (api: Hono<RuntimeEnv>) => void;
@@ -116,7 +116,6 @@ export function assembleStage<C extends ConfigDeclaration, S extends string>(def
     framework: {
       admins: resolved.admins,
       ...(resolved.users === undefined ? {} : { users: resolved.users }),
-      ...(resolved.google === undefined ? {} : { google: resolved.google }),
     },
     secret: (c, name) => frameworkSecrets(c.env, c.var.log).get(name as FrameworkSecretName),
     ...(options.provider === undefined ? {} : { provider: options.provider }),

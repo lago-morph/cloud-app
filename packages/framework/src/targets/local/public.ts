@@ -36,7 +36,7 @@ export function createLocalWorker<C extends ConfigDeclaration, S extends string>
     readSecret: (env) => envSecretReader(env, target),
     readFrameworkSecret: (env) => envSecretReader(env, target),
     secretValues: (c) => workerSecretValues(c.env),
-    requiredFrameworkSecrets: [FRAMEWORK_SECRETS.sessionKey, ...LOCAL_FRAMEWORK_SECRETS],
+    requiredFrameworkSecrets: [FRAMEWORK_SECRETS.sessionKey, FRAMEWORK_SECRETS.authSecret, ...LOCAL_FRAMEWORK_SECRETS],
     cookies: LOCAL_COOKIES,
     mock: createAuthMock(),
     routes: (api) => registerLocalTransferRoute(api, { key: ticketKey }),

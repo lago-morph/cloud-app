@@ -30,7 +30,7 @@ function prepareDeps(overrides: Partial<PrepareDeps> = {}): PrepareDeps & { buil
       built.push(`${o.target} ${o.stage}`);
       return {
         deployment: createDeployment({ app: "notes", stage: o.stage, target: o.target }),
-        resolved: { deployment: createDeployment({ app: "notes", stage: o.stage, target: o.target }), values: {}, admins: [], secrets: [{ name: "apiKey", location: "SECRET_API_KEY" }], google: { clientId: "cid" } },
+        resolved: { deployment: createDeployment({ app: "notes", stage: o.stage, target: o.target }), values: {}, admins: [], secrets: [{ name: "apiKey", location: "SECRET_API_KEY" }], email: { senderName: "Notes" } },
         outDir: join(o.appDir, ".framework", o.target),
         bundle: join(o.appDir, ".framework", o.target, "worker.js"),
       };
@@ -50,7 +50,7 @@ describe("deploy: preparing a Cloudflare deployment", () => {
     expect(deps.built).toEqual(["cloudflare test-abc", "client /.framework/cloudflare/client"]);
     expect(prepared.app).toBe("notes");
     expect(prepared.requiredSecrets).toEqual(["apiKey"]);
-    expect(prepared.googleClientId).toBe("cid");
+    expect("googleClientId" in prepared).toBe(false);
     expect(prepared.migrations.framework.map((m) => m.id)).toEqual(["framework/0000_framework_tables"]);
     expect(prepared.migrations.app.map((m) => m.id)).toEqual(["app/0000_init"]);
     const code = prepared.code as WorkerCode;

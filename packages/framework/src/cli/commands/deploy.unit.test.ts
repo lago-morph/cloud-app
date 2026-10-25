@@ -128,23 +128,27 @@ describe("deploy (CLI-REQ-001, PROV-REQ-002, CLI-REQ-003)", () => {
     expect(io.err).toContain("secrets set --target fake --stage test-abc");
   });
 
-  it("for a production stage, also prints the Google callback URL to register (GOOGLE-REQ-004)", async () => {
+  it("for a production stage, prints the sign-in page and the sender address, and nothing to register (provisioning.md §2)", async () => {
     const fake = new FakeTarget();
-    const h = harness({ fake, prepared: { googleClientId: "id-from-config" } });
-    // A production stage's first deploy needs the Google client secret set after step 5: set it as the owner would.
+    const h = harness({ fake });
     const io = captureIo();
-    const first = await deployCommand(h.deps)(["--target", "cloudflare", "--stage", "prod"], io);
-    expect(first).toBe(1);
-    await fake.setSecret({ app: "notes", stage: "prod" }, "frameworkGoogleClientSecret", "x");
-    const again = captureIo();
-    expect(await deployCommand(h.deps)(["--target", "cloudflare", "--stage", "prod"], again)).toBe(0);
-    expect(again.out).toContain("Google callback URL to register: https://notes-prod.fake.example/api/auth/callback");
+    expect(await deployCommand(h.deps)(["--target", "cloudflare", "--stage", "prod"], io)).toBe(0);
+    expect(io.out).toContain("sign-in page: https://notes-prod.fake.example/api/auth/sign-in");
+    expect(io.out).toContain("sender address: no-reply@example.test");
+    expect(io.out).not.toMatch(/callback|google/i);
   });
 
-  it("a test stage prints no Google callback URL", async () => {
+  it("a production stage without the account's email domain stops at the preflight", async () => {
+    const fake = new FakeTarget({ accountSettings: {} });
+    const io = captureIo();
+    expect(await deployCommand(harness({ fake }).deps)(["--target", "cloudflare", "--stage", "prod"], io)).toBe(1);
+    expect(io.err).toContain("--email-domain <domain>");
+  });
+
+  it("a test stage prints no sign-in page or sender", async () => {
     const h = harness();
     const io = captureIo();
     await deployCommand(h.deps)(ARGS, io);
-    expect(io.out).not.toContain("callback");
+    expect(io.out).not.toMatch(/callback|sign-in page|sender address/);
   });
 });

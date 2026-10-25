@@ -10,12 +10,13 @@
  * 4. generate the target entry point: it imports the app module, the configuration module and
  *    `<package>/targets/<target>`; only a test-stage Cloudflare entry imports the
  *    authentication mock (production bundles contain none);
- * 5. bundle the entry for Workers (esbuild);
+ * 5. bundle the entry for Workers (esbuild) and inspect it: no Node.js module other than
+ *    `node:crypto` and `node:async_hooks` (CF-REQ-003, `inspect.ts`);
  * 6. locally, write the `wrangler.jsonc` `dev` runs (local D1 `DB`, local R2 `FILES`).
  * Everything goes under `<app>/.framework/<target>/`, which is replaced on every build.
  * Node only.
  */
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import { createDeployment, type Deployment, type Target } from "../core/identity.js";
 import { nodeFileReader, resolveStageConfig } from "../config/files.js";
@@ -25,12 +26,21 @@ import { checkSecretDeclarations } from "../secrets/names.js";
 import { BINDINGS } from "../targets/cloudflare/bindings.js";
 import { APP_ENTRY, BUILD_DIR, loadAppModule } from "./load.js";
 import { bundleWorker } from "./bundle.js";
+import { ALLOWED_NODE_MODULES, disallowedNodeModules } from "./inspect.js";
+import { FrameworkError } from "../core/errors.js";
 
 /** The framework's package name, as generated entry points import it. */
 export const PACKAGE_NAME = "@lago-morph/prototype-framework";
 
 /** Workers compatibility date written for local `dev` (the Wrangler pin's runtime supports it). */
 export const COMPATIBILITY_DATE = "2026-10-01";
+
+/**
+ * Workers compatibility flags of every Worker the framework builds (local `dev` and cloud
+ * stages): `nodejs_compat`, set explicitly although Node APIs are on at this date, for the
+ * password provider's `node:crypto` and `node:async_hooks` (CF-REQ-003, DEC-0516, RESULT.md S1).
+ */
+export const COMPATIBILITY_FLAGS: readonly string[] = Object.freeze(["nodejs_compat"]);
 
 export interface BuildOptions {
   /** The app directory (holding `src/app.ts`, `config/`). */
@@ -99,6 +109,7 @@ export function localWranglerConfig(deployment: Deployment): string {
       name,
       main: "worker.js",
       compatibility_date: COMPATIBILITY_DATE,
+      compatibility_flags: [...COMPATIBILITY_FLAGS],
       d1_databases: [{ binding: BINDINGS.database, database_name: name, database_id: "00000000-0000-0000-0000-000000000000" }],
       r2_buckets: [{ binding: BINDINGS.files, bucket_name: name }],
     },
@@ -133,6 +144,13 @@ export async function buildApp(options: BuildOptions): Promise<BuildResult> {
   );
   const bundle = join(outDir, "worker.js");
   const { modules } = await bundleWorker(entry, bundle);
+  const disallowed = disallowedNodeModules(readFileSync(bundle, "utf8"));
+  if (disallowed.length > 0) {
+    throw new FrameworkError(
+      "CORE.MISCONFIGURED",
+      `the Worker bundle references Node.js modules a Worker may not use: ${disallowed.join(", ")}; only ${ALLOWED_NODE_MODULES.join(" and ")} are allowed (CF-REQ-003)`,
+    );
+  }
   let wranglerConfig: string | undefined;
   if (options.target === "local") {
     wranglerConfig = join(outDir, "wrangler.jsonc");

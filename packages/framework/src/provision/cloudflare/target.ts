@@ -5,14 +5,17 @@
  * - `preflight`: the credential variables by name, the token's usability, and the permission
  *   to create R2 API tokens. Reads only.
  * - `inspectAccount` / `createSharedResources`: `account.ts`.
+ * - `readAccountSettings` / `writeAccountSettings`: the account settings record
+ *   `framework/account.json` in `sst-state` (`account-settings.ts`, DEC-0514).
+ * - `setUpEmail` / `emailPrerequisites`: `email.ts`'s seam (the API calls are item I-F).
  * - `deployInfrastructure` (step 3): the stage bucket only, then the bucket's CORS policy for
  *   the stage's public origin (FILES' policy, DEC-0099). With a database, the program declares
  *   the Worker and the run is `sst deploy --target Files`; without one (a first deploy), the
  *   program is bucket-only and the run is untargeted, refused when the Worker exists.
  *   SST resolves `--target` only in the stage's state (root cause 2026-10-23-pass1).
  * - `deployCode` (step 5): a full `sst deploy` with the current database as an input, then the
- *   framework-internal secrets the CLI creates: the session key (generated when absent) and the
- *   stage's R2 signing token as S3 credentials (created when absent; a token whose secrets are
+ *   framework-internal secrets the CLI creates: the session key and the password provider's
+ *   secret `frameworkAuthSecret` (each generated when absent, PAR-253), and the stage's R2 signing token as S3 credentials (created when absent; a token whose secrets are
  *   missing is replaced, since its value is shown only once).
  * - `setSecret`, `listSetSecrets`, `stopApp`, `startApp`: `worker.ts`.
  * - Databases: D-04's operations through `databases.ts`.
@@ -31,6 +34,8 @@ import { join } from "node:path";
 import { FRAMEWORK_SECRETS } from "../../secrets/names.js";
 import type { DeployedCode, DeployInput, HealthOutcome, Stage, StageDatabase, StageResource, StageResources, TargetOperations } from "../core/operations.js";
 import { accountSubdomain, createSharedResources, inspectSharedResources } from "./account.js";
+import { readAccountSettings, writeAccountSettings } from "./account-settings.js";
+import { pendingEmailSetup, type CloudflareEmailSetup } from "./email.js";
 import { describeFailure, succeeded, type CloudflareApi } from "./api.js";
 import type { CloudflareDatabases } from "./databases.js";
 import { missingCredentials, type Environment } from "./environment.js";
@@ -65,8 +70,10 @@ export interface CloudflareTargetOptions {
   readonly sst?: SstExec;
   /** For the health check (needs `NODE_USE_ENV_PROXY=1` in the sandbox). */
   readonly fetch?: typeof fetch;
-  /** A new session signing key (PAR-253: 32 random bytes, base64url). */
+  /** A new generated framework key: the session key or the auth secret (PAR-253: 32 random bytes, base64url). */
   readonly randomKey?: () => string;
+  /** The email setup's Cloudflare calls (item I-F); default `pendingEmailSetup`. */
+  readonly email?: CloudflareEmailSetup;
   readonly healthTimeoutMs?: number;
   readonly now?: () => number;
   readonly sleep?: (ms: number) => Promise<void>;
@@ -80,8 +87,10 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
   const sst = options.sst ?? processSstExec();
   const dir = sstAppDir(options.appDir);
   const randomKey = options.randomKey ?? (() => randomBytes(32).toString("base64url"));
+  const email = options.email ?? pendingEmailSetup;
   const origin = async (stage: Stage) => publicOrigin(stage, await accountSubdomain(api, accountId));
   const sstRun = (stage: Stage) => ({ dir, env: options.env, stage });
+  const mail = (input: DeployInput) => (input.emailDomain === undefined ? {} : { emailDomain: input.emailDomain });
 
   async function exists(path: string, what: string): Promise<boolean> {
     const r = await api("GET", path);
@@ -94,7 +103,9 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
 
   async function ensureFrameworkSecrets(stage: Stage): Promise<void> {
     const set = (await listSetSecrets(api, accountId, stage)) ?? new Set<string>();
-    if (!set.has(FRAMEWORK_SECRETS.sessionKey)) await setSecret(api, accountId, stage, FRAMEWORK_SECRETS.sessionKey, randomKey());
+    for (const name of [FRAMEWORK_SECRETS.sessionKey, FRAMEWORK_SECRETS.authSecret]) {
+      if (!set.has(name)) await setSecret(api, accountId, stage, name, randomKey());
+    }
     if (set.has(FRAMEWORK_SECRETS.r2AccessKeyId) && set.has(FRAMEWORK_SECRETS.r2SecretAccessKey)) return;
     const existing = await findSigningToken(api, accountId, stage);
     if (existing) await deleteSigningToken(api, accountId, existing.id);
@@ -121,6 +132,10 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
 
     inspectAccount: () => inspectSharedResources(api, accountId),
     createSharedResources: (absent) => createSharedResources(api, accountId, absent),
+    readAccountSettings: () => readAccountSettings(api, accountId),
+    writeAccountSettings: (settings) => writeAccountSettings(api, accountId, settings),
+    setUpEmail: (emailDomain) => email.setUp(emailDomain),
+    emailPrerequisites: (_stage, emailDomain) => email.productionPrerequisites(emailDomain),
 
     async deployInfrastructure(input: DeployInput) {
       // SST 4.17.2 resolves `--target` only in the stage's previous state (run.go:348-360), so
@@ -137,7 +152,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       }
       const stageOrigin = await origin(input.stage);
       if (database && options.code) {
-        writeSstApp(dir, { stage: input.stage, worker: { publicOrigin: stageOrigin, database, code: options.code } });
+        writeSstApp(dir, { stage: input.stage, worker: { publicOrigin: stageOrigin, database, code: options.code, ...mail(input) } });
         await runSst(sst, sstRun(input.stage), "deploy", { target: INFRASTRUCTURE_COMPONENT });
       } else {
         writeSstApp(dir, { stage: input.stage });
@@ -150,7 +165,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
     async deployCode(input: DeployInput & { readonly database: StageDatabase }): Promise<DeployedCode> {
       if (!options.code) throw new Error("no built Worker code; build --target cloudflare must run before deploy");
       const stageOrigin = await origin(input.stage);
-      writeSstApp(dir, { stage: input.stage, worker: { publicOrigin: stageOrigin, database: input.database, code: options.code } });
+      writeSstApp(dir, { stage: input.stage, worker: { publicOrigin: stageOrigin, database: input.database, code: options.code, ...mail(input) } });
       await runSst(sst, sstRun(input.stage), "deploy");
       await ensureFrameworkSecrets(input.stage);
       return { publicOrigin: stageOrigin };

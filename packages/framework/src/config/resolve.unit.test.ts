@@ -106,9 +106,10 @@ describe("build-time resolution: framework settings (CFG-REQ-005)", () => {
     expect("users" in resolved).toBe(false);
   });
 
-  it("a production stage builds without framework.google (deploy preflight checks it, PROV-REQ-002)", () => {
-    expect("google" in resolve(values({ title: "t" }))).toBe(false);
-    expect(resolve(values({ title: "t" }, { admins: [], google: { clientId: "cid" } })).google).toEqual({ clientId: "cid" });
+  it("framework.email is optional and carries only the sender's display name (MAIL-REQ-003)", () => {
+    expect("email" in resolve(values({ title: "t" }))).toBe(false);
+    expect(resolve(values({ title: "t" }, { admins: [], email: { senderName: "Notes" } })).email).toEqual({ senderName: "Notes" });
+    expect(resolve(values({ title: "t" }, { admins: [], email: {} })).email).toEqual({});
   });
 });
 

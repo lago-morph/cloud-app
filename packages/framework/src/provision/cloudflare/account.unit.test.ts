@@ -122,7 +122,7 @@ describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
     expect(deployIo.err).toMatch(/another account/);
 
     expect(api.requests.every((r) => r.startsWith("GET "))).toBe(true);
-    expect(t.calls.filter((c) => !/^(preflight|listSetSecrets)\b/.test(c))).toEqual([]);
+    expect(t.calls.filter((c) => !/^(preflight|listSetSecrets|readAccountSettings)\b/.test(c))).toEqual([]);
   });
 
   it("setup-account creates the bucket once; a second run sends no change", async () => {

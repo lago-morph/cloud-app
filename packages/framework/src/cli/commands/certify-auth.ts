@@ -119,10 +119,7 @@ export function certifyAuthCommand(deps: CertifyAuthDeps): Command {
 
 /** `certify-auth` bound to the recorded deploy output, the stage's values file, git and the evidence writer. */
 export async function certifyAuthBinding(env: ProcessEnvironment = process.env): Promise<Command> {
-  const [{ loadApp }, { createDeployment }, { nodeFileReader, resolveStageConfig }, evidence, { readDeployedOrigin }, { execFileSync }, { readFileSync }] = await Promise.all([
-    import("../../build/load.js"),
-    import("../../core/identity.js"),
-    import("../../config/files.js"),
+  const [evidence, { readDeployedOrigin }, { execFileSync }, { readFileSync }] = await Promise.all([
     import("../../evidence/public.js"),
     import("./smoke.js"),
     import("node:child_process"),
@@ -138,11 +135,8 @@ export async function certifyAuthBinding(env: ProcessEnvironment = process.env):
   return certifyAuthCommand({
     env,
     deployedOrigin: readDeployedOrigin,
-    googleClientId: async (appDir, target, stage) => {
-      const { definition } = await loadApp(appDir);
-      const deployment = createDeployment({ app: definition.name, stage, target });
-      return resolveStageConfig(deployment, { config: definition.config, secrets: definition.secrets }, nodeFileReader(appDir)).google?.clientId;
-    },
+    // `framework.google` left the stage configuration (DEC-0513); this command is retired in item I-G.
+    googleClientId: async () => undefined,
     repo: (appDir) => {
       const root = execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: appDir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
       return { root, git: evidence.gitState(root) };

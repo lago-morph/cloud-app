@@ -13,11 +13,11 @@
  * of this sequence then deploy the code against the new database and start the app.
  */
 import { applyMigrations, MigrationFailedError, type Histories } from "../../mig/apply.js";
-import { FRAMEWORK_SECRETS } from "../../secrets/names.js";
+import { senderAddress } from "./account-settings.js";
 import { databaseName, matchStageDatabases, nextDatabaseName } from "./databases.js";
 import type { DeployedCode, Stage, StageDatabase, TargetOperations } from "./operations.js";
 import { EXIT, errorLine, line, messageOf, type ProvisionIo, type ProvisionStatus } from "./output.js";
-import { foreignResourcesMessage } from "./setup-account.js";
+import { foreignResourcesMessage, noEmailDomainMessage } from "./setup-account.js";
 
 export type DeployStep = "preflight" | "databases" | "infrastructure" | "migrate" | "code" | "start" | "health";
 
@@ -40,8 +40,6 @@ export interface DeployRequest {
   readonly migrations: Histories;
   /** The app's declared secret names; all must be set on the stage. */
   readonly requiredSecrets: readonly string[];
-  /** `framework.google.clientId` of the stage's resolved configuration, if any. */
-  readonly googleClientId?: string;
   /** Configuration problems (empty when valid), checked in step 1. */
   readonly validateConfiguration?: () => Promise<readonly string[]>;
   /** Set only by the compliance runner. */
@@ -77,11 +75,12 @@ const isTestStage = (stage: Stage) => stage.stage.startsWith("test-");
 export async function runDeploy(ops: TargetOperations, request: DeployRequest, io: ProvisionIo): Promise<DeployResult> {
   const { stage } = request;
   try {
-    const firstSecretsCheckDeferred = await preflight(ops, request);
+    const { deferred: firstSecretsCheckDeferred, emailDomain } = await preflight(ops, request);
+    const mail = emailDomain === undefined ? {} : { emailDomain };
     const current = await findDatabases(ops, stage, io);
 
     await step("infrastructure", "nothing of the new version was deployed; the previous version, if any, is unchanged", "fix the problem and run deploy again", () =>
-      ops.deployInfrastructure({ stage, ...(current ? { database: current } : {}) }),
+      ops.deployInfrastructure({ stage, ...(current ? { database: current } : {}), ...mail }),
     );
 
     const database = current ? await migrate(ops, request, current) : await firstDatabase(ops, request);
@@ -90,7 +89,7 @@ export async function runDeploy(ops: TargetOperations, request: DeployRequest, i
       "code",
       `database ${database.name} is current; the app may be stopped`,
       "fix the problem and run deploy again",
-      () => ops.deployCode({ stage, database }),
+      () => ops.deployCode({ stage, database, ...mail }),
     );
     if (request.abortAt === "after-code") throw abort("after the code deploy", `code deployed against database ${database.name}; the app is not started`);
 
@@ -101,6 +100,11 @@ export async function runDeploy(ops: TargetOperations, request: DeployRequest, i
 
     line(io, `deployed ${stage.app} stage ${stage.stage} to ${ops.target}; database ${database.name}`);
     line(io, `public origin: ${deployed.publicOrigin}`);
+    // provisioning.md §2 "Publishing the result": nothing to register with a login provider (DEC-0513).
+    if (!isTestStage(stage) && emailDomain !== undefined) {
+      line(io, `sign-in page: ${deployed.publicOrigin}/api/auth/sign-in`);
+      line(io, `sender address: ${senderAddress(emailDomain)}`);
+    }
     return { status: EXIT.ok, publicOrigin: deployed.publicOrigin };
   } catch (error) {
     const failure: DeployFailure =
@@ -130,8 +134,11 @@ function abort(point: string, stageState: string): StepFailure {
   });
 }
 
-/** Step 1. Returns true when the stage's secrets cannot be read yet (checked after step 5). */
-async function preflight(ops: TargetOperations, request: DeployRequest): Promise<boolean> {
+/**
+ * Step 1. `deferred`: the stage's secrets cannot be read yet (checked after step 5).
+ * `emailDomain`: the account settings record's, which steps 3 and 5 hand to the target.
+ */
+async function preflight(ops: TargetOperations, request: DeployRequest): Promise<{ deferred: boolean; emailDomain?: string }> {
   const { stage } = request;
   const missing: string[] = [];
   const attempt = async (what: string, run: () => Promise<void>) => {
@@ -142,6 +149,7 @@ async function preflight(ops: TargetOperations, request: DeployRequest): Promise
     }
   };
   let deferred = false;
+  let emailDomain: string | undefined;
 
   await attempt("credentials", async () => {
     missing.push(...(await ops.preflight(stage)));
@@ -160,15 +168,21 @@ async function preflight(ops: TargetOperations, request: DeployRequest): Promise
     });
   }
   const production = !isTestStage(stage);
-  if (production && !request.googleClientId) missing.push("framework.google.clientId (required for a production stage)");
+  // The login provider's prerequisites (PROV-REQ-002, DEC-0514, DEC-0515): a production stage
+  // sends mail from the account's email domain. A test stage only reads the record.
+  await attempt("account settings", async () => {
+    emailDomain = (await ops.readAccountSettings()).emailDomain;
+    if (!production) return;
+    if (emailDomain === undefined) missing.push(`${noEmailDomainMessage(ops.target)} (required for a production stage)`);
+    else missing.push(...(await ops.emailPrerequisites(stage, emailDomain)));
+  });
   await attempt("secrets", async () => {
     const set = await ops.listSetSecrets(stage);
     if (set === null) {
       deferred = true;
       return;
     }
-    const required = [...request.requiredSecrets, ...(production ? [FRAMEWORK_SECRETS.googleClientSecret] : [])];
-    for (const name of required) if (!set.has(name)) missing.push(`secret ${name} is not set (set it with secrets set)`);
+    for (const name of request.requiredSecrets) if (!set.has(name)) missing.push(`secret ${name} is not set (set it with secrets set)`);
   });
 
   if (missing.length > 0) {
@@ -179,7 +193,7 @@ async function preflight(ops: TargetOperations, request: DeployRequest): Promise
       nextAction: "provide the missing prerequisites and run deploy again",
     });
   }
-  return deferred;
+  return { deferred, ...(emailDomain === undefined ? {} : { emailDomain }) };
 }
 
 /** Step 2: the lowest-numbered stage database is current; higher-numbered ones are deleted and reported. */
@@ -295,8 +309,7 @@ async function restorePrevious(ops: TargetOperations, stage: Stage, nextName: st
 /** provisioning.md §2 "First Cloudflare deploy": the secrets are checked once step 5 created the runtime. */
 async function checkSecretsAfterFirstCode(ops: TargetOperations, request: DeployRequest): Promise<void> {
   const { stage } = request;
-  const production = !isTestStage(stage);
-  const required = [...request.requiredSecrets, ...(production ? [FRAMEWORK_SECRETS.googleClientSecret] : [])];
+  const required = request.requiredSecrets;
   const set = await step("code", "code deployed; the app's secrets could not be read", "run deploy again", async () => (await ops.listSetSecrets(stage)) ?? new Set<string>());
   const missing = required.filter((n) => !set.has(n));
   if (missing.length === 0) return;

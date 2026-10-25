@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { captureIo } from "../../cli/io.test-support.js";
 import type { Histories } from "../../mig/apply.js";
 import type { Migration } from "../../mig/history.js";
-import { FRAMEWORK_SECRETS } from "../../secrets/names.js";
 import { runDeploy, type DeployRequest } from "./deploy.js";
 import { FakeTarget } from "./fake-target.js";
 
@@ -36,7 +35,7 @@ function deployedTarget(n = 1, extra: ConstructorParameters<typeof FakeTarget>[0
 }
 
 const changingCalls = (t: FakeTarget) =>
-  t.calls.filter((c) => !/^(preflight|inspectAccount|listSetSecrets|listStageResources|checkHealth)\b/.test(c));
+  t.calls.filter((c) => !/^(preflight|inspectAccount|readAccountSettings|emailPrerequisites|listSetSecrets|listStageResources|checkHealth)\b/.test(c));
 
 describe("deploy step 2: database discovery (PROV-REQ-002)", () => {
   it("[COMPL-AC-007] takes the lowest-numbered stage database as current and deletes and reports every higher-numbered one", async () => {
@@ -239,19 +238,56 @@ describe("deploy step 1: preflight (PROV-REQ-002, PROV-REQ-004)", () => {
     expect(changingCalls(t)).toEqual([]);
   });
 
-  it("a production stage needs the Google client ID and client secret; a test stage does not", async () => {
+  it("[PROV-AC-004] (core part) a production stage needs the account's email domain and the target's email prerequisites; a test stage does not", async () => {
+    const prod = { app: "notes", stage: "prod" };
+    const t = new FakeTarget({ accountSettings: {} });
+    t.stageState(prod).secrets = new Set();
+    const io = captureIo();
+    expect((await runDeploy(t, request({ stage: prod }), io)).status).toBe(1);
+    expect(io.err).toContain("the account settings record names no email domain; run setup-account --target fake --email-domain <domain>");
+    expect(changingCalls(t)).toEqual([]);
+    expect(t.calls.some((c) => c.startsWith("emailPrerequisites"))).toBe(false);
+
+    // A test stage deploys without one, and its steps get no email domain.
+    const test = new FakeTarget({ accountSettings: {} });
+    expect((await runDeploy(test, request(), captureIo())).status).toBe(0);
+    expect(test.deployedEmailDomains).toEqual([undefined, undefined]);
+
+    // With a domain, the target's email prerequisites are checked and every missing one is named.
+    const u = new FakeTarget();
+    u.stageState(prod).secrets = new Set();
+    u.missingEmailPrerequisites = ["permission Email Sending Write", "the Email Sending entry of example.test is not verified"];
+    const io2 = captureIo();
+    expect((await runDeploy(u, request({ stage: prod }), io2)).status).toBe(1);
+    expect(u.calls).toContain("emailPrerequisites notes/prod example.test");
+    for (const missing of u.missingEmailPrerequisites) expect(io2.err).toContain(missing);
+    expect(changingCalls(u)).toEqual([]);
+
+    // All present: the domain reaches steps 3 and 5, and the result names the sign-in page and the sender.
+    u.missingEmailPrerequisites = [];
+    const io3 = captureIo();
+    expect((await runDeploy(u, request({ stage: prod }), io3)).status).toBe(0);
+    expect(u.deployedEmailDomains).toEqual(["example.test", "example.test"]);
+    expect(io3.out).toContain("sign-in page: https://notes-prod.fake.example/api/auth/sign-in");
+    expect(io3.out).toContain("sender address: no-reply@example.test");
+  });
+
+  it("a test stage's result names no sign-in page or sender; its steps still get the recorded email domain", async () => {
+    const t = new FakeTarget();
+    const io = captureIo();
+    expect((await runDeploy(t, request(), io)).status).toBe(0);
+    expect(io.out).not.toMatch(/sign-in page|sender address/);
+    expect(t.deployedEmailDomains).toEqual(["example.test", "example.test"]);
+    expect(t.calls.some((c) => c.startsWith("emailPrerequisites"))).toBe(false);
+  });
+
+  it("a production stage needs no retired Google setting or secret (DEC-0513)", async () => {
     const prod = { app: "notes", stage: "prod" };
     const t = new FakeTarget();
     t.stageState(prod).secrets = new Set();
     const io = captureIo();
-    expect((await runDeploy(t, request({ stage: prod }), io)).status).toBe(1);
-    expect(io.err).toContain("framework.google.clientId");
-    expect(io.err).toContain(FRAMEWORK_SECRETS.googleClientSecret);
-    expect(changingCalls(t)).toEqual([]);
-
-    t.stageState(prod).secrets = new Set([FRAMEWORK_SECRETS.googleClientSecret]);
-    expect((await runDeploy(t, request({ stage: prod, googleClientId: "id-from-config" }), captureIo())).status).toBe(0);
-    expect((await runDeploy(new FakeTarget(), request(), captureIo())).status).toBe(0);
+    expect((await runDeploy(t, request({ stage: prod }), io)).status).toBe(0);
+    expect(`${io.err}${io.out}`).not.toMatch(/google/i);
   });
 
   it("missing shared resources: deploy fails with a clear message to run setup-account, creating nothing", async () => {

@@ -4,10 +4,12 @@
  * not survive), and resolved with the Workers export conditions. Worker runtimes import no
  * Node-only framework module (the Postgres harness is `sql/postgres.ts`, the migrations
  * directory `mig/migrations-dir.ts`), so a Node built-in reaching the bundle fails the build
- * (DEC-0196, DEC-0197).
+ * (DEC-0196, DEC-0197), except `node:crypto` and `node:async_hooks`, which stay external
+ * (CF-REQ-003, DEC-0516; `inspect.ts` checks the written bundle).
  */
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
+import { ALLOWED_NODE_MODULES } from "./inspect.js";
 
 /** The framework package's directory (this file is `<package>/{src,dist}/build/bundle.*`). */
 const FRAMEWORK_DIR = fileURLToPath(new URL("../../", import.meta.url));
@@ -48,6 +50,8 @@ export async function bundleWorker(entry: string, outfile: string): Promise<Bund
     legalComments: "none",
     metafile: true,
     logLevel: "silent",
+    // CF-REQ-003 (DEC-0516): the two Node modules the Worker may use, provided by `nodejs_compat`.
+    external: [...ALLOWED_NODE_MODULES],
     plugins: [frameworkSideEffectFree],
   });
   // Modules with code in the output (an import whose code is tree-shaken away contributes 0 bytes).

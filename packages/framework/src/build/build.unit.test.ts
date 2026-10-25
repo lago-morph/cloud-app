@@ -141,6 +141,20 @@ describe("buildApp --target cloudflare", () => {
     expect(bundle).not.toMatch(/(?:from\s*|import\(\s*|require\(\s*)["'](?:node:)?(?:fs|fs\/promises|child_process|worker_threads|url|path|os)["']/);
   });
 
+  it(tag("CF-AC-003", "build part: node:crypto and node:async_hooks stay external; any other Node.js module fails the build naming it"), async () => {
+    const allowed = fixture({
+      "src/server/greet.ts":
+        'import { createHash } from "node:crypto";\nimport { AsyncLocalStorage } from "node:async_hooks";\nconst als = new AsyncLocalStorage();\nexport function greet(g: string): string { return als.run(1, () => `${g}!${createHash("sha256").update(g).digest("hex").length}`); }\n',
+    });
+    const result = await buildApp(options(allowed, "cloudflare", "prod"));
+    const bundle = readFileSync(result.bundle, "utf8");
+    expect(bundle).toMatch(/from\s*"node:crypto"/);
+    expect(bundle).toMatch(/from\s*"node:async_hooks"/);
+
+    const disallowed = fixture({ "src/server/greet.ts": 'import { sep } from "node:path";\nexport function greet(g: string): string { return g + sep; }\n' });
+    await expect(buildApp(options(disallowed, "cloudflare", "prod"))).rejects.toThrow(/node:path/);
+  });
+
   it(tag("CFG-AC-004", "build part: the embedded resolved configuration lists each declared secret with its location"), async () => {
     const dir = fixture({});
     const result = await buildApp(options(dir, "cloudflare", "test-b16"));
@@ -159,6 +173,8 @@ describe("buildApp --target local", () => {
     expect(config.main).toBe("worker.js");
     expect(config.d1_databases[0]?.binding).toBe("DB");
     expect(config.r2_buckets[0]?.binding).toBe("FILES");
+    expect((config as unknown as { compatibility_flags: string[] }).compatibility_flags).toEqual(["nodejs_compat"]);
+    expect(config).not.toHaveProperty("send_email");
     const bundle = readFileSync(result.bundle, "utf8");
     expect(bundle).toContain("marker-local-json");
     expect(bundle).toContain("__framework/files");
