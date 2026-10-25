@@ -31,3 +31,5 @@ Release 1 targets **local and Cloudflare** (DEC-0508, owner, 2026-10-24). The AW
 ## Login in release 1
 
 The real login provider is email and password with mandatory email verification (DEC-0509, DEC-0511), run in the app's own deployment: [components/password.md](components/password.md) (PWD) and [components/mail.md](components/mail.md) (MAIL), with the internal contracts [contracts/ts/internal/login-provider.d.ts](contracts/ts/internal/login-provider.d.ts) (`CredentialProvider`) and [contracts/http/internal/auth-password.openapi.yaml](contracts/http/internal/auth-password.openapi.yaml). The email domain is one account setting (DEC-0514). Google sign-in is dropped (DEC-0513): [components/google.md](components/google.md) is kept, marked retired, and its code is on the branch `google`. SYS-REQ-019, SYS-REQ-026 and SYS-REQ-027 carry an amendment note for release 1.
+
+Anyone who signs up and verifies their address is a user, and admins hold the `admin` role in the stage's database, granted with the operator command `admins` (DEC-0521…DEC-0526). Configuration holds no admin or users list. SYS-REQ-018 carries an amendment note.

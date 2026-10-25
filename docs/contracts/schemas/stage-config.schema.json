@@ -20,22 +20,10 @@
       }
     },
     "framework": {
+      "description": "Framework settings. There is no `admins` or `users` list (DEC-0521, DEC-0522): admins hold the `admin` role in the stage's database, granted with the `admins` command (docs/components/cli.md, CLI-REQ-005), and anyone who signs up and verifies is a user (docs/components/auth.md, AUTH-REQ-003). A file holding `admins` or `users` is rejected as an unknown field.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "admins": {
-          "description": "User IDs of admins, as shown by /api/auth/me.",
-          "type": "array",
-          "items": { "type": "string", "minLength": 1 },
-          "uniqueItems": true,
-          "default": []
-        },
-        "users": {
-          "description": "Optional list of user IDs, as shown by /api/auth/me, allowed to log in as `user`. When present, a validated login whose ID is in neither `users` nor `admins` is treated as anonymous. When absent, `user` means any account the login provider accepts. See docs/components/auth.md (AUTH-REQ-003).",
-          "type": "array",
-          "items": { "type": "string", "minLength": 1 },
-          "uniqueItems": true
-        },
         "email": {
           "description": "Settings of the framework's own email (verification and reset links). Optional. Holds no address or domain: the sender is always `no-reply@<emailDomain>`, derived from the account's single email-domain setting (docs/components/mail.md, MAIL-REQ-003).",
           "type": "object",

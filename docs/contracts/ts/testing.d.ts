@@ -1,6 +1,6 @@
 /**
  * Test helpers (`<package>/testing`). Importable only from app test files.
- * Owners: CORE (test app), AUTH (mock identities), PWD (password login provider), MAIL (outbox).
+ * Owners: CORE (test app), AUTH (mock identities, role helpers), PWD (password login provider), MAIL (outbox).
  * Behavior: docs/components/core.md, docs/components/auth.md, docs/components/password.md,
  * docs/components/mail.md.
  */
@@ -53,7 +53,9 @@ export interface TestAppOptions {
   /**
    * Config values overriding the app's defaults. A key the app did not declare makes `createTestApp` throw.
    * The reserved key `framework` holds the stage configuration's `framework` section
-   * (`{ admins?, users? }`, stage-config.schema.json); each `createTestApp` call is one build.
+   * (`{ email? }`, stage-config.schema.json); each `createTestApp` call is one build. It takes no
+   * `admins` or `users`: with either, `createTestApp` throws, as the build does (DEC-0521, DEC-0522).
+   * Grant roles with `TestApp.grantRole` instead.
    */
   readonly config?: Record<string, unknown>;
   /** Secret values for the test. */
@@ -62,8 +64,9 @@ export interface TestAppOptions {
   readonly unavailable?: readonly ("sql" | "kv" | "files" | "secrets")[];
   /**
    * Use the test-only stub login provider instead of the authentication mock. Logins then
-   * go through the real login, callback, user-ID derivation, and admin-list code paths
-   * (docs/components/auth.md). Default false.
+   * go through the real login, callback, user-ID derivation, and level code paths
+   * (docs/components/auth.md). Each subject logged in gets an in-memory account, verified and
+   * with no roles. Default false.
    */
   readonly stubLoginProvider?: boolean;
   /**
@@ -122,6 +125,23 @@ export interface TestApp {
    */
   loginWithStub(subject: string, options?: { readonly displayName?: string; readonly stubFailure?: "refused" | "replayed" }): Promise<void>;
   /**
+   * With `passwordLoginProvider` or `stubLoginProvider`: adds `role` to the roles of the account
+   * whose user ID (as `/api/auth/me` shows it) is `userId`. It writes what the `admins` command
+   * writes (the password provider's `role` column, or the stub's in-memory account), so the
+   * change shows on the next request of any session for that account, with no new login
+   * (AUTH-REQ-003, DEC-0525). Granting a role already held changes nothing.
+   * Rejects when no account has that user ID. Throws on a test app with the authentication mock
+   * (choose the level with `user` or `as` instead) and on a connected stage (use the `admins`
+   * command there).
+   */
+  grantRole(userId: string, role: TestRole): Promise<void>;
+  /**
+   * The reverse of `grantRole`: removes `role` from the account's roles. With no role left the
+   * account has none (the `role` column is NULL), never a "user" role. Revoking a role not held
+   * changes nothing. Same availability as `grantRole`.
+   */
+  revokeRole(userId: string, role: TestRole): Promise<void>;
+  /**
    * Discards all state created by this test app. In-process, the original and every test
    * app made from it with `as` share one app: disposing any of them disposes all, and later
    * requests through any of them reject. On a connected stage it only logs that test app
@@ -129,6 +149,12 @@ export interface TestApp {
    */
   dispose(): Promise<void>;
 }
+
+/**
+ * The roles a test can grant. `admin` is the only role defined (DEC-0521); "user" is an access
+ * level that every verified account has, not a role.
+ */
+export type TestRole = "admin";
 
 /** In-process app with fresh local storage, migrations applied, and the authentication mock. */
 export declare function createTestApp<C extends ConfigDeclaration, S extends string>(

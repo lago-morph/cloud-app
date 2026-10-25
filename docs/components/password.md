@@ -41,6 +41,11 @@ Origin: ai-proposed · Derives from: SYS-REQ-006, SYS-REQ-019 · Decision: DEC-0
 
 The credential library MUST be pinned exactly (PAR-122). Its origin check and rate limiter MUST be forced on whatever the process environment, its telemetry MUST be off, and its base URL MUST be the deployment's resolved public origin, never a request header. The framework MUST NOT forward the library's response bodies or headers to the browser.
 
+#### PWD-REQ-008 — The account's role list
+Origin: owner · Derives from: SYS-REQ-018 · Decision: DEC-0521, DEC-0522, DEC-0524
+
+Each account MUST have a role list, stored in the column `role` of `__framework_auth_user` as role names separated by commas, or NULL when it has none. `admin` is the only role defined. A new account MUST have no roles: nothing may write `user`, or any other default, into the list. Only the `admins` command (CLI-REQ-005) and the test helpers (`TestApp.grantRole`, `revokeRole`) may change it. No request to the provider's pages or endpoints may set or change it, whatever its body holds. The provider MUST answer `accountStatus(subject)` with the account's verification flag and roles, in one read (AUTH-REQ-003).
+
 ## 2. Design
 
 **Where.** `src/auth/password/`, framework-internal, Workers-compatible. One BA instance per request over the request's SQL binding (about 0.6 ms, RESULT.md S2), imported from `better-auth/minimal` with `better-auth/adapters/drizzle` (sqlite on D1, pg on PGlite in `createTestApp`).
@@ -55,9 +60,15 @@ The credential library MUST be pinned exactly (PAR-122). Its origin check and ra
 - `logger`: maps BA's levels to LOG entries with component `AUTH` and a fixed reason, never BA's message text;
 - password hashing: BA's default scrypt, which on workerd is `node:crypto.scrypt` (PAR-244). A custom hasher in the same format, with a constant-time compare, is allowed.
 
-The admin and test-utils plugins are not used; admins stay in configuration (SYS-REQ-018).
+The admin and test-utils plugins are not used. The admin plugin's `setRole` needs an existing admin, and its `defaultRole: "user"` would write a role that does not exist (DEC-0521). Admins are a role in the account table (PWD-REQ-008), granted with the `admins` command (CLI-REQ-005).
 
-**Tables.** BA's models are renamed with `modelName`: `__framework_auth_user`, `__framework_auth_account`, `__framework_auth_session`, `__framework_auth_verification`, `__framework_auth_rate_limit`. They are defined in Drizzle in the framework package and added to the framework migration histories of both dialects by the existing engine (MIG §2); BA's own `migrate` is never used. Apps cannot use the `__framework_` prefix, so app portability is unaffected; the D1 copy copies these tables like any other.
+**Role column** (PWD-REQ-008, DEC-0521).
+- `__framework_auth_user.role` is nullable text with no default. It is declared to BA as `user.additionalFields.role`, with `{ type: "string", required: false, input: false }`, so that BA's sign-up and update paths never take it from a request. The bridge also forwards only the fields it validated, so a `role` in a sign-up body never reaches BA.
+- It holds role names separated by commas, as the admin plugin's field does. It is NULL when the account has none, including every new account.
+- `accountStatus(subject)` is `SELECT email_verified, role FROM __framework_auth_user WHERE id = ?`, one read per authenticated request (AUTH §2). It answers null when there is no row.
+- The `admins` command and `grantRole` add `admin` to the list. `revoke` and `revokeRole` remove it, writing NULL when no role is left, and never write `user`. Each change is one `UPDATE … WHERE id = ?` of the parsed list, with names kept unique and in order.
+
+**Tables.** BA's models are renamed with `modelName`: `__framework_auth_user`, `__framework_auth_account`, `__framework_auth_session`, `__framework_auth_verification`, `__framework_auth_rate_limit`. They are defined in Drizzle in the framework package and added to the framework migration histories of both dialects by the existing engine (MIG §2); BA's own `migrate` is never used. The `role` column is added by its own framework migration, `<nnnn>_auth_role` (the next free number), after the tables' `0001_auth_tables` (MIG §2, DEC-0526). Apps cannot use the `__framework_` prefix, so app portability is unaffected; the D1 copy copies these tables like any other.
 
 **Handler bridge** (DEC-0510). Each framework POST endpoint validates its input, then forwards `new Request(origin + basePath + baPath)` with a JSON body to `auth.handler()`. It copies only `Origin`, `CF-Connecting-IP` and `User-Agent`, never `Cookie`, `Host` or `X-Forwarded-*`. It returns none of BA's headers and never BA's body: the framework maps BA's status and code to its own answer. Verify is sent to BA as `GET /verify-email?token=` (P4). On a sign-in 200 the bridge reads `user.id`, `user.name` and `token`, deletes the row `__framework_auth_session` with that token, and returns the `ProviderIdentity`. Only the framework's own endpoints are routed; any other path under `/api/auth/password/` is 404 `HTTP.NOT_FOUND`, so BA's endpoints are never reachable directly.
 
@@ -102,7 +113,7 @@ It writes one evidence record with results for PWD-AC-009, AUTH-AC-011 and E2E-0
 
 ## 3. Uses
 
-AUTH (provider interface, session, forgery check), MAIL (sending), SQL and MIG (tables), CFG (public origin), SEC (`frameworkAuthSecret`), LOG (failed logins), COMPL (evidence format).
+AUTH (provider interface, session, forgery check, level from `accountStatus`), MAIL (sending), SQL and MIG (tables, the role column), CFG (public origin), SEC (`frameworkAuthSecret`), LOG (failed logins), COMPL (evidence format).
 
 ## 4. Acceptance criteria
 
@@ -117,6 +128,7 @@ AUTH (provider interface, session, forgery check), MAIL (sending), SQL and MIG (
 | PWD-AC-007 | With `NODE_ENV=test`, a sign-in, a sign-up, a forgot and a reset with a forged `Origin` are each refused with 403 `AUTH.REQUEST_FORGERY`. The installed better-auth version equals PAR-122 exactly, and the framework's source imports the library only as `better-auth/minimal` and `better-auth/adapters/drizzle`. With outbound network requests recorded, sign-up and sign-in make none (telemetry off). | PWD-REQ-007 | Local |
 | PWD-AC-008 | On a Cloudflare test stage, sign-up, verification through the stage's test-mail route, sign-in and `/api/auth/me` work as in PWD-AC-001, and a sign-in burst gets 429 `AUTH.RATE_LIMITED`. | PWD-REQ-001, PWD-REQ-003, PWD-REQ-006 | Cloud |
 | PWD-AC-009 | On the `prodcheck` stage, redeployed, `check-login` runs steps 1–7 with real email delivery through the mail sink and writes an evidence record in which every step passed. | PWD-REQ-001, PWD-REQ-003, PWD-REQ-004, PWD-REQ-006 | Cloud |
+| PWD-AC-010 | With `createTestApp` and the password provider, on both dialects: after sign-up, the new account's `role` column is NULL, and it is still NULL after verification and sign-in, where `/api/auth/me` shows level `user`. A sign-up whose JSON body also carries `"role": "admin"` (and one carrying `"role": "user"`) is either refused with 400 `HTTP.INVALID_INPUT` or creates an account whose `role` is NULL, and that account signs in as `user`, never `admin`. No request to the provider's endpoints changes the column. After `grantRole` and `revokeRole`, the column is NULL again, never `user`. | PWD-REQ-008 | Local |
 
 ## 5. Portability note
 

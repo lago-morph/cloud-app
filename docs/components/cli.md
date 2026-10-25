@@ -7,7 +7,7 @@ Contracts: the command table below.
 ## 1. Requirements
 
 #### CLI-REQ-001 — Commands
-Origin: provenance-unclear · Derives from: SYS-REQ-022, SYS-REQ-023, SYS-REQ-025, SYS-REQ-027 · Decision: DEC-0512, DEC-0513, DEC-0514
+Origin: provenance-unclear · Derives from: SYS-REQ-018, SYS-REQ-022, SYS-REQ-023, SYS-REQ-025, SYS-REQ-027 · Decision: DEC-0512, DEC-0513, DEC-0514, DEC-0523
 
 The CLI MUST provide these commands as the framework package's own binary, invoked as `npx <package> <command>` (for example `npx <package> verify`). Apps also expose them as npm scripts of the same name.
 
@@ -24,6 +24,7 @@ The CLI MUST provide these commands as the framework package's own binary, invok
 | `setup-account --target <t> [--region <r>] [--email-domain <domain>]` | One-time creation of the account's shared resources and settings (PROV-REQ-004); `--region` chooses the AWS account's region (PROV-REQ-006); `--email-domain` records the Cloudflare account's email domain (MAIL-REQ-003). `--region` and the AWS target: deferred, branch `aws`; release 1's `setup-account` takes `--target` and, on Cloudflare, `--email-domain`. |
 | `check-login --target <t> --stage <s>` | Automated real-login-provider check on a production stage, with real email delivery (PWD §2). |
 | `mail last --to <address> [--target <t>]` | Print the latest framework email sent to an address: locally from `.mail/`, on Cloudflare from the mail sink (MAIL). |
+| `admins grant <email> --target <t> --stage <s> [--confirm-production <s>]`, `admins revoke <email> …`, `admins list …` | Grant, revoke or list the `admin` role of accounts on a stage, by email address, written directly in the stage's database (CLI-REQ-005). |
 | `reset-local` | Clear local state. |
 
 `certify-auth` (the guided Google certification) is retired with GOOGLE (DEC-0513); `check-login` replaces it (DEC-0512).
@@ -48,6 +49,16 @@ Every command MUST exit with non-zero status when it fails, including partial fa
 Origin: owner-approved · Derives from: SYS-REQ-015
 
 No command may print a secret value.
+
+#### CLI-REQ-005 — `admins`
+Origin: ai-proposed · Derives from: SYS-REQ-015, SYS-REQ-018 · Decision: DEC-0521, DEC-0523
+
+`admins grant <email>` MUST add the role `admin` to the account with that email address on the named stage. `admins revoke <email>` MUST remove it, leaving no role rather than a "user" role. `admins list` MUST print every account on the stage that holds `admin`. The command MUST:
+- write the stage's own database directly: on a cloud through the provider's API, locally the database that `dev` uses;
+- work on test stages and production stages alike, and on a production stage refuse to read or change anything unless `--confirm-production <s>` repeats the stage name;
+- refuse, changing nothing, an address with no account and an account whose address is not verified;
+- make a grant or revoke effect the person's level from their next request (AUTH-REQ-003), with no deploy;
+- never print a password, a password hash, a session or verification token, or a credential.
 
 ## 2. Design
 
@@ -95,6 +106,12 @@ Anything else is refused before any request is sent. `smoke` first checks that t
 - `check-login --target cloudflare --stage <s>` runs PWD's check (PWD §2, steps 1–7) on a production stage: base URL from the recorded deploy output, email domain from the account settings record (DEC-0514), mail from the sink. It needs no input, prints no address, password or token, and writes one evidence record (subdomain redacted). Test stages and target `local` are refused before any request.
 - `mail last --to <address> [--target local|cloudflare]` prints the latest message to that address as JSON: locally (the default) from the app's `.mail/`; on Cloudflare from the mail sink, for an address under `t.<emailDomain>` only. It exits 1 when there is none.
 - `setup-account --target cloudflare [--email-domain <domain>]`: `--email-domain` is required while the account settings record has no `emailDomain`, and otherwise changes it (MAIL §2). The flag is refused with any other target (exit 2).
+- `admins grant|revoke <email> | list --target <t> --stage <s>` (DEC-0523, CLI-REQ-005). The address is matched as BA stores it, trimmed and lowercased.
+  - **Locally** (`--target local`; `--stage` may be left out and can only be `local`), it opens the app's persisted local D1 under `.wrangler/state` through `getPlatformProxy`, as `dev` does. It works whether or not `dev` is running.
+  - **On Cloudflare**, it finds the stage's current database by the anchored pattern (MIG §2) and sends `/query` requests through the D1 HTTP API with the deploy token. It refuses a stage with no database, and one with more than one (a schema-changing deploy is in progress or was interrupted). It makes the same HTTPS proxy check as the other cloud commands.
+  - **Production stages.** A stage not named `test-*` is refused with exit 2 unless `--confirm-production <s>` repeats its name, as for `remove`. Nothing is read before the check.
+  - **Reads and writes.** `grant` and `revoke` read the account's `id`, `email_verified` and `role` by address. Then they write the new comma-separated list, or NULL when no role is left, with one `UPDATE … WHERE id = ?`. An unknown address or an unverified account exits 1 with the one message `no verified account with this address on <stage>`. `role` is the only column written.
+  - **Output.** `grant` and `revoke` print the account's user ID (`deriveUserId("password", id)`, as `/api/auth/me` shows it) and its new roles. `list` prints one line per admin: address, user ID, roles. Nothing else from the account table is printed: no password hash, no token, and no row of `__framework_auth_account`, `__framework_auth_session` or `__framework_auth_verification`. Holding the role already, or not holding it on revoke, prints the same line and exits 0.
 - `reset-local` removes `.wrangler/` (local D1, KV and R2), `.logs/` and `.mail/`; sources, configuration, migrations and `.dev.vars` stay.
 - `verify` runs every step and reports all of them before failing: type checking (the app lib set `APP_COMPILER_OPTIONS`, never the app's `tsconfig.json`; `src/` and `tests/` in separate programs, so test-runner types cannot make Node globals type-check in app code), the portability rules, the migration checker, the installed `zod` version against PAR-112, then the app tests (PAR-116 glob) once per dialect, each in a child process running Vitest through its Node API with the framework's options only (60 s test and hook timeouts, no cache). The output has no times or durations; it lists failing and skipped tests sorted (passing tests are only counted, since a line naming a file reads as a problem with it), so runs are comparable. A run with no passing test fails.
 - `dev` builds for `local`/`local`, generates missing development secrets, applies pending migrations to the persisted local D1 through `getPlatformProxy` (a failing migration exits 1 before anything is served), then starts Vite (no app Vite configuration) on `127.0.0.1` port 0 and takes its bound port as `<port>`, with `/api` proxied to Wrangler (with Wrangler's own `Host`, so Wrangler's dev proxy leaves the browser's `Origin` unchanged; `/api` answers 503 until Wrangler's port is known), no CORS headers (Vite's `server.cors: false`), the SPA fallback for deep links, and a check that answers 403 unless `Host` is exactly `localhost:<port>`. If Vite's bind fails with `EADDRINUSE`, it starts Vite again, at most 3 attempts in all. It then starts `wrangler dev` on a loopback port that Wrangler binds itself (`--port 0`, inspector on loopback port 0, `--persist-to <app>/.wrangler/state`, `--env-file <app>/.dev.vars`, `--var FRAMEWORK_PUBLIC_ORIGIN:http://localhost:<port>`) with its output passed through LOG's capture into `.logs/`, reads the Worker's real port back from Wrangler's `DEV_SERVER_READY` message (or its `Ready on` line), and points the `/api` proxy at it (DEC-0417). It prints `http://localhost:<port>/`. It does not rebuild while running. Ctrl-C stops both processes and exits 0; Wrangler ending on its own exits 1.
@@ -103,7 +120,7 @@ Anything else is refused before any request is sent. `smoke` first checks that t
 
 ## 3. Uses
 
-LOCAL, CHECK, PROV, MIG, SEC, PWD (`check-login`), MAIL (`mail`, `dev` capture), CORE (`connectTestStage`), COMPL (evidence records).
+LOCAL, CHECK, PROV, MIG (the stage's current database, for `admins`), SEC, PWD (`check-login`; the account table and its role column, for `admins`), MAIL (`mail`, `dev` capture), CORE (`connectTestStage`), COMPL (evidence records).
 
 ## 4. Acceptance criteria
 
@@ -114,6 +131,8 @@ LOCAL, CHECK, PROV, MIG, SEC, PWD (`check-login`), MAIL (`mail`, `dev` capture),
 | CLI-AC-003 | Injected failures in `deploy`, `remove` and the compliance runner, including a failure during cleanup, yield non-zero exit statuses that reflect the original failure. | CLI-REQ-003 | Local |
 | CLI-AC-004 | A scan of the output of every command in a full test run finds no test secret values. | CLI-REQ-004 | Local, cloud |
 | CLI-AC-005 | `smoke` runs the template's `tests/smoke/**` against the running `dev` server and against a deployed test stage, writes an evidence record, and prints the stage's log location for the day. | CLI-REQ-001 | Local, cloud |
+| CLI-AC-006 | Against the reference app's local D1 (`--target local`): after a sign-up and verification through `dev`, `admins grant <address>` exits 0 and prints the account's user ID, which equals `/api/auth/me`'s `id`. The next request with the person's existing session shows `admin`, with no new login and no restart. `admins list` shows the address with `admin`. `admins revoke <address>` makes the next request `user`, and the `role` column is NULL afterwards. A second grant, and a revoke of a non-admin, change nothing and exit 0. An unknown address and an unverified account each exit 1 and change nothing. The output of every run, scanned with the test passwords, the stored password hash and every verification token and session cookie of the test, contains none of them. | CLI-REQ-005 | Local |
+| CLI-AC-007 | On a Cloudflare test stage, after sign-up, verification through the test-mail route and sign-in, `admins grant <address> --target cloudflare --stage <test stage>` gives `admin` on the next request, and `admins revoke` gives `user` again, both through the D1 HTTP API. `admins grant <address> --target cloudflare --stage prodcheck` without `--confirm-production prodcheck`, or with another name, exits 2 and sends no request to the D1 API (a recorded fetch shows none); `admins list` likewise. The output of every run contains no password, hash, token or API credential. | CLI-REQ-005 | Cloud |
 
 ## 5. Portability note
 
