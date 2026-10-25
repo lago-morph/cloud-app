@@ -30,6 +30,7 @@ export { tag, parseTags } from "../../support/tags.js";
 export { createClient, HttpCheckError, USER_AGENT, type ComplianceClient, type HttpResponse, type Level, type RequestOptions } from "./http.js";
 export { approxEqual, expectMultisetEqual, floatsClose, multisetDiff } from "./compare.js";
 export { CLOUD_WAITS, waitFor, type WaitOptions } from "./wait.js";
+export { DATE_HEADER_SLACK_MS, inWindow, serverWindow, timed, type TimeWindow } from "./server-time.js";
 export { prerequisiteMissing, PrerequisiteMissingError, PREREQUISITE_MARKER } from "./blocked.js";
 export { readTargetEnv, type TargetEnv } from "./env.js";
 export { REFERENCE_APP } from "./leftovers.js";

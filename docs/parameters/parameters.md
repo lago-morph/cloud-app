@@ -98,7 +98,7 @@ The owner approved these values on 2026-10-25 ("Approve recommended values", DEC
 
 | ID | Parameter | Value | Category | Notes |
 | --- | --- | --- | --- | --- |
-| PAR-310 | Bound for a Cloudflare secret change to reach requests | 60 seconds | owner | SEC-AC-005 (DEC-0540). A secret set or deleted reaches requests once the Worker version it rolls out serves them, a few seconds later (DEC-0092); the same value as the compliance harness's `CLOUD_WAITS.secretRolloutMs` (DEC-0431). |
+| PAR-310 | Bound for a Cloudflare secret change to reach requests | 60 seconds | owner | SEC-AC-005 (DEC-0540, DEC-0562). A secret set or deleted reaches requests once the Worker version it rolls out serves them, a few seconds later (DEC-0092); the same value as the compliance harness's `CLOUD_WAITS.secretRolloutMs` (DEC-0431). |
 
 ## Log
 

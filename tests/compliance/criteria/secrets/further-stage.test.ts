@@ -4,10 +4,11 @@
  * stage:
  * - SEC-AC-003 (cloud part): after `secrets set`, the secret exists at SECRET_<NAME> in the
  *   target's store;
- * - SEC-AC-005 (DEC-0540): after `secrets set`, requests see the new value within PAR-310 and the
- *   5 consecutive requests after the first that sees it all see it; after the secret is deleted
- *   directly through the store (test hook), requests fail with SEC.MISSING within PAR-310 and the
- *   5 consecutive requests after the first that fails all fail with it;
+ * - SEC-AC-005 (DEC-0540, DEC-0562): after `secrets set`, a request sees the new value within
+ *   PAR-310 of the command returning, and 5 consecutive requests sent once PAR-310 has elapsed all
+ *   see it; after the secret is deleted directly through the store (test hook), a request fails
+ *   with SEC.MISSING within PAR-310, and 5 consecutive requests sent once PAR-310 has elapsed all
+ *   fail with it;
  * - SEC-AC-001 (cloud, "without a value" clause) and HTTP-AC-002 (SEC.MISSING on a cloud): the
  *   declared secret without a value fails with SEC.MISSING as a schema-valid ErrorResponse;
  * - LOG-AC-004 (removal clause): after the further stage is removed, the shared bucket and the
@@ -16,14 +17,59 @@
  * The tests in this file run in order and share the stage.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { client, CLOUD_WAITS, createClient, tag, waitFor } from "../../harness/index.js";
+import { client, CLOUD_WAITS, createClient, tag, waitFor, type HttpResponse } from "../../harness/index.js";
+import { delay } from "../core/support/processes.js";
 import { withFurtherStage, type FurtherStage } from "../core/support/stages.js";
-import { catalogueStatus, isLocal, REFERENCE_DIR, sha256Hex, uniqueValue, runDeployment, utcDay } from "../core/support/repo.js";
+import { catalogueStatus, isLocal, parameterNumber, REFERENCE_DIR, sha256Hex, uniqueValue, runDeployment, utcDay } from "../core/support/repo.js";
 import { expectSecretMissing } from "../core/support/secrets.js";
 import { cloudHooks, logDayPrefix } from "../core/support/stores.js";
 
-/** DEC-0540: the sample of consecutive requests after the first that shows the change. */
+/** DEC-0562: the sample of consecutive requests sent once PAR-310 has elapsed. */
 const CONSECUTIVE = 5;
+/** PAR-310 (DEC-0540): the bound for a secret change to reach requests, in ms (the parameter is in seconds). */
+const PAR_310_MS = parameterNumber("PAR-310") * 1000;
+
+/**
+ * SEC-AC-005 (DEC-0562) for one change whose command (or store deletion) returned at `since`
+ * (`performance.now()`): a request shows the change within PAR-310 of `since`; then, once PAR-310
+ * has elapsed since `since`, 5 consecutive requests all show it. A request that does not show the
+ * change must answer the stale state (`stale`, the old value's hash): a stale read is reported as
+ * one, and any other answer as what it is.
+ */
+async function expectChange(o: {
+  readonly since: number;
+  readonly request: () => Promise<HttpResponse>;
+  readonly changed: (r: HttpResponse) => boolean;
+  readonly stale: { readonly sha256: string };
+  readonly what: string;
+  readonly check?: (r: HttpResponse) => void;
+}): Promise<void> {
+  const staleText = JSON.stringify(o.stale);
+  const notStale: string[] = [];
+  const left = o.since + PAR_310_MS - performance.now();
+  expect(left, "PAR-310 had already elapsed when the wait began").toBeGreaterThan(0);
+  await waitFor(
+    async () => {
+      const r = await o.request();
+      if (o.changed(r)) return true;
+      if (!(r.status === 200 && r.text === staleText)) notStale.push(`status ${String(r.status)}: ${r.text.slice(0, 200)}`);
+      return undefined;
+    },
+    { what: `${o.what} within PAR-310 of the change`, timeoutMs: left, intervalMs: 1_000 },
+  );
+  expect(notStale, "answers before the change was seen that were neither the change nor the old value's hash").toEqual([]);
+  // Then wait until PAR-310 has elapsed since the change, and send 5 consecutive requests.
+  await delay(Math.max(0, o.since + PAR_310_MS - performance.now()));
+  for (let i = 1; i <= CONSECUTIVE; i += 1) {
+    const label = `consecutive request ${String(i)} of ${String(CONSECUTIVE)} sent once PAR-310 had elapsed`;
+    const r = await o.request();
+    if (!o.changed(r)) {
+      expect({ status: r.status, body: r.text }, `${label}: a request that does not show the change answers the old value's hash (stale), not something else`).toEqual({ status: 200, body: staleText });
+      expect.fail(`${label} answered the old value's hash (stale) after PAR-310`);
+    }
+    o.check?.(r);
+  }
+}
 
 if (!isLocal()) {
   describe("further reference stage: secrets and stage removal (cloud)", () => {
@@ -32,6 +78,8 @@ if (!isLocal()) {
     let finish: (() => void) | undefined;
     let held: Promise<void> | undefined;
     let ready: Promise<FurtherStage> | undefined;
+    /** The value the stage's apiKey last held (SEC-AC-005's old value). */
+    let lastSet: string = values[0];
 
     beforeAll(() => {
       // Hold the further stage open for the tests below; withFurtherStage removes it when `finish` is called.
@@ -63,6 +111,7 @@ if (!isLocal()) {
         const s = current();
         const set = await s.setSecret("apiKey", values[1]);
         expect(set.status, set.output).toBe(0);
+        lastSet = values[1];
         const hooks = await cloudHooks("SEC-AC-003");
         expect(await hooks.secretLocations({ app: s.app, stage: s.stage }), "secret locations set on the stage").toContain("SECRET_API_KEY");
         const c = createClient({ baseUrl: s.baseUrl });
@@ -73,35 +122,33 @@ if (!isLocal()) {
     );
 
     it(
-      tag("SEC-AC-005", "after secrets set, requests see the new value within PAR-310 and the next 5 consecutive requests all see it; after the secret is deleted through the store, requests fail with SEC.MISSING within PAR-310 and the next 5 consecutive requests all fail with it"),
+      tag("SEC-AC-005", "after secrets set, a request sees the new value within PAR-310 of the command returning and 5 consecutive requests sent once PAR-310 has elapsed all see it; after the secret is deleted through the store, a request fails with SEC.MISSING within PAR-310 and 5 consecutive requests sent once PAR-310 has elapsed all fail with it"),
       async () => {
         const s = current();
         const hooks = await cloudHooks("SEC-AC-005");
         const c = createClient({ baseUrl: s.baseUrl });
         const status = catalogueStatus("SEC.MISSING");
-        const expected = JSON.stringify({ sha256: sha256Hex(values[2]) });
+        const oldBody = { sha256: sha256Hex(lastSet) };
+        const newBody = { sha256: sha256Hex(values[2]) };
+        const seesNew = (r: HttpResponse): boolean => r.status === 200 && r.text === JSON.stringify(newBody);
+        const isMissing = (r: HttpResponse): boolean => r.status === status && r.errorCode === "SEC.MISSING";
 
         const set = await s.setSecret("apiKey", values[2]);
         expect(set.status, set.output).toBe(0);
-        // PAR-310 (DEC-0540): the first request that sees the new value comes within the bound.
-        await waitFor(async () => {
-          const r = await c.get("/api/ref/secret");
-          return r.status === 200 && r.text === expected ? true : undefined;
-        }, { what: "a request seeing the value secrets set wrote (PAR-310)", timeoutMs: CLOUD_WAITS.secretRolloutMs, intervalMs: 1_000 });
-        // Then 5 consecutive requests all see it: the old value never comes back (sampled).
-        for (let i = 1; i <= CONSECUTIVE; i += 1) {
-          expect(c.expectStatus(await c.get("/api/ref/secret"), 200).json(), `consecutive request ${String(i)} of ${String(CONSECUTIVE)} after the first that saw the new value`).toEqual({ sha256: sha256Hex(values[2]) });
-        }
+        const setReturned = performance.now();
+        lastSet = values[2];
+        await expectChange({ since: setReturned, request: () => c.get("/api/ref/secret"), changed: seesNew, stale: oldBody, what: "a request seeing the value secrets set wrote" });
 
         await hooks.deleteSecret({ app: s.app, stage: s.stage }, "apiKey");
-        // PAR-310: the first request that fails with SEC.MISSING comes within the bound.
-        await waitFor(async () => {
-          const r = await c.get("/api/ref/secret");
-          return r.status === status && r.errorCode === "SEC.MISSING" ? true : undefined;
-        }, { what: "a request failing with SEC.MISSING after the secret was deleted through the store (PAR-310)", timeoutMs: CLOUD_WAITS.secretRolloutMs, intervalMs: 1_000 });
-        for (let i = 1; i <= CONSECUTIVE; i += 1) {
-          c.expectError(await c.get("/api/ref/secret"), status, "SEC.MISSING");
-        }
+        const deleteReturned = performance.now();
+        await expectChange({
+          since: deleteReturned,
+          request: () => c.get("/api/ref/secret"),
+          changed: isMissing,
+          stale: newBody,
+          what: "a request failing with SEC.MISSING after the secret was deleted through the store",
+          check: (r) => c.expectError(r, status, "SEC.MISSING"),
+        });
       },
       10 * 60_000,
     );

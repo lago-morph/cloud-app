@@ -25,7 +25,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { APIRequestContext, Browser, BrowserContext, Locator, Page, Request } from "@playwright/test";
 import { createTestApp, type TestApp, type TestAppOptions } from "@lago-morph/prototype-framework/testing";
-import { USER_AGENT, prerequisiteMissing, target } from "../../harness/index.js";
+import { USER_AGENT, prerequisiteMissing, serverWindow, target, type TimeWindow } from "../../harness/index.js";
 import { expect } from "../../harness/playwright.js";
 import { copyApp, randomSuffix, removeDir, setSecret } from "./apps.js";
 import { REPO_ROOT, startDev, type DevServer } from "./process.js";
@@ -248,6 +248,17 @@ export interface Recorded {
   readonly status: number;
   /** The response body as text (JSON responses only; empty otherwise). */
   readonly response: string;
+  /** The response's `Date` header (the server's clock), when it had one. */
+  readonly date?: string;
+  /** The round trip measured here, from sending the request to its response, in ms. */
+  readonly durationMs: number;
+  /** This machine's clock when the response arrived (stands in for `date` when there is none). */
+  readonly receivedAt: number;
+}
+
+/** The server-clock window of a recorded request (harness/server-time.ts): D − duration − 1 s to D + 1 s. */
+export function recordedWindow(r: Recorded): TimeWindow {
+  return serverWindow(r.date, r.durationMs, r.receivedAt);
 }
 
 function isAppApi(origin: string, request: Request): boolean {
@@ -290,13 +301,17 @@ export class Recorder {
       const body = request.postData() ?? undefined;
       const contentType = request.headers()["content-type"];
       const base = { method: request.method(), path: `${url.pathname}${url.search}`, ...(body === undefined ? {} : { body }), ...(contentType === undefined ? {} : { contentType }) };
+      const started = performance.now();
       try {
         const response = await route.fetch();
+        const durationMs = performance.now() - started;
+        const receivedAt = Date.now();
+        const date = response.headers()["date"];
         const text = await response.text();
-        recorder.done.push({ ...base, status: response.status(), response: (response.headers()["content-type"] ?? "").includes("json") ? text : "" });
+        recorder.done.push({ ...base, status: response.status(), response: (response.headers()["content-type"] ?? "").includes("json") ? text : "", ...(date === undefined ? {} : { date }), durationMs, receivedAt });
         await route.fulfill({ response, body: text }).catch(() => undefined);
       } catch {
-        recorder.done.push({ ...base, status: 0, response: "" });
+        recorder.done.push({ ...base, status: 0, response: "", durationMs: performance.now() - started, receivedAt: Date.now() });
         await route.abort().catch(() => undefined);
       } finally {
         recorder.open -= 1;
@@ -366,7 +381,7 @@ export async function capture(page: Page, origin: string, action: () => Promise<
       const url = new URL(request.url());
       const body = request.postData() ?? undefined;
       const contentType = request.headers()["content-type"];
-      captured = { method: request.method(), path: `${url.pathname}${url.search}`, ...(body === undefined ? {} : { body }), ...(contentType === undefined ? {} : { contentType }), status: 0, response: "" };
+      captured = { method: request.method(), path: `${url.pathname}${url.search}`, ...(body === undefined ? {} : { body }), ...(contentType === undefined ? {} : { contentType }), status: 0, response: "", durationMs: 0, receivedAt: Date.now() };
       await route.abort();
       return;
     }
