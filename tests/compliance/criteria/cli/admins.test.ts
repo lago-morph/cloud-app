@@ -59,13 +59,35 @@ function localRole(subject: string): unknown {
   return row?.role;
 }
 
-/** Every account's role, to show that a refused run changed nothing. */
-function localRoles(): string {
-  return JSON.stringify(
-    localRows("__framework_auth_user")
-      .map((r) => [r.id, r.role ?? null, r.email_verified ?? null])
-      .sort(),
-  );
+/**
+ * What a refused run must leave unchanged. Other tests sign up and verify accounts on the same
+ * `dev` D1 in parallel, so a snapshot of the whole table is not stable. So: this test's own
+ * accounts keep their role and verification flag, every account that existed before keeps its
+ * role, and the number of accounts with the refused address stays the same.
+ */
+interface RoleSnapshot {
+  readonly own: string;
+  readonly roles: ReadonlyMap<unknown, unknown>;
+  readonly withAddress: number;
+}
+
+function roleSnapshot(ownSubjects: readonly string[], address: string): RoleSnapshot {
+  const rows = localRows("__framework_auth_user");
+  const own = ownSubjects.map((subject) => {
+    const row = rows.find((r) => r.id === subject);
+    expect(row, `this test's account row ${subject}`).toBeDefined();
+    return [subject, row?.role ?? null, row?.email_verified ?? null];
+  });
+  const withAddress = rows.filter((r) => typeof r.email === "string" && r.email.toLowerCase() === address.toLowerCase()).length;
+  return { own: JSON.stringify(own), roles: new Map(rows.map((r) => [r.id, r.role ?? null])), withAddress };
+}
+
+function expectUnchanged(before: RoleSnapshot, ownSubjects: readonly string[], address: string, what: string): void {
+  const now = roleSnapshot(ownSubjects, address);
+  expect(now.own, `${what}: this test's accounts`).toBe(before.own);
+  const changed = [...before.roles].filter(([id, role]) => !now.roles.has(id) || now.roles.get(id) !== role).map(([id]) => id);
+  expect(changed, `${what}: every account that existed before keeps its role`).toEqual([]);
+  expect(now.withAddress, `${what}: accounts with the address ${address}`).toBe(before.withAddress);
 }
 
 if (isLocal()) {
@@ -127,15 +149,16 @@ if (isLocal()) {
         expect(revokeAgain.status, `a revoke of a non-admin: ${revokeAgain.output}`).toBe(0);
         expect(localRole(subject), "a revoke of a non-admin changes nothing").toBeNull();
 
+        const own = [subject, localSubjectOf(unverified.email)];
         for (const [what, address] of [
           ["an unknown address", testAddress("cli-ac-006-nobody")],
           ["an unverified account", unverified.email],
         ] as const) {
           for (const verb of ["grant", "revoke"]) {
-            const roles = localRoles();
+            const before = roleSnapshot(own, address);
             const r = await run([verb, address]);
             expect(r.status, `${verb} for ${what}: ${r.output}`).toBe(1);
-            expect(localRoles(), `${verb} for ${what} changes nothing`).toBe(roles);
+            expectUnchanged(before, own, address, `${verb} for ${what} changes nothing`);
           }
         }
         expect(await levelOf(b), "still user").toMatchObject({ level: "user", id });

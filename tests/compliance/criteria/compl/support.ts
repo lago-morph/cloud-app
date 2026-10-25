@@ -232,10 +232,15 @@ export function whereSets(docsDir: string = DOCS): WhereSets {
   return { automated, milestone };
 }
 
-/** The milestone items COMPL-REQ-006 names ("The milestone items are …"). */
+/**
+ * The milestone items COMPL-REQ-006 names, as last amended: the latest sentence listing them in
+ * full ("The milestone items are …", or an amendment's "The milestone items of release 1 are
+ * therefore …", DEC-0526), so an amendment that restates the list replaces the original.
+ */
 export function milestoneItemsNamed(docsDir: string = DOCS): Set<string> {
   const text = readFileSync(join(docsDir, "components", "compliance.md"), "utf8");
-  const sentence = /The milestone items are ([^\n]*?)\. A milestone item/.exec(text)?.[1];
+  const sentences = Array.from(text.matchAll(/The milestone items (?:of release 1 )?are (?:therefore )?([^\n]*?)\.(?= |\n|$)/g), (m) => m[1]);
+  const sentence = sentences.at(-1);
   if (sentence === undefined) throw new Error("compliance.md: COMPL-REQ-006's list of milestone items not found");
   return new Set(Array.from(sentence.matchAll(/\b(?:[A-Z]+-AC|E2E)-\d{3}\b/g), (m) => m[0]));
 }

@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { whereSets } from "./support.js";
+import { milestoneItemsNamed, whereSets } from "./support.js";
 
 const HEADER = ["| ID | Criterion | Verifies | Where |", "| --- | --- | --- | --- |"];
 
@@ -95,5 +95,31 @@ describe("[COMPL-AC-001] whereSets reads criteria only from criteria tables", ()
   ])("throws, with file and line, on %s inside a criteria table", (_name, lines, message) => {
     const dir = make({ ...criteria, "components/bad.md": lines });
     expect(() => whereSets(dir)).toThrow(message);
+  });
+});
+
+describe("[COMPL-AC-001] milestoneItemsNamed reads COMPL-REQ-006's list as last amended", () => {
+  const original = "The milestone items are GOOGLE-AC-005, E2E-007 (cloud part), AUTH-AC-005 (admin-list part) and COMPL-AC-008. A milestone item MUST be run again.";
+  const amendment = "Amendment (DEC-0526): E2E-007 leaves the list. The milestone items of release 1 are therefore E2E-015, MAIL-AC-007 and COMPL-AC-008.";
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+  const docs = (lines: string[]): string => {
+    const dir = tree({ "components/compliance.md": lines });
+    dirs.push(dir);
+    return dir;
+  };
+
+  it("takes the original sentence when no amendment restates the list", () => {
+    expect(sorted(milestoneItemsNamed(docs(["#### COMPL-REQ-006", "", original])))).toEqual(["AUTH-AC-005", "COMPL-AC-008", "E2E-007", "GOOGLE-AC-005"]);
+  });
+
+  it("takes the latest amendment's full list over the original", () => {
+    expect(sorted(milestoneItemsNamed(docs(["#### COMPL-REQ-006", "", original, "", amendment])))).toEqual(["COMPL-AC-008", "E2E-015", "MAIL-AC-007"]);
+  });
+
+  it("on the real compliance.md, gives DEC-0526's release 1 list", () => {
+    expect(sorted(milestoneItemsNamed())).toEqual(["COMPL-AC-008", "E2E-010", "E2E-012", "E2E-015", "E2E-016", "MAIL-AC-007", "PROV-AC-003", "PROV-AC-004", "PROV-AC-006", "SKILL-AC-006"]);
   });
 });
