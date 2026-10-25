@@ -35,16 +35,26 @@ import { isLocal, parameterNumber, REFERENCE_DIR, uniqueValue } from "../core/su
 import { runCli, tail } from "../prov/support/stage.js";
 import { expectResult, hasLink, httpBrowser, signUp, testDisplayName, testPassword, waitForMail, type Account } from "../pwd/support.js";
 
-/** True for an entry that Cloudflare reports verified (a `status`-like field reading verified, or `verified: true`). */
+/**
+ * Whether Cloudflare reports the sending entry verified. The entry of
+ * `GET /zones/{zone}/email/sending/subdomains` has no status or `verified` field (live,
+ * 2026-10-25: `id`, `tag`, `name`, `enabled`, `preview_enabled`, `return_path_domain`,
+ * `dkim_selector`, `drop_suppressed_recipients`, `created`, `modified`); its verified state is
+ * `enabled: true` (implementation note i-f.md, item 3; `setup-account` polls for it). Should a
+ * status-like or `verified` field appear, it must read verified as well.
+ */
 function reportsVerified(entry: unknown): boolean {
   if (entry === null || typeof entry !== "object") return false;
-  return Object.entries(entry as Record<string, unknown>).some(([k, v]) => (/status/i.test(k) && typeof v === "string" && /^verified$/i.test(v)) || (/^verified$/i.test(k) && v === true));
+  const fields = Object.entries(entry as Record<string, unknown>);
+  const statusFields = fields.filter(([k]) => /status/i.test(k) || /^verified$/i.test(k));
+  const statusOk = statusFields.every(([k, v]) => (/^verified$/i.test(k) ? v === true : typeof v === "string" && /^verified$/i.test(v)));
+  return (entry as { enabled?: unknown }).enabled === true && statusOk;
 }
 
 function expectSinkSetUp(state: EmailState, domain: string): void {
   // The domain's sending entry, verified.
   const sending = Array.isArray(state.sending.result) ? (state.sending.result as unknown[]) : [];
-  const entry = sending.find((e) => JSON.stringify(e).includes(`"${domain}"`));
+  const entry = sending.find((e) => (e as { name?: unknown } | null)?.name === domain);
   expect(entry, `a sending entry for the email domain (status ${String(state.sending.status)})`).toBeDefined();
   expect(reportsVerified(entry), `the sending entry is verified: ${JSON.stringify(entry)}`).toBe(true);
 

@@ -93,7 +93,7 @@ The admin and test-utils plugins are not used. The admin plugin's `setRole` need
 Every endpoint can also answer 403 `AUTH.REQUEST_FORGERY` (AUTH-REQ-007) and 429 `AUTH.RATE_LIMITED`.
 
 **Error codes.** Two codes are new (DEC-0520). They join `errors.d.ts` with the error catalogue in implementation item I-C:
-- `AUTH.NOT_VERIFIED`: status 403, not retryable, meaning "The account's email address has not been verified yet.";
+- `AUTH.NOT_VERIFIED`: status 403, not retryable, meaning "The account has not been verified yet.";
 - `AUTH.RATE_LIMITED`: status 429, retryable, meaning "Too many attempts from this client; try again later.".
 
 **Failed login log entry** (AUTH-REQ-010). One `warn` entry, component `AUTH`, message `login failed: <reason>`, with reason `wrong credentials`, `not verified`, `rate limited`, `invalid token`, or `provider unavailable (<code>)`. Never the address, password or token.

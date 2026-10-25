@@ -129,7 +129,7 @@ export function createPasswordProvider(options: PasswordProviderOptions): Creden
       const password = typeof input.password === "string" ? input.password : "";
       const answer = await call(ctx, { method: "POST", path: BA_PATHS.signIn, body: { email, password, rememberMe: false } });
       if (answer.status === 403 && answer.code === "EMAIL_NOT_VERIFIED") {
-        throw refuse("not verified", new FrameworkError("AUTH.NOT_VERIFIED", "the account's email address has not been verified yet"));
+        throw refuse("not verified", new FrameworkError("AUTH.NOT_VERIFIED", "the account has not been verified yet"));
       }
       const signedIn = answer.signIn;
       if (signedIn === undefined) {
