@@ -201,7 +201,18 @@ function testApp(shared: Shared, user: CurrentUser | undefined): TestApp {
         ...(body instanceof ReadableStream ? { duplex: "half" } : {}),
       } as RequestInit);
       if (user !== undefined) shared.fixed.set(request, user);
-      return shared.fetch(request);
+      const response = await shared.fetch(request);
+      // With the password provider, the app keeps the session a sign-in sets (and drops it on
+      // logout), as loginWithStub does, so later requests without a Cookie header are signed in.
+      if (shared.noMock === "password") {
+        const name = LOCAL_COOKIES.session;
+        const pairs = cookiePairs(response);
+        if (pairs.has(name)) {
+          const value = pairs.get(name) ?? "";
+          shared.session = value === "" ? undefined : `${name}=${value}`;
+        }
+      }
+      return response;
     },
     mail: shared.mail,
     as(next) {

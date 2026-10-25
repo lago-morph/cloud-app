@@ -14,6 +14,8 @@ import { clearCookie, cookieSettings, readCookie, setCookie, type CookieSettings
 import { evaluateLogin, type AccessLists } from "./levels.js";
 import type { CredentialContext, CredentialProvider, LoginProvider, ProviderContext, ProviderIdentity } from "./login-provider.js";
 import { MOCK_DEFAULT_IDS } from "./mock-ids.js";
+import { PAGES } from "./password/pages.js";
+import { registerPasswordRoutes } from "./password/routes.js";
 import type { AuthMock } from "./mock.js";
 import type { CurrentUser } from "./public.js";
 import { sanitizeReturnTo } from "./return-to.js";
@@ -75,6 +77,8 @@ export const LOCAL_CLIENT_IP = "127.0.0.1";
 
 const ANONYMOUS: CurrentUser = Object.freeze({ level: "anonymous" });
 const STATE_CHANGING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+/** Every POST under this path needs the public origin, session or not (AUTH-REQ-007, DEC-0516). */
+const AUTH_PREFIX = "/api/auth/";
 
 /** Dotted-path read for the provider's `getConfig` (e.g. `framework.google.clientId`). */
 function lookup(root: unknown, key: string): unknown {
@@ -183,8 +187,10 @@ export function createAuthParts(options: AuthOptions): AuthParts {
     return evaluated.user;
   }
 
+  const credentials = options.credentialProvider === undefined ? undefined : credentialOperations(options.credentialProvider);
+
   return {
-    credentials: options.credentialProvider === undefined ? undefined : credentialOperations(options.credentialProvider),
+    credentials,
     currentUser: async (c, next) => {
       cookies();
       c.set("user", await identify(c));
@@ -193,10 +199,16 @@ export function createAuthParts(options: AuthOptions): AuthParts {
     forgeryCheck: async (c, next) => {
       // AUTH-REQ-007, DEC-0072: Origin must equal the public origin on a state-changing request
       // that carries a session (any session cookie, valid or not, or the mock's fixed login).
+      // DEC-0516: and on every POST under /api/auth/, with or without a session, so that no
+      // sign-in, sign-up, verification, reset or resend can be submitted from another site.
       if (STATE_CHANGING.has(c.req.method)) {
+        const authPost = c.req.method === "POST" && c.req.path.startsWith(AUTH_PREFIX);
         const carriesSession = readCookie(c.req.header("cookie"), cookies().session) !== undefined || c.var.user.level !== "anonymous";
-        if (carriesSession && c.req.header("origin") !== originOf(c)) {
-          throw new FrameworkError("AUTH.REQUEST_FORGERY", "a state-changing request with a session came from another origin");
+        if ((authPost || carriesSession) && c.req.header("origin") !== originOf(c)) {
+          throw new FrameworkError(
+            "AUTH.REQUEST_FORGERY",
+            carriesSession ? "a state-changing request with a session came from another origin" : "a login request came from another origin",
+          );
         }
       }
       await next();
@@ -209,8 +221,14 @@ export function createAuthParts(options: AuthOptions): AuthParts {
 
       api.get("/auth/login", async (c) => {
         const returnTo = sanitizeReturnTo(c.req.query("returnTo"));
+        if (credentials !== undefined) {
+          // DEC-0516: the credential provider is on every stage, so login is its sign-in page.
+          const query = returnTo === "/" ? "" : `?${new URLSearchParams({ returnTo }).toString()}`;
+          return c.redirect(`${PAGES.signIn}${query}`, 302);
+        }
         const { provider } = options;
         if (provider === undefined) {
+          // Only createTestApp's mock-only app gets here (no stage lacks the credential provider).
           if (mock === undefined) throw new FrameworkError("CORE.MISCONFIGURED", "no login provider is configured for this deployment");
           // Mock only: log in as the mock's default user (local development and test stages).
           c.header("Set-Cookie", await issueSessionCookie(c, { id: MOCK_DEFAULT_IDS.user, displayName: null, mockLevel: "user" }), { append: true });
@@ -253,6 +271,8 @@ export function createAuthParts(options: AuthOptions): AuthParts {
         c.header("Set-Cookie", clearCookie(cookies(), cookies().session), { append: true });
         return c.body(null, 204);
       });
+
+      if (credentials !== undefined) registerPasswordRoutes(api, credentials);
 
       mock?.registerRoutes(api, {
         issue: issueSessionCookie,

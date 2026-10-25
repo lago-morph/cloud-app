@@ -30,6 +30,7 @@ import { workerLogBucket, workerPublicOrigin, workerSecretValues, workerSql, wor
 import { cloudflareFilesStore } from "../../files/cloudflare/keys.js";
 import { assembleStage } from "../stage.js";
 import { workerTicketIssuer } from "./tickets.js";
+import { workerCredentialProvider } from "./password.js";
 
 export { createAuthMock } from "../../auth/mock.js";
 export { createTestMailCapture } from "../../mail/test-stage.js";
@@ -63,7 +64,8 @@ export function createCloudflareWorker<C extends ConfigDeclaration, S extends st
     readFrameworkSecret: (env) => envSecretReader(env, "cloudflare"),
     secretValues: (c) => workerSecretValues(c.env),
     requiredFrameworkSecrets: required,
-    // GOOGLE is retired (DEC-0513); the password provider (PWD) is wired here by item I-B.
+    // The real provider on every stage (DEC-0516): PWD over the stage's D1, mailing through `mail` below.
+    credentialProvider: workerCredentialProvider,
     ...(options.mock === undefined ? {} : { mock: options.mock() }),
     // A test stage captures its mail (and serves the test-mail route); only production sends.
     mail: (c: RuntimeContext) => (capture === undefined ? workerEmailSender(c.env, senderName) : capture.sender(c, senderName)),
