@@ -32,7 +32,9 @@ const MOCK = [/mock-login/];
 const STUB_PROVIDER = [/stubLoginProvider/, /loginWithStub/, /stubFailure/];
 const LOCAL_TRANSFER_ROUTE = [/__framework\/files/];
 const TICKET_KEY = [/ticket[_-]?key/i, /SECRET_[A-Z0-9_]*TICKET/];
-const AWS_SDK = [/@aws-sdk/, /aws-sdk/, /amazonaws\.com/];
+// An AWS endpoint host, except the issuer template of the credential library's (unused) Cognito
+// social provider, `cognito-idp.${region}.amazonaws.com`, which better-auth/minimal bundles (PWD).
+const AWS_SDK = [/@aws-sdk/, /aws-sdk/, /(?<!cognito-idp\.\$\{[\w.]+\}\.)amazonaws\.com/];
 const PROVISIONING = [/@pulumi/, /pulumi/i, /["'`]sst["'`/]/, /node_modules\/sst\//, /\.sst\b/, /\/provision\//, /prototype-framework\/provision/, /setupAccount/, /listStageResources/];
 const POSTGRES_HARNESS = [/pglite/i, /electric-sql/];
 const SPECIFIER = (names: string): RegExp => new RegExp(`(?:from\\s*|require\\(\\s*|import\\(\\s*)["'](?:${names})["']`);

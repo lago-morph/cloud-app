@@ -69,7 +69,8 @@ async function call(worker: { fetch(r: Request, env: unknown, ctx: unknown): Res
   return worker.fetch(new Request(`${ORIGIN}${path}`, init), env, ctx);
 }
 
-const mockLogin = { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ level: "user", id: "m" }) };
+// Every POST under /api/auth/ carries the public origin (AUTH-REQ-007, DEC-0516).
+const mockLogin = { method: "POST", headers: { "content-type": "application/json", origin: ORIGIN }, body: JSON.stringify({ level: "user", id: "m" }) };
 
 describe("createLocalWorker", () => {
   const worker = createLocalWorker(app, resolved("local", "local"));

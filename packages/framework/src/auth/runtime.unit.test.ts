@@ -366,7 +366,8 @@ describe("GET /api/auth/me", () => {
   it(tag("AUTH-AC-005", "methods the contract does not define get 405 HTTP.METHOD_NOT_ALLOWED"), async () => {
     const { request } = await stubHarness();
     for (const [method, path] of [["GET", "/api/auth/logout"], ["DELETE", "/api/auth/me"], ["POST", "/api/auth/login"]] as const) {
-      const res = await request(path, { method });
+      // With the public origin: a POST under /api/auth/ without it is refused first (AUTH-REQ-007).
+      const res = await request(path, { method, headers: { origin: ORIGIN } });
       expect(res.status, `${method} ${path}`).toBe(405);
       expect(((await res.json()) as { error: { code: string } }).error.code).toBe("HTTP.METHOD_NOT_ALLOWED");
     }
