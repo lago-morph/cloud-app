@@ -79,7 +79,7 @@ There is no stop command. Stopping turns off the stage's address. Its code, data
 npm run remove -- --target cloudflare --stage "$STAGE"
 ```
 
-This deletes the stage's Worker and secrets, its D1 databases, its R2 bucket and the files in it, its file-signing token, and its deploy state. Log entries in `prototype-logs` and the shared buckets stay. If something cannot be deleted, `remove` prints each leftover and exits non-zero. Run it again, or delete the printed resource in the dashboard.
+This deletes the stage's Worker and secrets, its D1 databases, its R2 bucket and the files in it, and its deploy state. Log entries in `prototype-logs`, the shared buckets and the account's file-signing credential stay. If something cannot be deleted, `remove` prints each leftover and exits non-zero. Run it again, or delete the printed resource in the dashboard.
 
 A production stage holds real data, and removing it deletes the database with no backup. `remove` refuses unless you repeat the stage name:
 

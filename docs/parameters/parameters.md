@@ -131,6 +131,7 @@ Deferred to a later release (DEC-0508): these parameters belong to the AWS targe
 | --- | --- | --- | --- | --- |
 | PAR-290 | Maximum app name length | 20 characters | ai-proposed | Lowercase letters and digits; no hyphens (stage names may contain hyphens). The length keeps names readable and log keys short. |
 | PAR-291 | Maximum stage name length | 20 characters | ai-proposed | Lowercase letters, digits, hyphens. The length keeps names readable and log keys short. |
+| PAR-320 | Random part of the `workers.dev` subdomain `setup-account` registers | 12 characters from `a`–`z` and `0`–`9`, after `pf-` | ai-proposed | Only on an account without a subdomain; drawn from the system's secure random source, never derived from the account ID or any personal data (DEC-0552). 36^12 names make a collision with another account's subdomain negligible; a refused registration names the subdomain, and a new run draws a new name. |
 
 ## Dependency pins
 

@@ -70,7 +70,7 @@ async function readSubdomain(api: CloudflareApi, accountId: string): Promise<str
 }
 
 /**
- * The subdomain `setup-account` registers on an account that has none: `pf-` and 12 random
+ * The subdomain `setup-account` registers on an account that has none: `pf-` and 12 random (PAR-320)
  * lowercase letters and digits (DEC-0552). It is never derived from the account ID, the owner's
  * name or any other personal data, since it is part of every stage's public address.
  */
