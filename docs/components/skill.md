@@ -45,7 +45,7 @@ Origin: provenance-unclear · Derives from: SYS-REQ-029
 The scaffolder MUST NOT overwrite existing files unless explicitly told to.
 
 #### SKILL-REQ-006 — Owner tasks documented
-Origin: owner · Derives from: SYS-REQ-018, SYS-REQ-019 · Decision: DEC-0080
+Origin: owner · Derives from: SYS-REQ-018, SYS-REQ-019 · Decision: DEC-0080, DEC-0513, DEC-0514
 
 The skill and the template's README MUST contain step-by-step instructions for the tasks the owner performs:
 - finding one's user ID and adding it to the admin list, or to the optional users list (`framework.users`);
@@ -53,6 +53,8 @@ The skill and the template's README MUST contain step-by-step instructions for t
 - setting secrets;
 - setting up the Google client;
 - deploying and removing stages.
+
+Amendment for release 1 (Origin: owner · Decision: DEC-0513, DEC-0514, DEC-0515): "setting up the Google client" is replaced by: setting the account's email domain with `setup-account --target cloudflare --email-domain <domain>` and the API token's email permissions; and signing up, verifying the address and signing in on a stage, including how an agent reads the mail with `mail last`. The instructions MUST write the domain as `<domain>`, never a concrete domain (MAIL-REQ-003).
 
 ## 2. Design
 
@@ -80,7 +82,7 @@ Specific content the references carry:
 - **Copy-ID steps** (owner tasks, AUTH-REQ-005). The same steps serve both lists: the person logs in on a production stage and opens `/api/auth/me`; they copy `id`, or `unlistedId` if the users list currently makes them anonymous; the owner adds it to `framework.admins` or `framework.users` in `config/<target>/<stage>.json`, commits, and deploys again.
 - **Deploying.** A stage whose name starts with `test-` is a test stage: it uses `config/<target>/test.json` and the authentication mock, holds no real data, and is removed after use. Every other stage is production and needs its own committed `config/<target>/<stage>.json`.
 - **Testing.** One test file under `tests/smoke/**` runs both in-process (`createTestApp`) and against a deployed test stage through `smoke --target <t> --stage <s>` (`connectTestStage()`). Time-dependent behaviour (for example share-link expiry) is tested locally with the test runner's fake timers, not in the smoke test.
-- **Troubleshooting.** Copy-and-paste commands per cloud to list a day's log entries and find the entry for a `requestId` under the LOG-REQ-004 key layout. On Cloudflare this uses the dashboard or an S3-compatible CLI with a manually created read-only R2 token. "When there is no log entry": `aws logs tail` on the stage Lambda's log group, or `wrangler tail` while reproducing. It points to the `meaning` of each code in `errors.d.ts`, and covers login failures (`redirect_uri_mismatch`: register the callback URL printed by deploy). (The AWS commands: deferred, branch `aws`.)
+- **Troubleshooting.** Copy-and-paste commands per cloud to list a day's log entries and find the entry for a `requestId` under the LOG-REQ-004 key layout. On Cloudflare this uses the dashboard or an S3-compatible CLI with a manually created read-only R2 token. "When there is no log entry": `aws logs tail` on the stage Lambda's log group, or `wrangler tail` while reproducing. It points to the `meaning` of each code in `errors.d.ts`, and covers login failures: `AUTH.NOT_VERIFIED` (use the link in the verification email, or resend), `AUTH.RATE_LIMITED` (wait), no email arriving (`mail last` on test stages and locally; on production, the `MAIL` log entries and their codes). (The AWS commands: deferred, branch `aws`.)
 
 **Diagnostics** from CHECK name the reference to read. Each reference a diagnostic can name has a section "Check rules that send you here" listing each such rule ID and what to do.
 
@@ -106,7 +108,7 @@ CORE (export list), CHECK, CLI, and the contracts of every capability.
 | SKILL-AC-003 | The router states each hard rule, including the `FRAMEWORK-ISSUE.md` entry contents and the next action after recording an entry. | SKILL-REQ-003 | Local |
 | SKILL-AC-004 | CI type-checks and runs every example and the template. No example file is derived from `apps/demo/`. | SKILL-REQ-004 | Local |
 | SKILL-AC-005 | Scaffolding into a directory with existing files stops without changing them. | SKILL-REQ-005 | Local |
-| SKILL-AC-006 | Following only the documented owner steps, a tester sets up an account, deploys with a `framework.users` list that omits them and is anonymous after login, adds their ID to `framework.users` and becomes `user`, then becomes admin, and removes the stage. | SKILL-REQ-006 | Cloud (milestone) |
+| SKILL-AC-006 | Following only the documented owner steps, an AI-agent tester sets up an account (including the email domain), deploys a production stage with a `framework.users` list that omits them, signs up with an address under `t.<domain>`, reads the verification mail with `mail last --target cloudflare`, verifies and signs in, and is anonymous; adds their ID to `framework.users` and becomes `user`, then becomes admin, and removes the stage. No step needs the owner or a browser. | SKILL-REQ-006 | Cloud (milestone) |
 
 ## 5. Portability note
 

@@ -2,7 +2,7 @@
 
 Classifies every request as anonymous, user, or admin and gives app code a stable opaque user ID. Owns login and logout, sessions, request-forgery protection, the login-provider interface, and the authentication mock. All protocol details live behind the provider interface.
 
-Contracts: [auth.d.ts](../contracts/ts/auth.d.ts), [client.d.ts](../contracts/ts/client.d.ts) (`getCurrentUser`, `login`, `logout`), [framework.openapi.yaml](../contracts/http/framework.openapi.yaml) (`/api/auth/*`), [internal/login-provider.d.ts](../contracts/ts/internal/login-provider.d.ts), [testing.d.ts](../contracts/ts/testing.d.ts) (`mockUsers`, stub login provider), [errors.d.ts](../contracts/ts/errors.d.ts) (`AUTH.*`).
+Contracts: [auth.d.ts](../contracts/ts/auth.d.ts), [client.d.ts](../contracts/ts/client.d.ts) (`getCurrentUser`, `login`, `logout`), [framework.openapi.yaml](../contracts/http/framework.openapi.yaml) (`/api/auth/*`), [internal/login-provider.d.ts](../contracts/ts/internal/login-provider.d.ts) (`LoginProvider`, `CredentialProvider`), [internal/auth-password.openapi.yaml](../contracts/http/internal/auth-password.openapi.yaml) (the password provider's pages and endpoints, PWD), [testing.d.ts](../contracts/ts/testing.d.ts) (`mockUsers`, stub login provider, password provider), [errors.d.ts](../contracts/ts/errors.d.ts) (`AUTH.*`).
 
 ## 1. Requirements
 
@@ -37,14 +37,16 @@ Origin: owner-approved · Derives from: SYS-REQ-017
 After a successful login, the framework MUST keep the user logged in with a signed session cookie that lasts PAR-250. The cookie MUST be HttpOnly and SameSite=Lax, and on cloud targets also Secure and host-only. No session may be created before the provider has validated the login. Logout MUST clear the cookie. Sessions are stateless: a copied cookie stays valid until it expires (DEC-0028).
 
 #### AUTH-REQ-007 — Request forgery protection
-Origin: provenance-unclear · Derives from: SYS-REQ-017
+Origin: provenance-unclear · Derives from: SYS-REQ-017 · Decision: DEC-0516
 
-A state-changing request (POST, PUT, PATCH, DELETE) that carries a session MUST be rejected with `AUTH.REQUEST_FORGERY` unless its `Origin` header equals the deployment's public origin. Together with SameSite=Lax session cookies, this is the whole protection (DEC-0072). State-changing behavior on GET routes is not allowed, except the framework's `/api/auth/login` and `/api/auth/callback`, which set login cookies; the callback is protected by the transaction state.
+A state-changing request (POST, PUT, PATCH, DELETE) that carries a session MUST be rejected with `AUTH.REQUEST_FORGERY` unless its `Origin` header equals the deployment's public origin. Every POST to a path under `/api/auth/` MUST be rejected in the same way whether or not it carries a session, so that no sign-in, sign-up, verification, reset or resend can be submitted from another site (login forgery). Together with SameSite=Lax session cookies, this is the whole protection (DEC-0072); the credential library's own origin check is not relied on. State-changing behavior on GET routes is not allowed, except the framework's `/api/auth/login` and `/api/auth/callback`, which set login cookies; the callback is protected by the transaction state.
 
 #### AUTH-REQ-008 — Provider interface
 Origin: owner · Derives from: SYS-REQ-019
 
 Each login provider MUST implement the internal provider interface. All protocol validation MUST happen inside the provider. The callback URL MUST be built from the deployment's resolved public origin, never from request headers.
+
+Amendment for release 1 (Origin: owner · Decision: DEC-0509, DEC-0510): a provider implements either the redirect interface (`LoginProvider`) or the credential interface (`CredentialProvider`); release 1's real provider, PWD, is a credential provider. All credential validation MUST happen inside the provider, the provider MUST return only a stable identifier and a display name, and links the provider sends by email MUST be built from the deployment's resolved public origin, never from request headers.
 
 #### AUTH-REQ-009 — Authentication mock
 Origin: owner · Derives from: SYS-REQ-020
@@ -52,9 +54,9 @@ Origin: owner · Derives from: SYS-REQ-020
 A mock provider and the `/api/auth/mock-login` route MUST let tests choose any identity — access level, user ID (used as given, not derived), and display name — without contacting a real provider. Both MUST be present only locally and in test stages, and MUST be absent from production deployments.
 
 #### AUTH-REQ-010 — Failed login
-Origin: provenance-unclear · Derives from: SYS-REQ-010
+Origin: provenance-unclear · Derives from: SYS-REQ-010 · Decision: DEC-0516
 
-A failed login MUST NOT create a session. It MUST redirect to `/?authError=login_failed&requestId=<id>`, where `<id>` is the request's ID, and log the provider's reason without exposing it to the browser.
+A failed login MUST NOT create a session, and MUST log the provider's reason without exposing it to the browser. A failed redirect-provider login MUST redirect to `/?authError=login_failed&requestId=<id>`, where `<id>` is the request's ID. A failed credential sign-in MUST answer as the internal HTTP contract specifies: a catalogue error in JSON, or a redirect to the sign-in page with a generic message for a form; both are identical for an unknown account and a wrong password (PWD-REQ-005).
 
 ## 2. Design
 
@@ -69,6 +71,8 @@ A failed login MUST NOT create a session. It MUST redirect to `/?authError=login
 
 A new login replaces any login in progress.
 
+**Credential login** (PWD, DEC-0510). `/api/auth/login` redirects to the framework's sign-in page (`/api/auth/sign-in`), carrying the sanitized `returnTo`. The page's form posts to `/api/auth/password/sign-in`; AUTH passes the credentials to the stage's `CredentialProvider`, derives the user ID from `password` and the returned subject, creates the session, and redirects to `returnTo` (or answers JSON). No transaction cookie is used. Sign-up, verification, resend, forgot and reset are PWD's endpoints and create no session.
+
 **Failed login.** The log entry names one fixed reason: transaction missing or expired; state mismatch; provider refused; token exchange rejected, with its HTTP status; or token check failed, naming the check. It never contains authorization codes, state, or tokens. It is one `warn` entry with component `AUTH` and message `login failed: <reason>`; an invalid or tampered transaction cookie counts as "transaction missing or expired". The transaction cookie is cleared by every callback, successful or not (DEC-0168).
 
 **Session cookie.** Named `__Host-session` on cloud targets and `session_local` locally. It holds a format version, user ID, display name, issued-at and expiry times, signed with HMAC-SHA-256 using the framework-internal session key (at least PAR-253 bytes, SEC). There is a single key; replacing it logs everyone out, which is acceptable at this scale. Admin status is not stored in the session; it is evaluated per request (AUTH-REQ-003). A future issued-at beyond PAR-252 makes the cookie invalid. A session created by the authentication mock also holds the level the test chose; such a session is honoured only where the mock is installed (DEC-0169).
@@ -77,13 +81,13 @@ A new login replaces any login in progress.
 
 **More than one provider.** If a deployment is later configured with several real providers, `/api/auth/login` shows a framework-owned page for choosing one. The app-facing contracts (`login()`, `/api/auth/login`) do not change.
 
-**Provider per stage.** Production deployments use the real provider (GOOGLE). Test stages (stages named `test-*`, PROV-REQ-005) and local development use the mock. `createTestApp` installs the mock directly. Installing the mock on any other stage is `CORE.MISCONFIGURED`. With the mock and no real provider, `/api/auth/login` logs in as the mock's default user and returns to `returnTo` (DEC-0171). The `./testing` subpath and the mock module are excluded from production bundles (CORE-REQ-006).
+**Provider per stage.** Every stage installs the real provider, PWD: production deployments, test stages (stages named `test-*`, PROV-REQ-005) and local development. Test stages and local development also install the mock, which tests use through `mock-login`. `createTestApp` installs the mock directly, or PWD with its in-memory outbox when the test asks for `passwordLoginProvider` (testing.d.ts). Installing the mock on any other stage is `CORE.MISCONFIGURED`. `/api/auth/login` always redirects to the sign-in page (DEC-0516, superseding DEC-0171's default-user login). The `./testing` subpath and the mock module are excluded from production bundles (CORE-REQ-006).
 
-**Stub provider.** Because the mock bypasses ID derivation and the admin list, real-provider paths are tested locally with a test-only stub provider that implements [internal/login-provider.d.ts](../contracts/ts/internal/login-provider.d.ts). It is available only under `./testing` and speaks no protocol: its provider id is `stub`, its login redirects straight to the callback URL it was given with a fresh `state` and single-use `code`, and the subject, display name and failure to simulate are query parameters that `loginWithStub` adds (DEC-0172). Local tests use it to verify admin-list and users-list evaluation, callback-URL building under a forged Host header, failed and replayed callbacks, and per-provider ID derivation. On each cloud, the production-check stage (`prodcheck`, COMPL) keeps only the checks that need no login.
+**Stub provider.** Because the mock bypasses ID derivation and the admin list, real-provider paths are tested locally with a test-only stub provider that implements [internal/login-provider.d.ts](../contracts/ts/internal/login-provider.d.ts). It is available only under `./testing` and speaks no protocol: its provider id is `stub`, its login redirects straight to the callback URL it was given with a fresh `state` and single-use `code`, and the subject, display name and failure to simulate are query parameters that `loginWithStub` adds (DEC-0172). Local tests use it to verify admin-list and users-list evaluation, callback-URL building under a forged Host header, failed and replayed callbacks, and per-provider ID derivation. On each cloud, the production-check stage (`prodcheck`, COMPL) is checked with real logins by `check-login` (PWD §2).
 
 ## 3. Uses
 
-HTTP (routes, error handler), CFG (admin list, users list, public origin), CORE (test-stage flag, derived from the stage name: PROV-REQ-005), SEC (session key), LOG (failed logins), GOOGLE (real provider).
+HTTP (routes, error handler), CFG (admin list, users list, public origin), CORE (test-stage flag, derived from the stage name: PROV-REQ-005), SEC (session key), LOG (failed logins), PWD (real provider).
 
 ## 4. Acceptance criteria
 
@@ -99,8 +103,10 @@ HTTP (routes, error handler), CFG (admin list, users list, public origin), CORE 
 | AUTH-AC-008 | With the stub provider, the callback URL it receives is built from the public origin despite a forged Host header. | AUTH-REQ-008 | Local |
 | AUTH-AC-009 | `/api/auth/mock-login` works on test stages and returns 404 on a production deployment. Production bundles contain no mock module. | AUTH-REQ-009 | Local, cloud |
 | AUTH-AC-010 | With the stub provider, a refused callback and one with a missing, invalid, or replayed transaction create no session, redirect as specified, and write a log entry naming one fixed reason. Login with `returnTo` set to `//evil.example`, `/\evil.example`, `https://evil.example`, `/%2F%2Fevil.example`, or `javascript:` redirects to `/` after login. | AUTH-REQ-010 | Local |
-| AUTH-AC-011 | On each cloud's `prodcheck` stage, `/api/auth/login` with a forged Host header redirects with the correct callback URL, and a bogus callback creates no session and redirects as specified. | AUTH-REQ-008, AUTH-REQ-010 | Cloud |
+| AUTH-AC-011 | On each cloud's `prodcheck` stage, through `check-login` (PWD §2): a sign-up sent with a forged `Host` header produces a verification email whose link is on the stage's public origin, and verifying with a bogus token gets 400 `AUTH.LOGIN_FAILED`, sets no cookie and leaves `/api/auth/me` anonymous. | AUTH-REQ-008, AUTH-REQ-010 | Cloud |
 | AUTH-AC-012 | With `createTestApp` using `stubLoginProvider` and `framework.users` set to one user ID: after `loginWithStub` as the subject with that ID, the level is `user`; as a subject whose ID is only in `framework.admins`, the level is `admin`; as any other subject, the request is anonymous (a `requireUser()` route returns 401 `AUTH.UNAUTHENTICATED`, and `/api/auth/me` returns level `anonymous` with the login's ID as `unlistedId`). Without `framework.users`, every validated login is at least `user`. | AUTH-REQ-003, AUTH-REQ-005 | Local |
+| AUTH-AC-013 | With `createTestApp` using `passwordLoginProvider`: after sign-up, verification through `app.mail` and sign-in, the user ID equals the specified derivation from provider id `password` and the provider's subject, a second sign-in yields the same ID, and the ID's presence in `framework.admins` or `framework.users` decides the level as with the stub provider. A failed sign-in creates no session, answers as the internal HTTP contract specifies, and writes one log entry naming a fixed reason. | AUTH-REQ-002, AUTH-REQ-003, AUTH-REQ-008, AUTH-REQ-010 | Local |
+| AUTH-AC-014 | A POST without any session to each of `/api/auth/password/sign-in`, `sign-up`, `resend`, `verify`, `forgot` and `reset`, with `Origin` missing or naming another origin, gets 403 `AUTH.REQUEST_FORGERY` and has no effect (no session, no mail, no account); with `Origin` equal to the public origin it is accepted. | AUTH-REQ-007 | Local, cloud |
 
 ## 5. Portability note
 

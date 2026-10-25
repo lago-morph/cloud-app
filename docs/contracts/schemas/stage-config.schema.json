@@ -36,12 +36,19 @@
           "items": { "type": "string", "minLength": 1 },
           "uniqueItems": true
         },
-        "google": {
-          "description": "Google login client settings. Required for production deployments.",
+        "email": {
+          "description": "Settings of the framework's own email (verification and reset links). Optional. Holds no address or domain: the sender is always `no-reply@<emailDomain>`, derived from the account's single email-domain setting (docs/components/mail.md, MAIL-REQ-003).",
           "type": "object",
-          "required": ["clientId"],
           "additionalProperties": false,
-          "properties": { "clientId": { "type": "string", "minLength": 1 } }
+          "properties": {
+            "senderName": {
+              "description": "Display name of the sender, as in `<senderName> <no-reply@...>`. Default: the app name.",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[^<>\"\\\\@\\r\\n]+$"
+            }
+          }
         }
       }
     }

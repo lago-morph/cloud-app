@@ -100,7 +100,7 @@ The admin list moves from secrets to configuration and identifies admins by the 
 Not adopted from the earlier spec: an admin list stored as a secret, keyed by provider issuer and subject, with periodic refresh.
 
 ### DEC-0016 — Google first, behind a provider-neutral abstraction
-Origin: owner · Status: accepted · Affects: SYS-REQ-019, AUTH, GOOGLE
+Origin: owner · Status: accepted; the Google part superseded for release 1 by DEC-0509 and DEC-0513 (email and password replaces Google; the provider-neutral abstraction stays) · Affects: SYS-REQ-019, AUTH, GOOGLE
 
 The owner personally uses Google sign-in, so Google is the first real provider. The abstraction targets a generic provider interface so other sources (for example GitHub) can be added later; this is about future providers, not about handling OIDC in app logic.
 
@@ -129,7 +129,7 @@ The owner needs some provisioning abstraction but does not mind which tool is us
 Origin: owner-approved · Status: accepted; for release 1 amended by DEC-0508 ("works" means local and Cloudflare) · Affects: SYS-REQ-026, COMPL
 
 ### DEC-0021 — Real-provider certification is a separate, rarely repeated manual test
-Origin: owner · Status: accepted · Affects: SYS-REQ-027, GOOGLE
+Origin: owner · Status: superseded by DEC-0512 (an automated check on a production deployment replaces the guided manual certification) · Affects: SYS-REQ-027, GOOGLE
 
 The real Google login is tested with a guided manual procedure using the owner's dedicated test account, which has no assets or permissions. It is certified independently as its own component; its interface stays simple so the certification remains valid. Manual testing happens only on major restructuring of the framework (or a substantive change to the adapter).
 
@@ -1315,7 +1315,7 @@ A POST/PUT/PATCH/DELETE is checked when it sends a session cookie (valid or not 
 Item: B-12.
 
 ### DEC-0171 — The mock module, its route, and login without a real provider
-Origin: ai-proposed · Status: accepted · Affects: AUTH-REQ-009, CORE-REQ-006, AUTH-AC-009, B-16
+Origin: ai-proposed · Status: accepted; its last two sentences (login with the mock and no real provider) superseded by DEC-0516 (the password provider is installed on every stage, so `/api/auth/login` always goes to the sign-in page) · Affects: AUTH-REQ-009, CORE-REQ-006, AUTH-AC-009, B-16
 
 `src/auth/mock.ts` exports `createAuthMock({ fixedUser? })`; the target runtime passes it as `mock` only locally and on `test-` stages, so production entry points do not import it and B-16 can leave it out of production bundles. `fixedUser(c)` is `createTestApp`'s per-request identity (`user` option, `as()`); returning `undefined` lets the session decide (DEC-0229). `POST /api/auth/mock-login` validates the contract body strictly (`HTTP.INVALID_INPUT`, 400); `id` must be non-empty when given; default IDs are `mock-user` / `mock-admin` (also `mockUsers`' defaults), display name defaults to `null`; `anonymous` clears the cookie; the response is 204. Without the mock, the route is not registered (404 `HTTP.NOT_FOUND`). With the mock and no real provider (local `dev`), `GET /api/auth/login` sets a mock session for the default user and redirects to the sanitised `returnTo`, so the template's login button works locally; with neither, it is `CORE.MISCONFIGURED`.
 Item: B-12.
@@ -4865,3 +4865,161 @@ The owner, 2026-10-24: "Move aws code to a branch". The first release targets lo
 - **Requirements.** SYS-REQ-001 and SYS-REQ-026 carry an amendment note for release 1. Every other requirement, criterion, scenario and parameter that names AWS is kept as written and marked "deferred (branch `aws`)" where it stands. `docs/components/aws.md` is marked deferred at its top; its content is kept for the record. A requirement's AWS clause binds again when the AWS release starts.
 - **What the harness and reports judge.** The catalogue still reads every criterion. `npm run compliance` refuses `--target aws`, no not-run rule names AWS, and the AWS clauses of Local criteria (CORE-AC-006's AWS bundle, SQL-AC-006's Data API retry loop) are not required (no clause rules). The traceability report shows results for local and Cloudflare only and lists the AWS-only criteria as deferred, never as untested. The release report (COMPL-AC-006) judges local and Cloudflare only, so no AWS criterion or record is ever listed as missing.
 - **Numbering.** DEC-0506 and DEC-0507 were used on the branch `aws` after it was split off (DEC-0506: at most 8 Lambda functions, PAR-284, budget alarm removed; DEC-0507: region guard under `PROTOTYPE_AWS_SANDBOX=pluralsight`). They are not reused here, and are not recorded on this branch; this entry is DEC-0508 so the two logs never give one number two meanings. Merging the branches brings them in unchanged.
+
+## Login: email and password with Better Auth (2026-10-25)
+
+Plan: `ai/implementation/plan-auth.md`. Spike evidence: `ai/implementation/spikes/ba-s1-s3/RESULT.md` (S1, S3, and the offline part of S2). The owner answered the plan's §7 on 2026-10-24 and 2026-10-25.
+
+### DEC-0509 — Email and password, through Better Auth self-hosted in the app's Worker, is release 1's real login provider; Workers Paid is required
+Origin: owner · Status: accepted · Supersedes: DEC-0016 (its Google part, for release 1) · Affects: SYS-REQ-019, SYS-REQ-026, SYS-REQ-027, AUTH, `docs/components/password.md` (PWD), `docs/components/mail.md` (MAIL), CF, PROV, CLI, COMPL, SKILL, PAR-122, PAR-241…PAR-245, PAR-254…PAR-259
+
+The owner, 2026-10-24: Better Auth (BA), self-hosted in the app's Worker. The account is on Workers Paid, and the owner confirmed on 2026-10-25 that Workers Paid is active. Password hashing (scrypt, about 72 ms CPU per operation in local workerd, RESULT.md S2) does not fit the Free plan's CPU limit, so Workers Paid is a prerequisite of every Cloudflare account that hosts a production stage. The new component PWD owns the provider. App code still sees only the access level, the opaque user ID and the display name (SYS-REQ-017). Further providers stay addable behind the provider interface (SYS-REQ-019).
+
+### DEC-0510 — The framework keeps its own session; Better Auth handles credentials only
+Origin: ai-proposed · Status: accepted · Affects: AUTH-REQ-006, AUTH-REQ-008, PWD-REQ-003, `docs/contracts/ts/internal/login-provider.d.ts` (`CredentialProvider`)
+
+Proposed in plan-auth.md §1 and confirmed by spike S3. The stateless `__Host-session` cookie (DEC-0028) stays the only session, for these reasons:
+- `identify()` needs no database read per request;
+- the mock uses the same cookie;
+- the admin and users lists are judged per request;
+- MIG-AC-006's session survives a schema-changing deploy.
+
+PWD implements the internal `CredentialProvider`, which returns `ProviderIdentity { subject: <BA user ID>, displayName: <BA user name> }`. AUTH derives the user ID as `deriveUserId("password", subject)` (DEC-0067) and issues the framework session.
+
+Framework routes forward a rebuilt request to BA's own handler (the "handler bridge"), because BA's server-side API calls skip its rate limiter. The bridge:
+- copies only `Origin`, `CF-Connecting-IP` and `User-Agent`;
+- returns none of BA's headers;
+- deletes the BA session row that a sign-in creates.
+
+BA's admin and test-utils plugins are not used.
+
+### DEC-0511 — Email verification is mandatory, sent through Cloudflare Email Service from `no-reply@<domain>`
+Origin: owner · Status: accepted · Affects: PWD-REQ-001, MAIL-REQ-001…MAIL-REQ-005, CF §2, PROV-REQ-002, PROV-REQ-004
+
+The owner, 2026-10-24: for self-hosted auth, email verification is mandatory, sent through Cloudflare Email Service (https://developers.cloudflare.com/email-service/). Arbitrary recipients need Workers Paid and a sender domain on Cloudflare DNS.
+
+The owner, 2026-10-25: "Sender no-reply@domain." The local part is fixed as `no-reply`, and the domain is DEC-0514's single setting. A new component, MAIL, owns sending.
+
+### DEC-0512 — An automated real-provider check on a production deployment replaces the guided manual certification
+Origin: owner · Status: accepted · Supersedes: DEC-0021 · Affects: SYS-REQ-026, SYS-REQ-027, PWD-AC-009, AUTH-AC-011, COMPL-REQ-005, COMPL-REQ-006, COMPL-AC-005, COMPL-AC-006, E2E-006, E2E-008, CLI-REQ-001
+
+The owner, 2026-10-24: setup and testing must be possible for an AI agent without manual steps or browser automation. `check-login --target cloudflare --stage prodcheck` replaces `certify-auth`. Over HTTP only, it:
+- signs up a fresh address under `t.<domain>`;
+- reads the real email from the framework's mail sink and verifies;
+- signs in;
+- resets the password;
+- checks the rate limit;
+- writes one evidence record.
+
+It runs on every compliance cloud run (COMPL-REQ-005), so the real provider is checked on every run, not as a rarely repeated milestone item. That is about three real sends per run.
+
+### DEC-0513 — Google is dropped from release 1; its code is kept on the branch `google`
+Origin: owner · Status: accepted · Supersedes: DEC-0016 (its Google part) · Affects: `docs/components/google.md` (retired), GOOGLE-REQ-001…GOOGLE-REQ-005, GOOGLE-AC-001, GOOGLE-AC-002, GOOGLE-AC-003, GOOGLE-AC-005, SEC §2 (`frameworkGoogleClientSecret`), CFG (`framework.google`), CLI-REQ-001 (`certify-auth`), COMPL-REQ-006, PAR-106, the component map, `tests/compliance/harness/expected.ts`
+
+The owner, 2026-10-24/25: "Drop Google." The Google provider's code is preserved on the branch `google`.
+- **The document.** `google.md` is kept for the record and marked retired. Its requirements are retired, with pointers to the PWD requirements. Its criteria leave the criteria tables, so the catalogue no longer reads them, and are listed in a "Retired criteria" table.
+- **The code.** `src/google/`, its tests, `certify-auth` and the `jose` dependency (PAR-106) leave the release branch in implementation item I-G. Until then the code stays, and its tests' tags name retired IDs, which the traceability report lists under "Tags naming no defined criterion or scenario".
+- **Configuration.** `framework.google` leaves the stage-config contract now. The Zod mirror (`src/config/schema.ts`) follows in item I-E.
+- **Later.** Re-adding Google means a new decision, a provider beside PWD behind the same interface, and new IDs.
+
+### DEC-0514 — The email domain is one account setting, initially `shareplay.com`; every address derives from it
+Origin: owner · Status: accepted · Affects: MAIL-REQ-003, MAIL-AC-004, MAIL-AC-005, PROV-REQ-002, PROV-REQ-004, CF §2, CLI-REQ-001 (`setup-account`, `check-login`, `mail`), `docs/contracts/schemas/stage-config.schema.json` (`framework.email`)
+
+The owner, 2026-10-25: "Make domain configurable in one place, initially shareplay.com." The owner will change the domain later, after a transfer. An interim value given earlier the same day, `lago-morph.xyz`, was replaced before anything was built on it.
+
+Where the one setting lives:
+- **The setting.** The key `emailDomain` of the Cloudflare account settings record. The record is the JSON object `framework/account.json` in the account's state home bucket `sst-state` (DEC-0084); SST's own objects use other top-level prefixes. It lives with the shared resources, as PROV §2 requires of account settings, so a clean machine finds it. Only `setup-account --target cloudflare --email-domain <domain>` writes it, and that is also how the owner changes it.
+- **What derives from it.** The sender `no-reply@<emailDomain>` and the test mailbox subdomain `t.<emailDomain>`, nothing else.
+- **Who reads it.** Each of these reads the record at run time, and none keeps a copy in a committed file:
+  - `setup-account`: sending onboarding, and Email Routing on `t.<emailDomain>`;
+  - `deploy`: the preflight, the `EMAIL` binding's allowed sender, and the Worker variable `FRAMEWORK_MAIL_FROM`, which is how the mail sender gets the address;
+  - `check-login` and `mail --target cloudflare`: the test addresses.
+- **No other copy.** No framework source, app, configuration file, template, skill text or test may hard-code the domain, or a sender address on it.
+  - Owner instructions write `<domain>`.
+  - Tests use reserved names (`example.test`, `localhost`).
+  - The stage configuration has no place for an address: `framework.email` holds only the sender's display name.
+  - This replaces the plan's per-stage `framework.email.from` and its build check that `from` is on the account's domain. With no copy to compare, that check becomes a repository scan (MAIL-AC-005).
+- **Local and in-process.** There is no account there. The `dev`, `createTestApp` and `test-*` capture senders never send. Locally the sender is `no-reply@localhost`; on a cloud test stage it is the derived address.
+
+`shareplay.com` was onboarded for Cloudflare Email Sending on the account on 2026-10-25, by `POST /zones/{zone}/email/sending/subdomains`, with DNS records under `cf-bounce.shareplay.com` and `_dmarc.shareplay.com`. `setup-account` must still do this itself, idempotently: it lists the zone's sending subdomains first and creates nothing that exists.
+
+### DEC-0515 — The Cloudflare API token's email permissions
+Origin: owner · Status: accepted · Affects: PROV-REQ-002 (preflight), PROV-REQ-004, PROV §2 "Credentials", SKILL-REQ-006
+
+The owner, 2026-10-25: the existing API token already has the email permissions. Besides the permissions it already needs (Workers, D1, R2, API tokens, the workers.dev subdomain), the token carries:
+- account: Email Sending Write, Email Routing Addresses Write;
+- zone (the email domain's zone): Email Routing Rules Write, DNS Write, Zone Settings Write, Zone Read.
+
+Account and zone permissions on one token are accepted. `setup-account`, and the preflight of a production stage's `deploy`, check them and name each one that is missing (PROV-REQ-002).
+
+### DEC-0516 — How the framework uses Better Auth: the spike's corrections
+Origin: ai-proposed · Status: accepted · Supersedes: DEC-0171 (its sentences on login without a real provider) · Affects: AUTH-REQ-007, AUTH-REQ-010, AUTH §2, PWD-REQ-001…PWD-REQ-007, CF-REQ-003, `docs/contracts/http/internal/auth-password.openapi.yaml`
+
+From RESULT.md (problems P1–P11), which corrects plan-auth.md §1:
+- **The forgery check is the primary defence.** BA checks `Origin` only on sign-in and sign-up; on forgot, reset and resend it checks it only when a `Cookie` header is present, and the bridge never forwards one (P3). So AUTH-REQ-007 requires `Origin` equal to the public origin on every POST to `/api/auth/*`, with or without a session. BA's `trustedOrigins` is not a second layer for those routes.
+- **Always on.** BA turns its origin check off under `NODE_ENV=test` or a truthy `TEST` (P1), and its rate limiter outside `NODE_ENV=production` (P2). The framework always passes `advanced.disableOriginCheck: false` and `rateLimit.enabled: true`, on every target and in `createTestApp`.
+- **BA's bodies are never forwarded.** Sign-up answers differ in their values for an existing and a new address (P9). Every framework route answers with its own fixed body or redirect.
+- **Verify.** BA's verify is GET only (P4), so the framework's POST verify calls it server-side as a GET through the bridge. The verify token is a stateless JWT: a replay within PAR-256 answers success and creates nothing.
+- **No email on a refused sign-in.** `sendOnSignIn` is off (P8), so a refused sign-in sends nothing and cannot spend the sending quota. The user asks for a new link with the explicit resend action (PAR-259).
+- **Import** from `better-auth/minimal`, with `better-auth/adapters/drizzle` (P5). The bundle then references only `node:crypto` and `node:async_hooks`, and `nodejs_compat` is set explicitly.
+- **Client IP.** The rate-limit key uses the IP from `CF-Connecting-IP` (P7). `createTestApp` and `dev` supply `127.0.0.1` unless the request sets the header.
+- **Logging.** BA's logger maps to LOG entries with fixed reasons, never BA's message text, so no address reaches the log (P10).
+- **Other options.** Telemetry is off. BA's `baseURL` is the resolved public origin, never a request header.
+- **One sign-in page on every stage.** PWD is installed on every stage, including `dev` and `test-*` stages, beside the mock where the mock is allowed. So `GET /api/auth/login` always redirects to the sign-in page. This replaces DEC-0171's rule that, with the mock and no real provider, `/api/auth/login` logs in as the mock's default user. Tests choose an identity with `mock-login` as before.
+
+### DEC-0517 — Parameter values for the password provider and mail
+Origin: owner-approved · Status: accepted · Affects: PAR-122, PAR-241…PAR-245, PAR-254…PAR-259
+
+The owner, 2026-10-25: "Approve recommended values", meaning the PARs in plan-auth.md §5 and RESULT.md's recommendations. The parameters register records:
+- password length 12 to 128 characters;
+- verification link valid 24 h, reset link 1 h;
+- rate limits per IP: sign-in 5 per 60 s; sign-up, forgot and resend 3 per 300 s; verify and reset submissions 10 per 60 s; BA's default rule 100 per 60 s;
+- scrypt N=16384, r=16, p=1, a 64-byte key and a 16-byte salt (BA's default);
+- mail sink retention 1 day;
+- a Worker bundle bound.
+
+**The better-auth pin** is exactly `1.7.7`, the newest version at least two weeks old on 2026-10-25. Version 1.7.12, which the spike ran, was 4 days old. The implementer moves the pin to `1.7.12` only if it needs a fix made in 1.7.8–1.7.12, and records that fix in a decision entry.
+
+**Numbering.** The plan's PAR-240 for the sink retention is not used: PAR-240 is retired (DEC-0077) and IDs are never reused, so the retention is PAR-241.
+
+### DEC-0518 — MAIL: one sender interface, one sender per kind of stage, and an account-level mail sink
+Origin: ai-proposed · Status: accepted · Affects: MAIL-REQ-001…MAIL-REQ-005, LOCAL-REQ-002, `docs/contracts/ts/testing.d.ts` (`TestApp.mail`), PROV-REQ-004, CLI-REQ-001 (`mail`)
+
+From plan-auth.md §2 and §3. `MailSender.send({ to, subject, text, html })` is framework-internal. It runs in the request's `waitUntil`, through BA's `advanced.backgroundTasks.handler`.
+
+The senders:
+- production stages: the Email Service binding `EMAIL` (`send_email`, allowed sender `no-reply@<domain>`);
+- `test-*` stages: a capture sender with `GET /api/__framework/test-mail?to=`. Both are excluded from production bundles, like the mock;
+- local `dev`: a capture sender. It prints a marked line, which `dev` writes to the git-ignored `.mail/<ts>-<id>.json`, like `.logs/`. Miniflare's own email output folder is not relied on;
+- `createTestApp`: an in-memory outbox.
+
+Real delivery is checked through the account-level sink:
+- Email Routing on `t.<domain>`, with a catch-all rule to the framework's sink Worker `prototype-mailsink`;
+- the sink writes the raw message to the R2 bucket `prototype-mailsink`, which has a lifecycle rule (PAR-241);
+- the sink is a shared account resource: `setup-account` creates it, and stage removal never touches it.
+
+Open spike questions:
+- S5: how SST/Pulumi express the `send_email` binding, and whether secrets survive the Worker update;
+- S4: Email Service quotas, and when `E_SENDER_NOT_VERIFIED` appears.
+
+### DEC-0519 — Accepted limitations of the password provider
+Origin: ai-proposed · Status: accepted · Affects: PWD-REQ-004, MAIL-REQ-001, COMPL-REQ-005
+
+- **A reset does not end framework sessions.** A reset revokes BA's sessions, of which there are none after the bridge. Framework sessions are stateless (DEC-0028) and stay valid until they expire (PAR-250). This is out of scope, like revocable sessions (system spec §4).
+- **Send failures are logged, not shown.** Sends run after the response, so the page cannot report a failed send without revealing whether the account exists.
+  - The failure is one LOG entry with a fixed reason and the provider's error code, never the address.
+  - The "check your email" page always offers resend.
+  - So an Email Service outage or suspension blocks sign-up without telling the user; the owner sees it in the log.
+- **Test users accumulate on `prodcheck`.** Each `check-login` run leaves one verified test user. This is accepted for now; a cleanup route can come later.
+- **The rate limiter counts every request**, successes included (P6). It costs 1–3 D1 queries per bridged request.
+
+### DEC-0520 — Where the spec differs from plan-auth.md §5
+Origin: ai-proposed · Status: accepted · Affects: E2E-007, E2E-008, AUTH-AC-005, SKILL-AC-006, PWD §2, `docs/contracts/ts/errors.d.ts`, `tests/compliance/harness/expected.ts`
+
+- **The admin-list criteria stay milestone items, performed by an AI agent.** The plan has E2E-007's cloud part "automated in check-login". Becoming an admin needs a committed change to `config/cloudflare/prodcheck.json` and a redeploy, and each `check-login` run uses a fresh user, so it cannot run on every commit.
+  - E2E-007's cloud part, AUTH-AC-005's admin-list part and SKILL-AC-006 stay milestone items.
+  - The tester reads the mail with `mail --target cloudflare`, so no owner step remains.
+  - E2E-008 becomes an automated scenario, run by `check-login`.
+- **Two new error codes**, `AUTH.NOT_VERIFIED` (403) and `AUTH.RATE_LIMITED` (429, retryable), are specified in PWD §2 and in the internal HTTP contract. They are added to `errors.d.ts` together with `ERROR_CATALOGUE` in implementation item I-C. The reason: the catalogue's unit test transcribes `errors.d.ts` exactly, and this item changes documents and contracts only.
+- **Not-run rules.** The criteria that need the password provider on a cloud stage get this phase's not-run rule "password login provider not implemented yet (DEC-0509)" in the compliance harness. It replaces the Google-mocked rules until items I-B…I-G land and the test authors tag tests. New local criteria get no rule: they are reported untested until their tests exist.
+- **Other differences.** The sink retention is PAR-241, not PAR-240 (DEC-0517), and the domain is an account setting, not a per-stage `from` (DEC-0514).

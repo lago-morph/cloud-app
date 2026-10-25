@@ -64,7 +64,25 @@ Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 | PAR-250 | Session lifetime | 7 days | ai-proposed | The owner has no preference (DEC-0057). |
 | PAR-251 | Validity of an in-progress login | 10 minutes | ai-proposed | |
 | PAR-252 | Clock skew tolerated when validating provider responses | 60 seconds | ai-proposed | Also bounds a session cookie's future issued-at time (DEC-0169). |
-| PAR-253 | Minimum session signing key length | 32 bytes | ai-proposed | |
+| PAR-253 | Minimum session signing key length | 32 bytes | ai-proposed | Also the length of `frameworkAuthSecret` (SEC). |
+
+## Password login provider and mail
+
+The owner approved these values on 2026-10-25 ("Approve recommended values", DEC-0517). Rate limits are counted per client IP (`CF-Connecting-IP`) and per operation over every request, successes included, in the `__framework_auth_rate_limit` table (PWD §2).
+
+| ID | Parameter | Value | Category | Notes |
+| --- | --- | --- | --- | --- |
+| PAR-241 | Mail sink retention | 1 day | owner | R2 lifecycle rule on the `prototype-mailsink` bucket (MAIL §2). The plan's PAR-240 is not used: it is retired (DEC-0077). |
+| PAR-242 | Verify and reset submission rate limit | 10 per 60 s per IP | owner | BA paths `/verify-email`, `/reset-password`. The tokens cannot be guessed; this caps the cost. |
+| PAR-243 | Default rate limit for other credential-library paths | 100 per 60 s per IP | owner | BA's fallback rule (`rateLimit.window`, `rateLimit.max`). |
+| PAR-244 | Password hash | scrypt, N=16384, r=16, p=1, 64-byte key, 16-byte random salt; stored as `<salt hex>:<key hex>` | owner | BA's default, which on workerd is `node:crypto.scrypt`: about 72 ms CPU per hash or verify in local workerd (RESULT.md S2), so Workers Paid is required (DEC-0509). The deployed figure is spike S2's online part. |
+| PAR-245 | Cloudflare Worker bundle size bound | 2 MiB (2,097,152 bytes) for the minified `worker.js` | owner | Checked by `build --target cloudflare` (CF-AC-003). The credential library with its adapter is about 600 KiB minified, 170 KiB gzip, with `better-auth/minimal` (RESULT.md); the bound fails fast on a dependency pulled in by mistake, far below Workers' limits (3 MiB Free, 10 MiB Paid, gzip). |
+| PAR-254 | Minimum password length | 12 characters | owner | BA `minPasswordLength`; no composition rules (PWD-REQ-002). |
+| PAR-255 | Maximum password length | 128 characters | owner | BA `maxPasswordLength`. |
+| PAR-256 | Verification link validity | 24 hours | owner | BA `emailVerification.expiresIn: 86400`. The token is a stateless JWT and can be replayed within this time, which changes nothing (DEC-0516). |
+| PAR-257 | Reset link validity | 1 hour | owner | BA `resetPasswordTokenExpiresIn: 3600`; single-use. |
+| PAR-258 | Sign-in rate limit | 5 per 60 s per IP | owner | BA path `/sign-in/email`. |
+| PAR-259 | Sign-up, forgot and resend rate limit | 3 per 300 s per IP | owner | BA paths `/sign-up/email`, `/request-password-reset`, `/send-verification-email`. |
 
 ## Log
 
@@ -113,7 +131,7 @@ Deferred to a later release (DEC-0508): these parameters belong to the AWS targe
 
 ## Dependency pins
 
-All pins are **ai-proposed**. They were selected around October 9, 2026; spike A-10 installed and ran them together on Node 22.22.0 on 2026-10-19 and recorded the remaining pins (DEC-0104). A pin may be replaced when it cannot satisfy a requirement or a newer compatible version is preferable; record the new value here and rerun the affected acceptance criteria. Apps never change framework pins.
+All pins are **ai-proposed**, except PAR-122, whose value the owner approved (DEC-0517). They were selected around October 9, 2026; spike A-10 installed and ran them together on Node 22.22.0 on 2026-10-19 and recorded the remaining pins (DEC-0104). A pin may be replaced when it cannot satisfy a requirement or a newer compatible version is preferable; record the new value here and rerun the affected acceptance criteria. Apps never change framework pins.
 
 | ID | Dependency | Version | Notes |
 | --- | --- | --- | --- |
@@ -123,7 +141,7 @@ All pins are **ai-proposed**. They were selected around October 9, 2026; spike A
 | PAR-103 | drizzle-kit | 0.31.11 | |
 | PAR-104 | Hono | 4.13.13 | |
 | PAR-105 | aws4fetch | 1.0.20 | |
-| PAR-106 | jose | 6.2.12 | |
+| PAR-106 | jose | 6.2.12 | Used only by GOOGLE (`src/google/`). Retired with that code in implementation item I-G (DEC-0513), unless framework code imports jose directly by then; the credential library brings its own copy as a dependency. |
 | PAR-107 | PGlite | 0.5.8 | |
 | PAR-108 | @pulumi/cloudflare | 6.15.0 | The provider generation SST 4.17.2 pins. A direct framework dependency only if framework code imports it (DEC-0109). |
 | PAR-109 | @pulumi/aws | 7.20.0 | The provider generation SST 4.17.2 pins. |
@@ -138,3 +156,4 @@ All pins are **ai-proposed**. They were selected around October 9, 2026; spike A
 | PAR-119 | esbuild | 0.28.2 | Exactly the version Wrangler (PAR-101) depends on; a framework dependency so npm hoists it for Vite (PAR-113) and the build pipeline, while drizzle-kit keeps its own nested copy (DEC-0114). Moves with PAR-101. |
 | PAR-120 | aws-sdk-client-mock | 4.1.0 | Framework dev dependency for AWS SDK unit tests; works with the PAR-111 clients (DEC-0432). Deferred (branch `aws`). |
 | PAR-121 | @types/aws-lambda | 8.10.164 | Framework dev dependency only, for the Lambda entry's event and result types; the published declarations do not need it (DEC-0432, DEC-0468). Deferred (branch `aws`). |
+| PAR-122 | better-auth | 1.7.7 (exact; `@better-auth/*` move in lock-step and are pinned exactly by it) | The newest version at least two weeks old on 2026-10-25, approved by the owner (DEC-0517). Move to 1.7.12 (the version spike BA-S1/S3 ran) only if a fix needed by the implementation is in 1.7.8–1.7.12, recording the fix in a decision entry. Peer range `drizzle-orm ^0.45.2`, met by PAR-102. Imported only as `better-auth/minimal` and `better-auth/adapters/drizzle` (DEC-0516). |

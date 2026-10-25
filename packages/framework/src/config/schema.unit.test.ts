@@ -88,8 +88,9 @@ describe("the Zod mirror matches the contract schema's fields", () => {
   it("required top-level fields and framework fields are the ones validated here", () => {
     expect(contract.required.sort()).toEqual(["framework", "values"]);
     expect(Object.keys(contract.properties).sort()).toEqual(["framework", "values"]);
-    expect(Object.keys(contract.properties.framework.properties).sort()).toEqual(["admins", "google", "users"]);
-    expect(contract.properties.framework.properties["google"]?.required).toEqual(["clientId"]);
-    expect(Object.keys(contract.properties.framework.properties["google"]?.properties ?? {})).toEqual(["clientId"]);
+    // DEC-0513/DEC-0514: the contract drops `google` and adds `email` ({ senderName }); the Zod mirror follows in item I-E.
+    expect(Object.keys(contract.properties.framework.properties).sort()).toEqual(["admins", "email", "users"]);
+    expect(contract.properties.framework.properties["email"]?.required).toBeUndefined();
+    expect(Object.keys(contract.properties.framework.properties["email"]?.properties ?? {})).toEqual(["senderName"]);
   });
 });

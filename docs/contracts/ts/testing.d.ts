@@ -1,7 +1,8 @@
 /**
  * Test helpers (`<package>/testing`). Importable only from app test files.
- * Owners: CORE (test app), AUTH (mock identities). Behavior: docs/components/core.md,
- * docs/components/auth.md.
+ * Owners: CORE (test app), AUTH (mock identities), PWD (password login provider), MAIL (outbox).
+ * Behavior: docs/components/core.md, docs/components/auth.md, docs/components/password.md,
+ * docs/components/mail.md.
  */
 import type { DefinedApp } from "./core";
 import type { ConfigDeclaration } from "./config";
@@ -20,6 +21,26 @@ export interface LogEntry {
   readonly message: string;
   /** Present when written during an HTTP request. */
   readonly requestId?: string;
+}
+
+/** One email the framework sent (verification, reset, or "someone tried to register"). */
+export interface MailMessage {
+  readonly to: string;
+  /** `"<sender name> <no-reply@...>"`. */
+  readonly from: string;
+  readonly subject: string;
+  readonly text: string;
+  readonly html: string;
+  /** ISO 8601 time the message was handed to the sender. */
+  readonly sentAt: string;
+}
+
+/** The framework's outgoing email as a test sees it. Nothing is ever delivered. */
+export interface TestMail {
+  /** The latest message sent to `address`, or undefined when there is none. */
+  lastTo(address: string): Promise<MailMessage | undefined>;
+  /** Every message sent so far, in order. On a connected stage this throws: read one address at a time. */
+  all(): Promise<readonly MailMessage[]>;
 }
 
 /**
@@ -46,6 +67,18 @@ export interface TestAppOptions {
    */
   readonly stubLoginProvider?: boolean;
   /**
+   * Use the real email-and-password login provider (docs/components/password.md) with an
+   * in-memory outbox (`TestApp.mail`), instead of the authentication mock. Sign-up, verification,
+   * sign-in and reset then go through the provider's routes, with its rate limits and request
+   * forgery check on. Mutually exclusive with `stubLoginProvider`. Default false.
+   */
+  readonly passwordLoginProvider?: boolean;
+  /**
+   * For the framework's own MAIL tests: an outgoing-mail sender whose every send fails, or
+   * whose sends never complete. Default: the in-memory outbox.
+   */
+  readonly mailSender?: "failing" | "never-completing";
+  /**
    * For the framework's own LOG tests (LOG-AC-001): a log writer whose every write fails, or
    * whose writes never complete. `logs()` then returns no entries. Default: the in-memory log.
    */
@@ -61,8 +94,15 @@ export interface TestApp {
    * (including `//host`, `/\host`, another protocol on the app's host, and `blob:`) is refused
    * before anything is sent, on both test apps. Send requests to other hosts, such as a cloud
    * ticket's `url`, with `fetch`.
+   * In-process, a request comes from the client address 127.0.0.1 unless `init` sets the
+   * `CF-Connecting-IP` header, so login rate limits apply per test client.
    */
   request(path: string, init?: RequestInit): Promise<Response>;
+  /**
+   * The framework's outgoing email: in-process, the in-memory outbox of this test app; on a
+   * connected test stage, the stage's mail capture. Messages never leave the test.
+   */
+  readonly mail: TestMail;
   /**
    * Returns a test app that sends subsequent requests as `user`. It shares storage with
    * the original. On a connected stage it logs in as `user` through mock-login. A test app

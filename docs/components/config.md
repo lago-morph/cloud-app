@@ -1,6 +1,6 @@
 # CFG — Configuration
 
-Non-secret configuration: keys declared by the app, per-stage values committed to the repository, and the framework settings that live with them (admins, the optional users list, login client ID). Values are fixed at deploy time.
+Non-secret configuration: keys declared by the app, per-stage values committed to the repository, and the framework settings that live with them (admins, the optional users list, the sender's display name for the framework's email). Values are fixed at deploy time.
 
 Contracts: [config.d.ts](../contracts/ts/config.d.ts), [stage-config.schema.json](../contracts/schemas/stage-config.schema.json), [errors.d.ts](../contracts/ts/errors.d.ts) (`CFG.*`).
 
@@ -42,7 +42,7 @@ Configuration files MUST NOT contain secret values; the schema provides no place
 
 **Declared keys.** Key names are lowerCamelCase (`^[a-z][a-zA-Z0-9]*$`). A default must have the key's type. Integers are JSON numbers without a fractional part.
 
-**Build failures.** Every problem in a values file (schema violation, missing file, missing value, wrong type, undeclared key, bad declared key or default) fails the build with one `CORE.MISCONFIGURED` error that names the file and lists every offending field or key (DEC-0152). `framework.google` is not required by the build; deploy preflight checks it for production stages (PROV-REQ-002).
+**Build failures.** Every problem in a values file (schema violation, missing file, missing value, wrong type, undeclared key, bad declared key or default) fails the build with one `CORE.MISCONFIGURED` error that names the file and lists every offending field or key (DEC-0152). `framework.email` is optional: it holds only `senderName`, the display name of the framework's email sender (MAIL), defaulting to the app name. It holds no address or domain; the email domain is an account setting (MAIL-REQ-003, DEC-0514). `framework.google` is no longer part of the schema (DEC-0513).
 
 **Admin and users lists.** `framework.admins` and the optional `framework.users` hold user IDs as shown by `/api/auth/me`, with the same item rules (non-empty, unique). AUTH evaluates both per request (AUTH-REQ-003). Like every value, a change takes effect at the next deploy.
 
@@ -53,7 +53,7 @@ Configuration files MUST NOT contain secret values; the schema provides no place
 - values known only once resources exist, such as the database, bucket and log bucket identifiers, and the stage's generated public origin;
 - secret locations, derived by SEC's naming convention.
 
-The build-time result (`ResolvedConfig`, framework-internal) holds the deployment, every declared key's value, `admins`, `users` (only when present in the file), `google` (only when present), and each declared secret as `{ name, location }`. Provisioning-derived values are not part of it; the adapters that need them read them from the target's deployment-time settings (DEC-0153).
+The build-time result (`ResolvedConfig`, framework-internal) holds the deployment, every declared key's value, `admins`, `users` (only when present in the file), `email` (only when present), and each declared secret as `{ name, location }`. Provisioning-derived values are not part of it; the adapters that need them read them from the target's deployment-time settings (DEC-0153).
 
 **Delivery.** Committed values are embedded in the build as a generated module (DEC-0063): a JavaScript module with no imports whose default export is the resolved configuration as JSON data. The runtime `ConfigService` is built over its `values`; reading any other key throws `CFG.UNDECLARED_KEY` naming the key. Provisioning-derived values reach the runtime through the platform's deployment-time settings (Worker variables on Cloudflare, Lambda environment variables on AWS). Only framework adapters read those settings; app code reads configuration through `c.var.config` only.
 

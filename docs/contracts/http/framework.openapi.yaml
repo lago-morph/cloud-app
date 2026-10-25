@@ -14,14 +14,14 @@ paths:
   /api/auth/login:
     get:
       summary: Start login
-      description: Redirects to the login provider. Starting a new login abandons any login in progress in this browser.
+      description: Redirects to the framework's sign-in page, or to the login provider when the stage's provider is a redirect provider. Starting a new login abandons any login in progress in this browser. The sign-in pages are framework-internal (docs/components/password.md).
       parameters:
         - name: returnTo
           in: query
           description: Same-origin path to return to after login. Anything else is replaced by "/".
           schema: { type: string }
       responses:
-        "302": { description: Redirect to the login provider. }
+        "302": { description: Redirect to the sign-in page or the login provider. }
         default: { $ref: "#/components/responses/Error" }
   /api/auth/callback:
     get:

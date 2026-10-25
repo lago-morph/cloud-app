@@ -134,7 +134,9 @@ describe("[COMPL-AC-002] the real documents", () => {
   it("define every component criterion and scenario once", () => {
     const ids = catalogue.map((e) => e.id);
     expect(ids.filter((id) => id.startsWith("E2E-"))).toHaveLength(16);
-    expect(ids.filter((id) => /-AC-/.test(id)).length).toBe(124);
+    // 124, less the four retired GOOGLE criteria, plus AUTH-AC-013/014, PWD-AC-001…009 and MAIL-AC-001…007 (DEC-0513).
+    expect(ids.filter((id) => /-AC-/.test(id)).length).toBe(138);
+    expect(ids.filter((id) => id.startsWith("GOOGLE-AC-"))).toEqual([]);
     expect(ids).toContain("DEMO-AC-011");
   });
 

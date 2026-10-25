@@ -69,29 +69,29 @@ Where: Cloud
 
 Redeploy the `prodcheck` stage (COMPL §2) on each cloud.
 
-Pass: `/api/auth/mock-login` returns 404, the deployed bundle contains no mock code, and `/api/auth/login` redirects to Google with the configured client.
+Pass: `/api/auth/mock-login` and `/api/__framework/test-mail` return 404, the deployed bundle contains no mock or mail-capture code, and `/api/auth/login` redirects to the framework's sign-in page on the stage's public origin (DEC-0513).
 
 #### E2E-007 — Becoming an admin
 Verifies: SYS-REQ-016, SYS-REQ-018
 Where: Local; cloud (milestone)
 
 Follow only the documented steps:
-1. Log in to a stage.
+1. Sign up and log in to a stage (with the password provider: sign up, read the verification mail with `mail last`, verify, sign in).
 2. Copy the user ID from the account page.
 3. Add it to the admin list in configuration.
 4. Redeploy.
 
-Locally this runs as an in-process test (`createTestApp` with the stub login provider), not through `dev`, because `dev` uses the mock, which ignores the admin list; the redeploy is a rebuild. On each cloud it runs on the `prodcheck` stage during certification (E2E-008). There, the admin-list change is a committed change to `config/<target>/prodcheck.json`, made before the redeploy, and the evidence is recorded against that commit.
+Locally this runs as an in-process test (`createTestApp` with the stub login provider), not through `dev`, because `dev` uses the mock, which ignores the admin list; the redeploy is a rebuild. On each cloud it runs on the `prodcheck` stage, performed by an AI agent with an address under `t.<domain>` and no owner step (DEC-0520). There, the admin-list change is a committed change to `config/<target>/prodcheck.json`, made before the redeploy, and the evidence is recorded against that commit.
 
 Pass: the user is admin after the redeploy and not before.
 
-#### E2E-008 — Real login provider certification (guided, manual)
+#### E2E-008 — Real login provider check (automated)
 Verifies: SYS-REQ-019, SYS-REQ-027
-Where: Cloud (manual, milestone)
+Where: Cloud
 
-On the `prodcheck` stage of each cloud, run `certify-auth` with the owner's dedicated Google test account.
+On the `prodcheck` stage of each cloud, after it is redeployed, run `check-login` (PWD §2): sign-up with real email delivery to the mail sink, refusal before verification, verification, sign-in, password reset, and the sign-in rate limit, all over HTTP (DEC-0512).
 
-Pass: certification records `passed`. Repeated only when SYS-REQ-027 requires it.
+Pass: `check-login` exits 0 and its evidence record shows every step passed. Runs on every cloud compliance run.
 
 #### E2E-009 — Large photos
 Verifies: SYS-REQ-008, SYS-REQ-014
@@ -164,7 +164,7 @@ Pass: the result of the last attempt meets every demo acceptance criterion. Ever
 Verifies: SYS-REQ-002, SYS-REQ-003, SYS-REQ-005, SYS-REQ-007
 Where: Local; review: milestone
 
-An automated scan of every app-facing contract (`docs/contracts/ts/` excluding `internal/`, and `framework.openapi.yaml`) finds no provider or protocol terms. The scan uses case-sensitive whole-word matching over identifiers, string literals, and comments. Its term list is kept in one file: S3, R2, D1, Aurora, Lambda, Worker, Cloudflare, AWS, Google, OIDC, OAuth, ID token, access token, issuer. A review, a milestone checklist item, then confirms three things:
+An automated scan of every app-facing contract (`docs/contracts/ts/` excluding `internal/`, and `framework.openapi.yaml`) finds no provider or protocol terms. The scan uses case-sensitive whole-word matching over identifiers, string literals, and comments. Its term list is kept in one file: S3, R2, D1, Aurora, Lambda, Worker, Cloudflare, AWS, Google, OIDC, OAuth, ID token, access token, issuer, Better Auth, scrypt, Email Service. A review, a milestone checklist item, then confirms three things:
 - each component document has a portability note;
 - no capability contract references another capability's adapter;
 - no design adds features beyond its requirements.

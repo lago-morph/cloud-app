@@ -167,7 +167,7 @@ describe("[COMPL-AC-003] compliance driver records", () => {
     expect(h.calls).toEqual([]);
     expect(h.events).toEqual([]);
     expect(recordOf(h).results).toEqual([
-      { id: "CLI-AC-001", status: "not-run", detail: "Google login mocked for this phase" },
+      { id: "CLI-AC-001", status: "not-run", detail: "password login provider not implemented yet (DEC-0509)" },
       { id: "KV-AC-001", status: "blocked", detail: reason },
       { id: "KV-AC-002", status: "blocked", detail: reason },
     ]);
@@ -290,7 +290,7 @@ describe("[COMPL-AC-004] cloud runs use a disposable test stage", () => {
     const record = recordOf(h);
     expect(record.stage).toBe("test-abcdefghij12345");
     expect(record.leftovers).toEqual([]);
-    expect(record.results.find((r) => r.id === "CLI-AC-001")).toEqual({ id: "CLI-AC-001", status: "not-run", detail: "Google login mocked for this phase" });
+    expect(record.results.find((r) => r.id === "CLI-AC-001")).toEqual({ id: "CLI-AC-001", status: "not-run", detail: "password login provider not implemented yet (DEC-0509)" });
     expect(h.written[0]?.redactions).toContainEqual({ value: "owner-sub", replacement: "<account-subdomain>" });
   });
 

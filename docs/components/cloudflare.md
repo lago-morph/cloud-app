@@ -27,13 +27,16 @@ Origin: provenance-unclear · Derives from: SYS-REQ-001, SYS-REQ-004
 
 The Worker bundle MUST contain only Workers-compatible code. It MUST NOT include AWS SDKs, provisioning code, the Postgres harness, filesystem access, or unsupported Node.js modules.
 
+Amendment (Origin: ai-proposed · Decision: DEC-0516): the only Node.js modules the bundle MAY import are `node:crypto` and `node:async_hooks`, which the password provider needs, and the Worker MUST be configured with the `nodejs_compat` compatibility flag. The minified bundle MUST stay within PAR-245.
+
 ## 2. Design
 
 Resources are created by SST (PAR-100) through its Cloudflare components, with raw Pulumi Cloudflare resources (PAR-108) only where SST has no component. Worker settings (built by `cloudflareWorkerSettings` in `src/targets/cloudflare/settings.ts`, which provisioning maps onto the SST Worker, the static-asset settings through SST's Worker `assets` option `{ directory, notFoundHandling, runWorkerFirst }`, DEC-0356; `wranglerWorkerConfig` gives the same settings in Wrangler's form, DEC-0325):
 - the Worker runs first for `/api` and `/api/*`;
 - other paths go to static assets, with fallback to the entry page (`single-page-application`); a path such as `/apix` is a client path;
-- the bindings: D1 `DB` (the stage's current database), R2 `FILES` (the stage bucket) and R2 `LOGS` (the shared `prototype-logs` bucket). The bindings carry the database, bucket and log-bucket identifiers to the runtime;
-- framework variables (CFG): the plain-text `FRAMEWORK_PUBLIC_ORIGIN`, the stage's public origin (an `https` origin, checked when the settings are built). With it, `deploy` sets `FRAMEWORK_R2_ACCOUNT_ID` and `FRAMEWORK_FILES_BUCKET`, the account ID and stage bucket name the R2 transfer tickets address, read when a ticket is created (DEC-0324, DEC-0353);
+- the compatibility date of the framework build (`COMPATIBILITY_DATE`, 2026-10-01) and the compatibility flag `nodejs_compat`, set explicitly although Node APIs are on by default at that date (RESULT.md, DEC-0516);
+- the bindings: D1 `DB` (the stage's current database), R2 `FILES` (the stage bucket) and R2 `LOGS` (the shared `prototype-logs` bucket). The bindings carry the database, bucket and log-bucket identifiers to the runtime. Production stages also bind `EMAIL`, an Email Service binding (`send_email`) whose only allowed sender is `no-reply@<emailDomain>` (MAIL, DEC-0514); test stages and local builds bind no `EMAIL`;
+- framework variables (CFG): the plain-text `FRAMEWORK_PUBLIC_ORIGIN`, the stage's public origin (an `https` origin, checked when the settings are built). With it, `deploy` sets `FRAMEWORK_R2_ACCOUNT_ID` and `FRAMEWORK_FILES_BUCKET`, the account ID and stage bucket name the R2 transfer tickets address, read when a ticket is created (DEC-0324, DEC-0353); and `FRAMEWORK_MAIL_FROM`, the sender address derived from the account settings record (MAIL);
 - secrets (SEC), set separately as `SECRET_<NAME>`. No variable or binding is ever named `SECRET_*`, because an upload that declares one replaces the secret (DEC-0087); building the settings refuses one with `CORE.MISCONFIGURED`.
 
 ### Runtime
@@ -48,7 +51,7 @@ The stage's public origin is its `workers.dev` URL. It is computed before deploy
 ### Deploy mechanics
 
 How this target implements the per-target operations (PROV §2, Per-target operations). The stage's resources have fixed names (DEC-0331): the Worker script `<app>-<stage>`, the R2 bucket `<app>-<stage>-files` and the R2 signing token `<app>-<stage>-files-signing`; databases follow MIG's `<app>-<stage>-db-<n>`.
-- **`setupAccount`** creates the shared R2 log bucket (LOG §2) and the provisioning tool's state home on Cloudflare, checks that this account owns them, and registers and records the `workers.dev` subdomain as above. Cloudflare holds the subdomain, so it is read again on every deploy; on an account without one, `setup-account` registers `pf-<first 12 characters of the account ID>` (DEC-0333).
+- **`setupAccount`** creates the shared R2 log bucket (LOG §2) and the provisioning tool's state home on Cloudflare, checks that this account owns them, and registers and records the `workers.dev` subdomain as above. It also records the email domain in the account settings record `framework/account.json` in `sst-state` (DEC-0514), onboards the domain for Email Sending, enables Email Routing on `t.<emailDomain>` with a catch-all rule to the sink Worker `prototype-mailsink`, deploys that Worker, and creates the R2 bucket `prototype-mailsink` with its lifecycle rule (MAIL §2). Each part lists first and creates only what is absent. Cloudflare holds the subdomain, so it is read again on every deploy; on an account without one, `setup-account` registers `pf-<first 12 characters of the account ID>` (DEC-0333).
 - **`deploy`** runs SST with the Worker settings above. The current D1 database is an input; it is not in the provisioning tool's state.
 - **`setSecret`** sets the Worker secret `SECRET_<NAME>` (SEC-REQ-003) through the Cloudflare API.
 - **`stopApp`** turns off the stage Worker's public address (its `workers.dev` route) through the Cloudflare API. **`startApp`** turns it back on. The Worker is never deleted, so its secrets and bindings survive a stop (DEC-0078). The provisioning tool does not undo a change made outside its state, so the start is always an explicit CLI call, made on every deploy (PROV-REQ-002 step 6) and after a failed migration or check (MIG-REQ-003).
@@ -67,7 +70,7 @@ All capability components, PROV.
 | --- | --- | --- | --- |
 | CF-AC-001 | A deployed test stage serves the client and the API from one origin, and unknown API paths return JSON 404s. | CF-REQ-001 | Cloud |
 | CF-AC-002 | Two stages of one app have disjoint databases, buckets, credentials, and secrets; both write to the shared log bucket. | CF-REQ-002 | Cloud |
-| CF-AC-003 | Bundle inspection finds none of the excluded modules. | CF-REQ-003 | Local |
+| CF-AC-003 | Bundle inspection finds none of the excluded modules, and no `node:*` specifier other than `node:crypto` and `node:async_hooks`; the generated Worker settings carry the `nodejs_compat` flag; the minified bundle of the reference app is within PAR-245. | CF-REQ-003 | Local |
 
 ## 5. Portability note
 
