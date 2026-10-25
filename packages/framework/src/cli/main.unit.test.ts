@@ -21,7 +21,7 @@ describe("command dispatch (CLI-REQ-001, CLI-REQ-003)", () => {
 
   it("registers every CLI-REQ-001 command", () => {
     expect([...COMMAND_NAMES].sort()).toEqual(
-      ["build", "certify-auth", "deploy", "dev", "generate-migration", "remove", "reset-local", "secrets", "setup-account", "smoke", "verify"].sort(),
+      ["build", "certify-auth", "deploy", "dev", "generate-migration", "mail", "remove", "reset-local", "secrets", "setup-account", "smoke", "verify"].sort(),
     );
   });
 

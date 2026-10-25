@@ -1,4 +1,6 @@
 {
   "postgres/0000_framework_tables.sql": "69f2208cf670bf9d362575483eba95a8f6a797a9fe343c8937a18e760b003206",
-  "sqlite/0000_framework_tables.sql": "32fe88ad0807dfec434f611a83e94829c4b1a8a37b354dcec81a9e40705cb7c1"
+  "postgres/0001_framework_test_mail.sql": "8392d3d6dc888568554548382f2007126a9db06731ed2561a963a899c31fdd75",
+  "sqlite/0000_framework_tables.sql": "32fe88ad0807dfec434f611a83e94829c4b1a8a37b354dcec81a9e40705cb7c1",
+  "sqlite/0001_framework_test_mail.sql": "a43827ad2a55cada9178eb54a2ddf81eecf8893240f73ebc0236596b41c4a794"
 }

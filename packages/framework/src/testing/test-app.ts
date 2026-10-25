@@ -38,6 +38,8 @@ import { generateAppMigrations } from "../mig/generate.js";
 import type { FilesStore } from "../files/service.js";
 import { createLocalTicketIssuer } from "../files/local/tickets.js";
 import { registerLocalTransferRoute } from "../files/local/route.js";
+import { createOutbox, failingMailSender, neverCompletingMailSender, type TestMail } from "../mail/outbox.js";
+import { mailSenderName } from "../mail/config.js";
 import { assembleStage } from "../targets/stage.js";
 import { startPlatformProxy } from "../targets/local/platform-proxy.js";
 
@@ -53,12 +55,19 @@ export interface TestAppOptions {
   readonly unavailable?: readonly ("sql" | "kv" | "files" | "secrets")[];
   /** Use the test-only stub login provider instead of the authentication mock. Default false. */
   readonly stubLoginProvider?: boolean;
+  /** For MAIL's own tests: a mail sender whose every send fails, or whose sends never complete. Default the outbox. */
+  readonly mailSender?: "failing" | "never-completing";
   /** LOG-AC-001: a log writer that fails on every write, or whose writes never complete (DEC-0210). */
   readonly logWriter?: "failing" | "never-completing";
 }
 
+export type { TestMail } from "../mail/outbox.js";
+export type { MailMessage } from "../mail/sender.js";
+
 export interface TestApp {
   request(path: string, init?: RequestInit): Promise<Response>;
+  /** The framework's outgoing email: the in-memory outbox (in-process) or the stage's capture (connected). */
+  readonly mail: TestMail;
   as(user: CurrentUser): TestApp;
   logs(): readonly LogEntry[];
   loginWithStub(subject: string, options?: { readonly displayName?: string; readonly stubFailure?: "refused" | "replayed" }): Promise<void>;
@@ -148,6 +157,7 @@ interface Shared {
   readonly fetch: (request: Request) => Promise<Response>;
   readonly fixed: WeakMap<Request, CurrentUser>;
   readonly logs: () => readonly LogEntry[];
+  readonly mail: TestMail;
   readonly stub: boolean;
   session: string | undefined;
   disposed: boolean;
@@ -172,6 +182,7 @@ function testApp(shared: Shared, user: CurrentUser | undefined): TestApp {
       if (user !== undefined) shared.fixed.set(request, user);
       return shared.fetch(request);
     },
+    mail: shared.mail,
     as(next) {
       if (shared.stub) throw new Error("as() needs the authentication mock; this test app uses the stub login provider");
       return testApp(shared, next);
@@ -246,6 +257,10 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
   const fixed = new WeakMap<Request, CurrentUser>();
   const env = proxy.env as unknown as RuntimeEnv["Bindings"];
   const store = unavailable.has("files") ? unreachableStore() : proxy.env.FILES;
+  const outbox = createOutbox({ senderName: mailSenderName(resolved) });
+  const mailSender = options.mailSender === "failing" ? failingMailSender() : options.mailSender === "never-completing" ? neverCompletingMailSender() : outbox.sender;
+  // The request's background tasks (`waitUntil`): sends run after the response, as on a Worker.
+  const executionCtx = { waitUntil: (pending: Promise<unknown>) => void pending.catch(() => undefined), passThroughOnException: () => undefined, props: {} };
   const sqlUnavailable = unavailable.has("sql");
   const kvUnavailable = sqlUnavailable || unavailable.has("kv");
 
@@ -266,12 +281,14 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
     cookies: LOCAL_COOKIES,
     ...(stub ? { provider: createStubLoginProvider() } : { mock: createAuthMock({ fixedUser: (c) => fixed.get(c.req.raw) }) }),
     routes: (api) => registerLocalTransferRoute(api, { key: ticketKey }),
+    mail: () => mailSender,
   });
 
   const shared: Shared = {
-    fetch: async (request) => hono.fetch(request, env),
+    fetch: async (request) => hono.fetch(request, env, executionCtx),
     fixed,
     logs: () => memory.entries(),
+    mail: { lastTo: outbox.lastTo, all: outbox.all },
     stub,
     session: undefined,
     disposed: false,

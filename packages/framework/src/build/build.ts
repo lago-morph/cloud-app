@@ -9,7 +9,8 @@
  *    configuration module (DEC-0063);
  * 4. generate the target entry point: it imports the app module, the configuration module and
  *    `<package>/targets/<target>`; only a test-stage Cloudflare entry imports the
- *    authentication mock (production bundles contain none);
+ *    authentication mock and the mail capture with its test-mail route (production bundles
+ *    contain none);
  * 5. bundle the entry for Workers (esbuild);
  * 6. locally, write the `wrangler.jsonc` `dev` runs (local D1 `DB`, local R2 `FILES`).
  * Everything goes under `<app>/.framework/<target>/`, which is replaced on every build.
@@ -82,8 +83,8 @@ export function entrySource(options: {
     lines.push(`import { createLocalWorker } from ${JSON.stringify(options.runtimeImport)};`, "export default createLocalWorker(app, config);");
   } else if (options.deployment.isTestStage) {
     lines.push(
-      `import { createAuthMock, createCloudflareWorker } from ${JSON.stringify(options.runtimeImport)};`,
-      "export default createCloudflareWorker(app, config, { mock: createAuthMock });",
+      `import { createAuthMock, createCloudflareWorker, createTestMailCapture } from ${JSON.stringify(options.runtimeImport)};`,
+      "export default createCloudflareWorker(app, config, { mock: createAuthMock, testMail: createTestMailCapture });",
     );
   } else {
     lines.push(`import { createCloudflareWorker } from ${JSON.stringify(options.runtimeImport)};`, "export default createCloudflareWorker(app, config);");

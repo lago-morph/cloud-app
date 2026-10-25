@@ -6,7 +6,7 @@
 import { UsageError } from "./args.js";
 import { describeFailure } from "./failure.js";
 import { EXIT, type CliIo, type Command } from "./io.js";
-import { buildBinding, devBinding, generateMigrationBinding, resetLocalBinding, secretsBinding, verifyBinding } from "./wiring.js";
+import { buildBinding, devBinding, generateMigrationBinding, mailBinding, resetLocalBinding, secretsBinding, verifyBinding } from "./wiring.js";
 
 export { EXIT, type CliIo, type Command } from "./io.js";
 
@@ -44,7 +44,8 @@ const COMMANDS: Readonly<Record<string, Entry>> = {
   secrets: { summary: "secrets set <name> --target <t> --stage <s>: set a secret from standard input", run: secretsBinding },
   "setup-account": { summary: "setup-account --target <t>: one-time account setup", run: setupAccountBinding },
   "certify-auth": { summary: "certify-auth --target <t> --stage <s>: guided login-provider certification", run: certifyAuthBinding },
-  "reset-local": { summary: "clear local state (local D1, R2 and .logs/)", run: resetLocalBinding },
+  "reset-local": { summary: "clear local state (local D1, R2, .logs/ and .mail/)", run: resetLocalBinding },
+  mail: { summary: "mail last --to <address> [--target <t>]: print the latest framework email sent to an address", run: mailBinding },
 };
 
 export const COMMAND_NAMES: readonly string[] = Object.keys(COMMANDS);
