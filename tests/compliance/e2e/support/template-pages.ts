@@ -6,7 +6,7 @@
  *
  * Capabilities and the template pages that use them:
  * - CFG: the heading shows the configured greeting (set in config/local.json by the test);
- * - AUTH: "Log in" (the mock's default user locally) and "Log out"; an admin via mock-login;
+ * - AUTH: "Log in" (opens the sign-in page; the user is then chosen with mock-login) and "Log out"; an admin via mock-login;
  * - SQL: Notes ("Add" lists the note); KV: Status ("Save", kept after a reload);
  * - FILES: Files ("Upload" lists the file; "Download" returns the same bytes);
  * - SEC: Admin "Check secret" says the secret is set (set with `secrets set` by the test);
@@ -110,7 +110,17 @@ try {
     await page.getByRole("heading", { level: 1, name: greeting, exact: true }).waitFor(T);
   });
   await check("AUTH: log in through the account page", async () => {
+    // "Log in" opens the framework's sign-in page (DEC-0516); the test then chooses its identity
+    // with mock-login, as every test does, and returns to the app.
     await page.getByRole("button", { name: "Log in" }).click();
+    await page.getByRole("heading", { level: 1, name: "Sign in", exact: true }).waitFor(T);
+    if (new URL(page.url()).pathname !== "/api/auth/sign-in") throw new Error(`"Log in" opened ${page.url()}, not the sign-in page`);
+    const status = await page.evaluate(async () => {
+      const r = await fetch("/api/auth/mock-login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ level: "user" }) });
+      return r.status;
+    });
+    if (status !== 204) throw new Error(`mock-login as user answered ${String(status)}`);
+    await page.goto(dev.origin);
     await page.getByText(/Logged in as .* \(user\)\./).waitFor(T);
   });
   const note = `note ${Date.now().toString(36)}`;

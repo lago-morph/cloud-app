@@ -207,7 +207,7 @@ function local(path: string): string {
 /** Registers the password pages and endpoints on the framework's `/api` router. */
 export function registerPasswordRoutes(api: Hono<RuntimeEnv>, credentials: CredentialOperations): void {
   const html = (c: Context, body: string): Response => {
-    c.header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
+    c.header("Content-Security-Policy", "default-src 'self'; script-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
     c.header("X-Frame-Options", "DENY");
     c.header("Cache-Control", "no-store");
     return c.html(body, 200);
