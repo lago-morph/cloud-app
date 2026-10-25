@@ -21,3 +21,12 @@ export const DENIED_PACKAGES: readonly RegExp[] = [
 export function isDeniedPackage(name: string): boolean {
   return DENIED_PACKAGES.some((re) => re.test(name));
 }
+
+/** The package an npm alias spec installs (`npm:@aws-sdk/client-s3@^3` → `@aws-sdk/client-s3`); undefined for any other spec. */
+export function npmAliasTarget(spec: unknown): string | undefined {
+  if (typeof spec !== "string" || !spec.startsWith("npm:")) return undefined;
+  const rest = spec.slice("npm:".length);
+  const at = rest.indexOf("@", rest.startsWith("@") ? 1 : 0);
+  const name = at < 0 ? rest : rest.slice(0, at);
+  return name === "" ? undefined : name;
+}

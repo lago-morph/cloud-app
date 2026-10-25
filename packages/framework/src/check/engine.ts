@@ -78,10 +78,11 @@ function toPosix(path: string): string {
 /**
  * Lints every app file with the shipped configuration (never with the app's lint configuration),
  * reports an app lint configuration that disables or weakens a framework rule, and reports an app
- * dependency whose installed tree contains a platform SDK or database driver (DEC-0554).
+ * dependency whose installed tree contains a platform SDK or database driver (DEC-0554). `warn`
+ * receives what could not be checked (no npm lockfile), which is not a diagnostic.
  */
-export async function runPortabilityRules(appDir: string): Promise<CheckDiagnostic[]> {
-  return sortDiagnostics([...(await lintAppFiles(appDir)), ...(await checkAppLintConfig(appDir)), ...checkDependencyTree(appDir)]);
+export async function runPortabilityRules(appDir: string, warn?: (message: string) => void): Promise<CheckDiagnostic[]> {
+  return sortDiagnostics([...(await lintAppFiles(appDir)), ...(await checkAppLintConfig(appDir)), ...checkDependencyTree(appDir, warn)]);
 }
 
 async function lintAppFiles(appDir: string): Promise<CheckDiagnostic[]> {

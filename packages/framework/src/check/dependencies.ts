@@ -8,7 +8,10 @@
  * - **Which lockfile.** The nearest `package-lock.json` from the app directory upwards (an app in
  *   an npm workspace is recorded in the workspace root's lockfile), else the app's
  *   `node_modules/.package-lock.json`. Lockfile versions 2 and 3 (`packages`) are read. Without
- *   one nothing is installed to inspect, and the check reports nothing (`npm install` writes it).
+ *   one (nothing installed, or another package manager: pnpm, yarn, bun) the check reports
+ *   nothing and `verify` prints a warning that the tree was not checked (`npm install` writes it).
+ * - **npm aliases.** A package installed under another name (`"s3": "npm:@aws-sdk/client-s3@^3"`)
+ *   is judged by the package it installs: the lock entry's `name`, else the `npm:` spec's target.
  * - **Where the walk starts.** The app's `dependencies`, `devDependencies` and
  *   `optionalDependencies`, except the framework itself: its own tree holds the tools it runs on
  *   the owner's machine (SST, Wrangler, PGlite), which never reach a Worker bundle (CORE-REQ-006).
@@ -22,7 +25,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import { isDeniedPackage } from "./denied-packages.js";
+import { isDeniedPackage, npmAliasTarget } from "./denied-packages.js";
 import type { CheckDiagnostic } from "./engine.js";
 import { referenceFor } from "./references.js";
 import { FRAMEWORK_PACKAGE } from "./resolve.js";
@@ -31,6 +34,7 @@ import { PLUGIN_NAME } from "./rule-names.js";
 const RULE = `${PLUGIN_NAME}/allowed-imports`;
 
 interface LockEntry {
+  readonly name?: string;
   readonly version?: string;
   readonly link?: boolean;
   readonly resolved?: string;
@@ -119,8 +123,30 @@ export interface DeniedChain {
   readonly chain: readonly string[];
 }
 
-/** Every (app dependency, denied package) pair in the installed tree, with one shortest chain each. */
-export function deniedChains(lock: LockfileLocation, rootDependencies: readonly string[]): DeniedChain[] {
+/** The spec a lock entry (or manifest) declares for `name`. */
+function specOf(entry: LockEntry, name: string): string | undefined {
+  return entry.dependencies?.[name] ?? entry.optionalDependencies?.[name] ?? entry.peerDependencies?.[name] ?? entry.devDependencies?.[name];
+}
+
+/**
+ * The real package name installed under `alias`: the lock entry's `name` (npm records it for an
+ * alias), else the target of an `npm:` spec, else the alias itself.
+ */
+function realName(packages: LockPackages, location: string, alias: string, spec: string | undefined): string {
+  const recorded = packages[location]?.name;
+  if (typeof recorded === "string" && recorded !== "" && packages[location]?.link !== true) return recorded;
+  return npmAliasTarget(spec) ?? alias;
+}
+
+/** A chain element: the name as declared, with the real package of an npm alias. */
+const shown = (alias: string, real: string): string => (alias === real ? alias : `${alias} (npm:${real})`);
+
+/**
+ * Every (app dependency, denied package) pair in the installed tree, with one shortest chain each.
+ * An npm alias (`"s3": "npm:@aws-sdk/client-s3@^3"`) is judged by the package it installs.
+ * `rootSpecs`: the manifest's spec of each root dependency.
+ */
+export function deniedChains(lock: LockfileLocation, rootDependencies: readonly string[], rootSpecs: Readonly<Record<string, string>> = {}): DeniedChain[] {
   const { packages, appLocation } = lock;
   const out: DeniedChain[] = [];
   for (const dependency of rootDependencies) {
@@ -129,12 +155,12 @@ export function deniedChains(lock: LockfileLocation, rootDependencies: readonly 
     if (start === undefined) continue;
     const seen = new Set<string>();
     const found = new Map<string, readonly string[]>();
-    const queue: { location: string; chain: readonly string[] }[] = [{ location: start, chain: [dependency] }];
+    const first = realName(packages, start, dependency, rootSpecs[dependency]);
+    const queue: { location: string; real: string; chain: readonly string[] }[] = [{ location: start, real: first, chain: [shown(dependency, first)] }];
     while (queue.length > 0) {
-      const { location, chain } = queue.shift()!;
-      const name = chain[chain.length - 1]!;
-      if (isDeniedPackage(name)) {
-        if (!found.has(name)) found.set(name, chain);
+      const { location, real, chain } = queue.shift()!;
+      if (isDeniedPackage(real)) {
+        if (!found.has(real)) found.set(real, chain);
         continue;
       }
       const at = installed(packages, location);
@@ -145,7 +171,9 @@ export function deniedChains(lock: LockfileLocation, rootDependencies: readonly 
       for (const next of followed(entry)) {
         if (next === FRAMEWORK_PACKAGE) continue;
         const where = resolveLocation(packages, at, next);
-        if (where !== undefined) queue.push({ location: where, chain: [...chain, next] });
+        if (where === undefined) continue;
+        const nextReal = realName(packages, where, next, specOf(entry, next));
+        queue.push({ location: where, real: nextReal, chain: [...chain, shown(next, nextReal)] });
       }
     }
     for (const [denied, chain] of [...found].sort(([a], [b]) => a.localeCompare(b))) out.push({ dependency, denied, chain });
@@ -159,16 +187,38 @@ function declarationLine(text: string, name: string): number {
   return index < 0 ? 1 : index + 1;
 }
 
-/** `verify`'s diagnostics for the app's installed tree (empty when there is no lockfile or nothing denied). */
-export function checkDependencyTree(appDir: string): CheckDiagnostic[] {
+/** Other package managers' lockfiles, which the tree check does not read. */
+const OTHER_LOCKFILES = ["pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb"];
+
+function otherLockfile(appDir: string): string | undefined {
+  for (let dir = resolve(appDir); ; dir = dirname(dir)) {
+    const found = OTHER_LOCKFILES.find((name) => existsSync(join(dir, name)));
+    if (found !== undefined) return found;
+    if (dirname(dir) === dir) return undefined;
+  }
+}
+
+/**
+ * `verify`'s diagnostics for the app's installed tree (empty when there is no lockfile or nothing
+ * denied). Without an npm lockfile the tree is not checked, and `warn` says so.
+ */
+export function checkDependencyTree(appDir: string, warn: (message: string) => void = () => undefined): CheckDiagnostic[] {
   const manifestPath = join(appDir, "package.json");
   if (!existsSync(manifestPath)) return [];
   const text = readFileSync(manifestPath, "utf8");
   const manifest = JSON.parse(text) as LockEntry;
   const lock = findLockfile(appDir);
-  if (lock === undefined) return [];
+  if (lock === undefined) {
+    const other = otherLockfile(appDir);
+    warn(
+      `no package-lock.json (npm's lockfile) records the app's installed packages${other === undefined ? "" : `; ${other} is not read`}, so the installed dependency tree was not checked for platform SDKs and database drivers (DEC-0554). ` +
+        "Install with npm (npm install) to have it checked.",
+    );
+    return [];
+  }
   const roots = [...new Set([...Object.keys(manifest.dependencies ?? {}), ...Object.keys(manifest.devDependencies ?? {}), ...Object.keys(manifest.optionalDependencies ?? {})])].sort();
-  return deniedChains(lock, roots).map(({ dependency, denied, chain }) => ({
+  const specs = { ...manifest.optionalDependencies, ...manifest.devDependencies, ...manifest.dependencies };
+  return deniedChains(lock, roots, specs).map(({ dependency, denied, chain }) => ({
     file: "package.json",
     line: declarationLine(text, dependency),
     column: 1,
@@ -176,7 +226,9 @@ export function checkDependencyTree(appDir: string): CheckDiagnostic[] {
     message:
       dependency === denied
         ? `Dependency "${dependency}" is a platform SDK or database driver; app code uses the framework's APIs instead.`
-        : `Dependency "${dependency}" installs the platform SDK or database driver "${denied}" (${chain.join(" → ")}); use a package without it, or the framework's API.`,
+        : chain.length === 1
+          ? `Dependency "${dependency}" is an npm alias of the platform SDK or database driver "${denied}"; app code uses the framework's APIs instead.`
+          : `Dependency "${dependency}" installs the platform SDK or database driver "${denied}" (${chain.join(" → ")}); use a package without it, or the framework's API.`,
     reference: referenceFor(RULE),
   }));
 }
