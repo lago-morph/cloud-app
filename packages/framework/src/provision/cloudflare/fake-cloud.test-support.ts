@@ -10,7 +10,8 @@ import { join } from "node:path";
 import type { Migration } from "../../mig/history.js";
 import type { MigrationDatabase } from "../../mig/apply.js";
 import type { ListedDatabase, StageDatabase } from "../core/operations.js";
-import type { ApiReply, CloudflareApi } from "./api.js";
+import type { ApiReply, CloudflareApi, CloudflareBytesApi } from "./api.js";
+import { BACKUP_LIFECYCLE_RULE } from "./backup.js";
 import type { CloudflareDatabases } from "./databases.js";
 import type { SstExec } from "./sst.js";
 
@@ -32,7 +33,7 @@ export interface FakeWorker {
 }
 
 /** The account signing record `setup-account` writes in the fake (DEC-0550); the secret is a fixed test value. */
-export const FAKE_SIGNING = Object.freeze({ tokenId: "tok0", accessKeyId: "tok0", secretAccessKey: "5".repeat(64) });
+export const FAKE_SIGNING = Object.freeze({ tokenId: "tok0", accessKeyId: "tok0", secretAccessKey: "5".repeat(64), deniedBuckets: ["prototype-logs", "sst-state", "prototype-mailsink", "prototype-backups"] });
 
 /** The fake's own token: its ID and its policies (`GET /accounts/<a>/tokens/<id>`). */
 export const SELF_TOKEN_ID = "selftoken";
@@ -104,6 +105,10 @@ export class FakeCloud {
   readonly buckets = new Map<string, Set<string>>();
   /** Bodies of objects written with `PUT …/objects/<key>`, by `<bucket>/<key>` (JSON values). */
   readonly objectBodies = new Map<string, unknown>();
+  /** Objects written or read as bytes (`bytes`), by `<bucket>/<key>`. */
+  readonly objectBytes = new Map<string, { bytes: Uint8Array; contentType: string }>();
+  /** `bytes` requests (`<METHOD> <path>`) answered with this HTTP status instead. */
+  readonly bytesFailures = new Map<string, number>();
   readonly cors = new Map<string, unknown>();
   readonly tokens = new Map<string, { name: string; resources: unknown }>();
   readonly workers = new Map<string, FakeWorker>();
@@ -263,6 +268,7 @@ export class FakeCloud {
         const key = decodeURIComponent(rest.slice("/objects/".length));
         objects.delete(key);
         this.objectBodies.delete(`${name}/${key}`);
+        this.objectBytes.delete(`${name}/${key}`);
         return ok({});
       }
       // An object's own bytes (JSON, or text such as a raw message); the R2 object endpoints answer them unwrapped.
@@ -469,6 +475,41 @@ export class FakeCloud {
     return { code: 0, output: "✓ Removed" };
   };
 
+  /**
+   * The R2 object endpoints as bytes (`CloudflareBytesApi`): GET answers an object's bytes and
+   * content type (a JSON-valued object as its JSON text), PUT stores bytes.
+   */
+  readonly bytes: CloudflareBytesApi = async (method, path, body) => {
+    this.requests.push(`BYTES ${method} ${path}`);
+    const failed = this.bytesFailures.get(`${method} ${path}`);
+    const none = new Uint8Array();
+    if (failed !== undefined) return { status: failed, bytes: none, body: { success: false, errors: [{ code: 10000, message: "injected failure" }] } };
+    const m = /^\/accounts\/[^/]+\/r2\/buckets\/([^/]+)\/objects\/(.+)$/.exec(path);
+    if (!m) throw new Error(`fake Cloudflare: unexpected bytes request ${method} ${path}`);
+    const bucket = m[1]!;
+    const key = decodeURIComponent(m[2]!);
+    const objects = this.buckets.get(bucket);
+    if (!objects) return { status: 404, bytes: none, body: { success: false, errors: [{ code: 10006, message: "The specified bucket does not exist." }] } };
+    if (method === "PUT") {
+      objects.add(key);
+      this.objectBytes.set(`${bucket}/${key}`, { bytes: body!.bytes.slice(), contentType: body!.contentType ?? "application/octet-stream" });
+      return { status: 200, bytes: none, contentType: "application/json", body: { success: true, result: { key } } };
+    }
+    if (!objects.has(key)) return { status: 404, bytes: none, body: { success: false, errors: [{ code: 10007, message: "The specified key does not exist." }] } };
+    const stored = this.objectBytes.get(`${bucket}/${key}`);
+    if (stored) return { status: 200, bytes: stored.bytes.slice(), contentType: stored.contentType, body: null };
+    const value = this.objectBodies.get(`${bucket}/${key}`);
+    const text = typeof value === "string" ? value : JSON.stringify(value ?? null);
+    return { status: 200, bytes: new TextEncoder().encode(text), contentType: typeof value === "string" ? "text/plain" : "application/json", body: null };
+  };
+
+  /** Stores an object's bytes, as an upload would. */
+  putBytes(bucket: string, key: string, bytes: Uint8Array, contentType = "application/octet-stream"): void {
+    if (!this.buckets.has(bucket)) this.buckets.set(bucket, new Set());
+    this.buckets.get(bucket)!.add(key);
+    this.objectBytes.set(`${bucket}/${key}`, { bytes, contentType });
+  }
+
   /** Stores an object as the sink Worker would (its bytes as text). */
   putObject(bucket: string, key: string, text: string): void {
     if (!this.buckets.has(bucket)) this.buckets.set(bucket, new Set());
@@ -481,6 +522,8 @@ export class FakeCloud {
     const c = new FakeCloud();
     c.buckets.set("prototype-logs", new Set());
     c.buckets.set("sst-state", new Set());
+    c.buckets.set("prototype-backups", new Set());
+    c.lifecycles.set("prototype-backups", [JSON.parse(JSON.stringify(BACKUP_LIFECYCLE_RULE)) as unknown]);
     c.addSigningCredential();
     return c;
   }
@@ -529,5 +572,13 @@ export class FakeDatabases implements CloudflareDatabases {
   }
   async checkMigratedDatabase(): Promise<void> {
     this.calls.push("check");
+  }
+  /** Databases whose export fails. */
+  readonly failingExports = new Set<string>();
+  async exportDatabase(database: StageDatabase): Promise<Uint8Array> {
+    this.calls.push(`export ${database.name}`);
+    if (this.failingExports.has(database.name)) throw new Error(`exporting D1 database ${database.name}: injected failure`);
+    const db = this.dbs.get(database.id)!;
+    return new TextEncoder().encode(`-- dump of ${db.name}\n${[...db.recorded].map((id) => `-- ${id}`).join("\n")}\n`);
   }
 }

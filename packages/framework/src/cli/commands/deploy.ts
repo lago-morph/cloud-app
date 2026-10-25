@@ -1,7 +1,8 @@
 /**
- * `deploy --target <t> --stage <s>` (CLI-REQ-001; PROV-REQ-002; D-05).
+ * `deploy --target <t> --stage <s> [--start]` (CLI-REQ-001; PROV-REQ-002; D-05).
  *
- * 1. Options: a cloud target (local has `dev`) and a stage; the runner-only abort point comes
+ * 1. Options: a cloud target (local has `dev`), a stage and the flag `--start`, which starts a
+ *    stage that `stop` stopped (without it a stopped stage stays stopped, DEC-0544); the runner-only abort point comes
  *    from the environment variable `PROTOTYPE_FRAMEWORK_ABORT_AT` (`after-copy` | `after-code`,
  *    DEC-0269), which only the compliance runner sets, so it never appears among the owner's
  *    options.
@@ -67,7 +68,8 @@ function abortPoint(env: ProcessEnvironment): AbortPoint | undefined {
 
 export function deployCommand(deps: DeployDeps): Command {
   return async (args, io) => {
-    const { target, stage } = parseCloudTargetStage("deploy", args);
+    const start = args.includes("--start");
+    const { target, stage } = parseCloudTargetStage("deploy", args.filter((a) => a !== "--start"));
     const abortAt = abortPoint(deps.env);
     const refused = refuseUnreachableCloud("deploy", deps.env, io);
     if (refused !== undefined) return refused;
@@ -88,6 +90,7 @@ export function deployCommand(deps: DeployDeps): Command {
         migrations: prepared.migrations,
         requiredSecrets: prepared.requiredSecrets,
         ...(abortAt === undefined ? {} : { abortAt }),
+        ...(start ? { start: true } : {}),
       },
       io,
     );

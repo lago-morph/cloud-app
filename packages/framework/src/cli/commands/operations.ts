@@ -9,7 +9,9 @@
  */
 import type { Target } from "../../core/identity.js";
 import { bucketCorsPolicy, checkStorageCors } from "../../files/cloudflare/cors.js";
-import { createCloudflareApi } from "../../provision/cloudflare/api.js";
+import { createCloudflareApi, createCloudflareBytesApi } from "../../provision/cloudflare/api.js";
+import { fetchTransfer } from "../../provision/cloudflare/d1/native-copy.js";
+import { workersPlanReader } from "../../provision/cloudflare/plan.js";
 import { d1DatabaseOperations } from "../../provision/cloudflare/d1/operations.js";
 import { missingCredentials } from "../../provision/cloudflare/environment.js";
 import type { WorkerCode } from "../../provision/cloudflare/sst.js";
@@ -59,10 +61,16 @@ export const cloudflareOperations: OperationsFactory =
     const api = createCloudflareApi({ token: env.CLOUDFLARE_API_TOKEN ?? "", ...withFetch });
     return createCloudflareTarget({
       api,
+      bytes: createCloudflareBytesApi({ token: env.CLOUDFLARE_API_TOKEN ?? "", ...withFetch }),
       accountId,
       env,
       appDir,
-      databases: d1DatabaseOperations({ api, accountId }),
+      databases: d1DatabaseOperations({
+        api,
+        accountId,
+        native: { transfer: fetchTransfer(options.fetch) },
+        plan: workersPlanReader(api, accountId, env),
+      }),
       files: {
         bucketCors: (origin) => bucketCorsPolicy(origin),
         storagePreflight: ({ accountId: account, bucket, origin }) => checkStorageCors({ accountId: account, bucket, publicOrigin: origin, ...withFetch }),

@@ -35,7 +35,7 @@ function deployedTarget(n = 1, extra: ConstructorParameters<typeof FakeTarget>[0
 }
 
 const changingCalls = (t: FakeTarget) =>
-  t.calls.filter((c) => !/^(preflight|inspectAccount|readAccountSettings|emailPrerequisites|listSetSecrets|listStageResources|checkHealth)\b/.test(c));
+  t.calls.filter((c) => !/^(preflight|inspectAccount|readAccountSettings|readStageRecord|emailPrerequisites|listSetSecrets|listStageResources|checkHealth)\b/.test(c));
 
 describe("deploy step 2: database discovery (PROV-REQ-002)", () => {
   it("[COMPL-AC-007] takes the lowest-numbered stage database as current and deletes and reports every higher-numbered one", async () => {

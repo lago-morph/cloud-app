@@ -22,6 +22,10 @@
  *   secret `frameworkAuthSecret` (each generated when absent, PAR-253), and the account's R2
  *   signing credential as S3 credentials, copied from its record on every deploy (DEC-0550).
  * - `setSecret`, `listSetSecrets`, `stopApp`, `startApp`: `worker.ts`.
+ * - `readStageRecord`, `writeStageRecord`: the stage record in `sst-state` (`stage-record.ts`,
+ *   DEC-0544); `removeStage` deletes it with the stage's state objects.
+ * - `backupStage`: the production `remove`'s backup into `prototype-backups` (`backup.ts`,
+ *   DEC-0543), through `bytes` and the databases' `exportDatabase`.
  * - Databases: D-04's operations through `databases.ts`.
  * - `checkHealth`: `health.ts` with FILES' storage preflight.
  * - `listStageResources`: the Worker, the bucket, a legacy per-stage signing token (when the
@@ -43,13 +47,15 @@ import type { DeployedCode, DeployInput, HealthOutcome, Stage, StageDatabase, St
 import { accountSubdomain, createSharedResources, inspectSharedResources, type SharedResourceOptions } from "./account.js";
 import { readAccountSettings, writeAccountSettings } from "./account-settings.js";
 import { createCloudflareEmailSetup, type CloudflareEmailSetup } from "./email.js";
-import { describeFailure, succeeded, type CloudflareApi } from "./api.js";
+import { describeFailure, succeeded, type CloudflareApi, type CloudflareBytesApi } from "./api.js";
+import { backupStage } from "./backup.js";
+import { readStageRecord, writeStageRecord } from "./stage-record.js";
 import type { CloudflareDatabases } from "./databases.js";
 import { missingCredentials, type Environment } from "./environment.js";
 import { checkStageHealth } from "./health.js";
 import { accountResourceClash, filesBucketName, isStageStateObject, publicOrigin, STATE_BUCKET, workerName } from "./names.js";
 import { deleteObjects, listObjectKeys } from "./objects.js";
-import { deleteSigningToken, findLegacySigningToken, readSigningCredentials, SIGNING_RESOURCE, tokenWriteProblems } from "./r2-token.js";
+import { deleteSigningToken, findLegacySigningToken, readSigningCredentials, SIGNING_RESOURCE, signingCredentialState, tokenWriteProblems } from "./r2-token.js";
 import { INFRASTRUCTURE_COMPONENT, processSstExec, runSst, writeSstApp, type SstExec, type WorkerCode } from "./sst.js";
 import { listSetSecrets, setRoute, setSecret } from "./worker.js";
 
@@ -63,6 +69,8 @@ export interface CloudflareFilesProvisioning {
 
 export interface CloudflareTargetOptions {
   readonly api: CloudflareApi;
+  /** Object bytes through the R2 object endpoints (the production `remove`'s backup, DEC-0543); without it a production stage cannot be removed. */
+  readonly bytes?: CloudflareBytesApi;
   /** `CLOUDFLARE_ACCOUNT_ID`. */
   readonly accountId: string;
   /** The process environment (credential check by name; SST's environment). */
@@ -155,7 +163,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
     writeAccountSettings: (settings) => writeAccountSettings(api, accountId, settings),
     async emailSetupProblems(emailDomain) {
       const problems = [...(await email.setupProblems(emailDomain))];
-      if ((await readSigningCredentials(api, accountId)) === undefined) problems.push(...(await tokenWriteProblems(api, accountId)));
+      if ((await signingCredentialState(api, accountId)) === "absent") problems.push(...(await tokenWriteProblems(api, accountId)));
       return problems;
     },
     setUpEmail: (emailDomain) => email.setUp(emailDomain),
@@ -201,6 +209,18 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
     listSetSecrets: (stage) => listSetSecrets(api, accountId, stage),
     stopApp: (stage) => setRoute(api, accountId, stage, false),
     startApp: (stage) => setRoute(api, accountId, stage, true),
+    readStageRecord: (stage) => readStageRecord(api, accountId, stage),
+    writeStageRecord: (stage, record) => writeStageRecord(api, accountId, stage, record),
+
+    async backupStage(stage, stageDatabases) {
+      refuseAccountResourceClash(stage);
+      if (!options.bytes) throw new Error("no byte transfer for R2 objects is configured, so the stage's files cannot be backed up");
+      return backupStage(
+        { api, bytes: options.bytes, accountId, exportDatabase: (d) => databases.exportDatabase(d), ...(options.now === undefined ? {} : { now: options.now }) },
+        stage,
+        stageDatabases,
+      );
+    },
 
     createDatabase: (stage, name) => databases.createDatabase(stage, name),
     copyDatabase: (stage, from, name) => databases.copyDatabase(stage, from, name),
@@ -225,7 +245,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       if (await exists(bucketPath(stage), `R2 bucket ${filesBucketName(stage)}`)) resources.push({ kind: "R2 bucket", id: filesBucketName(stage) });
       const token = await findLegacySigningToken(api, accountId, stage);
       if (token) resources.push({ kind: "R2 API token", id: token.id });
-      for (const key of await stateObjects(stage)) resources.push({ kind: "SST state object", id: key });
+      for (const key of await stateObjects(stage)) resources.push({ kind: key.startsWith("framework/") ? "stage record" : "SST state object", id: key });
       return { resources, databases: await databases.listDatabases() };
     },
 

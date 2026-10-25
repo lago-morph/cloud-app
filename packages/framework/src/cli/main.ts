@@ -30,6 +30,8 @@ const smokeBinding: Command = lazy(async () => {
 /** The cloud commands (D-05). */
 const deployBinding: Command = lazy(async () => (await import("./commands/deploy.js")).deployBinding());
 const removeBinding: Command = lazy(async () => (await import("./commands/remove.js")).removeBinding());
+const stopBinding: Command = lazy(async () => (await import("./commands/stop-start.js")).stopBinding());
+const startBinding: Command = lazy(async () => (await import("./commands/stop-start.js")).startBinding());
 const setupAccountBinding: Command = lazy(async () => (await import("./commands/setup-account.js")).setupAccountBinding());
 /** `check-login` (PWD §2): the real login provider on a production stage, with the mail sink. */
 const checkLoginBinding: Command = lazy(async () => (await import("./commands/check-login.js")).checkLoginBinding());
@@ -41,9 +43,11 @@ const COMMANDS: Readonly<Record<string, Entry>> = {
   verify: { summary: "the pre-completion verification (offline)", run: verifyBinding },
   "generate-migration": { summary: "generate-migration [--name <slug>]: the next migration pair from the table definitions", run: generateMigrationBinding },
   build: { summary: "build --target <t> --stage <s>: build a deployment without deploying it", run: buildBinding },
-  deploy: { summary: "deploy --target <t> --stage <s>: deploy a stage", run: deployBinding },
+  deploy: { summary: "deploy --target <t> --stage <s> [--start]: deploy a stage (a stopped stage stays stopped unless --start)", run: deployBinding },
   smoke: { summary: "smoke --target <t> --stage <s>: run the app's smoke tests against a stage", run: smokeBinding },
-  remove: { summary: "remove --target <t> --stage <s> [--confirm-production <s>]: remove a stage", run: removeBinding },
+  remove: { summary: "remove --target <t> --stage <s> [--confirm-production <s>]: remove a stage (a production stage is backed up first)", run: removeBinding },
+  stop: { summary: "stop --target <t> --stage <s>: stop a stage; deploy leaves it stopped", run: stopBinding },
+  start: { summary: "start --target <t> --stage <s>: start a stopped stage", run: startBinding },
   secrets: { summary: "secrets set <name> --target <t> --stage <s>: set a secret from standard input", run: secretsBinding },
   "setup-account": { summary: "setup-account --target <t>: one-time account setup", run: setupAccountBinding },
   "check-login": { summary: "check-login --target <t> --stage <s>: automated real-login check on a production stage", run: checkLoginBinding },

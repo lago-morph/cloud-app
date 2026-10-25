@@ -29,7 +29,7 @@ STAGE='<stage>'
 1. Sign up or log in at https://dash.cloudflare.com. The email domain must be a zone on this account, with Cloudflare DNS active (Websites → Add a site). Its mail need not be on Cloudflare: the framework uses the subdomain `t.<domain>` for test mail.
 2. Copy your **Account ID** from the account's overview page (menu names here are not yet verified).
 3. Create two **account API tokens**: Manage Account → Account API Tokens → Create Token → Create Custom Token. Account resources: this account only; zone resources: the email domain's zone. Copy each token when shown; Cloudflare shows it only once.
-   - **Everyday token** `prototype-framework`, for every command but `setup-account`. Account: Workers Scripts Edit, Workers R2 Storage Edit, D1 Edit, Email Sending Read. Zone: Zone Read, Analytics Read. It cannot create tokens.
+   - **Everyday token** `prototype-framework`, for every command but `setup-account`, including `stop`, `start` and the backup a production `remove` writes. Account: Workers Scripts Edit, Workers R2 Storage Edit, D1 Edit, Email Sending Read. Zone: Zone Read, Analytics Read. It cannot create tokens. It needs no Billing permission: if Cloudflare refuses a new database because the account has too many, the message names both plans' limits (put `PROTOTYPE_FRAMEWORK_CLOUDFLARE_PLAN=free` or `=paid` in front of the command to name yours).
    - **Setup token** `prototype-framework-setup`, for `setup-account` only (§3), used rarely. Account: Workers Scripts Edit, Workers R2 Storage Edit, Account API Tokens Edit, Email Sending Edit, Email Routing Addresses Edit. Zone: Email Routing Rules Edit, DNS Edit, Zone Settings Edit, Zone Read. Store it apart from the everyday token.
 
    A command names any permission its token lacks.
@@ -53,7 +53,7 @@ Paste the **setup token** into `read -rs CLOUDFLARE_API_TOKEN && export CLOUDFLA
 npm run setup-account -- --target cloudflare --email-domain <domain>
 ```
 
-This creates the shared resources once per account, including the file-signing credential every stage uses: the log bucket `prototype-logs`, the deploy-state bucket `sst-state`, the `workers.dev` address, sending from `no-reply@<domain>`, and the test mailbox: mail to `sink+<tag>@t.<domain>` is stored for a day, so an agent can read it. When it creates the mailbox rule it waits about a minute, so the first test mail does not arrive before the rule. Running it again changes nothing. To change the domain later, run it with the new `--email-domain`. `deploy` never creates these resources; if they are missing, it tells you to run this command.
+This creates the shared resources once per account, including the file-signing credential every stage uses: the log bucket `prototype-logs`, the deploy-state bucket `sst-state`, the backup bucket `prototype-backups` (a removed production stage's data, kept 30 days), the `workers.dev` address, sending from `no-reply@<domain>`, and the test mailbox: mail to `sink+<tag>@t.<domain>` is stored for a day, so an agent can read it. When it creates the mailbox rule it waits about a minute, so the first test mail does not arrive before the rule. Running it again changes nothing. To change the domain later, run it with the new `--email-domain`. `deploy` never creates these resources; if they are missing, it tells you to run this command. An account set up before the backup bucket or the file-signing credential existed needs this command once more, with the setup token: `deploy` then names what is missing and tells you to run it.
 
 ## 4. Secrets
 

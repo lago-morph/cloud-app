@@ -4,7 +4,7 @@ Read this when you deploy, smoke-test, stop, start or remove a stage on a cloud.
 
 Commands run in the app's directory, with `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` set ([owner-tasks.md](owner-tasks.md) §2). Each `npm run <command> -- …` is the same as `npx prototype-framework <command> …`. Behind an HTTPS proxy, put `NODE_USE_ENV_PROXY=1 ` in front of every cloud command; the command says so if it is needed.
 
-**Status in this phase:** every command on this page is **not yet verified on Cloudflare in this phase**. The framework's cloud commands have run only against a simulated Cloudflare. Only the Cloudflare API calls for stop and start (§4) were tried on a real Worker. AWS is a future release: this release deploys to Cloudflare only.
+**Status in this phase:** every command on this page is **not yet verified on Cloudflare in this phase**. The framework's cloud commands have run only against a simulated Cloudflare. Only the Cloudflare API call that `stop` and `start` use (§4) was tried on a real Worker. AWS is a future release: this release deploys to Cloudflare only.
 
 ## 1. Test stages and production stages
 
@@ -55,23 +55,22 @@ git commit -m "<what you changed>"
 npm run deploy -- --target cloudflare --stage "$STAGE"
 ```
 
-A deploy that changes the database schema first copies the database, migrates the copy, and then switches to it. While it does this, the app is stopped. If the migration fails, the previous version is restarted on the unchanged database.
+A deploy that changes the database schema first copies the database, migrates the copy, and then switches to it. While it does this, the app is stopped. The output says how the database was copied: `D1 native export/import` (fast), or `row-by-row copy (<reason>)` when the data has a shape the fast copy cannot carry. If the migration fails, the previous version is restarted on the unchanged database.
 
 ## 4. Stop and start a stage
 
-There is no stop command. Stopping turns off the stage's address. Its code, data and secrets stay, and storage stays billable.
+```sh
+npm run stop -- --target cloudflare --stage "$STAGE"
+npm run start -- --target cloudflare --stage "$STAGE"
+```
 
-- **Dashboard** (menu names not yet verified): open Workers & Pages → `<app>-<stage>` → Settings → Domains & Routes. Disable `workers.dev` to stop the stage, and enable it again to start it. While the stage is stopped, its address answers 404 (error code 1042).
-- **Command line:**
-  ```sh
-  WORKER="$APP-$STAGE"   # APP: the command at the top of troubleshooting.md
-  # stop:
-  curl -sS -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
-    -d '{"enabled":false,"previews_enabled":false}' \
-    "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$WORKER/subdomain"
-  # start: the same command with "enabled":true
-  ```
-- Every `deploy` also starts the stage.
+Stopping turns off the stage's address; it then answers 404 (error code 1042). Its code, data and secrets stay, and storage stays billable. The stop is recorded with the stage, so a later `deploy` leaves the stage stopped and skips its health check. To deploy and start it in one step, add `--start`:
+
+```sh
+npm run deploy -- --target cloudflare --stage "$STAGE" --start
+```
+
+Do not stop a stage in the dashboard: `deploy` does not know about that stop and turns the address back on.
 
 ## 5. Remove a stage
 
@@ -81,17 +80,32 @@ npm run remove -- --target cloudflare --stage "$STAGE"
 
 This deletes the stage's Worker and secrets, its D1 databases, its R2 bucket and the files in it, and its deploy state. Log entries in `prototype-logs`, the shared buckets and the account's file-signing credential stay. If something cannot be deleted, `remove` prints each leftover and exits non-zero. Run it again, or delete the printed resource in the dashboard.
 
-A production stage holds real data, and removing it deletes the database with no backup. `remove` refuses unless you repeat the stage name:
+A production stage holds real data. `remove` refuses unless you repeat the stage name, and it first backs the stage up:
 
 ```sh
 npm run remove -- --target cloudflare --stage prod --confirm-production prod
 ```
+
+The backup goes to the bucket `prototype-backups`, under `<app>/<stage>/<time>/`: `database/<name>.sql` (the D1 export), `files/…` (every stored file) and `manifest.json`. It is deleted automatically after 30 days. If any part of the backup fails, `remove` deletes nothing and exits non-zero. Secrets are not backed up.
+
+**Restore a removed production stage** (within the 30 days; download the backup's objects from the R2 dashboard or with an S3 client first, using an R2 API token of your own: the stages' file-signing credential cannot read this bucket):
+1. `npm run deploy -- --target cloudflare --stage prod`, set the app's secrets with `secrets set`, then `npm run stop -- --target cloudflare --stage prod`.
+2. Replace the new, empty database with the export, under the same name (`APP`: the command at the top of [troubleshooting.md](troubleshooting.md)):
+   ```sh
+   npx wrangler d1 delete "$APP-prod-db-1"
+   npx wrangler d1 create "$APP-prod-db-1"
+   npx wrangler d1 execute "$APP-prod-db-1" --remote --file database/<name>.sql
+   ```
+   A row larger than about 100 KB is refused by the import; insert it by hand.
+3. Copy the `files/` objects back into the bucket `<app>-prod-files` with an S3 client on the R2 endpoint, which keeps each key exactly (keys end in an invisible U+0001).
+4. `npm run deploy -- --target cloudflare --stage prod --start`.
 
 ## 6. What stays billable while idle
 
 - each stage's D1 database and R2 file bucket, until the stage is removed;
 - the shared `prototype-logs` bucket, which grows with every log entry. To delete old entries, open R2 → `prototype-logs` → Settings → Object lifecycle rules → add a rule that deletes objects after, for example, 30 days. Not yet verified on Cloudflare in this phase;
 - the shared `sst-state` bucket, which is small;
+- the shared `prototype-backups` bucket, while it holds backups of removed production stages (30 days);
 - leftover test stages. Find them in the dashboard (menu names not yet verified) in Workers & Pages (Workers named `<app>-test-…`) and in D1 (databases named `<app>-test-…-db-<n>`). Remove them with `remove`.
 
 On the free plan, D1 allows about 100,000 rows written per day per account. Keep test data to a few rows and remove test stages promptly.

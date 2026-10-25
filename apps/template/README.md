@@ -76,7 +76,7 @@ Set the **setup token** first, the same way as in §2 step 4 (`read -rs CLOUDFLA
 npm run setup-account -- --target cloudflare --email-domain <domain>
 ```
 
-Then set the everyday token again the same way. This creates the account's shared resources once, including the file-signing credential every stage uses: the log bucket `prototype-logs`, the deploy-state bucket `sst-state`, the account's `workers.dev` address, sending from `no-reply@<domain>`, and a test mailbox for agents: mail to `sink+<tag>@t.<domain>` is kept for a day. When it creates the mailbox rule, it waits about a minute before it finishes. Running it again changes nothing; to change the domain, run it again with the new `--email-domain`. `deploy` never creates these resources.
+Then set the everyday token again the same way. This creates the account's shared resources once, including the file-signing credential every stage uses: the log bucket `prototype-logs`, the deploy-state bucket `sst-state`, the backup bucket `prototype-backups` (a removed production stage's data, kept 30 days), the account's `workers.dev` address, sending from `no-reply@<domain>`, and a test mailbox for agents: mail to `sink+<tag>@t.<domain>` is kept for a day. When it creates the mailbox rule, it waits about a minute before it finishes. Running it again changes nothing; to change the domain, run it again with the new `--email-domain`. `deploy` never creates these resources; if any is missing (for example on an account set up before the backup bucket or the file-signing credential existed), it names them and tells you to run this command again, with the setup token.
 
 ## 4. Deploy a test stage, test it, remove it
 

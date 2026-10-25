@@ -3,11 +3,14 @@
  * mechanics" `setupAccount`; LOG §2; PROV §2 "State home"). The account's shared resources are:
  * - the shared R2 log bucket `prototype-logs`;
  * - SST's state home, the R2 bucket `sst-state` (DEC-0084);
+ * - the backup bucket `prototype-backups` and its PAR-311 lifecycle rule, where the production
+ *   `remove` writes a stage's data before deleting it (DEC-0543; `backup.ts`);
  * - the account's `workers.dev` subdomain (DEC-0086), the account setting that every stage's
  *   public origin is built from. Cloudflare keeps it; it is read from there on every deploy,
  *   never only recorded on the owner's machine (DEC-0333);
  * - the account's R2 signing credential `prototype-r2-signing` and its record in `sst-state`
- *   (`r2-token.ts`, DEC-0550), which every stage's upload and download tickets are signed with.
+ *   (`r2-token.ts`, DEC-0550), which every stage's upload and download tickets are signed with;
+ *   it is denied on every account bucket above, the backup bucket included.
  * Used by `setupAccount` (create when absent) and by the deploy preflight (inspect only),
  * through the per-target operations `inspectAccount` and `createSharedResources`.
  *
@@ -25,8 +28,9 @@
 import { randomBytes } from "node:crypto";
 import type { SharedResource } from "../core/operations.js";
 import { describeFailure, resultOf, succeeded, type CloudflareApi } from "./api.js";
+import { BACKUP_BUCKET, BACKUP_BUCKET_RESOURCE, BACKUP_LIFECYCLE_RESOURCE, inspectBackupResources, setBackupLifecycle } from "./backup.js";
 import { STATE_BUCKET } from "./names.js";
-import { createAccountSigningCredential, readSigningCredentials, SIGNING_RESOURCE } from "./r2-token.js";
+import { createAccountSigningCredential, SIGNING_RESOURCE, signingCredentialState } from "./r2-token.js";
 
 export type { CloudflareApi } from "./api.js";
 
@@ -108,8 +112,9 @@ export async function inspectSharedResources(api: CloudflareApi, accountId: stri
   return [
     await inspectBucket(api, accountId, LOG_BUCKET),
     await inspectBucket(api, accountId, STATE_BUCKET),
+    ...(await inspectBackupResources(api, accountId)),
     { name: SUBDOMAIN_RESOURCE, state: (await readSubdomain(api, accountId)) === undefined ? "absent" : "owned" },
-    { name: SIGNING_RESOURCE, state: (await readSigningCredentials(api, accountId)) === undefined ? "absent" : "owned" },
+    { name: SIGNING_RESOURCE, state: await signingCredentialState(api, accountId) },
   ];
 }
 
@@ -120,6 +125,8 @@ export async function createSharedResources(api: CloudflareApi, accountId: strin
   for (const resource of ordered) {
     if (resource.name === LOG_BUCKET_RESOURCE) await createBucket(api, accountId, LOG_BUCKET);
     else if (resource.name === STATE_HOME_RESOURCE) await createBucket(api, accountId, STATE_BUCKET);
+    else if (resource.name === BACKUP_BUCKET_RESOURCE) await createBucket(api, accountId, BACKUP_BUCKET);
+    else if (resource.name === BACKUP_LIFECYCLE_RESOURCE) await setBackupLifecycle(api, accountId);
     else if (resource.name === SUBDOMAIN_RESOURCE) await registerSubdomain(api, accountId, options);
     else if (resource.name === SIGNING_RESOURCE) await createAccountSigningCredential(api, accountId);
     else throw new Error(`unknown Cloudflare shared resource ${resource.name}`);

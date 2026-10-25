@@ -42,12 +42,12 @@ const GROUPS = ok([
 ]);
 
 describe("the account's R2 signing credential (DEC-0550)", () => {
-  it("allows Item Write on every bucket of the account and denies it on the account buckets (the shape verified live)", () => {
+  it("allows Item Write on every bucket of the account and denies it on the account buckets, the backup bucket included (the shape verified live)", () => {
     const account = `com.cloudflare.api.account.${ACCOUNT}`;
     const bucket = (b: string) => `com.cloudflare.edge.r2.bucket.${ACCOUNT}_default_${b}`;
     expect(signingTokenPolicies("g1", ACCOUNT)).toEqual([
       { effect: "allow", permission_groups: [{ id: "g1" }], resources: { [account]: "*" } },
-      { effect: "deny", permission_groups: [{ id: "g1" }], resources: { [account]: { [bucket("prototype-logs")]: "*", [bucket("sst-state")]: "*", [bucket("prototype-mailsink")]: "*" } } },
+      { effect: "deny", permission_groups: [{ id: "g1" }], resources: { [account]: { [bucket("prototype-logs")]: "*", [bucket("sst-state")]: "*", [bucket("prototype-mailsink")]: "*", [bucket("prototype-backups")]: "*" } } },
     ]);
   });
 
@@ -66,7 +66,7 @@ describe("the account's R2 signing credential (DEC-0550)", () => {
       `DELETE ${TOKENS}/old`,
       `GET ${TOKENS}/permission_groups`,
       `POST ${TOKENS} ${JSON.stringify({ name: SIGNING_TOKEN_NAME, policies: signingTokenPolicies("2efd5506f9c8494dacb1fa10a3e7d5b6", ACCOUNT) })}`,
-      `PUT ${RECORD} ${JSON.stringify({ tokenId: "tok123", accessKeyId: "tok123", secretAccessKey: SECRET })}`,
+      `PUT ${RECORD} ${JSON.stringify({ tokenId: "tok123", accessKeyId: "tok123", secretAccessKey: SECRET, deniedBuckets: ["prototype-logs", "sst-state", "prototype-mailsink", "prototype-backups"] })}`,
     ]);
   });
 

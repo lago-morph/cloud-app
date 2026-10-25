@@ -18,7 +18,9 @@ import type {
   MigrationCheckInput,
   SharedResource,
   Stage,
+  StageBackup,
   StageDatabase,
+  StageRecord,
   StageResource,
   StageResources,
   TargetOperations,
@@ -39,6 +41,8 @@ interface FakeStage {
   secrets: Set<string> | null;
   code: { database: string } | null;
   running: boolean;
+  /** The stage record's `stopped` (DEC-0544); absent means not stopped. */
+  stopped?: boolean;
 }
 
 export interface FakeTargetOptions {
@@ -79,6 +83,10 @@ export class FakeTarget implements TargetOperations {
   checkFailure: Error | undefined;
   /** Resources `removeStage` cannot delete (they stay listed). */
   readonly undeletable = new Set<string>();
+  /** Every backup `backupStage` wrote: the stage and the databases it held (DEC-0543). */
+  readonly backups: { stage: string; databases: string[] }[] = [];
+  /** The method `copyDatabase` reports (DEC-0545). */
+  copyMethod: string | undefined = "fake copy";
   private readonly failures = new Map<OperationName, { error: Error; times: number }>();
   private nextId = 1;
 
@@ -108,7 +116,7 @@ export class FakeTarget implements TargetOperations {
   stageState(stage: Stage): FakeStage {
     let s = this.stages.get(key(stage));
     if (!s) {
-      s = { resources: [], secrets: null, code: null, running: false };
+      s = { resources: [], secrets: null, code: null, running: false, stopped: false };
       this.stages.set(key(stage), s);
     }
     return s;
@@ -231,6 +239,22 @@ export class FakeTarget implements TargetOperations {
     this.stageState(stage).running = true;
   }
 
+  async readStageRecord(stage: Stage): Promise<StageRecord> {
+    this.enter("readStageRecord", key(stage));
+    return { stopped: this.stages.get(key(stage))?.stopped ?? false };
+  }
+
+  async writeStageRecord(stage: Stage, record: StageRecord): Promise<void> {
+    this.enter("writeStageRecord", `${key(stage)} ${record.stopped ? "stopped" : "running"}`);
+    this.stageState(stage).stopped = record.stopped;
+  }
+
+  async backupStage(stage: Stage, databases: readonly StageDatabase[]): Promise<StageBackup> {
+    this.enter("backupStage", `${key(stage)} ${databases.map((d) => d.name).join(",")}`);
+    this.backups.push({ stage: key(stage), databases: databases.map((d) => d.name) });
+    return { location: `fake backups/${key(stage)}/`, items: [...databases.map((d) => `database ${d.name}`), "files"] };
+  }
+
   async createDatabase(stage: Stage, name: string): Promise<StageDatabase> {
     this.enter("createDatabase", name);
     void stage;
@@ -240,14 +264,14 @@ export class FakeTarget implements TargetOperations {
     return { name, number: Number(name.slice(name.lastIndexOf("-") + 1)), id: db.id };
   }
 
-  async copyDatabase(stage: Stage, from: StageDatabase, name: string): Promise<StageDatabase> {
+  async copyDatabase(stage: Stage, from: StageDatabase, name: string): Promise<StageDatabase & { readonly method?: string }> {
     this.enter("copyDatabase", `${from.name} ${name}`);
     void stage;
     const source = this.db(from);
     if (this.databases.has(name)) throw new Error(`database ${name} already exists`);
     const db: FakeDatabase = { id: this.id(), records: new Set(source.records), rows: source.rows };
     this.databases.set(name, db);
-    return { name, number: Number(name.slice(name.lastIndexOf("-") + 1)), id: db.id };
+    return { name, number: Number(name.slice(name.lastIndexOf("-") + 1)), id: db.id, ...(this.copyMethod === undefined ? {} : { method: this.copyMethod }) };
   }
 
   async dropDatabase(stage: Stage, database: StageDatabase): Promise<void> {
@@ -293,6 +317,7 @@ export class FakeTarget implements TargetOperations {
     s.code = null;
     s.running = false;
     s.secrets = null;
+    s.stopped = false;
     if (s.resources.length > 0) throw new Error(`could not delete ${s.resources.map((r) => r.id).join(", ")}`);
   }
 }

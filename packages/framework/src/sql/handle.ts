@@ -4,7 +4,9 @@
  * members; every query builder made through it is wrapped so that awaiting or executing it
  * - runs through the adapter's guard (PAR-210 budget, driver errors normalized, SQL-REQ-006),
  * - resolves writes without `returning` to `undefined` (SQL-REQ-004),
- * - refuses results larger than PAR-215 (`SQL.RESULT_TOO_LARGE`).
+ * - refuses read results larger than PAR-215 (`SQL.RESULT_TOO_LARGE`). A write's RETURNING rows
+ *   are returned in full whatever their size: the size check never turns a committed write
+ *   into an error (DEC-0542).
  */
 import { FrameworkError } from "../core/errors.js";
 import type { Dialect } from "./dialect.js";
@@ -29,6 +31,25 @@ const WRITE_MEMBERS = ["insert", "update", "delete"] as const;
 /** Methods whose result is a builder even though it cannot execute yet (select/insert/update builders, `with`). */
 const BUILDER_METHODS: ReadonlySet<string | symbol> = new Set(PORTABLE_MEMBERS);
 
+/**
+ * What a builder executes: a read (its result is size-checked), a write (never size-checked), or
+ * not yet known (a `with(…)` builder, whose next `select`/`insert`/`update`/`delete` decides).
+ */
+type Kind = "read" | "write" | "pending";
+const KIND_OF: Readonly<Record<string, Kind>> = {
+  select: "read",
+  selectDistinct: "read",
+  insert: "write",
+  update: "write",
+  delete: "write",
+};
+
+/** The kind a builder made by `property` on a builder of kind `kind` has; once known it never changes. */
+function kindAfter(kind: Kind, property: string | symbol): Kind {
+  if (kind !== "pending" || typeof property !== "string") return kind;
+  return KIND_OF[property] ?? "pending";
+}
+
 const adapters = new WeakMap<object, Adapter>();
 const targets = new WeakMap<object, object>();
 
@@ -44,7 +65,7 @@ export function targetOf(builder: object): object {
 
 /** The app-facing handle over `adapter`. */
 export function portableHandle(adapter: Adapter): PortableDb {
-  const handle = restricted(adapter.db, PORTABLE_MEMBERS, (b) => wrapBuilder(b, adapter, undefined));
+  const handle = restricted(adapter.db, PORTABLE_MEMBERS, (b, member) => wrapBuilder(b, adapter, undefined, kindAfter("pending", member)));
   adapters.set(handle, adapter);
   return handle as unknown as PortableDb;
 }
@@ -55,27 +76,28 @@ export function portableHandle(adapter: Adapter): PortableDb {
  * builders are never executed by app code: `atomic` executes them.
  */
 export function writeHandle(db: DrizzleDb, adapter: Adapter, marks: WeakSet<object>): WriteDb {
-  return restricted(db, WRITE_MEMBERS, (b) => wrapBuilder(b, adapter, marks)) as unknown as WriteDb;
+  return restricted(db, WRITE_MEMBERS, (b) => wrapBuilder(b, adapter, marks, "write")) as unknown as WriteDb;
 }
 
-function restricted(db: DrizzleDb, members: readonly string[], wrap: (builder: object) => object): object {
+function restricted(db: DrizzleDb, members: readonly string[], wrap: (builder: object, member: string) => object): object {
   const handle: Record<string, unknown> = {};
   for (const name of members) {
     handle[name] = (...args: unknown[]): unknown => {
       const method = db[name] as (...a: unknown[]) => unknown;
-      return wrap(Reflect.apply(method, db, args) as object);
+      return wrap(Reflect.apply(method, db, args) as object, name);
     };
   }
   return Object.freeze(handle);
 }
 
-function wrapBuilder(target: object, adapter: Adapter, marks: WeakSet<object> | undefined): object {
+function wrapBuilder(target: object, adapter: Adapter, marks: WeakSet<object> | undefined, kind: Kind): object {
   const execute = (): Promise<unknown> =>
     marks !== undefined
       ? Promise.reject(new FrameworkError("CORE.INTERNAL", "a write built on an atomic step's handle is executed only by atomic; return it from the step instead of awaiting it"))
       : adapter.guard(async () => {
-      const result = await (target as { execute(): Promise<unknown> }).execute();
-      return checkResultSize(normalizeResult(result));
+      const result = normalizeResult(await (target as { execute(): Promise<unknown> }).execute());
+      // A write has committed by now: its RETURNING rows are returned, never refused (DEC-0542).
+      return kind === "write" ? result : checkResultSize(result);
     });
   const proxy: object = new Proxy(target, {
     get(t, property) {
@@ -94,7 +116,7 @@ function wrapBuilder(target: object, adapter: Adapter, marks: WeakSet<object> | 
       return (...args: unknown[]): unknown => {
         const result: unknown = Reflect.apply(value, t, args);
         if (result === t) return proxy;
-        if (isBuilder(property, result)) return wrapBuilder(result, adapter, marks);
+        if (isBuilder(property, result)) return wrapBuilder(result, adapter, marks, kindAfter(kind, property));
         return result;
       };
     },

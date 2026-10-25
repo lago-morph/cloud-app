@@ -3,9 +3,15 @@
  * "Cloudflare"; PROV-REQ-004): one account API token named `prototype-r2-signing` with the
  * permission group "Workers R2 Storage Bucket Item Write" on every R2 bucket of the account
  * (`com.cloudflare.api.account.<account>: "*"`), and a `deny` policy for the same group on the
- * account buckets (`ACCOUNT_BUCKETS`: the log bucket, the state home and the mail sink's), so the
- * credential reaches the stage buckets only. Verified live on 2026-10-25: such a token lists a
- * stage bucket over S3 and gets `403 AccessDenied` on the three account buckets.
+ * account buckets (`ACCOUNT_BUCKETS`: the log bucket, the state home, the mail sink's and the
+ * backup bucket `prototype-backups`), so the credential reaches the stage buckets only and a leaked
+ * stage secret cannot read or overwrite production backups (DEC-0543). Verified live on 2026-10-25:
+ * such a token lists a stage bucket over S3 and gets `403 AccessDenied` on the three account
+ * buckets it then denied; the fourth deny entry has the same shape and is not yet verified live.
+ *
+ * The record names the buckets the token denies (`deniedBuckets`). A record that lacks one of
+ * `ACCOUNT_BUCKETS` (a token created before the backup bucket existed) reads as absent, so the
+ * deploy preflight sends the owner to `setup-account`, which replaces the token.
  *
  * `setup-account` creates it (the only command that needs "Account API Tokens Write") and keeps
  * its S3 credentials (access key ID = token id, secret access key = lowercase hex SHA-256 of the
@@ -35,6 +41,12 @@ export const SIGNING_TOKEN_NAME = "prototype-r2-signing";
 export const SIGNING_RECORD_KEY = "framework/r2-signing.json";
 /** The shared resource as printed to the owner. */
 export const SIGNING_RESOURCE = `R2 signing credential ${SIGNING_TOKEN_NAME}`;
+
+/** Whether a stored record's token denies every current account bucket. */
+export function signingRecordIsCurrent(body: unknown): boolean {
+  const denied = typeof body === "object" && body !== null ? (body as { deniedBuckets?: unknown }).deniedBuckets : undefined;
+  return Array.isArray(denied) && ACCOUNT_BUCKETS.every((bucket) => denied.includes(bucket));
+}
 
 export interface SigningCredentials {
   /** The token's id (its identifier for removal). */
@@ -103,22 +115,36 @@ export function parseSigningRecord(body: unknown): SigningCredentials {
   return { id: tokenId, accessKeyId, secretAccessKey };
 }
 
-/** The account's signing credentials; undefined when the record (or the state home) does not exist. Reads only. */
-export async function readSigningCredentials(api: CloudflareApi, accountId: string): Promise<SigningCredentials | undefined> {
+/** The stored record; undefined when the record (or the state home) does not exist. Reads only. */
+async function readSigningRecord(api: CloudflareApi, accountId: string): Promise<{ credentials: SigningCredentials; current: boolean } | undefined> {
   const r = await api("GET", recordPath(accountId));
   if (r.status === 404) return undefined;
   if (r.status < 200 || r.status >= 300) throw new Error(`reading the ${recordResource} failed: ${describeFailure(r)}`);
-  return parseSigningRecord(r.body);
+  return { credentials: parseSigningRecord(r.body), current: signingRecordIsCurrent(r.body) };
+}
+
+/** The account's signing credentials; undefined when the record (or the state home) does not exist. Reads only. */
+export async function readSigningCredentials(api: CloudflareApi, accountId: string): Promise<SigningCredentials | undefined> {
+  return (await readSigningRecord(api, accountId))?.credentials;
+}
+
+/**
+ * The credential as a shared resource: owned when its record exists and its token denies every
+ * account bucket; absent otherwise, so `setup-account` (re)creates it. Reads only.
+ */
+export async function signingCredentialState(api: CloudflareApi, accountId: string): Promise<"owned" | "absent"> {
+  return (await readSigningRecord(api, accountId))?.current === true ? "owned" : "absent";
 }
 
 async function writeSigningRecord(api: CloudflareApi, accountId: string, credentials: SigningCredentials): Promise<void> {
-  const r = await api("PUT", recordPath(accountId), { tokenId: credentials.id, accessKeyId: credentials.accessKeyId, secretAccessKey: credentials.secretAccessKey });
+  const r = await api("PUT", recordPath(accountId), { tokenId: credentials.id, accessKeyId: credentials.accessKeyId, secretAccessKey: credentials.secretAccessKey, deniedBuckets: [...ACCOUNT_BUCKETS] });
   if (r.status < 200 || r.status >= 300 || (r.body as { success?: unknown } | null)?.success === false) throw new Error(`writing the ${recordResource} failed: ${describeFailure(r)}`);
 }
 
 /**
  * `setup-account`: creates the account signing token and its record. A token of that name left
- * without a record (its value is shown only once) is deleted first, so exactly one exists.
+ * without a record (its value is shown only once), or one whose record predates an account bucket,
+ * is deleted first, so exactly one exists.
  */
 export async function createAccountSigningCredential(api: CloudflareApi, accountId: string): Promise<void> {
   for (const t of (await listTokens(api, accountId)).filter((x) => x.name === SIGNING_TOKEN_NAME)) await deleteSigningToken(api, accountId, t.id);

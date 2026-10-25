@@ -11,6 +11,12 @@
  * copy (DEC-0268). Otherwise pending migrations run MIG-REQ-006 steps 1–5: stop,
  * copy into `<app>-<stage>-db-<n+1>`, migrate, check, delete the old database; steps 5 and 6
  * of this sequence then deploy the code against the new database and start the app.
+ *
+ * A stopped stage (its record says `stopped`, written by `stop`; DEC-0544) stays stopped: step 6
+ * turns the app off again instead of starting it (the code deploy may itself turn the route
+ * on, DEC-0091), the health check is skipped, and a failed migration leaves the previous version
+ * stopped. `start: true` (`deploy --start`) clears the record and starts the app as usual.
+ * A database copy's method (native export/import or row by row, DEC-0545) is printed.
  */
 import { applyMigrations, MigrationFailedError, type Histories } from "../../mig/apply.js";
 import { senderAddress } from "./account-settings.js";
@@ -44,6 +50,8 @@ export interface DeployRequest {
   readonly validateConfiguration?: () => Promise<readonly string[]>;
   /** Set only by the compliance runner. */
   readonly abortAt?: AbortPoint;
+  /** `deploy --start`: start a stage that `stop` stopped (DEC-0544). Without it a stopped stage stays stopped. */
+  readonly start?: boolean;
   readonly clock?: () => number;
 }
 
@@ -62,6 +70,10 @@ export interface DeployResult {
   readonly status: ProvisionStatus;
   readonly publicOrigin?: string;
   readonly failure?: DeployFailure;
+  /** How this deploy copied the database, when it copied one (DEC-0545). */
+  readonly copyMethod?: string;
+  /** The stage is stopped after the deploy (recorded by `stop`, no `--start`; DEC-0544). */
+  readonly stopped?: boolean;
 }
 
 class StepFailure extends Error {
@@ -75,15 +87,20 @@ const isTestStage = (stage: Stage) => stage.stage.startsWith("test-");
 export async function runDeploy(ops: TargetOperations, request: DeployRequest, io: ProvisionIo): Promise<DeployResult> {
   const { stage } = request;
   try {
-    const { deferred: firstSecretsCheckDeferred, emailDomain } = await preflight(ops, request);
+    const { deferred: firstSecretsCheckDeferred, emailDomain, stopped } = await preflight(ops, request);
+    const keepStopped = stopped && request.start !== true;
     const mail = emailDomain === undefined ? {} : { emailDomain };
     const current = await findDatabases(ops, stage, io);
+    if (keepStopped) line(io, `stage ${stage.stage} is stopped (recorded by stop); the deploy leaves it stopped (add --start to start it)`);
 
     await step("infrastructure", "nothing of the new version was deployed; the previous version, if any, is unchanged", "fix the problem and run deploy again", () =>
       ops.deployInfrastructure({ stage, ...(current ? { database: current } : {}), ...mail }),
     );
 
-    const database = current ? await migrate(ops, request, current) : await firstDatabase(ops, request);
+    const migrated = current ? await migrate(ops, request, current, keepStopped) : { database: await firstDatabase(ops, request) };
+    const { database } = migrated;
+    if (migrated.copyMethod !== undefined) line(io, `copied database ${current?.name} into ${database.name}: ${migrated.copyMethod}`);
+    const copied = migrated.copyMethod === undefined ? {} : { copyMethod: migrated.copyMethod };
 
     const deployed = await step(
       "code",
@@ -95,6 +112,18 @@ export async function runDeploy(ops: TargetOperations, request: DeployRequest, i
 
     if (firstSecretsCheckDeferred) await checkSecretsAfterFirstCode(ops, request);
 
+    if (keepStopped) {
+      // The code deploy may have turned the route on (DEC-0091): turn it off again.
+      await step("start", `new version deployed against database ${database.name}; the app may be answering although the stage is recorded as stopped`, "run stop again", () => ops.stopApp(stage));
+      line(io, `deployed ${stage.app} stage ${stage.stage} to ${ops.target}; database ${database.name}; the stage is stopped, so the health check was skipped`);
+      line(io, `public origin: ${deployed.publicOrigin} (stopped; start it with start --target ${ops.target} --stage ${stage.stage})`);
+      return { status: EXIT.ok, publicOrigin: deployed.publicOrigin, stopped: true, ...copied };
+    }
+    if (stopped) {
+      await step("start", `new version deployed against database ${database.name}; the app is not started and is still recorded as stopped`, "run deploy --start again", () =>
+        ops.writeStageRecord(stage, { stopped: false }),
+      );
+    }
     await step("start", `new version deployed against database ${database.name}; the app is not started`, "run deploy again", () => ops.startApp(stage));
     await healthCheck(ops, stage, deployed, database);
 
@@ -105,7 +134,7 @@ export async function runDeploy(ops: TargetOperations, request: DeployRequest, i
       line(io, `sign-in page: ${deployed.publicOrigin}/api/auth/sign-in`);
       line(io, `sender address: ${senderAddress(emailDomain)}`);
     }
-    return { status: EXIT.ok, publicOrigin: deployed.publicOrigin };
+    return { status: EXIT.ok, publicOrigin: deployed.publicOrigin, ...copied };
   } catch (error) {
     const failure: DeployFailure =
       error instanceof StepFailure
@@ -138,7 +167,7 @@ function abort(point: string, stageState: string): StepFailure {
  * Step 1. `deferred`: the stage's secrets cannot be read yet (checked after step 5).
  * `emailDomain`: the account settings record's, which steps 3 and 5 hand to the target.
  */
-async function preflight(ops: TargetOperations, request: DeployRequest): Promise<{ deferred: boolean; emailDomain?: string }> {
+async function preflight(ops: TargetOperations, request: DeployRequest): Promise<{ deferred: boolean; emailDomain?: string; stopped: boolean }> {
   const { stage } = request;
   const missing: string[] = [];
   const attempt = async (what: string, run: () => Promise<void>) => {
@@ -150,6 +179,7 @@ async function preflight(ops: TargetOperations, request: DeployRequest): Promise
   };
   let deferred = false;
   let emailDomain: string | undefined;
+  let stopped = false;
 
   await attempt("credentials", async () => {
     missing.push(...(await ops.preflight(stage)));
@@ -176,6 +206,9 @@ async function preflight(ops: TargetOperations, request: DeployRequest): Promise
     if (emailDomain === undefined) missing.push(`${noEmailDomainMessage(ops.target)} (required for a production stage)`);
     else missing.push(...(await ops.emailPrerequisites(stage, emailDomain)));
   });
+  await attempt("stage record", async () => {
+    stopped = (await ops.readStageRecord(stage)).stopped;
+  });
   await attempt("secrets", async () => {
     const set = await ops.listSetSecrets(stage);
     if (set === null) {
@@ -193,7 +226,7 @@ async function preflight(ops: TargetOperations, request: DeployRequest): Promise
       nextAction: "provide the missing prerequisites and run deploy again",
     });
   }
-  return { deferred, ...(emailDomain === undefined ? {} : { emailDomain }) };
+  return { deferred, stopped, ...(emailDomain === undefined ? {} : { emailDomain }) };
 }
 
 /** Step 2: the lowest-numbered stage database is current; higher-numbered ones are deleted and reported. */
@@ -245,16 +278,16 @@ async function pendingCount(ops: TargetOperations, database: StageDatabase, migr
   return [...migrations.framework, ...migrations.app].filter((m) => !recorded.has(m.id)).length;
 }
 
-/** Step 4 on an existing database: MIG-REQ-006 steps 1–5; returns the database the code must use. */
-async function migrate(ops: TargetOperations, request: DeployRequest, current: StageDatabase): Promise<StageDatabase> {
+/** Step 4 on an existing database: MIG-REQ-006 steps 1–5; returns the database the code must use and how it was copied. */
+async function migrate(ops: TargetOperations, request: DeployRequest, current: StageDatabase, keepStopped: boolean): Promise<{ database: StageDatabase; copyMethod?: string }> {
   const { stage } = request;
   const pending = await step("migrate", `database ${current.name} unchanged; the app was not stopped`, "run deploy again", () =>
     pendingCount(ops, current, request.migrations),
   );
-  if (pending === 0) return current;
+  if (pending === 0) return { database: current };
 
   const nextName = nextDatabaseName(stage, current);
-  let next: StageDatabase | undefined;
+  let next: (StageDatabase & { readonly method?: string }) | undefined;
   try {
     await ops.stopApp(stage);
     next = await ops.copyDatabase(stage, current, nextName);
@@ -269,17 +302,22 @@ async function migrate(ops: TargetOperations, request: DeployRequest, current: S
       throw new CheckFailedError(messageOf(error));
     }
     await ops.dropDatabase(stage, current);
-    return next;
+    return { database: next, ...(next.method === undefined ? {} : { copyMethod: next.method }) };
   } catch (error) {
     if (error instanceof StepFailure) throw error;
-    const cleanupErrors = await restorePrevious(ops, stage, nextName, next);
+    const cleanupErrors = await restorePrevious(ops, stage, nextName, next, keepStopped);
     const restarted = !cleanupErrors.some((e) => e.startsWith("restarting"));
     const leftBehind = cleanupErrors.some((e) => e.startsWith("deleting new database"));
+    const previous = keepStopped
+      ? "previous version left stopped, as recorded by stop"
+      : restarted
+        ? "previous version restarted"
+        : "previous version NOT restarted (start it with deploy again)";
     throw new StepFailure({
       step: "migrate",
       ...(error instanceof CheckFailedError ? { message: `the check of the migrated database failed: ${error.message}` } : migrationFailure(error)),
       stageState:
-        `${restarted ? "previous version restarted" : "previous version NOT restarted (start it with deploy again)"}; database ${current.name} unchanged` +
+        `${previous}; database ${current.name} unchanged` +
         (leftBehind ? `; new database ${nextName} left behind (the next deploy deletes it)` : ""),
       nextAction: "fix the problem (migration, data or target) and run deploy again",
       cleanupErrors,
@@ -289,8 +327,8 @@ async function migrate(ops: TargetOperations, request: DeployRequest, current: S
 
 class CheckFailedError extends Error {}
 
-/** MIG-REQ-003: delete the new database (if it was created), restart the previous version. Never throws. */
-async function restorePrevious(ops: TargetOperations, stage: Stage, nextName: string, next: StageDatabase | undefined): Promise<string[]> {
+/** MIG-REQ-003: delete the new database (if it was created), restart the previous version (unless the stage is recorded as stopped). Never throws. */
+async function restorePrevious(ops: TargetOperations, stage: Stage, nextName: string, next: StageDatabase | undefined, keepStopped: boolean): Promise<string[]> {
   const errors: string[] = [];
   try {
     const created = next ?? matchStageDatabases(stage, (await ops.listStageResources(stage)).databases).find((d) => d.name === nextName);
@@ -298,6 +336,7 @@ async function restorePrevious(ops: TargetOperations, stage: Stage, nextName: st
   } catch (error) {
     errors.push(`deleting new database ${nextName}: ${messageOf(error)}`);
   }
+  if (keepStopped) return errors;
   try {
     await ops.startApp(stage);
   } catch (error) {

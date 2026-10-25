@@ -11,6 +11,8 @@
     "deploy": "prototype-framework deploy",
     "smoke": "prototype-framework smoke",
     "remove": "prototype-framework remove",
+    "stop": "prototype-framework stop",
+    "start": "prototype-framework start",
     "secrets": "prototype-framework secrets",
     "setup-account": "prototype-framework setup-account",
     "check-login": "prototype-framework check-login",

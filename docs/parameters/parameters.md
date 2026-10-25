@@ -32,11 +32,14 @@ Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 | PAR-212 | Aurora capacity range | 0 to 4 ACU | ai-proposed | 0 lets the database pause when idle. Deferred (branch `aws`). |
 | PAR-213 | Aurora auto-pause delay | 5 minutes | ai-proposed | Platform minimum is 300 seconds. Deferred (branch `aws`). |
 | PAR-214 | Data API maximum response size | 1 MiB | platform | RDS Data API quotas. Deferred (branch `aws`). |
-| PAR-215 | Portable maximum query result size | 256 KiB | ai-proposed | Enforced on every target, measured as defined in sql.md §2.3. Leaves room for the Data API's JSON encoding within PAR-214. |
+| PAR-215 | Portable maximum query result size | 256 KiB | ai-proposed | Enforced on every read result on every target, measured as defined in sql.md §2.3; a write's RETURNING rows are not limited (DEC-0542). Leaves room for the Data API's JSON encoding within PAR-214. |
 | PAR-216 | D1 maximum bound parameters per statement | 100 | platform | Cloudflare D1 limits; measured identical on local D1 and remote D1 (DEC-0102, DEC-0097). Apps chunk long `inArray` lists and multi-row inserts; the D1 copy stays within it. |
 | PAR-217 | D1 maximum SQL statement length | 100,000 bytes | platform | Cloudflare D1 limits; SQL text only, bound values excluded; measured identical locally and remotely (DEC-0102, DEC-0097). |
 | PAR-218 | D1 copy page size | At most 1,000 rows and 1,000,000 bytes of values per request; a single larger row is sent alone | ai-proposed | Cloudflare `copyDatabase` fallback copy (DEC-0096). Keeps each request far from the observed 30 s / 502 failure at 5.5 MB. |
-| PAR-219 | D1 databases per Cloudflare account | 10 on Workers Free; 50,000 on Workers Paid | platform | Free: observed on the test account while it was on Free (HTTP 403, code 7406; DEC-0097). Both: Cloudflare D1 limits, developers.cloudflare.com/d1/platform/limits/ (read 2026-10-25; DEC-0530). A schema-changing deploy briefly holds two databases per stage; `copyDatabase` reports this error clearly. |
+| PAR-219 | D1 databases per Cloudflare account | 10 on Workers Free; 50,000 on Workers Paid | platform | Free: observed on the test account while it was on Free (HTTP 403, code 7406; DEC-0097). Both: Cloudflare D1 limits, developers.cloudflare.com/d1/platform/limits/ (read 2026-10-25; DEC-0530). A schema-changing deploy briefly holds two databases per stage; `copyDatabase` reports this error clearly, naming the account's plan's limit: the plan is read from `GET /accounts/<account>/subscriptions` when the error occurs, else from `PROTOTYPE_FRAMEWORK_CLOUDFLARE_PLAN=free|paid`, else both limits are named (DEC-0546). |
+| PAR-312 | Largest row the native D1 copy accepts | 40,000 bytes of values | ai-proposed | Pre-check of Cloudflare `copyDatabase` (DEC-0545): the export writes a row as one INSERT with inline literals, quoting can double a value, and D1 refuses a statement over PAR-217. A larger row makes the copy take the row-by-row path. |
+| PAR-313 | Largest database the native D1 copy accepts | 5,000,000 bytes of values | ai-proposed | Pre-check of Cloudflare `copyDatabase` (DEC-0545): within the 5 MB fixture of spike A-06 (DEC-0096). A larger database is copied row by row. |
+| PAR-314 | Time limit of one D1 export or import | 120 seconds, polled every second | ai-proposed | Native copy and the production `remove`'s backup (DEC-0545, DEC-0543). A-06's 5.6 MB export completed in 1.4 s and a 1.5 MB import in about 2 s. A native copy that runs out of time falls back to the row-by-row copy; a backup that does stops `remove` before anything is deleted. |
 
 ## KV
 
@@ -83,6 +86,18 @@ The owner approved these values on 2026-10-25 ("Approve recommended values", DEC
 | PAR-257 | Reset link validity | 1 hour | owner | BA `resetPasswordTokenExpiresIn: 3600`; single-use. |
 | PAR-258 | Sign-in rate limit | 5 per 60 s per IP | owner | BA path `/sign-in/email`. |
 | PAR-259 | Sign-up, forgot and resend rate limit | 3 per 300 s per IP | owner | BA paths `/sign-up/email`, `/request-password-reset`, `/send-verification-email`. |
+
+## Provisioning
+
+| ID | Parameter | Value | Category | Notes |
+| --- | --- | --- | --- | --- |
+| PAR-311 | Retention of a production stage's backup in `prototype-backups` | 30 days | owner | The bucket's lifecycle rule `framework-backups-retention` deletes every object this long after it was written (DEC-0543). Set by `setup-account`. |
+
+## Secrets
+
+| ID | Parameter | Value | Category | Notes |
+| --- | --- | --- | --- | --- |
+| PAR-310 | Bound for a Cloudflare secret change to reach requests | 60 seconds | owner | SEC-AC-005 (DEC-0540). A secret set or deleted reaches requests once the Worker version it rolls out serves them, a few seconds later (DEC-0092); the same value as the compliance harness's `CLOUD_WAITS.secretRolloutMs` (DEC-0431). |
 
 ## Log
 

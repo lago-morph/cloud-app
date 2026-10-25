@@ -92,6 +92,18 @@ describe("Cloudflare preflight (PROV-REQ-002 step 1)", () => {
     expect(io2.err).toMatch(/R2 signing credential prototype-r2-signing.*run setup-account --target cloudflare first/);
     expect(b.cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
     expect(io2.err).not.toContain(FAKE_SIGNING.secretAccessKey);
+
+    // Both re-run requirements (batch B's backup bucket, batch C's signing record, or a record whose
+    // token predates the backup bucket's deny entry): one preflight message naming each, pointing to setup-account.
+    const c = setup();
+    c.cloud.buckets.delete("prototype-backups");
+    c.cloud.objectBodies.set("sst-state/framework/r2-signing.json", { tokenId: "tok0", accessKeyId: "tok0", secretAccessKey: "5".repeat(64), deniedBuckets: ["prototype-logs", "sst-state", "prototype-mailsink"] });
+    const io3 = captureIo();
+    expect((await runDeploy(c.target, request(), io3)).failure?.step).toBe("preflight");
+    const lines = io3.err.split("\n").filter((l) => l.includes("setup-account"));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/R2 bucket prototype-backups.*R2 signing credential prototype-r2-signing.*run setup-account --target cloudflare first/);
+    expect(c.cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
   });
 });
 
@@ -105,6 +117,8 @@ describe("setup-account on Cloudflare (PROV-REQ-004)", () => {
       created: [
         "R2 bucket prototype-logs",
         "R2 bucket sst-state",
+        "R2 bucket prototype-backups",
+        "lifecycle rule of R2 bucket prototype-backups (PAR-311)",
         "workers.dev subdomain",
         "R2 signing credential prototype-r2-signing",
         "Email Sending entry example.test",
@@ -122,7 +136,7 @@ describe("setup-account on Cloudflare (PROV-REQ-004)", () => {
     expect(cloud.subdomain).toMatch(/^pf-[a-z0-9]{12}$/);
     expect(cloud.subdomain).not.toContain(ACCOUNT.slice(0, 6));
     expect([...cloud.tokens.values()].map((t) => t.name)).toEqual(["prototype-r2-signing"]);
-    expect(Object.keys(cloud.objectBodies.get("sst-state/framework/r2-signing.json") as object).sort()).toEqual(["accessKeyId", "secretAccessKey", "tokenId"]);
+    expect(Object.keys(cloud.objectBodies.get("sst-state/framework/r2-signing.json") as object).sort()).toEqual(["accessKeyId", "deniedBuckets", "secretAccessKey", "tokenId"]);
     cloud.requests.length = 0;
     // The record now names the domain, so --email-domain may be left out; the same domain changes nothing either.
     expect(await runSetupAccount(target, captureIo())).toEqual({ status: 0, created: [] });
@@ -348,7 +362,7 @@ describe("deploy on Cloudflare (PROV-REQ-002 steps 3, 5, 6, 7)", () => {
     const { cloud, target } = setup();
     await runDeploy(target, request(), captureIo());
     cloud.workers.get("notes-test-abc")!.secrets.set("SECRET_FRAMEWORK_R2_ACCESS_KEY_ID", "legacy-stage-token");
-    cloud.objectBodies.set("sst-state/framework/r2-signing.json", { tokenId: "tok7", accessKeyId: "tok7", secretAccessKey: "7".repeat(64) });
+    cloud.objectBodies.set("sst-state/framework/r2-signing.json", { ...FAKE_SIGNING, tokenId: "tok7", accessKeyId: "tok7", secretAccessKey: "7".repeat(64) });
     await runDeploy(target, request(), captureIo());
     const secrets = cloud.workers.get("notes-test-abc")!.secrets;
     expect(secrets.get("SECRET_FRAMEWORK_R2_ACCESS_KEY_ID")).toBe("tok7");

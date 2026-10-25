@@ -12,6 +12,8 @@ import type { ListedDatabase, MigrationCheckInput, Stage, StageDatabase, TargetO
 import { checkMigrated } from "../../../mig/cloud/check.js";
 import { d1CheckReader } from "./check-reader.js";
 import { copyD1Database, DEFAULT_COPY_LIMITS, type CopyLimits } from "./copy.js";
+import { DEFAULT_NATIVE_LIMITS, exportDump, fetchTransfer, nativeCopy, nativeCopyPrecheck, type DumpOptions, type NativeCopyLimits, type SignedTransfer } from "./native-copy.js";
+import { databaseLimitText, type WorkersPlanReader } from "../plan.js";
 import { d1HttpMigrationDatabase } from "./migration-database.js";
 import { d1Client, D1RequestError, DATABASE_LIMIT_CODE, type D1Client } from "./client.js";
 
@@ -21,11 +23,21 @@ export interface D1Options {
   readonly accountId: string;
   /** Copy page limits; tests only. Defaults: PAR-216, PAR-218. */
   readonly limits?: Partial<CopyLimits>;
+  /**
+   * The native export/import path (DEC-0545), tried when the pre-check allows it; the CLI always
+   * passes it. Without it `copyDatabase` copies row by row only. `transfer` also downloads the
+   * export of `exportDatabase` (default: the global `fetch`). Limits default to PAR-312…PAR-314.
+   */
+  readonly native?: { readonly transfer: SignedTransfer; readonly limits?: Partial<NativeCopyLimits>; readonly now?: () => number; readonly sleep?: (ms: number) => Promise<void> };
+  /** Reads the account's Workers plan for the database-limit message (DEC-0546); default: the plan is not known. */
+  readonly plan?: WorkersPlanReader;
 }
 
 export type D1DatabaseOperations = Pick<TargetOperations, "createDatabase" | "copyDatabase" | "dropDatabase" | "migrationDatabase" | "checkMigratedDatabase"> & {
   /** Every D1 database of the account, for `listStageResources`. */
   listDatabases(): Promise<ListedDatabase[]>;
+  /** The database's SQL dump through D1's export (the production `remove`'s backup, DEC-0543). */
+  exportDatabase(database: StageDatabase): Promise<Uint8Array>;
 };
 
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -39,13 +51,15 @@ function stageDatabase(name: string, id: string): StageDatabase {
 }
 
 /** Creates `name`; an unclear answer is resolved by listing the exact name (DEC-0094). */
-async function create(client: D1Client, name: string): Promise<StageDatabase> {
+async function create(client: D1Client, name: string, plan: WorkersPlanReader | undefined): Promise<StageDatabase> {
   try {
     return stageDatabase(name, await client.create(name));
   } catch (error) {
     if (error instanceof D1RequestError && error.code === DATABASE_LIMIT_CODE) {
+      // The limit depends on the account's Workers plan (PAR-219, DEC-0546); read only now, when it is hit.
+      const reading = plan === undefined ? undefined : await plan().catch(() => undefined);
       throw new Error(
-        `cannot create D1 database ${name}: the Cloudflare account already has the maximum number of D1 databases (PAR-219: 10; code ${DATABASE_LIMIT_CODE}). ` +
+        `cannot create D1 database ${name}: the Cloudflare account already has the maximum number of D1 databases (${databaseLimitText(reading)}; code ${DATABASE_LIMIT_CODE}). ` +
           "A schema-changing deploy needs one more database for a while; remove unused stages (remove --target cloudflare --stage <stage>) or other D1 databases, then run deploy again.",
       );
     }
@@ -59,13 +73,44 @@ async function create(client: D1Client, name: string): Promise<StageDatabase> {
 export function d1DatabaseOperations(options: D1Options): D1DatabaseOperations {
   const client = d1Client(options.api, options.accountId);
   const limits: CopyLimits = { ...DEFAULT_COPY_LIMITS, ...options.limits };
+  const dump: DumpOptions = {
+    transfer: options.native?.transfer ?? fetchTransfer(),
+    limits: { ...DEFAULT_NATIVE_LIMITS, ...options.native?.limits },
+    ...(options.native?.now === undefined ? {} : { now: options.native.now }),
+    ...(options.native?.sleep === undefined ? {} : { sleep: options.native.sleep }),
+  };
+  const nativeLimits = dump.limits as NativeCopyLimits;
+
+  /**
+   * The native export/import when the pre-check allows it (DEC-0545): `done`, or why the
+   * row-by-row copy runs instead; `dirty` when a failed import may have left part of the dump.
+   */
+  async function tryNative(from: StageDatabase, next: StageDatabase): Promise<{ done: true } | { done: false; why: string; dirty: boolean }> {
+    if (options.native === undefined) return { done: false, why: "the native copy is not configured", dirty: false };
+    const check = await nativeCopyPrecheck(client, from.id, nativeLimits);
+    if (!check.safe) return { done: false, why: check.reason, dirty: false };
+    try {
+      await nativeCopy(client, from.id, next.id, check.tables, dump);
+      return { done: true };
+    } catch (error) {
+      return { done: false, why: `the native export/import failed (${messageOf(error)})`, dirty: true };
+    }
+  }
+
   return {
-    createDatabase: (_stage: Stage, name: string) => create(client, name),
+    createDatabase: (_stage: Stage, name: string) => create(client, name, options.plan),
     async copyDatabase(_stage: Stage, from: StageDatabase, name: string) {
-      const next = await create(client, name);
+      let next = await create(client, name, options.plan);
       try {
+        const native = await tryNative(from, next);
+        if (native.done) return { ...next, method: "D1 native export/import" };
+        if (native.dirty) {
+          // Start the row-by-row copy on an empty database: the failed import may have left part of the dump.
+          await client.delete(next.id);
+          next = await create(client, name, options.plan);
+        }
         await copyD1Database(client, from.id, next.id, limits);
-        return next;
+        return { ...next, method: `row-by-row copy (${native.why})` };
       } catch (error) {
         const dropped = await client.delete(next.id).then(
           () => "the new database was deleted",
@@ -92,5 +137,12 @@ export function d1DatabaseOperations(options: D1Options): D1DatabaseOperations {
       if (problems.length > 0) throw new Error(`database ${input.next.name}: ${problems.join("; ")}`);
     },
     listDatabases: () => client.list(),
+    async exportDatabase(database: StageDatabase) {
+      try {
+        return await exportDump(client, database.id, dump);
+      } catch (error) {
+        throw new Error(`exporting D1 database ${database.name}: ${messageOf(error)}`);
+      }
+    },
   };
 }
