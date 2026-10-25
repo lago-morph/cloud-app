@@ -69,7 +69,7 @@ export const ERROR_CATALOGUE = {
   "AUTH.FORBIDDEN":           { status: 403, retryable: false, meaning: "The user's access level is insufficient, or the user may see the resource but not change it." },
   "AUTH.REQUEST_FORGERY":     { status: 403, retryable: false, meaning: "A state-changing request with a session came from another origin." },
   "AUTH.LOGIN_FAILED":        { status: 400, retryable: false, meaning: "Login could not be completed." },
-  "AUTH.NOT_VERIFIED":        { status: 403, retryable: false, meaning: "The account's email address has not been verified yet." },
+  "AUTH.NOT_VERIFIED":        { status: 403, retryable: false, meaning: "The account has not been verified yet." },
   "AUTH.RATE_LIMITED":        { status: 429, retryable: true,  meaning: "Too many attempts from this client; try again later." },
 } as const satisfies Readonly<Record<string, ErrorCatalogueEntry>>;
 

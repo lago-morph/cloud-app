@@ -134,7 +134,16 @@ if (!isLocal()) {
 
       const c = s.client();
       // The previous version is restarted explicitly; a workers.dev route change is visible within a bound (DEC-0090).
-      await waitFor(async () => ((await c.get("/api/ref/schema-version")).status === 200 ? true : undefined), { what: "the previous version answering again", timeoutMs: CLOUD_WAITS.routeToggleMs, intervalMs: 1_000 });
+      // While the turn-on propagates, the edge answers 200 and 404 (`error code: 1042`) alternately
+      // (run k9cc5zjcbm5mrkc: 404, 404, 404, 200, 404), so the wait ends on three 200s in a row.
+      let streak = 0;
+      await waitFor(
+        async () => {
+          streak = (await c.get("/api/ref/schema-version")).status === 200 ? streak + 1 : 0;
+          return streak >= 3 ? true : undefined;
+        },
+        { what: "the previous version answering again (three 200s in a row)", timeoutMs: CLOUD_WAITS.routeToggleMs, intervalMs: 1_000 },
+      );
       expect(c.expectStatus(await c.get("/api/ref/schema-version"), 200).json(), "the previous version answers").toEqual({ version: "v1" });
       expect(user.expectStatus(await user.get("/api/fixture/dump"), 200).json(), "the previous version's data is unchanged").toEqual(before);
       expect((await stageDatabases(s)).length, "databases after the failed deploy").toBe(1);
