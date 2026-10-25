@@ -1,0 +1,15 @@
+start 2026-10-23T17:27:54Z
+(node:19727) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+deploy failed at step 3 (long-lived infrastructure): sst deploy --stage test-ycfmck8n9jis0gb --target Files failed (exit 1):
+SST 4.17.2 ready!
+
+➜  App:        reference
+   Stage:      test-ycfmck8n9jis0gb
+
+~  Deploy
+
+✕  Target not found: Files
+  stage state: nothing of the new version was deployed; the previous version, if any, is unchanged
+  next action: fix the problem and run deploy again
+exit 1 2026-10-23T17:28:27Z

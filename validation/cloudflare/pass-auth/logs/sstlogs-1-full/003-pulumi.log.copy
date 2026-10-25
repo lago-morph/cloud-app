@@ -1,0 +1,21 @@
+Updating (test-k9cc5zjcbm5mrkc):
+@ updating......
+
+@ updating.....
+ +  pulumi:pulumi:Stack reference-test-k9cc5zjcbm5mrkc creating (0s) 
+@ updating.......
+ +  sst:cloudflare:Bucket Files creating (0s) 
+@ updating.........
+ +  cloudflare:index:R2Bucket FilesBucket creating (0s) 
+@ updating....
+ +  cloudflare:index:R2Bucket FilesBucket created (1s) 
+ +  sst:sst:LinkRef FilesLinkRef creating (0s) 
+ +  pulumi:pulumi:Stack reference-test-k9cc5zjcbm5mrkc created (10s) 
+Outputs:
+    _protect: false
+
+Resources:
+    + 4 created
+
+Duration: 14s
+

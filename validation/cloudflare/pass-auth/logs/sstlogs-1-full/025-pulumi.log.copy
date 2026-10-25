@@ -1,0 +1,12 @@
+Updating (test-k9cc5zjcbm5mrkc):
+
+@ updating........
+    pulumi:pulumi:Stack reference-test-k9cc5zjcbm5mrkc  
+Outputs:
+    _protect: false
+
+Resources:
+    8 unchanged
+
+Duration: 5s
+

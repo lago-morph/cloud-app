@@ -1,0 +1,566 @@
+{
+  "runId": "nhtt0ff3xx72qvn",
+  "commit": "75b68b98dbbb182d9fc896fc80c31846ece45936",
+  "target": "local",
+  "command": "npm run compliance -- --target local --only MIG-AC-002,MIG-AC-003,MIG-AC-006,PROV-AC-006,COMPL-AC-004,E2E-010,E2E-012,E2E-014,SEC-AC-001,SEC-AC-003,SEC-AC-005,HTTP-AC-002,LOG-AC-004,CLI-AC-004",
+  "startedAt": "2026-10-23T17:49:47.393Z",
+  "finishedAt": "2026-10-23T17:57:01.327Z",
+  "exitStatus": 1,
+  "results": [
+    {
+      "id": "AUTH-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "AUTH-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "AUTH-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "AUTH-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "AUTH-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "AUTH-AC-006",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "AUTH-AC-007",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "AUTH-AC-008",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "AUTH-AC-009",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "AUTH-AC-010",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "AUTH-AC-012",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CF-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CFG-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CFG-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CFG-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CFG-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CFG-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CFG-AC-006",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CHECK-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CHECK-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CHECK-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CHECK-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CHECK-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CHECK-AC-006",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CLI-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CLI-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CLI-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CLI-AC-004",
+      "status": "passed"
+    },
+    {
+      "id": "CLI-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "COMPL-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "COMPL-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "COMPL-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "COMPL-AC-006",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "COMPL-AC-007",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CORE-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CORE-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CORE-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CORE-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CORE-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CORE-AC-006",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CORE-AC-007",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "CORE-AC-008",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-006",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-007",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-008",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-009",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-010",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "DEMO-AC-011",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-007",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-009",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-011",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-013",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "E2E-014",
+      "status": "passed"
+    },
+    {
+      "id": "E2E-016",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "FILES-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "FILES-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "FILES-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "FILES-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "FILES-AC-006",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "GOOGLE-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "GOOGLE-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "GOOGLE-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "HTTP-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "HTTP-AC-002",
+      "status": "blocked",
+      "detail": "HTTP: error format > [HTTP-AC-002] a route throwing an error whose message contains the known test secret value does not echo it, for a 500 and for a 409: the reference app's test secret apiKey has no value in apps/reference/.dev.vars (SECRET_API_KEY): set it before the run with `npm run secrets -- set apiKey --target local --stage local` in apps/reference (value on stdin)"
+    },
+    {
+      "id": "HTTP-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "HTTP-AC-006",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "HTTP-AC-007",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "KV-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "KV-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "KV-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "KV-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "KV-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "LOCAL-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "LOCAL-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "LOCAL-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "LOCAL-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "LOG-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "LOG-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "LOG-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "LOG-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "MIG-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "MIG-AC-002",
+      "status": "passed"
+    },
+    {
+      "id": "MIG-AC-003",
+      "status": "passed"
+    },
+    {
+      "id": "PROV-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "PROV-AC-007",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SEC-AC-001",
+      "status": "blocked",
+      "detail": "SEC: declared names only > [SEC-AC-001] the declared secret apiKey with a value is read by the app; an undeclared name fails with SEC.UNDECLARED: the reference app's test secret apiKey has no value in apps/reference/.dev.vars (SECRET_API_KEY): set it before the run with `npm run secrets -- set apiKey --target local --stage local` in apps/reference (value on stdin)"
+    },
+    {
+      "id": "SEC-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SEC-AC-003",
+      "status": "passed"
+    },
+    {
+      "id": "SEC-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SKILL-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SKILL-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SKILL-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SKILL-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SKILL-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SQL-AC-001",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SQL-AC-002",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SQL-AC-003",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SQL-AC-004",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SQL-AC-005",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    },
+    {
+      "id": "SQL-AC-006",
+      "status": "not-run",
+      "detail": "not selected for this run (--only)"
+    }
+  ],
+  "versions": {
+    "node": "v22.22.0",
+    "@lago-morph/prototype-framework": "0.1.0",
+    "vitest": "5.0.5",
+    "@playwright/test": "1.64.1",
+    "wrangler": "4.149.0",
+    "typescript": "6.0.3",
+    "drizzle-orm": "0.45.4",
+    "drizzle-kit": "0.31.11",
+    "hono": "4.13.13",
+    "zod": "4.6.7",
+    "@electric-sql/pglite": "0.5.8",
+    "esbuild": "0.28.2",
+    "sst": "4.17.2"
+  }
+}

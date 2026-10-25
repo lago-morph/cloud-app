@@ -1,0 +1,78 @@
+node v22.22.0; PGlite PostgreSQL 18.3; NODE_ENV=<unset>; baDefaultOriginCheck=false
+PASS sign-up new email -> 200, token null, no Set-Cookie
+      {"status":200,"body":{"token":null,"user":{"name":"Alice","email":"alice@example.test","emailVerified":false,"image":null,"createdAt":"2026-10-24T23:47:11.311Z","updatedAt":"2026-10-24T23:47:11.311Z","id":"DHnOA3cON0UOnC9P4FcqAOdBMt8knSca"}},"setCookie":[],"builtMs":5}
+PASS sign-up existing email -> same status and same body shape
+      {"status":200,"body":{"token":null,"user":{"name":"Alice","email":"alice@example.test","emailVerified":false,"image":null,"createdAt":"2026-10-24T23:47:11.429Z","updatedAt":"2026-10-24T23:47:11.429Z","id":"3DcKWVn1HuakEFIoLzDXZa5upBXp49qo"}}}
+PASS existing-email sign-up got a different (synthetic) user.id
+      {"real":"DHnOA3cON0UOnC9P4FcqAOdBMt8knSca","synthetic":"3DcKWVn1HuakEFIoLzDXZa5upBXp49qo"}
+PASS outbox: one 'verify' mail (sign-up) + one 'existing' mail (onExistingUserSignUp)
+      ["verify","existing"]
+PASS verify mail URL is built from baseURL
+      "http://localhost:8787/api/auth/password/verify-email?token=<jwt>&callbackURL=%2F"
+PASS sign-in before verification -> 403 EMAIL_NOT_VERIFIED
+      {"status":403,"body":{"message":"Email not verified","code":"EMAIL_NOT_VERIFIED"}}
+PASS sendOnSignIn re-sent a verify mail
+      ["verify","existing","verify"]
+PASS bogus verify token -> 401 INVALID_TOKEN, no Set-Cookie
+      {"status":401,"body":{"message":"Invalid token","code":"INVALID_TOKEN"}}
+PASS verify with mailed token -> 200 {status:true}, no session cookie (autoSignInAfterVerification:false)
+      {"status":200,"body":{"status":true,"user":null},"setCookie":[]}
+PASS replaying the verify token -> still 200 (stateless JWT, not single-use)
+      {"status":200,"body":{"status":true,"user":null}}
+PASS no BA session rows after verify
+      {"__framework_auth_user":1,"__framework_auth_session":0,"__framework_auth_account":1,"__framework_auth_verification":0,"__framework_auth_rate_limit":4,"spike_outbox":3}
+PASS sign-in after verification -> 200 with user.id and a session token
+      {"status":200,"body":{"redirect":false,"token":"<32 chars>","user":{"name":"Alice","email":"alice@example.test","emailVerified":true,"image":null,"createdAt":"2026-10-24T23:47:11.311Z","updatedAt":"2026-10-24T23:47:11.572Z","id":"DHnOA3cON0UOnC9P4FcqAOdBMt8knSca"}}}
+PASS BA set a cookie that the bridge stripped; BA session row deleted (1 -> 0)
+      {"baSetCookie":["better-auth.session_token","better-auth.dont_remember"],"bridge":{"subject":"DHnOA3cON0UOnC9P4FcqAOdBMt8knSca","displayName":"Alice","baSessionRowsBefore":1,"baSessionRowsAfter":0,"frameworkWouldIssue":"__Host-session"}}
+PASS table counts after sign-in
+      {"__framework_auth_user":1,"__framework_auth_session":0,"__framework_auth_account":1,"__framework_auth_verification":0,"__framework_auth_rate_limit":4,"spike_outbox":3}
+[2m2026-10-24T23:47:11.805Z[0m [33mWARN[0m [1m[Better Auth]:[0m Invalid password
+[2m2026-10-24T23:47:11.902Z[0m [33mWARN[0m [1m[Better Auth]:[0m User not found
+PASS wrong password and unknown email give the same 401 body
+      {"wrong":{"message":"Invalid email or password","code":"INVALID_EMAIL_OR_PASSWORD"},"unknown":{"message":"Invalid email or password","code":"INVALID_EMAIL_OR_PASSWORD"}}
+[2m2026-10-24T23:47:11.928Z[0m [33mWARN[0m [1m[Better Auth]:[0m Reset Password: User not found
+PASS forgot: same 200 body for existing and unknown email
+      {"existing":{"status":true,"message":"If this email exists in our system, check your email for the reset link"},"unknown":{"status":true,"message":"If this email exists in our system, check your email for the reset link"}}
+PASS reset mail captured; URL built from baseURL
+      "http://localhost:8787/api/auth/password/reset-password/<token>?callbackURL="
+PASS reset with mailed token -> 200 {status:true}
+      {"status":200,"body":{"status":true},"setCookie":[]}
+PASS reset token is single-use -> 400 INVALID_TOKEN
+      {"status":400,"body":{"message":"Invalid token","code":"INVALID_TOKEN"}}
+[2m2026-10-24T23:47:12.145Z[0m [33mWARN[0m [1m[Better Auth]:[0m Invalid password
+PASS after reset: old password 401, new password 200
+      {"old":401,"new":200}
+[2m2026-10-24T23:47:12.253Z[0m [33mWARN[0m [1m[Better Auth]:[0m Password is too short
+PASS password shorter than 12 -> 400 PASSWORD_TOO_SHORT
+      {"message":"Password too short","code":"PASSWORD_TOO_SHORT"}
+[2m2026-10-24T23:47:12.343Z[0m [33mWARN[0m [1m[Better Auth]:[0m Invalid password
+[2m2026-10-24T23:47:12.433Z[0m [33mWARN[0m [1m[Better Auth]:[0m Invalid password
+[2m2026-10-24T23:47:12.532Z[0m [33mWARN[0m [1m[Better Auth]:[0m Invalid password
+[2m2026-10-24T23:47:12.623Z[0m [33mWARN[0m [1m[Better Auth]:[0m Invalid password
+[2m2026-10-24T23:47:12.745Z[0m [33mWARN[0m [1m[Better Auth]:[0m Invalid password
+PASS sign-in burst from one IP: 5x 401 then 429
+      [401,401,401,401,401,429,429]
+[2m2026-10-24T23:47:12.855Z[0m [33mWARN[0m [1m[Better Auth]:[0m Invalid password
+PASS another IP is not limited
+      401
+PASS rate-limit rows live in __framework_auth_rate_limit
+      [{"id":"VREYiJsnyZIVHNrIaQEcCbtk20uuZ5WJ","key":"192.0.2.99|/sign-in/email","count":5,"lastRequest":1792885632629}]
+[2m2026-10-24T23:47:12.863Z[0m [31mERROR[0m [1m[Better Auth]:[0m Invalid origin: https://evil.example
+PASS forged Origin on sign-in (rebuilt request) -> 403 INVALID_ORIGIN
+      {"message":"Invalid origin","code":"INVALID_ORIGIN"}
+[2m2026-10-24T23:47:12.868Z[0m [31mERROR[0m [1m[Better Auth]:[0m Invalid origin: https://evil.example
+PASS forged Origin on sign-up -> 403 INVALID_ORIGIN
+      {"message":"Invalid origin","code":"INVALID_ORIGIN"}
+PASS forged Origin on forgot (no cookie) -> BA does NOT reject (originCheck only runs with a Cookie header) [expected gap]
+      {"status":200,"body":{"status":true,"message":"If this email exists in our system, check your email for the reset link"}}
+[2m2026-10-24T23:47:12.883Z[0m [31mERROR[0m [1m[Better Auth]:[0m Invalid origin: https://evil.example
+PASS raw (unbridged) forgot with forged Origin AND a Cookie header -> 403 (BA's check needs a Cookie; the bridge never forwards Cookie)
+      {"message":"Invalid origin","code":"INVALID_ORIGIN"}
+[2m2026-10-24T23:47:12.889Z[0m [31mERROR[0m [1m[Better Auth]:[0m Invalid origin: https://evil.example
+PASS raw passthrough with forged Host + Origin -> 403 INVALID_ORIGIN (trustedOrigins from baseURL, not Host)
+      {"status":403,"body":{"message":"Invalid origin","code":"INVALID_ORIGIN"}}
+PASS forged Host/X-Forwarded-Host: reset link still on baseURL
+      "http://localhost:8787/api/auth/password/reset-password/<token>?callbackURL="
+
+30/30 checks passed

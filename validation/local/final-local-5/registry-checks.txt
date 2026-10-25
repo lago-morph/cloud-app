@@ -1,0 +1,3 @@
+registry after 02-build-framework (2026-10-24T06:29:09Z): 0 entries []
+registry after 03-secrets-set (2026-10-24T06:29:10Z): 0 entries []
+registry after 04-compliance-local (2026-10-24T07:00:06Z): 0 entries []

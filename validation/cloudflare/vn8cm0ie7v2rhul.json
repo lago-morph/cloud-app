@@ -1,0 +1,46 @@
+{
+  "runId": "vn8cm0ie7v2rhul",
+  "commit": "321e41c4679785b3ab1c3981078a974696c89096",
+  "target": "cloudflare",
+  "stage": "test-s6jca41ew34ahz3",
+  "command": "smoke --target cloudflare --stage test-s6jca41ew34ahz3",
+  "startedAt": "2026-10-24T06:01:23.415Z",
+  "finishedAt": "2026-10-24T06:01:39.252Z",
+  "exitStatus": 0,
+  "results": [
+    {
+      "id": "smoke: tests/smoke/smoke.test.ts > the app is healthy and serves its configuration (DEMO-REQ-006)",
+      "status": "passed"
+    },
+    {
+      "id": "smoke: tests/smoke/smoke.test.ts > the account's ID is the one /api/auth/me reports (DEMO-REQ-009)",
+      "status": "passed"
+    },
+    {
+      "id": "smoke: tests/smoke/smoke.test.ts > posts: drafts are private, only admins publish, anyone reads published posts newest first (DEMO-REQ-001, -002, -008)",
+      "status": "passed"
+    },
+    {
+      "id": "smoke: tests/smoke/smoke.test.ts > photos: a 20 MB JPEG round-trips, the maximum holds, deleting removes rows and files (DEMO-REQ-003)",
+      "status": "passed"
+    },
+    {
+      "id": "smoke: tests/smoke/smoke.test.ts > the banner set by an admin reaches anonymous visitors; users cannot set it (DEMO-REQ-004)",
+      "status": "passed"
+    },
+    {
+      "id": "smoke: tests/smoke/smoke.test.ts > the posts-per-page choice survives a new login (DEMO-REQ-005)",
+      "status": "passed"
+    },
+    {
+      "id": "smoke: tests/smoke/smoke.test.ts > a share link shows a draft to an anonymous visitor; an altered link is refused (DEMO-REQ-007)",
+      "status": "passed"
+    }
+  ],
+  "versions": {
+    "node": "v22.22.0",
+    "@lago-morph/prototype-framework": "0.1.0",
+    "vitest": "5.0.5",
+    "wrangler": "4.149.0"
+  }
+}

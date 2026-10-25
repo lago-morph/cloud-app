@@ -1,0 +1,359 @@
+{
+  "runId": "k9cc5zjcbm5mrkc",
+  "commit": "1d9623e8ea6256c355e5638a5df8a60654253ed0",
+  "target": "cloudflare",
+  "stage": "test-k9cc5zjcbm5mrkc",
+  "command": "npm run compliance -- --target cloudflare",
+  "startedAt": "2026-10-25T06:39:59.208Z",
+  "finishedAt": "2026-10-25T07:28:51.777Z",
+  "exitStatus": 1,
+  "results": [
+    {
+      "id": "AUTH-AC-004",
+      "status": "passed"
+    },
+    {
+      "id": "AUTH-AC-005",
+      "status": "failed",
+      "detail": "1 of 7 tests failed: AUTH-AC-005 admin-role part and E2E-007 cloud part on prodcheck > [AUTH-AC-005][E2E-007] admin-role part / cloud part (prodcheck): sign-up under t.<domain>, verification with mail last from the sink and sign-in show user (admin route 403); admins grant … --confirm-production prodcheck makes the next request admin with the same session; admins revoke makes it user again, with no role stored: AssertionError: POST /api/auth/password/sign-up → 403  {\"type\":\"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1000/\",\"title\":\"Error 1000: DNS points to prohibited IP\",\"status\":403,\"detail\":\"The domain's DNS records point to a prohibited IP a…"
+    },
+    {
+      "id": "AUTH-AC-005",
+      "status": "not-run",
+      "detail": "contract part: successful callback (needs a redirect login provider): no redirect login provider on a cloud stage (DEC-0513)"
+    },
+    {
+      "id": "AUTH-AC-006",
+      "status": "failed",
+      "detail": "1 of 5 tests failed: AUTH-AC-006 sessions on the target > [AUTH-AC-006] the session cookie set by a password sign-in on the target has the specified name and attributes, and is the only cookie set: AssertionError: POST /api/auth/password/sign-up → 403  {\"type\":\"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1000/\",\"title\":\"Error 1000: DNS points to prohibited IP\",\"status\":403,\"detail\":\"The domain's DNS records point to a prohibited IP a…"
+    },
+    {
+      "id": "AUTH-AC-007",
+      "status": "passed"
+    },
+    {
+      "id": "AUTH-AC-009",
+      "status": "passed"
+    },
+    {
+      "id": "AUTH-AC-011",
+      "status": "failed",
+      "detail": "1 of 1 tests failed: [AUTH-AC-011] check-login --stage prodcheck, run by the compliance driver after the test layers (COMPL-REQ-005): check-login exited 1 with no result for AUTH-AC-011 in a record: check-login: no recorded deploy output for stage prodcheck on cloudflare: deploy it first with `npm run deploy -- --target cloudflare --stage prodcheck`"
+    },
+    {
+      "id": "AUTH-AC-014",
+      "status": "failed",
+      "detail": "1 of 1 tests failed: AUTH-AC-014 through the deployed router > [AUTH-AC-014] through the deployed router: each password POST without a session and with Origin missing or wrong is 403 AUTH.REQUEST_FORGERY with no effect; with the public origin it is accepted: AssertionError: POST /api/auth/password/sign-up → 403  {\"type\":\"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1000/\",\"title\":\"Error 1000: DNS points to prohibited IP\",\"status\":403,\"detail\":\"The domain's DNS records point to a prohibited IP a…"
+    },
+    {
+      "id": "CF-AC-001",
+      "status": "passed"
+    },
+    {
+      "id": "CF-AC-002",
+      "status": "passed"
+    },
+    {
+      "id": "CFG-AC-003",
+      "status": "passed"
+    },
+    {
+      "id": "CFG-AC-004",
+      "status": "passed"
+    },
+    {
+      "id": "CLI-AC-001",
+      "status": "not-run",
+      "detail": "password login provider not implemented yet (DEC-0509)"
+    },
+    {
+      "id": "CLI-AC-004",
+      "status": "passed"
+    },
+    {
+      "id": "CLI-AC-005",
+      "status": "passed"
+    },
+    {
+      "id": "CLI-AC-007",
+      "status": "failed",
+      "detail": "1 of 2 tests failed: CLI-AC-007 admins on a Cloudflare stage > [CLI-AC-007] on the test stage, after sign-up, verification through the test-mail route and sign-in, admins grant gives admin on the next request and admins revoke gives user again, through the D1 HTTP API; no output holds a password, token or API credential: AssertionError: POST /api/auth/password/sign-up → 403  {\"type\":\"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1000/\",\"title\":\"Error 1000: DNS points to prohibited IP\",\"status\":403,\"detail\":\"The domain's DNS records point to a prohibited IP a…"
+    },
+    {
+      "id": "COMPL-AC-001",
+      "status": "passed"
+    },
+    {
+      "id": "COMPL-AC-003",
+      "status": "passed"
+    },
+    {
+      "id": "COMPL-AC-004",
+      "status": "passed"
+    },
+    {
+      "id": "COMPL-AC-005",
+      "status": "blocked",
+      "detail": "production checks on prodcheck > [COMPL-AC-005] after this run redeployed prodcheck: mock-login and the test-mail route are 404, /api/auth/login redirects to <public origin>/api/auth/sign-in, and the run runs check-login there and records its PWD-AC-009 result: the run stage test-k9cc5zjcbm5mrkc has no recorded deploy output in this checkout (a run with --base-url): the redeploy of prodcheck cannot be ordered against it"
+    },
+    {
+      "id": "CORE-AC-002",
+      "status": "passed"
+    },
+    {
+      "id": "CORE-AC-003",
+      "status": "passed"
+    },
+    {
+      "id": "DEMO-AC-001",
+      "status": "blocked",
+      "detail": "[DEMO-AC-001] a post title containing <script>…</script> shows as literal text to its author and, published, to an anonymous visitor in the list and on the post; no script element is added and the script does not run: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)"
+    },
+    {
+      "id": "DEMO-AC-002",
+      "status": "blocked",
+      "detail": "[DEMO-AC-002] each cell of the permissions table with mock identities (anonymous, user, another user, admin): permitted actions succeed through the page, forbidden ones are refused by the app and change nothing: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)"
+    },
+    {
+      "id": "DEMO-AC-003",
+      "status": "blocked",
+      "detail": "[DEMO-AC-003] a JPEG of at least 20 MB attached through the page displays: an image on the post is complete with naturalWidth > 0, at the photo's size: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)"
+    },
+    {
+      "id": "DEMO-AC-004",
+      "status": "blocked",
+      "detail": "[DEMO-AC-004] a banner an admin sets through the page appears at the top of the page for anonymous visitors; a user's attempt to set it is refused and changes nothing: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)"
+    },
+    {
+      "id": "DEMO-AC-005",
+      "status": "blocked",
+      "detail": "[DEMO-AC-005] a user's posts-per-page choice, made through the page, is still the choice after logging out and in again (same browser and a new one); another user keeps the default: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)"
+    },
+    {
+      "id": "DEMO-AC-007",
+      "status": "blocked",
+      "detail": "[DEMO-AC-007] a share link created through the page shows the draft to an anonymous visitor; the same link with one character altered is refused and shows nothing of the draft: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)"
+    },
+    {
+      "id": "DEMO-AC-008",
+      "status": "blocked",
+      "detail": "[DEMO-AC-008] publishing a post and deleting it through the page each produce an info entry of the demo, written during that request, in the target's log: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)"
+    },
+    {
+      "id": "DEMO-AC-009",
+      "status": "blocked",
+      "detail": "[DEMO-AC-009] with clipboard permissions granted, the account page's copy button puts exactly the /api/auth/me user ID on the clipboard: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)"
+    },
+    {
+      "id": "DEMO-AC-010",
+      "status": "blocked",
+      "detail": "[E2E-002][DEMO-AC-010] cloud part: the demo's smoke test on a deployed demo test stage, from the same commit: cloud part on cloudflare: F-03 deploys the demo to a test- stage and runs smoke --target cloudflare there (plan §7 F-03); this run has no demo stage"
+    },
+    {
+      "id": "E2E-002",
+      "status": "blocked",
+      "detail": "[E2E-002][DEMO-AC-010] cloud part: the demo's smoke test on a deployed demo test stage, from the same commit: cloud part on cloudflare: F-03 deploys the demo to a test- stage and runs smoke --target cloudflare there (plan §7 F-03); this run has no demo stage"
+    },
+    {
+      "id": "E2E-004",
+      "status": "passed"
+    },
+    {
+      "id": "E2E-005",
+      "status": "failed",
+      "detail": "1 of 2 tests failed: [E2E-005] no app-facing type exposes login-provider names, tokens, issuers or email addresses: Error: app-facing types exposing login-provider details:"
+    },
+    {
+      "id": "E2E-006",
+      "status": "passed"
+    },
+    {
+      "id": "E2E-007",
+      "status": "failed",
+      "detail": "1 of 1 tests failed: AUTH-AC-005 admin-role part and E2E-007 cloud part on prodcheck > [AUTH-AC-005][E2E-007] admin-role part / cloud part (prodcheck): sign-up under t.<domain>, verification with mail last from the sink and sign-in show user (admin route 403); admins grant … --confirm-production prodcheck makes the next request admin with the same session; admins revoke makes it user again, with no role stored: AssertionError: POST /api/auth/password/sign-up → 403  {\"type\":\"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1000/\",\"title\":\"Error 1000: DNS points to prohibited IP\",\"status\":403,\"detail\":\"The domain's DNS records point to a prohibited IP a…"
+    },
+    {
+      "id": "E2E-008",
+      "status": "failed",
+      "detail": "1 of 1 tests failed: [E2E-008] check-login --stage prodcheck, run by the compliance driver after the test layers (COMPL-REQ-005): check-login exited 1 with no result for E2E-008 in a record: check-login: no recorded deploy output for stage prodcheck on cloudflare: deploy it first with `npm run deploy -- --target cloudflare --stage prodcheck`"
+    },
+    {
+      "id": "E2E-009",
+      "status": "passed"
+    },
+    {
+      "id": "E2E-011",
+      "status": "passed"
+    },
+    {
+      "id": "E2E-013",
+      "status": "passed"
+    },
+    {
+      "id": "E2E-014",
+      "status": "passed"
+    },
+    {
+      "id": "FILES-AC-001",
+      "status": "passed"
+    },
+    {
+      "id": "FILES-AC-002",
+      "status": "passed"
+    },
+    {
+      "id": "FILES-AC-003",
+      "status": "failed",
+      "detail": "1 of 5 tests failed: [FILES-AC-003] expired-ticket clause: an expired ticket fails with FILES.TRANSFER_FAILED, storage's status and a rejected by storage (HTTP n) message without storage's error body: Error: status is storage's HTTP status, got null"
+    },
+    {
+      "id": "FILES-AC-004",
+      "status": "passed"
+    },
+    {
+      "id": "FILES-AC-005",
+      "status": "passed"
+    },
+    {
+      "id": "HTTP-AC-001",
+      "status": "passed"
+    },
+    {
+      "id": "HTTP-AC-002",
+      "status": "passed"
+    },
+    {
+      "id": "HTTP-AC-003",
+      "status": "passed"
+    },
+    {
+      "id": "HTTP-AC-004",
+      "status": "passed"
+    },
+    {
+      "id": "HTTP-AC-005",
+      "status": "passed"
+    },
+    {
+      "id": "KV-AC-001",
+      "status": "passed"
+    },
+    {
+      "id": "KV-AC-002",
+      "status": "passed"
+    },
+    {
+      "id": "KV-AC-003",
+      "status": "passed"
+    },
+    {
+      "id": "KV-AC-004",
+      "status": "passed"
+    },
+    {
+      "id": "KV-AC-005",
+      "status": "passed"
+    },
+    {
+      "id": "LOG-AC-001",
+      "status": "passed"
+    },
+    {
+      "id": "LOG-AC-002",
+      "status": "passed"
+    },
+    {
+      "id": "LOG-AC-004",
+      "status": "blocked",
+      "detail": "LOG: key layout in the shared bucket > [LOG-AC-004] an entry written outside a request has a random final part in its key: LOG-AC-004 (outside-request clause): the reference app has no way to write a log entry outside an HTTP request (needs a fixture; see DEC-0277…DEC-0280 in docs/decisions/decision-log.md)"
+    },
+    {
+      "id": "LOG-AC-005",
+      "status": "passed"
+    },
+    {
+      "id": "MAIL-AC-006",
+      "status": "passed"
+    },
+    {
+      "id": "MIG-AC-002",
+      "status": "passed"
+    },
+    {
+      "id": "MIG-AC-003",
+      "status": "passed"
+    },
+    {
+      "id": "MIG-AC-006",
+      "status": "passed"
+    },
+    {
+      "id": "PROV-AC-001",
+      "status": "passed"
+    },
+    {
+      "id": "PROV-AC-002",
+      "status": "failed",
+      "detail": "1 of 5 tests failed: PROV-AC-002 deploy, failing migration and health (cloud, D1) > [PROV-AC-002] a failing migration stops the deploy; the previous version answers again; the output names the step, migration file, stage state and next action: HttpCheckError: HTTP check failed: GET /api/ref/schema-version → status 404, code none, requestId none (expected status 200)"
+    },
+    {
+      "id": "PWD-AC-008",
+      "status": "failed",
+      "detail": "1 of 3 tests failed: PWD-AC-008 and MAIL-AC-006 on the run's Cloudflare test stage, through connectTestStage > [PWD-AC-008] a sign-in burst from one client gets 429 AUTH.RATE_LIMITED within PAR-258: AssertionError: 6 sign-ins within 60 s reach the limit (answers: 400 AUTH.LOGIN_FAILED, 400 AUTH.LOGIN_FAILED, 400 AUTH.LOGIN_FAILED, 400 AUTH.LOGIN_FAILED, 400 AUTH.LOGIN_FAILED, 400 AUTH.LOGIN_FAILED): expected false to be true // Object.is equality"
+    },
+    {
+      "id": "PWD-AC-009",
+      "status": "failed",
+      "detail": "1 of 1 tests failed: [PWD-AC-009] check-login --stage prodcheck, run by the compliance driver after the test layers (COMPL-REQ-005): check-login exited 1 with no result for PWD-AC-009 in a record: check-login: no recorded deploy output for stage prodcheck on cloudflare: deploy it first with `npm run deploy -- --target cloudflare --stage prodcheck`"
+    },
+    {
+      "id": "SEC-AC-001",
+      "status": "passed"
+    },
+    {
+      "id": "SEC-AC-002",
+      "status": "passed"
+    },
+    {
+      "id": "SEC-AC-003",
+      "status": "passed"
+    },
+    {
+      "id": "SEC-AC-005",
+      "status": "failed",
+      "detail": "1 of 1 tests failed: further reference stage: secrets and stage removal (cloud) > [SEC-AC-005] after secrets set the next request sees the new value; after the secret is deleted through the store, the next request fails with SEC.MISSING: HttpCheckError: HTTP check failed: GET /api/ref/secret → status 200, code none, requestId none (expected status 500 with code SEC.MISSING)"
+    },
+    {
+      "id": "SQL-AC-003",
+      "status": "passed"
+    },
+    {
+      "id": "SQL-AC-004",
+      "status": "passed"
+    },
+    {
+      "id": "SQL-AC-005",
+      "status": "passed"
+    },
+    {
+      "id": "SQL-AC-006",
+      "status": "passed"
+    }
+  ],
+  "versions": {
+    "node": "v22.22.0",
+    "@lago-morph/prototype-framework": "0.1.0",
+    "vitest": "5.0.5",
+    "@playwright/test": "1.64.1",
+    "wrangler": "4.149.0",
+    "typescript": "6.0.3",
+    "drizzle-orm": "0.45.4",
+    "drizzle-kit": "0.31.11",
+    "hono": "4.13.13",
+    "zod": "4.6.7",
+    "@electric-sql/pglite": "0.5.8",
+    "esbuild": "0.28.2",
+    "sst": "4.17.2"
+  },
+  "leftovers": []
+}

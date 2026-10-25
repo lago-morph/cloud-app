@@ -1,0 +1,4 @@
+bundle=dist-browser/worker-min.js compatibility_date=2026-10-01 flags=["nodejs_compat"] N=20 workerd pids=13565
+baseline no-op request: wall median 3.2 ms, cpu 1.5 ms
+default  hash   wall median   123.4 ms  p90   142.4 ms  cpu   115.0 ms   ok=null format=x{32}:x{128}
+default  verify wall median   122.5 ms  p90   135.6 ms  cpu   110.0 ms   ok=true format=x{32}:x{128}

@@ -1,0 +1,8 @@
+bundle=dist/worker.js compatibility_date=2026-10-01 flags=["nodejs_compat"] N=20 workerd pids=13548
+baseline no-op request: wall median 3.2 ms, cpu 2.5 ms
+default  hash   wall median    74.3 ms  p90    91.4 ms  cpu    72.5 ms   ok=null format=x{32}:x{128}
+default  verify wall median    73.2 ms  p90    77.5 ms  cpu    71.5 ms   ok=true format=x{32}:x{128}
+node     hash   wall median    73.7 ms  p90    77.1 ms  cpu    72.0 ms   ok=null format=x{32}:x{128}
+node     verify wall median    73.8 ms  p90    78.6 ms  cpu    71.5 ms   ok=true format=x{32}:x{128}
+noble    hash   wall median   132.2 ms  p90   151.1 ms  cpu   120.5 ms   ok=null format=x{32}:x{128}
+noble    verify wall median   122.8 ms  p90   144.9 ms  cpu   110.5 ms   ok=true format=x{32}:x{128}
