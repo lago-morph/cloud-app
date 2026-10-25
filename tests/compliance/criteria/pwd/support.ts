@@ -23,6 +23,7 @@ import { DatabaseSync } from "node:sqlite";
 import { expect } from "vitest";
 import type { LogEntry, MailMessage, TestApp as ContractTestApp, TestAppOptions as ContractTestAppOptions, TestMail } from "../../../../docs/contracts/ts/testing.js";
 import { client, createClient, target, waitFor, type ComplianceClient } from "../../harness/index.js";
+import { fetchOver, oneConnectionDispatcher, withDispatcher } from "../../harness/one-connection.js";
 import { referenceTestApp, type TestAppOptions } from "../core/support/in-process.js";
 import { acquireLock } from "../core/support/processes.js";
 import { DOCS, parameterNumber, REFERENCE_DIR } from "../core/support/repo.js";
@@ -398,7 +399,10 @@ export function testStageMail(c: ComplianceClient): MailReader {
 export interface SendOptions {
   /** `Origin`: default the public origin; `false` omits it (HTTP only: in-process always sends one). */
   readonly origin?: string | false;
-  /** `CF-Connecting-IP`. */
+  /**
+   * `CF-Connecting-IP`, sent only to a local origin (in-process, `dev`; see `sendsClientIp`).
+   * Through Cloudflare the client IP is the connection's, set by the edge.
+   */
   readonly ip?: string;
   /** Send the body as a form (`application/x-www-form-urlencoded`) and expect the 303 form answer. */
   readonly form?: boolean;
@@ -438,10 +442,21 @@ function cookieJar(): { remember(headers: Headers): void; header(): string | und
   };
 }
 
+/**
+ * Whether a browser on `origin` may set `CF-Connecting-IP` itself: only on a local origin
+ * (in-process, `dev`). Cloudflare's edge refuses any request that already carries the header with
+ * 403 "Error 1000: DNS points to prohibited IP" before the Worker runs (Cloudflare's Error 1000
+ * page; ai/implementation/root-causes/2026-10-25-cf-error-1000-client-cf-connecting-ip.md).
+ */
+export function sendsClientIp(origin: string): boolean {
+  const host = new URL(origin).hostname;
+  return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+}
+
 function requestHeaders(body: Readonly<Record<string, string>> | undefined, options: SendOptions, publicOrigin: string, cookie: string | undefined, method: string): { headers: Headers; payload: string | undefined } {
   const headers = new Headers(options.headers);
   if (!options.form) headers.set("accept", "application/json");
-  if (options.ip !== undefined) headers.set("cf-connecting-ip", options.ip);
+  if (options.ip !== undefined && sendsClientIp(publicOrigin)) headers.set("cf-connecting-ip", options.ip);
   const origin = options.origin ?? (method === "GET" ? false : publicOrigin);
   if (origin !== false) headers.set("origin", origin);
   if (cookie !== undefined && options.cookies !== false) headers.set("cookie", cookie);
@@ -525,10 +540,14 @@ export function connectedBrowser(app: PasswordTestApp, publicOrigin: string): Au
 
 function testAppBrowser(app: PasswordTestApp, publicOrigin: string, mail: MailReader): AuthBrowser {
   const jar = cookieJar();
+  // Off a local origin, one browser is one connection, so one client IP (oneConnectionDispatcher);
+  // `connectTestStage`'s `request` hands its init to `fetch`.
+  const dispatcher = sendsClientIp(publicOrigin) ? undefined : oneConnectionDispatcher();
   const send = async (method: string, path: string, body: Readonly<Record<string, string>> | undefined, options: SendOptions = {}): Promise<Answer> => {
     if (options.origin === false) throw new Error("TestApp requests always carry an Origin (testing.d.ts); send a missing Origin over HTTP");
     const { headers, payload } = requestHeaders(body, options, publicOrigin, jar.header(), method);
-    const response = await app.request(path, { method, headers, redirect: "manual", ...(payload === undefined ? {} : { body: payload }) });
+    const init: RequestInit = { method, headers, redirect: "manual", ...(payload === undefined ? {} : { body: payload }) };
+    const response = await app.request(path, dispatcher === undefined ? init : withDispatcher(init, dispatcher));
     jar.remember(response.headers);
     return answerOf(method, path, response.status, response.headers, await response.text());
   };
@@ -548,7 +567,9 @@ function testAppBrowser(app: PasswordTestApp, publicOrigin: string, mail: MailRe
  */
 export function httpBrowser(options: { readonly baseUrl?: string; readonly appDir?: string } = {}): AuthBrowser {
   // This browser keeps its own cookies (`cookies: false` sends none of them), so the harness client must not add its jar's.
-  const c = createClient({ baseUrl: options.baseUrl ?? client().baseUrl, keepCookies: false });
+  const baseUrl = options.baseUrl ?? client().baseUrl;
+  // Off a local origin, one browser is one connection, so one client IP (oneConnectionDispatcher).
+  const c = createClient({ baseUrl, keepCookies: false, ...(sendsClientIp(baseUrl) ? {} : { fetch: fetchOver(oneConnectionDispatcher()) }) });
   const jar = cookieJar();
   const publicOrigin = c.baseUrl;
   const send = async (method: string, path: string, body: Readonly<Record<string, string>> | undefined, options: SendOptions = {}): Promise<Answer> => {
@@ -606,12 +627,13 @@ export async function me(b: AuthBrowser): Promise<Me> {
 
 /**
  * Runs `body`, which signs in on the run's cloud test stage, alone among this run's test
- * processes. On a cloud stage `CF-Connecting-IP` is set by Cloudflare, not by the client, so
- * every request of this machine counts against one client IP, and `testIp()` separates nothing
+ * processes. On a cloud stage `CF-Connecting-IP` is set by Cloudflare, not by the client (a
+ * client that sends it gets Error 1000, `sendsClientIp`), so `testIp()` separates nothing there
  * (PWD-REQ-006 counts per IP). A test that signs in there holds this cross-process lock, and keeps
  * it for PAR-258's window after `body` ends, so that neither a sign-in burst (PWD-AC-008) nor a
- * test's own sign-ins leave the next holder rate-limited. Locally `body` just runs: the client IP
- * is the request's `CF-Connecting-IP`.
+ * test's own sign-ins leave the next holder rate-limited. Each browser on a cloud origin sends
+ * over one connection of its own (`oneConnectionDispatcher`), so that its client IP is one IP.
+ * Locally `body` just runs: the client IP is the request's `CF-Connecting-IP`.
  */
 export async function withStageSignIns<T>(body: () => Promise<T>): Promise<T> {
   const release = await holdStageSignIns();
