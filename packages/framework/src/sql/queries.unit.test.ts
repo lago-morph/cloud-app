@@ -199,6 +199,40 @@ describe.each([
     expect(await h.db.select({ id: p.id }).from(p)).toHaveLength(65);
   });
 
+  it("a committed write whose RETURNING rows exceed PAR-215 succeeds and returns them (DEC-0542)", async () => {
+    await h.run("delete from things");
+    await h.run("delete from parents");
+    const t = T(things);
+    // 3 names of 100,000 bytes: 300,000 bytes of RETURNING rows, more than PAR-215.
+    const rows = Array.from({ length: 3 }, (_, i) => ({ id: uuid(3000 + i), name: `${i}`.padEnd(100_000, "y") }));
+    const inserted = await h.db.insert(t).values(rows).returning({ id: t.id, name: t.name });
+    expect(inserted).toHaveLength(3);
+    // The write committed exactly once and was reported as success, so a caller has no reason to retry it.
+    expect(await h.db.select({ id: t.id }).from(t)).toHaveLength(3);
+    const updated = await h.db.update(t).set({ name: "u".repeat(100_000) }).returning({ name: t.name });
+    expect(updated).toHaveLength(3);
+    // Reading the same rows back is still refused: the limit applies to reads.
+    await expect(h.db.select({ name: t.name }).from(t)).rejects.toMatchObject({ name: "FrameworkError", code: "SQL.RESULT_TOO_LARGE" });
+    const deleted = await h.db.delete(t).returning({ name: t.name });
+    expect(deleted).toHaveLength(3);
+    expect(await h.db.select({ id: t.id }).from(t)).toHaveLength(0);
+  });
+
+  it("atomic's committed RETURNING rows over PAR-215 are returned, not refused (DEC-0542)", async () => {
+    await h.run("delete from things");
+    await h.run("delete from parents");
+    const p = T(parents);
+    const rows = Array.from({ length: 4 }, (_, i) => ({ id: uuid(4000 + i), name: `${i}`.padEnd(70_000, "z") }));
+    const [a, b] = await atomic(h.db, [
+      (w: WriteDb) => w.insert(p).values(rows.slice(0, 2)).returning({ name: p.name }),
+      (w: WriteDb) => w.insert(p).values(rows.slice(2)).returning({ name: p.name }),
+    ] as const);
+    expect(a).toHaveLength(2);
+    expect(b).toHaveLength(2);
+    expect(await h.db.select({ id: p.id }).from(p)).toHaveLength(4);
+    await h.run("delete from parents");
+  });
+
   it(tag("SQL-AC-006", "uniqueness and reference violations are SQL.CONFLICT"), async () => {
     const p = T(parents);
     const t = T(things);

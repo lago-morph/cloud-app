@@ -32,7 +32,7 @@ Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 | PAR-212 | Aurora capacity range | 0 to 4 ACU | ai-proposed | 0 lets the database pause when idle. Deferred (branch `aws`). |
 | PAR-213 | Aurora auto-pause delay | 5 minutes | ai-proposed | Platform minimum is 300 seconds. Deferred (branch `aws`). |
 | PAR-214 | Data API maximum response size | 1 MiB | platform | RDS Data API quotas. Deferred (branch `aws`). |
-| PAR-215 | Portable maximum query result size | 256 KiB | ai-proposed | Enforced on every target, measured as defined in sql.md §2.3. Leaves room for the Data API's JSON encoding within PAR-214. |
+| PAR-215 | Portable maximum query result size | 256 KiB | ai-proposed | Enforced on every read result on every target, measured as defined in sql.md §2.3; a write's RETURNING rows are not limited (DEC-0542). Leaves room for the Data API's JSON encoding within PAR-214. |
 | PAR-216 | D1 maximum bound parameters per statement | 100 | platform | Cloudflare D1 limits; measured identical on local D1 and remote D1 (DEC-0102, DEC-0097). Apps chunk long `inArray` lists and multi-row inserts; the D1 copy stays within it. |
 | PAR-217 | D1 maximum SQL statement length | 100,000 bytes | platform | Cloudflare D1 limits; SQL text only, bound values excluded; measured identical locally and remotely (DEC-0102, DEC-0097). |
 | PAR-218 | D1 copy page size | At most 1,000 rows and 1,000,000 bytes of values per request; a single larger row is sent alone | ai-proposed | Cloudflare `copyDatabase` fallback copy (DEC-0096). Keeps each request far from the observed 30 s / 502 failure at 5.5 MB. |
