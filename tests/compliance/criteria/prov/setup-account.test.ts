@@ -59,7 +59,7 @@
  * `COMPLIANCE_CLOUDFLARE_EMAIL_DOMAIN`), for when the deferral is lifted.
  *
  * Cloud usage (estimate, D-T.md): no D1 at all (setup-account creates R2 buckets only; the
- * stopped deploy creates nothing). ≈ 120 Cloudflare API requests (7 snapshots of ≈ 15 each,
+ * stopped deploy creates nothing). ≈ 250 Cloudflare API requests (8 snapshots of ≈ 28 each,
  * the scoped R2 tokens of 4 record writes ≈ 16; the setup-account runs' own requests not
  * counted), plus the state-home and log-bucket listings through R2's S3 endpoint (one request
  * per 1,000 objects).
