@@ -56,11 +56,10 @@ export interface LoginProvider {
   /**
    * The account's verification state and roles, or null when the provider has no account for
    * `subject`. Throws when it cannot tell (AUTH then treats the request as anonymous). The stub
-   * answers from its in-memory accounts (DEC-0525). Optional only so that the retired Google
-   * adapter still type-checks; AUTH treats a session from a provider without it as anonymous
-   * (fail closed).
+   * answers from its in-memory accounts (DEC-0525). Every provider has it (the retired Google
+   * adapter, which had none, left in item I-G).
    */
-  accountStatus?(subject: string): Promise<AccountStatus | null>;
+  accountStatus(subject: string): Promise<AccountStatus | null>;
 }
 
 /** Per-request context for a credential provider. Built by AUTH; never visible to app code. */

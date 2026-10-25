@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { MAIL_SINK_SOURCE } from "../../mail/sink-worker.js";
 import {
   createCloudflareEmailSetup,
+  RULE_SETTLE_MS,
   isWantedLifecycle,
   MAIL_SINK_LIFECYCLE_RULE_ID,
   mailSinkTag,
@@ -299,5 +300,40 @@ describe("CloudflareEmailSetup.productionPrerequisites (PROV-REQ-002 step 1)", (
     zoneOf(cloud).sending.push({ id: "s", name: DOMAIN, enabled: true, pollsUntilEnabled: 0 });
     cloud.tokenPolicies = FULL_POLICIES.map((p) => ({ ...p, permission_groups: p.permission_groups.filter((g) => g.name !== "DNS Write" && g.name !== "Workers Scripts Write") }));
     expect(await email.productionPrerequisites(DOMAIN)).toEqual(['the Cloudflare API token lacks the permission "DNS Write" (zone example.test; DEC-0515)']);
+  });
+});
+
+describe("the sink rule's read-back and settle wait (live finding 2026-10-25, i-g.md)", () => {
+  it("after creating the rule, setUp reads it back, then waits RULE_SETTLE_MS before reporting; a second run does not wait", async () => {
+    const cloud = FakeCloud.withSharedResources();
+    const events: string[] = [];
+    const api: typeof cloud.api = async (method, path, body) => (events.push(`${method} ${path}`), cloud.api(method, path, body));
+    let clock = 0;
+    const email = createCloudflareEmailSetup({
+      api,
+      accountId: ACCOUNT,
+      now: () => clock,
+      sleep: async (ms) => void (events.push(`sleep ${String(ms)}`), (clock += ms)),
+      pollTimeoutMs: 60_000,
+      pollIntervalMs: 5_000,
+    });
+    expect(RULE_SETTLE_MS).toBe(60_000);
+    await email.setUp(DOMAIN);
+    const zone = zoneOf(cloud);
+    const post = events.indexOf(`POST /zones/${zone.id}/email/routing/rules`);
+    expect(post).toBeGreaterThan(-1);
+    expect(events.slice(post + 1)).toEqual([`GET /zones/${zone.id}/email/routing/rules?per_page=50&page=1`, `sleep ${String(RULE_SETTLE_MS)}`]);
+    events.length = 0;
+    await email.setUp(DOMAIN);
+    expect(events.filter((e) => e.startsWith("sleep"))).toEqual([]);
+  });
+
+  it("a rule that does not read back as wanted is polled, and setUp fails naming it, without reporting success", async () => {
+    const cloud = FakeCloud.withSharedResources();
+    const { email } = setup(cloud, { ruleSettleMs: 1 });
+    const zone = zoneOf(cloud);
+    // The POST answers, but the rule never shows up in the listing.
+    cloud.override.set(`POST /zones/${zone.id}/email/routing/rules`, { status: 200, body: { success: true, errors: [], messages: [], result: { id: "ghost" } } });
+    await expect(email.setUp(DOMAIN)).rejects.toThrow(/reading back the routing rule sink@t\.example\.test → Worker prototype-mailsink: still not listed as an enabled rule to the Worker after 60 s/);
   });
 });

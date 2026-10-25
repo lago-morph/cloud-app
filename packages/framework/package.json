@@ -84,7 +84,6 @@
     "esbuild": "0.28.2",
     "eslint": "10.13.0",
     "hono": "4.13.13",
-    "jose": "6.2.12",
     "sst": "4.17.2",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.0",

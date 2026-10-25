@@ -1,6 +1,6 @@
 # Current user
 
-Read this when a route or page depends on who is logged in, you add an admin page, you restrict the app to known people, or you test logins and access levels.
+Read this when a route or page depends on who is logged in, you add an admin page, someone must become an admin, or you test logins and access levels.
 
 ## What the app sees
 
@@ -13,12 +13,12 @@ Store `c.var.user.id` in your rows to record ownership (an `ownerId: text()` col
 
 ## Levels
 
-- **Without a users list**, level `user` means *any account the login provider accepts*, not a person this app trusts. Anyone with a Google account can log in as `user`.
-- **To admit only known people**, list their user IDs in `framework.users` in the stage's values file (`config/<target>/<stage>.json`). Then a login whose ID is on neither `framework.users` nor `framework.admins` is anonymous: `c.var.user` is `{ level: "anonymous" }` and `requireUser()` refuses it with 401 `AUTH.UNAUTHENTICATED`.
-- **Admins** are the user IDs in `framework.admins`. They need not be repeated in `framework.users`.
-- Both lists are read on every request; a change takes effect at the next deploy, without logging anyone out.
+- **Anyone who signs up and verifies their email address is a user.** Level `user` means *any verified account*, not a person this app trusts; there is no list of allowed people. An unverified account cannot sign in.
+- **Admins** are users holding the `admin` role, stored with the account in the stage's own database. There is no "user" role: a new account has no roles.
+- The level is read from the account on every request with a session, so a grant or revoke applies from the person's next request, with no deploy and no new login.
+- Configuration holds no admins or users: `framework.admins` and `framework.users` are rejected by the build.
 
-How the owner finds an ID and adds it to a list (copy-and-paste steps): [owner-tasks.md](owner-tasks.md). In short: the person logs in on a production stage and opens `/api/auth/me`; they copy `id`, or `unlistedId` if the users list currently makes them anonymous; the owner adds it to `framework.admins` or `framework.users` in `config/<target>/<stage>.json`, commits, and deploys again.
+How someone becomes an admin (copy-and-paste steps): [owner-tasks.md](owner-tasks.md) §7. In short: they sign up and verify on the stage, then the owner (or an agent) runs `npm run admins -- grant <address> --target <t> --stage <s>`, adding `--confirm-production <s>` on a production stage; `admins revoke` takes it away and `admins list` shows the admins.
 
 ## Protecting routes
 
@@ -43,16 +43,16 @@ Sessions last 7 days (PAR-250). There is no server-side session list: logging ou
 
 | Where | Login |
 | --- | --- |
-| Local `dev` | The authentication mock: the login button logs in as the default mock user (`mock-user`) |
-| Test stages (`test-*`) | The authentication mock (`mockUsers`, `connectTestStage`) |
-| Production stages | Google (set up by the owner, [owner-tasks.md](owner-tasks.md)) |
+| Local `dev` | Email and password: the login button opens the sign-in page; mail is written to `.mail/` (`npm run mail -- last --to <address>`). Tests may also use the authentication mock. |
+| Test stages (`test-*`) | Email and password, plus the authentication mock for tests (`mockUsers`, `connectTestStage`) |
+| Production stages | Email and password only, with real mail ([owner-tasks.md](owner-tasks.md) §6) |
 
-The mock ignores `framework.users` and `framework.admins`: the test chooses the level directly.
+The mock chooses the level directly: it reads no roles.
 
 ## Testing
 
 - Choose the identity per test app: `createTestApp(app, { user: mockUsers.user("alice") })`, or `t.as(mockUsers.admin())` for further requests with another identity (sharing the same storage). `mockUsers.user(id?)` and `mockUsers.admin(id?)` use the ID as given.
-- To test **list membership** (users list, admin list), use the stub login provider, because the mock ignores the lists: `createTestApp(app, { stubLoginProvider: true, config: { framework: { users: [...] } } })`, then `await t.loginWithStub("alice")`. The stub runs the real login, ID derivation and list code. Read the derived ID from `/api/auth/me` (`id`, or `unlistedId` when the list makes the login anonymous), then build a second test app whose `framework.users` contains it. `as()` is not available on a stub test app.
+- To test the **real login and roles**, use `createTestApp(app, { passwordLoginProvider: true })`: sign up, read the mail with `t.mail.lastTo(address)`, verify and sign in through the app's requests. `t.grantRole(userId, "admin")` and `t.revokeRole(userId, "admin")` change that account's roles as `admins` does (the ID as `/api/auth/me` shows it); the next request sees the new level. `as()` is not available on such a test app.
 - Assert 401 `AUTH.UNAUTHENTICATED` for anonymous and 403 `AUTH.FORBIDDEN` for a user on admin routes. See [testing.md](testing.md).
 
 ## Examples

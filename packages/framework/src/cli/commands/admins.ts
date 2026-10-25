@@ -111,7 +111,12 @@ export function parseAdminsArgs(args: readonly string[]): Parsed {
 
 const rolesText = (roles: readonly string[]): string => (roles.length === 0 ? "none" : roles.join(","));
 
-async function change(db: AccountsDatabase, parsed: Parsed, email: string): Promise<string> {
+/**
+ * `grant` or `revoke` of `admin` for the account with this (normalized) address: one read, then at
+ * most one `UPDATE … WHERE id = ?` of `role`. Throws `Refused` for an unknown or unverified account.
+ * Returns the output line. `check-login` uses the same code (cli.md §2).
+ */
+export async function changeAdminRole(db: AccountsDatabase, parsed: { readonly action: "grant" | "revoke"; readonly stage: string }, email: string): Promise<string> {
   const rows = await db.query(`SELECT id, email_verified, role FROM "${USER}" WHERE email = ?`, [email]);
   const row = rows[0];
   const verified = row !== undefined && (row["email_verified"] === 1 || row["email_verified"] === true || row["email_verified"] === "1");
@@ -161,7 +166,7 @@ export function adminsCommand(deps: AdminsDeps): Command {
       throw error;
     }
     try {
-      const out = parsed.action === "list" ? await list(opened.db, parsed) : await change(opened.db, parsed, parsed.email ?? "");
+      const out = parsed.action === "list" ? await list(opened.db, parsed) : await changeAdminRole(opened.db, { action: parsed.action, stage: parsed.stage }, parsed.email ?? "");
       io.stdout(out);
       return EXIT.ok;
     } catch (error) {

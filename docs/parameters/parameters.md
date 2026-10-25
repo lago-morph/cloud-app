@@ -141,7 +141,7 @@ All pins are **ai-proposed**, except PAR-122, whose value the owner approved (DE
 | PAR-103 | drizzle-kit | 0.31.11 | |
 | PAR-104 | Hono | 4.13.13 | |
 | PAR-105 | aws4fetch | 1.0.20 | |
-| PAR-106 | jose | 6.2.12 | Used only by GOOGLE (`src/google/`). Retired with that code in implementation item I-G (DEC-0513), unless framework code imports jose directly by then; the credential library brings its own copy as a dependency. |
+| PAR-106 | jose | retired | Was used only by GOOGLE (`src/google/`); retired with that code in implementation item I-G (DEC-0513). The framework no longer declares jose; the credential library brings its own copy as a dependency. The value was 6.2.12 (branch `google`). |
 | PAR-107 | PGlite | 0.5.8 | |
 | PAR-108 | @pulumi/cloudflare | 6.15.0 | The provider generation SST 4.17.2 pins. A direct framework dependency only if framework code imports it (DEC-0109). |
 | PAR-109 | @pulumi/aws | 7.20.0 | The provider generation SST 4.17.2 pins. |

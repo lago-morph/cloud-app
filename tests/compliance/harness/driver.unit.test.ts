@@ -584,3 +584,114 @@ describe("[CLI-AC-003] compliance runner exit status under injected failures", (
     }
   });
 });
+
+// COMPL-REQ-005 as amended (DEC-0512): on a cloud run the driver redeploys prodcheck before the
+// test layers and runs check-login on it after them, folding its record's results in (prodcheck.ts).
+describe("[COMPL-AC-005] the production checks on prodcheck", () => {
+  const catalogue = [entry("KV-AC-001", "Local, cloud"), entry("PWD-AC-009", "Cloud"), entry("AUTH-AC-011", "Cloud"), entry("E2E-008", "Cloud")];
+  const checkLoginRecord = (results: EvidenceRecord["results"]): EvidenceRecord => ({
+    runId: "cl1",
+    commit: "c0ffee",
+    target: "cloudflare",
+    stage: "prodcheck",
+    command: "check-login --target cloudflare --stage prodcheck",
+    startedAt: "2026-10-20T10:00:00.000Z",
+    finishedAt: "2026-10-20T10:01:00.000Z",
+    exitStatus: results.every((r) => r.status === "passed") ? 0 : 1,
+    results,
+    versions: {},
+  });
+
+  it("redeploys prodcheck after the run stage and before the tests, runs check-login after them, and records its results; prodcheck is never removed", async () => {
+    const events: string[] = [];
+    const h = harness({
+      catalogue,
+      cloud: {
+        deploy: (stage) => (events.push(`deploy ${stage}`), Promise.resolve({ baseUrl: `https://reference-${stage}.owner-sub.workers.dev`, output: `deployed ${stage}` })),
+        remove: (stage) => (events.push(`remove ${stage}`), Promise.resolve("removed")),
+        checkLogin: (stage) => (
+          events.push(`check-login ${stage}`),
+          Promise.resolve({ status: 0, output: "check-login passed", record: checkLoginRecord([{ id: "PWD-AC-009", status: "passed" }, { id: "AUTH-AC-011", status: "passed" }, { id: "E2E-008", status: "passed" }]) })
+        ),
+      },
+    });
+    const run = h.deps.run;
+    const deps: DriverDeps = { ...h.deps, run: (c) => (events.push(`run ${c.args[0] ?? c.command}`), run(c)) };
+    const result = await runCompliance(parseArgs(["--target", "cloudflare"]), [], deps);
+    expect(events.filter((e) => !e.startsWith("run run"))).toEqual([
+      "deploy test-abcdefghij12345",
+      "deploy test-abcdefghij12345",
+      "deploy prodcheck",
+      "run vitest",
+      "run playwright",
+      "check-login prodcheck",
+      "remove test-abcdefghij12345",
+    ]);
+    expect(result.exitStatus).toBe(0);
+    const results = recordOf(h).results;
+    for (const id of ["PWD-AC-009", "AUTH-AC-011", "E2E-008"]) expect(results.filter((r) => r.id === id), id).toEqual([{ id, status: "passed" }]);
+    expect(h.written[0]?.raw?.["prodcheck-deploy.log"]).toBe("deployed prodcheck");
+    expect(h.written[0]?.raw?.["check-login.log"]).toBe("check-login passed");
+    expect(h.events).not.toContain("pending+ prodcheck");
+  });
+
+  it("a failed step is failed with check-login's detail, a check it did not reach is not-run, and the run exits non-zero", async () => {
+    const h = harness({
+      catalogue,
+      cloud: {
+        checkLogin: () =>
+          Promise.resolve({
+            status: 1,
+            output: "check-login failed",
+            record: checkLoginRecord([
+              { id: "PWD-AC-009", status: "failed", detail: "step 1: sign-up with a forged host: expected 200, got status 500" },
+              { id: "AUTH-AC-011", status: "not-run", detail: "check-login stopped before its checks" },
+              { id: "E2E-008", status: "failed", detail: "step 1: sign-up with a forged host: expected 200, got status 500" },
+            ]),
+          }),
+      },
+    });
+    const result = await runCompliance(parseArgs(["--target", "cloudflare"]), [], h.deps);
+    expect(result.exitStatus).toBe(1);
+    const byId = (id: string) => recordOf(h).results.filter((r) => r.id === id);
+    expect(byId("PWD-AC-009")).toEqual([{ id: "PWD-AC-009", status: "failed", detail: expect.stringMatching(/check-login failed: step 1: sign-up with a forged host.*\(record cl1\)/) }]);
+    expect(byId("AUTH-AC-011")).toEqual([{ id: "AUTH-AC-011", status: "not-run", detail: "check-login stopped before its checks" }]);
+  });
+
+  it("when prodcheck cannot be redeployed, check-login is not run and its criteria are failed naming why; the first deploy's unset apiKey is set first", async () => {
+    const events: string[] = [];
+    let prodDeploys = 0;
+    const h = harness({
+      catalogue,
+      cloud: {
+        deploy: (stage) => {
+          events.push(`deploy ${stage}`);
+          if (stage !== "prodcheck") return Promise.resolve({ baseUrl: "https://reference-test.owner-sub.workers.dev", output: "ok" });
+          prodDeploys += 1;
+          return prodDeploys === 1 ? Promise.reject(new SecretsNotSetError("required secrets are not set: apiKey", "first prodcheck output")) : Promise.reject(new Error("deploy --target cloudflare --stage prodcheck failed with status 1"));
+        },
+        setSecret: (stage, name) => (events.push(`secret ${name} ${stage}`), Promise.resolve("set")),
+        checkLogin: () => (events.push("check-login"), Promise.resolve({ status: 0, output: "" })),
+      },
+    });
+    const result = await runCompliance(parseArgs(["--target", "cloudflare"]), [], h.deps);
+    expect(events).toEqual(["deploy test-abcdefghij12345", "secret apiKey test-abcdefghij12345", "deploy test-abcdefghij12345", "deploy prodcheck", "secret apiKey prodcheck", "deploy prodcheck"]);
+    expect(result.exitStatus).toBe(1);
+    for (const id of ["PWD-AC-009", "AUTH-AC-011", "E2E-008"]) {
+      expect(recordOf(h).results.filter((r) => r.id === id), id).toEqual([{ id, status: "failed", detail: expect.stringContaining("not checked: redeploying prodcheck failed: deploy --target cloudflare --stage prodcheck failed with status 1") }]);
+    }
+    expect(h.written[0]?.redactions).toContainEqual({ value: SECRET, replacement: "<test-secret>" });
+  });
+
+  it("local runs, milestone runs and runs selecting no prodcheck criterion never touch prodcheck", async () => {
+    for (const argv of [["--target", "local"], ["--target", "cloudflare", "--milestone"], ["--target", "cloudflare", "--only", "KV-AC-001"]]) {
+      const events: string[] = [];
+      const h = harness({
+        catalogue: [...catalogue, entry("PROV-AC-003", "Cloud (milestone)")],
+        cloud: { deploy: (stage) => (events.push(`deploy ${stage}`), Promise.resolve({ baseUrl: "https://reference-test.owner-sub.workers.dev", output: "ok" })), checkLogin: () => (events.push("check-login"), Promise.resolve({ status: 0, output: "" })) },
+      });
+      await runCompliance(parseArgs(argv), argv, h.deps);
+      expect(events.filter((e) => e.includes("prodcheck") || e === "check-login"), argv.join(" ")).toEqual([]);
+    }
+  });
+});

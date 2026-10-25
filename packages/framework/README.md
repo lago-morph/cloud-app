@@ -28,7 +28,7 @@ The other subpaths (`/targets/*`, `/provision`, `/check`) are used by the comman
 
 Run them in an app's folder as `npx prototype-framework <command>` or `npm run <command>`:
 
-`dev`, `verify`, `build`, `generate-migration`, `deploy`, `smoke`, `remove`, `secrets`, `setup-account`, `certify-auth`, `reset-local`.
+`dev`, `verify`, `build`, `generate-migration`, `deploy`, `smoke`, `remove`, `secrets`, `setup-account`, `check-login`, `mail`, `admins`, `reset-local`.
 
 `verify` runs the type check, the portability lint, the app's tests and the migration checks. Run it before calling a change done.
 

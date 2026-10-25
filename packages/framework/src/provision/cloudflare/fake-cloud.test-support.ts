@@ -118,6 +118,10 @@ export class FakeCloud {
   readonly pendingUploads: { name: string; form: FormData }[] = [];
   subdomain: string | undefined = "example";
   readonly requests: string[] = [];
+  /** Email Sending's last events (`emailSendingAdaptive`, `isLastEvent: 1`) by zone ID, for `POST /graphql`. */
+  readonly emailEvents: { zoneTag: string; to: string; datetime: string; status: string; errorCause?: string; errorDetail?: string }[] = [];
+  /** GraphQL errors `POST /graphql` answers instead, when set. */
+  graphqlErrors: { message: string }[] | undefined;
   readonly sstRuns: string[] = [];
   readonly programs: string[] = [];
   /** Replies that replace the fake's own for `<METHOD> <path>`. */
@@ -168,6 +172,17 @@ export class FakeCloud {
     if (p === `${A}/tokens/verify`) return ok({ id: SELF_TOKEN_ID, status: "active" });
     if (p === `${A}/tokens/${SELF_TOKEN_ID}` && method === "GET") return ok({ id: SELF_TOKEN_ID, name: "admin", status: "active", policies: this.tokenPolicies });
     if (p.startsWith("/zones")) return this.handleZone(method, url, body);
+    if (p === "/graphql" && method === "POST") {
+      // Only the email delivery query (email-delivery.ts): the variables carry the filter.
+      if (this.graphqlErrors !== undefined) return { status: 200, body: { data: null, errors: this.graphqlErrors } };
+      const v = (b as { variables?: { zoneTag?: string; to?: string; since?: string } }).variables ?? {};
+      const events = this.emailEvents
+        .filter((e) => e.zoneTag === v.zoneTag && e.to === v.to && (v.since === undefined || e.datetime >= v.since))
+        .sort((x, y) => (x.datetime < y.datetime ? 1 : -1))
+        .slice(0, 1)
+        .map((e) => ({ datetime: e.datetime, status: e.status, errorCause: e.errorCause, errorDetail: e.errorDetail }));
+      return { status: 200, body: { data: { viewer: { zones: [{ emailSendingAdaptive: events }] } }, errors: null } };
+    }
     if (p === `${A}/tokens/permission_groups`) return ok([{ id: "2efd5506f9c8494dacb1fa10a3e7d5b6", name: "Workers R2 Storage Bucket Item Write" }]);
     if (p === `${A}/tokens` && method === "GET") return ok([...this.tokens].map(([id, t]) => ({ id, name: t.name })), { result_info: { page: 1, total_pages: 1 } });
     if (p === `${A}/tokens` && method === "POST") {

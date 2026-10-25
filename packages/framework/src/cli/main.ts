@@ -31,7 +31,8 @@ const smokeBinding: Command = lazy(async () => {
 const deployBinding: Command = lazy(async () => (await import("./commands/deploy.js")).deployBinding());
 const removeBinding: Command = lazy(async () => (await import("./commands/remove.js")).removeBinding());
 const setupAccountBinding: Command = lazy(async () => (await import("./commands/setup-account.js")).setupAccountBinding());
-const certifyAuthBinding: Command = lazy(async () => (await import("./commands/certify-auth.js")).certifyAuthBinding());
+/** `check-login` (PWD §2): the real login provider on a production stage, with the mail sink. */
+const checkLoginBinding: Command = lazy(async () => (await import("./commands/check-login.js")).checkLoginBinding());
 /** `admins` (CLI-REQ-005): the local D1, or the D1 HTTP API on Cloudflare. */
 const adminsBinding: Command = lazy(async () => (await import("./commands/admins.js")).adminsBinding());
 
@@ -45,7 +46,7 @@ const COMMANDS: Readonly<Record<string, Entry>> = {
   remove: { summary: "remove --target <t> --stage <s> [--confirm-production <s>]: remove a stage", run: removeBinding },
   secrets: { summary: "secrets set <name> --target <t> --stage <s>: set a secret from standard input", run: secretsBinding },
   "setup-account": { summary: "setup-account --target <t>: one-time account setup", run: setupAccountBinding },
-  "certify-auth": { summary: "certify-auth --target <t> --stage <s>: guided login-provider certification", run: certifyAuthBinding },
+  "check-login": { summary: "check-login --target <t> --stage <s>: automated real-login check on a production stage", run: checkLoginBinding },
   "reset-local": { summary: "clear local state (local D1, R2, .logs/ and .mail/)", run: resetLocalBinding },
   mail: { summary: "mail last --to <address> [--target <t>]: print the latest framework email sent to an address", run: mailBinding },
   admins: { summary: "admins grant <email> | revoke <email> | list --target <t> --stage <s> [--confirm-production <s>]: the admin role", run: adminsBinding },

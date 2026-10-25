@@ -24,7 +24,11 @@
  *   5. Subaddressing (`support_subaddress`, `GET`/`PATCH /zones/<z>/email/routing`).
  *   6. The routing rule: `sink@t.<domain>` → Worker `prototype-mailsink`. Cloudflare allows
  *      catch-all rules on the apex only, so the sink receives `sink+<tag>@t.<domain>` through
- *      one literal rule and subaddressing (`MAIL_SINK_LOCAL_PART`, `sinkAddress`).
+ *      one literal rule and subaddressing (`MAIL_SINK_LOCAL_PART`, `sinkAddress`). After creating
+ *      or changing it, the rule is read back (polled until listed as wanted), then `setUp` waits
+ *      `RULE_SETTLE_MS` before it reports success: a send right after the rule was created was
+ *      rejected `550 5.1.1 Address does not exist` (`routing_unknown_address`) because the rule
+ *      had not spread yet (live, 2026-10-25; decision note i-g.md).
  * - `productionPrerequisites` (deploy step 1, production stages; reads only): the zone, the
  *   DEC-0515 permissions, and the domain's Email Sending entry present and enabled.
  */
@@ -106,7 +110,12 @@ export interface EmailSetupOptions {
   readonly pollIntervalMs?: number;
   readonly now?: () => number;
   readonly sleep?: (ms: number) => Promise<void>;
+  /** How long `setUp` waits after creating or changing the sink rule; default `RULE_SETTLE_MS`. */
+  readonly ruleSettleMs?: number;
 }
+
+/** The wait after a new or changed sink rule, so a send cannot race the rule's propagation (i-g.md). */
+export const RULE_SETTLE_MS = 60_000;
 
 interface Zone {
   readonly id: string;
@@ -162,6 +171,7 @@ export function createCloudflareEmailSetup(options: EmailSetupOptions): Cloudfla
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const timeoutMs = options.pollTimeoutMs ?? 120_000;
   const intervalMs = options.pollIntervalMs ?? 5_000;
+  const ruleSettleMs = options.ruleSettleMs ?? RULE_SETTLE_MS;
   const zones = new Map<string, Zone | undefined>();
 
   async function findZone(domain: string): Promise<Zone | undefined> {
@@ -351,6 +361,16 @@ export function createCloudflareEmailSetup(options: EmailSetupOptions): Cloudfla
     throw new Error(`listing the Email Routing rules of zone ${zone.name}: more than 20 pages`);
   }
 
+  const isSinkRule = (rule: RoutingRule, address: string): boolean =>
+    rule.enabled === true &&
+    rule.matchers?.length === 1 &&
+    rule.matchers[0]?.type === "literal" &&
+    rule.matchers[0].value?.toLowerCase() === address &&
+    rule.actions?.length === 1 &&
+    rule.actions[0]?.type === "worker" &&
+    rule.actions[0].value?.length === 1 &&
+    rule.actions[0].value[0] === MAIL_SINK_NAME;
+
   async function ensureRule(zone: Zone, domain: string, created: string[]): Promise<void> {
     const address = sinkRouteAddress(domain);
     const wanted = {
@@ -361,12 +381,20 @@ export function createCloudflareEmailSetup(options: EmailSetupOptions): Cloudfla
     };
     const rules = await routingRules(zone);
     const same = rules.filter((rule) => rule.matchers?.length === 1 && rule.matchers[0]?.type === "literal" && rule.matchers[0].value?.toLowerCase() === address);
-    if (same.some((rule) => rule.enabled === true && rule.actions?.length === 1 && rule.actions[0]?.type === "worker" && rule.actions[0].value?.length === 1 && rule.actions[0].value[0] === MAIL_SINK_NAME)) return;
+    if (same.some((rule) => isSinkRule(rule, address))) return;
     const existing = same.find((rule) => typeof rule.id === "string");
     const r: ApiReply = existing?.id
       ? await api("PUT", `${routingPath(zone)}/rules/${existing.id}`, wanted)
       : await api("POST", `${routingPath(zone)}/rules`, wanted);
     resultOf(r, `${existing ? "updating" : "creating"} the ${EMAIL_RESOURCES.rule(domain)}`);
+    // Read it back, then let it spread before anything is sent to it.
+    await poll(
+      `reading back the ${EMAIL_RESOURCES.rule(domain)}`,
+      () => routingRules(zone),
+      (list) => list.some((rule) => isSinkRule(rule, address)),
+      () => "not listed as an enabled rule to the Worker",
+    );
+    await sleep(ruleSettleMs);
     created.push(EMAIL_RESOURCES.rule(domain));
   }
 
