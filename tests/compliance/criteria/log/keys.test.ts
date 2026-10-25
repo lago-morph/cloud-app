@@ -1,12 +1,13 @@
 /**
  * LOG-AC-004 (Cloud): entries appear under the specified key layout
  * `<app>/<stage>/<yyyy>/<mm>/<dd>/<hhmmss.sss>-<severity>-<id>.json` (LOG-REQ-004): an entry
- * written during a request has that request's ID and its severity in its key, one written outside
- * a request has a random final part. The removal clause ("after a stage is removed, the bucket
- * and other stages' entries remain") needs a stage to remove: secrets/further-stage.test.ts.
+ * written during a request has that request's ID and its severity in its key. The removal clause
+ * ("after a stage is removed, the bucket and other stages' entries remain") needs a stage to
+ * remove: secrets/further-stage.test.ts. DEC-0541 (owner) removed the outside-request clause from
+ * the criterion: LOG-REQ-004's random final part is verified by the R2 key builder's unit test.
  */
 import { describe, expect, it } from "vitest";
-import { client, prerequisiteMissing, tag, waitFor } from "../../harness/index.js";
+import { client, tag, waitFor } from "../../harness/index.js";
 import { logEntryViolations, runDeployment, uniqueValue, utcDay } from "../core/support/repo.js";
 import { cloudHooks, logDayPrefix } from "../core/support/stores.js";
 
@@ -52,11 +53,5 @@ describe("LOG: key layout in the shared bucket", () => {
       expect(`${m?.[1] ?? ""}-${m?.[2] ?? ""}-${m?.[3] ?? ""}`, "date part = the entry's UTC date").toBe(day);
       expect(m?.[4], "time part = the entry's UTC time").toBe(hhmmss);
     }
-  });
-
-  it(tag("LOG-AC-004", "an entry written outside a request has a random final part in its key"), () => {
-    // No reference route, and no app-facing API (log.d.ts), writes an entry outside an HTTP
-    // request: every app write happens in a request. Recorded in decisions C-T1 as a missing fixture.
-    prerequisiteMissing("LOG-AC-004 (outside-request clause): the reference app has no way to write a log entry outside an HTTP request (needs a fixture; see DEC-0277…DEC-0280 in docs/decisions/decision-log.md)");
   });
 });
