@@ -6,7 +6,7 @@ import { ACCOUNT, FakeCloud } from "../../../packages/framework/src/provision/cl
 import { stageLeftovers } from "./leftovers.js";
 import { cloudflareOperations } from "../../../packages/framework/src/cli/commands/deploy.js";
 import { FakeTarget } from "../../../packages/framework/src/provision/core/fake-target.js";
-import { cliStageOps, deployOrigin, devOrigin, generateTestSecret, pendingStageStore, readVersions, runProcess, secretsNotSet, stageResourceOperations, type OperationsFactory } from "./node-deps.js";
+import { cliStageOps, cloudAccount, deployOrigin, devOrigin, generateTestSecret, pendingStageStore, readVersions, runProcess, secretsNotSet, stageResourceOperations, type OperationsFactory } from "./node-deps.js";
 import type { RunCall } from "./driver.js";
 import { SIGN_UP_SLOT_MARGIN_MS, signUpLedger, withSignUpSlot, type BudgetDeps } from "./sign-up-budget.js";
 
@@ -241,5 +241,20 @@ describe("check-login's sign-up within prodcheck's PAR-259 budget (sign-up-budge
     const calls: string[] = [];
     await cliStageOps(repo, "cloudflare", { run: fakeRun(calls) }).checkLogin?.("prodcheck");
     expect(calls).toHaveLength(1);
+  });
+});
+
+describe("the Cloudflare account operations (DEC-0530, DEC-0531)", () => {
+  it("exist on Cloudflare with an account ID, and send the main token as a bearer token to the account's paths", async () => {
+    expect(cloudAccount("local", { CLOUDFLARE_ACCOUNT_ID: "a1" })).toBeUndefined();
+    expect(cloudAccount("cloudflare", {})).toBeUndefined();
+    const seen: { url: string; auth: string | undefined }[] = [];
+    const fakeFetch = ((url: string, init?: RequestInit) => {
+      seen.push({ url, auth: (init?.headers as Record<string, string> | undefined)?.authorization });
+      return Promise.resolve(new Response(JSON.stringify({ success: true, result: [] }), { status: 200 }));
+    }) as typeof fetch;
+    const ops = cloudAccount("cloudflare", { CLOUDFLARE_ACCOUNT_ID: "a1", CLOUDFLARE_API_TOKEN: "fake-main-token-not-a-credential" }, fakeFetch);
+    expect(await ops?.d1Plan()).toMatchObject({ plan: "free", source: "api" });
+    expect(seen).toEqual([{ url: "https://api.cloudflare.com/client/v4/accounts/a1/subscriptions", auth: "Bearer fake-main-token-not-a-credential" }]);
   });
 });

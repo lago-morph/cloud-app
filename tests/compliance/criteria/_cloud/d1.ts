@@ -1,5 +1,5 @@
 /**
- * Cloudflare D1 guards for cloud tests (plan §1 "Cloud usage limits"; DEC-0317, DEC-0419).
+ * Cloudflare D1 guards for cloud tests (plan §1 "Cloud usage limits"; DEC-0317, DEC-0419, DEC-0530).
  *
  * - **D1 stop (DEC-0317).** Every test that needs D1 on Cloudflare (any deploy of a stage
  *   creates and migrates its D1 database, so every test that deploys a stage needs D1) calls
@@ -7,18 +7,27 @@
  *   daily limit has reset and set `COMPLIANCE_CLOUDFLARE_D1=available`, the test reports a
  *   missing prerequisite with exactly the DEC-0317 detail and is recorded `blocked`. The default
  *   is "stopped", so no run uses D1 by accident while the owner's direction holds.
- * - **At most `MAX_D1_DATABASES` (8) D1 databases at once (DEC-0419; account limit 10,
- *   PAR-219).** `requireDatabaseRoom(n)` counts the account's test-stage databases
- *   (`<app>-test-…-db-<n>`) before a test creates `n` more and reports a missing prerequisite
- *   when the total would exceed the cap. One Cloudflare API
- *   request per call; no D1 rows.
+ * - **At most the plan's database cap at once (DEC-0419, DEC-0530; PAR-284 Free: 8 of the
+ *   account limit 10; PAR-285 Workers Paid: 20; PAR-219).** The plan is the one the driver read
+ *   for the run (`harness/d1-budget.ts`, `COMPLIANCE_D1_PLAN`), else the explicit setting
+ *   `COMPLIANCE_CLOUDFLARE_PLAN`, else Free. `requireDatabaseRoom(n)` counts the account's
+ *   test-stage databases (`<app>-test-…-db-<n>`) before a test creates `n` more and reports a
+ *   missing prerequisite when the total would exceed the cap. One Cloudflare API request per
+ *   call; no D1 rows.
  */
 import { prerequisiteMissing } from "../../harness/index.js";
+import { D1_BUDGETS, runD1Budget } from "../../harness/d1-budget.js";
 import { accountDatabases } from "./stage-resources.js";
 
 export const D1_STOP_DETAIL = "D1 daily row limit exhausted by phase A spikes on 2026-10-19; re-run after reset";
 export const D1_AVAILABLE_ENV = "COMPLIANCE_CLOUDFLARE_D1";
-export const MAX_D1_DATABASES = 8;
+/** The Free plan's cap (PAR-284), which applies when the plan is unknown. */
+export const MAX_D1_DATABASES = D1_BUDGETS.free.maxDatabases;
+
+/** The database cap of this run's plan (PAR-284 or PAR-285). */
+export function maxD1Databases(env: Readonly<Record<string, string | undefined>> = process.env): number {
+  return runD1Budget(env).maxDatabases;
+}
 
 /** Blocks (missing prerequisite) a test that needs D1 on Cloudflare while DEC-0317 holds. */
 export function requireCloudD1(target: string): void {
@@ -33,13 +42,14 @@ export async function testStageDatabases(): Promise<string[]> {
   return (await accountDatabases()).map((d) => d.name).filter((n) => TEST_STAGE_DATABASE.test(n)).sort();
 }
 
-/** Reports a missing prerequisite when creating `more` databases would hold more than `MAX_D1_DATABASES` at once. */
+/** Reports a missing prerequisite when creating `more` databases would hold more than the plan's cap at once. */
 export async function requireDatabaseRoom(more: number, what: string): Promise<void> {
   const existing = await testStageDatabases();
-  if (existing.length + more > MAX_D1_DATABASES) {
+  const budget = runD1Budget();
+  if (existing.length + more > budget.maxDatabases) {
     prerequisiteMissing(
       `${what} creates up to ${String(more)} D1 database(s) while ${String(existing.length)} test-stage database(s) exist (${existing.join(", ")}); ` +
-        `at most ${String(MAX_D1_DATABASES)} at once (DEC-0419): run it in a pass with fewer other stages`,
+        `at most ${String(budget.maxDatabases)} at once on the ${budget.plan} plan (DEC-0419, DEC-0530, ${budget.parameter}): run it in a pass with fewer other stages`,
     );
   }
 }

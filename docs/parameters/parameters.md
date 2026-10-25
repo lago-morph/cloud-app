@@ -36,7 +36,7 @@ Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 | PAR-216 | D1 maximum bound parameters per statement | 100 | platform | Cloudflare D1 limits; measured identical on local D1 and remote D1 (DEC-0102, DEC-0097). Apps chunk long `inArray` lists and multi-row inserts; the D1 copy stays within it. |
 | PAR-217 | D1 maximum SQL statement length | 100,000 bytes | platform | Cloudflare D1 limits; SQL text only, bound values excluded; measured identical locally and remotely (DEC-0102, DEC-0097). |
 | PAR-218 | D1 copy page size | At most 1,000 rows and 1,000,000 bytes of values per request; a single larger row is sent alone | ai-proposed | Cloudflare `copyDatabase` fallback copy (DEC-0096). Keeps each request far from the observed 30 s / 502 failure at 5.5 MB. |
-| PAR-219 | D1 databases per Cloudflare account | 10 | platform | Observed on the test account (HTTP 403, code 7406; DEC-0097). A schema-changing deploy briefly holds two databases per stage; `copyDatabase` reports this error clearly. |
+| PAR-219 | D1 databases per Cloudflare account | 10 on Workers Free; 50,000 on Workers Paid | platform | Free: observed on the test account while it was on Free (HTTP 403, code 7406; DEC-0097). Both: Cloudflare D1 limits, developers.cloudflare.com/d1/platform/limits/ (read 2026-10-25; DEC-0530). A schema-changing deploy briefly holds two databases per stage; `copyDatabase` reports this error clearly. |
 
 ## KV
 
@@ -121,6 +121,9 @@ Deferred to a later release (DEC-0508): these parameters belong to the AWS targe
 | PAR-281 | AWS-AC-005 wait for a paused cluster | 15 minutes (PAR-213 plus 10 minutes), polling every 30 seconds | ai-proposed | If the cluster has not observably paused by then, AWS-AC-005 is recorded not-run with the reason and the last observed state. Keeps one slow test under about 20 minutes (DEC-0437). Deferred (branch `aws`). |
 | PAR-282 | AWS API calls by the cloud test hooks per compliance run | 2,000 | ai-proposed | `COMPLIANCE_AWS_MAX_RUN_CALLS` overrides it. Calls the framework CLI makes (deploy, remove, the leftover check) are not counted; a total above the cap fails the run (DEC-0501). Deferred (branch `aws`). |
 | PAR-283 | Test-stage Aurora clusters at once in the AWS account | 3 | ai-proposed | The driver and the stage-lifecycle tests refuse a deploy that would exceed it and record the criteria not-run (DEC-0501). Deferred (branch `aws`). |
+| PAR-284 | D1 budget of compliance testing on a Cloudflare Free account | Per pass ≤ 10,000 rows written and ≤ 500,000 read; per UTC day ≤ 50,000 written and ≤ 2,500,000 read; ≤ 8 test-stage D1 databases at once | owner | DEC-0419, kept as the Free budget by DEC-0530: half of Free's daily 100,000 written / 5,000,000 read (developers.cloudflare.com/d1/platform/pricing/), 8 of PAR-219's 10. Also applies when the plan is unknown. No test runs into it. |
+| PAR-285 | D1 budget of compliance testing on a Cloudflare Workers Paid account | Per pass ≤ 100,000 rows written and ≤ 5,000,000 read; per UTC day ≤ 500,000 written and ≤ 25,000,000 read; ≤ 20 test-stage D1 databases at once | owner | DEC-0530. Workers Paid includes 50 million rows written and 25 billion read per month (developers.cloudflare.com/d1/platform/pricing/): 31 days at the daily cap use 31 % and 3.1 % of that. The plan is read from `GET /accounts/<account>/subscriptions` (rate plan `workers_paid`), else `COMPLIANCE_CLOUDFLARE_PLAN`, else Free (PAR-284). No test runs into it. |
+| PAR-286 | Lifetime of a restricted test token the compliance driver creates | 6 hours | ai-proposed | A backstop: the driver deletes its `prototype-compliance-*` tokens at the end of every run, and the leftover check reports any still listed (DEC-0531). |
 
 ## Names
 

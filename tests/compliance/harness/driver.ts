@@ -9,6 +9,11 @@
  * uses one test stage for the whole run. Release 1 targets local and Cloudflare; the AWS usage
  * caps and region step are on branch `aws` (DEC-0508).
  *
+ * Cloud account (DEC-0530, DEC-0531): at the start of a cloud run the driver reads the account's
+ * plan and D1 budget and creates the restricted test tokens the selected clauses need
+ * (`DriverDeps.cloudAccount`, test-tokens.ts); at the end it deletes them, also after a failure,
+ * and reports every `prototype-compliance-*` token still listed as a leftover.
+ *
  * A run against fakes (overridden not-run rules, or stage operations that say they are fakes) is
  * marked `dryRun` in its record, which no report counts (G-EV F3).
  *
@@ -37,6 +42,11 @@ import { CHECK_LOGIN_IDS, checkLoginOutcomes, PRODCHECK_IDS, PRODCHECK_STAGE } f
 import { grepPattern, parsePlaywrightJson, parseVitestJson } from "./reports.js";
 import { criterionResults, type TestOutcome } from "./results.js";
 import { idsFor, runnerSelection, scopeTests } from "./selection.js";
+import { d1Budget, describeBudget, RUN_PLAN_ENV, type D1Plan } from "./d1-budget.js";
+import { RESTRICTED_TOKENS, type CloudAccountOps, type CreatedToken } from "./test-tokens.js";
+
+/** How evidence and the driver's output show a self-created test token's value (DEC-0531). */
+export const TEST_TOKEN_REPLACEMENT = "<test-token>";
 
 export interface RunCall {
   readonly command: string;
@@ -116,6 +126,12 @@ export interface DriverDeps {
   run(call: RunCall): Promise<{ readonly status: number; readonly output: string }>;
   startLocal(): Promise<LocalSession>;
   cloud(target: Target): CloudStageOps;
+  /**
+   * The cloud account's reads and the self-created test tokens (d1-budget.ts, test-tokens.ts;
+   * DEC-0530, DEC-0531). Absent: no plan is read (the tests apply the setting or the Free
+   * budget), no test token is created and no token leftover check runs.
+   */
+  cloudAccount?(target: Target): CloudAccountOps | undefined;
   readonly pendingStages: PendingStages;
   /** The not-run rules; default `PHASE_RULES`. Tests pass others (a run against fakes). */
   readonly notRunRules?: readonly NotRunRule[];
@@ -271,6 +287,50 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
   let prodcheckProblem: string | undefined;
 
   let ops: CloudStageOps | undefined;
+  let account: CloudAccountOps | undefined;
+  let runPlan: D1Plan | undefined;
+  const createdTokens: CreatedToken[] = [];
+  /** The self-created test tokens' variables for the test processes (values in memory only). */
+  const tokenEnv: Record<string, string> = {};
+  /**
+   * DEC-0530/DEC-0531 at the start of a cloud run: read the plan's D1 budget, delete test tokens an
+   * interrupted earlier run left, and create each restricted token a selected clause needs and
+   * the operator did not supply. A token's value goes only into `tokenEnv` and the redactions.
+   */
+  const prepareAccount = async (acc: CloudAccountOps): Promise<void> => {
+    const reading = await acc.d1Plan();
+    runPlan = reading.plan;
+    const budget = d1Budget(reading.plan);
+    raw["d1-budget.json"] = `${JSON.stringify({ ...reading, budget }, null, 2)}\n`;
+    log(`compliance: ${describeBudget(budget)} (plan from ${reading.source}: ${reading.detail})`);
+    for (const old of await acc.testTokens()) {
+      await acc.deleteToken(old.id);
+      log(`compliance: deleted the test token ${old.name} an earlier run left`);
+    }
+    for (const spec of RESTRICTED_TOKENS) {
+      if (!toRun.includes(spec.criterion) || (process.env[spec.env] ?? "") !== "") continue;
+      const token = await acc.createRestrictedToken(spec, runId);
+      createdTokens.push(token);
+      redactions.push({ value: token.value, replacement: TEST_TOKEN_REPLACEMENT });
+      tokenEnv[spec.env] = token.value;
+      log(`compliance: created the test token ${token.name} (lacks ${spec.omitted}) for ${spec.criterion}`);
+    }
+  };
+  /** Deletes this run's test tokens, then reports every `prototype-compliance-*` token still listed as a leftover. */
+  const cleanUpTokens = async (acc: CloudAccountOps): Promise<void> => {
+    for (const token of createdTokens) {
+      try {
+        await acc.deleteToken(token.id);
+      } catch (error) {
+        log(`compliance: deleting the test token ${token.name} failed: ${firstLine(error)}`);
+      }
+    }
+    try {
+      leftovers.push(...(await acc.testTokens()).map((t) => `API token ${t.name}`));
+    } catch (error) {
+      leftovers.push(`test token check failed: ${firstLine(error)}`);
+    }
+  };
   if (toRun.length > 0) {
     let local: LocalSession | undefined;
     let deployed = false;
@@ -290,6 +350,8 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
       }
       if (isCloud) {
         ops = deps.cloud(args.target);
+        if (!args.selfTest) account = deps.cloudAccount?.(args.target);
+        if (account !== undefined) await prepareAccount(account);
         // An interrupted earlier run left these stages: remove them first (COMPL-REQ-004).
         for (const old of deps.pendingStages.list(args.target)) await removeStage(ops, old);
         if (baseUrl === undefined) {
@@ -318,7 +380,10 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
         ...(baseUrl === undefined ? {} : { baseUrl }),
         ...(testSecret === undefined ? {} : { testSecret }),
       });
-      const hide = testSecret === undefined ? {} : { redact: [testSecret] };
+      if (runPlan !== undefined) env[RUN_PLAN_ENV] = runPlan;
+      Object.assign(env, tokenEnv);
+      const hidden = [...(testSecret === undefined ? [] : [testSecret]), ...createdTokens.map((t) => t.value)];
+      const hide = hidden.length === 0 ? {} : { redact: hidden };
       const tmp = deps.tempDir();
       for (const selection of runnerSelection({ target: args.target, selfTest: args.selfTest })) {
         const ids = idsFor(selection, toRun);
@@ -377,6 +442,8 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
         }
       }
       if (ops !== undefined && deployed && stage !== undefined) await removeStage(ops, stage);
+      // Also after a failed run: the run's test tokens go, and none may remain (DEC-0531).
+      if (account !== undefined) await cleanUpTokens(account);
     }
   }
   // A stage that could not be removed, or a leftover check that could not run, is a partial failure (CLI-REQ-003).
@@ -385,7 +452,7 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
 
   const results: EvidenceResult[] = criterionResults({ target: args.target, expected, outcomes, blocked });
   // G-EV F3: a run against fakes says so in its record; the reports never count it, wherever it is stored.
-  const fakes = [...(deps.notRunRules !== undefined && deps.notRunRules !== PHASE_RULES ? ["not-run rules overridden (DriverDeps.notRunRules)"] : []), ...(ops?.dryRun === undefined ? [] : [ops.dryRun])];
+  const fakes = [...(deps.notRunRules !== undefined && deps.notRunRules !== PHASE_RULES ? ["not-run rules overridden (DriverDeps.notRunRules)"] : []), ...(ops?.dryRun === undefined ? [] : [ops.dryRun]), ...(account?.dryRun === undefined ? [] : [account.dryRun])];
   const dryRun = fakes.length === 0 ? undefined : fakes.join("; ");
   if (dryRun !== undefined) log(`compliance: dry run (${dryRun}): this record is not evidence`);
   const record: EvidenceRecord = {

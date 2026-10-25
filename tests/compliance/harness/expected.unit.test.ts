@@ -87,6 +87,13 @@ describe("[COMPL-AC-001] this phase's not-run rules (plan §8) against the docum
     expect(cfm.get("SKILL-AC-006")?.notRun).toBe("password login provider not implemented yet (DEC-0509)");
     expect(cfm.get("MAIL-AC-007"), "MAIL-AC-007 has its milestone test (T2)").toEqual({ id: "MAIL-AC-007", run: true, parts: [""], notRunParts: [] });
     expect(cfm.get("PROV-AC-003")?.run).toBe(true);
+    // DEC-0532: the fresh-account clause needs a second Cloudflare account; the owner deferred it. The rest of PROV-AC-004 runs.
+    expect(cfm.get("PROV-AC-004")).toEqual({
+      id: "PROV-AC-004",
+      run: true,
+      parts: [""],
+      notRunParts: [{ part: "fresh-account clause: deploying without setup-account fails with a clear message", detail: "deferred: needs a second Cloudflare account (owner, 2026-10-25)" }],
+    });
     // DEC-0526: E2E-007's cloud part and AUTH-AC-005's admin part left the milestone list.
     for (const id of ["E2E-008", "E2E-007", "AUTH-AC-005"]) expect(cfm.has(id), id).toBe(false);
     for (const target of ["local", "cloudflare"] as const) {
