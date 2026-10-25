@@ -14,7 +14,7 @@
  * 5. bundle the entry for Workers (esbuild) and inspect it: no Node.js module other than
  *    `node:crypto` and `node:async_hooks` (CF-REQ-003, `inspect.ts`);
  * 6. locally, write the `wrangler.jsonc` `dev` runs (local D1 `DB`, local R2 `FILES`).
- * Everything goes under `<app>/.framework/<target>/`, which is replaced on every build.
+ * Everything goes under `<app>/.framework/<target>/`, which is replaced on every build except `stages/`, the deploy records (DEC-0529).
  * Node only.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
