@@ -13,9 +13,9 @@
  *
  * Before the backup, the stage's earlier backups are listed (a failed listing also deletes
  * nothing). After it, every backup is printed, the usable ones first, newest first; a backup
- * without a manifest, or holding fewer databases than the most any backup of the stage holds (one
- * written by a retry after the databases were deleted), is flagged "do not restore from it", and
- * the closing line names the backup to restore from (DEC-0556).
+ * without a manifest, or whose database ids are a strict subset of an earlier backup's (one
+ * written by a retry after those databases were deleted), is flagged "do not restore from it", and
+ * the closing line names the backup to restore from (DEC-0556, DEC-0557).
  */
 import { matchStageDatabases } from "./databases.js";
 import type { BackupListing, Stage, StageBackup, TargetOperations } from "./operations.js";
@@ -104,23 +104,30 @@ export async function runRemove(ops: TargetOperations, stage: Stage, io: Provisi
 }
 
 /**
- * Prints every backup of the stage, the usable ones (complete, holding as many databases as the
- * stage had) first, newest first, and flags the others; returns the one to restore from. The
- * stage's databases are as many as the most any complete backup holds: a backup written after
- * the databases were deleted holds fewer and is flagged.
+ * Prints every backup of the stage, the usable ones first, newest first, and flags the others;
+ * returns the one to restore from (DEC-0557). A backup is flagged when it has no manifest (it did
+ * not finish), or when its database ids are a strict subset of an earlier backup's: it was written
+ * after some of those very databases were deleted (a retry after a partial removal). A backup of
+ * an earlier lifetime of the stage holds other databases, so it never makes a fresh one look
+ * incomplete. A manifest without ids (an older one) is never flagged for its databases.
  */
 function printBackups(io: ProvisionIo, stage: Stage, backups: readonly BackupListing[]): BackupListing | undefined {
-  const expected = Math.max(0, ...backups.filter((b) => b.complete).map((b) => b.databases ?? 0));
-  const usable = (b: BackupListing) => b.complete && (b.databases ?? 0) >= expected;
+  const supersetOf = (b: BackupListing): BackupListing | undefined => {
+    const ids = b.databaseIds;
+    if (ids === undefined) return undefined;
+    return backups.find((e) => e.complete && e.stamp < b.stamp && e.databaseIds !== undefined && e.databaseIds.length > ids.length && ids.every((id) => e.databaseIds?.includes(id)));
+  };
+  const usable = (b: BackupListing) => b.complete && supersetOf(b) === undefined;
   const newestFirst = (a: BackupListing, b: BackupListing) => (a.stamp < b.stamp ? 1 : a.stamp > b.stamp ? -1 : 0);
   const ordered = [...backups.filter(usable).sort(newestFirst), ...backups.filter((b) => !usable(b)).sort(newestFirst)];
   line(io, `backups of stage ${stage.stage} (the one to restore from first):`);
   for (const b of ordered) {
+    const fuller = supersetOf(b);
     const what = !b.complete
       ? "INCOMPLETE: no manifest (the backup did not finish); do not restore from it"
-      : usable(b)
+      : fuller === undefined
         ? `${b.databases ?? 0} database(s), ${b.files ?? 0} file(s)`
-        : `INCOMPLETE: ${b.databases ?? 0} of the stage's ${expected} database(s); do not restore from it`;
+        : `INCOMPLETE: holds ${b.databaseIds?.length ?? 0} of the ${fuller.databaseIds?.length ?? 0} database(s) of the earlier backup ${fuller.stamp}; do not restore from it`;
     line(io, `  ${b.location}: ${what}`);
   }
   return ordered.find(usable);

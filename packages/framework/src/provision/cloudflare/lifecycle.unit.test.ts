@@ -234,8 +234,23 @@ describe("production remove backs up first (DEC-0543)", () => {
     expect(at(complete)).toBeGreaterThan(-1);
     expect(at(partial)).toBeGreaterThan(at(complete));
     expect(lines[at(complete)]).toMatch(/1 database\(s\)/);
-    expect(lines[at(partial)]).toMatch(/INCOMPLETE: 0 of the stage's 1 database\(s\); do not restore from it/);
+    expect(lines[at(partial)]).toContain(`INCOMPLETE: holds 0 of the 1 database(s) of the earlier backup ${backupStamp(NOW)}; do not restore from it`);
     expect(io.out).toMatch(new RegExp(`to restore it, use R2 bucket prototype-backups, prefix ${complete.replace(/\//g, "\\/")}`));
+  });
+
+  it("a backup from an earlier lifetime of the stage, with other and more databases, does not make the fresh backup look incomplete", async () => {
+    const s = await deployedProd();
+    const old = "notes/prod/20261001T000000Z/";
+    const manifest = { app: "notes", stage: "prod", databases: ["database/notes-prod-db-1.sql", "database/notes-prod-db-2.sql"], databaseIds: ["old-1", "old-2"], files: 0 };
+    s.cloud.putBytes("prototype-backups", `${old}manifest.json`, new TextEncoder().encode(JSON.stringify(manifest)), "application/json");
+    const io = captureIo();
+    expect((await runRemove(s.target, prod, io)).status).toBe(0);
+    const listing = io.out.split("\n").filter((l) => l.startsWith("  "));
+    expect(listing[0]).toContain(prefix);
+    expect(io.out).not.toMatch(/do not restore/);
+    expect(io.out).toMatch(new RegExp(`to restore it, use R2 bucket prototype-backups, prefix ${prefix.replace(/\//g, "\\/")}`));
+    const written = JSON.parse(new TextDecoder().decode(s.cloud.objectBytes.get(`prototype-backups/${prefix}manifest.json`)!.bytes)) as { databaseIds: string[] };
+    expect(written.databaseIds).toEqual(["uuid-1"]);
   });
 
   it("a backup without a manifest (an interrupted one) is listed as incomplete", async () => {

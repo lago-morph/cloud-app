@@ -72,6 +72,8 @@ export interface BackupListing {
   /** From the manifest: the number of databases and files it holds. */
   readonly databases?: number;
   readonly files?: number;
+  /** From the manifest: the target's ids of the databases it holds (absent in an older manifest). */
+  readonly databaseIds?: readonly string[];
 }
 
 /** A database as a target lists it, before the core matches its name against the anchored pattern. */

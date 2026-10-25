@@ -157,6 +157,7 @@ export async function backupStage(options: BackupOptions, stage: Stage, database
     stage: stage.stage,
     createdAt: new Date((options.now ?? Date.now)()).toISOString(),
     databases: databases.map((d) => `database/${d.name}.sql`),
+    databaseIds: databases.map((d) => d.id),
     filesBucket,
     files: fileKeys.length,
     fileObjects,
@@ -174,7 +175,7 @@ export async function backupStage(options: BackupOptions, stage: Stage, database
   return {
     location,
     items: [...databaseItems, `${fileKeys.length} file(s) of R2 bucket ${filesBucket}`],
-    listing: { location, stamp, complete: true, databases: databases.length, files: fileKeys.length },
+    listing: { location, stamp, complete: true, databases: databases.length, files: fileKeys.length, databaseIds: databases.map((d) => d.id) },
   };
 }
 
@@ -202,9 +203,9 @@ export async function listStageBackups(options: Pick<BackupOptions, "api" | "byt
     const key = `${base}${stamp}/manifest.json`;
     const r = await options.bytes("GET", objectPath(options.accountId, BACKUP_BUCKET, key));
     if (r.status < 200 || r.status >= 300) throw new Error(`reading ${key} of R2 bucket ${BACKUP_BUCKET} failed: ${describeFailure({ status: r.status, body: r.body })}`);
-    let manifest: { databases?: unknown; files?: unknown };
+    let manifest: { databases?: unknown; files?: unknown; databaseIds?: unknown };
     try {
-      manifest = JSON.parse(new TextDecoder().decode(r.bytes)) as { databases?: unknown; files?: unknown };
+      manifest = JSON.parse(new TextDecoder().decode(r.bytes)) as { databases?: unknown; files?: unknown; databaseIds?: unknown };
     } catch {
       out.push({ location, stamp, complete: false });
       continue;
@@ -215,6 +216,7 @@ export async function listStageBackups(options: Pick<BackupOptions, "api" | "byt
       complete: true,
       ...(Array.isArray(manifest.databases) ? { databases: manifest.databases.length } : {}),
       ...(typeof manifest.files === "number" ? { files: manifest.files } : {}),
+      ...(Array.isArray(manifest.databaseIds) && manifest.databaseIds.every((x) => typeof x === "string") ? { databaseIds: manifest.databaseIds as string[] } : {}),
     });
   }
   return out;
