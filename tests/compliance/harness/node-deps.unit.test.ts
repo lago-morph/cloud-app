@@ -7,6 +7,8 @@ import { stageLeftovers } from "./leftovers.js";
 import { cloudflareOperations } from "../../../packages/framework/src/cli/commands/deploy.js";
 import { FakeTarget } from "../../../packages/framework/src/provision/core/fake-target.js";
 import { cliStageOps, deployOrigin, devOrigin, generateTestSecret, pendingStageStore, readVersions, runProcess, secretsNotSet, stageResourceOperations, type OperationsFactory } from "./node-deps.js";
+import type { RunCall } from "./driver.js";
+import { SIGN_UP_SLOT_MARGIN_MS, signUpLedger, withSignUpSlot, type BudgetDeps } from "./sign-up-budget.js";
 
 const repo = new URL("../../../", import.meta.url).pathname;
 let dir: string | undefined;
@@ -202,5 +204,42 @@ describe("[COMPL-AC-004] leftovers through listStageResources (fake target)", ()
     expect(cliStageOps(repo, "cloudflare", { run }).dryRun).toBe("fake framework CLI runner");
     expect(cliStageOps(repo, "cloudflare").dryRun).toBeUndefined();
     expect(cliStageOps(repo, "cloudflare", { env: CF_ENV })).not.toHaveProperty("dryRun");
+  });
+});
+
+describe("check-login's sign-up within prodcheck's PAR-259 budget (sign-up-budget.ts)", () => {
+  /** A fake clock whose sleep advances it, and a fresh directory for the ledger. */
+  function budget(): BudgetDeps & { slept: number[] } {
+    const d = mkdtempSync(join(tmpdir(), "node-deps-budget-"));
+    dir = d;
+    const clock = { now: 5_000_000 };
+    const slept: number[] = [];
+    return { dir: d, slept, now: () => clock.now, sleep: (ms) => ((clock.now += ms), slept.push(ms), Promise.resolve()), log: () => undefined };
+  }
+  const fakeRun =
+    (calls: string[]) =>
+    (call: RunCall): Promise<{ status: number; output: string }> => (calls.push(call.args.join(" ")), Promise.resolve({ status: 0, output: "check-login: done" }));
+
+  it("takes one slot of <target>/prodcheck per check-login, after the tests' sign-ups there", async () => {
+    const b = budget();
+    const calls: string[] = [];
+    // The tests' two sign-ups on prodcheck (AUTH-AC-005's admin-role part, MAIL-AC-007).
+    await withSignUpSlot("cloudflare/prodcheck", { max: 3, windowS: 300 }, () => Promise.resolve(), b);
+    await withSignUpSlot("cloudflare/prodcheck", { max: 3, windowS: 300 }, () => Promise.resolve(), b);
+    const ops = cliStageOps(repo, "cloudflare", { run: fakeRun(calls), signUpBudget: b });
+    await ops.checkLogin?.("prodcheck");
+    expect(calls).toEqual(["prototype-framework check-login --target cloudflare --stage prodcheck"]);
+    expect(b.slept, "three sign-ups fit PAR-259").toEqual([]);
+    expect(signUpLedger("cloudflare/prodcheck", b)).toHaveLength(3);
+    // A fourth (another check-login, a retry, the next run) waits out the oldest's window.
+    await ops.checkLogin?.("prodcheck");
+    expect(b.slept.reduce((a, n) => a + n, 0)).toBe(300_000 + SIGN_UP_SLOT_MARGIN_MS);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("uses no budget on a fake runner (it sends no sign-up)", async () => {
+    const calls: string[] = [];
+    await cliStageOps(repo, "cloudflare", { run: fakeRun(calls) }).checkLogin?.("prodcheck");
+    expect(calls).toHaveLength(1);
   });
 });

@@ -7,9 +7,14 @@
  * - ai/implementation/root-causes/2026-10-25-pwd-ac-008-burst-split-over-egress-ips.md: one
  *   browser must be one connection, so that Cloudflare sees it as one client IP.
  */
-import { describe, expect, it } from "vitest";
+import { randomBytes } from "node:crypto";
+import { rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MailMessage, TestMail } from "../../../../docs/contracts/ts/testing.js";
-import { connectedBrowser, inProcessBrowser, sendsClientIp, signUp, type PasswordTestApp } from "./support.js";
+import { budgetFileKey, signUpLedger } from "../../harness/sign-up-budget.js";
+import { connectedBrowser, inProcessBrowser, ROUTES, sendsClientIp, signIn, signUp, signUpBudgetKey, type PasswordTestApp } from "./support.js";
 
 function recordingApp(): { app: PasswordTestApp; seen: Headers[]; inits: RequestInit[] } {
   const seen: Headers[] = [];
@@ -72,5 +77,54 @@ describe("the connection of the password test browsers", () => {
     const { app, inits } = recordingApp();
     await signUp(inProcessBrowser(app), account);
     expect(dispatcherOf(inits[0])).toBeUndefined();
+  });
+});
+
+/**
+ * The stage budgets (harness/sign-up-budget.ts) as the browsers apply them on a cloud run: every
+ * sign-up to a cloud stage takes a slot of its PAR-259 budget, and a sign-in to the run's test
+ * stage outside `withStageSignIns` is refused before it is sent. The run's target is faked with
+ * the driver's variables (a fresh stage name, so the ledger in the OS temp directory is this test's own).
+ */
+describe("the stage budgets of the password test browsers on a cloud run", () => {
+  const stage = `test-unit${randomBytes(5).toString("hex")}`;
+  const key = `cloudflare/${stage}`;
+  beforeEach(() => {
+    vi.stubEnv("COMPLIANCE_TARGET", "cloudflare");
+    vi.stubEnv("COMPLIANCE_STAGE", stage);
+    vi.stubEnv("COMPLIANCE_BASE_URL", CLOUD_ORIGIN);
+    vi.stubEnv("COMPLIANCE_RUN_ID", "unitrun0000000x");
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    rmSync(join(tmpdir(), `c-t1-sign-ups-${budgetFileKey(key)}.json`), { force: true });
+  });
+
+  it("names the budget of the run's test stage, of another cloud origin, and none for a local origin or run", () => {
+    expect(signUpBudgetKey(CLOUD_ORIGIN)).toBe(key);
+    expect(signUpBudgetKey(`${CLOUD_ORIGIN}/`)).toBe(key);
+    expect(signUpBudgetKey("https://other.example.workers.dev")).toBe("cloudflare/other.example.workers.dev");
+    expect(signUpBudgetKey("http://localhost:8787")).toBeUndefined();
+    vi.stubEnv("COMPLIANCE_TARGET", "local");
+    expect(signUpBudgetKey(CLOUD_ORIGIN), "a local run has no cloud budget").toBeUndefined();
+  });
+
+  it("records every sign-up to the stage in its budget, whichever helper sends it, and nothing else", async () => {
+    const { app, seen } = recordingApp();
+    const b = connectedBrowser(app, CLOUD_ORIGIN);
+    await signUp(b, account);
+    await b.post(ROUTES.signUp, { email: account.email, password: account.password, displayName: account.displayName, role: "admin" });
+    await b.post(ROUTES.forgot, { email: account.email });
+    expect(seen).toHaveLength(3);
+    expect(signUpLedger(key), "two sign-ups in the stage's ledger").toHaveLength(2);
+  });
+
+  it("refuses a sign-in to the run's test stage outside withStageSignIns before sending it", async () => {
+    const { app, seen } = recordingApp();
+    await expect(signIn(connectedBrowser(app, CLOUD_ORIGIN), account.email, account.password)).rejects.toThrow(/must hold withStageSignIns/);
+    expect(seen, "nothing was sent").toHaveLength(0);
+    // Another stage (prodcheck's own D1 and limiter) is not the test stage's sign-in budget.
+    await signIn(connectedBrowser(app, "https://other.example.workers.dev"), account.email, account.password);
+    expect(seen).toHaveLength(1);
   });
 });

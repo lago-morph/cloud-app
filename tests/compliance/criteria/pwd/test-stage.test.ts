@@ -15,9 +15,11 @@
  *   forgot and reset (PWD-REQ-004) on the same account, as plan-auth.md §3 lists for test stages.
  *
  * The tests of this file share one account and run in order. One sign-up only: PAR-259 counts
- * per client IP, and on Cloudflare every request of this machine has the same one. For the same
- * reason the file holds the sign-in lock of `withStageSignIns` throughout, so its burst never
- * rate-limits another test's sign-ins on the stage. Written from the criteria and the contracts
+ * per client IP, and on Cloudflare every request of this machine has the same one. It is a sign-up
+ * of its own (MAIL-AC-006 and PWD-AC-008 assert on the sign-up itself, so the run's shared account
+ * would not do), and like every cloud sign-up it takes a slot of the stage's PAR-259 budget
+ * (`withSignUpSlot`). For the same reason the file holds the sign-in lock of `withStageSignIns`
+ * throughout, so its burst never rate-limits another test's sign-ins on the stage. Written from the criteria and the contracts
  * (auth-password.openapi.yaml, testing.d.ts), not from the implementation.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";

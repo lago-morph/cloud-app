@@ -114,7 +114,11 @@ describe("AUTH-AC-014 through the deployed router", () => {
     tag("AUTH-AC-014", "through the deployed router: each password POST without a session and with Origin missing or wrong is 403 AUTH.REQUEST_FORGERY with no effect; with the public origin it is accepted"),
     async () => {
       const b = httpBrowser();
-      // On a cloud stage its five sign-ins share this machine's client IP with the other tests' (withStageSignIns).
+      // On a cloud stage its five non-forged sign-ins share this machine's client IP with the other
+      // tests' and are PAR-258's whole maximum: withStageSignIns gives it the stage's sign-ins alone,
+      // from the previous holder's PAR-258 window to its own (a cloud sign-in outside the lock is
+      // refused before it is sent). Its sign-up is its own (it asserts on the sign-up), within the
+      // stage's PAR-259 budget like every cloud sign-up (withSignUpSlot).
       await withStageSignIns(() => loginForgeryFlow(b, [false, ...wrongOrigins(b.publicOrigin)]));
     },
     // The lock may wait for another test's sign-ins and their PAR-258 window.

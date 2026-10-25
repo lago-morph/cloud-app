@@ -16,7 +16,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { client, tag, target } from "../../harness/index.js";
 import { disposeReference, openReference } from "../files/in-process.js";
-import { createVerifiedAccount, expectAnswer, httpBrowser, me, newAccount, signIn, testIp } from "../pwd/support.js";
+import { createVerifiedAccount, expectAnswer, httpBrowser, me, newAccount, sharedVerifiedAccount, signIn, testIp, withStageSignIns, type Account } from "../pwd/support.js";
 import { clears, cookieProblems, isCloud, LOGIN_LIFETIME_S, loginCookieName, parseSetCookie, SESSION_LIFETIME_S, sessionCookieName, setCookies, tamper } from "./support.js";
 
 describe("AUTH-AC-006 sessions on the target", () => {
@@ -41,18 +41,31 @@ describe("AUTH-AC-006 sessions on the target", () => {
     for (const k of setCookies(res.headers)) expect([sessionCookieName(!isCloud()), loginCookieName(!isCloud())]).not.toContain(k.name);
   });
 
-  it(tag("AUTH-AC-006", "the session cookie set by a password sign-in on the target has the specified name and attributes, and is the only cookie set"), async () => {
-    const b = httpBrowser();
-    const a = newAccount("auth-ac-006");
-    await createVerifiedAccount(b, a, testIp());
-    const r = expectAnswer(await signIn(b, a.email, a.password, { ip: testIp() }), 200);
-    const cookies = r.setCookies.map(parseSetCookie);
-    expect(cookies.map((k) => k.name), "only the framework session cookie (PWD-REQ-003)").toStrictEqual([sessionCookieName()]);
-    const [session] = cookies;
-    if (session === undefined) throw new Error("the sign-in set no session cookie");
-    expect(cookieProblems(session, { name: sessionCookieName(), lifetimeS: SESSION_LIFETIME_S, cloud: isCloud() })).toStrictEqual([]);
-    expect((await me(b)).level).toBe("user");
-  });
+  it(
+    tag("AUTH-AC-006", "the session cookie set by a password sign-in on the target has the specified name and attributes, and is the only cookie set"),
+    async () => {
+      const b = httpBrowser();
+      // Any verified account will do: on a cloud stage the run's shared one, so that this test spends no sign-up of PAR-259's budget.
+      let a: Account;
+      if (isCloud()) a = await sharedVerifiedAccount();
+      else {
+        a = newAccount("auth-ac-006");
+        await createVerifiedAccount(b, a, testIp());
+      }
+      // On a cloud stage its sign-in shares this machine's client IP with the other tests' (withStageSignIns).
+      await withStageSignIns(async () => {
+        const r = expectAnswer(await signIn(b, a.email, a.password, { ip: testIp() }), 200);
+        const cookies = r.setCookies.map(parseSetCookie);
+        expect(cookies.map((k) => k.name), "only the framework session cookie (PWD-REQ-003)").toStrictEqual([sessionCookieName()]);
+        const [session] = cookies;
+        if (session === undefined) throw new Error("the sign-in set no session cookie");
+        expect(cookieProblems(session, { name: sessionCookieName(), lifetimeS: SESSION_LIFETIME_S, cloud: isCloud() })).toStrictEqual([]);
+        expect((await me(b)).level).toBe("user");
+      });
+    },
+    // The locks may wait for another test's sign-up budget and sign-ins (and their windows).
+    isCloud() ? 50 * 60_000 : 60_000,
+  );
 
   it(tag("AUTH-AC-006", "a tampered session cookie is treated as anonymous"), async () => {
     const c = client();
