@@ -15,7 +15,7 @@ import { copyD1Database, DEFAULT_COPY_LIMITS, type CopyLimits } from "./copy.js"
 import { DEFAULT_NATIVE_LIMITS, exportDump, fetchTransfer, nativeCopy, nativeCopyPrecheck, type DumpOptions, type NativeCopyLimits, type SignedTransfer } from "./native-copy.js";
 import { databaseLimitText, type WorkersPlanReader } from "../plan.js";
 import type { DatabaseExport } from "../databases.js";
-import { losslessExport } from "./lossless.js";
+import { buildLossless, readLossyTables } from "./lossless.js";
 import { d1HttpMigrationDatabase } from "./migration-database.js";
 import { d1Client, D1RequestError, DATABASE_LIMIT_CODE, type D1Client } from "./client.js";
 
@@ -151,9 +151,9 @@ export function d1DatabaseOperations(options: D1Options): D1DatabaseOperations {
     listDatabases: () => client.list(),
     async exportDatabase(database: StageDatabase): Promise<DatabaseExport> {
       try {
-        const lossless = await losslessExport(client, database.id, database.name, limits.pageRows);
+        const lossy = await readLossyTables(client, database.id, limits.pageRows);
         const exported = await exportDump(client, database.id, dump);
-        return { dump: exported, ...(lossless === undefined ? {} : { lossless }) };
+        return { dump: exported, ...(lossy === undefined ? {} : { lossless: buildLossless(lossy, exported, database.name) }) };
       } catch (error) {
         throw new Error(`exporting D1 database ${database.name}: ${messageOf(error)}`);
       }

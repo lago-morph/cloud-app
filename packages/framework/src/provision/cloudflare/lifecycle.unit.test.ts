@@ -206,10 +206,10 @@ describe("production remove backs up first (DEC-0543)", () => {
     expect(result.status).toBe(0);
     const keys = [...s.cloud.buckets.get("prototype-backups")!];
     expect(keys).toContain(`${prefix}database/notes-prod-db-1.lossless.json`);
-    expect(keys).toContain(`${prefix}database/notes-prod-db-1.lossless.sql`);
+    expect(keys).toContain(`${prefix}database/notes-prod-db-1.restore.sql`);
     const manifest = JSON.parse(new TextDecoder().decode(s.cloud.objectBytes.get(`prototype-backups/${prefix}manifest.json`)!.bytes)) as unknown;
     expect(manifest).toMatchObject({
-      lossless: [{ database: "notes-prod-db-1", tables: ["counters"], json: "database/notes-prod-db-1.lossless.json", sql: "database/notes-prod-db-1.lossless.sql" }],
+      lossless: [{ database: "notes-prod-db-1", tables: ["counters"], json: "database/notes-prod-db-1.lossless.json", restore: "database/notes-prod-db-1.restore.sql" }],
     });
     expect(result.backup?.items).toContain("database notes-prod-db-1 (table counters also row by row, losslessly)");
   });

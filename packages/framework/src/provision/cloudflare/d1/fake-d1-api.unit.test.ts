@@ -6,7 +6,9 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { d1Client } from "./client.js";
 import { openFakeD1Api, type FakeD1Api } from "./fake-d1-api.js";
+import { importDump } from "./native-copy.js";
 
 const ACCOUNT = "acct";
 const BASE = `/accounts/${ACCOUNT}/d1/database`;
@@ -31,6 +33,21 @@ describe("fake D1 HTTP API", { timeout: 60_000 }, () => {
     expect(list).toMatchObject({ status: 200, body: { success: true, result: [{ uuid, name: "app-test-a-db-1" }] } });
     expect(await fake.api("DELETE", `${BASE}/${uuid}`)).toMatchObject({ status: 200, body: { success: true } });
     expect(await fake.api("DELETE", `${BASE}/${uuid}`)).toMatchObject({ status: 404, body: { success: false } });
+  });
+
+  it("an import's foreign-key deferral spans only about 4 KB of the dump (A-06): a child further than that from its parent fails the whole import", async () => {
+    const client = d1Client(fake.api, ACCOUNT);
+    const options = { transfer: fake.transfer, sleep: async () => undefined };
+    const schema = [`PRAGMA defer_foreign_keys=TRUE;`, `CREATE TABLE "p" ("id" text PRIMARY KEY NOT NULL);`, `CREATE TABLE "c" ("id" text PRIMARY KEY NOT NULL, "p" text REFERENCES "p"("id"), "pad" text);`];
+    const child = (i: number, pad: number) => `INSERT INTO "c" ("id","p","pad") VALUES('c${i}','p1','${"x".repeat(pad)}');`;
+    const near = await create("near");
+    await importDump(client, near, new TextEncoder().encode([...schema, child(1, 100), `INSERT INTO "p" ("id") VALUES('p1');`].join("\n")), options);
+    expect((await fake.database(near).prepare(`SELECT count(*) AS "n" FROM "c"`).all<{ n: number }>()).results[0]?.n).toBe(1);
+
+    const far = await create("far");
+    const lines = [...schema, ...Array.from({ length: 50 }, (_, i) => child(i, 100)), `INSERT INTO "p" ("id") VALUES('p1');`];
+    await expect(importDump(client, far, new TextEncoder().encode(lines.join("\n")), options)).rejects.toThrow(/importing into D1 database .* failed/);
+    expect((await fake.database(far).prepare(`SELECT "name" FROM sqlite_master WHERE "type" = 'table'`).all()).results).toEqual([]);
   });
 
   it("refuses a database over the account limit with 403 code 7406", async () => {

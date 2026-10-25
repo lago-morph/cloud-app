@@ -7,20 +7,22 @@
  *   (30 days) after it was written. Stage removal never touches it.
  * - **Backup.** Under `<app>/<stage>/<UTC time yyyymmddThhmmssZ>/`:
  *   - `database/<database name>.sql`: D1's own export of each of the stage's databases;
- *   - `database/<database name>.lossless.json` and `.lossless.sql`, only for a database with a
- *     table D1's export does not keep exactly (a NUL in text, an integer beyond ±2^53; DEC-0096):
- *     those tables' rows read row by row (`d1/lossless.ts`, DEC-0556);
+ *   - `database/<database name>.lossless.json` and `database/<database name>.restore.sql`, only
+ *     for a database with a table D1's export does not keep exactly (a NUL in text, an integer
+ *     beyond ±2^53; DEC-0096) or whose scan D1 refused: those tables' rows read row by row, and
+ *     the one file to restore the database from, the export with those rows in place
+ *     (`d1/lossless.ts`, DEC-0556, DEC-0557);
  *   - `files/<nnnnnn>`: each object of the stage bucket, numbered from `000001` in key order, its
  *     bytes and content type unchanged. A stored key may be R2's full 1024 bytes, so no prefix
  *     would fit before it; the manifest maps each number to its key (keys keep their U+0001
  *     ending, DEC-0430);
- *   - `manifest.json`, written last: app, stage, time, the databases, the number of files,
- *     `fileObjects` (`{ object, key, contentType, bytes }` per file) and `lossless`
- *     (`{ database, tables, json, sql }` per database that has it).
+ *   - `manifest.json`, written last: app, stage, time, the databases, their D1 UUIDs
+ *     (`databaseIds`), the number of files, `fileObjects` (`{ object, key, contentType, bytes }`
+ *     per file) and `lossless` (`{ database, tables, json, restore }` per database that has it).
  *   Afterwards the prefix is listed again and must hold every object written; otherwise the
  *   backup fails and `remove` deletes nothing.
  * - **Listing** (`listStageBackups`): every `<app>/<stage>/<time>/` prefix; complete when its
- *   manifest exists, with the manifest's numbers of databases and files.
+ *   manifest exists, with the manifest's numbers of databases and files and its database UUIDs.
  *
  * Objects travel through the R2 object endpoints of `api.cloudflare.com` as bytes
  * (`CloudflareBytesApi`), with the deploy token. Not yet exercised against the live API: the
@@ -117,7 +119,7 @@ export async function backupStage(options: BackupOptions, stage: Stage, database
   const prefix = `${stage.app}/${stage.stage}/${stamp}/`;
   const written: string[] = [];
 
-  const lossless: { database: string; tables: readonly string[]; json: string; sql: string }[] = [];
+  const lossless: { database: string; tables: readonly string[]; json: string; restore: string }[] = [];
   const databaseItems: string[] = [];
   for (const database of databases) {
     const exported = await options.exportDatabase(database);
@@ -127,10 +129,10 @@ export async function backupStage(options: BackupOptions, stage: Stage, database
     databaseItems.push(`database ${database.name}`);
     if (exported.lossless === undefined) continue;
     // D1's dump does not keep these tables' values exactly (DEC-0096): their rows, losslessly (DEC-0556).
-    const entry = { database: database.name, tables: exported.lossless.tables, json: `database/${database.name}.lossless.json`, sql: `database/${database.name}.lossless.sql` };
+    const entry = { database: database.name, tables: exported.lossless.tables, json: `database/${database.name}.lossless.json`, restore: `database/${database.name}.restore.sql` };
     await put(options, `${prefix}${entry.json}`, exported.lossless.json, "application/json");
-    await put(options, `${prefix}${entry.sql}`, exported.lossless.sql, "application/sql");
-    written.push(`${prefix}${entry.json}`, `${prefix}${entry.sql}`);
+    await put(options, `${prefix}${entry.restore}`, exported.lossless.restore, "application/sql");
+    written.push(`${prefix}${entry.json}`, `${prefix}${entry.restore}`);
     lossless.push(entry);
     databaseItems[databaseItems.length - 1] = `database ${database.name} (table${entry.tables.length === 1 ? "" : "s"} ${entry.tables.join(", ")} also row by row, losslessly)`;
   }

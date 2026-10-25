@@ -147,21 +147,89 @@ describe("D1 copyDatabase: native export/import when the pre-check allows it (DE
     expect(parents.rows).toContainEqual(["neg", "n", { integer: "-9223372036854775808" }, null]);
     expect(parents.rows).toContainEqual(["p2", "two", { integer: "-2147483648" }, { real: 1 / 3 }]);
 
-    // The documented restore: one file of D1's dump without the listed tables' rows, followed by the lossless SQL.
+    // The documented restore: the one restore file, D1's dump with the listed tables' rows in their place.
     const restored = await ops.createDatabase(stage, "notes-test-abc-db-2");
-    const client = d1Client(fake.api, ACCOUNT);
-    const dumpText = new TextDecoder().decode(exported.dump);
-    const filtered = dumpText
-      .split("\n")
-      .filter((l) => !l.startsWith(`INSERT INTO "parents"`))
-      .join("\n");
-    const restoreFile = `${filtered}\n${new TextDecoder().decode(exported.lossless!.sql)}`;
-    await importDump(client, restored.id, new TextEncoder().encode(restoreFile), { transfer: fake.transfer, sleep: async () => undefined });
+    await importDump(d1Client(fake.api, ACCOUNT), restored.id, exported.lossless!.restore, { transfer: fake.transfer, sleep: async () => undefined });
     expect(await fingerprint(fake.database(restored.id))).toEqual(before);
 
     const safe = await ops.createDatabase(stage, "notes-test-abc-db-3");
     await seedSafe(fake.database(safe.id));
     expect((await ops.exportDatabase(safe)).lossless).toBeUndefined();
+  });
+
+  it("the restore file keeps the dump's order, so rows referencing a lossy table stay within the import's ~4 KB foreign-key deferral (A-06)", async () => {
+    const db = fake.database(source.id);
+    await seedSafe(db);
+    await db.batch([
+      db.prepare(`INSERT INTO "parents" VALUES ('nul', ?, NULL, NULL)`).bind("a\u0000b"),
+      ...Array.from({ length: 60 }, (_, i) => db.prepare(`INSERT INTO "children" VALUES (?, 'nul', ?, NULL)`).bind(`k${i}`, "y".repeat(100))),
+    ]);
+    const before = await fingerprint(db);
+    const exported = await ops.exportDatabase(source);
+    expect(exported.lossless?.tables).toEqual(["parents"]);
+    const client = d1Client(fake.api, ACCOUNT);
+    const options = { transfer: fake.transfer, sleep: async () => undefined };
+
+    // Appending the lossy table's rows after the dump puts every child more than 4 KB before its parent.
+    const json = JSON.parse(new TextDecoder().decode(exported.lossless!.json)) as { tables: { rows: unknown[][] }[] };
+    expect(json.tables[0]!.rows.length).toBe(4);
+    const restoreText = new TextDecoder().decode(exported.lossless!.restore);
+    const parentRows = restoreText.split("\n").filter((l) => l.startsWith(`INSERT INTO "parents"`));
+    const appended = [...restoreText.split("\n").filter((l) => !l.startsWith(`INSERT INTO "parents"`)), ...parentRows].join("\n");
+    const wrong = await ops.createDatabase(stage, "notes-test-abc-db-2");
+    await expect(importDump(client, wrong.id, new TextEncoder().encode(appended), options)).rejects.toThrow(/failed/);
+
+    const restored = await ops.createDatabase(stage, "notes-test-abc-db-3");
+    await importDump(client, restored.id, exported.lossless!.restore, options);
+    expect(await fingerprint(fake.database(restored.id))).toEqual(before);
+  });
+
+  it("text values are restored byte for byte: a leading U+FEFF and invalid UTF-8 included", async () => {
+    const db = fake.database(source.id);
+    await seedSafe(db);
+    await db.batch([
+      db.prepare(`INSERT INTO "parents" VALUES ('bom', ?, CAST('9223372036854775807' AS INTEGER), NULL)`).bind("﻿hello"),
+      db.prepare(`INSERT INTO "parents" VALUES ('bad', CAST(X'C328FF41' AS TEXT), NULL, NULL)`),
+    ]);
+    const hexes = async (d: D1Like) => (await d.prepare(`SELECT "id", hex("name") AS "h", typeof("name") AS "t" FROM "parents" ORDER BY "id"`).all()).results;
+    const before = await hexes(db);
+    const exported = await ops.exportDatabase(source);
+    const rows = (JSON.parse(new TextDecoder().decode(exported.lossless!.json)) as { tables: { rows: unknown[][] }[] }).tables[0]!.rows;
+    expect(rows).toContainEqual(["bom", "﻿hello", { integer: "9223372036854775807" }, null]);
+    expect(rows).toContainEqual(["bad", { textHex: "C328FF41" }, null, null]);
+    const restored = await ops.createDatabase(stage, "notes-test-abc-db-2");
+    await importDump(d1Client(fake.api, ACCOUNT), restored.id, exported.lossless!.restore, { transfer: fake.transfer, sleep: async () => undefined });
+    expect(await hexes(fake.database(restored.id))).toEqual(before);
+  });
+
+  it("the lossy scan reads each table in pages, so a database too large for one scan is still backed up", async () => {
+    const db = fake.database(source.id);
+    await seedSafe(db);
+    await db.prepare(`INSERT INTO "parents" VALUES ('i64', 'i', CAST('9223372036854775807' AS INTEGER), NULL)`).run();
+    // D1 refuses any read of a whole table at once (as on a large database).
+    fake.intercept = async (req, run) =>
+      req.path.endsWith(`/${source.id}/query`) && /FROM \\"(parents|children|x_seq)\\"/.test(JSON.stringify(req.body)) && !/LIMIT/.test(JSON.stringify(req.body))
+        ? { status: 400, body: { success: false, errors: [{ code: 7500, message: "D1_ERROR: query exceeded the CPU limit" }], messages: [], result: [] } }
+        : run();
+    const exported = await ops.exportDatabase(source);
+    expect(exported.lossless?.tables).toEqual(["parents"]);
+  });
+
+  it("a table whose scan D1 still refuses is backed up losslessly instead of failing the backup", async () => {
+    const db = fake.database(source.id);
+    await seedSafe(db);
+    const before = await fingerprint(db);
+    fake.intercept = async (req, run) =>
+      req.path.endsWith(`/${source.id}/query`) && /FROM \\"children\\"/.test(JSON.stringify(req.body)) && /instr\(/.test(JSON.stringify(req.body))
+        ? { status: 400, body: { success: false, errors: [{ code: 7500, message: "D1_ERROR: query exceeded the CPU limit" }], messages: [], result: [] } }
+        : run();
+    const exported = await ops.exportDatabase(source);
+    fake.intercept = undefined;
+    expect(exported.lossless?.tables).toEqual(["children"]);
+    expect(exported.lossless?.scanFailures).toEqual([expect.stringMatching(/children.*CPU limit/)]);
+    const restored = await ops.createDatabase(stage, "notes-test-abc-db-2");
+    await importDump(d1Client(fake.api, ACCOUNT), restored.id, exported.lossless!.restore, { transfer: fake.transfer, sleep: async () => undefined });
+    expect(await fingerprint(fake.database(restored.id))).toEqual(before);
   });
 
   it("a database over PAR-313 in all takes the row-by-row path", async () => {

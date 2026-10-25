@@ -587,6 +587,6 @@ export class FakeDatabases implements CloudflareDatabases {
     const tables = this.lossyTables.get(database.name);
     if (tables === undefined) return { dump };
     const encode = (text: string) => new TextEncoder().encode(text);
-    return { dump, lossless: { tables, json: encode(`{"database":"${db.name}","tables":${JSON.stringify(tables)}}\n`), sql: encode(`-- lossless rows of ${tables.join(", ")}\n`) } };
+    return { dump, lossless: { tables, json: encode(`{"database":"${db.name}","tables":${JSON.stringify(tables)}}\n`), restore: encode(`-- restore file with the lossless rows of ${tables.join(", ")}\n`) } };
   }
 }

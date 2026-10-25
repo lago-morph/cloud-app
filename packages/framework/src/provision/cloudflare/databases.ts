@@ -22,9 +22,10 @@ export interface DatabaseExport {
   readonly dump: Uint8Array;
   /**
    * Present when a table holds a value the dump does not keep (a NUL in text, an integer beyond
-   * ±2^53; DEC-0096): those tables' rows as lossless JSON and as SQL (`d1/lossless.ts`).
+   * ±2^53; DEC-0096), or whose scan D1 refused: those tables' rows as lossless JSON, and the one
+   * file to restore the database from, the dump with those rows in place (`d1/lossless.ts`).
    */
-  readonly lossless?: { readonly tables: readonly string[]; readonly json: Uint8Array; readonly sql: Uint8Array };
+  readonly lossless?: { readonly tables: readonly string[]; readonly scanFailures?: readonly string[]; readonly json: Uint8Array; readonly restore: Uint8Array };
 }
 
 /** Stand-in until D-04's implementation is wired: every call fails, naming what is missing. */
