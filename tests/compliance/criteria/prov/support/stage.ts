@@ -16,7 +16,7 @@
  *   deploy"); `deployReady` then sets them with `secrets set` and deploys again.
  */
 import { spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { isCriterionProductionStage, newCriterionProductionStage } from "../../../harness/criterion-stages.js";
 import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -156,20 +156,13 @@ export interface StageOptions {
 }
 
 /**
- * A new production stage name for a criterion about production stages: `prefix` and 10
- * random lowercase letters and digits (PAR-291's alphabet), never starting with `test-`
- * (PROV-REQ-005) and never `prodcheck`.
+ * A new criterion production stage name (DEC-0560): one of the reserved prefixes
+ * (`CRITERION_PRODUCTION_PREFIXES`, `harness/criterion-stages.ts`) and 10 random lowercase
+ * letters and digits. Never `test-…` (PROV-REQ-005) and never `prodcheck`; the driver's cleanup
+ * removes such stages at the start and end of every cloud run.
  */
 export function newProductionStage(prefix: string): string {
-  const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
-  let out = "";
-  while (out.length < 10) {
-    const byte = randomBytes(1)[0] ?? 255;
-    if (byte < 252) out += alphabet[byte % 36] ?? "";
-  }
-  const stage = `${prefix}${out}`;
-  if (stage.startsWith("test-") || stage === "prodcheck") throw new Error(`${stage} is not a new production stage name`);
-  return stage;
+  return newCriterionProductionStage(prefix);
 }
 
 /** Copies one overlay of apps/reference over a copy (remove the app's migrations first, then copy). */
@@ -251,7 +244,7 @@ export async function withCloudStage<T>(options: StageOptions, body: (stage: Clo
     copy = await scratchCopy(options.appDir, `d-t1-${options.app}`);
     const dir = copy.dir;
     const production = options.productionStage;
-    if (production === "prodcheck" || production?.startsWith("test-") === true) throw new Error(`productionStage ${production} is not a criterion's own production stage`);
+    if (production !== undefined && !isCriterionProductionStage(production)) throw new Error(`productionStage ${production} is not a criterion production stage name (DEC-0560: a reserved prefix and 10 random characters)`);
     const stageName = production ?? newTestStage();
     if (production !== undefined) await copy.write(`config/${t}/${production}.json`, await copy.read(`config/${t}/prodcheck.json`));
     const outputs: CommandResult[] = [];

@@ -27,6 +27,7 @@
  * read or written.
  */
 import { createHash } from "node:crypto";
+import { isCriterionProductionStage } from "../../harness/criterion-stages.js";
 import { prerequisiteMissing } from "../../harness/index.js";
 import { accountTokens, MAIL_SINK, signingAndBackupState } from "./account.js";
 import { accountId, cfApi, cfList, cfOk, failure } from "./api.js";
@@ -154,7 +155,7 @@ export function leftoverStrings(d: StageResourceDetails): string[] {
 export async function listStageResources(input: { readonly target: string; readonly app: string; readonly stage: string; readonly production?: boolean }): Promise<string[]> {
   if (input.target !== "cloudflare") return prerequisiteMissing(`no stage-resource probe for target ${input.target} (AWS deferred to a later release, DEC-0508)`);
   if (input.stage === "prodcheck") throw new Error("the stage-resource probe never handles prodcheck");
-  if (!input.stage.startsWith("test-") && input.production !== true) throw new Error(`the stage-resource probe handles test stages only, not ${input.stage} (pass production: true for a production stage the criterion created)`);
+  if (!input.stage.startsWith("test-") && !(input.production === true && isCriterionProductionStage(input.stage))) throw new Error(`the stage-resource probe handles test stages and criterion production stages only (DEC-0560), not ${input.stage}`);
   return leftoverStrings(await stageResourceDetails(input));
 }
 

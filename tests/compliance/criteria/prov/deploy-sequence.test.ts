@@ -20,16 +20,22 @@
  *    in `sst-state` holds `{ "stopped": true }`; a `deploy` without `--start` exits 0, says the
  *    stage is stopped and how to start it, and leaves it not answering; `deploy --start` exits 0,
  *    deletes the record, and the stage answers its health check again.
- * 2b. "Without the account's R2 signing credential, deploy names it and `setup-account` and stops
- *    before creating anything" (DEC-0550), and the preflight names every absent shared resource
- *    in one message (PROV-REQ-002 step 1): under the further-stage lock (no other stage deploys
+ * 2b. Milestone pass only (DEC-0560: no automated pass changes shared account state; the
+ *    clause's milestone part in PROV-AC-002's Where column; `COMPLIANCE_RUN_MODE`). Its logic is
+ *    also shown on every automated pass against the fake Cloudflare API
+ *    (`prov/preflight-fake.test.ts`). "Without the account's R2 signing credential, deploy names
+ *    it and `setup-account` and stops before creating anything" (DEC-0550), and the preflight
+ *    names every absent shared resource in one message (PROV-REQ-002 step 1): under the
+ *    further-stage lock (no other stage deploys
  *    meanwhile), the signing record is replaced by one written before the backup bucket existed
  *    (same credentials, no `deniedBuckets`: it counts as absent, PROV §2 "Signing record") and
  *    the backup bucket's lifecycle rule `framework-backups-retention` is removed; a deploy of a
  *    never-deployed stage then exits non-zero with one line `the account's shared resources are
  *    missing (…); run setup-account --target cloudflare first` naming both, and creates nothing.
- *    Both are restored byte for byte afterwards, also on failure, and read back. Running stages
- *    keep working meanwhile (their Worker secrets hold the same credentials). Needs no D1.
+ *    Both are restored byte for byte in a `finally`, also on failure, and read back; a restore
+ *    that fails or reads back differently fails the run loudly, naming the `setup-account`
+ *    command that repairs the account. Running stages keep working meanwhile (their Worker
+ *    secrets hold the same credentials). Needs no D1.
  * 3. "A clean deploy passes the health check": the first deploy of a shared stage exits 0
  *    (after setting the declared secret when the first deploy asks for it), and the stage's
  *    health endpoint answers 204.
@@ -123,36 +129,51 @@ async function deployNewStage(
   }
 }
 
-if (!isLocal()) {
-  describe("PROV-AC-002 preflight (cloud, no D1)", () => {
-    it(tag("PROV-AC-002", "with one credential (CLOUDFLARE_API_TOKEN) removed, deploy names it and stops before creating anything"), async () => {
-      const { result, left } = await deployNewStage({ unset: ["CLOUDFLARE_API_TOKEN"] });
-      expect(result.status, `deploy without CLOUDFLARE_API_TOKEN must fail:\n${tail(result.output)}`).not.toBe(0);
-      expect(result.output, "the output names the missing credential").toContain("CLOUDFLARE_API_TOKEN");
-      expect(left, "resources the stopped deploy created").toEqual([]);
-    }, 15 * 60_000);
+/** The command that repairs the account's shared resources (PROV-REQ-004), with DEC-0551's setup token. */
+const REPAIR = "CLOUDFLARE_API_TOKEN=<setup token> npx @lago-morph/prototype-framework setup-account --target cloudflare";
 
-    it(tag("PROV-AC-002", "Cloudflare: without the account's R2 signing credential, deploy names it and setup-account in one message with every absent shared resource, and stops before creating anything"), async () => {
+/** This pass's tier (DEC-0560): clause 2b changes shared account state, so it runs in the milestone pass only. */
+const MILESTONE = target().mode === "milestone";
+
+if (!isLocal() && MILESTONE) {
+  describe("PROV-AC-002 signing-credential clause (cloud, milestone, no D1)", () => {
+    it(tag("PROV-AC-002", "signing-credential clause: without the account's R2 signing credential, deploy names it and setup-account in one message with every absent shared resource, and stops before creating anything"), async () => {
       let record: string | undefined;
       let rules: LifecycleRule[] | undefined;
+      let changed = false;
       const { result, left } = await deployNewStage({}, {
         async before() {
           record = await readSigningRecordText();
           rules = await backupLifecycle();
+          changed = true;
           // A record written before the backup bucket existed counts as absent (PROV §2 "Signing record").
           if (record !== undefined) await writeSigningRecordText(legacySigningRecordText(record));
           if (rules !== undefined) await putBackupLifecycle(rules.filter((r) => r.id !== BACKUP_RULE_ID));
         },
         async after() {
+          if (!changed) return;
           const problems: string[] = [];
           try {
             if (record !== undefined) await writeSigningRecordText(record);
-          } finally {
-            if (rules !== undefined) await putBackupLifecycle(rules);
+          } catch (error) {
+            problems.push(`writing the signing record back: ${error instanceof Error ? error.message : String(error)}`);
           }
-          if ((await readSigningRecordText()) !== record) problems.push("the signing record");
-          if (JSON.stringify(await backupLifecycle()) !== JSON.stringify(rules)) problems.push("the backup bucket's lifecycle rules");
-          if (problems.length > 0) throw new Error(`PROV-AC-002: restoring ${problems.join(" and ")} failed; run setup-account --target cloudflare (with the setup token) to repair the account`);
+          try {
+            if (rules !== undefined) await putBackupLifecycle(rules);
+          } catch (error) {
+            problems.push(`writing the lifecycle rules back: ${error instanceof Error ? error.message : String(error)}`);
+          }
+          try {
+            if ((await readSigningRecordText()) !== record) problems.push("the signing record read back differs from the original");
+            if (JSON.stringify(await backupLifecycle()) !== JSON.stringify(rules)) problems.push("the backup bucket's lifecycle rules read back differ from the original");
+          } catch (error) {
+            problems.push(`reading the restored state back: ${error instanceof Error ? error.message : String(error)}`);
+          }
+          if (problems.length > 0) {
+            const message = `PROV-AC-002: RESTORING THE ACCOUNT FAILED (${problems.join("; ")}). Every deploy on this account now stops at its preflight. Repair it now with: ${REPAIR}`;
+            process.stderr.write(`\n[d-t1] ${message}\n\n`);
+            throw new Error(message);
+          }
         },
       });
       expect(result.status, `deploy without the signing credential must fail:\n${tail(result.output)}`).not.toBe(0);
@@ -161,6 +182,17 @@ if (!isLocal()) {
       expect(line, "the message names the R2 signing credential").toContain("R2 signing credential prototype-r2-signing");
       expect(line, "the message names the backup bucket's lifecycle rule").toContain("lifecycle rule of R2 bucket prototype-backups (PAR-311)");
       expect(line, "the message points to setup-account").toContain("run setup-account --target cloudflare first");
+      expect(left, "resources the stopped deploy created").toEqual([]);
+    }, 15 * 60_000);
+  });
+}
+
+if (!isLocal() && !MILESTONE) {
+  describe("PROV-AC-002 preflight (cloud, no D1)", () => {
+    it(tag("PROV-AC-002", "with one credential (CLOUDFLARE_API_TOKEN) removed, deploy names it and stops before creating anything"), async () => {
+      const { result, left } = await deployNewStage({ unset: ["CLOUDFLARE_API_TOKEN"] });
+      expect(result.status, `deploy without CLOUDFLARE_API_TOKEN must fail:\n${tail(result.output)}`).not.toBe(0);
+      expect(result.output, "the output names the missing credential").toContain("CLOUDFLARE_API_TOKEN");
       expect(left, "resources the stopped deploy created").toEqual([]);
     }, 15 * 60_000);
   });
@@ -298,7 +330,9 @@ if (!isLocal()) {
       expect(r.output, "names the error code").toContain("SEC.MISSING");
     }, 45 * 60_000);
   });
-} else {
+}
+
+if (isLocal()) {
   // Untagged, so never selected as evidence: keeps the file a valid suite on local runs.
   describe("PROV-AC-002 (cloud only)", () => {
     it("has nothing to run on local", () => undefined);

@@ -323,7 +323,56 @@ describe("[COMPL-AC-004] cloud runs use a disposable test stage", () => {
     await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], h.deps);
     expect(h.events.filter((e) => e.includes("prodcheck"))).toEqual([]);
     expect(recordOf(h).leftovers).toEqual([]);
-    expect(h.logs.join("\n")).toMatch(/prodcheck.*test stages only/);
+    expect(h.logs.join("\n")).toMatch(/prodcheck.*handles test stages/);
+  });
+
+  it("removes criterion production stages (DEC-0560) at the start and the end of a cloud run; one that stays is a leftover", async () => {
+    const left = new Set(["p003abcdefghij"]);
+    let late = false;
+    const h = harness({
+      cloud: {
+        listCriterionStages: () => Promise.resolve([...left]),
+        remove: (s) => (left.delete(s), Promise.resolve("removed")),
+        // A test of this run creates p004…; its removal at the end fails and leaves its bucket.
+        listStageResources: (s) => Promise.resolve(s === "p004klmnopqrst" ? ["R2 bucket reference-p004klmnopqrst-files"] : []),
+      },
+      vitestOutput: "",
+    });
+    const run = h.deps.run;
+    const deps: DriverDeps = {
+      ...h.deps,
+      run: (c) => {
+        if (c.args[0] === "vitest" && !late) {
+          late = true;
+          left.add("p004klmnopqrst");
+        }
+        return run(c);
+      },
+      cloud: (t) => {
+        const ops = h.deps.cloud(t);
+        return { ...ops, remove: (s) => (h.events.push(`remove ${s}`), s === "p004klmnopqrst" ? Promise.reject(new Error("remove failed")) : ops.remove(s)) };
+      },
+    };
+    const result = await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], deps);
+    expect(h.events.filter((e) => /^remove /.test(e))).toEqual(["remove p003abcdefghij", "remove test-abcdefghij12345", "remove p004klmnopqrst"]);
+    expect(recordOf(h).leftovers).toEqual(["p004klmnopqrst: R2 bucket reference-p004klmnopqrst-files"]);
+    expect(h.logs.join("\n")).toContain("removing the criterion production stage p003abcdefghij (start of run)");
+    expect(result.exitStatus).toBe(1);
+  });
+
+  it("a criterion production stage listing that fails is a leftover entry (DEC-0560)", async () => {
+    const h = harness({ cloud: { listCriterionStages: () => Promise.reject(new Error("HTTP 403")) } });
+    await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], h.deps);
+    expect(recordOf(h).leftovers).toEqual(["criterion production stage check failed: HTTP 403", "criterion production stage check failed: HTTP 403"]);
+  });
+
+  it("passes the run's tier to the tests (COMPLIANCE_RUN_MODE, DEC-0560)", async () => {
+    const h = harness();
+    await runCompliance(parseArgs(["--target", "local", "--only", "KV-AC-001"]), [], h.deps);
+    expect(h.calls.find((c) => c.args[0] === "vitest")?.env.COMPLIANCE_RUN_MODE).toBe("automated");
+    const m = harness();
+    await runCompliance(parseArgs(["--target", "local", "--milestone"]), [], m.deps);
+    expect(m.calls.filter((c) => c.args[0] === "vitest").every((c) => c.env.COMPLIANCE_RUN_MODE === "milestone")).toBe(true);
   });
 
   it("a leftover check that cannot run is recorded, never read as no leftovers", async () => {

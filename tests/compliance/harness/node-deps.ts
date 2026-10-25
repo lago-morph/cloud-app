@@ -16,6 +16,8 @@ import { defaultBudgetDeps, rateLimitIn, withSignUpSlot, type BudgetDeps } from 
 import type { EvidenceRecord } from "../../../packages/framework/src/evidence/public.js";
 import { waitFor } from "./wait.js";
 import { cloudflareAccountOps, fetchCfCall, type CloudAccountOps } from "./test-tokens.js";
+import type { CfCall } from "./d1-budget.js";
+import { criterionStagesIn, isCriterionProductionStage } from "./criterion-stages.js";
 import type { TargetOperations } from "../../../packages/framework/src/provision/core/operations.js";
 import { targetOperations } from "../../../packages/framework/src/cli/commands/operations.js";
 import { cloudProcessProblems } from "../../../packages/framework/src/cli/commands/smoke-cloud.js";
@@ -194,6 +196,8 @@ export function cliStageOps(
     readonly operations?: OperationsFactory;
     readonly run?: (call: RunCall) => Promise<{ status: number; output: string }>;
     readonly env?: Readonly<Record<string, string | undefined>>;
+    /** The Cloudflare API with the main token, for the criterion production stage listing (DEC-0560). Default: `fetchCfCall(env)`. */
+    readonly cfCall?: CfCall;
     /**
      * The stage sign-up budget `check-login` takes its one sign-up from (sign-up-budget.ts).
      * Default: the shared one, unless the runner is a fake (which sends no sign-up).
@@ -227,7 +231,8 @@ export function cliStageOps(
       return { baseUrl, output: result.output };
     },
     async remove(stage) {
-      const result = await cli(["remove", "--target", target, "--stage", stage]);
+      // A criterion production stage (DEC-0560) is removed like any production stage: confirmed by name (and backed up first, DEC-0543).
+      const result = await cli(["remove", "--target", target, "--stage", stage, ...(isCriterionProductionStage(stage) ? ["--confirm-production", stage] : [])]);
       if (result.status !== 0) throw new Error(`remove --target ${target} --stage ${stage} failed with status ${String(result.status)}\n${result.output.slice(-2000)}`);
       return result.output;
     },
@@ -256,10 +261,48 @@ export function cliStageOps(
       }
       return { status: result.status, output: result.output, ...(record === undefined ? {} : { record }) };
     },
+    async listCriterionStages() {
+      if (target !== "cloudflare") return [];
+      return listCloudflareCriterionStages(options.cfCall ?? fetchCfCall(env), env.CLOUDFLARE_ACCOUNT_ID ?? "");
+    },
     async listStageResources(stage) {
       return stageLeftovers(await stageResourceOperations(repoRoot, target, { env, ...(options.operations === undefined ? {} : { operations: options.operations }) }), { app: REFERENCE_APP, stage });
     },
   };
+}
+
+/**
+ * The criterion production stages of the reference app on the Cloudflare account (DEC-0560),
+ * from the names of its Workers, R2 buckets and D1 databases (fixed names, DEC-0331). Bounded:
+ * at most 10 pages of databases and of buckets. 3 Cloudflare API requests on a small account.
+ */
+export async function listCloudflareCriterionStages(call: CfCall, accountId: string): Promise<string[]> {
+  if (accountId === "") throw new Error("CLOUDFLARE_ACCOUNT_ID is not set: the criterion production stages cannot be listed");
+  const fail = (what: string, r: { status: number }): Error => new Error(`listing ${what} for the criterion production stages failed: HTTP ${String(r.status)}`);
+  const ok = (r: { status: number; body: unknown }): boolean => r.status === 200 && (r.body as { success?: unknown } | undefined)?.success === true;
+  const names: string[] = [];
+  const workers = await call("GET", `/accounts/${accountId}/workers/scripts`);
+  if (!ok(workers)) throw fail("Worker scripts", workers);
+  names.push(...(workers.body as { result: { id: string }[] }).result.map((w) => w.id));
+  for (let page = 1; ; page += 1) {
+    if (page > 10) throw new Error("listing D1 databases for the criterion production stages: more than 10 pages");
+    const r = await call("GET", `/accounts/${accountId}/d1/database?per_page=100&page=${String(page)}`);
+    if (!ok(r)) throw fail("D1 databases", r);
+    const listed = (r.body as { result: { name: string }[] }).result;
+    names.push(...listed.map((d) => d.name));
+    if (listed.length < 100) break;
+  }
+  let cursor: string | undefined;
+  for (let page = 1; ; page += 1) {
+    if (page > 10) throw new Error("listing R2 buckets for the criterion production stages: more than 10 pages");
+    const r = await call("GET", `/accounts/${accountId}/r2/buckets?per_page=1000${cursor === undefined ? "" : `&cursor=${encodeURIComponent(cursor)}`}`);
+    if (!ok(r)) throw fail("R2 buckets", r);
+    const body = r.body as { result: { buckets: { name: string }[] }; result_info?: { cursor?: string } };
+    names.push(...body.result.buckets.map((b) => b.name));
+    cursor = body.result_info?.cursor;
+    if (cursor === undefined || cursor === "" || body.result.buckets.length === 0) break;
+  }
+  return criterionStagesIn(names, REFERENCE_APP);
 }
 
 /**

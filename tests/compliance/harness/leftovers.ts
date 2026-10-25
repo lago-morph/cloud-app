@@ -2,17 +2,22 @@
  * The leftover check of a compliance cloud run (COMPL-REQ-004, compliance.md "Test stages"):
  * every resource of PROV's removal list still present for a test stage, by exact name, read
  * through the target's `listStageResources` (PROV §2). Databases are matched by the exact
- * stage pattern, never a wildcard. Only `test-` stages are ever checked or cleaned up: the
+ * stage pattern, never a wildcard. Only `test-` stages and criterion production stages
+ * (reserved prefixes, DEC-0560, `criterion-stages.ts`) are ever checked or cleaned up: the
  * `prodcheck` stage is exempt.
  */
 import { matchStageDatabases } from "../../../packages/framework/src/provision/core/databases.js";
 import type { Stage, TargetOperations } from "../../../packages/framework/src/provision/core/operations.js";
+import { CRITERION_PRODUCTION_PREFIXES, isCleanableStage } from "./criterion-stages.js";
 
 /** The reference app's name (`apps/reference`). */
 export const REFERENCE_APP = "reference";
 
+/** Throws unless compliance cleanup may handle `stage`: a test stage, or a criterion production stage (DEC-0560). */
 export function assertTestStage(stage: string): void {
-  if (!stage.startsWith("test-")) throw new Error(`stage ${stage}: compliance cleanup handles test stages only (names starting with test-)`);
+  if (!isCleanableStage(stage)) {
+    throw new Error(`stage ${stage}: compliance cleanup handles test stages (names starting with test-) and criterion production stages (${CRITERION_PRODUCTION_PREFIXES.join(", ")} and 10 random characters) only`);
+  }
 }
 
 /** Leftovers as `database <name>` and `<kind> <id>`, in the form `remove` prints them. */

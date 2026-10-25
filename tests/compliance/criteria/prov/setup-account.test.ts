@@ -31,6 +31,9 @@
  *    has DEC-0550's policies. This replaces the account's credential: stages deployed before
  *    hold the old one until their next deploy (every deploy copies the record, step 5), so run
  *    this milestone pass with no other stage running (prodcheck is redeployed by every cloud run).
+ *    The test checks this first and refuses (blocked, naming the deployed stages and the command
+ *    for a pass of its own) while any Worker other than the mail sink, prodcheck and criterion
+ *    production stages exists (DEC-0560).
  * 4. Idempotence: `setup-account` runs once, the account's shared state is snapshotted,
  *    `setup-account` runs again, and the snapshot must be identical. After the first run the
  *    backup bucket's retention rule, the signing record (every field, the 4 denied buckets, its
@@ -83,7 +86,8 @@ import {
 } from "../_cloud/account.js";
 import { accountId, cfApi, cfOk } from "../_cloud/api.js";
 import { BACKUP_BUCKET, LOG_BUCKET, listObjects, STATE_BUCKET } from "../_cloud/r2.js";
-import { listStageResources, sharedResources } from "../_cloud/stage-resources.js";
+import { accountWorkers, listStageResources, MAIL_SINK, sharedResources } from "../_cloud/stage-resources.js";
+import { criterionStagesIn } from "../../harness/criterion-stages.js";
 import { emailState, zoneOf } from "../_cloud/email.js";
 import { emailDomain } from "../cli/support/admins.js";
 import { scratchCopy } from "../core/support/processes.js";
@@ -150,6 +154,23 @@ async function signingCredentialProblems(): Promise<string[]> {
   if (tokens.length !== 1 || tokens[0]?.id !== record.tokenId) problems.push(`the account has ${String(tokens.length)} token(s) named prototype-r2-signing, not exactly the record's`);
   for (const t of tokens) problems.push(...signingPolicyProblems((await tokenDetail(t.id)).policies, accountId(), await permissionGroupNames()).map((p) => `token ${t.id}: ${p}`));
   return problems;
+}
+
+/**
+ * Clause 3 replaces the account's signing token, so it refuses (a missing prerequisite) while any
+ * other stage is deployed (DEC-0560): every Worker of the account except the mail sink, a
+ * `prodcheck` stage (redeployed at the start of every automated cloud run, which copies the new
+ * credential, PROV-REQ-002 step 5) and the criterion production stages (reserved prefixes, removed
+ * by the driver's cleanup). 1 Cloudflare API request.
+ */
+async function requireNoOtherStages(): Promise<void> {
+  const others = (await accountWorkers()).filter((w) => w !== MAIL_SINK && !/-prodcheck$/.test(w) && criterionStagesIn([w], w.split("-")[0] ?? "").length === 0).sort();
+  if (others.length > 0) {
+    prerequisiteMissing(
+      `the re-run clause replaces the account's R2 signing token, which every deployed stage holds until its next deploy, so it runs only with no other stage deployed; deployed now: ${others.join(", ")}. ` +
+        "Remove them (or let the next cloud run clean its test stages), then run the milestone pass for PROV-AC-004 alone, with no run stage: npm run compliance -- --target cloudflare --milestone --only PROV-AC-004 --base-url https://unused.invalid",
+    );
+  }
 }
 
 function token(env: string, what: string): string {
@@ -220,6 +241,7 @@ if (!isLocal()) {
     }, 30 * 60_000);
 
     it(tag("PROV-AC-004", "a re-run of setup-account replaces a signing record written before the backup bucket existed: a new token with every account bucket denied, the old token deleted"), async () => {
+      await requireNoOtherStages();
       const t = target().target;
       const copy = await scratchCopy(REFERENCE_DIR, "d-t1-prov004-rerun");
       try {

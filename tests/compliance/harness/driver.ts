@@ -98,6 +98,11 @@ export interface CloudStageOps {
   /** The stage's resources that still exist, by exact identifier (PROV `listStageResources`). */
   listStageResources(stage: string): Promise<readonly string[]>;
   /**
+   * The account's criterion production stages (reserved prefixes, DEC-0560): the driver removes
+   * them at the start and the end of every cloud run, like `test-` stages. Absent: none are listed.
+   */
+  listCriterionStages?(): Promise<readonly string[]>;
+  /**
    * `check-login --target <cloud> --stage <stage>` (PWD §2): its status, output and the evidence
    * record it wrote, if any. Absent: the run records the check-login IDs as failed.
    */
@@ -259,6 +264,33 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
   };
 
   /**
+   * DEC-0560: criterion production stages are cleaned like `test-` stages. Each one listed is
+   * removed (`--confirm-production`, by the target's `remove`) and its leftovers are recorded; a
+   * listing that fails is a leftover entry. At the end of the run, one still listed is a leftover.
+   */
+  const removeCriterionStages = async (ops: CloudStageOps, when: "start" | "end"): Promise<void> => {
+    if (ops.listCriterionStages === undefined) return;
+    let listed: readonly string[];
+    try {
+      listed = await ops.listCriterionStages();
+    } catch (error) {
+      leftovers.push(`criterion production stage check failed: ${firstLine(error)}`);
+      return;
+    }
+    for (const name of listed) {
+      log(`compliance: removing the criterion production stage ${name} (${when} of run)`);
+      await removeStage(ops, name);
+    }
+    if (when === "end" && listed.length > 0) {
+      try {
+        for (const name of await ops.listCriterionStages()) if (!leftovers.some((l) => l.startsWith(`${name}: `))) leftovers.push(`${name}: criterion production stage still listed`);
+      } catch (error) {
+        leftovers.push(`criterion production stage check failed: ${firstLine(error)}`);
+      }
+    }
+  };
+
+  /**
    * COMPL-REQ-005: `prodcheck` is redeployed (a production stage: never removed, no pending
    * entry). Its first deploy stops on the reference app's unset `apiKey`, which is then set to a
    * fresh value (on standard input, redacted) before the second deploy. Resolves to the problem, or undefined.
@@ -354,6 +386,8 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
         if (account !== undefined) await prepareAccount(account);
         // An interrupted earlier run left these stages: remove them first (COMPL-REQ-004).
         for (const old of deps.pendingStages.list(args.target)) await removeStage(ops, old);
+        // Criterion production stages an interrupted test left (DEC-0560).
+        await removeCriterionStages(ops, "start");
         if (baseUrl === undefined) {
           stage ??= testStageName(runId);
           deps.pendingStages.add(args.target, stage);
@@ -376,6 +410,7 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
       const env = childEnv(process.env, {
         target: args.target,
         runId,
+        mode: args.milestone ? "milestone" : "automated",
         ...(stage === undefined ? {} : { stage }),
         ...(baseUrl === undefined ? {} : { baseUrl }),
         ...(testSecret === undefined ? {} : { testSecret }),
@@ -442,6 +477,7 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
         }
       }
       if (ops !== undefined && deployed && stage !== undefined) await removeStage(ops, stage);
+      if (ops !== undefined) await removeCriterionStages(ops, "end");
       // Also after a failed run: the run's test tokens go, and none may remain (DEC-0531).
       if (account !== undefined) await cleanUpTokens(account);
     }
