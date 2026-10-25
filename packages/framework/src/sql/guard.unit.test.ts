@@ -6,7 +6,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { atomic } from "./atomic.js";
 import { id, text } from "./columns.js";
 import { createGuard, normalizeError, PAR_210_MS } from "./guard.js";
-import { postgresDb } from "./postgres.js";
+import { postgresDb, queuedClient } from "./postgres.js";
 import { defineTable, tableFor } from "./table.js";
 import type { AnyTable } from "./types.js";
 import { newId } from "./values.js";
@@ -189,6 +189,29 @@ describe("PGlite's connection turns are per client, not per handle (DEC-0557)", 
       await expect(a).resolves.toBeUndefined();
       await new Promise((r) => setTimeout(r, 300));
       expect((await pg.query(`SELECT "id" FROM "notes"`)).rows).toEqual([{ id: first }]);
+    } finally {
+      await pg.close();
+    }
+  });
+});
+
+describe("other PGlite users of the same client take the same turns (DEC-0557)", () => {
+  it("a guarded write queued behind an auth transaction on the queued client times out instead of waiting untimed, and is never stored", async () => {
+    const pg = new PGlite();
+    try {
+      await pg.exec(`CREATE TABLE "notes" ("id" text PRIMARY KEY NOT NULL, "title" text NOT NULL)`);
+      const notes = tableFor(defineTable("notes", { id: id(), title: text() }), "postgres") as unknown as AnyTable;
+      // The auth database's client, as the test app gives it to Better Auth's adapter.
+      const auth = queuedClient(pg);
+      const transaction = auth.transaction(async (tx) => {
+        await tx.query(`INSERT INTO "notes" VALUES ('${newId()}', 'auth')`);
+        await new Promise((r) => setTimeout(r, 150));
+      });
+      const db = postgresDb(pg, { budgetMs: 30 }) as unknown as { insert(t: unknown): { values(v: unknown): { execute(): Promise<unknown> } } };
+      await expect(db.insert(notes).values({ id: newId(), title: "app" }).execute()).rejects.toMatchObject({ code: "SQL.UNAVAILABLE" });
+      await transaction;
+      await new Promise((r) => setTimeout(r, 100));
+      expect((await pg.query<{ title: string }>(`SELECT "title" FROM "notes"`)).rows).toEqual([{ title: "auth" }]);
     } finally {
       await pg.close();
     }

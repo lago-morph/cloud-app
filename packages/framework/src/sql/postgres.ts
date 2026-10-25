@@ -53,6 +53,33 @@ function newTurns(client: PGlite): () => Promise<() => void> {
   };
 }
 
+/**
+ * `client` for another user of the same PGlite instance (the test app's auth database): its
+ * `query`, `exec` and `transaction` take the same connection turns as every handle's operations,
+ * so a guarded operation waiting behind them is bounded by PAR-210 (DEC-0557). Their own wait is
+ * not timed.
+ */
+export function queuedClient(client: PGlite): PGlite {
+  const turns = connectionTurns(client);
+  return new Proxy(client, {
+    get(target, property) {
+      const value: unknown = Reflect.get(target, property, target);
+      if (typeof value !== "function") return value;
+      if (property === "query" || property === "exec" || property === "transaction") {
+        return async (...args: unknown[]) => {
+          const release = await turns();
+          try {
+            return await (value as (...a: unknown[]) => Promise<unknown>).apply(target, args);
+          } finally {
+            release();
+          }
+        };
+      }
+      return (value as (...a: unknown[]) => unknown).bind(target);
+    },
+  });
+}
+
 /** The app-facing handle over a PGlite harness instance (see openPostgres). */
 export function postgresDb(client: PGlite, options: SqlAdapterOptions = {}): PortableDb {
   const guard = createGuard({ ...options, unreachable: PGLITE_UNREACHABLE, connection: connectionTurns(client) });

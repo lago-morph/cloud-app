@@ -40,6 +40,7 @@ Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 | PAR-312 | Largest row the native D1 copy accepts | 40,000 bytes of values | ai-proposed | Pre-check of Cloudflare `copyDatabase` (DEC-0545): the export writes a row as one INSERT with inline literals, quoting can double a value, and D1 refuses a statement over PAR-217. A larger row makes the copy take the row-by-row path. |
 | PAR-313 | Largest database the native D1 copy accepts | 5,000,000 bytes of values | ai-proposed | Pre-check of Cloudflare `copyDatabase` (DEC-0545): within the 5 MB fixture of spike A-06 (DEC-0096). A larger database is copied row by row. |
 | PAR-314 | Time limit of one D1 export or import | 120 seconds, polled every second | ai-proposed | Native copy and the production `remove`'s backup (DEC-0545, DEC-0543). A-06's 5.6 MB export completed in 1.4 s and a 1.5 MB import in about 2 s. A native copy that runs out of time falls back to the row-by-row copy; a backup that does stops `remove` before anything is deleted. |
+| PAR-315 | Wait for requests in flight after a production `remove` stops the app | 60 seconds | ai-proposed | Production `remove` on Cloudflare (DEC-0557): after the route is off, a request the Worker took before may still be writing; the backup's reads start only after this wait. Cloudflare sets no wall-clock limit on a Worker request while its client stays connected, but `waitUntil` work may run up to 30 s after the response; 60 s covers ordinary requests and that tail. A longer request can still write during the backup. |
 
 ## KV
 
