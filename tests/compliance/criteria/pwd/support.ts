@@ -25,6 +25,7 @@ import type { LogEntry, MailMessage, TestApp as ContractTestApp, TestAppOptions 
 import { client, createClient, target, waitFor, type ComplianceClient } from "../../harness/index.js";
 import { fetchOver, oneConnectionDispatcher, withDispatcher } from "../../harness/one-connection.js";
 import { referenceTestApp, type TestAppOptions } from "../core/support/in-process.js";
+import { withSignUpSlot, sharedOnce } from "../../harness/sign-up-budget.js";
 import { acquireLock } from "../core/support/processes.js";
 import { DOCS, parameterNumber, REFERENCE_DIR } from "../core/support/repo.js";
 
@@ -453,6 +454,50 @@ export function sendsClientIp(origin: string): boolean {
   return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
 }
 
+/**
+ * The sign-up budget (`withSignUpSlot`, harness/sign-up-budget.ts) that a sign-up to `origin`
+ * counts against: `<target>/<stage>` for the run's test stage and for `prodcheck` (its recorded
+ * deploy output), `<target>/<host>` for another cloud origin; none on a local run or a local origin (where
+ * `CF-Connecting-IP` is the test's own, `sendsClientIp`).
+ */
+export function signUpBudgetKey(origin: string): string | undefined {
+  if (sendsClientIp(origin)) return undefined;
+  const t = target();
+  if (t.target === "local") return undefined;
+  const bare = (o: string): string => o.replace(/\/$/, "");
+  if (t.stage !== undefined && bare(t.baseUrl) === bare(origin)) return `${t.target}/${t.stage}`;
+  const prodcheck = join(REFERENCE_DIR, ".framework", t.target, "stages", "prodcheck.json");
+  try {
+    const recorded = (JSON.parse(readFileSync(prodcheck, "utf8")) as { publicOrigin?: unknown }).publicOrigin;
+    if (typeof recorded === "string" && bare(recorded) === bare(origin)) return `${t.target}/prodcheck`;
+  } catch {
+    // no recorded prodcheck deploy
+  }
+  return `${t.target}/${new URL(origin).host}`;
+}
+
+/** How many `holdStageSignIns` holds this process has open (at most one: the lock is exclusive). */
+let stageSignInsHeld = 0;
+
+/**
+ * Sends a request through `send` within the stage's budgets. A sign-up to a cloud origin takes one
+ * slot of that stage's PAR-259 budget first (`withSignUpSlot`), so the run's sign-ups never exceed
+ * it, whichever test sends them. A sign-in to the run's cloud test stage must hold the sign-in lock
+ * (`withStageSignIns`), so that none lands inside another test's PAR-258 window (AUTH-AC-014's
+ * five sign-ins are PAR-258's whole maximum).
+ */
+function withinStageBudgets(publicOrigin: string, path: string, send: () => Promise<Answer>): Promise<Answer> {
+  const route = path.split("?")[0];
+  if (route === ROUTES.signIn && stageSignInsHeld === 0) {
+    const t = target();
+    if (t.stage !== undefined && signUpBudgetKey(publicOrigin) === `${t.target}/${t.stage}`) {
+      return Promise.reject(new Error("a sign-in on the run's cloud test stage must hold withStageSignIns (PAR-258 counts this machine's one client IP)"));
+    }
+  }
+  const key = route === ROUTES.signUp ? signUpBudgetKey(publicOrigin) : undefined;
+  return key === undefined ? send() : withSignUpSlot(key, par.emailSending(), send);
+}
+
 function requestHeaders(body: Readonly<Record<string, string>> | undefined, options: SendOptions, publicOrigin: string, cookie: string | undefined, method: string): { headers: Headers; payload: string | undefined } {
   const headers = new Headers(options.headers);
   if (!options.form) headers.set("accept", "application/json");
@@ -547,9 +592,11 @@ function testAppBrowser(app: PasswordTestApp, publicOrigin: string, mail: MailRe
     if (options.origin === false) throw new Error("TestApp requests always carry an Origin (testing.d.ts); send a missing Origin over HTTP");
     const { headers, payload } = requestHeaders(body, options, publicOrigin, jar.header(), method);
     const init: RequestInit = { method, headers, redirect: "manual", ...(payload === undefined ? {} : { body: payload }) };
-    const response = await app.request(path, dispatcher === undefined ? init : withDispatcher(init, dispatcher));
-    jar.remember(response.headers);
-    return answerOf(method, path, response.status, response.headers, await response.text());
+    return withinStageBudgets(publicOrigin, path, async () => {
+      const response = await app.request(path, dispatcher === undefined ? init : withDispatcher(init, dispatcher));
+      jar.remember(response.headers);
+      return answerOf(method, path, response.status, response.headers, await response.text());
+    });
   };
   return {
     publicOrigin,
@@ -577,9 +624,11 @@ export function httpBrowser(options: { readonly baseUrl?: string; readonly appDi
     // The harness client adds Origin on POSTs by default: pass ours explicitly (false = omit).
     const origin = headers.get("origin");
     headers.delete("origin");
-    const r = await c.request(method, path, { headers: Object.fromEntries(headers), origin: origin ?? false, ...(payload === undefined ? {} : { body: payload }) });
-    jar.remember(r.headers);
-    return answerOf(method, path, r.status, r.headers, r.text);
+    return withinStageBudgets(publicOrigin, path, async () => {
+      const r = await c.request(method, path, { headers: Object.fromEntries(headers), origin: origin ?? false, ...(payload === undefined ? {} : { body: payload }) });
+      jar.remember(r.headers);
+      return answerOf(method, path, r.status, r.headers, r.text);
+    });
   };
   return {
     publicOrigin,
@@ -633,7 +682,10 @@ export async function me(b: AuthBrowser): Promise<Me> {
  * it for PAR-258's window after `body` ends, so that neither a sign-in burst (PWD-AC-008) nor a
  * test's own sign-ins leave the next holder rate-limited. Each browser on a cloud origin sends
  * over one connection of its own (`oneConnectionDispatcher`), so that its client IP is one IP.
- * Locally `body` just runs: the client IP is the request's `CF-Connecting-IP`.
+ * Locally `body` just runs: the client IP is the request's `CF-Connecting-IP`. A sign-in to the
+ * run's cloud test stage outside this lock is refused before it is sent (`withinStageBudgets`).
+ * Sign-ups have a budget of their own (PAR-259, `withSignUpSlot`), which every sign-up to a cloud
+ * stage takes one slot of.
  */
 export async function withStageSignIns<T>(body: () => Promise<T>): Promise<T> {
   const release = await holdStageSignIns();
@@ -648,10 +700,12 @@ export async function withStageSignIns<T>(body: () => Promise<T>): Promise<T> {
 export async function holdStageSignIns(): Promise<() => Promise<void>> {
   if (target().target === "local") return () => Promise.resolve();
   const unlock = await acquireLock("cloud-test-stage-sign-ins", 45 * 60_000);
+  stageSignInsHeld += 1;
   let released = false;
   return async () => {
     if (released) return;
     released = true;
+    stageSignInsHeld -= 1;
     await new Promise((r) => setTimeout(r, (par.signIn().windowS + 5) * 1000));
     await unlock();
   };
@@ -663,6 +717,31 @@ export async function createVerifiedAccount(b: AuthBrowser, a: Account, ip: stri
   const mail = await waitForMail(b.mail, a.email, "verification", { accept: (m) => hasLink(m, "verify") });
   expectResult(await verify(b, linkToken(mail, "verify", b.publicOrigin), { ip }), "verified");
   return mail;
+}
+
+/** A verified account, with the token of the verification link it was verified with. */
+export interface VerifiedAccount extends Account {
+  readonly verifyToken: string;
+}
+
+/**
+ * The run's one shared verified account on its cloud test stage: one sign-up (within the stage's
+ * PAR-259 budget) and its verification through the stage's test-mail route, made once per run
+ * across the test processes (`sharedOnce`, keyed by target, stage and run ID). For the criteria
+ * that need some verified account to sign in with, not their own sign-up (AUTH-AC-006's password
+ * sign-in, CLI-AC-007); a criterion that asserts on a sign-up makes its own. A test that changes
+ * the account (CLI-AC-007's grant and revoke) does so inside `withStageSignIns`, which every
+ * sign-in to it holds too, and restores it before releasing.
+ */
+export async function sharedVerifiedAccount(): Promise<VerifiedAccount> {
+  const t = target();
+  if (t.target === "local" || t.stage === undefined) throw new Error("sharedVerifiedAccount is for the run's cloud test stage");
+  return sharedOnce(`verified-account-${t.target}/${t.stage}/${t.runId ?? "no-run-id"}`, async () => {
+    const b = httpBrowser();
+    const a = newAccount("shared-verified");
+    const mail = await createVerifiedAccount(b, a, testIp());
+    return { ...a, verifyToken: linkToken(mail, "verify", b.publicOrigin) };
+  });
 }
 
 /** The session cookie name of the run's target (auth.md §2): `session_local` in-process and under `dev`. */

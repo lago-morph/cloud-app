@@ -6,6 +6,11 @@
  * `check-login` runs last because its sign-in burst leaves the run's client IP rate-limited for
  * PAR-258's window, and because the tests on `prodcheck` sign in from the same IP.
  *
+ * Sign-ups on `prodcheck` (its own D1, so a PAR-259 budget of its own): AUTH-AC-005's admin-role
+ * part, MAIL-AC-007's sink message (milestone) and `check-login`'s step 1: at most three. Each takes a slot of
+ * the `<target>/prodcheck` budget (sign-up-budget.ts; `cliStageOps().checkLogin` for the last), so
+ * a further one, a retry, or the next run within PAR-259's window waits instead of getting 429.
+ *
  * `check-login` writes its own evidence record; the driver folds that record's results for
  * PWD-AC-009, AUTH-AC-011 and E2E-008 into the run's record as outcomes of one driver check per
  * ID, titled `DRIVER_CHECK_TITLE`, so they are tagged like any test (and listed as such:

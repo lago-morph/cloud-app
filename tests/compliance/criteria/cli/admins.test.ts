@@ -35,6 +35,7 @@ import {
   par,
   rowsWith,
   sessionCookieNameFor,
+  sharedVerifiedAccount,
   signIn,
   signUp,
   testAddress,
@@ -174,40 +175,49 @@ if (isLocal()) {
   describe("CLI-AC-007 admins on a Cloudflare stage", () => {
     it(
       tag("CLI-AC-007", "on the test stage, after sign-up, verification through the test-mail route and sign-in, admins grant gives admin on the next request and admins revoke gives user again, through the D1 HTTP API; no output holds a password, token or API credential"),
-      // Its sign-in shares this machine's client IP with the other tests' on the stage (withStageSignIns).
-      () => withStageSignIns(async () => {
+      async () => {
         const t = target();
         requireCloudD1(t.target);
         const stage = t.stage ?? "";
         expect(stage, "the run's test stage").toMatch(/^test-/);
-        const b = httpBrowser();
-        const a = newAccount("cli-ac-007");
-        const verifyMail = await createVerifiedAccount(b, a, testIp());
-        const verifyToken = linkToken(verifyMail, "verify", b.publicOrigin);
-        expectAnswer(await signIn(b, a.email, a.password, { ip: testIp() }), 200);
-        const before = await levelOf(b);
-        expect(before.level).toBe("user");
-        const session = b.cookies()[sessionCookieNameFor(b)];
-        const outputs: CommandResult[] = [];
-        const recording = await recordRequests();
-        try {
-          const grant = await admins(["grant", a.email, "--target", t.target, "--stage", stage], { env: recording.env });
-          outputs.push(grant);
-          expect(grant.status, `admins grant: ${grant.output}`).toBe(0);
-          expect(grant.output.toLowerCase()).toContain((before.id ?? "").toLowerCase());
-          expect(await levelOf(b), "the next request after the grant").toMatchObject({ level: "admin", id: before.id });
-          const revoke = await admins(["revoke", a.email, "--target", t.target, "--stage", stage], { env: recording.env });
-          outputs.push(revoke);
-          expect(revoke.status, `admins revoke: ${revoke.output}`).toBe(0);
-          expect(await levelOf(b), "the next request after the revoke").toMatchObject({ level: "user", id: before.id });
-          expect(d1ApiRequests(await recording.lines()).length, "grant and revoke went through the D1 HTTP API").toBeGreaterThan(0);
-        } finally {
-          await recording.dispose();
-        }
-        const needles = { password: a.password, "verification token": verifyToken, "session cookie": session, "API token": process.env.CLOUDFLARE_API_TOKEN };
-        for (const r of outputs) expect(leaks(r.output, needles), `${r.command}: output`).toEqual([]);
-      }),
-      45 * 60_000,
+        // "After sign-up, verification through the test-mail route": the run's shared verified
+        // account was made exactly so (sharedVerifiedAccount), and spends no further sign-up of PAR-259's budget.
+        const a = await sharedVerifiedAccount();
+        const verifyToken = a.verifyToken;
+        // Its sign-in shares this machine's client IP with the other tests' on the stage (withStageSignIns),
+        // and every other sign-in to the shared account holds the same lock, so none sees it as admin.
+        await withStageSignIns(async () => {
+          const b = httpBrowser();
+          expectAnswer(await signIn(b, a.email, a.password, { ip: testIp() }), 200);
+          const before = await levelOf(b);
+          expect(before.level).toBe("user");
+          const session = b.cookies()[sessionCookieNameFor(b)];
+          const outputs: CommandResult[] = [];
+          const recording = await recordRequests();
+          let restore = true; // until the revoke succeeds, the shared account may be admin
+          try {
+            const grant = await admins(["grant", a.email, "--target", t.target, "--stage", stage], { env: recording.env });
+            outputs.push(grant);
+            expect(grant.status, `admins grant: ${grant.output}`).toBe(0);
+            expect(grant.output.toLowerCase()).toContain((before.id ?? "").toLowerCase());
+            expect(await levelOf(b), "the next request after the grant").toMatchObject({ level: "admin", id: before.id });
+            const revoke = await admins(["revoke", a.email, "--target", t.target, "--stage", stage], { env: recording.env });
+            outputs.push(revoke);
+            expect(revoke.status, `admins revoke: ${revoke.output}`).toBe(0);
+            restore = false;
+            expect(await levelOf(b), "the next request after the revoke").toMatchObject({ level: "user", id: before.id });
+            expect(d1ApiRequests(await recording.lines()).length, "grant and revoke went through the D1 HTTP API").toBeGreaterThan(0);
+          } finally {
+            await recording.dispose();
+            // The shared account goes back to user for the other tests that sign in with it (not evidence).
+            if (restore) await admins(["revoke", a.email, "--target", t.target, "--stage", stage]);
+          }
+          const needles = { password: a.password, "verification token": verifyToken, "session cookie": session, "API token": process.env.CLOUDFLARE_API_TOKEN };
+          for (const r of outputs) expect(leaks(r.output, needles), `${r.command}: output`).toEqual([]);
+        });
+      },
+      // The locks may wait for another test's sign-up budget and sign-ins (and their windows).
+      50 * 60_000,
     );
 
     it(tag("CLI-AC-007", "for prodcheck, grant, revoke and list without --confirm-production prodcheck, or with another name, exit 2 and send no request to the D1 API"), async () => {

@@ -12,6 +12,7 @@ import { readCatalogue, type ReleaseTarget as Target } from "./catalogue.js";
 import { SecretsNotSetError, TEST_SECRET, type CloudStageOps, type DriverDeps, type LocalSession, type PendingStages, type RunCall } from "./driver.js";
 import { REFERENCE_APP, stageLeftovers } from "./leftovers.js";
 import { checkLoginRecordPath } from "./prodcheck.js";
+import { defaultBudgetDeps, rateLimitIn, withSignUpSlot, type BudgetDeps } from "./sign-up-budget.js";
 import type { EvidenceRecord } from "../../../packages/framework/src/evidence/public.js";
 import { waitFor } from "./wait.js";
 import type { TargetOperations } from "../../../packages/framework/src/provision/core/operations.js";
@@ -192,9 +193,15 @@ export function cliStageOps(
     readonly operations?: OperationsFactory;
     readonly run?: (call: RunCall) => Promise<{ status: number; output: string }>;
     readonly env?: Readonly<Record<string, string | undefined>>;
+    /**
+     * The stage sign-up budget `check-login` takes its one sign-up from (sign-up-budget.ts).
+     * Default: the shared one, unless the runner is a fake (which sends no sign-up).
+     */
+    readonly signUpBudget?: BudgetDeps;
   } = {},
 ): CloudStageOps {
   const runner = options.run ?? runProcess;
+  const budget = options.signUpBudget ?? (options.run === undefined ? defaultBudgetDeps() : undefined);
   const env = options.env ?? process.env;
   // G-EV F3: operations built on a fake runner or factory say so, and the driver marks the record.
   const fakes = [...(options.run === undefined ? [] : ["fake framework CLI runner"]), ...(options.operations === undefined ? [] : ["fake stage operations (OperationsFactory)"])];
@@ -232,7 +239,11 @@ export function cliStageOps(
     },
     async checkLogin(stage) {
       // PWD §2: no input; it prints no address, password or token, and writes its own record.
-      const result = await cli(["check-login", "--target", target, "--stage", stage]);
+      const run = (): Promise<{ status: number; output: string }> => cli(["check-login", "--target", target, "--stage", stage]);
+      // Its step 1 is one sign-up from this machine's client IP: within the stage's PAR-259 budget,
+      // shared with the tests' sign-ups there (AUTH-AC-005's admin-role part, MAIL-AC-007).
+      const result =
+        budget === undefined ? await run() : await withSignUpSlot(`${target}/${stage}`, rateLimitIn(readFileSync(join(repoRoot, "docs", "parameters", "parameters.md"), "utf8"), "PAR-259"), run, { log: (line) => process.stderr.write(`compliance: ${line}\n`), ...budget });
       const path = checkLoginRecordPath(result.output);
       let record: EvidenceRecord | undefined;
       if (path !== undefined) {
