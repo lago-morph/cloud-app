@@ -51,7 +51,7 @@ If a command says it needs `NODE_USE_ENV_PROXY=1`, you are behind an HTTPS proxy
 npm run setup-account -- --target cloudflare --email-domain <domain>
 ```
 
-This creates the shared resources once per account: the log bucket `prototype-logs`, the deploy-state bucket `sst-state`, the `workers.dev` address, sending from `no-reply@<domain>`, and the test mailbox: mail to `sink+<tag>@t.<domain>` is stored for a day, so an agent can read it. When it creates the mailbox rule it waits about a minute, so the first test mail does not arrive before the rule. Running it again changes nothing. To change the domain later, run it with the new `--email-domain`. `deploy` never creates these resources; if they are missing, it tells you to run this command.
+This creates the shared resources once per account: the log bucket `prototype-logs`, the deploy-state bucket `sst-state`, the backup bucket `prototype-backups` (a removed production stage's data, kept 30 days), the `workers.dev` address, sending from `no-reply@<domain>`, and the test mailbox: mail to `sink+<tag>@t.<domain>` is stored for a day, so an agent can read it. When it creates the mailbox rule it waits about a minute, so the first test mail does not arrive before the rule. Running it again changes nothing. To change the domain later, run it with the new `--email-domain`. `deploy` never creates these resources; if they are missing, it tells you to run this command. An account set up before the backup bucket existed needs this command once more.
 
 ## 4. Secrets
 

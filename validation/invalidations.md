@@ -10,3 +10,4 @@ A date alone means the end of that day (UTC): every record finished on or before
 
 ## Entries
 
+- 2026-10-25T15:30:43Z | PROV-AC-003, PROV-AC-004, PROV-AC-006, MAIL-AC-007, E2E-010, E2E-012, COMPL-AC-008 | batch B changes PROV, MIG and CF code: the backup bucket among the shared resources and the production remove backup (DEC-0543), stop/start and the stage record (DEC-0544), the native D1 copy (DEC-0545), the plan-dependent D1 limit (DEC-0546)
