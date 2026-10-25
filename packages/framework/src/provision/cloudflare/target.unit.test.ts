@@ -83,6 +83,8 @@ describe("setup-account on Cloudflare (PROV-REQ-004)", () => {
       created: [
         "R2 bucket prototype-logs",
         "R2 bucket sst-state",
+        "R2 bucket prototype-backups",
+        "lifecycle rule of R2 bucket prototype-backups (PAR-311)",
         "workers.dev subdomain",
         "Email Sending entry example.test",
         "R2 bucket prototype-mailsink",

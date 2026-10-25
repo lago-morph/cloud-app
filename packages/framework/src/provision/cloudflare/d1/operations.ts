@@ -24,10 +24,11 @@ export interface D1Options {
   /** Copy page limits; tests only. Defaults: PAR-216, PAR-218. */
   readonly limits?: Partial<CopyLimits>;
   /**
-   * The native export/import path (DEC-0545): `false` copies row by row only (tests). Default:
-   * signed-URL transfers with the global `fetch` and the PAR-312…PAR-314 limits.
+   * The native export/import path (DEC-0545), tried when the pre-check allows it; the CLI always
+   * passes it. Without it `copyDatabase` copies row by row only. `transfer` also downloads the
+   * export of `exportDatabase` (default: the global `fetch`). Limits default to PAR-312…PAR-314.
    */
-  readonly native?: false | { readonly transfer?: SignedTransfer; readonly limits?: Partial<NativeCopyLimits>; readonly now?: () => number; readonly sleep?: (ms: number) => Promise<void> };
+  readonly native?: { readonly transfer: SignedTransfer; readonly limits?: Partial<NativeCopyLimits>; readonly now?: () => number; readonly sleep?: (ms: number) => Promise<void> };
   /** Reads the account's Workers plan for the database-limit message (DEC-0546); default: the plan is not known. */
   readonly plan?: WorkersPlanReader;
 }
@@ -73,19 +74,19 @@ export function d1DatabaseOperations(options: D1Options): D1DatabaseOperations {
   const client = d1Client(options.api, options.accountId);
   const limits: CopyLimits = { ...DEFAULT_COPY_LIMITS, ...options.limits };
   const dump: DumpOptions = {
-    transfer: (options.native === false ? undefined : options.native?.transfer) ?? fetchTransfer(),
-    limits: { ...DEFAULT_NATIVE_LIMITS, ...(options.native === false ? {} : options.native?.limits) },
-    ...(options.native !== false && options.native?.now !== undefined ? { now: options.native.now } : {}),
-    ...(options.native !== false && options.native?.sleep !== undefined ? { sleep: options.native.sleep } : {}),
+    transfer: options.native?.transfer ?? fetchTransfer(),
+    limits: { ...DEFAULT_NATIVE_LIMITS, ...options.native?.limits },
+    ...(options.native?.now === undefined ? {} : { now: options.native.now }),
+    ...(options.native?.sleep === undefined ? {} : { sleep: options.native.sleep }),
   };
   const nativeLimits = dump.limits as NativeCopyLimits;
 
   /**
-   * The native export/import when the pre-check allows it (DEC-0545); `undefined` when it ran,
-   * else why the row-by-row copy runs. A failed native copy leaves `next` to be recreated.
+   * The native export/import when the pre-check allows it (DEC-0545): `done`, or why the
+   * row-by-row copy runs instead; `dirty` when a failed import may have left part of the dump.
    */
   async function tryNative(from: StageDatabase, next: StageDatabase): Promise<{ done: true } | { done: false; why: string; dirty: boolean }> {
-    if (options.native === false) return { done: false, why: "the native copy is turned off", dirty: false };
+    if (options.native === undefined) return { done: false, why: "the native copy is not configured", dirty: false };
     const check = await nativeCopyPrecheck(client, from.id, nativeLimits);
     if (!check.safe) return { done: false, why: check.reason, dirty: false };
     try {
