@@ -75,6 +75,13 @@ export async function cfApi<T>(method: string, path: string, body?: unknown): Pr
   }
 }
 
+/** One GET whose answer is not a JSON envelope (for example a Worker script download): its status and body text. */
+export async function cfRawGet(path: string): Promise<{ readonly status: number; readonly text: string }> {
+  count();
+  const response = await fetch(`${API_BASE}${path}`, { headers: { "user-agent": USER_AGENT, ...authHeader() }, signal: AbortSignal.timeout(CLOUD_WAITS.requestMs) });
+  return { status: response.status, text: await response.text() };
+}
+
 /** Short description of a failed call, without any credential (Cloudflare error bodies hold none). */
 export function failure(what: string, r: CfResponse<unknown>): Error {
   const errors = (r.body?.errors ?? []).map((e) => `${String(e.code ?? "")} ${e.message ?? ""}`.trim()).join("; ");

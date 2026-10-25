@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isDeferred, parseWhere, readCatalogue, RELEASE_TARGETS, type CatalogueEntry } from "./catalogue.js";
-import { ADMIN_ROLE_PART, CLAUSE_RULES, checkRules, expectedCriteria, PASSWORD_PENDING, NO_REDIRECT_PROVIDER, PHASE_RULES, UNIT_LEVEL, type ClauseRule, type NotRunRule } from "./expected.js";
+import { CLAUSE_RULES, checkRules, expectedCriteria, PASSWORD_PENDING, NO_REDIRECT_PROVIDER, PHASE_RULES, type ClauseRule, type NotRunRule } from "./expected.js";
 
 const docs = new URL("../../../docs/", import.meta.url).pathname;
 
@@ -71,22 +71,21 @@ describe("[COMPL-AC-001] this phase's not-run rules (plan §8) against the docum
     expect(checkRules(real, CLAUSE_RULES)).toEqual([]);
   });
 
-  // DEC-0513, DEC-0520: Google is retired; the cloud items that need the password provider are not-run until it lands.
-  it("records the password-pending items on Cloudflare as not-run with their detail, and no retired Google criterion", () => {
+  // DEC-0513, DEC-0520: Google is retired; the cloud items that need the password provider were not-run until it landed.
+  it("runs the password and mail criteria on Cloudflare now that their cloud tests exist (T2, T3); the rest stay not-run with their detail, and no retired Google criterion", () => {
     const cf = new Map(expectedCriteria(real, "cloudflare", "automated").map((e) => [e.id, e]));
-    // DEC-0526: E2E-007's cloud part is automated now, and CLI-AC-007 is the `admins` command on Cloudflare.
-    for (const id of ["AUTH-AC-014", "COMPL-AC-005", "PWD-AC-008", "MAIL-AC-006", "E2E-006", "E2E-007", "CLI-AC-001", "CLI-AC-007"]) {
-      expect(cf.get(id)?.notRun, id).toBe("password login provider not implemented yet (DEC-0509)");
+    // plan-auth.md T2/T3: tagged cloud tests exist for these, so they run with no not-run rule.
+    for (const id of ["AUTH-AC-009", "AUTH-AC-014", "COMPL-AC-005", "PWD-AC-008", "MAIL-AC-006", "E2E-006", "E2E-007", "CLI-AC-007"]) {
+      expect(cf.get(id), id).toEqual({ id, run: true, parts: [""], notRunParts: [] });
     }
+    // CLI-AC-001's cloud part (the whole command table from the template on a cloud) has no cloud test yet.
+    expect(cf.get("CLI-AC-001")?.notRun).toBe("password login provider not implemented yet (DEC-0509)");
     // Item I-G: check-login runs on prodcheck in every cloud run (the driver, prodcheck.ts), so its criteria run.
     for (const id of ["PWD-AC-009", "AUTH-AC-011", "E2E-008"]) expect(cf.get(id), id).toEqual({ id, run: true, parts: [""], notRunParts: [] });
-    expect(cf.get("AUTH-AC-009")?.run).toBe(true);
-    expect(cf.get("AUTH-AC-009")?.notRunParts).toEqual([{ part: "cloud production part", detail: "password login provider not implemented yet (DEC-0509)" }]);
     expect(cf.get("KV-AC-001")).toEqual({ id: "KV-AC-001", run: true, parts: [""], notRunParts: [] });
     const cfm = new Map(expectedCriteria(real, "cloudflare", "milestone").map((e) => [e.id, e]));
-    for (const id of ["SKILL-AC-006", "MAIL-AC-007"]) {
-      expect(cfm.get(id)?.notRun, id).toBe("password login provider not implemented yet (DEC-0509)");
-    }
+    expect(cfm.get("SKILL-AC-006")?.notRun).toBe("password login provider not implemented yet (DEC-0509)");
+    expect(cfm.get("MAIL-AC-007"), "MAIL-AC-007 has its milestone test (T2)").toEqual({ id: "MAIL-AC-007", run: true, parts: [""], notRunParts: [] });
     expect(cfm.get("PROV-AC-003")?.run).toBe(true);
     // DEC-0526: E2E-007's cloud part and AUTH-AC-005's admin part left the milestone list.
     for (const id of ["E2E-008", "E2E-007", "AUTH-AC-005"]) expect(cfm.has(id), id).toBe(false);
@@ -99,12 +98,11 @@ describe("[COMPL-AC-001] this phase's not-run rules (plan §8) against the docum
 
   // Root cause 2026-10-24-pass1c-E2E-004-AUTH-AC-005-no-cloud-test (Review, change 3): the contract part runs on
   // Cloudflare except the successful-callback response, which needs a real login provider (DEC-0171).
-  // DEC-0526: its admin-role part is automated on prodcheck, not-run until the password provider lands on a cloud stage.
-  it("runs AUTH-AC-005's contract part on Cloudflare with its successful-callback response and admin-role part not-run, and all of it on local", () => {
+  // DEC-0526: its admin-role part is automated on prodcheck, and runs since its test exists (auth/admin-role.test.ts).
+  it("runs AUTH-AC-005 on Cloudflare with only its successful-callback response not-run, and all of it on local", () => {
     const part = { part: "contract part: successful callback (needs a redirect login provider)", detail: NO_REDIRECT_PROVIDER };
-    const adminPart = { part: ADMIN_ROLE_PART, detail: PASSWORD_PENDING };
     const cf = new Map(expectedCriteria(real, "cloudflare", "automated").map((e) => [e.id, e]));
-    expect(cf.get("AUTH-AC-005")).toEqual({ id: "AUTH-AC-005", run: true, parts: [""], notRunParts: [part, adminPart] });
+    expect(cf.get("AUTH-AC-005")).toEqual({ id: "AUTH-AC-005", run: true, parts: [""], notRunParts: [part] });
     const local = new Map(expectedCriteria(real, "local", "automated").map((e) => [e.id, e]));
     expect(local.get("AUTH-AC-005")).toEqual({ id: "AUTH-AC-005", run: true, parts: [""], notRunParts: [] });
   });

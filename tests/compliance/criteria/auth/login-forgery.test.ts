@@ -38,6 +38,7 @@ import {
   type Answer,
   type AuthBrowser,
   type SendOptions,
+  withStageSignIns,
 } from "../pwd/support.js";
 
 function wrongOrigins(publicOrigin: string): string[] {
@@ -113,9 +114,11 @@ describe("AUTH-AC-014 through the deployed router", () => {
     tag("AUTH-AC-014", "through the deployed router: each password POST without a session and with Origin missing or wrong is 403 AUTH.REQUEST_FORGERY with no effect; with the public origin it is accepted"),
     async () => {
       const b = httpBrowser();
-      await loginForgeryFlow(b, [false, ...wrongOrigins(b.publicOrigin)]);
+      // On a cloud stage its five sign-ins share this machine's client IP with the other tests' (withStageSignIns).
+      await withStageSignIns(() => loginForgeryFlow(b, [false, ...wrongOrigins(b.publicOrigin)]));
     },
-    300_000,
+    // The lock may wait for another test's sign-ins and their PAR-258 window.
+    target().target === "local" ? 300_000 : 45 * 60_000,
   );
 });
 

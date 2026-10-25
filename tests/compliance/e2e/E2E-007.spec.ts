@@ -17,8 +17,8 @@
  *
  * The run's `dev` server of the reference app is the stage (the driver starts it); the mail is
  * read with `mail last --to <address>` from its `.mail/`, and the stored role from its local D1
- * (read-only). The cloud part runs on `prodcheck` and is recorded by the driver's not-run rule
- * until its test exists.
+ * (read-only). The cloud part runs on `prodcheck` in criteria/auth/admin-role.test.ts, with
+ * AUTH-AC-005's admin-role part (one sign-up and one real send for both).
  */
 import { randomBytes } from "node:crypto";
 import { existsSync, readdirSync, statSync } from "node:fs";
