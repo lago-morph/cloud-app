@@ -113,9 +113,27 @@ describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
   function targetOver(api: CloudflareApi): FakeTarget {
     const t = new FakeTarget();
     t.inspectAccount = async (): Promise<readonly SharedResource[]> => inspectSharedResources(api, ACCOUNT);
-    t.createSharedResources = (absent) => createSharedResources(api, ACCOUNT, absent);
+    t.createSharedResources = (absent, note) => createSharedResources(api, ACCOUNT, absent, {}, note);
     return t;
   }
+
+  it("setup-account replacing the account's signing token says every deployed stage must be redeployed to pick up the new key", async () => {
+    const TOKENS = `/accounts/${ACCOUNT}/tokens`;
+    const api = stubApi({
+      [`GET ${BUCKET_PATH}`]: ok({ name: LOG_BUCKET }),
+      ...OTHERS_PRESENT,
+      [`GET ${SIGNING_PATH}`]: err(404, 10007, "The specified key does not exist."),
+      [`GET ${TOKENS}?per_page=50&page=1`]: { status: 200, body: { success: true, errors: [], messages: [], result: [{ id: "old", name: "prototype-r2-signing" }], result_info: { page: 1, total_pages: 1 } } },
+      [`GET ${TOKENS}/permission_groups`]: ok([{ id: "g1", name: "Workers R2 Storage Bucket Item Write", scopes: ["com.cloudflare.edge.r2.bucket"] }]),
+      [`POST ${TOKENS}`]: ok({ id: "tok2", name: "prototype-r2-signing", status: "active", value: "v" }),
+      [`PUT ${SIGNING_PATH}`]: ok({}),
+      [`DELETE ${TOKENS}/old`]: ok({ id: "old" }),
+    });
+    const io = captureIo();
+    expect((await runSetupAccount(targetOver(api), io)).status).toBe(0);
+    expect(api.requests.findIndex((r) => r.startsWith(`DELETE ${TOKENS}/old`))).toBeGreaterThan(api.requests.findIndex((r) => r.startsWith(`PUT ${SIGNING_PATH}`)));
+    expect(io.out).toMatch(/replaced the R2 signing credential prototype-r2-signing; every deployed stage keeps the old key until it is redeployed: run deploy --target cloudflare --stage <stage> for each/);
+  });
 
   it("[PROV-AC-007] with the stubbed response showing the shared log bucket belongs to another account, setup-account and deploy stop with a message naming the bucket and change nothing", async () => {
     const api = stubApi({ [`GET ${BUCKET_PATH}`]: err(403, 10002, "Unauthorized to access requested resource"), ...OTHERS_PRESENT });

@@ -137,8 +137,11 @@ export interface TargetOperations {
 
   /** The account's shared resources and their state. Changes nothing (PROV-REQ-004; deploy step 1). */
   inspectAccount(): Promise<readonly SharedResource[]>;
-  /** Creates the given absent shared resources. Called only when none is foreign. */
-  createSharedResources(absent: readonly SharedResource[]): Promise<void>;
+  /**
+   * Creates the given absent shared resources. Called only when none is foreign. `note` receives
+   * what the owner must do afterwards (e.g. redeploy every stage after a replaced credential).
+   */
+  createSharedResources(absent: readonly SharedResource[], note?: (message: string) => void): Promise<void>;
 
   /**
    * The account settings record (provisioning.md §2; Cloudflare: `framework/account.json` in the

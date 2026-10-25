@@ -119,7 +119,13 @@ export async function inspectSharedResources(api: CloudflareApi, accountId: stri
 }
 
 /** Creates the given absent shared resources. The core calls it only when none is foreign. */
-export async function createSharedResources(api: CloudflareApi, accountId: string, absent: readonly SharedResource[], options: SharedResourceOptions = {}): Promise<void> {
+export async function createSharedResources(
+  api: CloudflareApi,
+  accountId: string,
+  absent: readonly SharedResource[],
+  options: SharedResourceOptions = {},
+  note: (message: string) => void = () => undefined,
+): Promise<void> {
   // The signing credential's record lives in the state home, so it comes after the buckets.
   const ordered = [...absent].sort((a, b) => Number(a.name === SIGNING_RESOURCE) - Number(b.name === SIGNING_RESOURCE));
   for (const resource of ordered) {
@@ -128,7 +134,15 @@ export async function createSharedResources(api: CloudflareApi, accountId: strin
     else if (resource.name === BACKUP_BUCKET_RESOURCE) await createBucket(api, accountId, BACKUP_BUCKET);
     else if (resource.name === BACKUP_LIFECYCLE_RESOURCE) await setBackupLifecycle(api, accountId);
     else if (resource.name === SUBDOMAIN_RESOURCE) await registerSubdomain(api, accountId, options);
-    else if (resource.name === SIGNING_RESOURCE) await createAccountSigningCredential(api, accountId);
+    else if (resource.name === SIGNING_RESOURCE) {
+      const { replaced } = await createAccountSigningCredential(api, accountId);
+      if (replaced.length > 0) {
+        note(
+          `replaced the ${SIGNING_RESOURCE}; every deployed stage keeps the old key until it is redeployed: run deploy --target cloudflare --stage <stage> for each ` +
+            "deployed stage now (until then its file uploads and downloads fail)",
+        );
+      }
+    }
     else throw new Error(`unknown Cloudflare shared resource ${resource.name}`);
   }
 }

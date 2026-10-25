@@ -162,7 +162,8 @@ export class FakeTarget implements TargetOperations {
     return [...this.shared].map(([name, state]) => ({ name, state }));
   }
 
-  async createSharedResources(absent: readonly SharedResource[]): Promise<void> {
+  async createSharedResources(absent: readonly SharedResource[], note?: (message: string) => void): Promise<void> {
+    void note;
     this.enter("createSharedResources", absent.map((r) => r.name).join(","));
     for (const r of absent) {
       if (this.shared.get(r.name) === "foreign") throw new Error(`${r.name} belongs to another account`);

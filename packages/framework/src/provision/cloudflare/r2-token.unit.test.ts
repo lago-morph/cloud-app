@@ -59,15 +59,35 @@ describe("the account's R2 signing credential (DEC-0550)", () => {
       [`POST ${TOKENS}`]: ok({ id: "tok123", name: SIGNING_TOKEN_NAME, status: "active", value: "token-value-xyz" }),
       [`PUT ${RECORD}`]: ok({ key: SIGNING_RECORD_KEY }),
     });
-    await createAccountSigningCredential(api, ACCOUNT);
+    expect(await createAccountSigningCredential(api, ACCOUNT)).toEqual({ replaced: ["old"] });
     expect(ITEM_WRITE_PERMISSION).toBe("Workers R2 Storage Bucket Item Write");
     expect(api.requests).toEqual([
       `GET ${TOKENS}?per_page=50&page=1`,
-      `DELETE ${TOKENS}/old`,
       `GET ${TOKENS}/permission_groups`,
       `POST ${TOKENS} ${JSON.stringify({ name: SIGNING_TOKEN_NAME, policies: signingTokenPolicies("2efd5506f9c8494dacb1fa10a3e7d5b6", ACCOUNT) })}`,
       `PUT ${RECORD} ${JSON.stringify({ tokenId: "tok123", accessKeyId: "tok123", secretAccessKey: SECRET, deniedBuckets: ["prototype-logs", "sst-state", "prototype-mailsink", "prototype-backups"] })}`,
+      `DELETE ${TOKENS}/old`,
     ]);
+  });
+
+  it("the old signing token is deleted only after the new token and its record exist, so a failure leaves the deployed stages' key working", async () => {
+    const api = stubApi({
+      [`GET ${TOKENS}?per_page=50&page=1`]: ok([{ id: "old", name: SIGNING_TOKEN_NAME }], { page: 1, total_pages: 1 }),
+      [`GET ${TOKENS}/permission_groups`]: GROUPS,
+      [`POST ${TOKENS}`]: err(500, 1000, "internal error"),
+    });
+    await expect(createAccountSigningCredential(api, ACCOUNT)).rejects.toThrow();
+    expect(api.requests.some((r) => r.startsWith(`DELETE ${TOKENS}/old`))).toBe(false);
+
+    const recordFails = stubApi({
+      [`GET ${TOKENS}?per_page=50&page=1`]: ok([{ id: "old", name: SIGNING_TOKEN_NAME }], { page: 1, total_pages: 1 }),
+      [`GET ${TOKENS}/permission_groups`]: GROUPS,
+      [`POST ${TOKENS}`]: ok({ id: "tok123", name: SIGNING_TOKEN_NAME, status: "active", value: "token-value-xyz" }),
+      [`PUT ${RECORD}`]: err(403, 10002, "Unauthorized"),
+      [`DELETE ${TOKENS}/tok123`]: ok({ id: "tok123" }),
+    });
+    await expect(createAccountSigningCredential(recordFails, ACCOUNT)).rejects.toThrow(/writing the record/);
+    expect(recordFails.requests.some((r) => r.startsWith(`DELETE ${TOKENS}/old`))).toBe(false);
   });
 
   it("a record that cannot be written deletes the new token again; failures never contain the token value", async () => {

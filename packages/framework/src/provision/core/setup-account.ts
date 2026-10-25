@@ -64,7 +64,7 @@ export async function runSetupAccount(ops: TargetOperations, io: ProvisionIo, re
     if (present.length > 0) line(io, `already present: ${present.join(", ")}`);
     const created: string[] = [];
     if (absent.length > 0) {
-      await ops.createSharedResources(absent);
+      await ops.createSharedResources(absent, (message) => line(io, message));
       created.push(...absent.map((r) => r.name));
       line(io, `created: ${created.join(", ")}`);
     }

@@ -158,7 +158,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
     },
 
     inspectAccount: () => inspectSharedResources(api, accountId),
-    createSharedResources: (absent) => createSharedResources(api, accountId, absent, options.newSubdomain === undefined ? {} : { newSubdomain: options.newSubdomain }),
+    createSharedResources: (absent, note) => createSharedResources(api, accountId, absent, options.newSubdomain === undefined ? {} : { newSubdomain: options.newSubdomain }, note),
     readAccountSettings: () => readAccountSettings(api, accountId),
     writeAccountSettings: (settings) => writeAccountSettings(api, accountId, settings),
     async emailSetupProblems(emailDomain) {
