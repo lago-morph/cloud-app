@@ -12,6 +12,9 @@
  */
 import type { MigrationDatabase, Histories } from "../../mig/apply.js";
 import type { Dialect } from "../../sql/dialect.js";
+import type { AccountSettings } from "./account-settings.js";
+
+export type { AccountSettings } from "./account-settings.js";
 
 /** One stage of one app. Names follow PAR-290 / PAR-291 (checked by the build before PROV runs). */
 export interface Stage {
@@ -64,6 +67,12 @@ export interface DeployInput {
   readonly stage: Stage;
   /** The current database: an input to the provisioning tool, never in its state. Absent in step 3 of a first deploy. */
   readonly database?: StageDatabase;
+  /**
+   * The account settings record's email domain, as step 1 read it (DEC-0514): the sender of a
+   * production stage's mail binding and the mail variable derive from it. Always present for a
+   * production stage (step 1 requires it); a test stage may have none.
+   */
+  readonly emailDomain?: string;
 }
 
 /** What `deployCode` returns. */
@@ -102,8 +111,27 @@ export interface TargetOperations {
 
   /** The account's shared resources and their state. Changes nothing (PROV-REQ-004; deploy step 1). */
   inspectAccount(): Promise<readonly SharedResource[]>;
-  /** Creates the given absent shared resources and records the account settings. Called only when none is foreign. */
+  /** Creates the given absent shared resources. Called only when none is foreign. */
   createSharedResources(absent: readonly SharedResource[]): Promise<void>;
+
+  /**
+   * The account settings record (provisioning.md §2; Cloudflare: `framework/account.json` in the
+   * state home, DEC-0514); `{}` when there is none yet. Changes nothing.
+   */
+  readAccountSettings(): Promise<AccountSettings>;
+  /** Records the account settings. Only `setup-account` calls it, after the shared resources exist. */
+  writeAccountSettings(settings: AccountSettings): Promise<void>;
+  /**
+   * `setup-account`: makes the email domain's setup exist (sending onboarding, the mail sink),
+   * listing first so a second run changes nothing (PROV-REQ-004, MAIL-REQ-005). Returns the names
+   * of what it created.
+   */
+  setUpEmail(emailDomain: string): Promise<readonly string[]>;
+  /**
+   * Deploy step 1 of a production stage: the email prerequisites that are missing (the domain's
+   * sending entry verified, the credentials' email permissions; DEC-0515), by name. Changes nothing.
+   */
+  emailPrerequisites(stage: Stage, emailDomain: string): Promise<readonly string[]>;
 
   /** Deploy step 3: long-lived infrastructure only (buckets, roles), no new app code. */
   deployInfrastructure(input: DeployInput): Promise<void>;

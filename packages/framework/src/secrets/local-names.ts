@@ -15,7 +15,8 @@ export type LocalFrameworkSecretName = typeof LOCAL_TICKET_KEY;
 export const LOCAL_FRAMEWORK_SECRETS: readonly LocalFrameworkSecretName[] = Object.freeze([LOCAL_TICKET_KEY]);
 
 /** Development-only framework secrets that `dev` generates into `.dev.vars` when absent. */
-export const DEV_GENERATED_SECRETS: readonly (typeof FRAMEWORK_SECRETS.sessionKey | LocalFrameworkSecretName)[] = Object.freeze([
+export const DEV_GENERATED_SECRETS: readonly (typeof FRAMEWORK_SECRETS.sessionKey | typeof FRAMEWORK_SECRETS.authSecret | LocalFrameworkSecretName)[] = Object.freeze([
   FRAMEWORK_SECRETS.sessionKey,
+  FRAMEWORK_SECRETS.authSecret,
   LOCAL_TICKET_KEY,
 ]);

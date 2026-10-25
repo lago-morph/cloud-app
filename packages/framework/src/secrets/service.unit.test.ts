@@ -91,7 +91,9 @@ describe("[SEC-AC-001] SecretsService reads declared secrets by logical name", (
     const env = { SECRET_FRAMEWORK_SESSION_KEY: key, SECRET_API_KEY: dummy("a") };
     const internal = createFrameworkSecrets({ read: envSecretReader(env, "cloudflare") });
     await expect(internal.get("frameworkSessionKey")).resolves.toBe(key);
-    await expect(internal.get("frameworkGoogleClientSecret")).rejects.toMatchObject({ code: "SEC.MISSING" });
+    await expect(internal.get("frameworkAuthSecret")).rejects.toMatchObject({ code: "SEC.MISSING" });
+    // Retired with GOOGLE (DEC-0513): no longer a framework-internal name.
+    await expect(internal.get("frameworkGoogleClientSecret" as never)).rejects.toMatchObject({ code: "SEC.UNDECLARED" });
     await expect(internal.get("apiKey" as never)).rejects.toMatchObject({ code: "SEC.UNDECLARED" });
   });
 

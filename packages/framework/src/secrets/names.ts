@@ -10,15 +10,18 @@ export const FRAMEWORK_SECRET_PREFIX = "framework";
 
 /**
  * Framework-internal secrets of every target, read only by framework code (never through the
- * app's service). The Google client secret's name is the one GOOGLE reads (DEC-0176).
+ * app's service). `frameworkGoogleClientSecret` is retired with GOOGLE (DEC-0513).
  * This module is in every cloud bundle, so local-only names live in `local-names.ts`
  * (CORE-REQ-006, DEC-0194).
  */
 export const FRAMEWORK_SECRETS = Object.freeze({
   /** AUTH's session signing key (PAR-253); generated per stage by the CLI when absent. */
   sessionKey: "frameworkSessionKey",
-  /** GOOGLE's OAuth client secret; set by the owner with `secrets set`. */
-  googleClientSecret: "frameworkGoogleClientSecret",
+  /**
+   * PWD's signing secret (the credential library's `secret`; PAR-253: 32 random bytes,
+   * base64url), generated per stage by the CLI when absent, like the session key (DEC-0509).
+   */
+  authSecret: "frameworkAuthSecret",
   /** FILES' stage-scoped R2 API token (S3 credentials), created by provisioning on Cloudflare. */
   r2AccessKeyId: "frameworkR2AccessKeyId",
   r2SecretAccessKey: "frameworkR2SecretAccessKey",

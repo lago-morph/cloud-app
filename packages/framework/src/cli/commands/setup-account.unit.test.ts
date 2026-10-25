@@ -31,6 +31,26 @@ describe("setup-account (CLI-REQ-001, PROV-REQ-004)", () => {
     expect(fake.calls.some((c) => c.startsWith("createSharedResources"))).toBe(false);
   });
 
+  it("[PROV-AC-004] --email-domain records the account's email domain, lowercased; it is required while none is recorded", async () => {
+    const fake = new FakeTarget({ accountSettings: {} });
+    const { deps } = harness(fake);
+    const without = captureIo();
+    expect(await setupAccountCommand(deps)(["--target", "cloudflare"], without)).toBe(1);
+    expect(without.err).toContain("--email-domain <domain>");
+    const io = captureIo();
+    expect(await setupAccountCommand(deps)(["--target", "cloudflare", "--email-domain", "Example.TEST"], io)).toBe(0);
+    expect(fake.accountSettings).toEqual({ emailDomain: "example.test" });
+    expect(await setupAccountCommand(deps)(["--target=cloudflare", "--email-domain=example.test"], captureIo())).toBe(0);
+    expect(fake.calls.filter((c) => c.startsWith("writeAccountSettings"))).toEqual(["writeAccountSettings example.test"]);
+  });
+
+  it("--email-domain needs a value and is refused for the local target", async () => {
+    const h = harness(new FakeTarget());
+    await expect(setupAccountCommand(h.deps)(["--target", "cloudflare", "--email-domain"], captureIo())).rejects.toThrow(/--email-domain needs a value/);
+    await expect(setupAccountCommand(h.deps)(["--target", "local", "--email-domain", "example.test"], captureIo())).rejects.toThrow(UsageError);
+    expect(h.events).toEqual([]);
+  });
+
   it("target local has no shared resources: it says so, exits 0 and touches no target", async () => {
     const h = harness(new FakeTarget());
     const io = captureIo();

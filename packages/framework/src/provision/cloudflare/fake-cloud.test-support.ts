@@ -29,6 +29,8 @@ export interface FakeWorker {
 
 export class FakeCloud {
   readonly buckets = new Map<string, Set<string>>();
+  /** Bodies of objects written with `PUT …/objects/<key>`, by `<bucket>/<key>` (JSON values). */
+  readonly objectBodies = new Map<string, unknown>();
   readonly cors = new Map<string, unknown>();
   readonly tokens = new Map<string, { name: string; resources: unknown }>();
   readonly workers = new Map<string, FakeWorker>();
@@ -120,8 +122,22 @@ export class FakeCloud {
       }
       if (rest === "/objects" && method === "GET") return ok([...objects].sort().map((key) => ({ key })), { result_info: { is_truncated: false } });
       if (rest.startsWith("/objects/") && method === "DELETE") {
-        objects.delete(decodeURIComponent(rest.slice("/objects/".length)));
+        const key = decodeURIComponent(rest.slice("/objects/".length));
+        objects.delete(key);
+        this.objectBodies.delete(`${name}/${key}`);
         return ok({});
+      }
+      // An object's own bytes (JSON here); the R2 object endpoints answer them unwrapped.
+      if (rest.startsWith("/objects/") && method === "GET") {
+        const key = decodeURIComponent(rest.slice("/objects/".length));
+        if (!objects.has(key)) return err(404, 10007, "The specified key does not exist.");
+        return { status: 200, body: this.objectBodies.get(`${name}/${key}`) ?? null };
+      }
+      if (rest.startsWith("/objects/") && method === "PUT") {
+        const key = decodeURIComponent(rest.slice("/objects/".length));
+        objects.add(key);
+        this.objectBodies.set(`${name}/${key}`, JSON.parse(JSON.stringify(body)) as unknown);
+        return ok({ key });
       }
     }
     throw new Error(`fake Cloudflare: unexpected request ${method} ${path}`);

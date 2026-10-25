@@ -25,8 +25,8 @@ export interface AuthOptions {
   readonly deployment: Deployment;
   /** The deployment's resolved public origin (never request headers), e.g. `http://localhost:8787`. */
   readonly publicOrigin: string | ((c: RuntimeContext) => string);
-  /** The stage's `framework` configuration (CFG's resolved `admins`, `users`, `google`). */
-  readonly framework: AccessLists & { readonly google?: { readonly clientId: string } };
+  /** The stage's `framework` configuration (CFG's resolved `admins`, `users`). */
+  readonly framework: AccessLists;
   /** Reads a framework-internal secret (SEC) for this request: the session key and provider secrets. */
   readonly secret: (c: RuntimeContext, name: string) => Promise<string>;
   /** The stage's login provider: GOOGLE in production, the stub in some tests. */

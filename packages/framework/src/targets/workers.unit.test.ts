@@ -56,7 +56,7 @@ beforeAll(async () => {
     SECRET_API_KEY: "api-value",
     SECRET_FRAMEWORK_SESSION_KEY: "s".repeat(43),
     SECRET_FRAMEWORK_LOCAL_TICKET_KEY: "t".repeat(43),
-    SECRET_FRAMEWORK_GOOGLE_CLIENT_SECRET: "g".repeat(20),
+    SECRET_FRAMEWORK_AUTH_SECRET: "a".repeat(43),
   };
 }, 60_000);
 afterAll(async () => {
@@ -130,5 +130,21 @@ describe("createCloudflareWorker", () => {
   it("answers the health check when the stage's secrets are set", async () => {
     const worker = createCloudflareWorker(app, resolved("cloudflare", "prod"));
     expect((await call(worker, "/api/__framework/health")).status).toBe(204);
+  });
+
+  it("the health check also requires frameworkAuthSecret, on production and test stages (PROV-REQ-002 step 7)", async () => {
+    const { SECRET_FRAMEWORK_AUTH_SECRET: _omitted, ...withoutAuthSecret } = bindings;
+    for (const stage of ["prod", "test-x"]) {
+      const worker = createCloudflareWorker(app, resolved("cloudflare", stage));
+      const res = await call(worker, "/api/__framework/health", undefined, withoutAuthSecret);
+      expect(res.status, stage).not.toBe(204);
+      expect(((await res.json()) as { error: { code: string } }).error.code, stage).toBe("SEC.MISSING");
+    }
+  });
+
+  it("the local health check requires frameworkAuthSecret too", async () => {
+    const { SECRET_FRAMEWORK_AUTH_SECRET: _omitted, ...withoutAuthSecret } = bindings;
+    const res = await call(createLocalWorker(app, resolved("local", "local")), "/api/__framework/health", undefined, withoutAuthSecret);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("SEC.MISSING");
   });
 });

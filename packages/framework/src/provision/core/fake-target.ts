@@ -10,6 +10,7 @@ import type { MigrationDatabase } from "../../mig/apply.js";
 import type { Migration } from "../../mig/history.js";
 import type { Dialect } from "../../sql/dialect.js";
 import type {
+  AccountSettings,
   DeployedCode,
   DeployInput,
   HealthOutcome,
@@ -44,6 +45,8 @@ export interface FakeTargetOptions {
   readonly sharedResources?: Readonly<Record<string, SharedResource["state"]>>;
   readonly databases?: readonly { readonly name: string; readonly records?: readonly string[]; readonly rows?: number }[];
   readonly dialect?: Dialect;
+  /** The account settings record; default `{ emailDomain: "example.test" }` (a reserved name). */
+  readonly accountSettings?: AccountSettings;
 }
 
 const key = (s: Stage) => `${s.app}/${s.stage}`;
@@ -58,6 +61,14 @@ export class FakeTarget implements TargetOperations {
   readonly stages = new Map<string, FakeStage>();
   /** Returned by `preflight`. */
   missingPrerequisites: string[] = [];
+  /** The account settings record (`readAccountSettings` / `writeAccountSettings`). */
+  accountSettings: AccountSettings;
+  /** Returned by `emailPrerequisites`. */
+  missingEmailPrerequisites: string[] = [];
+  /** Returned by the next `setUpEmail` (then emptied: a second run finds everything in place). */
+  emailToCreate: string[] = [];
+  /** The `emailDomain` of each `deployInfrastructure` and `deployCode` input, in order. */
+  readonly deployedEmailDomains: (string | undefined)[] = [];
   /** Returned by `checkHealth`. */
   health: HealthOutcome = { ok: true };
   /** Migration IDs whose application throws (and is not recorded). */
@@ -71,6 +82,7 @@ export class FakeTarget implements TargetOperations {
 
   constructor(options: FakeTargetOptions = {}) {
     this.dialect = options.dialect ?? "sqlite";
+    this.accountSettings = options.accountSettings ?? { emailDomain: "example.test" };
     const shared: Readonly<Record<string, SharedResource["state"]>> = options.sharedResources ?? { "log bucket": "owned" };
     for (const [name, state] of Object.entries(shared)) this.shared.set(name, state);
     for (const db of options.databases ?? []) {
@@ -148,14 +160,38 @@ export class FakeTarget implements TargetOperations {
     }
   }
 
+  async readAccountSettings(): Promise<AccountSettings> {
+    this.enter("readAccountSettings");
+    return { ...this.accountSettings };
+  }
+
+  async writeAccountSettings(settings: AccountSettings): Promise<void> {
+    this.enter("writeAccountSettings", settings.emailDomain ?? "");
+    this.accountSettings = { ...settings };
+  }
+
+  async setUpEmail(emailDomain: string): Promise<readonly string[]> {
+    this.enter("setUpEmail", emailDomain);
+    const created = this.emailToCreate;
+    this.emailToCreate = [];
+    return created;
+  }
+
+  async emailPrerequisites(stage: Stage, emailDomain: string): Promise<readonly string[]> {
+    this.enter("emailPrerequisites", `${key(stage)} ${emailDomain}`);
+    return [...this.missingEmailPrerequisites];
+  }
+
   async deployInfrastructure(input: DeployInput): Promise<void> {
     this.enter("deployInfrastructure", key(input.stage));
+    this.deployedEmailDomains.push(input.emailDomain);
     const s = this.stageState(input.stage);
     if (!s.resources.some((r) => r.kind === "bucket")) s.resources.push({ kind: "bucket", id: `${key(input.stage)}/bucket` });
   }
 
   async deployCode(input: DeployInput & { readonly database: StageDatabase }): Promise<DeployedCode> {
     this.enter("deployCode", `${key(input.stage)} ${input.database.name}`);
+    this.deployedEmailDomains.push(input.emailDomain);
     this.db(input.database);
     const s = this.stageState(input.stage);
     if (!s.resources.some((r) => r.kind === "runtime")) s.resources.push({ kind: "runtime", id: `${key(input.stage)}/runtime` });

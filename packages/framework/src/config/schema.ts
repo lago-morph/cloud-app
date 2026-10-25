@@ -14,7 +14,8 @@ export interface StageConfigFile {
   readonly framework: {
     readonly admins: readonly string[];
     readonly users?: readonly string[];
-    readonly google?: { readonly clientId: string };
+    /** The framework's own email: only the sender's display name (MAIL-REQ-003, DEC-0514). */
+    readonly email?: { readonly senderName?: string };
   };
 }
 
@@ -26,12 +27,24 @@ const value = z.union([z.string(), z.number().int(), z.boolean(), z.array(z.stri
   error: "must be a string, an integer, a boolean, or a list of strings",
 });
 
+/** The contract's `framework.email.senderName` pattern: no address syntax, quote or line break. */
+const SENDER_NAME = /^[^<>"\\@\r\n]+$/;
+
 const stageConfig = z.strictObject({
   values: z.record(z.string(), value),
   framework: z.strictObject({
     admins: userIds.default([]),
     users: userIds.optional(),
-    google: z.strictObject({ clientId: z.string().min(1, "must not be empty") }).optional(),
+    email: z
+      .strictObject({
+        senderName: z
+          .string()
+          .min(1, "must not be empty")
+          .max(64, "must be at most 64 characters")
+          .regex(SENDER_NAME, "must not contain <, >, \", \\, @ or a line break")
+          .optional(),
+      })
+      .optional(),
   }),
 });
 
@@ -51,10 +64,14 @@ export function parseStageConfig(text: string, file: string): StageConfigFile {
   }
   const result = stageConfig.safeParse(data);
   if (!result.success) throw invalid(file, result.error.issues.flatMap(describeIssue));
-  const { admins, users, google } = result.data.framework;
+  const { admins, users, email } = result.data.framework;
   return {
     values: result.data.values,
-    framework: { admins, ...(users === undefined ? {} : { users }), ...(google === undefined ? {} : { google }) },
+    framework: {
+      admins,
+      ...(users === undefined ? {} : { users }),
+      ...(email === undefined ? {} : { email: email.senderName === undefined ? {} : { senderName: email.senderName } }),
+    },
   };
 }
 

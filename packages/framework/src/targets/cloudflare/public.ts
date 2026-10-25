@@ -16,7 +16,6 @@ import type { DefinedApp } from "../../core/public.js";
 import type { ConfigDeclaration } from "../../config/public.js";
 import type { ResolvedConfig } from "../../config/resolve.js";
 import type { AuthMock, AuthMockOptions } from "../../auth/mock.js";
-import { createGoogleLoginProvider } from "../../google/provider.js";
 import { workerOutputSink } from "../../log/local.js";
 import { r2LogSink } from "../../log/cloudflare/sink.js";
 import { envSecretReader } from "../../secrets/service.js";
@@ -39,10 +38,8 @@ export function createCloudflareWorker<C extends ConfigDeclaration, S extends st
   resolved: ResolvedConfig,
   options: CloudflareWorkerOptions = {},
 ): WorkerHandler {
-  const { deployment } = resolved;
-  const production = !deployment.isTestStage;
-  const required: FrameworkSecretName[] = [FRAMEWORK_SECRETS.sessionKey];
-  if (production) required.push(FRAMEWORK_SECRETS.googleClientSecret);
+  // Every stage's CLI generates both keys (deploy step 5); the health check requires them (PROV-REQ-002 step 7).
+  const required: FrameworkSecretName[] = [FRAMEWORK_SECRETS.sessionKey, FRAMEWORK_SECRETS.authSecret];
   const hono = assembleStage(app, {
     resolved,
     sink: workerOutputSink(),
@@ -55,8 +52,7 @@ export function createCloudflareWorker<C extends ConfigDeclaration, S extends st
     readFrameworkSecret: (env) => envSecretReader(env, "cloudflare"),
     secretValues: (c) => workerSecretValues(c.env),
     requiredFrameworkSecrets: required,
-    // Production stages log in with Google; a test stage uses the mock unless it configures Google.
-    ...(production || resolved.google !== undefined ? { provider: createGoogleLoginProvider() } : {}),
+    // GOOGLE is retired (DEC-0513); the password provider (PWD) is wired here by item I-B.
     ...(options.mock === undefined ? {} : { mock: options.mock() }),
   });
   return { fetch: (request, env, ctx) => hono.fetch(request, env, ctx as never) };

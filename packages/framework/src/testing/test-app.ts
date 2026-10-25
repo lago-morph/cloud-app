@@ -230,6 +230,7 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
   // Secret store: the Worker env form (`SECRET_<NAME>`), with fresh framework keys per app.
   const secretEnv: Record<string, string> = {
     [secretLocation("local", FRAMEWORK_SECRETS.sessionKey)]: randomKey(),
+    [secretLocation("local", FRAMEWORK_SECRETS.authSecret)]: randomKey(),
     [secretLocation("local", LOCAL_TICKET_KEY)]: randomKey(),
   };
   for (const [name, value] of Object.entries(options.secrets ?? {})) secretEnv[secretLocation("local", name)] = value;
@@ -262,7 +263,7 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
     readSecret: () => appReader,
     readFrameworkSecret: () => frameworkReader,
     secretValues: () => Object.values(secretEnv),
-    requiredFrameworkSecrets: [FRAMEWORK_SECRETS.sessionKey, ...LOCAL_FRAMEWORK_SECRETS],
+    requiredFrameworkSecrets: [FRAMEWORK_SECRETS.sessionKey, FRAMEWORK_SECRETS.authSecret, ...LOCAL_FRAMEWORK_SECRETS],
     cookies: LOCAL_COOKIES,
     ...(stub ? { provider: createStubLoginProvider() } : { mock: createAuthMock({ fixedUser: (c) => fixed.get(c.req.raw) }) }),
     routes: (api) => registerLocalTransferRoute(api, { key: ticketKey }),
