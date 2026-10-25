@@ -240,6 +240,23 @@ describe("D1 copyDatabase: native export/import when the pre-check allows it (DE
     expect(await contents(fake.database(restored.id))).toEqual(before);
   });
 
+  it("a WITHOUT ROWID table whose text keys hold NULs is read to its end in pages of 2 and restored exactly", async () => {
+    ops = d1DatabaseOperations({ api: fake.api, accountId: ACCOUNT, limits: { pageRows: 2 }, native: { transfer: fake.transfer, sleep: async () => undefined } });
+    const db = fake.database(source.id);
+    await db.batch([
+      db.prepare(`CREATE TABLE "nk" ("k" text PRIMARY KEY NOT NULL, "v" integer) WITHOUT ROWID`),
+      ...["a", "a\u0000x", "a\u0000y", "b\u0000", "c"].map((k, i) => db.prepare(`INSERT INTO "nk" VALUES (CAST(? AS TEXT), ?)`).bind(k, i)),
+    ]);
+    const contents = async (d: D1Like) => (await d.prepare(`SELECT hex("k") AS "k", "v" FROM "nk" ORDER BY "k"`).all()).results;
+    const before = await contents(db);
+    expect(before).toHaveLength(5);
+    const exported = await ops.exportDatabase(source);
+    expect(exported.lossless?.tables).toEqual(["nk"]);
+    const restored = await ops.createDatabase(stage, "notes-test-abc-db-2");
+    await importDump(d1Client(fake.api, ACCOUNT), restored.id, exported.lossless!.restore, { transfer: fake.transfer, sleep: async () => undefined });
+    expect(await contents(fake.database(restored.id))).toEqual(before);
+  });
+
   it("a trigger body's inner semicolons do not split it: a trigger inserting into a lossy table keeps the restore file's count right", async () => {
     const db = fake.database(source.id);
     await seedSafe(db);

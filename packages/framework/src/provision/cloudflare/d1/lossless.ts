@@ -63,17 +63,29 @@ async function tableShapes(client: D1Client, uuid: string): Promise<TableShape[]
 }
 
 /**
- * One keyset page of `t` (DEC-0557): `ORDER BY` the keys, after the last page's keys (exact SQL
- * literals from `quote()`), `pageRows` rows. Never `OFFSET`, whose cost grows with every page.
+ * One keyset page of `t` (DEC-0557): `ORDER BY` the keys, after the last page's keys, `pageRows`
+ * rows. Never `OFFSET`, whose cost grows with every page. The keys travel in the exact forms of
+ * `literal` (text and blobs as hex, `CAST(X'…' AS TEXT)` and `X'…'`): `quote()` would cut a text
+ * key at a NUL, and the page would never move forward.
  */
 function keysetPage(t: TableShape, select: string, after: readonly string[] | undefined, pageRows: number): string {
   const keys = t.keys.join(", ");
-  const quoted = t.keys.map((k, i) => `quote(${k}) AS "k${i}"`).join(", ");
+  const exact = t.keys
+    .map((k, i) => `typeof(${k}) AS "kt${i}", CASE typeof(${k}) WHEN 'integer' THEN CAST(${k} AS TEXT) WHEN 'text' THEN hex(${k}) WHEN 'blob' THEN hex(${k}) ELSE ${k} END AS "kv${i}"`)
+    .join(", ");
   const where = after === undefined ? "" : ` WHERE (${keys}) > (${after.join(", ")})`;
-  return `SELECT ${quoted}, ${select} FROM ${q(t.name)}${where} ORDER BY ${keys} LIMIT ${pageRows}`;
+  return `SELECT ${exact}, ${select} FROM ${q(t.name)}${where} ORDER BY ${keys} LIMIT ${pageRows}`;
 }
 
-const lastKeys = (t: TableShape, page: readonly D1Row[]): string[] => t.keys.map((_, i) => String(page[page.length - 1]?.[`k${i}`]));
+/** The last row's keys as SQL literals; throws when they are the previous page's (no progress). */
+function lastKeys(t: TableShape, page: readonly D1Row[], previous: readonly string[] | undefined): string[] {
+  const row = page[page.length - 1] ?? {};
+  const next = t.keys.map((_, i) => literal({ type: String(row[`kt${i}`]), raw: row[`kv${i}`] }));
+  if (previous !== undefined && next.every((k, i) => k === previous[i])) {
+    throw new Error(`reading table ${t.name} in pages by its key did not move forward past (${next.join(", ")}); the backup stops rather than read forever`);
+  }
+  return next;
+}
 
 /** Whether the table holds a lossy value: keyset pages, stopping at the first lossy row. */
 async function tableIsLossy(client: D1Client, uuid: string, t: TableShape, pageRows: number): Promise<boolean> {
@@ -83,7 +95,7 @@ async function tableIsLossy(client: D1Client, uuid: string, t: TableShape, pageR
     const [page = []] = await client.batch(uuid, [{ sql: keysetPage(t, lossy, after, pageRows) }]);
     if (page.some((r) => Number(r["lossy"]) > 0)) return true;
     if (page.length < pageRows) return false;
-    after = lastKeys(t, page);
+    after = lastKeys(t, page, after);
   }
 }
 
@@ -114,7 +126,7 @@ async function readRows(client: D1Client, uuid: string, table: TableShape, pageR
     const [page = []] = await client.batch(uuid, [{ sql: keysetPage(table, selectValues(table.columns), after, pageRows) }]);
     rows.push(...page.map(toRow));
     if (page.length < pageRows) return rows;
-    after = lastKeys(table, page);
+    after = lastKeys(table, page, after);
   }
 }
 
