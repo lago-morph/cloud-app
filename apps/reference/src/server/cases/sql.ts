@@ -506,6 +506,23 @@ const resultSize = async ({ sql }: CaseServices, input: unknown): Promise<unknow
   }
 };
 
+/**
+ * SQL-AC-006 (DEC-0542): one row of `chars` ASCII characters is inserted with `returning`, which
+ * must resolve with the row even when it is larger than PAR-215; the stored rows are then counted
+ * (exactly one: the write was saved once and reported as a success), and the row is removed.
+ */
+const writeResultSize = async ({ sql }: CaseServices, input: unknown): Promise<unknown> => {
+  const { chars } = sizeInput.parse(input);
+  const id = newId();
+  try {
+    const returned = await sql.insert(blobs).values({ id, body: "x".repeat(chars) }).returning({ id: blobs.id, body: blobs.body });
+    const stored = await sql.select({ id: blobs.id }).from(blobs).where(eq(blobs.id, id));
+    return { returned: returned.length, length: returned[0]?.body.length ?? 0, stored: stored.length };
+  } finally {
+    await sql.delete(blobs).where(eq(blobs.id, id));
+  }
+};
+
 export const SQL_SIZES = { oversized: OVERSIZED_CHARS, fitting: FITTING_CHARS } as const;
 
 export const sqlCases: CaseSet = {
@@ -524,4 +541,5 @@ export const sqlCases: CaseSet = {
   duplicateUnique,
   duplicateThrows,
   resultSize,
+  writeResultSize,
 };

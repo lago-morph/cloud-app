@@ -41,8 +41,8 @@ interface FakeStage {
   secrets: Set<string> | null;
   code: { database: string } | null;
   running: boolean;
-  /** The stage record's `stopped` (DEC-0544). */
-  stopped: boolean;
+  /** The stage record's `stopped` (DEC-0544); absent means not stopped. */
+  stopped?: boolean;
 }
 
 export interface FakeTargetOptions {
