@@ -116,7 +116,7 @@ describe("[COMPL-AC-002] traceability report", () => {
     const real = readCatalogue(new URL("../../../docs/", import.meta.url).pathname);
     const report = buildTraceability({ catalogue: real, tests: [], records: [] });
     expect(report.rows.map((r) => r.id)).toEqual(real.map((e) => e.id));
-    expect(report.rows.length).toBe(154);
+    expect(report.rows.length).toBe(157);
   });
 
   it("finds tags in test sources: bracketed titles and tag() calls, not untagged mentions", () => {

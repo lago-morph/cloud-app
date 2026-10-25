@@ -127,10 +127,17 @@ Origin: owner · Decision: DEC-0014
 
 Every request MUST be classified as anonymous, logged-in user, or admin. App code sees only that level, a stable opaque user ID, and an optional display name. App code MUST NOT see email addresses, provider identities, protocol details, or tokens; all authentication handling, including validation, happens behind the abstraction. A user ID is stable for a person and login provider; signing in through a different provider yields a different user ID.
 
-#### SYS-REQ-018 — Admins by configuration
-Origin: owner · Decision: DEC-0015
+#### SYS-REQ-018 — Admins (by role, amended; formerly by configuration)
+Origin: owner · Decision: DEC-0015 (superseded), DEC-0521, DEC-0522
 
 Admins MUST be designated in configuration by user ID. The framework MUST provide documented steps by which a user can see their own user ID so it can be copied into configuration.
+
+Amendment (Origin: owner · Decision: DEC-0521, DEC-0522; the operator command, its confirmation and the next-request rule: ai-proposed, DEC-0523, DEC-0524): admins are no longer designated in configuration. The text above is replaced by the following:
+- Admins MUST be designated by the role `admin`, stored with the person's account in the stage's own database. The only role defined is `admin`; a new account has no roles, and there is no "user" role.
+- Any account whose email address is verified MUST be level `user`, and an admin is a user whose roles include `admin`. An account whose address is not verified MUST NOT be `user` or `admin`.
+- A change of roles MUST take effect on the person's next request, with no new login and no deploy.
+- The framework MUST provide an operator command that grants, revokes and lists the `admin` role by email address on any stage. On a production stage the command MUST require an explicit confirmation.
+- Configuration MUST NOT hold admin or user lists.
 
 #### SYS-REQ-019 — Login provider
 Origin: owner · Decision: DEC-0016, DEC-0509, DEC-0513

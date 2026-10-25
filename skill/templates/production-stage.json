@@ -1,7 +1,6 @@
 {
   "values": {},
   "framework": {
-    "admins": [],
     "email": { "senderName": "REPLACE-WITH-THE-SENDER-NAME" }
   }
 }

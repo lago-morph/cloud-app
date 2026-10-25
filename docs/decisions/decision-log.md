@@ -93,7 +93,7 @@ App code sees only: anonymous / logged-in user / admin, a stable opaque user ID,
 Not adopted from the earlier spec: exposing provider issuer and subject identifiers and optional email to app code.
 
 ### DEC-0015 — Admins listed in config by user ID
-Origin: owner · Status: accepted · Affects: SYS-REQ-018, CFG, AUTH
+Origin: owner · Status: superseded by DEC-0521 (admins are a role stored with the account in the stage's database) · Affects: SYS-REQ-018, CFG, AUTH
 
 The admin list moves from secrets to configuration and identifies admins by the same opaque user ID the app sees. Instructions must show how to find one's own ID; copy and paste is acceptable. Because configuration is deploy-time, changing admins requires a redeploy.
 
@@ -164,7 +164,7 @@ Origin: owner-approved · Status: accepted · Affects: SYS-REQ-017
 Anonymous, user, admin. A simplification so the first implementation is not bogged down by features that may never be needed.
 
 ### DEC-0028 — Stateless sessions without revocation
-Origin: owner-approved · Status: accepted · Affects: AUTH
+Origin: owner-approved · Status: accepted; amended by DEC-0524 (the level is read from the account on each authenticated request; sessions stay unrevocable) · Affects: AUTH
 
 A simplification for the first implementation. A copied valid session remains usable until it expires, even after logout.
 
@@ -568,7 +568,7 @@ Origin: owner · Status: accepted · Amends: DEC-0076 · Affects: MIG, PROV
 If a migration or check fails, the new database is deleted and the old database is left unchanged, as before. The CLI now restarts the previous version against that database and the deploy exits with failure status. The app is no longer left down until a deploy succeeds.
 
 ### DEC-0080 — Optional list of allowed users
-Origin: owner · Status: accepted · Affects: SYS-REQ-017 (refinement), AUTH, CFG, SKILL, DEMO
+Origin: owner · Status: superseded by DEC-0522 (anyone who signs up and verifies is a user) · Affects: SYS-REQ-017 (refinement), AUTH, CFG, SKILL, DEMO
 
 Without a list, level `user` means any account the login provider accepts. The configuration may include an optional `framework.users` list of user IDs. When the list is present, a validated login whose ID is in neither `framework.users` nor `framework.admins` is treated as anonymous. The steps for finding and copying a user ID are the same as for admins.
 
@@ -5014,7 +5014,7 @@ Origin: ai-proposed · Status: accepted · Affects: PWD-REQ-004, MAIL-REQ-001, C
 - **The rate limiter counts every request**, successes included (P6). It costs 1–3 D1 queries per bridged request.
 
 ### DEC-0520 — Where the spec differs from plan-auth.md §5
-Origin: ai-proposed · Status: accepted · Affects: E2E-007, E2E-008, AUTH-AC-005, SKILL-AC-006, PWD §2, `docs/contracts/ts/errors.d.ts`, `tests/compliance/harness/expected.ts`
+Origin: ai-proposed · Status: accepted; its first bullet amended by DEC-0526 (E2E-007's cloud part and AUTH-AC-005's admin part are automated) · Affects: E2E-007, E2E-008, AUTH-AC-005, SKILL-AC-006, PWD §2, `docs/contracts/ts/errors.d.ts`, `tests/compliance/harness/expected.ts`
 
 - **The admin-list criteria stay milestone items, performed by an AI agent.** The plan has E2E-007's cloud part "automated in check-login". Becoming an admin needs a committed change to `config/cloudflare/prodcheck.json` and a redeploy, and each `check-login` run uses a fresh user, so it cannot run on every commit.
   - E2E-007's cloud part, AUTH-AC-005's admin-list part and SKILL-AC-006 stay milestone items.
@@ -5023,3 +5023,103 @@ Origin: ai-proposed · Status: accepted · Affects: E2E-007, E2E-008, AUTH-AC-00
 - **Two new error codes**, `AUTH.NOT_VERIFIED` (403) and `AUTH.RATE_LIMITED` (429, retryable), are specified in PWD §2 and in the internal HTTP contract. They are added to `errors.d.ts` together with `ERROR_CATALOGUE` in implementation item I-C. The reason: the catalogue's unit test transcribes `errors.d.ts` exactly, and this item changes documents and contracts only.
 - **Not-run rules.** The criteria that need the password provider on a cloud stage get this phase's not-run rule "password login provider not implemented yet (DEC-0509)" in the compliance harness. It replaces the Google-mocked rules until items I-B…I-G land and the test authors tag tests. New local criteria get no rule: they are reported untested until their tests exist.
 - **Other differences.** The sink retention is PAR-241, not PAR-240 (DEC-0517), and the domain is an account setting, not a per-stage `from` (DEC-0514).
+
+## Login: admins by role, everyone who signs up is a user (2026-10-25)
+
+The owner's two decisions of 2026-10-25, and the design the orchestrator proposed for them, which the owner agreed. They replace configuration-based admins (DEC-0015) and the optional users list (DEC-0080).
+
+### DEC-0521 — Admins are a role stored with the account in the stage's database, not a list in configuration
+Origin: owner · Status: accepted · Supersedes: DEC-0015 · Affects: SYS-REQ-018, AUTH-REQ-003, AUTH-REQ-005, PWD-REQ-008, CFG-REQ-005, SKILL-REQ-006, `docs/contracts/schemas/stage-config.schema.json`, `docs/contracts/ts/testing.d.ts`
+
+The owner, 2026-10-25: "We can assign users to groups in better auth, correct? If so on cloudflare let's create an admin group and assign users there, not in a file." And, clarifying: "The user is not assigned any roles though. There is not a 'user' role."
+
+- **Where the role lives.** In the column `role` of `__framework_auth_user`, shaped like Better Auth's admin-plugin field: text holding role names separated by commas. It is in the stage's own database: D1 on Cloudflare, the local D1 for `dev`, and PGlite or local D1 in `createTestApp`.
+- **Only one role exists: `admin`.** The column can hold more roles in a later release, but no other role is defined now. Unknown names in the column are ignored.
+- **There is no "user" role.** A new account has no roles: the column is NULL. Nothing ever writes `user` into it. The admin plugin's `defaultRole: "user"` is not copied, and the admin plugin itself is not installed.
+- **"user" is an access level, not a role.** The levels are:
+  - `anonymous`: no valid session;
+  - `user`: a valid session for an existing, verified account;
+  - `admin`: a user whose role list contains `admin`.
+- **Revoking** removes `admin` from the list. When no role is left, the column is NULL again, never `user`.
+- **No admins in configuration.** `framework.admins` leaves the stage-config schema. A values file that still holds it is rejected, like any unknown field (CFG-REQ-005 as amended).
+
+### DEC-0522 — Anyone who signs up and verifies their address is a user; the users list is removed
+Origin: owner · Status: accepted · Supersedes: DEC-0080 · Affects: SYS-REQ-018, AUTH-REQ-003, AUTH-REQ-005, CFG-REQ-005, DEMO-REQ-011, SKILL-REQ-006, `docs/contracts/schemas/stage-config.schema.json`, `docs/contracts/http/framework.openapi.yaml` (`unlistedId`)
+
+The owner, 2026-10-25: "Anyone who signs up is a user."
+
+- Any account with a verified email address is level `user`. Admins are users with the `admin` role (DEC-0521).
+- `framework.users` leaves the stage-config schema, and with it the "unlisted" login: `/api/auth/me` no longer returns `unlistedId`.
+- **An unverified account is never a user.** Sign-in already refuses it (PWD-REQ-001). The level check also reads the verification flag, so a session whose account is no longer verified, or no longer exists, is anonymous.
+- DEMO-REQ-011 ("only listed people can post") and DEMO-AC-011 are retired. On the demo, every signed-up user can post, as DEMO-REQ-002's permissions table already says for level `user`.
+
+### DEC-0523 — The first admin is granted with the operator command `admins`
+Origin: ai-proposed · Status: accepted · Affects: CLI-REQ-001, CLI-REQ-005, CLI-AC-006, CLI-AC-007, SKILL-REQ-006
+
+Better Auth's own `setRole` needs an existing admin's session, so nobody could ever become the first admin through it. The framework adds an operator command instead:
+
+- **Forms.** `npm run admins -- grant <email> --target <t> --stage <s>`, `revoke <email> …` and `list …`. The owner's proposal wrote `--stage <stage>` only; `--target` is added because every stage command takes it (CLI-REQ-001). With `--target local`, `--stage` may be left out and can only be `local`.
+- **Where it writes.** Directly in the stage's database:
+  - on Cloudflare, through the D1 HTTP API, against the stage's current database (MIG §2), with the token that deploys already use;
+  - locally, in the app's persisted local D1 (`.wrangler/state`), which `dev` also uses.
+- **People are named by email.** It is an operator tool, not app code, so the email address is the natural handle for the owner. App code still never sees an address (SYS-REQ-017).
+- **Stages.** It works on `test-*` stages and on production stages. On a production stage it requires `--confirm-production <s>` repeating the stage name, as `remove` does (CLI §2).
+- **Refusals.** These are refused with exit 1, and nothing changes:
+  - an unknown address;
+  - an unverified account;
+  - on Cloudflare, a stage with more than one database. That means a schema-changing deploy is in progress or was interrupted, and a grant could land in a database that is about to be deleted.
+- **Output.**
+  - `grant` and `revoke` print the account's user ID and its new role list.
+  - `list` prints each admin's address, user ID and roles.
+  - No form prints a password, a hash, a token, or an API credential (CLI-REQ-004).
+- **Idempotent.** Granting a role already held, or revoking one not held, changes nothing and exits 0.
+
+### DEC-0524 — The level is read from the account on every request that carries a valid session; one D1 read per authenticated request
+Origin: ai-proposed · Status: accepted · Amends: DEC-0028 (sessions stay stateless and unrevocable; only the level is read per request) · Affects: AUTH-REQ-003, AUTH-REQ-006, AUTH §2 (session cookie), `docs/contracts/ts/internal/login-provider.d.ts` (`AccountStatus`)
+
+- **When it reads.** AUTH reads the account's verification flag and role list from the stage's database once per request. It does so only when the request carries a valid framework session from a real provider: a session cookie with a good signature that has not expired. These requests make no database read:
+  - a request without a session cookie;
+  - a request with an invalid, tampered or expired cookie;
+  - a request with a session created by the authentication mock. The mock's session carries its level, and only test stages and local builds have the mock (AUTH-REQ-009).
+- **Grant and revoke take effect on the next request.** Nobody has to log in again, and no deploy is needed.
+- **The session names the account.** The user ID cannot be reversed into the provider's subject (AUTH-REQ-002). So the session cookie gains the provider id and the provider's subject (session format version 2). The cookie is signed and HttpOnly, and app code never sees it. A version 1 cookie is treated as anonymous, which logs everyone out once.
+- **Lookup.** The session's provider answers `accountStatus(subject)` with `{ verified, roles }`, or null for an unknown account. For the password provider this is one `SELECT email_verified, role FROM __framework_auth_user WHERE id = ?`.
+- **A failed read means anonymous.** If the read fails, that request is anonymous, and one `warn` LOG entry, `role lookup failed (<code>)`, names the error code. A request is never admin on a guess.
+- **The trade-off against DEC-0028.**
+  - DEC-0028 made sessions stateless, so no request needed a database read for identity. This adds one primary-key D1 read to every authenticated request.
+  - Apps are low-volume (DEC-0005), and the rate limiter already reads D1 on every credential request (DEC-0519), so the cost is accepted.
+  - Sessions themselves stay stateless: logout, a password reset and a revoke do not end a copied session. A revoke does lower that session's level on the next request.
+
+### DEC-0525 — Tests: the mock still chooses a level; a test helper grants roles to real-provider accounts
+Origin: ai-proposed · Status: accepted · Affects: AUTH-REQ-009, `docs/contracts/ts/testing.d.ts` (`TestApp.grantRole`, `TestApp.revokeRole`, `TestAppOptions.config`)
+
+- **The authentication mock is unchanged.** `mock-login`, `as()` and `createTestApp`'s `user` choose `anonymous`, `user` or `admin` directly, and no role is read for them.
+- **The role helpers.** `TestApp.grantRole(userId, "admin")` and `revokeRole(userId, "admin")` change a real-provider account's roles. They work in a test app created with `passwordLoginProvider` or `stubLoginProvider`.
+  - The account is named by the user ID that `/api/auth/me` shows.
+  - They write what `admins` writes: the password provider's `role` column, or the stub's in-memory accounts. So the same level code runs.
+  - They throw on a mock test app and on a connected stage. On a stage, use the `admins` command instead.
+- **The stub provider** keeps one in-memory account per subject logged in with `loginWithStub`. Each is verified and starts with no roles.
+- **Configuration.** `createTestApp`'s reserved `config.framework` key no longer takes `admins` or `users`. With either, it throws, as the build does.
+
+### DEC-0526 — What changes because admins are a role
+Origin: ai-proposed · Status: accepted · Amends: DEC-0520 (its first bullet) · Affects: E2E-007, AUTH-AC-003, AUTH-AC-005, AUTH-AC-012, AUTH-AC-013, AUTH-AC-015, PWD-AC-010, CFG-AC-005, CLI-AC-006, CLI-AC-007, SKILL-AC-006, DEMO-REQ-009, DEMO-REQ-011, DEMO-AC-011, COMPL-REQ-006, MIG §2, `tests/compliance/harness/expected.ts`
+
+- **No more "copy your user ID into configuration".** The skill's and the template README's copy-ID steps go away. Becoming an admin is one `admins grant <address>` command, run by the owner or an agent. `/api/auth/me` and the demo's account page still show the ID, for support and for the test helpers.
+- **Milestone parts become automated.**
+  - DEC-0520 kept E2E-007's cloud part and AUTH-AC-005's admin-list part as milestone items, because they needed a committed configuration change and a redeploy. A grant needs neither.
+  - So both now run on every cloud run. The test signs up on `prodcheck`, grants itself the role with `admins grant … --confirm-production prodcheck`, checks that the next request is admin, then revokes the role.
+  - They leave the milestone list (COMPL-REQ-006).
+  - SKILL-AC-006 stays a milestone item, because it follows the owner documentation from account setup onwards. It no longer edits a values file.
+- **New criteria:**
+  - AUTH-AC-015: no database read without a session;
+  - PWD-AC-010: a new account has no role;
+  - CLI-AC-006 and CLI-AC-007: the `admins` command, locally and on Cloudflare.
+- **Rewritten criteria:** AUTH-AC-003, AUTH-AC-005, AUTH-AC-012, AUTH-AC-013, CFG-AC-005 and E2E-007.
+- **Retired:** DEMO-REQ-011 and DEMO-AC-011 (DEC-0522).
+- **Migration.** A new framework migration in both dialects adds the column (`framework/<nnnn>_auth_role`, the next free number). It is a nullable text column with no default, which is a supported change (MIG §2). Existing accounts get NULL, meaning no roles.
+- **Not-run rules.** The new and rewritten cloud parts need the password provider on a cloud stage. Until the implementation items land and the tests are tagged, they get this phase's rule "password login provider not implemented yet (DEC-0509)".
+- **Implementation follow-ups.** This item changes documents and contracts only, so these are not done here:
+  - the stage-config Zod mirror (`src/config/schema.ts`), `ResolvedConfig` and `levels.ts` drop `admins` and `users`;
+  - the committed values files drop them too (`apps/demo/config/cloudflare/prod.json`, and the template's and the reference app's files);
+  - the session format version 2, `accountStatus`, the role column and its migration, the `admins` command, and the test helpers;
+  - `skill/` and `apps/template/README.md` replace the copy-ID steps with `admins grant`, in item I-G's rewrite of the owner tasks.

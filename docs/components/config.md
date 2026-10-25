@@ -1,6 +1,6 @@
 # CFG — Configuration
 
-Non-secret configuration: keys declared by the app, per-stage values committed to the repository, and the framework settings that live with them (admins, the optional users list, the sender's display name for the framework's email). Values are fixed at deploy time.
+Non-secret configuration: keys declared by the app, per-stage values committed to the repository, and the framework setting that lives with them (the sender's display name for the framework's email). Values are fixed at deploy time. Admins and users are not configuration: admins hold a role in the stage's database, and anyone who signs up is a user (DEC-0521, DEC-0522).
 
 Contracts: [config.d.ts](../contracts/ts/config.d.ts), [stage-config.schema.json](../contracts/schemas/stage-config.schema.json), [errors.d.ts](../contracts/ts/errors.d.ts) (`CFG.*`).
 
@@ -26,10 +26,12 @@ Origin: owner · Derives from: SYS-REQ-016
 
 The configuration resolved for a deployment MUST record each declared secret's logical name and its location on that target.
 
-#### CFG-REQ-005 — Admin list and users list
-Origin: owner · Derives from: SYS-REQ-018 · Decision: DEC-0080
+#### CFG-REQ-005 — No admin list or users list (amended; formerly admin list and users list)
+Origin: owner · Derives from: SYS-REQ-018 · Decision: DEC-0080 (superseded), DEC-0521, DEC-0522
 
 The admin list MUST be the user IDs in `framework.admins`. The optional users list MUST be the user IDs in `framework.users`; when it is absent, there is no users list (AUTH-REQ-003).
+
+Amendment (Origin: owner · Decision: DEC-0521, DEC-0522): the paragraph above is replaced by the following. Configuration MUST NOT designate admins or users. The stage configuration schema has no `framework.admins` and no `framework.users`, and a values file that holds either MUST fail the build like any unknown field, naming it. Admins are the `admin` role of AUTH-REQ-003, granted with `admins` (CLI-REQ-005).
 
 #### CFG-REQ-006 — No secret values
 Origin: owner · Derives from: SYS-REQ-015
@@ -44,7 +46,7 @@ Configuration files MUST NOT contain secret values; the schema provides no place
 
 **Build failures.** Every problem in a values file (schema violation, missing file, missing value, wrong type, undeclared key, bad declared key or default) fails the build with one `CORE.MISCONFIGURED` error that names the file and lists every offending field or key (DEC-0152). `framework.email` is optional: it holds only `senderName`, the display name of the framework's email sender (MAIL), defaulting to the app name. It holds no address or domain; the email domain is an account setting (MAIL-REQ-003, DEC-0514). `framework.google` is no longer part of the schema (DEC-0513).
 
-**Admin and users lists.** `framework.admins` and the optional `framework.users` hold user IDs as shown by `/api/auth/me`, with the same item rules (non-empty, unique). AUTH evaluates both per request (AUTH-REQ-003). Like every value, a change takes effect at the next deploy.
+**No admin or users lists** (DEC-0521, DEC-0522). `framework.admins` and `framework.users` are no longer part of the schema. A values file still holding one fails the build with the unknown-field message, and the build's message adds that admins are now granted with `admins grant` (CLI-REQ-005). The level of a logged-in person comes from their account (AUTH-REQ-003), so changing who is an admin needs no commit and no deploy.
 
 **Resolution.** At deploy time, the resolved configuration combines:
 - the committed values;
@@ -53,7 +55,7 @@ Configuration files MUST NOT contain secret values; the schema provides no place
 - values known only once resources exist, such as the database, bucket and log bucket identifiers, and the stage's generated public origin;
 - secret locations, derived by SEC's naming convention.
 
-The build-time result (`ResolvedConfig`, framework-internal) holds the deployment, every declared key's value, `admins`, `users` (only when present in the file), `email` (only when present), and each declared secret as `{ name, location }`. Provisioning-derived values are not part of it; the adapters that need them read them from the target's deployment-time settings (DEC-0153).
+The build-time result (`ResolvedConfig`, framework-internal) holds the deployment, every declared key's value, `email` (only when present), and each declared secret as `{ name, location }`. Provisioning-derived values are not part of it; the adapters that need them read them from the target's deployment-time settings (DEC-0153).
 
 **Delivery.** Committed values are embedded in the build as a generated module (DEC-0063): a JavaScript module with no imports whose default export is the resolved configuration as JSON data. The runtime `ConfigService` is built over its `values`; reading any other key throws `CFG.UNDECLARED_KEY` naming the key. Provisioning-derived values reach the runtime through the platform's deployment-time settings (Worker variables on Cloudflare, Lambda environment variables on AWS). Only framework adapters read those settings; app code reads configuration through `c.var.config` only.
 
@@ -80,7 +82,7 @@ CORE (deployment identity), SEC (secret location convention), PROV (provisioning
 | CFG-AC-002 | Builds fail, naming the key, for a missing value, a wrong type, and an undeclared key in the values file. A build for a stage named `test-<id>` uses `config/<target>/test.json`; a build for a stage not named `test-*` that has no committed values file of its own fails, naming the missing file, even when `test.json` exists. | CFG-REQ-002 | Local |
 | CFG-AC-003 | Locally, changing a value in the committed file has no effect on a running build and takes effect only after the next build. On cloud, a deployed stage reports exactly its committed values. | CFG-REQ-003 | Local, cloud |
 | CFG-AC-004 | The resolved configuration of a deployment lists every declared secret with its target location. | CFG-REQ-004 | Local, cloud |
-| CFG-AC-005 | Locally, with the stub login provider, a user whose ID is added to `framework.admins` becomes admin only after the next build; removing it reverts. Likewise, adding `framework.users` without a logged-in user's ID makes that user anonymous only after the next build. On cloud, a deployed stage reports exactly its committed `framework.admins` and `framework.users`. | CFG-REQ-005 | Local, cloud |
+| CFG-AC-005 | A build of a values file holding `framework.admins` (even an empty list) fails with `CORE.MISCONFIGURED`, naming the file and the unknown field `framework.admins`; likewise for `framework.users`. `createTestApp` with `config: { framework: { admins: [] } }` or `{ users: [] }` throws. The stage configuration schema's `framework` properties are exactly `email`. The committed values files of the template, the reference app and the demo, and `skill/templates/production-stage.json`, hold neither field. | CFG-REQ-005 | Local |
 | CFG-AC-006 | A values file containing an unknown field is rejected by schema validation. | CFG-REQ-006 | Local |
 
 ## 5. Portability note

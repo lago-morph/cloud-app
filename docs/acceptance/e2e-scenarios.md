@@ -72,18 +72,22 @@ Redeploy the `prodcheck` stage (COMPL §2) on each cloud.
 Pass: `/api/auth/mock-login` and `/api/__framework/test-mail` return 404, the deployed bundle contains no mock or mail-capture code, and `/api/auth/login` redirects to the framework's sign-in page on the stage's public origin (DEC-0513).
 
 #### E2E-007 — Becoming an admin
-Verifies: SYS-REQ-016, SYS-REQ-018
-Where: Local; cloud (milestone)
+Verifies: SYS-REQ-018
+Where: Local, cloud
 
-Follow only the documented steps:
-1. Sign up and log in to a stage (with the password provider: sign up, read the verification mail with `mail last`, verify, sign in).
-2. Copy the user ID from the account page.
-3. Add it to the admin list in configuration.
-4. Redeploy.
+Follow only the documented steps (DEC-0521, DEC-0523, DEC-0526):
+1. Sign up and sign in to a stage: sign up, read the verification mail with `mail last`, verify, and sign in. Check that `/api/auth/me` shows level `user`, and that an admin-only reference route answers 403 `AUTH.FORBIDDEN`.
+2. Grant the role: `admins grant <address> --target <t> --stage <s>`, adding `--confirm-production <s>` on a production stage.
+3. Send the next request with the same session: no new login, no deploy.
+4. Revoke the role with `admins revoke`, and send one more request.
 
-Locally this runs as an in-process test (`createTestApp` with the stub login provider), not through `dev`, because `dev` uses the mock, which ignores the admin list; the redeploy is a rebuild. On each cloud it runs on the `prodcheck` stage, performed by an AI agent with an address under `t.<domain>` and no owner step (DEC-0520). There, the admin-list change is a committed change to `config/<target>/prodcheck.json`, made before the redeploy, and the evidence is recorded against that commit.
+Locally this runs through `dev` and the reference app's local D1, with `--target local`. On each cloud it runs on the `prodcheck` stage, with an address under `t.<domain>`, the mail read from the sink, and `--confirm-production prodcheck`. It is automated on every cloud run, with no owner step and no commit.
 
-Pass: the user is admin after the redeploy and not before.
+Pass:
+- the user is `user` before the grant;
+- `admin` (the admin-only route answers 200) on the first request after it;
+- `user` again on the first request after the revoke;
+- the account has no role stored afterwards.
 
 #### E2E-008 — Real login provider check (automated)
 Verifies: SYS-REQ-019, SYS-REQ-027
