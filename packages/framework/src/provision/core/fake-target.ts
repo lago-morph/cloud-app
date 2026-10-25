@@ -10,6 +10,7 @@ import type { MigrationDatabase } from "../../mig/apply.js";
 import type { Migration } from "../../mig/history.js";
 import type { Dialect } from "../../sql/dialect.js";
 import type {
+  BackupListing,
   AccountSettings,
   DeployedCode,
   DeployInput,
@@ -253,7 +254,16 @@ export class FakeTarget implements TargetOperations {
   async backupStage(stage: Stage, databases: readonly StageDatabase[]): Promise<StageBackup> {
     this.enter("backupStage", `${key(stage)} ${databases.map((d) => d.name).join(",")}`);
     this.backups.push({ stage: key(stage), databases: databases.map((d) => d.name) });
-    return { location: `fake backups/${key(stage)}/`, items: [...databases.map((d) => `database ${d.name}`), "files"] };
+    const n = this.backups.filter((b) => b.stage === key(stage)).length;
+    const location = `fake backups/${key(stage)}/${n}/`;
+    return { location, items: [...databases.map((d) => `database ${d.name}`), "files"], listing: { location, stamp: String(n).padStart(4, "0"), complete: true, databases: databases.length, files: 0 } };
+  }
+
+  async listStageBackups(stage: Stage): Promise<readonly BackupListing[]> {
+    this.enter("listStageBackups", key(stage));
+    return this.backups
+      .filter((b) => b.stage === key(stage))
+      .map((b, i) => ({ location: `fake backups/${key(stage)}/${i + 1}/`, stamp: String(i + 1).padStart(4, "0"), complete: true, databases: b.databases.length, files: 0 }));
   }
 
   async createDatabase(stage: Stage, name: string): Promise<StageDatabase> {

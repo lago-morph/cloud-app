@@ -25,6 +25,7 @@
  */
 import { createHash } from "node:crypto";
 import type { D1Client, D1Row } from "./client.js";
+import { lossyRowCondition } from "./lossless.js";
 
 /** Downloads from or uploads to a signed URL (no credentials): the export's and the import's. */
 export type SignedTransfer = (method: "GET" | "PUT", url: string, body?: Uint8Array) => Promise<{ readonly status: number; readonly bytes: Uint8Array }>;
@@ -57,8 +58,6 @@ export interface DumpOptions {
 
 const q = (name: string) => `"${name.replace(/"/g, '""')}"`;
 const NOT_INTERNAL = `"name" NOT LIKE 'sqlite\\_%' ESCAPE '\\' AND "name" NOT LIKE '\\_cf\\_%' ESCAPE '\\'`;
-/** ±(2^53 − 1): integers beyond it are rounded by the dump (A-06). */
-const SAFE = "9007199254740991";
 
 /** A SQLite identifier as SQLite compares it: ASCII letters without regard to case. */
 export const foldCase = (name: string): string => name.replace(/[A-Z]/g, (c) => c.toLowerCase());
@@ -78,12 +77,7 @@ export async function nativeCopyPrecheck(client: D1Client, uuid: string, limits:
   const statements = names.map((t, i) => {
     const cols = (info[2 * i] ?? []).map((c) => String(c["name"]));
     const size = cols.length === 0 ? "0" : cols.map((c) => `coalesce(length(CAST(${q(c)} AS BLOB)), 0)`).join(" + ");
-    const bad =
-      cols.length === 0
-        ? "0"
-        : cols
-            .map((c) => `(typeof(${q(c)}) = 'text' AND instr(CAST(${q(c)} AS BLOB), X'00') > 0) OR (typeof(${q(c)}) = 'integer' AND (${q(c)} > ${SAFE} OR ${q(c)} < -${SAFE}))`)
-            .join(" OR ");
+    const bad = lossyRowCondition(cols);
     return { sql: `SELECT count(*) AS "n", coalesce(max(${size}), 0) AS "big", coalesce(sum(${size}), 0) AS "total", coalesce(sum(CASE WHEN ${bad} THEN 1 ELSE 0 END), 0) AS "bad" FROM ${q(t)}` };
   });
   // SQLite matches table names without regard to ASCII case, so a reference may spell its parent differently.

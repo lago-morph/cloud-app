@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { D1Like } from "../../../mig/apply.js";
 import type { StageDatabase } from "../../core/operations.js";
 import { openFakeD1Api, type FakeD1Api } from "./fake-d1-api.js";
-import { exportDump } from "./native-copy.js";
+import { exportDump, importDump } from "./native-copy.js";
 import { d1Client } from "./client.js";
 import { d1DatabaseOperations, type D1DatabaseOperations } from "./operations.js";
 
@@ -126,6 +126,42 @@ describe("D1 copyDatabase: native export/import when the pre-check allows it (DE
     expect(nativeRequests()).toEqual([]);
     fake.intercept = undefined;
     expect(await fingerprint(fake.database(copied.id))).toEqual(before);
+  });
+
+  it("the backup's export scans for NULs and integers beyond ±2^53 and writes those tables losslessly as JSON and SQL (DEC-0096, DEC-0543)", async () => {
+    const db = fake.database(source.id);
+    await seedSafe(db);
+    await db.batch([
+      db.prepare(`INSERT INTO "parents" VALUES ('nul', ?, CAST('9223372036854775807' AS INTEGER), 2.0)`).bind("a\u0000b\nc"),
+      db.prepare(`INSERT INTO "parents" VALUES ('neg', 'n', CAST('-9223372036854775808' AS INTEGER), NULL)`),
+    ]);
+    const before = await fingerprint(db);
+    const exported = await ops.exportDatabase(source);
+    expect(exported.dump.length).toBeGreaterThan(0);
+    expect(exported.lossless?.tables).toEqual(["parents"]);
+    const json = JSON.parse(new TextDecoder().decode(exported.lossless!.json)) as { database: string; tables: { table: string; columns: string[]; rows: unknown[][] }[] };
+    expect(json.database).toBe("notes-test-abc-db-1");
+    const parents = json.tables.find((t) => t.table === "parents")!;
+    expect(parents.columns).toEqual(["id", "name", "n", "r"]);
+    expect(parents.rows).toContainEqual(["nul", "a\u0000b\nc", { integer: "9223372036854775807" }, { real: 2 }]);
+    expect(parents.rows).toContainEqual(["neg", "n", { integer: "-9223372036854775808" }, null]);
+    expect(parents.rows).toContainEqual(["p2", "two", { integer: "-2147483648" }, { real: 1 / 3 }]);
+
+    // The documented restore: one file of D1's dump without the listed tables' rows, followed by the lossless SQL.
+    const restored = await ops.createDatabase(stage, "notes-test-abc-db-2");
+    const client = d1Client(fake.api, ACCOUNT);
+    const dumpText = new TextDecoder().decode(exported.dump);
+    const filtered = dumpText
+      .split("\n")
+      .filter((l) => !l.startsWith(`INSERT INTO "parents"`))
+      .join("\n");
+    const restoreFile = `${filtered}\n${new TextDecoder().decode(exported.lossless!.sql)}`;
+    await importDump(client, restored.id, new TextEncoder().encode(restoreFile), { transfer: fake.transfer, sleep: async () => undefined });
+    expect(await fingerprint(fake.database(restored.id))).toEqual(before);
+
+    const safe = await ops.createDatabase(stage, "notes-test-abc-db-3");
+    await seedSafe(fake.database(safe.id));
+    expect((await ops.exportDatabase(safe)).lossless).toBeUndefined();
   });
 
   it("a database over PAR-313 in all takes the row-by-row path", async () => {

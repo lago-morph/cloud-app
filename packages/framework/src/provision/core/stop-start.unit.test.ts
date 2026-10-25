@@ -164,13 +164,27 @@ describe("production remove: backup first (DEC-0543)", () => {
     const io = captureIo();
     const result = await runRemove(t, prod, io);
     expect(result.status).toBe(0);
-    expect(result.backup).toEqual({ location: "fake backups/notes/prod/", items: ["database notes-prod-db-1", "files"] });
+    expect(result.backup).toEqual({
+      location: "fake backups/notes/prod/1/",
+      items: ["database notes-prod-db-1", "files"],
+      listing: { location: "fake backups/notes/prod/1/", stamp: "0001", complete: true, databases: 1, files: 0 },
+    });
     expect(t.calls.indexOf("backupStage notes/prod notes-prod-db-1")).toBeLessThan(t.calls.indexOf("dropDatabase notes-prod-db-1"));
-    expect(io.out).toMatch(/backed up stage prod to fake backups\/notes\/prod\/: database notes-prod-db-1, files/);
+    expect(t.calls.indexOf("listStageBackups notes/prod")).toBeLessThan(t.calls.indexOf("backupStage notes/prod notes-prod-db-1"));
+    expect(io.out).toMatch(/backed up stage prod to fake backups\/notes\/prod\/1\/: database notes-prod-db-1, files/);
 
     const u = deployed();
     expect((await runRemove(u, stage, captureIo())).backup).toBeUndefined();
     expect(u.calls.some((c) => c.startsWith("backupStage"))).toBe(false);
+  });
+
+  it("a backup listing that cannot be read deletes nothing and exits 1", async () => {
+    const t = deployed(prod).fail("listStageBackups", new Error("listing failed"));
+    const io = captureIo();
+    expect(await runRemove(t, prod, io)).toEqual({ status: 1, leftovers: [] });
+    expect(t.calls.some((c) => /^(backupStage|dropDatabase|removeStage)/.test(c))).toBe(false);
+    expect(io.err).toMatch(/listing failed/);
+    expect(io.err).toMatch(/nothing was deleted; the stage is unchanged/);
   });
 
   it("a failed backup deletes nothing and exits 1", async () => {

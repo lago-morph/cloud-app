@@ -12,7 +12,7 @@
  * is removed without a backup.
  */
 import { matchStageDatabases } from "./databases.js";
-import type { Stage, StageBackup, TargetOperations } from "./operations.js";
+import type { BackupListing, Stage, StageBackup, TargetOperations } from "./operations.js";
 import { EXIT, errorLine, line, messageOf, type ProvisionIo, type ProvisionStatus } from "./output.js";
 
 export interface RemoveResult {
@@ -33,9 +33,14 @@ export async function runRemove(ops: TargetOperations, stage: Stage, io: Provisi
   };
 
   let backup: StageBackup | undefined;
+  let restoreFrom: BackupListing | undefined;
   if (!isTestStage(stage)) {
+    let earlier: readonly BackupListing[];
     try {
       const databases = matchStageDatabases(stage, (await ops.listStageResources(stage)).databases);
+      // A retry after a partial remove (databases already deleted) writes a backup with less in it:
+      // the earlier backups are listed first, so the owner is pointed at a complete one (DEC-0556).
+      earlier = await ops.listStageBackups(stage);
       backup = await ops.backupStage(stage, databases);
     } catch (error) {
       errorLine(io, `remove of production stage ${stage.stage} failed: the backup failed: ${messageOf(error)}`);
@@ -44,6 +49,7 @@ export async function runRemove(ops: TargetOperations, stage: Stage, io: Provisi
       return { status: EXIT.failed, leftovers: [] };
     }
     line(io, `backed up stage ${stage.stage} to ${backup.location}: ${backup.items.join(", ")}`);
+    restoreFrom = printBackups(io, stage, [...earlier.filter((b) => b.stamp !== backup?.listing.stamp), backup.listing]);
   }
   const withBackup = backup === undefined ? {} : { backup };
 
@@ -85,6 +91,31 @@ export async function runRemove(ops: TargetOperations, stage: Stage, io: Provisi
     return { status: EXIT.failed, leftovers, ...withBackup };
   }
   line(io, `removed stage ${stage.stage} of ${stage.app} from ${ops.target}; its log entries stay in the shared log bucket`);
-  if (backup !== undefined) line(io, `its data stays in ${backup.location} until the backup bucket's lifecycle rule deletes it; to restore it, follow "Restore a removed production stage" in the skill's reference/deploying.md`);
+  if (restoreFrom !== undefined) {
+    line(io, `its data stays in the backups above until the backup bucket's lifecycle rule deletes them; to restore it, use ${restoreFrom.location} and follow "Restore a removed production stage" in the skill's reference/deploying.md`);
+  }
   return { status: EXIT.ok, leftovers, ...withBackup };
+}
+
+/**
+ * Prints every backup of the stage, the usable ones (complete, holding as many databases as the
+ * stage had) first, newest first, and flags the others; returns the one to restore from. The
+ * stage's databases are as many as the most any complete backup holds: a backup written after
+ * the databases were deleted holds fewer and is flagged.
+ */
+function printBackups(io: ProvisionIo, stage: Stage, backups: readonly BackupListing[]): BackupListing | undefined {
+  const expected = Math.max(0, ...backups.filter((b) => b.complete).map((b) => b.databases ?? 0));
+  const usable = (b: BackupListing) => b.complete && (b.databases ?? 0) >= expected;
+  const newestFirst = (a: BackupListing, b: BackupListing) => (a.stamp < b.stamp ? 1 : a.stamp > b.stamp ? -1 : 0);
+  const ordered = [...backups.filter(usable).sort(newestFirst), ...backups.filter((b) => !usable(b)).sort(newestFirst)];
+  line(io, `backups of stage ${stage.stage} (the one to restore from first):`);
+  for (const b of ordered) {
+    const what = !b.complete
+      ? "INCOMPLETE: no manifest (the backup did not finish); do not restore from it"
+      : usable(b)
+        ? `${b.databases ?? 0} database(s), ${b.files ?? 0} file(s)`
+        : `INCOMPLETE: ${b.databases ?? 0} of the stage's ${expected} database(s); do not restore from it`;
+    line(io, `  ${b.location}: ${what}`);
+  }
+  return ordered.find(usable);
 }

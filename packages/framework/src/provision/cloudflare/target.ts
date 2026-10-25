@@ -24,7 +24,7 @@
  * - `setSecret`, `listSetSecrets`, `stopApp`, `startApp`: `worker.ts`.
  * - `readStageRecord`, `writeStageRecord`: the stage record in `sst-state` (`stage-record.ts`,
  *   DEC-0544); `removeStage` deletes it with the stage's state objects.
- * - `backupStage`: the production `remove`'s backup into `prototype-backups` (`backup.ts`,
+ * - `backupStage`, `listStageBackups`: the production `remove`'s backup into `prototype-backups` (`backup.ts`,
  *   DEC-0543), through `bytes` and the databases' `exportDatabase`.
  * - Databases: D-04's operations through `databases.ts`.
  * - `checkHealth`: `health.ts` with FILES' storage preflight.
@@ -48,7 +48,7 @@ import { accountSubdomain, createSharedResources, inspectSharedResources, type S
 import { readAccountSettings, writeAccountSettings } from "./account-settings.js";
 import { createCloudflareEmailSetup, type CloudflareEmailSetup } from "./email.js";
 import { describeFailure, succeeded, type CloudflareApi, type CloudflareBytesApi } from "./api.js";
-import { backupStage } from "./backup.js";
+import { backupStage, listStageBackups } from "./backup.js";
 import { readStageRecord, writeStageRecord } from "./stage-record.js";
 import type { CloudflareDatabases } from "./databases.js";
 import { missingCredentials, type Environment } from "./environment.js";
@@ -220,6 +220,12 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
         stage,
         stageDatabases,
       );
+    },
+
+    async listStageBackups(stage) {
+      refuseAccountResourceClash(stage);
+      if (!options.bytes) throw new Error("no byte transfer for R2 objects is configured, so the stage's backups cannot be read");
+      return listStageBackups({ api, bytes: options.bytes, accountId }, stage);
     },
 
     createDatabase: (stage, name) => databases.createDatabase(stage, name),

@@ -57,6 +57,21 @@ export interface StageBackup {
   readonly location: string;
   /** What was backed up, e.g. `database notes-prod-db-3`, `12 files`. */
   readonly items: readonly string[];
+  /** The backup as `listStageBackups` lists it. */
+  readonly listing: BackupListing;
+}
+
+/** One backup of a stage in the target's backup store (DEC-0543, DEC-0556). */
+export interface BackupListing {
+  /** For the owner, as `StageBackup.location`. */
+  readonly location: string;
+  /** Its time, `yyyymmddThhmmssZ`; listings sort by it. */
+  readonly stamp: string;
+  /** Whether its manifest exists (written last, so the backup finished). */
+  readonly complete: boolean;
+  /** From the manifest: the number of databases and files it holds. */
+  readonly databases?: number;
+  readonly files?: number;
 }
 
 /** A database as a target lists it, before the core matches its name against the anchored pattern. */
@@ -219,4 +234,6 @@ export interface TargetOperations {
    * everything arrived. Throws when any step fails; it never deletes anything of the stage.
    */
   backupStage(stage: Stage, databases: readonly StageDatabase[]): Promise<StageBackup>;
+  /** Every backup of the stage in the account's backup store, in any order (DEC-0556). Reads only. */
+  listStageBackups(stage: Stage): Promise<readonly BackupListing[]>;
 }
