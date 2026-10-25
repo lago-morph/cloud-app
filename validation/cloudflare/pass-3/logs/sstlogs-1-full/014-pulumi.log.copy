@@ -1,0 +1,21 @@
+Updating (prodcheck):
+
+@ updating........
+ ~  cloudflare:index:WorkersScript WorkerScript updating (0s) [diff: ~assets,contentFile,contentSha256]
+@ updating..........
+ ~  cloudflare:index:WorkersScript WorkerScript updated (6s) [diff: ~assets,contentFile,contentSha256]
+@ updating.....
+ ~  pulumi-nodejs:dynamic:Resource WorkerUrl.sst.cloudflare.WorkerUrl updating (0s) [diff: ~etag]
+@ updating......
+ ~  pulumi-nodejs:dynamic:Resource WorkerUrl.sst.cloudflare.WorkerUrl updated (3s) [diff: ~etag]
+ ~  sst:sst:LinkRef WorkerLinkRef updating (0s) [diff: ~properties]
+    pulumi:pulumi:Stack reference-prodcheck  
+Outputs:
+    _protect: false
+
+Resources:
+    ~ 3 updated
+    5 unchanged
+
+Duration: 18s
+
