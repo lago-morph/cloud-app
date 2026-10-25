@@ -10,6 +10,7 @@ import {
   isWantedLifecycle,
   MAIL_SINK_LIFECYCLE_RULE_ID,
   mailSinkTag,
+  sameDnsRecord,
   sinkAddress,
   sinkRouteAddress,
   zoneCandidates,
@@ -63,7 +64,7 @@ describe("CloudflareEmailSetup.setUp (MAIL-REQ-005, PROV-REQ-004)", () => {
     const again = createCloudflareEmailSetup({ api: cloud.api, accountId: ACCOUNT });
     expect(await again.setUp(DOMAIN)).toEqual([]);
     expect(writes(cloud)).toEqual([]);
-    expect(cloud.requests.length).toBeLessThanOrEqual(9);
+    expect(cloud.requests.length).toBeLessThanOrEqual(10);
   });
 
   it("onboards the domain itself for Email Sending, and only when no entry of that name exists", async () => {
@@ -92,7 +93,7 @@ describe("CloudflareEmailSetup.setUp (MAIL-REQ-005, PROV-REQ-004)", () => {
     await expect(stuck.email.setUp(DOMAIN)).rejects.toThrow(/Email Sending entry example\.test: still not enabled \(not verified\) after 60 s; run setup-account again later/);
   });
 
-  it("enables Email Routing on t.<domain> only, never on the apex, and waits for its MX and SPF records", async () => {
+  it("enables Email Routing through t.<domain> only, never through the apex enable or catch-all calls, and waits for its MX and SPF records", async () => {
     const { cloud, email } = setup();
     cloud.routingPolls = 2;
     await email.setUp(DOMAIN);
@@ -165,6 +166,84 @@ describe("CloudflareEmailSetup.setUp (MAIL-REQ-005, PROV-REQ-004)", () => {
     cloud.requests.length = 0;
     expect(await email.setUp(DOMAIN)).toEqual(["Worker prototype-mailsink"]);
     expect(writes(cloud)).toEqual([`PUT /accounts/${ACCOUNT}/workers/scripts/prototype-mailsink`]);
+  });
+
+  describe("Email Routing readiness, replaying the live answers of 2026-10-25 (DEC-0527)", () => {
+    const sub = `t.${DOMAIN}`;
+    const dnsGet = (cloud: FakeCloud) => `GET /zones/${zoneOf(cloud).id}/email/routing/dns?subdomain=${encodeURIComponent(sub)}`;
+    // The exact live body after the records existed, with the domain replaced by the reserved test domain (MAIL-AC-005).
+    const LIVE_DNS_BODY = JSON.parse(
+      `{"success":true,"errors":[],"result":{"errors":null,"records":[{"name":"${sub}","content":"route1.mx.cloudflare.net.","type":"MX","priority":96,"ttl":1},{"name":"${sub}","content":"route2.mx.cloudflare.net.","type":"MX","priority":97,"ttl":1},{"name":"${sub}","content":"route3.mx.cloudflare.net.","type":"MX","priority":97,"ttl":1},{"name":"${sub}","content":"\\"v=spf1 include:_spf.mx.cloudflare.net ~all\\"","type":"TXT","ttl":1}]}}`,
+    ) as unknown;
+
+    /** The account as the failed live run left it: sending, bucket, lifecycle, Worker and the `t.` records exist, routing is on zone-wide, subaddressing is off and there is no sink rule. */
+    async function liveState() {
+      const { cloud, email } = setup();
+      await email.setUp(DOMAIN);
+      const zone = zoneOf(cloud);
+      zone.supportSubaddress = false;
+      zone.rules.splice(1);
+      expect(zone.routingEnabled).toBe(true);
+      expect(zone.dnsRecords.map((r) => `${r.name} ${r.type}`)).toEqual([`${sub} MX`, `${sub} MX`, `${sub} MX`, `${sub} TXT`, `${DOMAIN} TXT`, `cf2024-1._domainkey.${DOMAIN} TXT`]);
+      cloud.override.set(dnsGet(cloud), { status: 200, body: LIVE_DNS_BODY });
+      cloud.requests.length = 0;
+      return cloud;
+    }
+
+    it("the re-run accepts the live object answer, sends no routing POST, and does only subaddressing and the sink rule; a further run is GET-only", async () => {
+      const cloud = await liveState();
+      const zone = zoneOf(cloud);
+      const rerun = setup(cloud).email;
+      expect(await rerun.setUp(DOMAIN)).toEqual(["Email Routing subaddressing", "routing rule sink@t.example.test → Worker prototype-mailsink"]);
+      expect(writes(cloud)).toEqual([`PATCH /zones/${zone.id}/email/routing`, `POST /zones/${zone.id}/email/routing/rules`]);
+      expect(cloud.requests).toContain(`GET /zones/${zone.id}/dns_records?name=${sub}&per_page=100&page=1`);
+
+      cloud.requests.length = 0;
+      expect(await setup(cloud).email.setUp(DOMAIN)).toEqual([]);
+      expect(writes(cloud)).toEqual([]);
+      expect(cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
+    });
+
+    it("records listed by the routing API but absent from the zone's DNS are missing: one POST, then polled until the zone has them", async () => {
+      const { cloud, email } = setup();
+      cloud.routingPolls = 2;
+      cloud.override.set(dnsGet(cloud), { status: 200, body: LIVE_DNS_BODY });
+      expect(await email.setUp(DOMAIN)).toContain("Email Routing on t.example.test");
+      const zone = zoneOf(cloud);
+      expect(cloud.requests.filter((r) => r === `POST /zones/${zone.id}/email/routing/dns`)).toHaveLength(1);
+      expect(cloud.requests.filter((r) => r.startsWith(`GET /zones/${zone.id}/dns_records`))).toHaveLength(4);
+    });
+
+    it("stops with the missing records named when they never appear", async () => {
+      const { cloud, email } = setup();
+      cloud.routingPolls = 1_000;
+      await expect(email.setUp(DOMAIN)).rejects.toThrow(/Email Routing DNS records of t\.example\.test: still missing: MX route1\.mx\.cloudflare\.net\., .*TXT "v=spf1 include:_spf\.mx\.cloudflare\.net ~all"/);
+    });
+
+    it("an error Cloudflare reports keeps the routing not ready even when the records exist", async () => {
+      const cloud = await liveState();
+      const body = JSON.parse(JSON.stringify(LIVE_DNS_BODY)) as { result: { errors: unknown } };
+      body.result.errors = [{ code: "mx.conflict" }];
+      cloud.override.set(dnsGet(cloud), { status: 200, body });
+      await expect(setup(cloud).email.setUp(DOMAIN)).rejects.toThrow(/still missing: mx\.conflict/);
+    });
+
+    it("accepts the documented shape (a list of required records), and rejects any other", async () => {
+      const cloud = await liveState();
+      cloud.override.set(dnsGet(cloud), { status: 200, body: { success: true, errors: [], result: (LIVE_DNS_BODY as { result: { records: unknown } }).result.records } });
+      expect(await setup(cloud).email.setUp(DOMAIN)).not.toContain("Email Routing on t.example.test");
+      expect(writes(cloud).filter((w) => w.includes("/routing/dns"))).toEqual([]);
+
+      cloud.override.set(dnsGet(cloud), { status: 200, body: { success: true, errors: [], result: { errors: null } } });
+      await expect(setup(cloud).email.setUp(DOMAIN)).rejects.toThrow(/reading the Email Routing DNS records of t\.example\.test: unexpected answer shape/);
+    });
+
+    it("compares records ignoring a trailing dot, TXT quotes, case and MX priority", () => {
+      expect(sameDnsRecord({ name: sub, type: "MX", content: "route1.mx.cloudflare.net.", priority: 96 }, { name: sub.toUpperCase(), type: "mx", content: "Route1.mx.cloudflare.net", priority: 12 })).toBe(true);
+      expect(sameDnsRecord({ name: sub, type: "TXT", content: '"v=spf1 include:_spf.mx.cloudflare.net ~all"' }, { name: sub, type: "TXT", content: "v=spf1 include:_spf.mx.cloudflare.net ~all" })).toBe(true);
+      expect(sameDnsRecord({ name: sub, type: "TXT", content: '"v=spf1 include:_spf.mx.cloudflare.net ~all"' }, { name: DOMAIN, type: "TXT", content: '"v=spf1 include:_spf.mx.cloudflare.net ~all"' })).toBe(false);
+      expect(sameDnsRecord({ name: sub, type: "MX", content: "route1.mx.cloudflare.net." }, { name: sub, type: "MX", content: "route2.mx.cloudflare.net" })).toBe(false);
+    });
   });
 
   it("finds the zone of a domain below the zone apex", async () => {

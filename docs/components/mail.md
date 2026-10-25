@@ -27,9 +27,9 @@ Origin: ai-proposed · Derives from: SYS-REQ-015, SYS-REQ-017 · Decision: DEC-0
 Links in mail MUST be built from the deployment's resolved public origin, never from request headers. A message MUST contain only fixed text, the display name the person entered, and the link; never a password, a secret, or the user ID.
 
 #### MAIL-REQ-005 — Mail sink for real-delivery checks
-Origin: owner · Derives from: SYS-REQ-027 · Decision: DEC-0512, DEC-0518
+Origin: owner · Derives from: SYS-REQ-027 · Decision: DEC-0512, DEC-0518, DEC-0527
 
-`setup-account` MUST set up, idempotently, the account-level mail sink: mail to any address under `t.<emailDomain>` is stored for PAR-241 and then deleted, and can be read by recipient through the CLI. The sink is a shared account resource: stage removal MUST NOT touch it (PROV-REQ-003).
+`setup-account` MUST set up, idempotently, the account-level mail sink: mail to `sink@t.<emailDomain>` and to each subaddress `sink+<tag>@t.<emailDomain>` is stored for PAR-241 and then deleted, and can be read by recipient through the CLI. The sink is a shared account resource: stage removal MUST NOT touch it (PROV-REQ-003).
 
 ## 2. Design
 
@@ -44,14 +44,14 @@ Origin: owner · Derives from: SYS-REQ-027 · Decision: DEC-0512, DEC-0518
 **Failures.** A rejected send is one `error` entry, component `MAIL`, message `mail send failed: <code>`, where `<code>` is Email Service's error code (for example `E_SENDER_NOT_VERIFIED`) or `unknown`. The address is never logged (DEC-0519).
 
 **Mail sink** (account level, created by `setup-account`, DEC-0518):
-- Email Routing enabled on the subdomain `t.<emailDomain>` of the domain's zone, with a catch-all rule that sends to the Worker `prototype-mailsink`;
+- Email Routing enabled on the subdomain `t.<emailDomain>` of the domain's zone, with subaddressing on and one literal rule that sends `sink@t.<emailDomain>` to the Worker `prototype-mailsink` (DEC-0527). Cloudflare allows catch-all rules only on the apex, so tests use the subaddress `sink+<run ID>@t.<emailDomain>`. Known Cloudflare behaviour: enabling the subdomain also turns on Email Routing for the whole zone and adds an apex SPF and DKIM TXT, but no apex MX, so the zone reads `misconfigured` and the apex receives nothing. `setup-account` posts the subdomain's records only when one is missing from the zone's DNS;
 - `prototype-mailsink` writes each raw message to the R2 bucket `prototype-mailsink` under `<recipient>/<timestamp>-<id>.eml`, and does nothing else;
 - the bucket has a lifecycle rule deleting objects after PAR-241;
 - the sending side: `setup-account` lists the zone's sending subdomains (`GET /zones/{zone}/email/sending/subdomains`), creates the domain's entry only if absent, polls its verification status, and records the result.
 
 Each step lists before creating, so a second run changes nothing (PROV-REQ-004). Changing `--email-domain` onboards and routes the new domain and updates the record; the old domain's entries are left in place and printed.
 
-**Reading mail.** `mail last --to <address> [--target local|cloudflare]` prints the latest message to that address as JSON: locally from `.mail/`, on Cloudflare from the sink through the R2 REST API (the address must be under `t.<emailDomain>`). Agents use it in owner-task steps; `check-login` uses the same code.
+**Reading mail.** `mail last --to <address> [--target local|cloudflare]` prints the latest message to that address as JSON: locally from `.mail/`, on Cloudflare from the sink through the R2 REST API (the address must be under `t.<emailDomain>`; only `sink@` and its `sink+<tag>@` subaddresses are delivered there, DEC-0527). Agents use it in owner-task steps; `check-login` uses the same code.
 
 ## 3. Uses
 
@@ -67,7 +67,7 @@ LOG (send failures), CFG (sender display name, public origin), PROV (account set
 | MAIL-AC-004 | A local build check: Cloudflare builds for stages not named `test-*` (`prod`, `prodcheck`, `mytest-1`) contain no capture sender and no test-mail route, and their Worker settings bind `EMAIL` with exactly the allowed sender `no-reply@<emailDomain>` taken from a stubbed account record; a `test-<id>` build contains the capture sender and binds no `EMAIL`. | MAIL-REQ-002, MAIL-REQ-003 | Local |
 | MAIL-AC-005 | A repository scan of `packages/`, `apps/`, `skill/` and `tests/` (dependencies and build output excluded) finds no email address whose domain is not a reserved name (`localhost`, or ending in `.test`, `.example` or `.invalid`). The stage-config schema rejects any `framework.email` field other than `senderName`. | MAIL-REQ-003 | Local |
 | MAIL-AC-006 | On a Cloudflare test stage, after a sign-up, `GET /api/__framework/test-mail?to=<address>` returns the verification message; on the redeployed `prodcheck` stage the same route returns 404. | MAIL-REQ-002 | Cloud |
-| MAIL-AC-007 | Running `setup-account --target cloudflare` twice changes nothing the second time, and afterwards the domain's sending entry is verified, Email Routing on `t.<emailDomain>` routes to `prototype-mailsink`, the bucket's lifecycle rule is PAR-241, and a message sent to an address under `t.<emailDomain>` is readable with `mail last --target cloudflare`. Removing a stage leaves all of these. | MAIL-REQ-005 | Cloud (milestone) |
+| MAIL-AC-007 | Running `setup-account --target cloudflare` twice changes nothing the second time, and afterwards the domain's sending entry is verified, Email Routing on `t.<emailDomain>` routes `sink@t.<emailDomain>` to `prototype-mailsink` with subaddressing on, the bucket's lifecycle rule is PAR-241, and a message sent to `sink+<run ID>@t.<emailDomain>` is readable with `mail last --target cloudflare`. Removing a stage leaves all of these. | MAIL-REQ-005 | Cloud (milestone) |
 
 ## 5. Portability note
 

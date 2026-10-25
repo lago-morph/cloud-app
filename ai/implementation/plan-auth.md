@@ -77,7 +77,7 @@ BA-owned sessions would add a second cookie, a D1 read per request, and rework A
   - `framework.email.from` (for example `"Demo <no-reply@<domain>>"`) in the stage values. The deploy preflight requires it for production stages, replacing the `framework.google` check.
   - The sender domain is an account setting: `setup-account --target cloudflare --email-domain <domain>`. The build checks that each stage's `from` is on that domain.
 - **Provisioning, all through the API:**
-  - `setup-account`: look up the zone ID, then `POST /zones/{zone}/email/sending/subdomains` (list first, so it is idempotent), poll the verification status, and record the result. For the test mailbox (§3) it also enables Email Routing on a subdomain, adds a catch-all rule to the sink Worker, and deploys the sink.
+  - `setup-account`: look up the zone ID, then `POST /zones/{zone}/email/sending/subdomains` (list first, so it is idempotent), poll the verification status, and record the result. For the test mailbox (§3) it also enables Email Routing on a subdomain, turns on subaddressing, adds a literal rule `sink@t.<domain>` to the sink Worker (catch-all rules are apex-only; DEC-0527), and deploys the sink.
   - `deploy`: adds the `EMAIL` binding on production stages.
   - `remove`: nothing extra to remove.
 - **Token permissions to add** (exact names confirmed in spike S4; the preflight will name any that are missing):
@@ -88,9 +88,9 @@ BA-owned sessions would add a second cookie, a D1 read per request, and rework A
 - **Local:** tests sign up, read the link from the outbox or `.mail/`, POST verify, sign in, then forgot, read the mail and reset. `npm run mail -- last --to <addr>` does the same for agents.
 - **Cloud test stages:** the capture sender plus the test-only route. It is deterministic, uses no quota and needs no domain, so this part can start before the transfer finishes.
 - **Real-provider check (recommended): Email Routing.**
-  - Mail to `*@t.<domain>` goes to a framework-owned account-level sink Worker, `prototype-mailsink`, which writes the raw MIME to the R2 bucket `prototype-mailsink` with a 1-day lifecycle rule.
+  - Mail to `sink@t.<domain>` and its subaddresses `sink+<tag>@t.<domain>` (DEC-0527) goes to a framework-owned account-level sink Worker, `prototype-mailsink`, which writes the raw MIME to the R2 bucket `prototype-mailsink` with a 1-day lifecycle rule.
   - The new command `check-login --target cloudflare --stage prodcheck` replaces `certify-auth`. It runs these steps:
-    1. sign up `<runid>@t.<domain>`;
+    1. sign up `sink+<runid>@t.<domain>`;
     2. confirm sign-in is refused (403) before verification;
     3. read the email and verify;
     4. sign in and check `/me` shows `user`;
