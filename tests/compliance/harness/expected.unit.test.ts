@@ -75,9 +75,11 @@ describe("[COMPL-AC-001] this phase's not-run rules (plan §8) against the docum
   it("records the password-pending items on Cloudflare as not-run with their detail, and no retired Google criterion", () => {
     const cf = new Map(expectedCriteria(real, "cloudflare", "automated").map((e) => [e.id, e]));
     // DEC-0526: E2E-007's cloud part is automated now, and CLI-AC-007 is the `admins` command on Cloudflare.
-    for (const id of ["AUTH-AC-011", "AUTH-AC-014", "COMPL-AC-005", "PWD-AC-008", "PWD-AC-009", "MAIL-AC-006", "E2E-006", "E2E-007", "E2E-008", "CLI-AC-001", "CLI-AC-007"]) {
+    for (const id of ["AUTH-AC-014", "COMPL-AC-005", "PWD-AC-008", "MAIL-AC-006", "E2E-006", "E2E-007", "CLI-AC-001", "CLI-AC-007"]) {
       expect(cf.get(id)?.notRun, id).toBe("password login provider not implemented yet (DEC-0509)");
     }
+    // Item I-G: check-login runs on prodcheck in every cloud run (the driver, prodcheck.ts), so its criteria run.
+    for (const id of ["PWD-AC-009", "AUTH-AC-011", "E2E-008"]) expect(cf.get(id), id).toEqual({ id, run: true, parts: [""], notRunParts: [] });
     expect(cf.get("AUTH-AC-009")?.run).toBe(true);
     expect(cf.get("AUTH-AC-009")?.notRunParts).toEqual([{ part: "cloud production part", detail: "password login provider not implemented yet (DEC-0509)" }]);
     expect(cf.get("KV-AC-001")).toEqual({ id: "KV-AC-001", run: true, parts: [""], notRunParts: [] });

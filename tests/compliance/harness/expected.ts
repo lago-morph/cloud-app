@@ -69,7 +69,9 @@ const CLOUD: readonly Target[] = ["cloudflare"];
 export const ADMIN_ROLE_PART = "admin-role part (prodcheck)";
 
 /**
- * This phase's not-run rules (plan §8.1, §8.2; plan-auth.md, DEC-0520, DEC-0526). §8.3's outstanding milestone items
+ * This phase's not-run rules (plan §8.1, §8.2; plan-auth.md, DEC-0520, DEC-0526). PWD-AC-009,
+ * AUTH-AC-011 and E2E-008 have none since item I-G: the driver runs `check-login` on `prodcheck`
+ * (prodcheck.ts). §8.3's outstanding milestone items
  * follow from them. Local criteria get no rule: a new local criterion without a test is reported untested.
  */
 export const PHASE_RULES: readonly NotRunRule[] = [
@@ -78,17 +80,14 @@ export const PHASE_RULES: readonly NotRunRule[] = [
   // DEC-0526: the admin part left the milestone list; it needs the password provider and `admins` on a cloud stage.
   { id: "AUTH-AC-005", targets: CLOUD, mode: "automated", part: ADMIN_ROLE_PART, detail: PASSWORD_PENDING },
   { id: "AUTH-AC-009", targets: CLOUD, mode: "automated", part: "cloud production part", detail: PASSWORD_PENDING },
-  { id: "AUTH-AC-011", targets: CLOUD, mode: "automated", detail: PASSWORD_PENDING },
   { id: "AUTH-AC-014", targets: CLOUD, mode: "automated", detail: PASSWORD_PENDING },
   { id: "COMPL-AC-005", targets: CLOUD, mode: "automated", detail: PASSWORD_PENDING },
   { id: "PWD-AC-008", targets: CLOUD, mode: "automated", detail: PASSWORD_PENDING },
-  { id: "PWD-AC-009", targets: CLOUD, mode: "automated", detail: PASSWORD_PENDING },
   { id: "MAIL-AC-006", targets: CLOUD, mode: "automated", detail: PASSWORD_PENDING },
   { id: "MAIL-AC-007", targets: CLOUD, mode: "milestone", detail: PASSWORD_PENDING },
   { id: "SKILL-AC-006", targets: CLOUD, mode: "milestone", detail: PASSWORD_PENDING },
   { id: "E2E-006", targets: CLOUD, mode: "automated", detail: PASSWORD_PENDING },
   { id: "E2E-007", targets: CLOUD, mode: "automated", detail: PASSWORD_PENDING },
-  { id: "E2E-008", targets: CLOUD, mode: "automated", detail: PASSWORD_PENDING },
   { id: "CLI-AC-001", targets: CLOUD, mode: "automated", detail: PASSWORD_PENDING },
   { id: "CLI-AC-007", targets: CLOUD, mode: "automated", detail: PASSWORD_PENDING },
 ];

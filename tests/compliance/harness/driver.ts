@@ -11,6 +11,10 @@
  *
  * A run against fakes (overridden not-run rules, or stage operations that say they are fakes) is
  * marked `dryRun` in its record, which no report counts (G-EV F3).
+ *
+ * Production checks (COMPL-REQ-005, prodcheck.ts): on an automated cloud run that selects a
+ * criterion with a part on `prodcheck`, the driver redeploys `prodcheck` before the test layers
+ * (never removing it), and runs `check-login` on it after them, folding its record's results in.
  */
 import {
   DirtyTreeError,
@@ -29,6 +33,7 @@ import { NOT_SELECTED, type CatalogueEntry, type ReleaseTarget as Target } from 
 import { childEnv } from "./env.js";
 import { expectedCriteria, PHASE_RULES, type ExpectedEntry, type NotRunRule } from "./expected.js";
 import { assertTestStage } from "./leftovers.js";
+import { CHECK_LOGIN_IDS, checkLoginOutcomes, PRODCHECK_IDS, PRODCHECK_STAGE } from "./prodcheck.js";
 import { grepPattern, parsePlaywrightJson, parseVitestJson } from "./reports.js";
 import { criterionResults, type TestOutcome } from "./results.js";
 import { idsFor, runnerSelection, scopeTests } from "./selection.js";
@@ -82,6 +87,11 @@ export interface CloudStageOps {
   remove(stage: string): Promise<string>;
   /** The stage's resources that still exist, by exact identifier (PROV `listStageResources`). */
   listStageResources(stage: string): Promise<readonly string[]>;
+  /**
+   * `check-login --target <cloud> --stage <stage>` (PWD §2): its status, output and the evidence
+   * record it wrote, if any. Absent: the run records the check-login IDs as failed.
+   */
+  checkLogin?(stage: string): Promise<{ readonly status: number; readonly output: string; readonly record?: EvidenceRecord }>;
   /** Set when these operations are fakes (G-RUN's dry run): what is faked. The record is then marked `dryRun`. */
   readonly dryRun?: string;
 }
@@ -232,6 +242,34 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
     }
   };
 
+  /**
+   * COMPL-REQ-005: `prodcheck` is redeployed (a production stage: never removed, no pending
+   * entry). Its first deploy stops on the reference app's unset `apiKey`, which is then set to a
+   * fresh value (on standard input, redacted) before the second deploy. Resolves to the problem, or undefined.
+   */
+  const redeployProdcheck = async (cloudOps: CloudStageOps): Promise<string | undefined> => {
+    try {
+      try {
+        raw["prodcheck-deploy.log"] = (await cloudOps.deploy(PRODCHECK_STAGE)).output;
+        return undefined;
+      } catch (error) {
+        if (!(error instanceof SecretsNotSetError) || cloudOps.setSecret === undefined) throw error;
+        raw["prodcheck-deploy.log"] = error.output;
+      }
+      const value = deps.newTestSecret();
+      redactions.push({ value, replacement: TEST_SECRET.replacement });
+      raw["prodcheck-secrets-set.log"] = await (cloudOps.setSecret as NonNullable<CloudStageOps["setSecret"]>)(PRODCHECK_STAGE, TEST_SECRET.name, value);
+      raw["prodcheck-redeploy.log"] = (await cloudOps.deploy(PRODCHECK_STAGE)).output;
+      return undefined;
+    } catch (error) {
+      raw["prodcheck-deploy-error.log"] = `${error instanceof Error ? error.message : String(error)}\n`;
+      return `redeploying ${PRODCHECK_STAGE} failed: ${firstLine(error)}`;
+    }
+  };
+  const prodcheckRun = isCloud && !args.selfTest && !args.milestone && toRun.some((id) => PRODCHECK_IDS.includes(id));
+  const checkLoginRun = prodcheckRun ? toRun.filter((id) => CHECK_LOGIN_IDS.includes(id)) : [];
+  let prodcheckProblem: string | undefined;
+
   let ops: CloudStageOps | undefined;
   if (toRun.length > 0) {
     let local: LocalSession | undefined;
@@ -261,6 +299,13 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
           baseUrl = await deployWithTestSecret(ops, stage);
         }
         if (baseUrl !== undefined) redactions.push(...subdomainRedaction(baseUrl));
+        if (prodcheckRun) {
+          prodcheckProblem = await redeployProdcheck(ops);
+          if (prodcheckProblem !== undefined) {
+            log(`compliance: ${prodcheckProblem} (raw/prodcheck-deploy-error.log)`);
+            exitStatus ||= 1;
+          }
+        }
       } else if (!args.selfTest && baseUrl === undefined) {
         local = await deps.startLocal();
         baseUrl = local.baseUrl;
@@ -298,6 +343,22 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
         outcomes.push(...scopeTests(selection, parsed.outcomes));
         runErrors.push(...parsed.errors);
         exitStatus ||= result.status;
+      }
+      // check-login last (prodcheck.ts): its sign-in burst rate-limits this client for PAR-258's window.
+      if (checkLoginRun.length > 0 && ops !== undefined) {
+        if (prodcheckProblem !== undefined) outcomes.push(...checkLoginOutcomes(checkLoginRun, { problem: `not checked: ${prodcheckProblem}` }));
+        else if (ops.checkLogin === undefined) outcomes.push(...checkLoginOutcomes(checkLoginRun, { problem: `the ${args.target} stage operations cannot run check-login` }));
+        else {
+          try {
+            const result = await ops.checkLogin(PRODCHECK_STAGE);
+            raw["check-login.log"] = result.output;
+            outcomes.push(...checkLoginOutcomes(checkLoginRun, result));
+            exitStatus ||= result.status;
+          } catch (error) {
+            outcomes.push(...checkLoginOutcomes(checkLoginRun, { problem: `check-login could not run: ${firstLine(error)}` }));
+            exitStatus ||= 1;
+          }
+        }
       }
     } catch (error) {
       const reason = `not run: setting up the target failed: ${firstLine(error)}`;

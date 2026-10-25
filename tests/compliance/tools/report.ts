@@ -12,6 +12,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { readCatalogue } from "../harness/catalogue.js";
+import { driverChecks } from "../harness/prodcheck.js";
 import type { RunnerSelection } from "../harness/selection.js";
 import { listSelection } from "./listing.js";
 import { readRecords } from "./records.js";
@@ -48,6 +49,8 @@ function listTests(): ListedTest[] {
     for (const error of listing.errors) process.stderr.write(`report: ${error}\n`);
     tests.push(...listing.tests);
   }
+  // The driver's own checks on a cloud run (check-login on prodcheck, COMPL-REQ-005).
+  tests.push(...driverChecks("cloudflare"));
   for (const file of SOURCE_DIRS.flatMap((d) => sourceFiles(join(root, d)))) {
     const ids = scanSourceTags(readFileSync(file, "utf8"));
     if (ids.length > 0) tests.push({ title: `(tags in source) ${ids.map((id) => `[${id}]`).join("")}`, file: relative(root, file).split("\\").join("/") });

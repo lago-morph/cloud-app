@@ -180,7 +180,7 @@ export class FakeCloud {
         .filter((e) => e.zoneTag === v.zoneTag && e.to === v.to && (v.since === undefined || e.datetime >= v.since))
         .sort((x, y) => (x.datetime < y.datetime ? 1 : -1))
         .slice(0, 1)
-        .map(({ zoneTag: _z, to: _t, ...rest }) => rest);
+        .map((e) => ({ datetime: e.datetime, status: e.status, errorCause: e.errorCause, errorDetail: e.errorDetail }));
       return { status: 200, body: { data: { viewer: { zones: [{ emailSendingAdaptive: events }] } }, errors: null } };
     }
     if (p === `${A}/tokens/permission_groups`) return ok([{ id: "2efd5506f9c8494dacb1fa10a3e7d5b6", name: "Workers R2 Storage Bucket Item Write" }]);

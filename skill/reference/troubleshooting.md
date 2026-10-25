@@ -81,30 +81,32 @@ Each code's meaning, HTTP status and whether it is retryable are in the framewor
 | Code | Usual cause | What to do |
 | --- | --- | --- |
 | `CORE.INTERNAL` | An uncaught error in app code | Find the log entry. It has the error's name, message and stack. |
-| `CORE.MISCONFIGURED` | Invalid configuration or wiring, for example a production stage without `framework.google.clientId` | Fix `config/<target>/<stage>.json`, then deploy again. |
+| `CORE.MISCONFIGURED` | Invalid configuration or wiring, for example a values file that still holds `framework.admins` | Fix `config/<target>/<stage>.json`, then deploy again. |
 | `SEC.MISSING` | A declared secret has no value in this stage | Set it (see [owner-tasks.md](owner-tasks.md) §4). On Cloudflare, the next request sees it (not yet verified). |
 | `SEC.UNDECLARED`, `CFG.UNDECLARED_KEY` | The code reads a name that `src/server/env.ts` does not declare | Declare it, or fix the name. |
 | `SQL.UNAVAILABLE`, `KV.UNAVAILABLE`, `FILES.UNAVAILABLE`, `SEC.UNAVAILABLE` | Storage was not reachable in time. On Cloudflare's free plan, the D1 daily limit may be used up | Retry later. Check D1 usage in the dashboard. |
 | `SQL.RESULT_TOO_LARGE` | A query returns too much | Paginate the query. |
-| `AUTH.UNAUTHENTICATED` / `AUTH.FORBIDDEN` | Not logged in / not admin or not allowed | See §3 and the admin steps in [owner-tasks.md](owner-tasks.md) §6. |
+| `AUTH.UNAUTHENTICATED` / `AUTH.FORBIDDEN` | Not logged in / not admin or not allowed | See §3 and the admin steps in [owner-tasks.md](owner-tasks.md) §7. |
 | `AUTH.REQUEST_FORGERY` | A POST/PUT/PATCH/DELETE with a session came from another origin | Use the stage's own URL, not a copy behind another host. |
 | `HTTP.NETWORK_ERROR` | The browser got no framework response | Check that the stage is started and the URL is right. |
 | `FILES.TRANSFER_FAILED` | A direct upload or download failed or its ticket expired | Request a new ticket and retry. On Cloudflare an expired ticket shows status null (DEC-0101; not yet verified). |
 
 ## 3. Login failures
 
-These steps are for production stages, which use Google. They are **not yet verified on Cloudflare in this phase**, because Google login is mocked here. Test stages and local development use the mock and never contact Google.
+Every stage signs people in with email and password. A failed attempt writes one `warn` entry from `AUTH`, `login failed: <reason>`, never the address (§1):
 
-- **Google shows `Error 400: redirect_uri_mismatch`.** The callback URL is not registered on the Google client. Add `https://<app>-<stage>.<subdomain>.workers.dev/api/auth/callback` exactly. That is the URL `deploy` prints as "Google callback URL to register". See [owner-tasks.md](owner-tasks.md) §5.
-- **Google shows "Access blocked" or "app has not completed verification".** The client's audience is in Testing and the person is not a test user. Add their Google account as a test user, or publish the app.
-- **The app returns to `/?authError=login_failed&requestId=<id>`.** Find that entry (§1). It is a `warn` entry from `AUTH` with the message `login failed: <reason>`:
-  - `transaction missing or expired`: the login took too long, or cookies were blocked. Try again in one tab.
-  - `state mismatch`: two logins ran at once. Try again.
-  - `provider refused`: the person cancelled, or Google refused the client.
-  - `token exchange rejected (HTTP 401)`: the client secret is wrong. Set `frameworkGoogleClientSecret` again ([owner-tasks.md](owner-tasks.md) §5).
-  - `token check failed: audience`: `framework.google.clientId` does not belong to this client secret.
-  - `provider discovery failed (…)`: Google could not be reached from the Worker. Retry.
-- **Logged in, but `/api/auth/me` says `anonymous` with an `unlistedId`.** The stage has a `framework.users` list, and this ID is on neither list. Add it ([owner-tasks.md](owner-tasks.md) §6).
+- `wrong credentials`: unknown address or wrong password (both get the same answer). Use "Forgot your password?" on the sign-in page.
+- `not verified`: the address is not confirmed yet. Open the link in the "Confirm your email address" mail, or use "Send a new confirmation link".
+- `rate limited`: too many attempts from one network address; wait a minute (sign-in) or five minutes (sign-up, forgot, resend).
+- `invalid token`: the mailed link was used already or expired (confirmation 24 hours, reset 1 hour). Ask for a new one.
+- `provider unavailable (<code>)`: the database was not reachable; retry.
+
+No mail arrives:
+- Locally nothing is sent: read `.mail/` with `npm run mail -- last --to '<address>'`. On a test stage the mail is captured, not sent.
+- On a production stage, look for a `MAIL` entry `mail send failed: <code>` (§1). The sender is `no-reply@<domain>`; if `deploy` or `setup-account` said the domain is not verified for sending, run `npm run setup-account -- --target cloudflare` again.
+- A test address `sink+<tag>@t.<domain>`: read it with `npm run mail -- last --to '<address>' --target cloudflare`. Only `sink+…` addresses reach the test mailbox. Right after `setup-account` created the mailbox rule, a send may be rejected for a minute.
+
+Signed in, but not admin: the `admin` role is granted per stage with `admins grant` ([owner-tasks.md](owner-tasks.md) §7); check with `admins list`.
 
 ## 4. Deploy, remove and setup failures
 

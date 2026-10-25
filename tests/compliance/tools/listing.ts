@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Target } from "../harness/catalogue.js";
 import { parsePlaywrightJson, parseVitestJson } from "../harness/reports.js";
+import { driverChecks } from "../harness/prodcheck.js";
 import { runnerSelection, scopeTests, type RunnerSelection } from "../harness/selection.js";
 
 /** A test-name filter no test title matches. */
@@ -64,9 +65,13 @@ export function listSelection(selection: RunnerSelection, options: ListOptions):
   }
 }
 
-/** The tests a driver run on `target` selects, each with the IDs it may evidence (exactly the driver's selection). */
+/**
+ * The tests a driver run on `target` selects, each with the IDs it may evidence (exactly the
+ * driver's selection), and the driver's own checks on that target (`check-login` on `prodcheck`,
+ * harness/prodcheck.ts).
+ */
 export function listDriverTests(target: Target, options: ListOptions): Listing {
-  const tests: ListedTest[] = [];
+  const tests: ListedTest[] = [...driverChecks(target)];
   const errors: string[] = [];
   for (const selection of runnerSelection({ target })) {
     const listing = listSelection(selection, options);

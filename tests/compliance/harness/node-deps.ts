@@ -11,6 +11,8 @@ import { gitState, newRunId, redact, writeEvidence } from "../../../packages/fra
 import { readCatalogue, type ReleaseTarget as Target } from "./catalogue.js";
 import { SecretsNotSetError, TEST_SECRET, type CloudStageOps, type DriverDeps, type LocalSession, type PendingStages, type RunCall } from "./driver.js";
 import { REFERENCE_APP, stageLeftovers } from "./leftovers.js";
+import { checkLoginRecordPath } from "./prodcheck.js";
+import type { EvidenceRecord } from "../../../packages/framework/src/evidence/public.js";
 import { waitFor } from "./wait.js";
 import type { TargetOperations } from "../../../packages/framework/src/provision/core/operations.js";
 import { targetOperations } from "../../../packages/framework/src/cli/commands/operations.js";
@@ -227,6 +229,20 @@ export function cliStageOps(
       const output = redact(result.output, [{ value, replacement: TEST_SECRET.replacement }]);
       if (result.status !== 0) throw new Error(`secrets set ${name} --target ${target} --stage ${stage} failed with status ${String(result.status)}\n${output.slice(-2000)}`);
       return output;
+    },
+    async checkLogin(stage) {
+      // PWD §2: no input; it prints no address, password or token, and writes its own record.
+      const result = await cli(["check-login", "--target", target, "--stage", stage]);
+      const path = checkLoginRecordPath(result.output);
+      let record: EvidenceRecord | undefined;
+      if (path !== undefined) {
+        try {
+          record = JSON.parse(readFileSync(path, "utf8")) as EvidenceRecord;
+        } catch {
+          record = undefined;
+        }
+      }
+      return { status: result.status, output: result.output, ...(record === undefined ? {} : { record }) };
     },
     async listStageResources(stage) {
       return stageLeftovers(await stageResourceOperations(repoRoot, target, { env, ...(options.operations === undefined ? {} : { operations: options.operations }) }), { app: REFERENCE_APP, stage });

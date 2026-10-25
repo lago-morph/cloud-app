@@ -1,6 +1,6 @@
 # Deploying
 
-Read this when you deploy, smoke-test, stop, start or remove a stage on a cloud. Account setup, the API token, secrets and the Google client are in [owner-tasks.md](owner-tasks.md).
+Read this when you deploy, smoke-test, stop, start or remove a stage on a cloud. Account setup, the API token, the email domain, secrets, sign-up and admins are in [owner-tasks.md](owner-tasks.md).
 
 Commands run in the app's directory, with `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` set ([owner-tasks.md](owner-tasks.md) §2). Each `npm run <command> -- …` is the same as `npx prototype-framework <command> …`. Behind an HTTPS proxy, put `NODE_USE_ENV_PROXY=1 ` in front of every cloud command; the command says so if it is needed.
 
@@ -8,8 +8,8 @@ Commands run in the app's directory, with `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLAR
 
 ## 1. Test stages and production stages
 
-- A stage whose name starts with `test-` is a **test stage**. It uses `config/cloudflare/test.json` and the mock login, holds no real data, and is removed after use.
-- Every other stage is a **production stage**, for example `prod`. It needs its own committed `config/cloudflare/<stage>.json` with `framework.google.clientId`, and the Google client secret ([owner-tasks.md](owner-tasks.md) §5).
+- A stage whose name starts with `test-` is a **test stage**. It uses `config/cloudflare/test.json`, has the mock login for tests beside email-and-password sign-in, keeps its mail in a test capture (never sent), holds no real data, and is removed after use.
+- Every other stage is a **production stage**, for example `prod`. It needs its own committed `config/cloudflare/<stage>.json` ([owner-tasks.md](owner-tasks.md) §5) and the account's email domain (§3 there). It has no mock: people sign up with email and password, and real mail is sent from `no-reply@<domain>`.
 - A stage name is at most 20 lowercase letters, digits and hyphens. The stage's address is `https://<app>-<stage>.<subdomain>.workers.dev`.
 
 ## 2. Deploy and smoke-test a test stage
@@ -36,18 +36,18 @@ npm run smoke -- --target cloudflare --stage "$STAGE"
 
 ## 3. Deploy a production stage
 
-1. Create and commit `config/cloudflare/<stage>.json`, including the Google client ID, with the commands in [owner-tasks.md](owner-tasks.md) §5 step 5.
-2. Deploy, set the secrets the deploy names (the app's secrets and `frameworkGoogleClientSecret`), then deploy again:
+1. Create and commit `config/cloudflare/<stage>.json` from `skill/templates/production-stage.json`, with the commands in [owner-tasks.md](owner-tasks.md) §5.
+2. Deploy, set the secrets the deploy names (the app's secrets; the framework generates its own), then deploy again:
    ```sh
    STAGE=prod
    npm run deploy -- --target cloudflare --stage "$STAGE"
-   npm run secrets -- set frameworkGoogleClientSecret --target cloudflare --stage "$STAGE"
    npm run secrets -- set apiKey --target cloudflare --stage "$STAGE"
    npm run deploy -- --target cloudflare --stage "$STAGE"
    ```
-3. Register the printed `Google callback URL to register` on the Google client, if you have not yet.
+   It prints the stage's address, its sign-in page and the sender address.
+3. Sign up on the stage, then make yourself an admin with `admins grant` ([owner-tasks.md](owner-tasks.md) §6, §7). Admins change without a deploy.
 
-To change a production stage later (code, admins, users), commit the change and run `deploy` again:
+To change a production stage later (code or configuration), commit the change and run `deploy` again:
 
 ```sh
 git add -A
