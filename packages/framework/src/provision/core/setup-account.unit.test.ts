@@ -19,7 +19,7 @@ describe("setup-account core (PROV-REQ-004)", () => {
     const before = t.calls.length;
     const io = captureIo();
     expect(await runSetupAccount(t, io)).toEqual({ status: 0, created: [] });
-    expect(t.calls.slice(before)).toEqual(["inspectAccount", "readAccountSettings", "setUpEmail example.test"]);
+    expect(t.calls.slice(before)).toEqual(["inspectAccount", "readAccountSettings", "emailSetupProblems example.test", "setUpEmail example.test"]);
     expect(io.out).toMatch(/nothing changed/);
   });
 
@@ -41,7 +41,7 @@ describe("setup-account core (PROV-REQ-004)", () => {
       created: ["state home", "sending entry", "mail sink"],
       recorded: "example.test",
     });
-    expect(t.calls).toEqual(["inspectAccount", "readAccountSettings", "createSharedResources state home", "writeAccountSettings example.test", "setUpEmail example.test"]);
+    expect(t.calls).toEqual(["inspectAccount", "readAccountSettings", "emailSetupProblems example.test", "createSharedResources state home", "writeAccountSettings example.test", "setUpEmail example.test"]);
     expect(t.accountSettings).toEqual({ emailDomain: "example.test" });
     expect(io.out).toContain("recorded the account's email domain: example.test");
     for (const request of [{}, { emailDomain: "example.test" }]) {

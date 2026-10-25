@@ -146,13 +146,20 @@ export async function listStageResources(input: { readonly target: string; reado
 /**
  * The account-level shared resources (PROV-REQ-004, DEC-0084, DEC-0086): whether the shared log
  * bucket and the state home exist, and a SHA-256 of the account's `workers.dev` subdomain (the
- * subdomain is personal and never printed, DEC-0086). 3 Cloudflare API requests.
+ * subdomain is personal and never printed, DEC-0086), and whether the mail sink's bucket and
+ * Worker `prototype-mailsink` exist (MAIL-REQ-005: stage removal never touches them).
+ * 5 Cloudflare API requests.
  */
-export async function sharedResources(): Promise<{ logBucket: boolean; stateHome: boolean; subdomainSha256: string }> {
+export async function sharedResources(): Promise<{ logBucket: boolean; stateHome: boolean; subdomainSha256: string; mailSinkBucket: boolean; mailSinkWorker: boolean }> {
   const sub = await cfOk<{ subdomain?: string }>("reading the account's workers.dev subdomain", "GET", `/accounts/${accountId()}/workers/subdomain`);
   return {
     logBucket: await bucketExists(LOG_BUCKET),
     stateHome: await bucketExists(STATE_BUCKET),
     subdomainSha256: createHash("sha256").update(sub.subdomain ?? "").digest("hex"),
+    mailSinkBucket: await bucketExists(MAIL_SINK),
+    mailSinkWorker: (await accountWorkers()).includes(MAIL_SINK),
   };
 }
+
+/** The account-level mail sink's Worker and bucket name (MAIL §2). */
+export const MAIL_SINK = "prototype-mailsink";

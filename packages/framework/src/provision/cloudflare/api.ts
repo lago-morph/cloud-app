@@ -12,9 +12,10 @@
 
 /**
  * One Cloudflare API request, relative to `https://api.cloudflare.com/client/v4`. The body is
- * sent as JSON; the answer's body is its parsed JSON, or its text when it is not JSON.
+ * sent as JSON, except a `FormData` body, which is sent as `multipart/form-data` (a Worker
+ * upload); the answer's body is its parsed JSON, or its text when it is not JSON.
  */
-export type CloudflareApi = (method: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: unknown) => Promise<{ readonly status: number; readonly body: unknown }>;
+export type CloudflareApi = (method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: unknown) => Promise<{ readonly status: number; readonly body: unknown }>;
 
 export type ApiReply = Awaited<ReturnType<CloudflareApi>>;
 
@@ -30,10 +31,11 @@ export function createCloudflareApi(options: CloudflareApiOptions): CloudflareAp
   const doFetch = options.fetch ?? fetch;
   return async (method, path, body) => {
     const headers: Record<string, string> = { authorization: `Bearer ${options.token}` };
-    if (body !== undefined) headers["content-type"] = "application/json";
+    const multipart = body instanceof FormData;
+    if (body !== undefined && !multipart) headers["content-type"] = "application/json";
     let response: Response;
     try {
-      response = await doFetch(`${API_BASE}${path}`, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+      response = await doFetch(`${API_BASE}${path}`, { method, headers, ...(body === undefined ? {} : { body: multipart ? body : JSON.stringify(body) }) });
     } catch (error) {
       throw new Error(`Cloudflare API request ${method} ${path} got no response: ${error instanceof Error ? error.message : String(error)}`);
     }

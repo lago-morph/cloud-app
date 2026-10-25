@@ -7,7 +7,10 @@
  * - `inspectAccount` / `createSharedResources`: `account.ts`.
  * - `readAccountSettings` / `writeAccountSettings`: the account settings record
  *   `framework/account.json` in `sst-state` (`account-settings.ts`, DEC-0514).
- * - `setUpEmail` / `emailPrerequisites`: `email.ts`'s seam (the API calls are item I-F).
+ * - `emailSetupProblems` / `setUpEmail` / `emailPrerequisites`: `email.ts` (Email Sending, the
+ *   mail sink's bucket, Worker and Email Routing on `t.<emailDomain>`, the permission check).
+ * - The mail sink (`prototype-mailsink`) is an account resource: a stage whose fixed names would
+ *   be an account resource's is refused by deploy, the stage listing and removal (`names.ts`).
  * - `deployInfrastructure` (step 3): the stage bucket only, then the bucket's CORS policy for
  *   the stage's public origin (FILES' policy, DEC-0099). With a database, the program declares
  *   the Worker and the run is `sst deploy --target Files`; without one (a first deploy), the
@@ -35,12 +38,12 @@ import { FRAMEWORK_SECRETS } from "../../secrets/names.js";
 import type { DeployedCode, DeployInput, HealthOutcome, Stage, StageDatabase, StageResource, StageResources, TargetOperations } from "../core/operations.js";
 import { accountSubdomain, createSharedResources, inspectSharedResources } from "./account.js";
 import { readAccountSettings, writeAccountSettings } from "./account-settings.js";
-import { pendingEmailSetup, type CloudflareEmailSetup } from "./email.js";
+import { createCloudflareEmailSetup, type CloudflareEmailSetup } from "./email.js";
 import { describeFailure, succeeded, type CloudflareApi } from "./api.js";
 import type { CloudflareDatabases } from "./databases.js";
 import { missingCredentials, type Environment } from "./environment.js";
 import { checkStageHealth } from "./health.js";
-import { filesBucketName, isStageStateObject, publicOrigin, STATE_BUCKET, workerName } from "./names.js";
+import { accountResourceClash, filesBucketName, isStageStateObject, publicOrigin, STATE_BUCKET, workerName } from "./names.js";
 import { deleteObjects, listObjectKeys } from "./objects.js";
 import { createSigningToken, deleteSigningToken, findSigningToken, tokenCreationProblems } from "./r2-token.js";
 import { INFRASTRUCTURE_COMPONENT, processSstExec, runSst, writeSstApp, type SstExec, type WorkerCode } from "./sst.js";
@@ -72,7 +75,7 @@ export interface CloudflareTargetOptions {
   readonly fetch?: typeof fetch;
   /** A new generated framework key: the session key or the auth secret (PAR-253: 32 random bytes, base64url). */
   readonly randomKey?: () => string;
-  /** The email setup's Cloudflare calls (item I-F); default `pendingEmailSetup`. */
+  /** The email setup's Cloudflare calls; default `createCloudflareEmailSetup` over `api`. */
   readonly email?: CloudflareEmailSetup;
   readonly healthTimeoutMs?: number;
   readonly now?: () => number;
@@ -87,7 +90,9 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
   const sst = options.sst ?? processSstExec();
   const dir = sstAppDir(options.appDir);
   const randomKey = options.randomKey ?? (() => randomBytes(32).toString("base64url"));
-  const email = options.email ?? pendingEmailSetup;
+  const email =
+    options.email ??
+    createCloudflareEmailSetup({ api, accountId, ...(options.now === undefined ? {} : { now: options.now }), ...(options.sleep === undefined ? {} : { sleep: options.sleep }) });
   const origin = async (stage: Stage) => publicOrigin(stage, await accountSubdomain(api, accountId));
   const sstRun = (stage: Stage) => ({ dir, env: options.env, stage });
   const mail = (input: DeployInput) => (input.emailDomain === undefined ? {} : { emailDomain: input.emailDomain });
@@ -114,6 +119,12 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
     await setSecret(api, accountId, stage, FRAMEWORK_SECRETS.r2SecretAccessKey, credentials.secretAccessKey);
   }
 
+  /** Refuses a stage whose fixed names are an account resource's (`names.ts`), before any request. */
+  function refuseAccountResourceClash(stage: Stage): void {
+    const clash = accountResourceClash(stage);
+    if (clash !== undefined) throw new Error(clash);
+  }
+
   async function stateObjects(stage: Stage): Promise<string[]> {
     return (await listObjectKeys(api, accountId, STATE_BUCKET)).filter((key) => isStageStateObject(stage, key));
   }
@@ -122,7 +133,9 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
     target: "cloudflare",
     dialect: "sqlite",
 
-    async preflight() {
+    async preflight(stage) {
+      const clash = accountResourceClash(stage);
+      if (clash !== undefined) return [clash];
       const missing = missingCredentials(options.env);
       if (missing.length > 0) return missing;
       const verify = await api("GET", `/accounts/${accountId}/tokens/verify`);
@@ -134,6 +147,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
     createSharedResources: (absent) => createSharedResources(api, accountId, absent),
     readAccountSettings: () => readAccountSettings(api, accountId),
     writeAccountSettings: (settings) => writeAccountSettings(api, accountId, settings),
+    emailSetupProblems: (emailDomain) => email.setupProblems(emailDomain),
     setUpEmail: (emailDomain) => email.setUp(emailDomain),
     emailPrerequisites: (_stage, emailDomain) => email.productionPrerequisites(emailDomain),
 
@@ -144,6 +158,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       // database the program is bucket-only and the run is untargeted, which reconciles the
       // whole stage stack and would delete a Worker in state (root cause 2026-10-23-pass1, R1/R2).
       const { database } = input;
+      refuseAccountResourceClash(input.stage);
       if (database && !options.code) throw new Error("no built Worker code; build --target cloudflare must run before deploy (step 3 of a stage with a database declares its Worker)");
       if (!database && (await exists(`${workerPath(input.stage)}/settings`, `Worker ${workerName(input.stage)}`))) {
         throw new Error(
@@ -164,6 +179,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
 
     async deployCode(input: DeployInput & { readonly database: StageDatabase }): Promise<DeployedCode> {
       if (!options.code) throw new Error("no built Worker code; build --target cloudflare must run before deploy");
+      refuseAccountResourceClash(input.stage);
       const stageOrigin = await origin(input.stage);
       writeSstApp(dir, { stage: input.stage, worker: { publicOrigin: stageOrigin, database: input.database, code: options.code, ...mail(input) } });
       await runSst(sst, sstRun(input.stage), "deploy");
@@ -193,6 +209,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       }),
 
     async listStageResources(stage): Promise<StageResources> {
+      refuseAccountResourceClash(stage);
       const resources: StageResource[] = [];
       if (await exists(`${workerPath(stage)}/settings`, `Worker ${workerName(stage)}`)) resources.push({ kind: "Worker", id: workerName(stage) });
       if (await exists(bucketPath(stage), `R2 bucket ${filesBucketName(stage)}`)) resources.push({ kind: "R2 bucket", id: filesBucketName(stage) });
@@ -203,6 +220,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
     },
 
     async removeStage(stage) {
+      refuseAccountResourceClash(stage);
       const failures: string[] = [];
       const attempt = async (run: () => Promise<void>) => {
         try {
