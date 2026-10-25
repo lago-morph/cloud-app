@@ -75,6 +75,17 @@ describe("base-URL HTTP client", () => {
     expect(client.cookies()).toEqual({ session_local: "abc" });
   });
 
+  it("with keepCookies false, remembers no Set-Cookie and sends the caller's cookie header unchanged", async () => {
+    const { fetch, seen } = stubFetch(() => new Response(null, { status: 204, headers: { "set-cookie": "session_local=issued; Path=/" } }));
+    const client = createClient({ baseUrl: "http://localhost:1", fetch, keepCookies: false });
+    await client.get("/a");
+    await client.get("/b", { headers: { cookie: "session_local=crafted" } });
+    await client.get("/c");
+    expect(seen[1]?.headers.get("cookie")).toBe("session_local=crafted");
+    expect(seen[2]?.headers.get("cookie")).toBeNull();
+    expect(client.cookies()).toEqual({});
+  });
+
   it("logs in through mock-login and gives each identity its own cookie jar", async () => {
     const { fetch, seen } = stubFetch((s) => {
       if (s.url.endsWith("/api/auth/mock-login")) return new Response(null, { status: 204, headers: { "set-cookie": `session_local=${s.body ?? ""}; Path=/` } });

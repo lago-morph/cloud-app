@@ -91,7 +91,8 @@ async function session(browser: Browser, level: "anonymous" | "user" | "admin", 
   const context = await browser.newContext({ baseURL: origin(), userAgent: USER_AGENT });
   const page = await context.newPage();
   if (level !== "anonymous") {
-    const login = await page.request.post("/api/auth/mock-login", { data: { level, ...(id === undefined ? {} : { id }), displayName: `demo-pages ${level}` } });
+    // AUTH-REQ-007 (DEC-0516): every POST under /api/auth/ carries Origin equal to the public origin.
+    const login = await page.request.post("/api/auth/mock-login", { data: { level, ...(id === undefined ? {} : { id }), displayName: `demo-pages ${level}` }, headers: { origin: origin() } });
     expect(login.status(), "mock login").toBe(204);
   }
   return { context, page };

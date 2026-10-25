@@ -342,7 +342,8 @@ describe("signed-up users and admins by role (DEMO-REQ-002; DEC-0521, DEC-0522)"
     expect(bossMe.unlistedId).toBeUndefined();
     if (bossMe.id === undefined) throw new Error("no id");
     await t.grantRole(bossMe.id, "admin");
-    expect(((await (await t.request("/api/auth/me")).json()) as Me).level).toBe("admin");
+    const granted: Me = await (await t.request("/api/auth/me")).json();
+    expect(granted.level).toBe("admin");
     const published = await createDraft(t, "published post");
     expect((await t.request(`/api/posts/${published}/publish`, { method: "POST" })).status).toBe(200);
 
@@ -354,7 +355,8 @@ describe("signed-up users and admins by role (DEMO-REQ-002; DEC-0521, DEC-0522)"
 
     await t.loginWithStub("boss");
     await t.revokeRole(bossMe.id, "admin");
-    expect(((await (await t.request("/api/auth/me")).json()) as Me).level).toBe("user");
+    const revoked: Me = await (await t.request("/api/auth/me")).json();
+    expect(revoked.level).toBe("user");
     const page: PostPage = await (await t.request("/api/posts")).json();
     expect(page.posts.map((p) => p.id)).toEqual([published]);
   });

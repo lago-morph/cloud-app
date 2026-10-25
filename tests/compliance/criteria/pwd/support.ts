@@ -519,7 +519,8 @@ export function inProcessBrowser(app: PasswordTestApp): AuthBrowser {
  * with `baseUrl` and `appDir`, on another `dev` server whose mail is in `<appDir>/.mail/`.
  */
 export function httpBrowser(options: { readonly baseUrl?: string; readonly appDir?: string } = {}): AuthBrowser {
-  const c = options.baseUrl === undefined ? client() : createClient({ baseUrl: options.baseUrl });
+  // This browser keeps its own cookies (`cookies: false` sends none of them), so the harness client must not add its jar's.
+  const c = createClient({ baseUrl: options.baseUrl ?? client().baseUrl, keepCookies: false });
   const jar = cookieJar();
   const publicOrigin = c.baseUrl;
   const send = async (method: string, path: string, body: Readonly<Record<string, string>> | undefined, options: SendOptions = {}): Promise<Answer> => {

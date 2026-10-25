@@ -9,11 +9,13 @@
  * `prodcheck` is the reference app's long-lived production stage, redeployed by the cloud run
  * (COMPL §2); its origin comes from its recorded deploy output, the domain from the account
  * settings record (MAIL-REQ-003, so no test holds it), and the mail from the sink through
- * `mail last --target cloudflare`. The role is revoked before the test ends, also when it fails
+ * `mail last --target cloudflare`. Only `sink@` and `sink+<tag>@t.<domain>` are delivered (DEC-0527),
+ * so the address is `sink+auth-ac-005-<random>@t.<domain>` (`sinkAddress`). The role is revoked before the test ends, also when it fails
  * (COMPL §2 "Production-check stage").
  */
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { sinkAddress } from "../../../../packages/framework/src/provision/cloudflare/email.js";
 import { tag, target } from "../../harness/index.js";
 import { requireCloudD1 } from "../_cloud/d1.js";
 import { admins, emailDomain, leaks, recordedOrigin, sinkMail } from "../cli/support/admins.js";
@@ -30,7 +32,7 @@ if (!isLocal()) {
         requireCloudD1(t.target);
         const origin = recordedOrigin(t.target, "prodcheck");
         const domain = await emailDomain();
-        const a: Account = { email: `auth-ac-005-${randomBytes(6).toString("hex")}@t.${domain}`, password: testPassword(), displayName: testDisplayName("AUTH 005") };
+        const a: Account = { email: sinkAddress(domain, `auth-ac-005-${randomBytes(6).toString("hex")}`), password: testPassword(), displayName: testDisplayName("AUTH 005") };
         const b: AuthBrowser = { ...httpBrowser({ baseUrl: origin }), mail: sinkMail() };
         const verifyMail = await createVerifiedAccount(b, a, testIp());
         expectAnswer(await signIn(b, a.email, a.password, { ip: testIp() }), 200);
