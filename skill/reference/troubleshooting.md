@@ -113,7 +113,7 @@ Signed in, but not admin: the `admin` role is granted per stage with `admins gra
 `deploy` prints the failed step, the stage's state and the next action. Follow the next action. Common messages:
 
 - `run setup-account … first`: the account's shared resources are missing. See [owner-tasks.md](owner-tasks.md) §3.
-- A missing `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID`, or "the permission to create R2 API tokens": see [owner-tasks.md](owner-tasks.md) §2.
+- A missing `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID`, or a missing permission: see [owner-tasks.md](owner-tasks.md) §2. "Account API Tokens Write" is the setup token's, needed only by `setup-account`; "R2 signing credential … missing" means `setup-account` must run with the setup token.
 - `NODE_USE_ENV_PROXY`: you are behind an HTTPS proxy. Put `NODE_USE_ENV_PROXY=1 ` in front of the command.
 - `required secrets are not set: …`: this happens on the first deploy of a stage. Set each named secret with `--target cloudflare`, then run `deploy` again.
 - An error about the number of D1 databases: an account holds at most 10, and a schema-changing deploy briefly holds two per stage. Remove unused test stages ([deploying.md](deploying.md)).

@@ -1,8 +1,9 @@
 /**
  * Cloudflare transfer tickets (files.md §2 "Cloudflare"; DEC-0098, DEC-0160): SigV4 query-signed,
- * path-style URLs for R2's S3-compatible endpoint, signed with the stage's R2 API token (the
- * framework-internal Worker secrets `frameworkR2AccessKeyId` / `frameworkR2SecretAccessKey`,
- * DEC-0100). Same JSON shape as every target's tickets, so the browser helpers are unchanged.
+ * path-style URLs for R2's S3-compatible endpoint, signed with the account's R2 signing credential
+ * (the stage's framework-internal Worker secrets `frameworkR2AccessKeyId` /
+ * `frameworkR2SecretAccessKey`, DEC-0550; each URL names the stage bucket only). Same JSON shape
+ * as every target's tickets, so the browser helpers are unchanged.
  * R2 omits CORS headers on its 403s, so in a browser a mismatched ticket fails with status null
  * (DEC-0101); the browser helper refuses an expired upload ticket before sending (DEC-0534).
  * Workers-compatible (Web Crypto).
@@ -90,8 +91,8 @@ export interface R2BucketLocation {
 }
 
 /**
- * The issuer a Cloudflare Worker uses (`StageOptions.tickets`): signs with the stage's R2 token,
- * read from the framework-internal secrets on each ticket (DEC-0100).
+ * The issuer a Cloudflare Worker uses (`StageOptions.tickets`): signs with the R2 signing credential,
+ * read from the stage's framework-internal secrets on each ticket (DEC-0550).
  */
 export function createWorkerTicketIssuer(location: R2BucketLocation, frameworkSecret: (name: FrameworkSecretName) => Promise<string>): CloudflareTicketIssuer {
   return createCloudflareTicketIssuer({

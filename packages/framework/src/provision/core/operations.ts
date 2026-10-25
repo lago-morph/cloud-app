@@ -104,8 +104,7 @@ export interface TargetOperations {
 
   /**
    * Deploy step 1, target part: names of missing or unusable prerequisites (credentials, by
-   * name only; on Cloudflare the permission to create R2 API tokens). Empty when all is well.
-   * Creates nothing.
+   * name only, and whether the credential is usable). Empty when all is well. Creates nothing.
    */
   preflight(stage: Stage): Promise<readonly string[]>;
 
@@ -128,13 +127,16 @@ export interface TargetOperations {
    */
   setUpEmail(emailDomain: string): Promise<readonly string[]>;
   /**
-   * `setup-account`, before anything changes: the email setup's missing prerequisites by name
-   * (the domain's zone, the credentials' email permissions; DEC-0515). Changes nothing.
+   * `setup-account`, before anything changes: its missing prerequisites by name: the email
+   * setup's (the domain's zone, the credentials' email permissions; DEC-0515) and, on
+   * Cloudflare while the account's R2 signing credential is absent, the permission to create it
+   * (DEC-0551). Changes nothing.
    */
   emailSetupProblems(emailDomain: string): Promise<readonly string[]>;
   /**
    * Deploy step 1 of a production stage: the email prerequisites that are missing (the domain's
-   * sending entry verified, the credentials' email permissions; DEC-0515), by name. Changes nothing.
+   * zone and its sending entry verified, read with the permissions deploy uses; DEC-0553), by name.
+   * Changes nothing.
    */
   emailPrerequisites(stage: Stage, emailDomain: string): Promise<readonly string[]>;
 

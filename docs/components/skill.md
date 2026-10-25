@@ -56,6 +56,8 @@ The skill and the template's README MUST contain step-by-step instructions for t
 
 Amendment for release 1 (Origin: owner · Decision: DEC-0513, DEC-0514, DEC-0515): "setting up the Google client" is replaced by: setting the account's email domain with `setup-account --target cloudflare --email-domain <domain>` and the API token's email permissions; and signing up, verifying the address and signing in on a stage, including how an agent reads the mail with `mail last`. The instructions MUST write the domain as `<domain>`, never a concrete domain (MAIL-REQ-003).
 
+Amendment (Origin: ai-proposed · Decision: DEC-0551): the token instructions describe two account API tokens: the everyday token for every command but `setup-account`, which cannot create API tokens, and the setup token for `setup-account`, each with its permission list.
+
 Amendment (Origin: owner · Decision: DEC-0521, DEC-0522, DEC-0523): "finding one's user ID and adding it to the admin list, or to the optional users list" is replaced by granting and revoking the `admin` role with `admins grant|revoke <email> --target <t> --stage <s>`, with `--confirm-production <s>` on a production stage, and listing admins with `admins list`. No step may tell anyone to copy a user ID into configuration, or to edit `framework.admins` or `framework.users`. The instructions MUST say that anyone who signs up and verifies their address is a user.
 
 ## 2. Design

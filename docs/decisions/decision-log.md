@@ -615,10 +615,11 @@ The first request ~1 s after `wrangler deploy` returned already succeeded, so no
 Evidence: `ai/implementation/spikes/a-02/RESULT.md`, logs `c02`, `c03`, `n01`, `n02`, `p01` (archived). Fallback: none needed (plan fallback was "report the refused host to the owner").
 
 ### DEC-0086 — The account's `workers.dev` subdomain is already registered
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: cloudflare.md §2 (`setupAccount`), D-03/D-05
+Origin: ai-proposed · Status: accepted (resolved by the owner, 2026-10-25: the account's subdomain was renamed to a neutral name; see DEC-0552) · Affects: cloudflare.md §2 (`setupAccount`), D-03/D-05
 
 `GET /accounts/{account}/workers/subdomain` returns `success: true` with a subdomain set, so on this account `setup-account --target cloudflare` only reads and records it (the "register if none" branch is not exercised here and is tested only by unit tests with a fake API). The subdomain value contains the owner's name; it is not written into committed docs or evidence (it is computed/recorded at runtime by `setup-account`), and spike logs redact it.
-Assumption (taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review): treating the subdomain as non-secret but personal — redacted in committed artefacts, not a credential.
+Assumption (taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"): treating the subdomain as non-secret but personal — redacted in committed artefacts, not a credential.
+**Resolved (owner, 2026-10-25).** The owner renamed the account's `workers.dev` subdomain to a neutral name, so it no longer contains personal data. The framework must never register a subdomain derived from personal data: on an account without one, `setup-account` registers `pf-<random>` (DEC-0552).
 Evidence: `ai/implementation/spikes/a-02/logs/c01-subdomain-get.txt` (archived). Fallback: none needed.
 
 ### DEC-0087 — SST/Pulumi Worker updates keep secrets set through the Cloudflare API; no second copy, no extra mechanism
@@ -758,7 +759,7 @@ Provisioning sets `PUT /accounts/<account>/r2/buckets/<bucket>/cors` with `{ "ru
 Evidence: RESULT.md (N13, N14, B4–B6). Fallback: none needed.
 
 ### DEC-0100 — Stage R2 signing token: account API token with "Workers R2 Storage Bucket Item Write" on the stage bucket only
-Origin: ai-proposed · Status: accepted · Affects: FILES §2 "Cloudflare", SEC (R2 signing credentials), PROV, cloudflare.md, D-02
+Origin: ai-proposed · Status: superseded by DEC-0550 (one account signing token created by `setup-account`; the S3 derivation stays) (was: accepted) · Affects: FILES §2 "Cloudflare", SEC (R2 signing credentials), PROV, cloudflare.md, D-02
 
 Provisioning creates the token through `POST /accounts/<account>/tokens` (works with the sandbox's proxy-injected token) with one policy: permission group "Workers R2 Storage Bucket Item Write" (looked up by name from `GET /accounts/<account>/tokens/permission_groups`; id at test time `2efd5506f9c8494dacb1fa10a3e7d5b6`) on resource `com.cloudflare.edge.r2.bucket.<account>_default_<bucket>` = `"*"`. S3 credentials: access key ID = token `id`; secret access key = lowercase hex SHA-256 of the token `value` (returned once; stored only as the framework-internal Worker secret, never printed). Item Write includes object reads. The token was usable immediately and refused the other bucket and ListBuckets (403 AccessDenied). Removal deletes it with `DELETE /accounts/<account>/tokens/<id>`. Assumption (simplest): one token per stage, named after the stage's resources, created by provisioning; rotation is out of scope here.
 Evidence: RESULT.md "How it works", N10–N12, logs/01-setup.txt, logs/04-teardown.txt. Fallback: none needed.
@@ -791,7 +792,7 @@ Evidence: `ai/implementation/spikes/a-08/RESULT.md`, `out/local.txt`, `out/remot
 `out/remote-http.txt` (archived). Fallback: not needed.
 
 ### DEC-0103 — sql.d.ts typing approach works; three declarations revised (contract change)
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SQL-REQ-002, SQL-REQ-003, CORE (AppDefinition.tables), docs/contracts/ts/sql.d.ts, docs/contracts/ts/index.d.ts, B-05
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: SQL-REQ-002, SQL-REQ-003, CORE (AppDefinition.tables), docs/contracts/ts/sql.d.ts, docs/contracts/ts/index.d.ts, B-05
 
 Spike A-09 (evidence: `ai/implementation/spikes/a-09/RESULT.md`, `revised.diff` (archived); drizzle-orm 0.45.4,
 TypeScript 5.9.3 and 7.0.2). Result: the restricted Drizzle pg-core approach works — the sql.md §2.3
@@ -810,7 +811,7 @@ Proposed change (verified: all checks pass): `Column` gains a `TableName` parame
 `TableDefinitions = Record<string, AnyTable>` (export from index.d.ts); framework-declared
 `sum`/`avg` returning `SQL<number | null>`. Fallback named in the plan: none — ask owner.
 
-Integration (A-INT): adopted under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review. `revised.diff` was
+Integration (A-INT): adopted under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me"). `revised.diff` was
 applied to `docs/contracts/ts/sql.d.ts` (now identical to the spike's `fw-revised/index.d.ts`),
 `AnyTable` is exported from `docs/contracts/ts/index.d.ts`, and sql.md §2.2 describes the types. The
 spike's checks, rerun against the edited contract file (drizzle-orm 0.45.4; TypeScript 5.9.3 and
@@ -858,28 +859,28 @@ MIG §2 on AWS. (Alternative if that proves awkward in-memory: `containsText` ap
 `lower()`, which gives the same result on the default database.)
 
 ### DEC-0107 — Combined Cloudflare tool environment for sandbox runs
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: DEC-0083, DEC-0088, DEC-0084, PROV §2 "Credentials" and "Removal", plan §10.6, D-03, D-05, every cloud run
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: DEC-0083, DEC-0088, DEC-0084, PROV §2 "Credentials" and "Removal", plan §10.6, D-03, D-05, every cloud run
 
 One statement of DEC-0083 as amended by DEC-0088, for implementers:
 - **wrangler:** `CLOUDFLARE_API_TOKEN=<non-secret placeholder>` (the proxy injects the real token for `api.cloudflare.com`), `CLOUDFLARE_ACCOUNT_ID`, `NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt`, plus the sandbox's `HTTPS_PROXY`.
 - **SST/Pulumi:** `CLOUDFLARE_API_TOKEN=<non-secret placeholder>`, `CLOUDFLARE_DEFAULT_ACCOUNT_ID=$CLOUDFLARE_ACCOUNT_ID`, `NODE_USE_ENV_PROXY=1`, `--stage` (or `SST_STAGE`), plus `HTTPS_PROXY`.
 - **Framework Node code** calling Cloudflare or `workers.dev` with `fetch`: `NODE_USE_ENV_PROXY=1` (DEC-0085).
 On an owner machine the real token goes in `CLOUDFLARE_API_TOKEN` and the proxy-specific variables are harmless. Removal: `sst remove` leaves the stage's state objects (including its passphrase) in the `sst-state` bucket, so the framework's Cloudflare `remove` deletes the objects under `*/<app>/<stage>` itself and never the bucket (DEC-0084).
-Recorded under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Recorded under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Evidence: `ai/implementation/spikes/a-01/RESULT.md`, `ai/implementation/spikes/a-03/RESULT.md`.
 
 ### DEC-0108 — Offline runs use the spike's `offline.sh` wrapper
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: plan §10.2, B-17 (`verify` offline check), B-18 / C-05 exit checks, CHECK-REQ-006 runs
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: plan §10.2, B-17 (`verify` offline check), B-18 / C-05 exit checks, CHECK-REQ-006 runs
 
 Plan §10.2's offline command runs `ip link set lo up`, but `ip` (iproute2) is not installed in this sandbox. Offline runs use `unshare -rn sh <dir>/offline.sh <command…>`, where `offline.sh` brings loopback up with `ip` if present and otherwise with an ioctl through `python3 -I lo-up.py`, then runs the command. Spike A-10 ran Vitest, `wrangler dev` and Playwright + Vite offline with it. The files were `ai/implementation/spikes/a-10/scripts/{offline.sh,lo-up.py}` (archived); B-01 copies both unchanged to `scripts/offline.sh` and `scripts/lo-up.py` at the repository root, and later items use that path. Unsetting `HTTPS_PROXY` or disabling TLS is still never a substitute.
-Recorded under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Recorded under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Evidence: `ai/implementation/spikes/a-10/RESULT.md` "Environment", commands 3, 5, 13.
 
 ### DEC-0109 — The framework depends on `@pulumi/cloudflare` only if its code imports it
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: PAR-108, B-01 (`FW/package.json`), D-03
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: PAR-108, B-01 (`FW/package.json`), D-03
 
 SST 4.17.2 installs its own `@pulumi/cloudflare` 6.15.0 (PAR-108) in `.sst/platform`, and installing the package directly pulls a newer `@pulumi/pulumi` (3.270.0) than SST's (3.215.0). So the framework declares `@pulumi/cloudflare` as a dependency, at exactly PAR-108, only if framework code imports it (for example for types or a resource SST does not wrap); otherwise it relies on SST's copy and declares nothing. PAR-108 stays the pinned version either way.
-Recorded under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Recorded under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Evidence: `ai/implementation/spikes/a-10/RESULT.md` finding 5, command 15.
 
 ---
@@ -972,12 +973,12 @@ Origin: ai-proposed · Status: accepted · Affects: HTTP-REQ-001, HTTP-REQ-005, 
 Item: B-03.
 
 ### DEC-0123 — 5xx responses carry only the catalogue meaning; known secret values are redacted
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: HTTP-REQ-002, HTTP-AC-002, SEC-REQ-002, B-10, B-16, SEC-AC-002, HTTP-REQ-007, B-03, B-04
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: HTTP-REQ-002, HTTP-AC-002, SEC-REQ-002, B-10, B-16, SEC-AC-002, HTTP-REQ-007, B-03, B-04
 
 Responses below 500 keep a `FrameworkError`'s own message (app messages such as "note limit reached", validation details); responses of 500 and above give the catalogue meaning, with the detail only in the log. HTTP cannot know secret values itself, so `createHttpParts({ secretValues: (c) => Iterable<string> })` takes them from the runtime (B-16 wires SEC: e.g. every `SECRET_*` value in the Worker env); every non-empty value is replaced by `[redacted]` in the response message and the log entry. Reason: HTTP-AC-002's "an error containing a known secret value is not echoed" covers app-thrown `FrameworkError` messages, which only redaction can meet.
 
 B-T1's draft of the same decision ("Secret values are redacted from responses and log entries"): HTTP-REQ-007 logs the underlying error's message, while SEC-REQ-002 forbids secret values in log entries and error responses, and C-01's fixture is "a route that throws an error containing the test secret value". The tests therefore require that a known secret value (one read through `c.var.secrets` in this request or set for the test app) never appears in a response — including the message of an app-thrown 4xx `FrameworkError` — nor in any log entry, even when app code put it into an error message. The framework must redact known secret values (or not return app messages).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Items: B-03, B-T1 (drafts merged).
 
 ### DEC-0124 — The log entry's route path is the matched route pattern; key and secret names come from the message
@@ -1041,12 +1042,12 @@ Each column's rule runs inside that column's Drizzle `mapToDriverValue`, so ever
 Item: B-05.
 
 ### DEC-0134 — Dialect per process: `PROTOTYPE_FRAMEWORK_DIALECT`
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: LOCAL-REQ-003, core.md "Testing", cli.md `verify`, B-16, B-17, B-16 (`createTestApp`), B-17 (`verify`), core.md §2 "Testing", SQL-AC-001/-003…-006, KV-AC-001…-005
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: LOCAL-REQ-003, core.md "Testing", cli.md `verify`, B-16, B-17, B-16 (`createTestApp`), B-17 (`verify`), core.md §2 "Testing", SQL-AC-001/-003…-006, KV-AC-001…-005
 
 Same variable as the B-T2 suites assume (merged below), so there is one name. The dialect is read once per process from the environment variable `PROTOTYPE_FRAMEWORK_DIALECT` (`sqlite` by default, or `postgres`; anything else is `CORE.MISCONFIGURED`) and fixed after the first read. Worker bundles (local and Cloudflare) leave it unset and get SQLite; `verify` sets `postgres` for the second test-runner process. `defineTable` builds the table of that dialect when the schema module is imported, and keeps a dialect-neutral definition; `tableFor(table, dialect)` builds (and memoizes) the other dialect's table, resolving `ref`s to the same dialect, for `generate-migration` (B-07), which needs both histories from one process.
 
 B-T2's draft of the same decision ("Framework suites select the SQL dialect with `PROTOTYPE_FRAMEWORK_DIALECT`"): core.md and local.md fix the dialect per test-runner process but name no mechanism; spike A-10 says "an env var selecting the dialect (B-16)". The suites assume the variable `PROTOTYPE_FRAMEWORK_DIALECT` with values `sqlite` (local D1) and `postgres` (PGlite), read when the framework is loaded. It is defined once in `test/integration/sql/support/dialect.ts`; if B-16 chooses another name, only that constant changes. One entry file per dialect (`*.sqlite.test.ts`, `*.postgres.test.ts`) sets it and then imports its suite dynamically, so dialect-specific tables are built after selection; Vitest's `forks` pool gives each file its own process, so `npm run test:integration` covers both dialects in one run. A harness check (not a criterion) in `sql.suites.ts` proves the selection took effect: a 101-parameter query must fail on local D1 (PAR-216, DEC-0102) and succeed on PGlite.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Items: B-05, B-T2 (drafts merged).
 
 ### DEC-0135 — PGlite harness: one C/C data directory per process, one instance per database
@@ -1069,40 +1070,40 @@ Taken under the owner's instruction "Do not stop and ask me questions. Make an a
 Item: B-06.
 
 ### DEC-0138 — `atomic` mechanics locally
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SQL-REQ-005, SQL-AC-005, sql.md §2.2 "atomic"
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: SQL-REQ-005, SQL-AC-005, sql.md §2.2 "atomic"
 
 D1: steps are built on a write handle over the database, checked, then submitted with Drizzle's `db.batch` (one D1 batch, which D1 runs as one transaction). PGlite: Drizzle's `transaction`; inside it all steps are built on a write handle over the transaction (with the value rules), checked, then executed in order; any error rolls back. The check: a step's return value must be a builder made by *that call's* write handle (recorded in a per-call `WeakSet`); anything else — a builder from `c.var.sql`, one captured earlier, a promise from an `async` step — rejects with `CORE.INTERNAL` (sql.md §2.2; SQL-REQ-005 only asks for "a catalogue error", and B-T2's suite accepts any catalogue code) before anything executes. Builders made on a step's handle reject with `CORE.INTERNAL` when awaited, so an `async` step cannot execute its write outside the unit (found by the unit test: awaiting the builder inside an `async` step had executed it). A handle not made by `sqliteDb`/`postgresDb` is `CORE.INTERNAL`. Empty input resolves to `[]` without touching the database (so also without a forced-outage error). The whole call runs as one guarded operation (one PAR-210 budget).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-06.
 
 ### DEC-0139 — `containsText` SQL per dialect
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SQL-REQ-003, sql.md §2.2, DEC-0106
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: SQL-REQ-003, sql.md §2.2, DEC-0106
 
 No substring-position function exists in both dialects (`instr` is SQLite-only, `strpos`/`position(… in …)` Postgres-only), and Drizzle `sql` fragments cannot see the dialect while rendering, so `containsText` picks `instr(lower(col), ?) > 0` or `strpos(lower(col), $n) > 0` from the column's class (`SQLiteColumn` or not); a column always belongs to a table built for one dialect (B-05). The needle is folded in JS (A–Z only) instead of `lower(?)`, which Postgres cannot type for an untyped parameter. Relies on the harness database's C ctype for ASCII-only `lower()` on Postgres (DEC-0106); measured: `àpple` does not match `ÀPPLE` on both local dialects.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-06.
 
 ### DEC-0140 — Failure mapping, PAR-210 locally, forced outage and logging
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SQL-REQ-006, SQL-AC-006, LOG-REQ-005, LOG-AC-005, sql.md §2.2 "Failures", B-08, B-16
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: SQL-REQ-006, SQL-AC-006, LOG-REQ-005, LOG-AC-005, sql.md §2.2 "Failures", B-08, B-16
 
 - `SQL.CONFLICT`: anywhere in the error's `cause` chain (Drizzle 0.45 wraps driver errors in `DrizzleQueryError`), SQLSTATE `23505`/`23503` or a SQLite message `UNIQUE|PRIMARY KEY|FOREIGN KEY constraint failed`. The message is generic (no values or names), because 409 messages reach the client.
 - `SQL.UNAVAILABLE` (local adapters): messages `PGlite is closed`, Miniflare's `poisoned stub` (binding used after `dispose`), and connection-level ones (`Network connection lost`, `ECONNREFUSED`, `ECONNRESET`, `fetch failed`); also any operation not settled within PAR-210 (45 s; the late outcome is ignored). Observed messages: unit test "a database that cannot be reached …" in `src/sql/queries.unit.test.ts`. The Data API retry loop is AWS and not built.
 - Anything else from a driver: `FrameworkError("CORE.INTERNAL")` carrying the driver message and `cause` (logged; the HTTP handler returns only the catalogue meaning for status ≥ 500), so no driver error reaches app code.
 - Adapter options (`SqlAdapterOptions`, exported from `src/sql/drivers.ts`): `unavailable: true` (for `createTestApp`'s `unavailable: ["sql"]`, B-16) fails every operation with `SQL.UNAVAILABLE` without running it; `budgetMs` (tests only); `log`: when given, every `SQL.UNAVAILABLE` is written once through `logFailure` (component `SQL`). KV (B-08) should create its handle without `log` and log its own `KV.UNAVAILABLE`, so a KV outage is not logged as a SQL one.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-06.
 
 ### DEC-0141 — `sum`/`avg` normalisation
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SQL-REQ-003, sql.md §2.2
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: SQL-REQ-003, sql.md §2.2
 
 `sum(x)`/`avg(x)` are `sql\`sum(${x})\`.mapWith(toJsNumber)`: numbers pass, strings and bigints (Postgres `numeric`/`bigint`) become numbers, and an unsafe integer or non-finite value is `SQL.INVALID_VALUE`. NULL (empty or all-NULL input) stays null (Drizzle does not call the decoder for NULL). `count`/`countDistinct`/`min`/`max` stay Drizzle's (already `Number`/column-mapped).
 
 No portable bound-parameter or statement-size limit is added (A-08, DEC-0102; PAR-216, PAR-217 are cited in sql.md "Common needs").
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-06.
 
 ### DEC-0142 — Migration file layout, snapshots, checksums and record format
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: MIG-REQ-001, MIG-REQ-002, MIG-AC-001, MIG-AC-002, migrations.md §2 "Generation", "Record", B-15, B-17, D-04, DEC-0224, DEC-0236
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: MIG-REQ-001, MIG-REQ-002, MIG-AC-001, MIG-AC-002, migrations.md §2 "Generation", "Record", B-15, B-17, D-04, DEC-0224, DEC-0236
 
 migrations.md fixes the directories and the record columns but not file names, how drizzle-kit learns the previous schema, the `checksums.json` format or the record `id`. Chosen, simplest that meets them:
 - Files: `migrations/<dialect>/<nnnn>_<slug>.sql`, same base name in both dialects, `<nnnn>` = highest existing number + 1 (4 digits), `<slug>` = `schema` unless the caller names one (lowercase snake_case). Statements joined with drizzle-kit's `--> statement-breakpoint` lines.
@@ -1110,30 +1111,30 @@ migrations.md fixes the directories and the record columns but not file names, h
 - `checksums.json`: `{ "<dialect>/<file>.sql": "<sha256 hex of the UTF-8 text>" }`, keys sorted; generation only adds entries for new files, never recomputes existing ones, and drops entries of files that no longer exist. Snapshots are not checksummed (they only steer the next generation).
 - Record: `id` = `<history>/<base name>` with history `framework` or `app` (so app and framework IDs never collide and an app ID contains its file base name, as the B-T2 suites assume), `dialect` = `sqlite`/`postgres`, `checksum` = the file's SHA-256 hex, `applied_at` = epoch ms (`integer` on SQLite, `bigint` on Postgres).
 - Framework tables are plain Drizzle tables in `src/mig/framework.ts` (not `defineTable`: `__framework_kv.key` is text, not a UUID): `__framework_kv(key text primary key, value text not null)`, `__framework_migrations(id text primary key, dialect, checksum, applied_at not null)`. Their history `FW/migrations/{sqlite,postgres}/0000_framework_tables.sql` (+ `checksums.json`) is produced by the same engine; a unit test fails if the shipped files differ from what the engine generates. KV (B-08) uses `frameworkTables(dialect).kv`.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-07.
 
 ### DEC-0143 — The generator also refuses changes to existing columns
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: migrations.md §2 "Supported changes", CHECK-REQ-004, B-15
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: migrations.md §2 "Supported changes", CHECK-REQ-004, B-15
 
 migrations.md requires refusing drop+add diffs (tables, or columns of one table). Besides those, the engine refuses — with a message naming the add-copy-drop pattern, before writing anything — a change to an existing column's type, nullability, default or primary key, and a NOT NULL column without a static default added to an existing table. These are exactly the unsupported changes of CHECK-REQ-004; without the refusal drizzle-kit would emit a SQLite table rebuild that D1 cannot run on referenced tables (DEC-0095) and the checker would reject anyway. The checker (B-15) still has to catch them in hand-written files (CHECK-AC-004 uses hand-written pairs). Not refused (not in the whitelist, rare, left to the checker): adding a foreign key to an existing column.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-07.
 
 ### DEC-0144 — Local reading of MIG-AC-002/-003 and in-place application
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: MIG-REQ-002, MIG-REQ-003, MIG-AC-002, MIG-AC-003 (local), migrations.md §2 "Local", B-16, B-17 (`dev`), B-07
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: MIG-REQ-002, MIG-REQ-003, MIG-AC-002, MIG-AC-003 (local), migrations.md §2 "Local", B-16, B-17 (`dev`), B-07
 
 Same reading as B-T2's draft (merged below): locally a deployment is a `dev` start (or a `createTestApp` on fresh storage) that applies pending migrations in place; there is no copy and no second database. Each pending migration is applied atomically with its record row (local D1: one `batch` prefixed with `PRAGMA defer_foreign_keys = on`, the same shape as Cloudflare's DEC-0093 request; PGlite: one transaction). On failure the applier stops, leaves the database exactly as before that migration (earlier migrations of the same run stay applied — each is its own unit, as on Cloudflare), and throws `MigrationFailedError` (migration ID, file, cause, IDs applied before it); `dev` must exit non-zero and `createTestApp` must reject. "The old app answers again" = a `dev` start with the previous sources and committed migrations serves the unchanged database. With nothing pending the applier writes nothing (no record update). Following DEC-0094, an error is not taken as proof of rollback: the record is re-read and a migration found there counts as applied. Evidence: `src/mig/apply.unit.test.ts` on local D1 (getPlatformProxy) and PGlite; a mutation that runs the D1 statements one by one instead of as one batch makes the failing-migration test fail (checked once by hand, not committed).
 
 B-T2's draft of the same decision ("MIG-AC-002/-003 local interpretation"): Locally a "deployment" is a `dev` start: it applies pending migrations in place to the persistent local D1 database (migrations.md §2 "Local"). Hence: initial deployment = first `dev` start; second deployment with no changes = another `dev` start with the same sources, which must leave the whole database (schema, every row, the migration record including applied times) byte-for-byte equal and answer the health check and the app's routes; "neither stops the app" has no separate local meaning (local deploys are `dev` restarts) and is checked as "applies nothing". A failing deployment = `dev` exits non-zero instead of serving; "unchanged" = identical database snapshot; "no new database behind" = exactly one local D1 database file; "the old app answers again" = `dev` with version 2's sources and committed migrations serves the unchanged data; the re-run path tested is "after correcting the data". `dev`'s address is the first `http://localhost:<port>` it prints (LOCAL-REQ-004) on which `/api/__framework/health` answers 204; `dev` is stopped with SIGINT to its process group. The database is read from Miniflare's SQLite file under `.wrangler/state/**/d1/` after `dev` stops (Node's `node:sqlite`). These criteria are not run on PGlite: `dev` uses local D1 only, and PGlite exists only in test processes with fresh storage.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Items: B-07, B-T2 (drafts merged).
 
 ### DEC-0145 — No checksum or order check when applying locally
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: MIG-REQ-001, B-15, B-17
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: MIG-REQ-001, B-15, B-17
 
 The local applier does not compare recorded checksums with the files, and does not refuse a pending file that sorts before an applied one: `verify`'s migration checker (B-15) owns edit detection, and local data is disposable (`reset-local`). Recorded migrations whose files are missing (e.g. a newer version's migrations after switching back to old sources) are ignored.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-07.
 
 ### DEC-0146 — Empty values are accepted (KV-REQ-002 over KV-AC-002) — open owner item
@@ -1144,31 +1145,31 @@ Taken under the owner's instruction "Do not stop and ask me questions. Make an a
 Item: B-08.
 
 ### DEC-0147 — Prefix rules: empty prefix lists every key; over PAR-220 bytes rejected
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: KV-REQ-001, KV-REQ-002, kv.md §2
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: KV-REQ-001, KV-REQ-002, kv.md §2
 
 KV-REQ-002 requires prefixes to be well-formed but gives no length rule; the catalogue's `KV.INVALID_KEY` meaning ("Key or prefix is empty, malformed, or too long") is read as describing the code's cases jointly, not as a requirement that prefixes be non-empty. Chosen: a prefix is well-formed text of at most PAR-220 bytes (a longer prefix can match no key, and the B-T2 suite expects `KV.INVALID_KEY`), else `KV.INVALID_KEY`; the empty prefix is allowed and lists every key (simplest; "keys starting with the prefix").
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-08.
 
 ### DEC-0148 — `limit` is clamped, not rejected
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: KV-REQ-003, kv.d.ts `KvListOptions.limit`, kv.md §2
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: KV-REQ-003, kv.d.ts `KvListOptions.limit`, kv.md §2
 
 No catalogue code exists for a bad page size, and kv.d.ts only names a default and a maximum. Chosen: absent or non-finite → PAR-221; otherwise `floor`, clamped to 1…PAR-222.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-08.
 
 ### DEC-0149 — KV's own SQL handle and failure mapping (KV-REQ-005, LOG-REQ-005)
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: KV-REQ-005, KV-AC-005, LOG-REQ-005, kv.md §2, DEC-0140, B-16
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: KV-REQ-005, KV-AC-005, LOG-REQ-005, kv.md §2, DEC-0140, B-16
 
 `createKv(db, { log })` (`src/kv/service.ts`) takes a handle made by `sqliteDb`/`postgresDb`. B-16 must build that handle **separately from `c.var.sql`'s**: same binding/client, with `unavailable` set when `createTestApp`'s `unavailable` contains `"sql"` **or** `"kv"`, the same `budgetMs`, and **no `log`**; and pass the request's log to `createKv`. Then: `SQL.UNAVAILABLE` (forced, PAR-210 budget, unreachable database) becomes `KV.UNAVAILABLE` with the SQL error as `cause`, written once via `logFailure` (component `KV`; the HTTP handler's later `logFailure` of the same object writes nothing), so no `SQL` entry appears for a KV outage. Any other `SQL.*` code (e.g. `SQL.RESULT_TOO_LARGE`, which the PAR choices make impossible) is a framework fault and becomes `CORE.INTERNAL`, so no SQL code surfaces from KV. `KV.*` and `CORE.*` errors pass unchanged. Evidence: `src/kv/service.unit.test.ts` ("storage that cannot be used": forced outage and a closed database, both dialects).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-08.
 
 ### DEC-0150 — Cursor form; one extra row per page
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: KV-REQ-003, KV-AC-003, KV-AC-005, kv.md §2
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: KV-REQ-003, KV-AC-003, KV-AC-005, kv.md §2
 
 The cursor is base64url (no padding) of UTF-8 JSON `[prefix, lastKey]`; decoding requires the canonical re-encoding to match, so an altered cursor (e.g. a character appended) is `KV.INVALID_CURSOR`. Not signed: a forged cursor can only skip ahead within its own prefix, which exposes nothing. Each page query fetches `limit + 1` rows so `nextCursor` is null exactly when nothing remains (kv.d.ts), in one query; a maximum page plus one row is 51 × (1,024 + 4,096) = 261,120 bytes ≤ PAR-215 (262,144). If PAR-220/222/223 grow, that margin must be rechecked (the unit test "a maximum page of maximum-size entries" fetches exactly this case on both dialects).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-08.
 
 ### DEC-0151 — The local target reads `config/local.json` for every stage
@@ -1377,14 +1378,14 @@ Origin: ai-proposed · Status: accepted · Affects: GOOGLE-REQ-005, GOOGLE-AC-00
 Item: B-13.
 
 ### DEC-0179 — Rule engine independent of type checking, with a framework-built program
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CHECK-REQ-001, CHECK-REQ-006, check.md §2, B-17
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CHECK-REQ-001, CHECK-REQ-006, check.md §2, B-17
 
 `runPortabilityRules(appDir)` (`./check`) lints every `.ts/.tsx/.mts/.cts` file under `src/` and `tests/` with ESLint (PAR-111) using only the shipped configuration (`overrideConfigFile: true`, `allowInlineConfig: false`). Type information comes from a TypeScript program the engine creates with fixed app-lib-set options (`APP_COMPILER_OPTIONS`, identical to `tsconfig.app.json`), not from the app's `tsconfig.json`. Type errors never stop the rules, so `verify` can print both the type errors and the rule diagnostics (DEC-0238: `node:fs`, `.transaction()`, `db.query` fail both). B-17 should type-check with the same `APP_COMPILER_OPTIONS`, print `formatDiagnostics(...)`, and fail when either step reports anything. Rules resolve every reference through the type checker to its declaration (aliases, local re-exports, namespace imports, `const` copies) and classify declarations by the package that declares them (framework package root, `drizzle-orm`, `hono`, TypeScript lib files); framework declarations are recognised both in the workspace and under `node_modules`. Files under `src/` but outside `client/`, `shared/`, `server/` (e.g. `src/vite-env.d.ts`) are treated as server code; files outside `src/` and `tests/` are not app code. Only TypeScript files are app code.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-14.
 
 ### DEC-0180 — What each rule rejects (readings of check.md §1)
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CHECK-REQ-001, SQL-REQ-002, CORE-REQ-005, CORE-REQ-007, check.md §2
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25); the `allowed-imports` reading amended by DEC-0554 (the deny list also applies to the installed dependency tree and the Worker bundle, and names `cloudflare` and `googleapis`) · Affects: CHECK-REQ-001, SQL-REQ-002, CORE-REQ-005, CORE-REQ-007, check.md §2
 
 Listed per rule in check.md §2 "What each rule takes as its construct". Readings worth review:
 - `allowed-imports` uses a fixed deny list for platform SDKs and drivers (Cloudflare, AWS, SST, Pulumi, Vercel, Netlify, Google Cloud, Azure, PGlite, pg, postgres, mysql, SQLite drivers, libSQL, Neon, PlanetScale, drizzle-kit, Prisma, Kysely, Knex, TypeORM, Sequelize, MongoDB, Redis) plus every `scheme:` specifier; other npm packages are allowed. `drizzle-orm` (root) is allowed by this rule; its non-portable names are the SQL rules'. Framework subpaths follow CORE-REQ-005 literally: server code `.` only (not `./client`), tests `.` and `./testing`, shared code nothing; browser framework imports are `browser-api-only`'s. Browser code may not import server or test code even type-only; server code may not import browser or test code.
@@ -1393,77 +1394,77 @@ Listed per rule in check.md §2 "What each rule takes as its construct". Reading
 - `app-error-codes` judges the code by its type, so a parameter typed `ErrorCode` fails; `AUTH.UNAUTHORIZED` is rejected (not in CORE-REQ-007's table).
 - `no-env-access` also covers `const { env } = process` and Hono `onError`/`notFound` by type.
 - CHECK-REQ-002 "unchecked type assertions" includes non-null assertions (`x!`).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25. The risk of a fixed list (a denied SDK arriving inside an ordinary package) is reduced by DEC-0554.
 Item: B-14.
 
 ### DEC-0181 — Skill reference file names
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CHECK-REQ-003, CHECK-AC-003, SKILL-REQ-002, E-01, E-02
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CHECK-REQ-003, CHECK-AC-003, SKILL-REQ-002, E-01, E-02
 
 `src/check/references.ts` fixes the names under `skill/reference/`: `http-and-validation.md`, `sql-and-migrations.md`, `kv.md`, `files.md`, `secrets.md`, `configuration.md`, `current-user.md`, `log.md`, `local-development.md`, `deploying.md`, `testing.md`, `troubleshooting.md`, `owner-tasks.md` (skill.md §2 topics, plus the owner tasks E-02 writes). Rule → reference: `allowed-imports`, `browser-api-only`, `app-error-codes`, `no-raw-html` → `http-and-validation.md`; `no-env-access` → `configuration.md`; the six SQL rules → `sql-and-migrations.md`; type-escape bans, `no-suppression-comments` and anything else → `troubleshooting.md`. E-01/E-02 must create exactly these files; CHECK-AC-003 passes only once they exist.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-14.
 
 ### DEC-0182 — Raw-HTML sinks and suppression comments are framework rules
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CHECK-REQ-001 (last paragraph), CHECK-REQ-002, check.md §2
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CHECK-REQ-001 (last paragraph), CHECK-REQ-002, check.md §2
 
 check.md §2 suggests "existing lint rules (for example `no-unsanitized`)". No such plugin is pinned in parameters.md and B-14 owns no `package.json`, so the shipped configuration uses its own `prototype-framework/no-raw-html` (browser code only; DOM sinks and React's `dangerouslySetInnerHTML`). Likewise `prototype-framework/no-suppression-comments` bans `@ts-ignore`/`@ts-expect-error`/`@ts-nocheck` and ESLint directive comments (typescript-eslint's `ban-ts-comment` was dropped because its `@ts-ignore` message recommends `@ts-expect-error`, which is banned too). Type escapes otherwise use typescript-eslint (PAR-111) `no-explicit-any`, `consistent-type-assertions` (`never`; `as const` stays allowed) and `no-non-null-assertion`. The rules import `@typescript-eslint/utils` types only (a dependency of the pinned `typescript-eslint`, same version); B-INT may declare it explicitly.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-14.
 
 ### DEC-0183 — Detecting app configurations that weaken framework rules
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CHECK-REQ-006, CHECK-AC-006, B-17
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CHECK-REQ-006, CHECK-AC-006, B-17
 
 `checkAppLintConfig(appDir)` (also run by `runPortabilityRules`) imports the app's `eslint.config.{js,mjs,cjs,ts,mts,cts}` (default export, nested arrays flattened) and reports, as a diagnostic on that file naming the rule, every entry that sets a shipped rule to a lower severity than `error` or to different options; a plugin registered under another namespace with `meta.name: "prototype-framework"` is followed. A file that fails to load is itself a failure (rule `prototype-framework/lint-config`). `ignores` patterns and other settings of the app file are not inspected, because `verify` never uses that file for its rules.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-14.
 
 ### DEC-0184 — Supported changes are judged by each migration's schema effect, not its statements
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CHECK-REQ-004, CHECK-AC-004, MIG-REQ-001, MIG-REQ-003, migrations.md §2 "Supported changes", check.md §2
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CHECK-REQ-004, CHECK-AC-004, MIG-REQ-001, MIG-REQ-003, migrations.md §2 "Supported changes", check.md §2
 
 The checker applies the app history one migration at a time (framework history first, through MIG's `applyMigrations`, the same path as `dev`/`createTestApp`) to fresh local D1 (getPlatformProxy, not persisted, temporary config) and PGlite, introspects the schema after each, and diffs consecutive states per dialect. Supported: add or drop a table; add a column that is nullable or has a static default; drop a column (with its references); add or drop an index or a unique constraint. Rejected, each with a message naming the add-copy-drop pattern: a table removed and another added in one migration (rename); a column removed and another added in the same table in one migration (rename); a NOT NULL column without a default added to an existing table; a change to an existing column's type, nullability, default or primary key; a reference added to, or removed from, a column that is kept. A statement diff was rejected because drizzle-kit itself writes a supported change — dropping a `ref()` column on SQLite — as a table rebuild (`PRAGMA`, `CREATE TABLE __new_…`, `INSERT … SELECT`, `RENAME`), observed with the B-07 generator. In addition, statements that change data (`INSERT`, `UPDATE`, `DELETE`, `REPLACE`, `TRUNCATE`, `MERGE`) are rejected, except drizzle-kit's rebuild copy `INSERT INTO __new_<t> (…) SELECT …`. A migration that fails to apply on a fresh database is reported with the database error (`migration-apply`) and that dialect's later migrations are not judged; e.g. SQLite cannot add a NOT NULL column without a default at all, so that case shows as `migration-apply` on SQLite and `migration-supported-changes` on Postgres.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-15.
 
 ### DEC-0185 — "Same logical schema": what is compared, and when
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CHECK-REQ-004, MIG-REQ-001, check.md §2
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CHECK-REQ-004, MIG-REQ-001, check.md §2
 
 Per table: columns by SQL name with declared type, nullability, static default and primary key; non-unique indexes and unique column sets (unique constraints and unique indexes alike, by ordered column list, names ignored); references (`cols -> table(cols)` with update/delete actions). Declared types are compared by SQLite storage class (`integer` ≡ `integer`/`bigint`/`smallint`/`boolean`; `real` ≡ `real`/`double precision`/`numeric`; `text` ≡ `text`), since SQLite has no boolean or bigint; a Postgres `boolean` therefore matches any SQLite `integer`. Defaults are compared as SQL text after removing Postgres casts and wrapping parentheses (and unquoting quoted numbers of non-text columns). Framework tables are included. When both histories have the same file names, the dialects are compared after each pair and only the first diverging pair is reported (later pairs inherit it); otherwise only the final schemas are compared, when both histories applied completely.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-15.
 
 ### DEC-0186 — Checksums, layout and order
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CHECK-REQ-004, MIG-REQ-001, DEC-0142, DEC-0145
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CHECK-REQ-004, MIG-REQ-001, DEC-0142, DEC-0145
 
 The local applier checks neither checksums nor order (DEC-0145), so the checker does, offline: every `migrations/<dialect>/*.sql` must have its SHA-256 recorded in `migrations/checksums.json` (missing entry: "not made by generate-migration"; different: "edited after it was generated"); every entry must name an existing file (a deleted, possibly applied migration); `checksums.json` must exist and be a JSON object when there are migrations. Layout: names `<nnnn>_<slug>.sql`; numbers 0000, 0001, … without gaps or repeats per dialect; the same base names in both dialects. Since checksums are keyed by file name, renumbering or inserting a file before applied ones is caught by numbering or by missing entries. The checker cannot know which migrations a cloud stage has applied; it does not compare migrations with the current table definitions (not required by CHECK-REQ-004).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-15.
 
 ### DEC-0187 — Diagnostics
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CHECK-REQ-003, CHECK-REQ-004, B-17
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CHECK-REQ-003, CHECK-REQ-004, B-17
 
 Diagnostics are `CheckDiagnostic`s (same layout through `formatDiagnostics`), located at line 1, column 1 of the migration file (or `migrations/checksums.json`), with rule IDs `prototype-framework/migration-checksums`, `-history`, `-apply`, `-supported-changes`, `-dialects` (`MIGRATION_CHECKS`) and reference `skill/reference/sql-and-migrations.md`. A dialect mismatch is reported once, on the SQLite file of the pair, naming both files and every difference (e.g. `column records.extra exists in postgres but not in sqlite`). These rule IDs are not ESLint rules and are not in `RULE_NAMES`/the shipped config.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-15.
 
 ### DEC-0188 — Build output layout and how the app module is loaded
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CORE-REQ-002, cli.md §2, local.md §2, B-17, D-03, DEC-0214, DEC-0218, DEC-0240
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CORE-REQ-002, cli.md §2, local.md §2, B-17, D-03, DEC-0214, DEC-0218, DEC-0240
 
 `buildApp({ appDir, target, stage })` (`src/build/build.ts`) writes `<app>/.framework/<target>/{config.mjs, entry.mjs, worker.js}` (plus `wrangler.jsonc` locally), deleting the directory first. `config.mjs` is CFG's generated module; `entry.mjs` imports `../../src/app.ts`, `./config.mjs` and `<package>/targets/<target>`; `worker.js` is the esbuild bundle of the entry (ESM, minified, no legal comments, conditions `workerd`/`worker`/`browser`). `src/app.ts` must export the `defineApp` result as `default` or as `app`. To read the definition at build time (name, config declaration, secrets), `loadApp` bundles `src/app.ts` with esbuild for Node, keeping every import from outside the app directory external (so the app shares the caller's framework instance), imports it from `.framework/.load/` and deletes the file. Build failures are `CORE.MISCONFIGURED` with the components' messages (app/stage name rules, every values-file problem, secret declarations).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-16.
 
 ### DEC-0189 — Mock and local-only code are excluded by the entry, not by flags
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CORE-REQ-006, PROV-REQ-005, AUTH-REQ-009, CORE-AC-006, PROV-AC-005
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25); its Google sentence ("A production stage uses the Google provider …") superseded by DEC-0513, DEC-0509 · Affects: CORE-REQ-006, PROV-REQ-005, AUTH-REQ-009, CORE-AC-006, PROV-AC-005
 
 `./targets/cloudflare` exports `createCloudflareWorker(app, config, { mock? })` and re-exports `createAuthMock`; only a test-stage entry imports and passes it. `./targets/local` (`createLocalWorker`) is the only runtime that imports the local ticket issuer, the transfer route and the mock unconditionally. The bundler marks framework modules (paths inside the package) `sideEffects: false`, so a module that only the runtime re-exports (the mock) leaves no code at all in a production bundle; `BundleResult.modules` lists only modules that contribute bytes. Not built here (phase D): the R2 log writer (D-01; until then Cloudflare entries print marked lines like local) and the SigV4 ticket signer (D-02; until then `createUploadTicket`/`createDownloadTicket` on Cloudflare fail with `CORE.MISCONFIGURED`). A production stage uses the Google provider; a test stage uses the mock, plus Google only when `framework.google` is configured.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-16.
 
 ### DEC-0190 — Worker bindings, variables and the local Wrangler configuration
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: cloudflare.md §2 "Worker settings", config.md §2 "Delivery", B-17 (`dev`), D-01, D-03
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: cloudflare.md §2 "Worker settings", config.md §2 "Delivery", B-17 (`dev`), D-01, D-03
 
 Binding names: D1 `DB`, R2 `FILES`; Worker variable `FRAMEWORK_PUBLIC_ORIGIN` holds the stage's public origin (the only provisioning-derived value read in this phase; read per request, `CORE.MISCONFIGURED` when absent). Secrets are `SECRET_<NAME>` in `env` (SEC-REQ-003); every such value is redacted from responses and log entries. The local `wrangler.jsonc` is `{ name: "<app>-local", main: "worker.js", compatibility_date: "2026-10-01", d1_databases: [DB], r2_buckets: [FILES] }` with placeholder IDs; it sets no `vars` and no persist path. **For B-17:** `dev` must pass `FRAMEWORK_PUBLIC_ORIGIN=http://localhost:<vite port>` (e.g. `--var`), point Wrangler's state at `<app>/.wrangler/state` (`--persist-to`, B-T2 reads it there) and at `<app>/.dev.vars` (Wrangler reads `.dev.vars` beside the config file, which is under `.framework/local/`), and apply migrations to that state (MIG `migrateLocal` through `getPlatformProxy` with the same config and persist path) before starting Wrangler. The compatibility date is a constant in `src/build/build.ts`; no parameter was added.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-16.
 
 ### DEC-0191 — Node-only imports of shared modules are replaced in Worker bundles
@@ -1474,16 +1475,16 @@ Taken under the owner's instruction "Do not stop and ask me questions. Make an a
 Item: B-16.
 
 ### DEC-0192 — `createTestApp` migrations: committed ones from the working directory, else generated
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: testing.d.ts ("migrations applied"), B-17 (`verify`), B-16, B-07
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: testing.d.ts ("migrations applied"), B-17 (`verify`), B-16, B-07
 
 `createTestApp` applies the framework history, then the app's: `<cwd>/migrations/` when it holds a `<dialect>/` directory (app tests run from the app root, as `verify` runs them), otherwise — when the app has tables — a history generated once per process and app definition from the table definitions by MIG's own generator into a temporary directory. So in-process tests of apps without committed migrations (the framework's own suites) still get their tables, and app tests exercise the committed files.
 
 B-T2's draft of the same decision ("`createTestApp` applies the app's generated migrations from the working directory"): `createTestApp(app)` receives only the `DefinedApp`; the simplest reading of "fresh local storage, migrations applied" with `verify` running tests from the app root is that it applies the framework migrations and then the app's committed `migrations/<dialect>/` found from `process.cwd()`. The SQL suites therefore write a scratch app with the same tables (`sql/fixtures/schema.ts`, defined through an injected framework module so test process and CLI share one definition), run `generate-migration` there, and `chdir` into it for the test process. If `createTestApp` instead builds the schema from the definitions, the generated files are simply unused. The KV suites need no app tables and do not change directory.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Items: B-16, B-T2 (drafts merged).
 
 ### DEC-0193 — `createTestApp` behaviour the contract leaves open
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: testing.d.ts (contract changed: `logWriter`, `framework` key, `as` with the stub), DEC-0210, DEC-0226, DEC-0229
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: testing.d.ts (contract changed: `logWriter`, `framework` key, `as` with the stub), DEC-0210, DEC-0226, DEC-0229
 
 - Deployment `{ app: <definition name>, stage: "local", target: "local" }`; name rules apply (a bad name rejects with `CORE.MISCONFIGURED`); declared secret names are checked as in a build.
 - `config`: the reserved key `framework` is the values file's `framework` section; all other keys are values. Both go through CFG's schema validation and resolution, so an undeclared key, a wrong type or a missing value without default rejects. The object is copied: later mutation has no effect (each call is one build).
@@ -1493,84 +1494,84 @@ Origin: ai-proposed · Status: accepted (assumption under the owner's instructio
 - Public origin `http://localhost:8787`. `request(path)` resolves `path` against it, adds `Origin` to state-changing requests unless `init` has one, and sends the `loginWithStub` session unless `init` sets `Cookie`; no other response cookie is kept (tests that follow the login steps by hand pass cookies explicitly).
 - Without `stubLoginProvider`: the mock is installed and `user`/`as()` are its fixed identity per request (no `user` → the session decides). With it: the stub provider and no mock (no mock-login route); `user` rejects and `as()` throws, since both need the mock. `loginWithStub` requests `/api/auth/login`, passes the `Location` through `stubCallbackUrl`, requests the callback with the transaction cookie, and keeps the `session_local` cookie; if none is set (a stub failure) it rejects with the redirect it got.
 - `dispose()` closes PGlite and the platform proxy; later requests reject.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-16.
 
 ### DEC-0194 — The local ticket key's name lives in a local-only SEC module
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CORE-REQ-006, CORE-AC-006, secrets.md §2, DEC-0189, DEC-0193
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CORE-REQ-006, CORE-AC-006, secrets.md §2, DEC-0189, DEC-0193
 
 `FRAMEWORK_SECRETS` (`src/secrets/names.ts`, in every cloud bundle) no longer holds `localTicketKey`. `src/secrets/local-names.ts` holds `LOCAL_TICKET_KEY`, `LOCAL_FRAMEWORK_SECRETS` and `DEV_GENERATED_SECRETS`; it is imported only by the local runtime, `createTestApp`, `secrets set` and the `.dev.vars` store. `FrameworkSecretName` still includes the local name as a type. `createFrameworkSecrets({ read, log, extra })` makes `extra` names readable besides `FRAMEWORK_SECRETS`; the stage runtime passes its target's `requiredFrameworkSecrets` as `extra` (a secret the health check requires is one framework code reads), so the local target adds the ticket key without the shared runtime naming it. `secrets set` still accepts `frameworkLocalTicketKey`.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-16a.
 
 ### DEC-0195 — The local cookie settings are passed in by the local runtime
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: LOCAL-REQ-004, LOCAL-AC-004, AUTH-REQ-006, auth.md §2 "Session cookie"
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: LOCAL-REQ-004, LOCAL-AC-004, AUTH-REQ-006, auth.md §2 "Session cookie"
 
 `src/auth/local-cookies.ts` holds `LOCAL_COOKIES` (`session_local`, `login_local`, not Secure); `src/auth/cookies.ts` holds only `CLOUD_COOKIES`. `cookieSettings(target, settings = CLOUD_COOKIES)` and `AuthOptions.cookies` / `StageOptions.cookies` now take a `CookieSettings` object instead of a `"local" | "cloud"` mode; non-Secure settings on any non-local target are still CORE.MISCONFIGURED. Assumption: without settings every target, the local one included, gets the cloud settings (the safe direction); the local runtime and `createTestApp` always pass `LOCAL_COOKIES`.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-16a.
 
 ### DEC-0196 — SQL drivers split into a D1 module and a Node-only Postgres harness module
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CORE-REQ-006, CF-REQ-003, SQL-REQ-006, sql.md §2 "Local drivers", DEC-0191
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CORE-REQ-006, CF-REQ-003, SQL-REQ-006, sql.md §2 "Local drivers", DEC-0191
 
 `src/sql/drivers.ts` is replaced by `src/sql/d1.ts` (`sqliteDb`, `SqlAdapterOptions`; Workers-compatible) and `src/sql/postgres.ts` (`postgresDb`, `openPostgres`, `POSTGRES_DATABASE`; Node only). The guard's built-in unreachable pattern no longer names PGlite; `GuardOptions.unreachable` / `normalizeError(…, unreachable)` take a driver's extra patterns, and `postgresDb` passes `/PGlite is closed/i`. Unit test: a query on a closed harness database is `SQL.UNAVAILABLE` (`src/sql/postgres.unit.test.ts`).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-16a.
 
 ### DEC-0197 — The framework migrations directory moves to a Node-only MIG module; bundler stand-ins removed
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CF-REQ-003, CF-AC-003, DEC-0191
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CF-REQ-003, CF-AC-003, DEC-0191
 
 `FRAMEWORK_MIGRATIONS_DIR` moves from `src/mig/framework.ts` to `src/mig/migrations-dir.ts`, so `framework.ts` (imported by KV and the stage runtime) uses no `node:url` or `import.meta.url`. With 3 and 4, `src/build/bundle.ts` no longer replaces `@electric-sql/pglite`, `drizzle-orm/pglite` or `node:url` and no longer defines `import.meta.url`; a Node built-in reaching a Worker bundle now fails the build (esbuild cannot resolve it for the browser platform). DEC-0191 is superseded.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-16a.
 
 ### DEC-0198 — The diagnostics count line names each kind of problem
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CHECK-REQ-003, CHECK-REQ-004, check.md §2 "Diagnostics", B-17
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CHECK-REQ-003, CHECK-REQ-004, check.md §2 "Diagnostics", B-17
 
 `formatDiagnostics` ends with `<n> portability problem(s)`, `<n> migration problem(s)` (rules in `MIGRATION_CHECKS`), or both joined by `, ` (portability first). No test pinned the wording (B-T4 and the integration suites do not match the count line; the B-14 unit test's `2 portability problems` still holds).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-16a.
 
 ### DEC-0199 — Command table, exit statuses, commands of later items
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CLI-REQ-001, CLI-REQ-003, CLI-REQ-004, cli.md §2
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CLI-REQ-001, CLI-REQ-003, CLI-REQ-004, cli.md §2
 
 Every CLI-REQ-001 command is registered in `src/cli/main.ts`. Exit 0 = success, 1 = failure, 2 = usage error. `deploy`, `remove`, `setup-account`, `certify-auth`, `smoke` and `secrets set --target cloudflare` exit 1 with "not available yet: it requires …" naming the work item (C-04, D-05); D-05 replaces the bindings. Failures print the error's message only. Usage messages never repeat an unexpected argument (a secret typed by mistake is never echoed); `secrets set` prints the name and `SECRET_<NAME>` location only after the name was checked against the declared names, and does not print the stage argument.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-17.
 
 ### DEC-0200 — `reset-local` removes `.wrangler/` and `.logs/`, keeps `.dev.vars`
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: LOCAL-REQ-002, LOCAL-AC-002
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: LOCAL-REQ-002, LOCAL-AC-002
 
 "Local state" = local D1 (SQL, KV) and R2 under `.wrangler/`, and the local log. `.dev.vars` holds secrets the owner set with `secrets set`; clearing it would lose them, and `dev` regenerates only the framework's dev keys. `.framework/` is build output, not state.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-17.
 
 ### DEC-0201 — `verify` runs every step and reports all of them
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CLI-REQ-002, CLI-AC-002, DEC-0238
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CLI-REQ-002, CLI-AC-002, DEC-0238
 
 Order: type check, portability rules, migration checker, zod version, tests (sqlite), tests (postgres). Tests run even when a static step failed, so one run shows every problem. Diagnostics use CHECK's one-line layout (`file:line:col  error  message  rule  (read reference)`; type errors carry `TSnnnn` as the rule). No clock times or durations are printed; failing and skipped tests are listed sorted by file and name and passing tests are only counted (a line naming a file is read as a diagnostic about it, DEC-0237), so two runs on the same app print identical text (checked offline on the template: CLI-AC-002 "two consecutive runs"). A dialect run with no passing test fails ("no tests ran"); a test file that fails to load, an unhandled error, or a runner crash fails the run.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-17.
 
 ### DEC-0202 — `verify`'s type check and zod check
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CHECK §2, CHECK-AC-001, CLI-REQ-002
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CHECK §2, CHECK-AC-001, CLI-REQ-002
 
 The type check uses `APP_COMPILER_OPTIONS` over the same files the rules lint (`src/`, `tests/`), never the app's `tsconfig.json`. `src/` and `tests/` are checked in separate programs: test files import Vitest, whose declarations reference Node's types, which would otherwise make `Buffer` type-check in server code. The zod check reads `node_modules/zod/package.json` resolved upwards from the app (Node's resolution) and compares with PAR-112 (`ZOD_VERSION`, unit-tested equal to the framework's own `zod` dependency); a missing zod fails.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-17.
 
 ### DEC-0203 — `verify`'s test runs: Vitest Node API in a child per dialect, framework options only
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CLI-REQ-002, LOCAL-REQ-003, PAR-116, CHECK-REQ-006
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CLI-REQ-002, LOCAL-REQ-003, PAR-116, CHECK-REQ-006
 
 Each dialect runs `dist/cli/verify/test-runner-child.js` in its own process with `PROTOTYPE_FRAMEWORK_DIALECT` set; the child calls Vitest's `startVitest` with `config: false`, root = app, include = PAR-116 glob, no file-system module cache, silent, 60 s test and hook timeouts (opening PGlite the first time takes over 5 s; same values as the template's `vitest.config.ts`), and writes a summary JSON the parent formats. The app's Vitest configuration is not read, like the lint configuration (the app cannot narrow which tests run). If an app needs Vitest settings beyond these, that is a framework change.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-17.
 
 ### DEC-0204 — `dev` process layout
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: local.md §2, LOCAL-REQ-002, LOCAL-REQ-004, LOG-REQ-003, MIG-REQ-003, CFG-AC-003, DEC-0190
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: local.md §2, LOCAL-REQ-002, LOCAL-REQ-004, LOG-REQ-003, MIG-REQ-003, CFG-AC-003, DEC-0190
 
 `dev` builds for target `local`, stage `local`; runs `ensureDevSecrets`; applies migrations with `migrateLocal(d1MigrationDatabase(DB), <app>/migrations)` through `getPlatformProxy({ configPath: .framework/local/wrangler.jsonc, persist: { path: <app>/.wrangler/state/v3 } })` — the same database file `wrangler dev --persist-to <app>/.wrangler/state` uses; a `MigrationFailedError` exits 1 before serving. Ports are free loopback ports picked at start (refined by DEC-0417: no port is picked before its bind; Vite starts first on port 0, then Wrangler on port 0). Wrangler is a child process (`--ip 127.0.0.1`, inspector on 127.0.0.1, `--env-file <app>/.dev.vars`, `--var FRAMEWORK_PUBLIC_ORIGIN:http://localhost:<vite port>`, `--local`, metrics off); its stdout and stderr go through LOG's `createLogCapture` into `.logs/<UTC day>.log`, other lines to stderr prefixed `[wrangler]`. Vite runs in the CLI process with no app configuration file (`configFile: false`; the generated configuration cannot widen the host), on 127.0.0.1, `appType: "spa"` (deep links get the entry page), `/api` proxied to Wrangler without changing `Host`, cache in `.framework/vite`, and a first middleware that answers 403 unless `Host` is exactly `localhost:<port>`. The client root is the app root when it has `index.html`, else `src/client/`. `dev` prints `http://localhost:<port>/` after both are serving, does not rebuild while running, and on SIGINT/SIGTERM closes Vite, stops Wrangler and exits 0; Wrangler ending on its own exits 1. Wrangler's own port answers any `Host`; it is loopback-only and not printed (the Host check is enforced on the one printed origin).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-17.
 
 ### DEC-0205 — Root `npm run verify`
@@ -1581,42 +1582,42 @@ Taken under the owner's instruction "Do not stop and ask me questions. Make an a
 Item: B-17.
 
 ### DEC-0206 — What the template contains, one use per capability
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SKILL-REQ-004, skill.md §2 "The template", cli.md §2 "App layout", CHECK-AC-005, E-02, C-05
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: SKILL-REQ-004, skill.md §2 "The template", cli.md §2 "App layout", CHECK-AC-005, E-02, C-05
 
 `apps/template` (app name `template`) is a notes app: config key `greeting` (`GET /api/hello`, anonymous); SQL table `notes` (`GET`/`POST /api/notes`, user's own rows, `requireUser`); a log entry per created note (component `notes`); KV status line per user (`GET`/`PUT /api/status`); files in `users/<id>/` via upload/download tickets (`GET /api/files`, `POST /api/files/{upload,download}-ticket`); one secret `apiKey`, checked (never returned) by an admin-only route (`GET /api/admin/secret`, `requireAdmin`). One route module per capability in `src/server/routes/`, each taking `Hono<Env>`; `src/server/env.ts` exactly as skill.md §2. The browser part is `index.html` at the app root (the Vite root, as in B-T4's base fixture) plus `src/client/main.ts` and one page module per capability under `src/client/pages/`, built with `textContent` only. `src/shared/types.ts` holds only types: the portability rules let browser code import shared code type-only (DEC-0180), so input limits live in the server's Zod schemas only. `config/local.json` and `config/cloudflare/test.json` set no values (the greeting has a default) and an empty `framework` section. Only `.`, `./client` and `./testing` are imported; nothing names a target.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-18.
 
 ### DEC-0207 — The smoke file picks its mode through the test runner's provided context
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CLI-AC-005, skill.md §2 "Testing", testing.d.ts `connectTestStage`, C-04
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CLI-AC-005, skill.md §2 "Testing", testing.d.ts `connectTestStage`, C-04
 
 `tests/smoke/smoke.test.ts` calls `connectTestStage()` when Vitest's `inject("prototypeFrameworkSmoke")` is `true`, and `createTestApp(app, …)` otherwise (so it runs in-process under `verify`). App code may not read `process.env` or `import.meta.env` (`no-env-access`), and the contract has no other switch, so the runner's provided context (PAR-116 is Vitest) is the simplest target-neutral signal. **For C-04:** `smoke` must run Vitest with `provide: { prototypeFrameworkSmoke: true }` on `tests/smoke/**`. If C-04 prefers another mechanism, only this file changes. The smoke checks avoid `logs()` (throws on a connected stage) and use a fresh random mock user per run, so they also pass on a stage that keeps data.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-18.
 
 ### DEC-0208 — Committed migrations generated with MIG's generator; app test timeouts
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: MIG-REQ-001, CLI-REQ-002, B-17
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: MIG-REQ-001, CLI-REQ-002, B-17
 
 The CLI was not merged, so `migrations/` (`0000_schema` pair, snapshots, `checksums.json`) was generated by calling MIG's `generateAppMigrations` on the loaded app (the engine `generate-migration` uses); the migration checker reports nothing. `vitest.config.ts` keeps the PAR-116 glob and raises test and hook timeouts to 60 s, because the first PGlite open in a Postgres-dialect process takes over 5 s (observed: the first test timed out at the default). **For B-17:** `verify`'s test runs must either use the app's `vitest.config.ts` or apply an equivalent timeout themselves.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-18.
 
 ### DEC-0209 — The template imports `hono` types without declaring `hono`
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: skill.md §2 ("route modules take `Hono<Env>`"), B-01 dependency rule, C-05
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: skill.md §2 ("route modules take `Hono<Env>`"), B-01 dependency rule, C-05
 
 Route modules use `import type { Hono } from "hono"` as skill.md prescribes; `hono` is a framework dependency, resolved by hoisting. Adding it to `apps/template/package.json` would change the shared lockfile, which only an integrator regenerates (plan §9.2). Proposed (integrator or CORE): either declare `"hono": "4.13.13"` (PAR pin) in the template's dependencies and regenerate the lockfile, or re-export the `Hono` type from `.` so apps need no direct `hono` import. Scaffolded apps installed from a tarball depend on hoisting until then.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-18.
 
 ### DEC-0210 — LOG-AC-001 needs a log-writer injection option in `TestAppOptions`
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: LOG-AC-001, `docs/contracts/ts/testing.d.ts` (owner B-16), B-04
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: LOG-AC-001, `docs/contracts/ts/testing.d.ts` (owner B-16), B-04
 
 LOG-AC-001 requires "an injected log writer that fails and one that never completes", but no public contract offers an injection point; plan B-04 already lists "failing and never-completing writer injection for tests". Proposal: add to `TestAppOptions` `readonly logWriter?: "failing" | "never-completing"` ("failing": every write rejects/throws inside the writer; "never-completing": every write returns a promise that never settles). `log/log.test.ts` uses exactly this name through an intersection type (`TestAppOptions & { logWriter?: … }`), so it type-checks today and fails until B-16 adds the option. If B-16 picks another shape, it updates the contract and this one test together (decision draft required, contract change).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T1.
 
 ### DEC-0211 — How the suites reach the framework
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: all B-T1 suites, B-16, B-17, B-RUN, plan §10.1
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: all B-T1 suites, B-16, B-17, B-RUN, plan §10.1
 
 - In-process tests import the public hubs by relative path (`src/index.ts`, `src/testing/index.ts`), which re-export exactly the contract names; they run against sources and need no build.
 - Everything an app would do through the package name uses the package name and therefore the compiled `dist/` (DEC-0111): on-disk fixture apps (temp directories whose `node_modules` links to the workspace's), the CORE-AC-001 compiler fixtures, the esbuild bundle of `./client` for the browser test, and the package binary (`bin/prototype-framework.js`) for `build`, `dev` and `secrets set`.
@@ -1625,73 +1626,73 @@ Origin: ai-proposed · Status: accepted (assumption under the owner's instructio
 B-T2's draft of the same decision ("How the suites reach the framework"): In-process code imports only the public hubs `src/index.ts` and `src/testing/index.ts` (the contracted names) and uses services only through a route of a `defineApp` app (`c.var.sql`, `c.var.kv`); a probe route runs a test closure inside a real request and returns its value or thrown error in memory, so `undefined`, JS types and `FrameworkError` instances are observed exactly as app code sees them. CLI behaviour is exercised through the package binary `bin/prototype-framework.js` in scratch app directories (copied from `apps/template` when present, minus sources/tests/migrations/state; `node_modules` symlinked to the workspace's). The binary loads `dist/`, so **the framework must be built (`npm run build -w packages/framework`) before `npm run test:integration`**; B-16/B-17/B-RUN wire that order. Scratch apps live in the OS temp directory and are removed after each file.
 
 B-T4's draft of the same decision ("Suites drive the real binary on throwaway copies; the framework must be built first"): Each test copies fixture layers into a fresh OS temp directory, symlinks `node_modules` to the workspace's, and runs `node_modules/.bin/prototype-framework <command>` there (what `npx <package> <command>` resolves to). The binary and exports point at `dist/` (DEC-0111), so the harness refuses to run when `packages/framework/dist/cli/public.js` is missing or older than `src/`, naming the command `npm --workspace packages/framework run build`. The runner (B-RUN) must build before `npm run test:integration`, or B-17 wires the build into that script.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Items: B-T1, B-T2, B-T4 (drafts merged).
 
 ### DEC-0212 — Finding the `dev` origin; one `dev` at a time
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: HTTP-AC-001, HTTP-AC-006, LOG-AC-002, LOG-AC-003, CFG-AC-003, SEC-AC-001, SEC-AC-002
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: HTTP-AC-001, HTTP-AC-006, LOG-AC-002, LOG-AC-003, CFG-AC-003, SEC-AC-001, SEC-AC-002
 
 The dev port is not contracted. The harness starts `npx <package> dev` (the binary) in the app directory, collects every `http://localhost:<port>` printed, and uses the one that serves both `GET /` as `text/html` 200 and `GET /api/__framework/health` as a framework response (204 or JSON) — the one-origin requirement (HTTP-REQ-004, LOCAL-REQ-004). `dev` must therefore print that URL. Vitest runs files in parallel, so dev sessions are serialised by a lock directory in the OS temp directory (owner pid inside; a dead owner's lock is taken over). Stopping sends SIGINT to the process group, then SIGKILL after 15 s.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T1.
 
 ### DEC-0213 — Fixture client entry page location
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open); refined by DEC-0312 · Affects: HTTP-AC-001
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25); refined by DEC-0312 · Affects: HTTP-AC-001
 
 Where the client's `index.html` lives is not contracted (cli.md only says `src/client/` holds browser code). Fixture apps write the same page at the app root and at `src/client/index.html`. HTTP-AC-001 asserts the deep link returns 200 HTML byte-identical to `GET /` and containing the page's marker.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T1.
 
 ### DEC-0214 — Entry-module export form
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: on-disk fixture apps, B-16, cli.md §2 App layout, testing.d.ts, B-18
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: on-disk fixture apps, B-16, cli.md §2 App layout, testing.d.ts, B-18
 
 The form of `src/app.ts`'s export is not contracted ("the value an app's entry module exports"). Fixture apps export the `defineApp` result both as `default` and as `app`.
 
 B-T4's draft of the same decision ("App entry and test-app conventions used by fixtures"): `src/app.ts` exports the `defineApp` result both as `default` and as `app` (cli.md says only that it "holds the defineApp call"). App tests call `createTestApp(app)` and `TestApp.request` with the full path (`/api/hello`). The Vite entry page is `index.html` at the app root loading `/src/client/main.ts`. Fixture `tsconfig.json` repeats the app lib set. Route handlers live inline in `defineApp` (no `hono` import needed).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Items: B-T1, B-T4 (drafts merged).
 
 ### DEC-0215 — CFG-AC-003 local interpretation
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CFG-AC-003, B-17
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CFG-AC-003, B-17
 
 "A running build" is a running `dev`; "the next build" is the next `dev` start (which builds). The test edits `config/local.json` while `dev` runs, checks the served value is unchanged after 8 s and 10 s, restarts `dev`, and expects the new value. So `dev` must not rebuild on a values-file change while running (E2E-014: "takes effect only after the rebuild").
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T1.
 
 ### DEC-0216 — Local stage name and build invocations
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CORE-AC-007, CFG-AC-002, CFG-AC-004, CFG-AC-006, SEC-AC-002…004
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CORE-AC-007, CFG-AC-002, CFG-AC-004, CFG-AC-006, SEC-AC-002…004
 
 CLI-REQ-001 requires `--stage` for `build` and `secrets set`; no doc names the local stage. Tests use `--target local --stage local`, which reads `config/local.json`. Test/production stage selection (CFG-AC-002) is tested with `build --target cloudflare --stage test-<id>` and `--stage bt1prod`, which run offline (plan B-16).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T1.
 
 ### DEC-0217 — "Naming" in CLI failures
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CORE-AC-007, CFG-AC-002, CFG-AC-006
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CORE-AC-007, CFG-AC-002, CFG-AC-006
 
 A failure "names" something when the command exits non-zero and its combined stdout+stderr contains: the offending key (CFG-AC-002), the missing file as `config/<target>/<stage>.json` (CFG-AC-002), the unknown field's name (CFG-AC-006), or for the app-name rule the bad name plus one of `hyphen`, `lowercase letters and digits`, `[a-z0-9]`, `PAR-290` (CORE-AC-007).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T1.
 
 ### DEC-0218 — CFG-AC-004: where the resolved configuration is observed
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CFG-AC-004, B-09, B-16
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CFG-AC-004, B-09, B-16
 
 The resolved configuration is embedded in the build as a generated module (DEC-0063) under `.framework/`; its format is not contracted. The test passes when, after `build`, some file under `.framework/` contains both each declared secret's logical name and its location (`SECRET_<NAME>`, SEC-REQ-003), for a local and a Cloudflare test-stage build.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T1.
 
 ### DEC-0219 — HTTP-AC-007 entry contents and fixtures
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: HTTP-AC-007, LOG-AC-005, B-03, B-04
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: HTTP-AC-007, LOG-AC-005, B-03, B-04
 
 - The log entry schema has no structured fields beyond `message`, so method, route path, code, the error's name and message, the stack (a V8 frame line `\n    at `), and the key or secret name are all asserted inside `message`. The secret is accepted by logical name or location.
 - Routes have no path parameters, so "route path" and request path coincide.
 - No app-reachable in-process path produces `CORE.MISCONFIGURED`, so the reference route throws `FrameworkError("CORE.MISCONFIGURED")` (a CORE code, not a capability code, so CORE-REQ-007 does not forbid it at runtime).
 - "Exactly one `error` entry" counts `error` entries added to `logs()` during that request.
 - LOG-AC-005: the entry's `component` is `CORE` for an uncaught error and `SQL` for `SQL.UNAVAILABLE` (LOG-REQ-005 "the failing component's code").
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T1.
 
 ### DEC-0220 — Other readings
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: listed per item
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: listed per item
 
 - HTTP-AC-002 "the request's ID": the `requestId` in the body equals `c.var.requestId` seen by app middleware for that request.
 - HTTP-AC-003: the over-limit body is sent once with `Content-Length` and once streamed without it; a body of exactly PAR-200 bytes reaches the handler; malformed JSON also gives 400 `HTTP.INVALID_INPUT`.
@@ -1703,22 +1704,22 @@ Origin: ai-proposed · Status: accepted (assumption under the owner's instructio
 - LOG-AC-003: the log file is named after the entry's UTC date; "ignored by git" is checked with `git check-ignore --no-index` for `apps/{template,reference,demo}/.logs/…` in this repository.
 - SEC-AC-002 local scope: error responses; `TestApp.logs()`; `.logs/` from `dev`; the app directory after `build --target local` and `--target cloudflare --stage test-…` (excluding `.dev.vars`, the secret store, and `.wrangler/`, emulator state); the repository via `git grep --untracked`. Ticket "URL" = every string of 16+ characters inside the ticket JSON (contents are opaque). The stub authorization code = the query values of `/api/auth/callback` reached by following same-origin `/api/` redirects from `/api/auth/login` in-process; this assumes the stub provider redirects straight to the callback (it "speaks no protocol"). "Deployed browser assets" is cloud-only (C-T1/D).
 - SEC-AC-003 local: `.dev.vars` holds exactly one line `SECRET_API_KEY=<value>` (quotes allowed) after `secrets set apiKey --target local --stage local` with the value on stdin. SEC-AC-004 also checks the stdin form of the same command succeeds, so the rejection is specific to the argument forms (positional, `--value x`, `--value=x`).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T1.
 
 ### DEC-0221 — SQL-AC-001: what "rejected" and "valid name" mean
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: B-05, SQL-REQ-001, SQL-AC-001, SQL-AC-004
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: B-05, SQL-REQ-001, SQL-AC-001, SQL-AC-004
 
 - "Rejected" = `defineTable` (or `defineApp` with the table) throws at definition time, so no database is created; any `Error` counts (no catalogue code is specified for schema errors).
 - Table names must be lowercase ASCII snake_case starting with a letter, at most 63 bytes (Postgres' identifier limit: "valid on every target"), and not start with `__framework_`. Rejected fixtures: `Notes`, `notesList`, `notes-list`, `notes list`, `1notes`, `café`, `__framework_notes`, empty, 64 × `n`. Column keys must be ASCII lowerCamelCase whose snake_case name obeys the same rules (rejected: `Title`, `created_at`, `title-text`, `title text`, `ünicode`, `__frameworkX`, 64 × `a`). Index/unique entries naming a non-existent key are rejected.
 - Composite primary keys, reference actions and SQL-expression defaults cannot be expressed through `sql.d.ts`; the suite asserts this at the type level (`@ts-expect-error`, enforced by `npm run typecheck`) and also forces each through with a cast and expects a run-time rejection. Auto-increment, generated and non-portable columns are forced in as Drizzle pg-core builders (`serial`, `generatedAlwaysAs`, `varchar`). Custom collations have no expression at all in the contract or in a portable builder; that clause is covered only by the absence of an API (not testable at run time).
 - `.default()` values outside the column rule are rejected the same way (tagged SQL-AC-004).
 - The identical-schema clause is checked by applying the generated histories to a fresh local D1 (`getPlatformProxy`) and a fresh PGlite and comparing introspected schemas: snake_case names, §2.1 physical type per dialect, NOT NULL, primary key, defaults, references with a "fail while referenced" action (`NO ACTION`/`RESTRICT`), unique sets and indexes. SQLite stores boolean defaults as 0/1 or `false`/`true`; the comparison reads both as booleans for boolean columns. The introspection harness was validated against hand-written drizzle-style DDL on real local D1 and PGlite (not committed).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T2.
 
 ### DEC-0222 — SQL-AC-003…-006: value and failure expectations
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: B-05, B-06, SQL-AC-003…-006
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: B-05, B-06, SQL-AC-003…-006
 
 - "Identical results" locally = the same literal expectations pass in both dialect processes; floats are compared with PAR-280's tolerance. Seed IDs are fixed, valid UUID v4 text so orderings ending in `id` are known.
 - `containsText` folds the needle as well as the column (ASCII only): `ÀPPLE` matches `ÀPPLE and apple`, `àpple` does not.
@@ -1726,57 +1727,57 @@ Origin: ai-proposed · Status: accepted (assumption under the owner's instructio
 - `atomic` with a step built on the outer handle: SQL-REQ-005/`sql.d.ts` say "a catalogue error"; sql.md §2.2 says `CORE.INTERNAL`. The test accepts any catalogue code (the binding wording) and checks nothing was written.
 - `SQL.RESULT_TOO_LARGE`: "larger than PAR-215" is strict, so a result of exactly 262,144 bytes (sql.md §2.3 measure) succeeds and one byte more fails.
 - The Data API retry clause of SQL-AC-006 and the Cloudflare/Data API targets of SQL-AC-003…-006 are out of scope for B-T2 (AWS code is not built; cloud parts are later phases).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T2.
 
 ### DEC-0223 — MIG-AC-001: the checker is judged through `verify`
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: B-07, B-15, B-17, MIG-AC-001
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: B-07, B-15, B-17, MIG-AC-001
 
 The migration checker has no contracted entry point other than `verify` (CLI-REQ-002 step 3). The test first runs `verify` on the unedited scratch app (must exit 0; the app has one test, because `verify` fails on zero tests), then appends a comment line to the first generated SQLite migration and expects a non-zero exit whose output names the edited file (assumption: CHECK diagnostics name the offending file). `migrations/checksums.json` must be JSON and mention each migration's base name. "One new migration per dialect" = exactly one new `.sql` file in each of `migrations/sqlite/` and `migrations/postgres/`, earlier files byte-identical.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T2.
 
 ### DEC-0224 — Recognising app migrations in `__framework_migrations`
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: B-07, MIG-REQ-002
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: B-07, MIG-REQ-002
 
 The record's columns are `(id, dialect, checksum, applied_at)` (migrations.md §2) but the `id` format is not specified. The tests assume an app migration's `id` contains its file's base name (e.g. `0000_…`); every row is unique; rows not matching an app file are framework migrations (at least one), and all of them precede the app rows in insertion order, which follow file order.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T2.
 
 ### DEC-0225 — KV ambiguities
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: B-08, KV-AC-001…-005
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: B-08, KV-AC-001…-005
 
 - KV-AC-002 says "empty … values are rejected", but KV-REQ-002 only rejects empty keys; the requirement wins: `put(k, "")` is accepted and `get` returns `""`.
 - A malformed or over-long prefix is rejected with `KV.INVALID_KEY` (KV-REQ-002 and the catalogue: "Key or prefix"); the empty prefix and `limit` above PAR-222 are not tested (not in any criterion; clamp vs reject is unspecified).
 - `nextCursor` is null whenever no item remains, including after a full page that exhausts the prefix (kv.d.ts "Null when there are no more items").
 - "Database unreachable" locally = `createTestApp(app, { unavailable: ["sql"] })`; every KV operation must then fail with `KV.UNAVAILABLE`, not `SQL.UNAVAILABLE` (KV-REQ-005).
 - KV-AC-004's local part is the same KV suite passing in both dialect processes; each KV test carries both its own ID and KV-AC-004.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T2.
 
 ### DEC-0226 — `framework.admins` / `framework.users` reach `createTestApp` through `config.framework`; a rebuild is a new `createTestApp`
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: AUTH-AC-003, AUTH-AC-012, CFG-AC-005, E2E-007, AUTH-AC-005; testing.d.ts (`TestAppOptions.config`), B-12, B-16
+Origin: ai-proposed · Status: superseded by DEC-0521 and DEC-0522 (was: accepted (assumption under the owner's instruction; owner review open)) · Affects: AUTH-AC-003, AUTH-AC-012, CFG-AC-005, E2E-007, AUTH-AC-005; testing.d.ts (`TestAppOptions.config`), B-12, B-16
 
 AUTH-AC-012 says "With `createTestApp` using `stubLoginProvider` and `framework.users` set to one user ID", but `TestAppOptions.config` is documented as "Config values overriding the app's defaults. A key the app did not declare makes `createTestApp` throw", and no other option carries the framework lists. Assumption: `config` also accepts the reserved key `framework`, holding the stage-config schema's `framework` object (`{ admins?, users? }`), and it is not an undeclared app key. E2E-007 and AUTH-AC-003 say the redeploy "is a rebuild" locally; the suites treat each `createTestApp` call as one build. CFG-AC-005's "only after the next build" is checked by mutating the very object passed to `createTestApp` after the build (no effect) and then building again (effect). Suggest testing.d.ts document the `framework` key (contract owner: B-16).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue". Superseded in release 1; see the status line.
 Item: B-T3.
 
 ### DEC-0227 — The stub login provider's `id` is `"stub"`; base32 case is not compared
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: AUTH-AC-002; auth.md §2 "User ID", B-12
+Origin: ai-proposed · Status: superseded by DEC-0513 (was: accepted (assumption under the owner's instruction; owner review open)) · Affects: AUTH-AC-002; auth.md §2 "User ID", B-12
 
 AUTH-AC-002 requires the ID to match the specified derivation (`u_` + first 26 characters of base32(SHA-256(`<provider id>:<subject>`))), which needs the stub's provider id; no document names it. Assumed `"stub"`. auth.md does not fix the base32 alphabet's letter case, so the suite uses RFC 4648 and compares case-insensitively. "Two providers yield different IDs": locally only the stub completes a non-mock login through `createTestApp` (the Google provider cannot without Google), so the suite checks that the stub's ID is the derivation for its own provider name and differs from the derivation under `"google"`. That is the strongest local form; record it as such for the evaluator.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue". Superseded in release 1; see the status line.
 Item: B-T3.
 
 ### DEC-0228 — The stub provider redirects straight to the callback URL; the transaction cookie is the non-session cookie `/api/auth/login` sets
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: AUTH-AC-005, AUTH-AC-006, AUTH-AC-008, AUTH-AC-010; B-12 (`FW/src/auth/testing.ts`)
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: AUTH-AC-005, AUTH-AC-006, AUTH-AC-008, AUTH-AC-010; B-12 (`FW/src/auth/testing.ts`)
 
 auth.md says the stub "speaks no protocol" but not what its `beginLogin` returns. Assumption: its `redirectUrl` is the `callbackUrl` it was given (built from the public origin) plus stub-specific query parameters, so a test can follow `/api/auth/login` → `Location` → `/api/auth/callback` in-process with `TestApp.request` and the transaction cookie. This is how the suites observe the callback URL (AUTH-AC-008), the transaction cookie's attributes (AUTH-AC-006), missing / tampered / crossed / expired transactions and `returnTo` sanitising (AUTH-AC-010). Refused and replayed callbacks use `loginWithStub(…, { stubFailure })`, since only the stub can produce them.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T3.
 
 ### DEC-0229 — `TestApp` request semantics the suites rely on
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: all B-T3 AUTH and FILES tests; testing.d.ts, B-16
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: all B-T3 AUTH and FILES tests; testing.d.ts, B-16
 
 - `request(path)` takes the full path including `/api` (e.g. `/api/auth/me`).
 - An explicit `Cookie` header in `init` is sent as given and takes precedence over any session the test app keeps.
@@ -1784,91 +1785,91 @@ Origin: ai-proposed · Status: accepted (assumption under the owner's instructio
 - `loginWithStub` with a `stubFailure` may resolve or reject (the contract does not say); tests accept either and assert only the observable outcome (no session, log entry).
 - Failed-login log entries name the fixed reasons with auth.md's words ("transaction missing or expired", "state mismatch", "provider refused", "token exchange rejected", "token check failed"), matched case-insensitively, and carry the failing request's `requestId`.
 - Time checks use `Date`; tests fake only `Date` (`vi.useFakeTimers({ toFake: ["Date"] })`) so local storage I/O keeps running (core.md §2 "Testing" says the runner's fake timers govern session and ticket expiry).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T3.
 
 ### DEC-0230 — AUTH-AC-007's missing-Origin and deployed-router clauses are not testable in-process
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: AUTH-AC-007; testing.d.ts, C-phase compliance authors
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: AUTH-AC-007; testing.d.ts, C-phase compliance authors
 
 `TestApp.request` always sends the deployment's origin on state-changing requests unless `init` sets one, so a request with no `Origin` cannot be sent through it, and "through the deployed router" needs the `dev` server or a deployed stage. The B-T3 tests cover the in-process ("directly") part: wrong origins (`https://evil.example`, `null`, a look-alike host) rejected with `AUTH.REQUEST_FORGERY` for POST/PUT/PATCH/DELETE and logout, and the public origin accepted. Their titles say "in-process". The missing-Origin clause and the router part are left to the compliance criteria tests against `dev` and the test stage (C-phase), which can send raw HTTP.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T3.
 
 ### DEC-0231 — FILES browser tests run the in-process app behind a local bridge; an unrelated origin is a `127.0.0.1` page with `<base href>` to the app
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: FILES-AC-004 (browser part), FILES-AC-006 (browser part); B-11
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: FILES-AC-004 (browser part), FILES-AC-006 (browser part); B-11
 
 `files/browser-harness.ts` serves the bundled `<package>/client` and forwards `/api/*` to `TestApp.request`, at `http://localhost:<port>`. Assumption: local ticket URLs are same-origin (relative, or absolute to the page's origin), as files.md §2 Local says ("a same-origin framework route"). The unrelated origin is `http://127.0.0.1:<other port>`, whose page sets `<base href="<app origin>/">` so the same ticket targets the app's transfer route cross-origin; the browser must refuse it (`uploadFile` → `FILES.TRANSFER_FAILED`, status null, `no response: network or cross-origin blocked`, nothing stored; a download `fetch` fails with `TypeError`). A same-origin control proves the tickets work. Interruption (FILES-AC-006) is the bridge pausing a transfer-route PUT after 2 MiB of a 16 MiB body, then dropping the connection; with bytes already sent, the expected class is `interrupted after n bytes` (0 < n < size) with status null. The harness mechanics were checked against Chromium with a fake app (cross-origin PUT blocked before reaching the server; upload error after ~6 MB reported by XHR progress).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T3.
 
 ### DEC-0232 — The Google provider is reached as `createGoogleLoginProvider(): LoginProvider` from `FW/src/google/public.ts`
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: GOOGLE-AC-001 (local), GOOGLE-AC-002, GOOGLE-AC-003; B-13
+Origin: ai-proposed · Status: superseded by DEC-0513 (was: accepted (assumption under the owner's instruction; owner review open)) · Affects: GOOGLE-AC-001 (local), GOOGLE-AC-002, GOOGLE-AC-003; B-13
 
 No contract names GOOGLE's factory. Assumed a no-argument `createGoogleLoginProvider()` exported from `FW/src/google/public.ts`, returning the internal `LoginProvider` (docs/contracts/ts/internal/login-provider.d.ts); the suite loads it with a dynamic import so the shared type-check stays green until B-13 adds it. Configuration and secret come only through `ProviderContext`: `getConfig` answers `framework.google.clientId` (or the enclosing `framework.google` / `framework` objects), and `getSecret` answers any name containing "google" (case-insensitive) with the client secret. Global `fetch` is stubbed (prompt §4); Google's discovery, JWKS and token endpoints answer from memory, and every other URL is recorded as unexpected and must stay empty, so nothing contacts Google (jose 6's `createRemoteJWKSet` uses global `fetch`). The client ID is obviously fake (`fake-test-client-id.invalid`) and exists only in test files.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue". Superseded in release 1; see the status line.
 Item: B-T3.
 
 ### DEC-0233 — GOOGLE-AC-002 also gets an integration form; the "never fetch token URLs" clause is tagged under it
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: GOOGLE-AC-002
+Origin: ai-proposed · Status: superseded by DEC-0513 (was: accepted (assumption under the owner's instruction; owner review open)) · Affects: GOOGLE-AC-002
 
 GOOGLE-AC-002 names unit tests; B-13's unit tests remain its primary evidence. The B-T3 suite feeds the same hand-built tokens through the provider's `completeLogin` (expecting `AUTH.LOGIN_FAILED` for wrong signature, issuer, audience, expired, future issued-at beyond PAR-252, wrong or missing nonce), with controls that tokens inside the 60 s skew and the documented issuer `accounts.google.com` are accepted. GOOGLE-REQ-002's "MUST NOT fetch URLs taken from the token" is checked in a test tagged GOOGLE-AC-002 (a token with `jku`/`x5u` headers), because no AC names that clause.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue". Superseded in release 1; see the status line.
 Item: B-T3.
 
 ### DEC-0234 — Parts of B-T3 criteria covered elsewhere or not-run
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: AUTH-AC-005, AUTH-AC-009, GOOGLE-AC-001, FILES-AC-004, FILES-AC-006
+Origin: ai-proposed · Status: superseded by DEC-0513 (was: accepted (assumption under the owner's instruction; owner review open)) · Affects: AUTH-AC-005, AUTH-AC-009, GOOGLE-AC-001, FILES-AC-004, FILES-AC-006
 
 - AUTH-AC-005: contract part only. No OpenAPI/JSON-Schema validator is a declared dependency (ajv is only transitive), so `auth/support.ts` hand-codes the `CurrentUser` and `ErrorResponse` schemas of framework.openapi.yaml; keep them in step with the YAML. Admin-list part: cloud milestone, not-run ("Google login mocked for this phase").
 - AUTH-AC-009: local part (mock-login works with the identity used as given). The production-404 and "production bundles contain no mock" parts need a production build: bundle inspection is CORE-AC-006 (B-T4); the cloud production part is not-run.
 - GOOGLE-AC-001: local part (redirect parameters and the token request with the client secret and PKCE verifier). The certification step-1 check against a production deployment is not-run.
 - FILES-AC-004 / FILES-AC-006: the "type inspection" and "server part" tests are Vitest; the browser parts are Playwright (`files/transfers.spec.ts`, project `integration`). FILES-AC-004's forbidden vocabulary (storage services, signing, credentials, CORS, bindings) is the list in `files/app-facing-types.test.ts`.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue". Superseded in release 1; see the status line.
 Item: B-T3.
 
 ### DEC-0235 — Fixture TypeScript files carry a `.fixture` suffix
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: `packages/framework/test/fixtures/**`, B-01 `packages/framework/tsconfig.json`
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: `packages/framework/test/fixtures/**`, B-01 `packages/framework/tsconfig.json`
 
 `packages/framework/tsconfig.json` includes `test/**/*.ts` with the framework (Node) lib set and NodeNext resolution. Fixture apps are app code (app lib set, Bundler resolution) and many fail type checking on purpose, so as `.ts` they would break `npm run typecheck`. They are stored as `*.ts.fixture`; the harness (`fixtures/support/app.ts`) strips the suffix when it copies a fixture app. The passing and failing apps were type-checked by hand against the B-01 contract stubs under the app lib set: the passing app is clean; the failing app's type errors are exactly the intended ones.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T4.
 
 ### DEC-0236 — Fixture apps hold no generated migrations; the harness runs `generate-migration`
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: B-07, B-17
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: B-07, B-17
 
 Migrations are the framework generator's output (format, file names, `checksums.json`), which does not exist yet. After copying, the harness runs `generate-migration` once, as an owner does after defining tables; a failure there fails the test setup with the command's output. Tests that need a hand-changed history (`editMigrationKeepingChecksum`, `addHandWrittenMigration`) infer the `checksums.json` entry from the existing file's digest (sha256/sha1/sha512, hex/base64/base64url, optionally `algo:`/`algo-` prefixed) and fail with a clear harness message if the format is not recognisable; a drizzle `meta/_journal.json`, when present, gets an entry for a hand-written file.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T4.
 
 ### DEC-0237 — Diagnostic layout the assertions rely on
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CHECK-REQ-003, B-14, B-17
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CHECK-REQ-003, B-14, B-17
 
 A diagnostic about a file is found by the file's base name (fixture base names are unique) on an output line, plus any indented continuation lines (so both one-line `path:line:col message rule` and ESLint "stylish" layouts work). The rule is "named" when its name appears as a whole word, plugin prefix allowed (`x/no-raw-sql`). Type errors are recognised by `TSnnnn`. CHECK-AC-003 additionally needs, in one diagnostic (the rule line up to the next diagnostic), a skill reference written as `skill/reference/<name>.md` or `reference/<name>.md` that exists under `skill/`, and the construct (per-fixture patterns in `fixtures/support/check-catalog.ts`, matched after removing the file name, rule name and reference path).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T4.
 
 ### DEC-0238 — `verify` reports every static step's diagnostics, not only the first failing step's
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CHECK-AC-001, CHECK-AC-003, SQL-AC-002, CLI-REQ-002, B-17
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CHECK-AC-001, CHECK-AC-003, SQL-AC-002, CLI-REQ-002, B-17
 
 CHECK-AC-001 requires the rule (`allowed-imports`) to fail `node:fs` and bare `fs` imports, but under the app lib set (no `@types/node`) those also fail type checking; likewise `.transaction()`, `.batch()` and `db.query` are absent from `PortableDb` and fail type checking before `no-transactions` / `no-relational-queries` could be seen. The tests therefore require `verify`'s output to contain both the type error and the rule's diagnostic. The simplest reading: `verify` runs type checking and the portability rules and reports both before failing. All failing fixtures share one app and one `verify` run.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T4.
 
 ### DEC-0239 — Postgres-only failures used for CLI-AC-002 and LOCAL-AC-003
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open); CLI-AC-002 fixture superseded by DEC-0311 · Affects: CLI-AC-002, LOCAL-AC-003
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25); CLI-AC-002 fixture superseded by DEC-0311 · Affects: CLI-AC-002, LOCAL-AC-003
 
 Both use only supported features, so only the Postgres test process can catch them: `.limit(-1)` (SQLite: no limit; Postgres: "LIMIT must not be negative") for CLI-AC-002, and `selectDistinct` ordered by an unselected column (Postgres requires ORDER BY expressions of SELECT DISTINCT in the select list) for LOCAL-AC-003. The assertion is that `verify` fails and its output names the failing app test, which proves a test run (not a static check) failed. The output need not say which dialect failed (not specified), so "works on SQLite" is not separately asserted.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T4.
 
 ### DEC-0240 — Bundle inspection reads `.framework/` and matches surviving strings
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CORE-AC-006, CF-AC-003, PROV-AC-005, LOCAL-AC-004, B-16
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CORE-AC-006, CF-AC-003, PROV-AC-005, LOCAL-AC-004, B-16
 
 cli.md says `build` generates entry points under `.framework/`; the tests assume the whole build output is there and scan every file in it. Positive controls: a `.js`/`.mjs` file exists, the text contains `__framework/health` and the stage's own config marker. Modules are recognised by strings that survive bundling and minification: `mock-login` (mock); `stubLoginProvider`/`loginWithStub`/`stubFailure` (stub provider, `./testing`); `__framework/files` (local transfer route); `ticket_key`/`ticketKey`/`SECRET_*TICKET*` (local ticket key — assumes its framework-internal name contains "ticket"); `@aws-sdk`/`aws-sdk`/`amazonaws.com`; `pulumi`, `sst` specifiers or paths, `/provision/`, `setupAccount`, `listStageResources` (provisioning); `pglite`/`electric-sql`; import specifiers of `fs`, `fs/promises`, `child_process`, `worker_threads`, `cluster`, `repl`, `inspector`, `v8`, `tty`, `dgram` (with or without `node:`); tooling package specifiers or `node_modules/<pkg>/` paths (eslint, typescript, drizzle-kit, wrangler, vite, vitest, esbuild, miniflare). Comments mentioning these strings in bundled framework code would be false positives; the build should strip comments or minify.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T4.
 
 ### DEC-0241 — Readings of individual criteria
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: listed IDs
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: listed IDs
 
 - **CORE-AC-005**: the exports map must equal the CORE-REQ-005 table minus `./targets/aws` (DEC-0110, plan §11 Q3). The `./targets/aws` fixture must fail `verify` with a diagnostic naming the file (type error or `allowed-imports`).
 - **CORE-AC-006**: only the Cloudflare-bundle part is covered; "the AWS bundle contains no Cloudflare-only modules" is not testable this phase (no AWS target; not-run).
@@ -1881,14 +1882,14 @@ Origin: ai-proposed · Status: accepted (assumption under the owner's instructio
 - **CHECK-AC-006**: the rule's full ID is discovered from the exports of `<package>/check` (a key ending in `/no-raw-sql`, or a plugin whose `rules` has it); the app config is `eslint.config.js` setting it to `"off"` or `0`. `verify` must fail, name the rule, and name `eslint.config`. If `./check` exposes no such ID the test fails saying so.
 - **SQL-AC-002**: excluded features that Drizzle cannot express without raw SQL (window functions, JSON operators, full-text search) are fixtures of `no-raw-sql`; views are a `pgView` import (`allowed-imports`). Triggers and stored procedures have no fixture: they can only be created by raw DDL, which `PortableDb` cannot execute and `no-raw-sql` already rejects. `groupBy` is assumed supported (aggregates are, and grouping is how they are used); the passing fixture uses it.
 - **CHECK-AC-001** raw-HTML insertion, value import from `src/shared/` in browser code, and the type-escape fixtures of CHECK-AC-002 name no rule, so any diagnostic naming the file counts.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-T4.
 
 ### DEC-0242 — The framework lints its own source with typescript-eslint's recommended rules; root `verify` includes it
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open); lint scope extended by DEC-0315 · Affects: plan §3 B-17 task line, plan §10.1, prompt §5 ("the framework's own code must pass its own checks"), PAR-111, DEC-0205
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25); lint scope extended by DEC-0315 · Affects: plan §3 B-17 task line, plan §10.1, prompt §5 ("the framework's own code must pass its own checks"), PAR-111, DEC-0205
 
 The plan's root `verify` is "framework typecheck + framework lint + unit tests + `npx <package> verify` in the apps" (B-17 task line), so the framework lints itself. The shipped portability rules (`./check`) are written for app code (app lib set, no Node APIs) and do not fit framework code, which is Node and Worker library code. Chosen, simplest: root `eslint.config.js` applies typescript-eslint's `recommended` configuration (ESLint and typescript-eslint at PAR-111, declared as root dev dependencies) to `packages/framework/src/**/*.ts` and `packages/framework/bin/**/*.js`; in colocated `*.unit.test.ts` files `no-unused-vars` and `no-unused-expressions` are off, because those files hold type-level fixtures (values declared only for their types, expressions read only by the type checker). Root `lint` = `eslint packages/framework/src packages/framework/bin`; root `verify` = `npm run build -w packages/framework && npm run typecheck && npm run lint && npm run test:unit && npm --workspace apps/template run verify` (`apps/reference` is added by C-01). The test-author suites and fixtures under `packages/framework/test/**` are not linted yet: they are owned by test-author items, and recommended rules report seven findings there (unused `_` names, `{}` types, one unused directive) at B-INT. C-INT may extend the scope once their owners fix them. Integration fix: two `prefer-const` findings in unit tests (`testing/test-app.unit.test.ts`, `secrets/service.unit.test.ts`) were corrected without changing behaviour.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: B-INT.
 
 ### DEC-0243 — Direct imports are declared: `hono` in the template, `@typescript-eslint/utils` in the framework
@@ -1938,54 +1939,54 @@ The contract does not fix `FrameworkError.name`, so the test does not hard-code 
 Item: B-T5.
 
 ### DEC-0250 — Reference app layout and route list
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: COMPL §2, C-T1…C-T4, D-RUN, `apps/reference/ROUTES.md`
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: COMPL §2, C-T1…C-T4, D-RUN, `apps/reference/ROUTES.md`
 
 `apps/reference` (app name `reference`) follows the template's layout: `src/app.ts` exports the `defineApp` result as `default` and `app`; one route module per area in `src/server/routes/` (`ref`, `levels`, `errors`, `kv`, `files`, `fixture`, `cases`); `index.html` at the app root with `src/client/`; `src/shared/types.ts` types only. The route list, with the criteria each route serves, is `apps/reference/ROUTES.md`; tests address the app only through it. Capability routes (`/api/kv/*`, `/api/files/*`, `/api/fixture/*`, `/api/cases/*`) require a logged-in user, since cloud test stages are publicly reachable; fixtures and error routes are anonymous unless the code needs a level. KV and FILES routes pass keys, names and cursors to the framework unchanged (no prefix), so the framework's own rejections are observable.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-01.
 
 ### DEC-0251 — Error routes raise capability codes by causing them
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: HTTP-AC-002, HTTP-AC-007, CORE-AC-008, CORE-REQ-007, `app-error-codes`, DEC-0219
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: HTTP-AC-002, HTTP-AC-007, CORE-AC-008, CORE-REQ-007, `app-error-codes`, DEC-0219
 
 "A reference route per catalogue code with a status" is one literal route `/api/errors/<CODE>` per code (no path parameter, so the HTTP-REQ-007 route path equals the request path). App code may throw only the four CORE-REQ-007 codes (`app-error-codes` fails `verify` otherwise), so every other code is produced by doing what causes it: `CORE.MISCONFIGURED` by calling `defineTable` with an invalid table name inside the handler (DEC-0132); `CFG.UNDECLARED_KEY` and `SEC.UNDECLARED` by reading an undeclared name through the general `ConfigService<ConfigDeclaration>` / `SecretsService<string>` types, to which the app's typed services are assignable without a type assertion; `SQL.CONFLICT` by a duplicate unique `authors.name`; `SQL.INVALID_VALUE` by `integer` 2³¹; `SQL.RESULT_TOO_LARGE` by one 300,000-character row (one oversized row, plan §1 limits); `KV.*`/`FILES.*` invalid inputs directly; outage codes (`*.UNAVAILABLE`, `SEC.MISSING`) by a plain read that fails only under `createTestApp`'s `unavailable` option or a missing value, and otherwise answers 200 `{ raised: false }`. `AUTH.LOGIN_FAILED` has no route: app code may not throw it and the framework's callback answers failed logins with a redirect (DEC-0168). DEC-0219's fixture (B-T1) throws `FrameworkError("CORE.MISCONFIGURED")` directly; the reference app cannot, since `app-error-codes` rejects it.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-01.
 
 ### DEC-0252 — Secret fixture routes never return the value
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SEC-AC-001, SEC-AC-002, SEC-AC-005, HTTP-AC-002
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: SEC-AC-001, SEC-AC-002, SEC-AC-005, HTTP-AC-002
 
 The app declares one secret, `apiKey` (the test secret). Every declared secret is required by the health check and the deploy preflight, so no "never set" secret is declared; `SEC.MISSING` is observed where `apiKey` has no value. `GET /api/ref/secret` returns only the SHA-256 of the value, so SEC-AC-001's "is returned" is checked by digest and no response ever contains the value. `GET /api/ref/throw-secret` (plain `Error`, 500) and `/throw-secret-app` (`HTTP.CONFLICT`, 409) throw errors whose messages contain the value, for HTTP-AC-002's no-echo clause (DEC-0123 redaction).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-01.
 
 ### DEC-0253 — Route modules take the router type derived from `AppDefinition`; no `hono` import
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: DEC-0209, DEC-0243, `apps/reference/package.json`, `package-lock.json`
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: DEC-0209, DEC-0243, `apps/reference/package.json`, `package-lock.json`
 
 The template imports `type { Hono } from "hono"` and declares `hono` (DEC-0243). Declaring it in `apps/reference/package.json` would change the shared lockfile, which only an integrator regenerates. The reference app instead types its route modules with `Api = Parameters<AppDefinition<typeof config, Secret>["routes"]>[0]` (in `src/server/env.ts`), which is the same `Hono<AppEnv<…>>`, and imports nothing from `hono`. If the integrator prefers the template's form, declare `hono` 4.13.13 here, regenerate the lockfile and switch the alias to `Hono<Env>`.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-01.
 
 ### DEC-0254 — Version 1/2 schemas as overlays; a failing overlay for MIG-AC-003
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: COMPL §2 ("committed version 1 and version 2 schemas"), E2E-010, MIG-AC-002, MIG-AC-003, C-T2, C-T4, D-RUN-M
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: COMPL §2 ("committed version 1 and version 2 schemas"), E2E-010, MIG-AC-002, MIG-AC-003, C-T2, C-T4, D-RUN-M
 
 An app has one schema at a time, so the committed app is version 1, and every version-dependent part (the `parents`/`children` tables, the fixture load and dump, `SCHEMA_VERSION`) lives in `src/server/evolution.ts`. Overlays under `apps/reference/versions/<name>/` hold a replacement `src/server/evolution.ts` and the complete `migrations/` tree, generated with `generate-migration` from a copy of the app; a test applies one by copying the app, replacing `migrations/` and that file, then deploying (locally: the next `dev` start). `v2` adds `children.rank` (default 0), an index on `children(parentId, rank)`, and drops `parents.note`, a table with child rows (MIG §2 supported changes only; the drop and the add are on different tables, so the generator accepts one migration). `unique-fail` adds a unique constraint on `children.label`, which the data fixture violates (two children labelled `shared`) — the "data-dependent failing migration" of MIG-AC-003, provided here because C-T2 does not own `apps/reference`. Overlay files are outside `src/`, so the app's own `verify` does not check them; checked manually in scratch copies: the `v2` copy passes `verify` (both dialects), a `dev` start of `v2` over a v1 `dev` state holding the fixture keeps every row and file (dump shown below), and `unique-fail` makes `dev` exit before serving with the migration named and the database unchanged.
 
 Evidence (local, scratch copies): v2 dump after upgrade `{"version":"v2","parents":[{"name":"alpha"},{"name":"beta"},{"name":"gamma"}],"children":[…5 rows, "rank":0…],"files":[…2 files, sha256 unchanged…]}`; unique-fail: `dev: migration app/0001_unique_label (…/0001_unique_label.sql) failed and was not applied; the database is unchanged by it: D1_ERROR: UNIQUE constraint failed: children.label`.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-01.
 
 ### DEC-0255 — Data fixture shape and the fixture routes
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: E2E-010, MIG-AC-003, MIG-AC-006
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: E2E-010, MIG-AC-003, MIG-AC-006
 
 The data fixture (`src/server/fixture-data.ts`) is 3 parents, 5 children and 2 files under `fixture/` (one text, one with all 256 byte values). `id()` values must come from `newId()` (`framework-ids`), so `POST /api/fixture/load` generates IDs and `GET /api/fixture/dump` compares by content: parents by name, children by parent name and label, files by name, size, content type and SHA-256. Load inserts all rows with one `atomic` call and refuses a second load with `HTTP.CONFLICT`.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-01.
 
 ### DEC-0256 — Shared case sets: interface and registry handover
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: C-T2 (owner of `apps/reference/src/server/cases/**`), SQL-AC-003…-006, KV-AC-004
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: C-T2 (owner of `apps/reference/src/server/cases/**`), SQL-AC-003…-006, KV-AC-004
 
 A case is `(services: { sql, kv, files, log }, input: unknown) => Promise<unknown>`; a set is a record of named cases (`src/server/case-types.ts`). `POST /api/cases/run { set, name, input? }` answers `{ outcome: "value", value }` or `{ outcome: "undefined" }`, or the framework's `ErrorResponse` for a thrown error; `GET /api/cases` lists the sets. The route reads its sets from `src/server/case-registry.ts`, which ships empty, because C-01 may not create files under `src/server/cases/**` and a missing module would fail `verify`. **For C-T2:** export `caseSets: CaseSets` from `src/server/cases/index.ts` and replace the registry's body with `export { caseSets } from "./cases/index";` (ownership of that one file passes to C-T2 for this edit). Case tables `authors`, `posts` (every column type, nullable and defaulted columns, a reference), `tags` (composite unique, index) are in `src/server/schema.ts` with committed migrations; changing them needs a new migration from C-01's owner.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-01.
 
 ### DEC-0257 — Configuration values per stage file
@@ -2047,7 +2048,7 @@ Tests are found by the runners themselves, so titles built at run time are read 
 Item: C-02.
 
 ### DEC-0266 — Harness tooling: launcher, HTTP client, Playwright, self-test, root scripts
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: plan §9.2, §10.1, DEC-0085, DEC-0089, PAR-119, PAR-210, PAR-270, PAR-280
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: plan §9.2, §10.1, DEC-0085, DEC-0089, PAR-119, PAR-210, PAR-270, PAR-280
 
 - `run.mjs` / `tools/report.mjs` bundle the TypeScript entry point with esbuild into the gitignored `.framework/compliance/` and import it. Node's type stripping does not resolve the sources' `.js` specifiers.
 - The HTTP client sends `User-Agent: prototype-framework-compliance/0.1.0` (DEC-0089). It sends `Origin` on state-changing requests, keeps a cookie jar per client, follows no redirects, and bounds each request at PAR-270. Logins go through `/api/auth/mock-login`. `expectStatus`/`expectError` throw messages naming the method, path, status, code and requestId, which go into `detail`. Waits are `waitFor` with bounds from PAR-210 (database resume), DEC-0090 (route toggle) and PAR-270.
@@ -2081,9 +2082,9 @@ Origin: ai-proposed · Status: accepted · Affects: PROV-REQ-002, MIG-REQ-003, C
 Item: C-03.
 
 ### DEC-0270 — Ownership of the Cloudflare shared log bucket
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open; unverified against the live API, verify in D-03/D-RUN); 409 reading amended by DEC-0421 (200, 404 and 409 confirmed live in pass 0) · Affects: PROV-REQ-004, PROV-AC-007, cloudflare.md `setupAccount`, D-03
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25; unverified against the live API, verify in D-03/D-RUN); 409 reading amended by DEC-0421 (200, 404 and 409 confirmed live in pass 0) · Affects: PROV-REQ-004, PROV-AC-007, cloudflare.md `setupAccount`, D-03
 
-R2 bucket names are scoped to an account, so the bucket `prototype-logs` is read through this account's path `GET /accounts/{account}/r2/buckets/prototype-logs`: success → owned; HTTP 404 → absent; HTTP 403 → foreign (it exists but this account does not own it, or its credentials cannot see it — the message says both). Creation is `POST /accounts/{account}/r2/buckets {"name":"prototype-logs"}`; HTTP 409 → foreign. Any other answer is an error naming the bucket and the HTTP status. The status codes were not observed against the live API (this item is offline); D-03/D-RUN confirm them. Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+R2 bucket names are scoped to an account, so the bucket `prototype-logs` is read through this account's path `GET /accounts/{account}/r2/buckets/prototype-logs`: success → owned; HTTP 404 → absent; HTTP 403 → foreign (it exists but this account does not own it, or its credentials cannot see it — the message says both). Creation is `POST /accounts/{account}/r2/buckets {"name":"prototype-logs"}`; HTTP 409 → foreign. Any other answer is an error naming the bucket and the HTTP status. The status codes were not observed against the live API (this item is offline); D-03/D-RUN confirm them. Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 
 **To verify in phase D:** D-03 and D-RUN must confirm the 404/403/409 readings against the live R2 API before `setup-account` relies on them; until then this entry is unverified.
 Item: C-03.
@@ -2095,10 +2096,10 @@ Origin: ai-proposed · Status: accepted · Affects: COMPL-AC-007, PROV-AC-007, C
 Item: C-03.
 
 ### DEC-0272 — How `smoke` finds the base URL: recorded dev origin and recorded deploy output
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CLI-REQ-001 `smoke`, CLI-AC-005, testing.d.ts `connectTestStage`, `dev` (B-17), D-05 `deploy`
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CLI-REQ-001 `smoke`, CLI-AC-005, testing.d.ts `connectTestStage`, `dev` (B-17), D-05 `deploy`
 
 `dev` picks a free port each start, so `smoke --target local` cannot guess it. While it runs, `dev` records `{ origin, pid }` in `<app>/.framework/local/dev-server.json` (git-ignored) and removes the file when it stops. `smoke` treats a missing or malformed record, or one whose process has ended, as "no running dev server" and says to start `npm run dev`. On a cloud the base URL is the stage's recorded deploy output `<app>/.framework/<target>/stages/<stage>.json` (`{ publicOrigin }`), written by `deploy` (D-05). The helpers `recordDevServer`/`clearDevServer`/`recordDeployOutput` are in `src/cli/commands/smoke.ts`. With `--target local`, `--stage` may be left out and can only be `local`. On a cloud, `--stage` is required and must start with `test-`. Anything else is refused before any request is sent.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-04.
 
 ### DEC-0273 — How the connection reaches `connectTestStage`
@@ -2143,13 +2144,13 @@ C-INT added `apps/template/.gitignore`, which the scaffolder copies (DEC-0316).
 Item: C-05.
 
 ### DEC-0277 — Run prerequisites: the test secret's value
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SEC-AC-001, SEC-AC-002, HTTP-AC-002, CORE-AC-002, C-RUN, D-RUN, C-02 driver
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: SEC-AC-001, SEC-AC-002, HTTP-AC-002, CORE-AC-002, C-RUN, D-RUN, C-02 driver
 
 Criteria that need the reference app's test secret `apiKey` to have a known value read it from its SEC-REQ-003 location: locally `SECRET_API_KEY` in `apps/reference/.dev.vars` (`dev` does not reload `.dev.vars` while running, so the runner sets it *before* the run with `npm run secrets -- set apiKey --target local --stage local` in `apps/reference`, value on stdin; a long random value of letters and digits). A cloud store cannot be read back, so on a cloud the runner sets the value on the run stage and passes it to the tests in `COMPLIANCE_SECRET_API_KEY` (the driver does not do this yet: a D item must add it, or the runner exports it). Without a value (or one under 12 characters) the tests report a missing prerequisite (`blocked`), never pass. CORE-AC-002's health check reports `SEC.MISSING` the same way.
 
 C-INT: the driver passing `COMPLIANCE_SECRET_API_KEY` on a cloud run is assigned to D-T2/D-05 in the plan (§5 "From phase C").
 Integrator note: done by D-07; see DEC-0398.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T1.
 
 ### DEC-0278 — Clauses that change a stage run on scratch copies and further stages
@@ -2159,7 +2160,7 @@ The driver records evidence only from an unmodified working tree, so no test edi
 Item: C-T1.
 
 ### DEC-0279 — Cloud test hooks D-T2 provides under `tests/compliance/criteria/_cloud/`
-Origin: ai-proposed · Status: accepted (C-T4 part: assumption under the owner's instruction; owner review open) · Affects: D-T2, LOG-AC-002, LOG-AC-004, LOG-AC-005, SEC-AC-002, SEC-AC-003, SEC-AC-005, E2E-011, E2E-012, E2E-014
+Origin: ai-proposed · Status: accepted (C-T4 part: accepted under the owner's instruction of 2026-10-25) · Affects: D-T2, LOG-AC-002, LOG-AC-004, LOG-AC-005, SEC-AC-002, SEC-AC-003, SEC-AC-005, E2E-011, E2E-012, E2E-014
 
 **Criteria tests (C-T1).** Cloud stores are reached through `tests/compliance/criteria/_cloud/index.ts` (D-T2 owns it), which must export `cloudHooks(target: string): CloudHooks | Promise<CloudHooks>` with the interface in `core/support/stores.ts`: `deleteSecret({app, stage}, name)`, `secretLocations({app, stage})` (e.g. `["SECRET_API_KEY"]`), `logBucketExists()`, `listLogKeys(prefix)`, `readLogObject(key)`. The module is loaded at run time; while it is absent the tests report a missing prerequisite. Stored-entry lookups by request ID read only the objects whose key ends with `-<requestId>.json`; SEC-AC-002 reads all of the run stage's entries for today and yesterday.
 
@@ -2167,11 +2168,11 @@ Origin: ai-proposed · Status: accepted (C-T4 part: assumption under the owner's
 - `_cloud/logs.ts` exporting `listLogEntries({ target, app, stage, day }): Promise<{ key: string; body: string }[]>` — every object under `<app>/<stage>/<day>/` (`day` = `yyyy/mm/dd`) in the account's shared log bucket, with its body;
 - `_cloud/stage-resources.ts` exporting `listStageResources({ target, app, stage }): Promise<string[]>` — every resource of PROV's removal list still present for the stage, as the driver's leftover strings (`database <name>`, `<kind> <id>`).
 If D-T2 chooses other names, a C-T4 follow-up adapts `support/cloud.ts` (plan: "gaps found in them go back to a C-T* follow-up item"). The D1 database probe (PROV-REQ-002's exact pattern) and the shared-bucket existence check use the Cloudflare API directly (`support/cloud.ts`, no Authorization header; the proxy injects the token). Cloud log waits use `CLOUD_WAITS.requestMs` (an entry is written within its request's lifetime, PAR-270); waiting for a newly set secret uses `CLOUD_WAITS.routeToggleMs`.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T1, C-T4 (merged: C-T1-3 and C-T4-7).
 
 ### DEC-0280 — Readings of criteria
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: the IDs named
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25; its SEC-AC-005 bullet is changed separately) · Affects: the IDs named
 
 - **CORE-AC-002:** per target: `apps/reference/src` is unmodified (git status empty), `build --target <t> --stage <s>` of a copy succeeds, and the run's deployment serves `/`, `/api/ref/deployment` = `{app, stage}` and health 204. The AWS part is the AWS phase.
 - **CORE-AC-003:** forwarding headers (`X-Forwarded-*`, `Forwarded`, `X-Original-Host`, `X-Host`) must leave `deployment` identical; a forged `Host` may be refused before the app (local `dev` answers 403 unless Host is exact; a cloud routes by Host), and when the app answers, the identity is unchanged.
@@ -2189,21 +2190,21 @@ Origin: ai-proposed · Status: accepted (assumption under the owner's instructio
 - **CLI-AC-001:** both forms are `npx --no @lago-morph/prototype-framework <command>` and `npm run --silent <command> -- …` in a template copy. Local commands must succeed (`dev`: serves the client on its printed origin; `smoke`: against a running `dev`). `deploy`, `remove`, `setup-account`, `certify-auth` are run with `--target local` so a local run creates no cloud resources: "runs" there means the package dispatches them (no unknown-command answer, not status 127) and both forms give the same status. Their real (cloud) runs are CLI-AC-001's cloud part, which is not-run in this phase.
 - **CLI-AC-004:** locally, every output of the CLI-AC-001 runs (both forms, `dev` and `smoke` included) is scanned for the test secret set there and for the framework's generated development secrets in `.dev.vars`; on a cloud, the outputs of the further stage's deploy, `secrets set` and `remove`. The driver's own raw output is scanned by the runner (plan §10.6).
 - **CLI-AC-005:** `smoke` must exit 0, write exactly one schema-valid record (`validateEvidence`) under the copy's `validation/<target>/` with `exitStatus` 0 and no non-passed result, and print the log location for the day: locally `.logs/<yyyy-mm-dd>.log`, on a cloud `<app>/<stage>/<yyyy>/<mm>/<dd>/`.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T1.
 
 ### DEC-0281 — Shared case sets: one expectation set, three places
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SQL-AC-003…-006, KV-AC-001…-005, COMPL-REQ-001, `apps/reference/src/server/cases/**`, `tests/compliance/criteria/{sql,kv}/`
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: SQL-AC-003…-006, KV-AC-001…-005, COMPL-REQ-001, `apps/reference/src/server/cases/**`, `tests/compliance/criteria/{sql,kv}/`
 
 The cases live in the reference app (`cases/sql.ts`, `cases/kv.ts`, `cases/mig.ts`, registered by `case-registry.ts` per DEC-0256) and only report what the framework did; expectations are literals in `tests/compliance/criteria/{sql,kv}/suite.ts`, derived from sql.md / kv.md / the contracts. Each suite runs three times: in-process on local D1 and on PGlite (`createTestApp(referenceApp)` + `POST /api/cases/run`, one entry file per dialect because the dialect is fixed per process, DEC-0134), and through the reference app over HTTP (`client()`: `dev` locally, the test stage on a cloud). "Identical results on every target" (SQL-AC-003, KV-AC-004) = the same literal expectations pass in every place; floats compare with PAR-280; unordered results are sorted by the case and compared as multisets. Every KV test is tagged with its own criterion and KV-AC-004.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T2.
 
 ### DEC-0282 — In-process runs exist only on the local target
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: COMPL-REQ-001, `tests/compliance/criteria/{sql,kv}/*.{d1,pglite}.test.ts`
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: COMPL-REQ-001, `tests/compliance/criteria/{sql,kv}/*.{d1,pglite}.test.ts`
 
 The in-process entry files define their tests only when `target()` is `local`. On a cloud run they would produce local results under the cloud target's evidence; defining them conditionally (rather than skipping) keeps cloud evidence to the HTTP runs, and adds no `not-run` entries. This is the one place the C-T2 tests read `target()`, and only to choose where tests exist, not what they expect.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T2.
 
 ### DEC-0283 — Cases are namespaced, self-cleaning and use only public, `verify`-clean app code
@@ -2213,28 +2214,28 @@ Each case takes `{ ns }`, a random per-suite namespace (`c-t2-<16 hex>`), names 
 Item: C-T2.
 
 ### DEC-0284 — Readings of SQL-AC-003…-006
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SQL-AC-003…-006
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: SQL-AC-003…-006
 
 - SQL-AC-003 "every supported feature": every §2.3 row is exercised — select/selectDistinct, insert (single and multi-row), update, delete, inner/left joins, a subquery (`inArray` over a select), a select-only CTE (`$with`/`with`), all exported comparison/boolean/null/`inArray`/`notInArray`/`between` expressions on every column type, `containsText`, every aggregate incl. `groupBy`, `asc`/`desc` on every nullable type, `limit`/`offset`, both upsert forms against declared uniques, and `returning`. Ordering totality: within a suite's data every ordering ends in a column whose values are distinct (`title`), so the order is determined.
 - `containsText` "edge cases": `""`, `%`, `_`, `\`, a would-be LIKE pattern (`1%s`, `o_e`) that must not match, ASCII folding (`HELLO`, `APPLE`), non-ASCII not folded (`àpple`, `äpfel`), NULL never matching.
 - SQL-AC-004: per type, values just inside and just outside each rule of sql.md §2.1 (integer ±2³¹ edges, fractions, NaN; number ±Infinity, NaN, `Number.MAX_VALUE`, `Number.MIN_VALUE`, −0 stored as 0; timestamp −1, 2⁵³, fractions, 0, `MAX_SAFE_INTEGER`; text lone/reversed surrogates, NUL, `""`, U+FFFF, U+10FFFF, an astral pair; `id`/`ref` uppercase UUID and non-UUID). Rejections must be `SQL.INVALID_VALUE` and write nothing (also for `update().set()`, comparisons and a multi-row insert with one bad row); accepted values must read back exactly.
 - SQL-AC-005: the outer-handle rejection must be a catalogue code (any; SQL-REQ-005 and sql.d.ts say "a catalogue error", sql.md says `CORE.INTERNAL`, as DEC-0222) and nothing — not even the first, valid step — may be written. A committing `atomic` is checked as a control.
 - SQL-AC-006: duplicate single-column and composite unique values on insert and update → `SQL.CONFLICT` (409 over HTTP); one row of 270,000 ASCII characters selected back → `SQL.RESULT_TOO_LARGE` (one oversized row, plan §1), one of 200,000 succeeds. **Not covered:** the Data API retry-loop clause (AWS adapter; not built in this phase).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T2.
 
 ### DEC-0285 — Readings of KV-AC-001…-005; KV-AC-002's empty-value conflict
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open; owner item DEC-0146 / plan §11 Q6) · Affects: KV-AC-001…-005, DEC-0146
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25; owner item DEC-0146 / plan §11 Q6) · Affects: KV-AC-001…-005, DEC-0146
 
 - KV-AC-001: list results are checked for exact key sets and code point order, incl. `%`, `_`, mixed case, a key outside the prefix that a non-literal match would include (`<ns>/pa%b` for prefix `<ns>/p/`), and code point vs UTF-16 order (U+FFFD before U+1F600).
 - KV-AC-002: limits in UTF-8 bytes (a key of 1,024 bytes made of 2-byte characters is accepted; a 1,025-byte key with an astral character, only 1,023 UTF-16 units long, is rejected); malformed keys, prefixes and values are `KV.INVALID_KEY` (KV-REQ-002). **Empty values:** the test follows KV-REQ-002 (binding) and DEC-0146 — `put(k, "")` is accepted and `get` returns `""` — in its own test whose title names the conflict, so the owner's decision changes one test. A prefix over PAR-220 bytes is not asserted (DEC-0147 is an implementation choice no requirement states).
 - KV-AC-003: "2.5 pages" = 10 keys in pages of 4 (sizes 4, 4, 2), not 50 keys at the default page size (plan §1 limits); a cursor is rejected with a different, a narrower and a wider prefix, and when malformed.
 - KV-AC-005: the maximum page is exactly PAR-222 = 50 entries of PAR-220-byte keys and PAR-223-byte values (the criterion's own size, the only test above "tens of rows"); "database unreachable" locally = `createTestApp(…, { unavailable: ["sql"] })` and `["kv"]`, in-process only (DEC-0225).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T2.
 
 ### DEC-0286 — MIG criteria deploy their own stages from a scratch copy of the reference app
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open); stage layout amended by DEC-0423 (three self-contained blocks), its D1 reads' "no Authorization header" by DEC-0428 · Affects: MIG-AC-002, -003, -006, DEC-0144, compliance.md "Test stages", D-RUN
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25); stage layout amended by DEC-0423 (three self-contained blocks), its D1 reads' "no Authorization header" by DEC-0428 · Affects: MIG-AC-002, -003, -006, DEC-0144, compliance.md "Test stages", D-RUN
 
 `tests/compliance/criteria/mig/support/stage.ts` copies `apps/reference` (without state, tests and overlays) to a temporary directory, applies an overlay (`v1` = committed app, `versions/v2`, `versions/unique-fail`) and deploys it: locally a `dev` start (DEC-0144; after a failed start the harness serves the previous version's sources, the local reading of "the old app answers again"), on Cloudflare `deploy --target cloudflare --stage test-<random>` then `remove`. The database is read only with SELECTs: locally from Miniflare's SQLite file, on Cloudflare through the D1 HTTP API `query` endpoint of the stage's lowest-numbered `reference-<stage>-db-<n>` database (no Authorization header; the proxy injects it). Two stages, used one after the other: (1) initial deploy, unchanged redeploy, failing `unique-fail` deploy, data correction, successful re-run; (2) v1 → v2 with data, writes during the deploy, a secret and a session.
 - MIG-AC-002: "creates the schema" = every app and framework table exists; "the record lists every migration once" = `__framework_migrations.id` in rowid order equals `framework/<file>` for the framework history then `app/<file>` for the app's, each in file order (DEC-0142 format); "changes no data" = every table's rows, incl. the record's applied times, are identical; "does not stop the app" = on a cloud every health probe during the deploy answers 204; locally a deployment is a `dev` restart, so only "applies nothing" is checked (DEC-0144).
@@ -2243,181 +2244,181 @@ Origin: ai-proposed · Status: accepted (assumption under the owner's instructio
 - Not runnable until D: the Cloudflare paths depend on D-05's `deploy`/`remove`/`secrets set --target cloudflare` and were not executed here.
 
 A schema-changing deploy of a MIG stage holds two databases while the run stage holds a third; how D-RUN stays within the cap of two is DEC-0318.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T2.
 
 ### DEC-0287 — C-01's case-runner test updated for the registered sets
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: `apps/reference/tests/fixture-and-cases.test.ts` (C-01-owned), DEC-0256
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: `apps/reference/tests/fixture-and-cases.test.ts` (C-01-owned), DEC-0256
 
 C-01's test "has no sets until C-T2 registers them" asserted `GET /api/cases` = `{ sets: {} }` and failed once the registry re-exports C-T2's sets, so the reference app's `verify` (and root `verify`) failed. The only edit outside C-T2's paths: that assertion now expects the registered set names `kv`, `mig`, `sql` (its unknown-case 404 check is unchanged). Owner instruction "do not stop for questions"; C-01's owner may prefer another form.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T2.
 
 ### DEC-0288 — Browser transfers use the published `<package>/client`, bundled and added to a page of the app's origin
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: FILES-AC-003, FILES-AC-004 (browser part), FILES-AC-006 (browser part); `tests/compliance/criteria/files/browser.ts`
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: FILES-AC-003, FILES-AC-004 (browser part), FILES-AC-006 (browser part); `tests/compliance/criteria/files/browser.ts`
 
 FILES-AC-003 needs `uploadFile` and `downloadUrl` called with tickets the test chooses (another name's, another content type's, an expired one), and needs `ApiError.status`, which the reference page's status text does not show. The reference page exposes no helpers. So the test bundles the installed package's `./client` entry (what an app imports) with esbuild into an IIFE (`window.fw`) and adds it to the reference app's own page with `page.addScriptTag`. The page is on the target's origin (`dev`, or the stage), so the browser treats the transfers exactly as an app's. Tickets are requested by a logged-in Node client from the reference app's ticket routes, as app server code would hand them out, and passed into the page unchanged. esbuild is not declared in `tests/compliance/package.json` (C-T3 does not own it); it resolves from the root `node_modules` (framework dependency, PAR-119). If a cloud stage's page ever sends a Content-Security-Policy that blocks inline scripts, the injection fails visibly; Playwright's `bypassCSP` would then be the fix (not set now, since `dev` sends none). Not a missing route: the scenario-level flow through the app's own page is E2E-009.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T3.
 
 ### DEC-0289 — Ticket fields are read only through the documented ticket shape
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: FILES-AC-003, FILES-AC-005, E2E-009
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: FILES-AC-003, FILES-AC-005, E2E-009
 
 Where a criterion is about what a ticket permits, the tests read `url`, `method`, `headers` and `expiresAt`, the shape files.md §2 "Shared runtime shape" documents (DEC-0160). App code never does; the type inspection (FILES-AC-004) checks that app-facing types expose none of these.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T3.
 
 ### DEC-0290 — "A ticket for one name cannot write another": the ticket's URL edited to name another file is refused
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: FILES-AC-003
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: FILES-AC-003
 
 The test uploads with an upload ticket for `…/one.txt` (it writes that name and nothing else), then rewrites the ticket URL wherever it carries the name — plainly, percent-encoded, or inside a base64url JSON segment (a signed token) — to `…/two.txt`, sends each rewritten URL with the ticket's method and headers from the page, and expects each to be refused, `two.txt` absent and `one.txt` unchanged. It requires at least one rewrite to be possible, so the clause cannot pass vacuously.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T3.
 
 ### DEC-0291 — "An upload with a different content type is rejected": a raw `fetch` from the page
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: FILES-AC-003
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: FILES-AC-003
 
 `uploadFile` always sends the ticket's content type, so the mismatched upload is a plain `fetch` `PUT` to the ticket URL with `Content-Type: image/png` from the app's page. It passes when the request does not succeed (a refused status, or a network/CORS error on a cloud) and nothing is stored; a control upload with the ticket's own type then works.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T3.
 
 ### DEC-0292 — FILES-AC-003's expired-ticket clause waits for a real expiry (PAR-233)
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: FILES-AC-003; `expired-ticket.spec.ts`
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: FILES-AC-003; `expired-ticket.spec.ts`
 
 No contract option or reference route issues a shorter-lived ticket, and the expiry is checked by storage (R2 on Cloudflare), so the clock cannot be moved. The test uses the ticket once (control), waits until its `expiresAt` plus 30 s (bounded: the lifetime must not exceed PAR-233 + 1 min; test timeout PAR-233 + 5 min), and asserts the clause as written: `FILES.TRANSFER_FAILED`, a numeric status ≥ 400, `rejected by storage (HTTP n)`, no storage error body in the message, nothing written. It is in its own spec file so the wait overlaps the other specs. On Cloudflare it is expected to fail (DEC-0101); it is not skipped or weakened. A test-only short ticket lifetime would make the run 15 minutes shorter; that would be a framework change (not requested).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T3.
 
 ### DEC-0293 — FILES-AC-004 browser part: a `127.0.0.1` page is the unrelated origin, against `dev`
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: FILES-AC-004; B-EV flag F6
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: FILES-AC-004; B-EV flag F6
 
 Per F6 the browser part runs against `dev` (the driver's local target), not a harness. The unrelated origin is a page served by the test at `http://127.0.0.1:<port>` with `<base href="<app origin>/">`, so relative (local) ticket URLs target the app's storage cross-origin; on a cloud the ticket URLs are absolute anyway. A same-origin control precedes it. Outcomes are soft assertions, so the evidence shows the upload and the download result together.
 Observed on `dev` (informational, 2026-10-20): the upload from `http://127.0.0.1:<port>` **succeeds**. `dev`'s HTTP server answers the preflight for `/api/__framework/files/*` with `Access-Control-Allow-Origin: <the requesting loopback origin>` (it does so for `http://127.0.0.1:1234`, not for `http://evil.example`), i.e. any page on a loopback origin, such as another local dev server, can use the app's tickets. This is the dev-server path F6 asked to check; the test reports it as a failure. Origin of the header (Vite's default `server.cors`, which allows loopback origins) is for a diagnoser to confirm.
 
 Since fixed (root-cause record `ai/implementation/root-causes/2026-10-20-FILES-AC-004-dev-vite-default-cors-allows-loopback.md`, commit `69ae283`): `dev` runs Vite with `server.cors: false`, so the loopback page is refused and the test passes.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T3.
 
 ### DEC-0294 — FILES-AC-006: server part in-process; browser part through a cutting proxy against `dev`
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: FILES-AC-006
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: FILES-AC-006
 
 Server part: a running `dev` cannot be given unreachable storage, so the reference app runs in-process with `createTestApp(…, { unavailable: ["files"] })` and every `/api/files/*` route (put, get, head, delete, list, both ticket kinds) must answer 503 `FILES.UNAVAILABLE`. Browser part: the page on `dev` is opened in a context whose proxy is a small forwarding HTTP proxy run by the test (`bypass: "<-loopback>"`, since Chromium never proxies loopback otherwise); it drops the connection of every upload `PUT` to the ticket's path after 2 MiB, and the upload is throttled to 4 MiB/s (CDP) so the cut lands mid-body. Chromium retries a reset request a few times; each attempt is cut. Expected: `FILES.TRANSFER_FAILED`, status null, `interrupted after n bytes` with 0 < n < 16 MiB, nothing stored. Both parts are Local only (Where), so the driver selects them only on `local`.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T3.
 
 ### DEC-0295 — FILES-AC-005: the stage's storage as a stranger finds it
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: FILES-AC-005 (Cloud)
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: FILES-AC-005 (Cloud)
 
 The storage address comes from a ticket URL with its query string (where a signed URL carries its signature) removed. Unsigned `GET` of the file, of a sibling name, of the storage root and of the first path segment (bucket, path-style), and an unsigned `PUT`, must each get a 4xx without the file's bytes or name in the body, and the file must be unchanged. Cloud only: locally the signature is part of the path, so the test is not meaningful there and the driver does not select it.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T3.
 
 ### DEC-0296 — FILES-AC-004 type inspection walks the published declarations, and the contracts
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: FILES-AC-004
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: FILES-AC-004
 
 The TypeScript checker walks the FILES exports (and `Services.files`) of the package's `exports` `types` files for `.` and `./client`, and of `docs/contracts/ts/{index,client}.d.ts` (bundler resolution, since the contracts use extensionless imports), collecting member, parameter, type and string-literal names; none may match the storage/signing/credential vocabulary, and `UploadTicket` / `DownloadTicket` must have no property besides the brand. A non-vacuity check requires the walk to have reached `createUploadTicket`, `createDownloadTicket`, `contentType`, `onProgress` and `nextCursor`. B-T3 inspects the sources; this inspects what an app installs.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T3.
 
 ### DEC-0297 — AUTH-AC-006: per-target cookie names; the transaction cookie and the "Locally" clauses in-process
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: AUTH-AC-006
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: AUTH-AC-006
 
 "As specified" is AUTH-REQ-006 plus auth.md §2: names `session_local` / `login_local` locally and `__Host-session` / `__Host-login` on cloud targets; HttpOnly, SameSite=Lax, Path=/, no Domain, cloud also Secure; lifetime PAR-250 (session) and PAR-251 (transaction) from Max-Age or Expires (±60 s). These are the per-target expectations the criterion states, so the tests branch on the target for them. A `test-` stage and local `dev` have no real login provider, so their `/api/auth/login` sets the session directly (DEC-0171) and no transaction cookie: on the target the test checks every cookie the login flow sets. The transaction cookie itself is checked with the stub login provider, which exists only in-process (`createTestApp(…, { stubLoginProvider: true })`), together with the "Locally, expired and future-dated" clauses (fake `Date`, as B-T3 did). Those in-process tests are registered only when the target is `local` (not skipped elsewhere), so a cloud run neither runs nor records them. Consequence for evaluators: on a cloud test stage the transaction-cookie attributes are not observed; that is only possible on a stage with a real provider (prodcheck: not-run, Google login mocked).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T3.
 
 ### DEC-0298 — AUTH-AC-007: missing and wrong Origin through the deployed router with raw HTTP; directly in-process
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: AUTH-AC-007; DEC-0230
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: AUTH-AC-007; DEC-0230
 
 Through the deployed router (`dev` locally, the stage on a cloud): a POST with a session and no `Origin` (also `/api/auth/logout`, which must leave the session intact), with wrong origins (`https://evil.example`, `null`, a look-alike host, the same host with the other scheme, another port, a trailing slash), and with the public origin (the base URL's origin). Directly: in-process (local only), wrong and correct origins.
 Observed on `dev` (informational, 2026-10-20): `Origin: https://localhost:<dev port>` (other scheme) is **accepted** through `dev` but refused by the worker when sent to it directly, so `dev`'s front server appears to rewrite or drop `Origin` before the forgery check. The test reports this as a failure; a diagnoser should confirm the mechanism.
 
 Since fixed (root-cause record `ai/implementation/root-causes/2026-10-20-AUTH-AC-007-wrangler-proxy-rewrites-origin-scheme.md`, commit `69ae283`): `dev` proxies `/api` with `changeOrigin: true`, so wrangler no longer rewrites the `Origin` scheme and the test passes.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T3.
 
 ### DEC-0299 — AUTH-AC-009: only the test-stage part
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: AUTH-AC-009
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25); its production-404 part, which waited on Google login, superseded by DEC-0513 · Affects: AUTH-AC-009
 
 On the target (local or `test-` stage): chosen level, ID used as given (including characters a derived ID never has) and display name appear in `/api/auth/me`, `c.var.user` and the guards; a fixed default ID per level; `anonymous` logs out. The production 404 is not-run (Google login mocked, plan §8.1). "Production bundles contain no mock module" is a bundle inspection (CORE-AC-006 build part, B-T4) and is not checked or tagged here.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T3.
 
 ### DEC-0300 — E2E-009: BMP photos through the reference app's page; request and source checks
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: E2E-009
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: E2E-009
 
 The photos are uncompressed 24-bit BMPs of at least 20 MB and 100 MB (decimal), generated on disk for the run and removed afterwards (one item per size the scenario names). Upload through `file-input` + `upload` until `upload-status` is `Uploaded.`; view: the item's `preview` reaches the photo's natural dimensions; download: the item's `download` link, observed through Playwright's `download` event, saved and compared by size and SHA-256. "Requests only to the app's API and through framework helpers": every page request is a ticket URL the app's ticket routes returned, a same-origin `/api/*` request outside `/api/__framework/`, or a same-origin GET loading the page or its client code; each photo went to storage by exactly one PUT to an upload-ticket URL, and `/api/files/content` was never called. "No storage or CORS settings": the reference app's code and configuration files (excluding tests, generated migrations and the version overlays) contain none of the storage/CORS vocabulary.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T3.
 
 ### DEC-0301 — No missing reference routes
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: C-01 `apps/reference/ROUTES.md`
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: C-01 `apps/reference/ROUTES.md`
 
 Every route these tests use is in ROUTES.md (`/files/*`, `/levels/*`, `/ref/me`, the framework's `/api/auth/*`). Not needed but would help: a way to issue a short-lived ticket on test stages (DEC-0292).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T3.
 
 ### DEC-0302 — Target-specific parts are defined only on their targets
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: E2E-007, E2E-011, E2E-014, COMPL-REQ-001
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: E2E-007, E2E-011, E2E-014, COMPL-REQ-001
 
 Where a scenario states different steps per target (E2E-007 local in-process part; E2E-011 local failing-writer part; E2E-014 cloud scan part and local rebuild part), the test for one target's part is defined only when `target()` is that target (`if (target().target === "local") test(...)`), not skipped elsewhere: the driver turns each skipped tagged test into a `not-run` entry, which would misstate a part that does not apply. Shared parts (E2E-011's entry lookup, E2E-014's committed-values check) run on every target and branch only on where the target stores its entries.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T4.
 
 ### DEC-0303 — E2E-001: offline namespace after scaffolding; capabilities through the template's pages
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: E2E-001, LOCAL-AC-001
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: E2E-001, LOCAL-AC-001
 
 Scaffolding (`skill/scripts/scaffold`) needs the npm registry for the template's other pinned dependencies (DEC-0276), so it runs with cloud credentials removed from the environment (`CLOUDFLARE_*`, `CF_*`, `AWS_*`, `GOOGLE_*`, `GCLOUD*`, `CLOUDSDK_*`, `AZURE_*`, `SST_*`) but with the proxy. Every later step runs under `unshare -rn sh scripts/offline.sh` (no network at all, stronger than "cloud providers blocked"), with the same credentials removed and `HOME` an empty directory; the test first shows `api.cloudflare.com` is unreachable there. Because the browser must reach `dev` inside the namespace, `support/template-pages.ts` (run by Node with type stripping) starts `dev` and Chromium inside it and prints one result line. "Imports every public subpath" = every key of the installed package's `exports` map imports in Node and type-checks (`tsc --strict --skipLibCheck`, Bundler resolution). "Each capability through the template's pages": CFG (heading shows `greeting` set in `config/local.json`), AUTH (Log in / Log out; admin via mock-login), SQL (Notes), KV (Status, kept after reload), FILES (upload, list, download same bytes), SEC (Admin "Check secret" after `secrets set apiKey`), LOG (the note's entry in `.logs/`). Selectors are the template pages' visible texts (the template has no test IDs). The scaffolded app lives in the OS temp directory and is removed afterwards.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T4.
 
 ### DEC-0304 — E2E-003: violations, expected rules and references
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: E2E-003, CHECK-REQ-003
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: E2E-003, CHECK-REQ-003
 
 E2E-001 and E2E-003 share one scaffolded app (one spec file, serial). Each violation is one new file under `src/server/` (or the edited `migrations/sqlite/0000_schema.sql`), restored after its `verify` (run offline). Pass per violation: `verify` exits non-zero and a diagnostic line names the file, the rule ID and `(read skill/reference/<file>.md` per check.md §2 "Diagnostics" and DEC-0181: AWS SDK import and `node:fs` → `prototype-framework/allowed-imports` + `http-and-validation.md`; `c.env.DB` → `no-env-access` + `configuration.md`; raw `sql` → `no-raw-sql`, `rightJoin` → `no-dialect-features`, edited migration → `migration-checksums`, all + `sql-and-migrations.md`; `any` → `@typescript-eslint/no-explicit-any` + `troubleshooting.md`. `caches.default` may instead fail type checking (a TS error line naming the file). "A SQLite-only function" has no Drizzle helper, so it is `strftime` through Drizzle's `sql` template; either `no-dialect-features` or `no-raw-sql` counts. The test fails while the skill reference files do not exist only if `verify` stops printing them; their existence is CHECK-AC-003's (E-01).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T4.
 
 ### DEC-0305 — E2E-004: in-run coverage part; the pass part is read from the run's own record
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: E2E-004, COMPL-REQ-006
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: E2E-004, COMPL-REQ-006
 
 E2E-004's pass condition is a property of a whole run's evidence record, which is written after every test finishes, so no test of that run can observe it (running the suite recursively would double cloud usage). The tests check what a run can: (a) coverage — every criterion the driver expects to run on this target and tier (`expectedCriteria`) has at least one tagged test in the files this target's run executes (`tests/compliance/**`, plus `packages/framework/test/integration/**` locally; driver.ts limits cloud runs to `tests/compliance/`); (b) the evidence writer's schema matches the contract's required fields and properties and rejects invalid records. Titles say "coverage part" / "record part". The evaluator judges E2E-004 itself from that run's record (every other applicable result `passed`, record schema-valid). Expected to fail until every component's tests exist (SKILL, DEMO criteria in phases E/F; other C-T* items until merged).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T4.
 
 ### DEC-0306 — E2E-005: browser fetches from the app page; exposure detectors
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: E2E-005
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: E2E-005
 
 The browser logs in via `/api/auth/mock-login` and calls ROUTES.md's protected routes with `fetch` from the app's own page (`/`), so cookies and `Origin` are the browser's. Permitted actions per level: `/levels/anyone` all; `/levels/user` (GET, POST), `/levels/current`, `/kv/value`, `/files/head` user and admin; `/levels/admin` (GET, POST) admin only; refusals 401 `AUTH.UNAUTHENTICATED` (anonymous) / 403 `AUTH.FORBIDDEN` (user). Every `/api` response's body and headers (except `Set-Cookie`, which carries the framework's own session) is checked for the words google, oidc, oauth, openid, issuer, iss, email, id token, access token, refresh token, jwt (camel/snake case split, case-insensitive), email addresses and JWT-shaped strings. "App-facing types" = the shipped declaration files of `.`, `./client`, `./testing` (CORE-REQ-005's app-importable subpaths) and every declaration file they import; identifiers and string literals are checked with the same detector, comments are not (they are documentation, not types).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T4.
 
 ### DEC-0307 — E2E-013/E2E-014 secret checks without printing values
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: E2E-013, E2E-014, SEC-REQ-002, CLI-REQ-004
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: E2E-013, E2E-014, SEC-REQ-002, CLI-REQ-004
 
 E2E-013 finds the secret `apiKey` in responses through its digest (`GET /api/ref/secret` → SHA-256; every substring of each short response text is hashed), so it needs no copy of the value and runs on every target; locally it also checks every `.dev.vars` value (≥ 8 characters). E2E-014 sets a fresh value with `secrets set apiKey` (standard input) — on a cloud on the run's stage, then deploys that stage again; locally in a copy of the reference app under the git-ignored `.framework/e2e/` (the tree stays clean). Scans: repository = `git ls-files` plus untracked non-ignored files; build outputs = the app's `.framework/` (LOCAL §2 "Build output"); browser assets = everything reachable from `/` (same origin, outside `/api`, ≤ 300 files); logs = `.logs/` locally, the stage's entries of the day in the shared bucket on a cloud. `.wrangler/` (local runtime state) and `.dev.vars` (the local secret store itself) are not scanned. Assertion messages name where a value was found, never the value. Local "rebuild" = restarting `dev`, which builds (DEC-0215); the served value is checked unchanged for 10 s after the edit.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T4.
 
 ### DEC-0308 — E2E-010 and E2E-012 stage handling
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: E2E-010, E2E-012, D-RUN-M
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: E2E-010, E2E-012, D-RUN-M
 
 Each scenario creates its own `test-<random>` stages (`newTestStage()`) and removes them in `finally`; each deploy runs from its own copy of the app under `.framework/e2e/` so concurrent deploys never share a build directory. The first Cloudflare deploy of a stage stops when `apiKey` is unset (provisioning.md "First Cloudflare deploy"); the helper then sets a fresh value and deploys again. E2E-010: v2 = the `versions/v2/` overlay; "applies nothing" = the stage keeps the same single database (a schema-changing deploy copies to a new one, MIG-REQ-006) and the dump is unchanged; "no downtime" = every probe of `/api/ref/schema-version` (no database rows) during the second v2 deploy answers 200, one per second. E2E-012: the kept stage holds the migration fixture plus its own KV value and file; the removed stage its own KV value and file and one log entry, which must remain after removal. Data per scenario: tens of rows (fixture 3 + 5 rows, 2–3 files, 1–2 KV keys), within the plan's cloud usage limits.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T4.
 
 ### DEC-0309 — E2E-016 scan details
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: E2E-016
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: E2E-016
 
 Scanned: `docs/contracts/ts/**/*.ts` except `internal/`, and `docs/contracts/http/framework.openapi.yaml`. TypeScript files are tokenised with the TypeScript scanner (identifiers, string and template literals, comments); the YAML file line by line. Case-sensitive whole-word matching; in identifiers a word boundary is also a camel-case boundary (`getS3Client`, `OAuthToken`), a lower-case term also matches its capitalised camel-case form (`tokenIssuer`), and multi-word terms also match their identifier spellings (`idToken`, `IDToken`, `access_token`). A test checks `terms.txt` equals the scenario's list, and positive/negative controls check the scanner. The scan test also runs in a local milestone run, where the driver records E2E-016's "review" part from it; the review itself is F-04's `validation/reviews/E2E-016.md` (the evaluator must not read the scan as the review).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T4.
 
 ### DEC-0310 — In-process reference app from Playwright
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: E2E-007, E2E-011
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: E2E-007, E2E-011
 
 The in-process parts import `apps/reference/src/app.ts` at run time (its `app` export, DEC-0214) and call `createTestApp` with the working directory set to `apps/reference` (restored afterwards), so the committed migrations apply. E2E-007's "copy the user ID from the account page" reads `/api/auth/me`, the account page's data (framework.openapi.yaml); "redeploy" is a second `createTestApp` with `framework.admins` (testing.d.ts: each call is one build).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T4.
 
 ### DEC-0311 — CLI-AC-002's Postgres-only fixture is `.limit(10).offset(-1)` (corrects DEC-0239)
@@ -2433,10 +2434,10 @@ DEC-0213's test requires the deep-link response to be byte-identical to `GET /`.
 Item: C-INT (correction).
 
 ### DEC-0313 — Downloads are saved under the file's name
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open; implemented by D-02, see DEC-0329); raster-`inline` part superseded by DEC-0414 · Affects: FILES-REQ-003, files.md §2 (Local, Cloudflare), `packages/framework/src/files/local/route.ts`, D-02
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25; implemented by D-02, see DEC-0329); raster-`inline` part superseded by DEC-0414 · Affects: FILES-REQ-003, files.md §2 (Local, Cloudflare), `packages/framework/src/files/local/route.ts`, D-02
 
 Observed in phase C: a local download is saved under the ticket token (the last segment of the ticket URL), because the local route sends a bare `Content-Disposition: attachment`. files.md does not say what name a download gets. The simplest reasonable behaviour is chosen. A storage response to a download ticket names the file with `filename*=UTF-8''<percent-encoded file name>` (RFC 6266/8187) in its `Content-Disposition`. That is `attachment; filename*=…` for every content type except raster images, which stay `inline; filename*=…` as they are now. The whole file name is used and nothing is interpreted as a path (FILES-REQ-002); browsers replace `/` and other unsafe characters when they save the file. There is no app-facing change and no new option. Locally the `/api/__framework/files/*` route adds the parameter. On Cloudflare the download ticket signs R2's `response-content-disposition` query parameter with the same value (the S3 GetObject override). D-02's tests confirm that R2 honours it on a presigned GET. If it does not, Cloudflare keeps the default name and this entry is revised. C-INT changes no code. The local change is a small follow-up to the FILES local route (B-11's paths), and the Cloudflare part belongs to D-02 (plan §5 "From phase C"). The implementing item updates files.md.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-INT.
 
 ### DEC-0314 — LOG-AC-004 "written outside a request": the design has no such writer; the clause stays blocked pending the owner
@@ -2465,7 +2466,7 @@ Phase A spikes wrote about 1.22 million D1 rows on 2026-10-19 against the free p
 Item: C-INT (recording an owner direction).
 
 ### DEC-0318 — Phase D cloud runs hold at most two D1 databases at once
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open); two-database cap superseded by DEC-0419; the stage guards applied to every further stage by DEC-0424 · Affects: plan §1 "Cloud usage limits", §5 D-RUN and D-RUN-M, DEC-0263, DEC-0268, DEC-0278, DEC-0286, DEC-0308, MIG-AC-002, MIG-AC-003, MIG-AC-006, E2E-010, E2E-012, PAR-219
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25); two-database cap superseded by DEC-0419; the stage guards applied to every further stage by DEC-0424 · Affects: plan §1 "Cloud usage limits", §5 D-RUN and D-RUN-M, DEC-0263, DEC-0268, DEC-0278, DEC-0286, DEC-0308, MIG-AC-002, MIG-AC-003, MIG-AC-006, E2E-010, E2E-012, PAR-219
 
 C-T2's estimate per Cloudflare run is about 350 base rows written, up to about 700 with index entries, under 2,000 rows read, and about 100–150 API requests from the MIG tests, plus those of 2 stages × 3–4 deploys and removals. That is within the caps. The databases are the problem. A run stage holds one D1 database. A stage's first deploy migrates in place (DEC-0268), and so does a redeploy without pending migrations, so each holds one database. A schema-changing deploy copies (MIG-REQ-006) and holds two. The MIG file (DEC-0286), E2E-010 (v1 → v2 on its own stage) and E2E-012 (a kept and a removed stage) therefore reach three databases alongside the run stage, which breaks the plan §1 cap of two. Rule: D-RUN and D-RUN-M run in passes, each holding at most two databases.
 1. **Main pass:** `npm run compliance -- --target cloudflare --only <every expected ID except MIG-AC-002, MIG-AC-003, MIG-AC-006>`. It uses the run stage plus at most one further stage at a time (DEC-0278's lock; further stages deploy the committed schema, so one database each).
@@ -2479,7 +2480,7 @@ Item: C-INT.
 Entries DEC-0319 to DEC-0391 were integrated by the C/D/E integrator from the drafts of items fix-c3, C-T5, D-01…D-06, D-T1/D-T2, E-01…E-03, E-T1 and fix-e1 (plan §10.4), and DEC-0391 from the C-EV evaluation. No Cloudflare call was made by any of these items: everything cloud-side is verified offline against fakes and is confirmed live by D-RUN once the D1 stop (DEC-0317) ends. No parameter changed.
 
 ### DEC-0319 — The driver also runs the unit layer on local, for an explicit list of unit-level criteria only
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: COMPL-REQ-003, COMPL-REQ-006, COMPL-AC-002, COMPL-AC-006, COMPL-AC-007, GOOGLE-AC-002, PROV-AC-007, CLI-AC-003, plan §10.1, §10.3, compliance.md "Driver", DEC-0261 (supersedes its first bullet's "each runs once" for the local unit layer)
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: COMPL-REQ-003, COMPL-REQ-006, COMPL-AC-002, COMPL-AC-006, COMPL-AC-007, GOOGLE-AC-002, PROV-AC-007, CLI-AC-003, plan §10.1, §10.3, compliance.md "Driver", DEC-0261 (supersedes its first bullet's "each runs once" for the local unit layer)
 
 Plan §10.3 says unit tests count as evidence only for unit-level criteria, and C-EV / COMPL-REQ-006 read "works" only from evidence records. Before this decision the driver ran only `vitest.integration.config.ts` and the Playwright `integration`/`e2e` projects, so no record could ever show a unit-level criterion `passed` (root cause, cause B).
 
@@ -2507,31 +2508,31 @@ Not on the list:
 `selection.unit.test.ts` checks that every listed ID is a Local criterion of the catalogue.
 
 Wording change, compliance.md "Driver": "runs each test runner once" → "runs each selected test layer once (on local also the unit layer, for the unit-level criteria only)". Plan §10.1 `npm run compliance` line likewise.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: fix-c3 (root cause 2026-10-20-E2E-004-coverage-and-not-run, cause B).
 
 ### DEC-0320 — E2E-004's coverage part lists the driver's exact selection through the runners
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: E2E-004, DEC-0305, DEC-0265
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: E2E-004, DEC-0305, DEC-0265
 
 DEC-0305's coverage part ("has at least one tagged test in the files this target's run executes") was implemented as a regex scan of `*.test|spec.ts` sources, which cannot see titles built at run time (the KV and SQL shared case sets tag through `t(id, …)` / `tag(id, …)` in helper modules), so IDs the same run recorded `passed` were reported uncovered (root cause, cause A).
 
 Rule: the coverage part lists, without running a test body, exactly the invocations of `runnerSelection` for the target (`tests/compliance/tools/listing.ts` `listDriverTests`: a Vitest run whose name filter matches nothing, per config; `playwright test --list` over the driver's projects and paths), scopes each listed test to the IDs it may evidence (`scopeTests`; unit-layer tests only for unit-level IDs), and reports the expected IDs no listed test carries (`uncovered`, `selection.ts`). No source scan supplements it, so the check cannot count a tag the driver would not run. Listing problems (load errors, non-zero exits) are appended to the failure message. The listing writes its Playwright JSON to its own file, never the run's `PLAYWRIGHT_JSON_OUTPUT_NAME`. The traceability report uses the same listing executor (`listSelection`) with every layer and keeps its source scan as a supplement (DEC-0265). DEC-0305's wording becomes "has at least one tagged test that the run's runners collect with the driver's selection".
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: fix-c3 (root cause 2026-10-20-E2E-004-coverage-and-not-run, cause A).
 
 ### DEC-0321 — COMPL-AC-001 and COMPL-AC-003 are compliance-level, evidenced by nested real runs of the command in a clone
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: COMPL-AC-001, COMPL-AC-003, DEC-0319, `tests/compliance/criteria/compl/`
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: COMPL-AC-001, COMPL-AC-003, DEC-0319, `tests/compliance/criteria/compl/`
 
 Both criteria are stated over runs of the one command, so they are not unit-level and stay off `UNIT_LEVEL`. Their tests (`tests/compliance/criteria/compl/{targets,evidence}.test.ts`, integration layer, selected by the driver like every other criterion) run the real `npm run compliance -- …` as a child process:
 - in a throwaway `git clone --shared` of HEAD with the installed `node_modules` linked in (untracked, excluded), so a test can commit a deliberate case or modify a tracked file without touching the working tree the enclosing run records from;
 - with `--out <temp dir>`, no `COMPLIANCE_*`/`CLOUDFLARE_*`/`AWS_*` variables, and a dead proxy, so a nested run can make no cloud call;
 - never recursing into the real suites: a nested run either blocks every ID (`--blocked '*=…'`, so it lists and records without starting `dev`, deploying or running a test) or uses `--self-test` (only `harness/self-test/`).
 Each record a nested run writes is checked against `docs/contracts/schemas/evidence.schema.json` by a small checker in the test support (independent of the writer's own validator).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T5.
 
 ### DEC-0322 — How each clause is read
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: COMPL-AC-001, COMPL-AC-003
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: COMPL-AC-001, COMPL-AC-003
 
 COMPL-AC-001:
 - "One command runs the suite against each target": the same command with `--target local|cloudflare|aws` writes a record for that target and commit. "Per-target lists of executed criteria and scenarios" = the IDs in that record's results; a blocked-everything run lists what the run would execute, and that a full run executes exactly that list is shown by the enclosing run's own record and E2E-004's coverage part. The test does not execute a cloud run (prohibited here; also the enclosing cloud run is that evidence).
@@ -2545,14 +2546,14 @@ COMPL-AC-003:
 - "Started from a working tree with a modified tracked file": `docs/README.md` modified in the clone → non-zero exit and no file at all under `--out`, both for `--self-test` and for a list-only local run; control: after reverting, the same clone records.
 - Where "cloud": the clauses are properties of the driver and writer, which are target-independent; on a cloud run these tests run the same local nested runs (a nested cloud run would deploy). The cloud HTTP-failure path uses the same `HttpCheckError` message. Open for the owner if a cloud-specific check is wanted.
 
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C-T5.
 
 ### DEC-0323 — Cloudflare log writer: `LOGS` binding, per-request sink, fallback without the binding
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: LOG-REQ-001, LOG-REQ-004, LOG-AC-001, LOG-AC-002, LOG-AC-004, LOG-AC-005, DEC-0128, DEC-0189, DEC-0314, cloudflare.md §2 "Runtime", log.md §2 "Cloudflare", D-03, D-T2
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: LOG-REQ-001, LOG-REQ-004, LOG-AC-001, LOG-AC-002, LOG-AC-004, LOG-AC-005, DEC-0128, DEC-0189, DEC-0314, cloudflare.md §2 "Runtime", log.md §2 "Cloudflare", D-03, D-T2
 
 The shared log bucket `prototype-logs` is bound to the stage Worker as the R2 binding `LOGS` (`BINDINGS.logs`). `r2LogSink` (`src/log/cloudflare/sink.ts`) writes each entry as one object: the body is the entry's JSON, `httpMetadata.contentType` is `application/json`, and the key comes from `logObjectKey` (`src/log/cloudflare/keys.ts`): `<app>/<stage>/<yyyy>/<mm>/<dd>/<hhmmss.sss>-<severity>-<id>.json` from the entry's UTC time, with `<id>` the request ID or, when there is none, `crypto.randomUUID()` (the only evidence for LOG-REQ-004's random-value rule is `keys.unit.test.ts`, DEC-0314). The write promise has its rejection swallowed and is handed to the request's `ctx.waitUntil`; the sink returns nothing, so the writer never waits (DEC-0128). A synchronous throw from the binding or from `waitUntil` is dropped. The sink needs the request's env and execution context, so `StageOptions` gained an optional `requestSink(c)` that replaces the static `sink` per request (the local runtime and `createTestApp` are unchanged). Without a `LOGS` binding (a misconfigured Worker), entries are printed as the local marked lines (`workerOutputSink` format) rather than failing anything, since LOG-REQ-001 forbids a log write from failing the caller and the lines still show in the Worker's logs. This replaces B-16's interim stub (DEC-0189). Verified offline: unit tests with fake buckets; the runtime against Wrangler's local R2 (`getPlatformProxy`); a real `build --target cloudflare --stage test-x` bundle under local workerd writing to `LOGS`.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: D-01.
 
 ### DEC-0324 — Provisioning-derived identifiers reach the Cloudflare runtime as bindings; one framework variable
@@ -2588,10 +2589,10 @@ Taken under the owner's instruction "Do not stop and ask me questions. Make an a
 Item: D-02.
 
 ### DEC-0329 — Download names on Cloudflare, and the content type the issuer needs
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open); content-type part superseded by DEC-0414 · Affects: DEC-0313, files.md §2 "Download names", `src/files/service.ts` (B-11's), D-RUN
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25); content-type part superseded by DEC-0414 · Affects: DEC-0313, files.md §2 "Download names", `src/files/service.ts` (B-11's), D-RUN
 
 DEC-0313 is implemented with one helper, `downloadDisposition(name, contentType)` in `src/files/cloudflare/disposition.ts`. The local route imports it: a shared FILES module would be the natural home, but D-02 does not own one. The helper builds `attachment|inline; filename*=UTF-8''<RFC 8187 value-chars>` and percent-encodes `'`, `(`, `)`, `*` and `/` too. The Cloudflare download ticket signs it as `response-content-disposition`. aws4fetch serialises the query in form encoding, so the space after `;` is sent as `+`. Assumed (S3 behaviour): R2 decodes `+` as a space when it checks the signature. D-RUN confirms R2 honours the override and accepts the signature with one presigned GET. If it does not, DEC-0313 says Cloudflare keeps the default name and the entry is revised. Choosing `inline` for raster images needs the file's content type. `TicketIssuer.download(name)` does not pass it, so the Cloudflare issuer takes an optional second argument and defaults to `attachment`. `<img src>` ignores `Content-Disposition`, so images still display. Needed elsewhere: in `src/files/service.ts` `createDownloadTicket`, pass the `head` result's content type: `options.tickets.download(name, infoOf(head).contentType)`, and widen `TicketIssuer.download` to `(name, contentType?)`. Until then, Cloudflare names raster images `attachment`.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: D-02.
 
 ### DEC-0330 — Storage CORS preflight for deploy's health step; CORS policy helper
@@ -2601,11 +2602,11 @@ Origin: ai-proposed · Status: accepted · Affects: provisioning.md step 7, DEC-
 Item: D-02.
 
 ### DEC-0331 — Cloudflare stage resources have fixed names
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: PROV §2 "Stage resources", CF-REQ-002, PROV-AC-003, PROV-AC-006, DEC-0263, `provision/cloudflare/names.ts`
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25); the per-stage signing token's name amended by DEC-0550 (a legacy name only) · Affects: PROV §2 "Stage resources", CF-REQ-002, PROV-AC-003, PROV-AC-006, DEC-0263, `provision/cloudflare/names.ts`
 
 On Cloudflare the stage's Worker script is `<app>-<stage>`, its R2 bucket `<app>-<stage>-files`, and its R2 signing token `<app>-<stage>-files-signing`. These are not generated names. PROV §2 says physical names are "whatever the provisioning tool generates (with a unique suffix where the namespace is global)". Workers scripts, R2 buckets and account API tokens are named per account, not globally, and app names have no hyphens (PAR-290), so the fixed names are unique. With PAR-290 and PAR-291 every name fits the 63-character limits. Reason: every operation (stop, start, secrets, removal, the leftover check) finds the stage's resources from the stage name alone, with no SST outputs or local state. That includes a deploy from a clean machine (PROV-AC-006). They are still referenced only by exact name, never by a wildcard. `remove` and the leftover check match SST state objects as `<kind>/<app>/<stage>` exactly, or below it, so `test-a` never matches `test-ab`.
 **Change needed elsewhere:** provisioning.md §2 "Stage resources" should say that on Cloudflare the names are fixed as above. cloudflare.md "Deploy mechanics" should name them. Neither doc is owned by D-03.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: D-03.
 
 ### DEC-0332 — The real `CloudflareApi` sends `CLOUDFLARE_API_TOKEN` as a bearer token
@@ -2615,11 +2616,12 @@ Origin: ai-proposed · Status: accepted · Affects: DEC-0083, DEC-0107, DEC-0271
 Item: D-03.
 
 ### DEC-0333 — The `workers.dev` subdomain is a shared account resource, read from Cloudflare on every deploy
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: PROV-REQ-004, PROV §2 "State home" ("account settings live with the shared resources"), cloudflare.md §2, DEC-0086, `provision/cloudflare/account.ts`
+Origin: ai-proposed · Status: accepted (resolved by the owner, 2026-10-25: the subdomain was renamed to a neutral name); the registered name amended by DEC-0552 (`pf-<random>`, never derived from the account ID) · Affects: PROV-REQ-004, PROV §2 "State home" ("account settings live with the shared resources"), cloudflare.md §2, DEC-0086, `provision/cloudflare/account.ts`
 
 `inspectAccount` reports three shared resources: `R2 bucket prototype-logs`, `R2 bucket sst-state` (SST's state home, DEC-0084; same 404/403/409 readings as the log bucket, DEC-0270), and `workers.dev subdomain`. The subdomain is `owned` when `GET /accounts/{id}/workers/subdomain` returns a non-empty `result.subdomain`. It is `absent` on HTTP 404 or an empty value. It is never `foreign`, because it is a setting of the account itself, and any other answer is an error. Cloudflare holds the subdomain, so "recording" it means it is read again on every deploy (`accountSubdomain`) and never stored on the owner's machine. When it is absent, `setup-account` registers `pf-<first 12 characters of the account ID>` with `PUT /accounts/{id}/workers/subdomain {"subdomain": …}`. If that fails, the error names the subdomain and asks the owner to register one in the dashboard and run `setup-account` again. The name is deterministic, so a repeat run tries the same name. It is the simplest name that contains nothing personal. On this account the subdomain already exists (DEC-0086), so registration runs only in unit tests.
 **Change needed elsewhere:** cloudflare.md §2 could say which name is registered (D-01 owns that doc in this wave).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue".
+**Resolved (owner, 2026-10-25).** The owner renamed the account's subdomain to a neutral name. The framework must never register a subdomain derived from personal data; it registers `pf-<random>` (DEC-0552), which replaces the account-ID-derived name above.
 Item: D-03.
 
 ### DEC-0334 — Readings not yet verified against the live API: D-RUN verifies them first
@@ -2645,11 +2647,11 @@ D-03's own code writes and reads no D1 rows and creates no D1 databases; databas
 Item: D-03.
 
 ### DEC-0335 — Preflight checks the token permission by reads only
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open); open question closed by DEC-0420 and DEC-0428 (no proxy injection; the restricted-credential clause runs when the operator supplies the token) · Affects: PROV-REQ-002 step 1, PROV-AC-002, `provision/cloudflare/r2-token.ts`, D-T1
+Origin: ai-proposed · Status: superseded by DEC-0550 (deploy needs no token permission, so the preflight no longer checks it) (was: accepted (accepted under the owner's instruction of 2026-10-25)); open question closed by DEC-0420 and DEC-0428 (no proxy injection; the restricted-credential clause runs when the operator supplies the token) · Affects: PROV-REQ-002 step 1, PROV-AC-002, `provision/cloudflare/r2-token.ts`, D-T1
 
 Cloudflare has no request that answers "may this credential create a token?" without creating one, and step 1 must create nothing. The preflight therefore reads `GET /accounts/$ID/tokens/permission_groups` and `GET /accounts/$ID/tokens?per_page=50&page=1`, the two reads that token creation itself needs. If either is refused, it reports "the Cloudflare API token lacks the permission to create R2 API tokens (Account API Tokens: Edit): HTTP …". Before that, it checks the credential variables by name (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) and the token with `GET /accounts/$ID/tokens/verify`. A token that can read tokens but not edit them passes the preflight, and step 5's token creation then fails, naming the token. That is accepted as the simplest available check.
 **Open question (owner / D-T1):** in the sandbox the proxy replaces every `Authorization` header to `api.cloudflare.com` with the injected token, so a deploy cannot use a restricted credential. If so, PROV-AC-002's "credential that lacks the permission to create R2 API tokens" clause cannot be run live from this sandbox, and its unit test (`r2-token.unit.test.ts`, `target.unit.test.ts`) is the only evidence.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: D-03.
 
 ### DEC-0336 — The SST app generated for a Cloudflare stage
@@ -2873,23 +2875,23 @@ The leftover-check note above was done by D-06 (DEC-0357). Edits outside D-05's 
 Item: D-05.
 
 ### DEC-0356 — Static assets of the generated SST Worker come from D-01's settings
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open; unverified live, DEC-0334 item 6) · Affects: CF-REQ-001, CF-AC-001, cloudflare.md §2, DEC-0325, DEC-0336 (closes its "Static-asset settings" open item), `provision/cloudflare/sst.ts`
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25; unverified live, DEC-0334 item 6) · Affects: CF-REQ-001, CF-AC-001, cloudflare.md §2, DEC-0325, DEC-0336 (closes its "Static-asset settings" open item), `provision/cloudflare/sst.ts`
 
 When the built code has an assets directory, `sstProgram` builds `cloudflareWorkerSettings` (D-01) from the stage's inputs (Worker name, bundle, assets directory, public origin, database, files bucket) and passes its `assets` to `sst.cloudflare.Worker` as `assets: { directory, notFoundHandling: "single-page-application", runWorkerFirst: ["/api", "/api/*"] }`. Without an assets directory (an app with no `index.html`, DEC-0351) there is no `assets` and the Worker answers every path, as before. Building the settings also applies D-01's checks (an `https` public origin without a path; no `SECRET_*` names).
 
 Evidence for the shape (no Cloudflare call): the platform source embedded in the pinned SST binary (`sst-linux-x64` 4.17.2) declares `WorkerArgs.assets?: { directory; htmlHandling?; notFoundHandling?: "404-page" | "single-page-application" | "none"; runWorkerFirst?: boolean | string[] }` and maps it onto the Pulumi `WorkersScript` as `assets: { directory, config: { headers, redirects, htmlHandling, notFoundHandling, runWorkerFirst } }`, adding an `assets` binding named `ASSETS`. So no transform (`args.assets.config`) is needed. The option is marked `@internal` in SST's docs; if a later SST drops it, the fallback is DEC-0336's (set `assets` in the Worker transform, or raw Pulumi). D-RUN's first deploy and CF-AC-001 confirm the behaviour on a test stage.
 Unit test: `sst.unit.test.ts` "serves the built client as static assets with D-01's settings …" (red: the program had `{ directory }` only).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: D-06.
 
 ### DEC-0357 — The driver's leftover check uses the framework's own `listStageResources`
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: COMPL-REQ-004, COMPL-AC-004, PROV-AC-003, compliance.md "Test stages", DEC-0341, DEC-0355 (its "change needed elsewhere" note), `tests/compliance/harness/node-deps.ts`
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: COMPL-REQ-004, COMPL-AC-004, PROV-AC-003, compliance.md "Test stages", DEC-0341, DEC-0355 (its "change needed elsewhere" note), `tests/compliance/harness/node-deps.ts`
 
 compliance.md "Test stages" says the leftover check uses `listStageResources` (PROV §2 per-target operations), so the driver uses the framework's Cloudflare operations, built exactly as `remove` builds them (`cloudflareOperations({ env, requireCredentials: true })` from `cli/commands/deploy.ts`, app directory `apps/reference`). D-T2's `_cloud/stage-resources.ts` hook is not used here: it is the *independent* probe the CF/PROV/E2E tests use to check the framework's removal, and the driver's check is defined in terms of the framework's operation. `stageLeftovers` (unchanged) keeps the exact-pattern databases and the `<kind> <id>` resources.
 
 The check runs inside the driver's process, and Node's `fetch` uses the proxy only when the process was started with `NODE_USE_ENV_PROXY=1` (DEC-0085). So `stageResourceOperations` rejects before any request, naming the variable (D-05's `cloudProcessProblems`), when `HTTPS_PROXY` is set without it, and names missing credential variables; the driver then records "leftover check failed" rather than "no leftovers" (DEC-0263). Consequence for D-RUN: start the driver as `NODE_USE_ENV_PROXY=1 npm run compliance -- --target cloudflare …` (with the placeholder `CLOUDFLARE_API_TOKEN`, DEC-0083). Cost: about 5 API requests per check (Worker settings, bucket, tokens list, `sst-state` object list, D1 list); no D1 rows.
 Unit tests: `node-deps.unit.test.ts` "the driver's Cloudflare leftover check …" against D-03's in-memory account (`FakeCloud`) through a fake `fetch` (red: `stageResourceOperations` did not exist).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: D-06.
 
 ### DEC-0358 — Playwright test paths come before `--project`
@@ -2899,17 +2901,17 @@ In Playwright 1.64.1 `--project` is variadic, so the cloud form `playwright test
 Item: D-06.
 
 ### DEC-0359 — Cloud test hooks: Cloudflare API without credentials, R2 reads through a short-lived read-only token
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: D-T2, DEC-0279, LOG-AC-004, SEC-AC-005, PROV-AC-002, E2E-011, E2E-012
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: D-T2, DEC-0279, LOG-AC-004, SEC-AC-005, PROV-AC-002, E2E-011, E2E-012
 
 `_cloud/index.ts` exports `cloudHooks(target)` with C-T1's `CloudHooks` interface (`core/support/stores.ts`). `_cloud/logs.ts` exports `listLogEntries`, and `_cloud/stage-resources.ts` exports `listStageResources`, both with DEC-0279's signatures.
 - **Secrets.** The stage's Worker script is found by name (DEC-0360). `GET` and `DELETE /accounts/{a}/workers/scripts/{script}/secrets[/SECRET_<NAME>]` read and delete its secrets. That makes the store a test hook outside the framework.
 - **Logs and state home.** One account API token per test process gets only "Workers R2 Storage Bucket Item Read" on `prototype-logs` and `sst-state` (DEC-0100's mechanism). It expires after 30 min and is deleted on `beforeExit`. Before creating one, the hook deletes its own expired or older-than-1-h tokens (`compliance-r2read-*`). Listing and reading go through R2's S3 endpoint with a SigV4 signer of its own: no undeclared dependency, and it was checked offline against aws4fetch. So polling a log key costs no Cloudflare API requests, which the 500-per-item cap needs. Bucket existence uses `GET /accounts/{a}/r2/buckets/{name}` (404 means absent).
 - **Credentials.** No `Authorization` header is sent while a proxy is configured (plan §10.6). Without a proxy, `CLOUDFLARE_API_TOKEN` is sent as a bearer token and never printed. Every API request is counted per process and the count is printed on exit, so runs are countable.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: D-T.
 
 ### DEC-0360 — The stage-resource probe matches by name and includes the state home
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: D-T2, CF-AC-002, PROV-AC-003, COMPL-AC-004, E2E-012
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: D-T2, CF-AC-002, PROV-AC-003, COMPL-AC-004, E2E-012
 
 Physical names are what SST generates (PROV §2), so the probe treats a resource as the stage's when its name contains both the app name and the stage name as delimited parts. This covers the Worker, the R2 bucket, the R2 API token, and the objects in `sst-state`. A run's stage carries 15 random characters, so no other stage can match.
 - Databases use PROV-REQ-002's exact pattern.
@@ -2918,7 +2920,7 @@ Physical names are what SST generates (PROV §2), so the probe treats a resource
 - Output strings are `database <name>`, `Worker <name>`, `R2 bucket <name>`, `R2 API token <id>` and `state object sst-state/<key>`.
 
 If D-03 names the Worker, bucket or token without the stage name, the probe finds nothing and the tests that expect one resource per kind fail. A follow-up would then match on D-03's recorded identifiers.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Integrator note: D-03 gives the Worker, bucket and token fixed names that contain both the app and the stage name (DEC-0331), so the probe's name match finds them.
 Item: D-T.
 
@@ -2937,7 +2939,7 @@ D-T1's per-test estimates (unmeasured basis; D-RUN replaces them with before/aft
 Item: D-T.
 
 ### DEC-0362 — Readings of CF-AC-001, CF-AC-002, PROV-AC-001
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CF-AC-001, CF-AC-002, PROV-AC-001
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CF-AC-001, CF-AC-002, PROV-AC-001
 
 - **CF-AC-001:**
   - `/` and a random deep link answer the same HTML entry page.
@@ -2956,23 +2958,23 @@ Origin: ai-proposed · Status: accepted (assumption under the owner's instructio
   - Every committed file of `apps/template` is the app definition, code, generated migrations, configuration values or standard package/tool metadata. No file is IaC, and no source or dependency names SST, Pulumi, wrangler, CDK or similar tools.
   - A scratch copy of exactly those files deploys and answers `/` and health 204.
   - The deploy leaves no new file outside the directories in the template's `.gitignore`.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: D-T.
 
 ### DEC-0363 — Readings of PROV-AC-002
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open); "blocked in this sandbox" amended by DEC-0428 (blocked only while the restricted token is not supplied) · Affects: PROV-AC-002, D-05
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25); "blocked in this sandbox" amended by DEC-0428 (blocked only while the restricted token is not supplied) · Affects: PROV-AC-002, D-05
 
 - **"One credential removed":** `CLOUDFLARE_API_TOKEN` is removed from the deploy's environment, on a stage never deployed before. The deploy must exit non-zero and name the variable. Afterwards the independent probe must find nothing of the stage.
 - **"Lacks the permission to create R2 API tokens":** the test needs an operator-supplied restricted token (`COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_R2_TOKEN_PERMISSION`) and a machine without the sandbox proxy. The proxy replaces every Authorization header (DEC-0083), so this clause is `blocked` in this sandbox.
 - **"Failing migration":** the fixture is loaded, then the `unique-fail` overlay is deployed. The output must name the migrate step, `0001_unique_label`, "previous version restarted" and a next action. Afterwards `schema-version` must be v1, the fixture dump unchanged, and one database left.
 - **"Secret removed by a test hook after the preflight":** the deploy prints no progress before step 7 is known, so the hook deletes `apiKey` at the first output that shows a later step, or 20 s into the deploy. If the deploy still stopped at the preflight, the secret is set again and the test retries once at 45 s. The output must then name the health step and `SEC.MISSING`.
 - A defective preflight could create a database despite a missing credential, so these stopped deploys also take the further-stage lock and check the database cap.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Integrator note: the restricted-credential clause is the same finding as DEC-0335's open question; the two are one owner item (plan §11 Q5). The clause is always `blocked` in this sandbox.
 Item: D-T.
 
 ### DEC-0364 — PROV-AC-004 and PROV-AC-006 (Cloudflare part)
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: PROV-AC-004, PROV-AC-006, plan §11 Q2
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: PROV-AC-004, PROV-AC-006, plan §11 Q2
 
 - **PROV-AC-004 idempotence:** after one `setup-account`, the test snapshots the account. The snapshot covers:
   - existence of the shared log bucket and the state home;
@@ -2984,11 +2986,11 @@ Origin: ai-proposed · Status: accepted (assumption under the owner's instructio
   The snapshot must be identical after a second run.
 - **PROV-AC-004 "deploying without it":** this needs an account where `setup-account` never ran. The test never deletes shared resources, so the clause runs only with `COMPLIANCE_CLOUDFLARE_FRESH_ACCOUNT=1` and an absent log bucket; otherwise it is `blocked`.
 - **PROV-AC-006 (Cloudflare part):** each "clean machine" is a fresh scratch copy (committed files only) with a fresh, empty HOME and XDG directories. Machine 1 deploys and writes a KV value. Machine 2 redeploys the same stage: it must succeed, keep the same single database and still see the value. Machine 3 removes the stage and nothing is left. The region part stays not-run ("AWS phase not started").
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: D-T.
 
 ### DEC-0365 — Readings of COMPL-AC-004 and COMPL-AC-008
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: COMPL-AC-004, COMPL-AC-008, D-05
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: COMPL-AC-004, COMPL-AC-008, D-05
 
 - **COMPL-AC-004, naming:** the expected form `test-[a-z0-9]{PAR-291 − 5}` is read from parameters.md. It is checked for:
   - the run's stage;
@@ -2998,7 +3000,7 @@ Origin: ai-proposed · Status: accepted (assumption under the owner's instructio
 - **COMPL-AC-004, token left behind:** the stage's R2 API token is then re-created under its exact name and policies. A second driver cleanup whose removal skips the token must list the new token's ID among the leftovers. The token is deleted afterwards.
 - **COMPL-AC-004, `prodcheck`:** a recording fake for the cloud operations shows that the driver never removes or checks `prodcheck`.
 - **COMPL-AC-008:** two stages, one per abort point, are deployed at v1. Each is then deployed at v2 with the abort point, which must exit non-zero. A re-run must exit 0 and leave one database, health 204 and `schema-version` v2. The abort point's CLI form is D-05's; the assumption is the environment variable `PROTOTYPE_FRAMEWORK_ABORT_AT=after-copy|after-code`. If D-05 chooses another form, one constant in `prov/deploy-recovery.test.ts` changes.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: D-T.
 
 ### DEC-0366 — Gaps left to other items
@@ -3012,22 +3014,22 @@ Integrator note (final): the first bullet is closed by DEC-0398 (D-07).
 Item: D-T.
 
 ### DEC-0367 — Examples are whole files copied unchanged from the template and the reference app
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SKILL-REQ-001, SKILL-REQ-004, SKILL-AC-001, SKILL-AC-004, DEC-0054, skill.md §2 "Implementation", `skill/examples/**`
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: SKILL-REQ-001, SKILL-REQ-004, SKILL-AC-001, SKILL-AC-004, DEC-0054, skill.md §2 "Implementation", `skill/examples/**`
 
 SKILL-REQ-004 needs every example to type-check and pass `verify` in CI and to come only from `apps/template` or `apps/reference`. Code kept in a second copy that CI does not compile would drift, and fragments do not compile. So each example is a Markdown file (`skill/examples/<topic>.md`, eight files, 2.5–10 KB each, within PAR-072) holding whole files copied byte for byte from those two apps. Each copy is a fenced block directly preceded by `<!-- example-source: <repo path> -->`. The code is type-checked and tested where it lives: root `npm run verify` runs `npm --workspace apps/template run verify` and the same for `apps/reference`. E-T1 can then check SKILL-AC-004 mechanically: every block equals its source file, and no source path is under `apps/demo/`. Reference-app files were chosen only where they show an app pattern (`evolution.ts` for `atomic` and joins, `routes/levels.ts`, `encoding.ts`, `env.ts`, `config/local.json`, `tests/support.ts`). Compliance-only routes that pass client names and keys to the framework unchanged (`routes/files.ts`, `routes/kv.ts`, `routes/ref.ts`) are not shown, because an app should not copy them.
 If a source file changes, the matching block must be copied again; E-T1's equality check finds the drift. The examples were made with a one-off copy script that is not committed: it read each listed path and wrote the block.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: E-01.
 
 ### DEC-0368 — `skill/templates/` holds the files an app agent fills in; the app template stays `apps/template`
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SKILL-REQ-001, SKILL-REQ-004, SKILL-REQ-005, C-05 scaffolder, `skill/templates/**`
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25); the placeholder Google client ID of `production-stage.json` superseded by DEC-0513 (`framework.google` left the stage-config contract) · Affects: SKILL-REQ-001, SKILL-REQ-004, SKILL-REQ-005, C-05 scaffolder, `skill/templates/**`
 
 SKILL-REQ-001 lists "templates applied by the scaffolder". The scaffolder built in C-05 (`skill/scripts/scaffold`, not owned by E-01) copies `apps/template`. CI already type-checks and tests that template. A second copy under `skill/templates/` would need its own CI run and would drift. So `apps/template` stays the one app template. `skill/templates/` holds the other files an agent copies in by hand:
 - `FRAMEWORK-ISSUE.md`, with the entry fields of SKILL-REQ-003 (task, contract or reference consulted, minimal reproduction, observed code or diagnostic, workaround not taken), plus "expected" and "blocked requirements" for the next action;
 - `production-stage.json`, a production values file that is valid against `stage-config.schema.json`, with a placeholder Google client ID;
 - `README.md`, saying what to copy where.
 For SKILL-AC-004, E-T1 can check `production-stage.json` against the schema. The Markdown templates have no code to type-check.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: E-01.
 
 ### DEC-0369 — Reference structure: "Read this when" opening, "Stopping condition" ending, a per-rule section for diagnostics
@@ -3048,10 +3050,10 @@ skill.md §2 asks for "one tested example of the upload pattern", with a finaliz
 Item: E-01.
 
 ### DEC-0371 — Router front matter, and which pins hard rule 5 names
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SKILL-REQ-003, SKILL-AC-003, `skill/SKILL.md`
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: SKILL-REQ-003, SKILL-AC-003, `skill/SKILL.md`
 
 `SKILL.md` starts with YAML front matter (`name: prototype-framework` and a description), so agent runtimes that load skills can find it. SKILL-REQ-003 says "never change framework version pins". The router names the exact pins the template's `package.json` carries (`@lago-morph/prototype-framework`, `hono`, `zod`, `typescript`, `vite`, `vitest`). `zod` must equal PAR-112 (`verify` checks it), and the others are the versions the framework is tested with. The hard rules are numbered 1–7, and the `FRAMEWORK-ISSUE.md` entry fields and the next action are stated in full in the router, not only in the template (SKILL-AC-003).
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: E-01.
 
 ### DEC-0372 — Cloud behaviour is stated as designed, not as observed
@@ -3067,7 +3069,7 @@ The skill splits the owner steps by topic to keep each reference under PAR-071, 
 Item: E-02.
 
 ### DEC-0374 — Cloudflare API token: an account token with four Account permissions
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open; not verified live) · Affects: PROV-REQ-002 step 1, PROV §2 "Credentials", DEC-0083, DEC-0100, owner-tasks.md §2, README §2
+Origin: ai-proposed · Status: superseded by DEC-0551 (two tokens with per-command permission sets, verified live) and DEC-0550 (deploy creates no API token) (was: accepted, assumption under the owner's instruction; owner review open; not verified live) · Affects: PROV-REQ-002 step 1, PROV §2 "Credentials", DEC-0083, DEC-0100, owner-tasks.md §2, README §2
 
 The framework verifies the token at `/accounts/<id>/tokens/verify` and creates the per-stage signing tokens at `/accounts/<id>/tokens`. Both are account-token endpoints (DEC-0083: "The token is an Account API token"). So the owner creates the token under Manage Account → Account API Tokens, not under My Profile.
 
@@ -3078,7 +3080,7 @@ The four permissions are read from the calls the framework makes:
 - Account API Tokens: Edit, which `r2-token.ts` names as its permission.
 
 No live check of a token holding exactly these four was made: the sandbox token's permissions are not visible. So the docs say to add any permission that `deploy` names. If SST's Pulumi provider needs more (for example, Account Settings: Read), D-RUN or E-RUN must amend this list.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue". Superseded by DEC-0550 and DEC-0551.
 Item: E-02.
 
 ### DEC-0375 — Log lookup on Cloudflare uses the Cloudflare API's R2 object listing with the owner's existing token
@@ -3129,17 +3131,17 @@ Taken under the owner's instruction "Do not stop and ask me questions. Make an a
 Item: E-03.
 
 ### DEC-0381 — App tests upload by sending the in-process ticket's wire form
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: `apps/template/tests/app.test.ts`, files.md §2 "Implementation"/"Local", skill/reference/testing.md
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: `apps/template/tests/app.test.ts`, files.md §2 "Implementation"/"Local", skill/reference/testing.md
 
 No public test helper performs an upload, and `uploadFile` needs a browser. So the template test declares `WireUploadTicket { url, method, headers }`, which is the documented JSON form of a ticket (files.md §2). It sends that request with `TestApp.request`. Under `createTestApp` the URL is the same-origin `/api/__framework/files/<token>`. The test reads the ticket only as test plumbing, and app code still treats tickets as opaque. If FILES changes the wire form, this test fails and must change with it. A public `TestApp` upload helper would remove this coupling; that is a possible framework follow-up, not done here.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: E-03.
 
 ### DEC-0382 — HMAC is a helper module with unit tests, not a route or a new secret
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: skill.md §2 "Secrets", `apps/template/src/server/signing.ts`, `apps/template/tests/signing.test.ts`
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: skill.md §2 "Secrets", `apps/template/src/server/signing.ts`, `apps/template/tests/signing.test.ts`
 
 `signToken(key, subject, expiresAt)` returns `<subject>.<expiresAt>.<base64url HMAC-SHA-256>`. `verifyToken(key, token)` returns the subject, or `null` for a malformed, tampered, wrongly keyed or expired token. It uses `crypto.subtle.verify` (constant-time), `btoa`/`atob`, and `now()` for expiry. It uses no `Buffer`. The tests cover valid, tampered (subject, expiry and signature), wrong key, malformed and expired tokens, with fake timers for expiry. No route uses the helper, and no `shareKey` secret is declared. A declared secret must be set on every stage, or the deploy health check fails. That would add an owner step to every template stage for a feature the template does not need. The doc comment and `secrets.md` show the key coming from `c.var.secrets.get(...)`.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: E-03.
 
 ### DEC-0383 — Example blocks re-copied by script; sizes
@@ -3194,7 +3196,7 @@ Item: E-T1.
 Refined by DEC-0392. Proposed extensions: DEC-0404, DEC-0405 (status `proposed`, plan §11 Q9).
 
 ### DEC-0390 — `apps/template` and `apps/reference` have no `vitest.config.ts`
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SKILL-AC-004, SKILL-REQ-004, PROV-AC-001 (reading in `tests/compliance/criteria/prov/template-deploy.test.ts`), decision-log entries at lines 1564 and 1599 (their mentions of "the template's `vitest.config.ts`" are now historical)
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: SKILL-AC-004, SKILL-REQ-004, PROV-AC-001 (reading in `tests/compliance/criteria/prov/template-deploy.test.ts`), decision-log entries at lines 1564 and 1599 (their mentions of "the template's `vitest.config.ts`" are now historical)
 
 The Review left open whether to delete the file. Rule taken: delete it from an app only if nothing uses it. Checked:
 - No script: neither app's `package.json` has a `test` script or any script that runs Vitest directly.
@@ -3206,18 +3208,18 @@ The Review left open whether to delete the file. Rule taken: delete it from an a
 So both files are deleted. This also settles the record's Observation: the template has no TypeScript outside `src/` and `tests/`, so "CI type-checks … the template" holds for every file. A bare `npx vitest` inside an app now runs with Vitest defaults (5 s timeouts, SQLite only), which was never a supported test command.
 
 Not changed: the decision log text (history) and the PROV-AC-001 reading comment, which still list `vitest.config.ts` as permitted metadata; permitting a file that is absent is harmless. The owner may trim both.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: fix-e1.
 
 ### DEC-0391 — E2E-004 is judged at F-EV, not at C-EV
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: E2E-004, DEC-0305, DEC-0320, plan §4 C-EV, §7 F-EV, §11 Q1, `ai/implementation/evaluations/C-local.md` (flag 3)
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: E2E-004, DEC-0305, DEC-0320, plan §4 C-EV, §7 F-EV, §11 Q1, `ai/implementation/evaluations/C-local.md` (flag 3)
 
 The C-EV evaluation (`ai/implementation/evaluations/C-local.md`) recorded E2E-004 `failed` on local in run 3: its coverage part (DEC-0305, DEC-0320) reports DEMO-AC-001…-011 and E2E-002 as having no tagged test, and its pass part needs every other applicable result passed. Those criteria belong to the demo, built in phase F, so E2E-004 cannot pass before then; the root cause is accepted (`ai/implementation/root-causes/2026-10-20-E2E-004-coverage-and-not-run.md`, cause C revised). Plan C-EV listed E2E-004 as a phase C item, which was inconsistent with §11 Q1. Rule: E2E-004 is removed from C-EV's list and judged at F-EV, after the demo's tests exist. Its test is unchanged; it keeps running and reporting `failed` until then (never skipped). Owner: accept the move, or narrow E2E-004's coverage part to the components built so far.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: C/D/E integrator (from the C-EV evaluation's flag 3).
 
 ### DEC-0392 — SKILL-AC-004: a demo file equal to a block's verified template or reference source is not derivation
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SKILL-AC-004, DEC-0389, `tests/skill/example-copies.unit.test.ts`
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: SKILL-AC-004, DEC-0389, `tests/skill/example-copies.unit.test.ts`
 
 Replaces the last sentence of DEC-0389's first bullet ("No block may equal a non-empty `apps/demo/` file.") with: "No block may equal a non-empty `apps/demo/` file unless its marker names a file of `apps/template` or `apps/reference` that exists and that the block also equals byte for byte." The marker must be present and directly adjacent, and its path must pass the plain-path and app checks; a block with no marker, or with an invalid or missing source, is still reported when it equals a demo file. The rest of DEC-0389 is unchanged.
 
@@ -3226,11 +3228,11 @@ Reason: the demo is built by copying the template (DEC-0054, prompt §9 F, `apps
 Residual limit: demo code first copied into `apps/template` or `apps/reference` and then into an example cannot be detected from bytes; any byte-equality proxy either misses it or also flags legitimate copies. That route requires changing a verified app, which that app's `verify` and review own.
 
 Root cause and review (ACCEPTED): `ai/implementation/root-causes/2026-10-20-SKILL-AC-004-demo-overlap.md`.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: fix-e4 (test author, §8 step 3).
 
 ### DEC-0393 — In-page clauses of DEMO-AC-001, -003 and -009 are verified by a compliance-layer browser spec, not by the demo's smoke test
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: DEMO, COMPL, SKILL (DEMO-AC-001, DEMO-AC-003, DEMO-AC-009, DEMO-REQ-010, demo-spec §2 preamble, `skill/reference/testing.md`, plan §7 F-03)
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: DEMO, COMPL, SKILL (DEMO-AC-001, DEMO-AC-003, DEMO-AC-009, DEMO-REQ-010, demo-spec §2 preamble, `skill/reference/testing.md`, plan §7 F-03)
 
 The demo-spec §2 preamble says the smoke test (DEMO-REQ-010) covers each criterion on a deployed stage except those it lists; the in-page clauses of DEMO-AC-001 ("renders as text"), DEMO-AC-003 ("displays") and DEMO-AC-009 ("the copy button copies it") are not in that list. This entry records a deviation from that preamble; `docs/demo/demo-spec.md` itself is not edited, because it is one of the fresh F-01 builder's three inputs (E2E-015) and states how binding criteria are verified.
 
@@ -3239,7 +3241,7 @@ Rule: those in-page clauses are verified by a compliance-layer Playwright spec, 
 Reason: apps have no browser tests by design. Playwright is scoped to browser-level compliance tests (PAR-114, compliance.md); it is not an app dependency; SKILL.md hard rule 1 limits what `tests/**` may import; and `verify` and `smoke` run only Vitest `*.test.ts` files over HTTP (PAR-116, cli.md). The demo's smoke test therefore cannot cover page-only behaviour, and the demo builder correctly raised this as FRAMEWORK-ISSUE #1 instead of working around it. `skill/reference/testing.md` now states, app-generically, that an app's tests and smoke test reach it through its API and that page-only behaviour is checked by the framework's browser tests.
 
 Root cause and review (ACCEPTED, fix amended): `ai/implementation/root-causes/2026-10-20-F-02-round-3-demo-issues.md`.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: fix-f4a (docs).
 
 ## Implementation phase: local and Cloudflare — follow-ups after phase E, phase F demo checks (2026-10-20)
@@ -3280,7 +3282,7 @@ Origin: ai-proposed · Status: superseded by DEC-0499 · Affects: CORE-AC-006, S
 Item: C-T6.
 
 ### DEC-0398 — The driver deploys, sets `apiKey` through `secrets set`, and deploys again
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: DEC-0277, DEC-0366, compliance.md "Driver", `tests/compliance/harness/{driver,node-deps,env}.ts`, SEC-AC-001, SEC-AC-002, HTTP-AC-002, CORE-AC-002, D-RUN
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: DEC-0277, DEC-0366, compliance.md "Driver", `tests/compliance/harness/{driver,node-deps,env}.ts`, SEC-AC-001, SEC-AC-002, HTTP-AC-002, CORE-AC-002, D-RUN
 
 - **When.** Only for a run stage the driver deploys itself (cloud target, no `--base-url`). Local runs are unchanged: the value stays in `apps/reference/.dev.vars`, set by the operator (DEC-0277). A cloud pass on a given `--base-url` (the MIG pass, DEC-0355) generates and sets nothing; an exported `COMPLIANCE_SECRET_API_KEY` still passes through there as before.
 - **Sequence.** `deploy` → generate → `secrets set apiKey --target <cloud> --stage <stage>` → `deploy` again. The first deploy of a new stage stops after step 5 with "required secrets are not set: apiKey" and the app stopped (provision core `checkSecretsAfterFirstCode`); the CLI wrapper recognises that output (or the preflight's "secret <name> is not set (set it with secrets set)") and rejects with `SecretsNotSetError`, which the driver accepts; any other deploy failure propagates unchanged (no retry, no secret). The second deploy always runs, also when the first one succeeded (a reused `--stage` that already had a value): it starts the stopped app and its health check passes only on the version that has the new secret, which is simpler and safer than relying on the secret PUT's own version roll-out (DEC-0092: a few seconds' delay).
@@ -3291,7 +3293,7 @@ Origin: ai-proposed · Status: accepted (assumption under the owner's instructio
 - **Raw files.** `deploy.log` (first deploy), `secrets-set.log`, `redeploy.log`.
 - **Check.** `driver.unit.test.ts` "[COMPL-AC-004] the test secret on a cloud run stage": the real evidence writer, into a temp root, with a fake test run that prints the value in its output and its failure message: no written file contains the value, the raw log shows `<test-secret>`, and no driver log line contains it; plus no command line carries it and the build/typecheck environment lacks it. `node-deps.unit.test.ts`: the generator's form, the unset-secrets recognition, standard input plus line-wise echo redaction on a real child process, and the request count below.
 
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: D-07.
 
 ### DEC-0399 — Extra Cloudflare API requests per run stage
@@ -3333,7 +3335,7 @@ Sizes after the change (PAR-071, 12,000 bytes): owner-tasks ≈ 10.0 kB, trouble
 Item: E-04.
 
 ### DEC-0403 — SKILL-AC-001: "each reference links to its examples" means every example tied to it (F1)
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SKILL-AC-001, DEC-0386 (third bullet strengthened)
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: SKILL-AC-001, DEC-0386 (third bullet strengthened)
 
 DEC-0386 read "its examples" as "at least one example". The criterion says *its* examples (plural, possessive): each reference must link every example that shows what it covers. `tests/skill/budgets-and-links.test.ts` now holds a table of each reference's examples, keyed by exactly `REFERENCE_FILES`, and requires every link in it. The "at least one" and "every example linked from somewhere" checks remain. Each row comes from skill.md §2 and from the files each example copies, not from the references' text:
 
@@ -3358,7 +3360,7 @@ Integrator note: item fix-e3 added that link (root cause `ai/implementation/root
 Item: E-T2.
 
 ### DEC-0404 — SKILL-AC-004: the template's browser examples are run (F2)
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SKILL-AC-004, DEC-0389
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: SKILL-AC-004, DEC-0389
 
 "CI type-checks and runs every example." Examples copy `apps/template/index.html`, `src/client/main.ts`, `src/client/dom.ts` and `src/client/pages/{account,admin,files,notes,status}.ts`. No app test executes them; the app tests reach server routes only. New `tests/skill/example-pages.test.ts` (integration layer, so the driver runs it):
 - a static check: every example source that is an `index.html` or under `src/client/` must be loaded by the template's `index.html` (its module script, then the relative non-type imports). So the run covers each one, and a new browser example outside that graph fails;
@@ -3371,7 +3373,7 @@ Integrator note: item fix-e3 has since appended that line to root `verify` and r
 Item: E-T2.
 
 ### DEC-0405 — SKILL-AC-004: the byte-for-byte example check runs in root `verify` (F3)
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: SKILL-AC-004, DEC-0384
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: SKILL-AC-004, DEC-0384
 
 `tests/skill/examples.test.ts` was split into two files:
 - `tests/skill/example-copies.unit.test.ts` holds the file-only checks: markers, no `apps/demo/`, byte-for-byte equality, sources inside what `verify` covers, and the root `verify` wiring. The unit include glob `tests/**/*.unit.test.ts` collects it, so `npm run test:unit` and therefore root `npm run verify` run it. The integration glob `tests/skill/**/*.test.ts` also collects it, so the driver's integration run still evidences SKILL-AC-004 from it. The driver's unit run is limited to `UNIT_LEVEL` and ignores it. No configuration changed. A new tagged test asserts this wiring: root `verify` runs `test:unit`, which uses `vitest.unit.config.ts`, which includes `tests/**/*.unit.test.ts`.
@@ -3379,7 +3381,7 @@ Origin: ai-proposed · Status: accepted (assumption under the owner's instructio
 Item: E-T2.
 
 ### DEC-0406 — CHECK-AC-003 covers the five migration-checker rule IDs (F4)
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CHECK-AC-003, DEC-0187
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CHECK-AC-003, DEC-0187
 
 "Every rule's diagnostic" includes the migration checker's five rule IDs (check.md §2). New `packages/framework/test/integration/check/migration-diagnostics.test.ts` runs the real `verify` on three fixture apps (`apps/base` + `mig/base`; three apps so that one break cannot hide another). For each rule it requires a line in the check.md §2 layout carrying that rule ID, a message that names the construct (the location prefix is excluded), and a `skill/reference/*.md` that exists:
 - `migration-checksums`: a comment appended to a generated migration; the message names that migration.
@@ -3392,13 +3394,13 @@ All 5 pass.
 Item: E-T2.
 
 ### DEC-0407 — The CHECK-AC-003 coverage control is tagged and checks "exactly one" (F5)
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: CHECK-AC-003
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: CHECK-AC-003
 
 The control in `portability-rules.test.ts` is now tagged `[CHECK-AC-003]`, so the driver runs it. It was untagged and showed as `skipped`. Before, it mapped `RULES` through `some(...)`, so a rule with two representative fixtures passed. Now it lists every representative fixture's rule, plus the other representatives, and requires that list sorted to equal `ALL_RULES`. So each rule has exactly one, none missing and none twice. It passes.
 Item: E-T2.
 
 ### DEC-0408 — A criterion is defined only by a row of a `| ID | Criterion | Verifies | Where |` table
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: COMPL-REQ-001, COMPL-REQ-002, COMPL-AC-001, compliance.md "Driver", DEC-0319
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: COMPL-REQ-001, COMPL-REQ-002, COMPL-AC-001, compliance.md "Driver", DEC-0319
 
 Before this decision the driver's catalogue (`tests/compliance/harness/catalogue.ts`) took any `| <AREA>-AC-NNN | … |` row of three or more cells anywhere under `docs/` as a definition, with its last cell as the Where text, and the COMPL test's independent reader (`tests/compliance/criteria/compl/support.ts` `whereSets`) took such a row of any width. DEC-0319's two-column table of criterion IDs in the decision log broke the test's reader; a three-column one would have broken the driver ("defined twice"). `docs/CONVENTIONS.md` does not define the criteria table format; every defining document uses the same header, which COMPL-AC-001 ("the criteria's "Where" columns") relies on.
 
@@ -3409,18 +3411,18 @@ Rule (both readers, implemented separately; the test shares no code with the har
 - Scenarios are unchanged: a `#### E2E-nnn` heading followed by a `Where:` line.
 
 On the real `docs/` both readers give the same 140 IDs (124 criteria, 16 scenarios) and the same per-target, per-tier sets as before the change. No doc change: DEC-0319's table stays as written. Stating the rule in compliance.md "Driver" is left to the owner.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: fix-e2 (root cause 2026-10-20-COMPL-AC-001-where-parser-decision-log).
 
 ### DEC-0409 — `TestApp.dispose` states that in-process views share disposal
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: `docs/contracts/ts/testing.d.ts` (`TestApp.dispose` doc comment), DEC-0193, `skill/reference/testing.md`
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: `docs/contracts/ts/testing.d.ts` (`TestApp.dispose` doc comment), DEC-0193, `skill/reference/testing.md`
 
 No type or behaviour change. The doc comment on `dispose` now states the behaviour DEC-0193 and `test-app.ts` already have: in-process, the original test app and every test app made from it with `as` share one app, so disposing any of them disposes all and later requests through any of them reject; on a connected stage it only logs that test app out and stage data is kept. Changing in-process behaviour (making a view's `dispose` a no-op) is not proposed; it would need its own decision.
-Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; open for owner review.
+Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
 Item: fix-f1 (root cause 2026-10-20-F-02-round-1-demo-issues, entry 4).
 
 ### DEC-0410 — The spec finds the demo through `COMPLIANCE_DEMO_BASE_URL`, or starts it locally
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: COMPL (compliance driver usage), DEMO, plan F-03
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: COMPL (compliance driver usage), DEMO, plan F-03
 
 The driver starts or deploys the reference app only, and `COMPLIANCE_BASE_URL` names that app. The spec therefore does not use the harness `baseURL`. It works out the demo's origin like this:
 - If `COMPLIANCE_DEMO_BASE_URL` is set, the spec uses that origin, on any target.
@@ -3433,7 +3435,7 @@ With `--base-url`, the driver deploys no reference stage. The cloud cost is two 
 Item: fix-f4b.
 
 ### DEC-0411 — Selectors come from the demo specification, not the round-3 demo
-Origin: ai-proposed · Status: accepted (assumption; owner review open) · Affects: DEMO, COMPL
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: DEMO, COMPL
 
 The demo is rebuilt from its specification every round (round 4 is in progress), so the spec uses no demo API route, element ID or class name. It drives the page only through:
 - the framework's routes `/api/auth/mock-login` (identities, on local and `test-` stages) and `/api/auth/me`;
@@ -3469,7 +3471,7 @@ The round-3 demo matches all of these. The round-4 demo has no account link, so 
 Item: fix-f4b.
 
 ### DEC-0412 — What each test asserts
-Origin: ai-proposed · Status: accepted (assumption; owner review open) · Affects: DEMO-AC-001, DEMO-AC-003, DEMO-AC-009
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: DEMO-AC-001, DEMO-AC-003, DEMO-AC-009
 
 **DEMO-AC-001.**
 - An admin creates a draft through the page. The title is `Hello <script>window.demoPagesXss<id>=1</script> <id>`. The specification lets admins create drafts and publish any post, so no user's draft has to be reached by an admin.
@@ -3713,7 +3715,7 @@ Evidence: `tests/compliance/criteria/_cloud/api.unit.test.ts` and `tests/complia
 Item: fix-envtoken.
 
 ### DEC-0429 — AUTH-AC-005's contract part runs over HTTP on every target; its successful-callback response is a cloud not-run part
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Affects: AUTH-AC-005, AUTH-REQ-005, E2E-004, COMPL-AC-001, DEC-0171, plan §8.1, `tests/compliance/criteria/auth/contract.test.ts`, `tests/compliance/harness/expected.ts`, `tests/support/http-schemas.ts`
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: AUTH-AC-005, AUTH-REQ-005, E2E-004, COMPL-AC-001, DEC-0171, plan §8.1, `tests/compliance/criteria/auth/contract.test.ts`, `tests/compliance/harness/expected.ts`, `tests/support/http-schemas.ts`
 
 AUTH-AC-005's Where is "Local, cloud; admin-list part: cloud (milestone)", so its contract part ("`/api/auth/*` responses validate against the HTTP contract") is automated on cloud. Its only tests were in-process (`packages/framework/test/integration/auth/routes-contract.test.ts`), which the cloud selection rightly excludes. Pass 1c therefore recorded AUTH-AC-005 `not-run` on Cloudflare and failed E2E-004's coverage part.
 
@@ -4944,7 +4946,7 @@ Where the one setting lives:
 `shareplay.com` was onboarded for Cloudflare Email Sending on the account on 2026-10-25, by `POST /zones/{zone}/email/sending/subdomains`, with DNS records under `cf-bounce.shareplay.com` and `_dmarc.shareplay.com`. `setup-account` must still do this itself, idempotently: it lists the zone's sending subdomains first and creates nothing that exists.
 
 ### DEC-0515 — The Cloudflare API token's email permissions
-Origin: owner · Status: accepted · Affects: PROV-REQ-002 (preflight), PROV-REQ-004, PROV §2 "Credentials", SKILL-REQ-006
+Origin: owner · Status: accepted; the production deploy's permission check amended by DEC-0553 (it reads with Zone Read and Email Sending Read; the write permissions are `setup-account`'s), the one token split into two by DEC-0551 · Affects: PROV-REQ-002 (preflight), PROV-REQ-004, PROV §2 "Credentials", SKILL-REQ-006
 
 The owner, 2026-10-25: the existing API token already has the email permissions. Besides the permissions it already needs (Workers, D1, R2, API tokens, the workers.dev subdomain), the token carries:
 - account: Email Sending Write, Email Routing Addresses Write;
@@ -5134,7 +5136,7 @@ From item I-F (`ai/implementation/decisions/i-f.md`) and its live run on 2026-10
 - **"Verified" sending.** The Email Sending entry (`GET /zones/<z>/email/sending/subdomains`) has no status or verified field; "verified" means the entry for the exact domain name has `enabled: true`, which `setup-account` polls for (MAIL-AC-007).
 
 ### DEC-0528 — `AUTH.NOT_VERIFIED`'s meaning names no email address
-Origin: ai-proposed · Status: accepted (assumption under the owner's instruction; owner review open) · Amends: DEC-0520 (the meaning text of `AUTH.NOT_VERIFIED`) · Affects: PWD §2, `docs/contracts/ts/errors.d.ts`, E2E-005
+Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Amends: DEC-0520 (the meaning text of `AUTH.NOT_VERIFIED`) · Affects: PWD §2, `docs/contracts/ts/errors.d.ts`, E2E-005
 
 From the diagnosis of the Cloudflare pass-auth run `k9cc5zjcbm5mrkc` (2026-10-25). `errors.d.ts` is an app-facing type, and E2E-005 forbids login-provider details in it; DEC-0306's detector flags the word "email". The meaning "The account's email address has not been verified yet." was the only finding. It is now "The account has not been verified yet." (and the error message "the account has not been verified yet"). The code, status and retryability are unchanged. The sign-in and sign-up pages still say "email", because they are the password provider's own pages, not app-facing types.
 
@@ -5252,3 +5254,76 @@ The owner, 2026-10-25: "Why limit files to 10mb? That is stupid."
 - The template's finalize route no longer checks the size. Uploads are limited only by what the framework and R2 support: one `PUT` per upload (DEC-0062), so the platform's single-upload maximum, PAR-234. On Cloudflare that is R2's maximum upload size for one request, 4.995 GiB (5 GiB less 5 MiB; developers.cloudflare.com/r2/platform/limits/, read 2026-10-25, which also gives 5 TiB less 5 GiB per object, reachable only by multipart upload, which the framework does not use). Locally the test app and `dev` buffer an upload in memory (DEC-0163), so the machine's memory is the practical limit there.
 - The finalize pattern is kept: `head`, a missing upload is `HTTP.NOT_FOUND`, a type outside the accepted list is deleted and answered `HTTP.CONFLICT`, and only then is the row inserted. The template's test now checks that a file of 10 MiB + 1 byte is accepted, and that a wrong-type upload is deleted.
 - The skill still teaches that an app may check size in its finalize route when it needs a limit (FILES "Safe upload pattern" step 3 is unchanged).
+
+### DEC-0550 — The stages' R2 signing credential is one account credential that `setup-account` creates; `deploy` creates no API token
+Origin: ai-proposed · Status: accepted · Supersedes: DEC-0100 (per-stage token; its S3 derivation stays) · Amends: CF-REQ-002 (the R2 signing credential), DEC-0331 (the token name), DEC-0335 (the preflight's token check is gone), DEC-0374 · Affects: PROV-REQ-002 step 1, PROV-REQ-004, PROV §2 "Stage resources", "Removal", "Signing record", cloudflare.md §2 "Deploy mechanics", files.md §2 "Cloudflare", COMPL-REQ-004, PROV-AC-002, PROV-AC-004, CF-AC-002, COMPL-AC-004, `provision/cloudflare/{r2-token,account,target,names}.ts`, `files/cloudflare/{tickets,credentials}.ts`
+
+The owner, 2026-10-25, batch C: reduce the risk of DEC-0374, whose one token held "Account API Tokens: Edit" for every deploy; move the creation of R2 credentials out of everyday deploys into `setup-account`.
+
+- **Where the credential was.** `deploy` step 5 created one account API token per stage, `<app>-<stage>-files-signing`, with "Workers R2 Storage Bucket Item Write" on the stage bucket (DEC-0100), and stored its S3 credentials as the stage's framework-internal Worker secrets `frameworkR2AccessKeyId` / `frameworkR2SecretAccessKey`. That is why every deploy token needed "Account API Tokens: Edit", which can mint a token with any permission of the account.
+- **Now.** `setup-account` creates one account token, `prototype-r2-signing`, when the account has none. Its policies:
+  - `allow` "Workers R2 Storage Bucket Item Write" on `com.cloudflare.api.account.<account>: "*"` (every bucket of the account, so it covers stage buckets created later);
+  - `deny` the same group on `com.cloudflare.edge.r2.bucket.<account>_default_<bucket>` for `prototype-logs`, `sst-state` and `prototype-mailsink` (`ACCOUNT_BUCKETS`), nested under the account key.
+  Its S3 credentials (access key ID = token id, secret access key = hex SHA-256 of the value, DEC-0100) go into the stage-independent **signing record** `framework/r2-signing.json` in `sst-state`, beside the account settings record (DEC-0514). The record is a shared resource (`R2 signing credential prototype-r2-signing`) that `inspectAccount` reads: when it is absent, `deploy` stops in step 1 telling the owner to run `setup-account`. `deploy` step 5 copies the two values from the record into the stage's Worker secrets on every deploy, so a stage that still uses its legacy token, or a credential that `setup-account` replaced, switches over on the next deploy. A same-named token without a record (its value is shown only once) is deleted and replaced; a record that cannot be written deletes the new token again.
+- **Live check, 2026-10-25.** An account-owned token with the `allow` policy nested as `{ account: { "com.cloudflare.edge.r2.bucket.*": "*" } }` is refused (HTTP 400, code 1001, "Must specify a bucket for account owned tokens, or nest bucket under specific account resource"); `{ account: "*" }` is accepted. A temporary token with the two policies above listed a stage bucket over S3 (`ListObjectsV2`, HTTP 200) and was refused on `sst-state`, `prototype-logs` and `prototype-mailsink` (`403 AccessDenied`). The token was deleted.
+- **What the stages share, and what they do not.** A leaked stage Worker secret now reaches every stage bucket of the account instead of one; it still reaches no account bucket, so not the SST state, the records, the logs or the mail sink. Tickets stay bound to the stage: the server signs only URLs for its own bucket (`FRAMEWORK_FILES_BUCKET`), and a signature covers bucket, key, method and expiry. The stages keep disjoint databases, buckets and secrets. This is the accepted trade for an everyday token that cannot create tokens: Cloudflare's account-owned tokens cannot be scoped to stage buckets that do not exist yet. CF-REQ-002 carries an amendment, and CF-AC-002 now asks that each stage's ticket names only its own bucket, signed with the account's credential.
+- **Legacy tokens.** Stages deployed before this decision have `<app>-<stage>-files-signing`. `listStageResources` and `remove` still find and delete it when the credential may list tokens; with the everyday token the listing answers 403 and is treated as "none", so `remove` works without the token permission and leaves the legacy token, which is scoped to the deleted bucket only. The owner deletes leftover legacy tokens in the dashboard, or runs `remove` with the setup token. One such token exists on the development account (2026-10-25).
+- **Removal and leftovers.** `remove` never touches the account's credential. COMPL-REQ-004's leftover check covers a legacy token; COMPL-AC-004's deliberately left-behind resource becomes the stage's R2 bucket.
+
+Criterion tests that must change (they are under `tests/compliance/criteria/`, which this batch does not edit): PROV-AC-002 (`prov/deploy-sequence.test.ts`, `prov/support/restricted-token.ts`: the restricted-token deploy now succeeds, and a deploy without the signing record fails naming it), PROV-AC-004 (`prov/setup-account.test.ts`: the Account API Tokens Write clause, and the production-deploy clause of DEC-0553), CF-AC-002 (`cf/stage-resources.test.ts`, `_cloud/stage-resources.ts`: no per-stage token; equal access keys, different buckets), COMPL-AC-004 (`prov/test-stages.test.ts`: leave the bucket behind instead of the token).
+
+### DEC-0551 — Two Cloudflare tokens: an everyday token and a setup token, with the minimal permission set of each command
+Origin: ai-proposed · Status: accepted (verified live with a temporary token, 2026-10-25; SST's own calls during a deploy not yet observed) · Supersedes: DEC-0374 · Affects: PROV §2 "Credentials", PROV-REQ-002, PROV-REQ-004, SKILL-REQ-006, `skill/reference/owner-tasks.md` §2–§3, `skill/reference/troubleshooting.md`, `skill/reference/deploying.md`, `apps/template/README.md` §2–§4, `provision/cloudflare/{r2-token,email,email-permissions}.ts`
+
+The calls are read from `provision/cloudflare/*` and `cli/commands/*`. Each permission is the one Cloudflare's API reference lists as accepted for the call (developers.cloudflare.com/api/, "Accepted Permissions", read 2026-10-25), or, where the reference lists none, the one the live check showed. "Write" is the API name of the dashboard's "Edit".
+
+| Command | Account permissions | Zone permissions (email domain's zone) | Calls behind them |
+| --- | --- | --- | --- |
+| `deploy`, test stage | Workers Scripts Write, Workers R2 Storage Write, D1 Write | none | `tokens/verify` (no permission; any token verifies itself); `workers/subdomain` GET (Workers Scripts Read or Write), script upload, `…/secrets` PUT/GET and `…/subdomain` POST (Workers Scripts Write); R2 bucket create (Workers R2 Storage Write), bucket GET, CORS PUT and the `sst-state` objects of SST and the records (R2 Storage); D1 list and query (D1 Read or Write), create and delete (D1 Write). SST/Pulumi use the same Workers, R2 and D1 endpoints |
+| `deploy`, production stage | the above, plus Email Sending Read | Zone Read | zone lookup `GET /zones?name=` ("Zone Read"); `GET /zones/<z>/email/sending/subdomains` (live: 403 without Email Sending Read) |
+| `remove` | Workers Scripts Write, Workers R2 Storage Write, D1 Write | none | script settings GET and DELETE, bucket objects DELETE and bucket DELETE, `sst remove`, D1 delete; deleting a legacy per-stage token needs Account API Tokens Write and is skipped without it (DEC-0550) |
+| `secrets set` | Workers Scripts Write | none | `…/scripts/<w>/secrets` PUT |
+| `smoke` | none | none | no Cloudflare API request: HTTP to the stage only, base URL from the deploy record |
+| `check-login` | Workers R2 Storage Read, D1 Write | Zone Read, Analytics Read | account settings record and mail sink objects (R2); `admins grant`/`revoke` through the D1 query API; zone lookup; GraphQL `emailSendingAdaptive` (live: without Analytics Read the query names the missing `com.cloudflare.api.account.zone.analytics.read`) |
+| `admins` | D1 Write (`list` alone: D1 Read) | none | D1 list and query |
+| `mail last --target cloudflare` | Workers R2 Storage Read | none | the account settings record and the mail sink's objects |
+| `setup-account` | Workers Scripts Write, Workers R2 Storage Write, Account API Tokens Write, Email Sending Write, Email Routing Addresses Write | Email Routing Rules Write, DNS Write, Zone Settings Write, Zone Read | subdomain PUT (Workers Scripts Write); buckets, lifecycle, records (R2 Storage Write); the sink Worker upload; the signing token (`tokens` POST: "Account API Tokens Write"; `permission_groups` and the token list: Read or Write); its own policies for the permission checks (`tokens/<id>`: Read or Write); the DEC-0515 email set-up |
+
+**The two tokens** (owner-tasks §2, the template README §2):
+- **Everyday token** (`prototype-framework`): the union of every command but `setup-account`. Account: Workers Scripts Write, Workers R2 Storage Write (which includes Read), D1 Write, Email Sending Read. Zone: Zone Read, Analytics Read. No permission on API tokens, so it cannot mint a token, and no write permission on email or DNS.
+- **Setup token** (`prototype-framework-setup`): `setup-account`'s set. The owner runs `setup-account` rarely (once per account, and to change the email domain), sets the setup token for that run only, and may give it an expiry and recreate it when needed.
+
+**Live check, 2026-10-25** (51 Cloudflare API calls and 8 read-only S3 listings in all for this decision and DEC-0550, including the final listing that showed no `prototype-compliance-batchc-*` token left; token values and the account ID were never printed). A temporary token `prototype-compliance-batchc-everyday-…` with exactly the everyday set and a 2-hour expiry: `tokens/verify` 200 `active`; `prototype-logs` and `sst-state` bucket GET 200, a never-created bucket 404 (code 10006); `workers/subdomain` 200; the account settings record 200; the signing record 404 (absent, code 10007); the `sst-state` listing 200; D1 list 200; a missing Worker's `secrets` and `settings` 404 (code 10007), the answers step 1 and step 3 rely on; the mail sink listing 200; the zone lookup 200; the Email Sending listing 200; the GraphQL delivery query 200 without errors; and `tokens/permission_groups`, the token list and its own `tokens/<id>` 403 (code 9109), which deploy no longer sends except the stage listing's legacy-token probe, read as "none". A second token without Email Sending Read and Analytics Read: the sending listing 403 (code 10000) and the GraphQL error above. Both tokens were deleted and read back 404. No deploy ran, so SST/Pulumi's own requests and the Email Service binding upload of a production stage are not observed under the everyday set; a refusal there fails step 3 or 5 with Cloudflare's error, which names the request.
+
+### DEC-0552 — The `workers.dev` subdomain `setup-account` registers is `pf-<random>`, never derived from personal data
+Origin: owner · Status: accepted · Amends: DEC-0333 (the registered name) · Resolves: DEC-0086 · Affects: cloudflare.md §2, PAR-320, `provision/cloudflare/account.ts` (`randomSubdomain`)
+
+The owner, 2026-10-25, resolved DEC-0086 and DEC-0333 by renaming the account's `workers.dev` subdomain to a neutral name. The framework must never register a subdomain derived from personal data. DEC-0333 registered `pf-<first 12 characters of the account ID>`; the account ID identifies the owner's account and appears in every stage's public address, so the code now registers `pf-` and PAR-320's 12 random characters (`a`–`z`, `0`–`9`, from `crypto.randomBytes` with rejection sampling so each character is equally likely). A repeat run after a refused registration draws a new name. The framework reads the subdomain from Cloudflare on every deploy and never derives anything else from the account ID or the owner's name.
+
+### DEC-0553 — A production deploy reads its email prerequisites with "Zone Read" and "Email Sending Read"; the write permissions of DEC-0515 are `setup-account`'s only
+Origin: ai-proposed · Status: accepted · Amends: DEC-0515 (its sentence that a production deploy checks the email permissions), PROV-REQ-002 step 1 · Affects: PROV-AC-004, `provision/cloudflare/email.ts` (`productionPrerequisites`), `provision/cloudflare/email-permissions.ts`
+
+DEC-0515 had a production deploy check all six email permissions by reading the token's own policies, which needs "Account API Tokens Read" and keeps the email write permissions on the token every deploy uses. A deploy writes nothing email-related: the `send_email` binding is part of the Worker upload. So `productionPrerequisites` keeps its checks (the zone exists and is active; the domain's Email Sending entry is onboarded and verified) and drops the policy read: the zone lookup needs "Zone Read", the sending listing "Email Sending Read" (live: 403 without it), and a refusal names that permission. `setup-account` still checks every DEC-0515 permission, plus "Account API Tokens Write" while the signing credential is absent (DEC-0550), before it changes anything. PROV-AC-004's production-deploy clause becomes "with a token lacking Email Sending Read, a production deploy names that permission and changes nothing"; its criterion test (`prov/setup-account.test.ts`) must change.
+
+### DEC-0554 — The portability check also inspects the installed dependency tree and the Worker bundle for provider SDKs
+Origin: ai-proposed · Status: accepted · Amends: DEC-0180 (`allowed-imports`' fixed list), CHECK-REQ-001 (`allowed-imports` row), CF-REQ-003 · Affects: CHECK-AC-001, CF-AC-003, check.md §2, `src/check/{denied-packages,dependencies,engine}.ts`, `src/check/rules/allowed-imports.ts`, `src/build/{inspect,build}.ts`
+
+The owner, 2026-10-25, batch C: reduce the risk of DEC-0180, whose check blocks only packages that app code imports by name, so an ordinary-looking package can bring in a provider SDK.
+
+- **One deny list.** The patterns move to `src/check/denied-packages.ts` (`isDeniedPackage`), shared by the import rule, the tree check and the bundle inspection. It also names `cloudflare` (the Cloudflare SDK) and `googleapis`.
+- **Installed tree** (`check/dependencies.ts`, run by `verify` with the lint rules). The lockfile is the nearest `package-lock.json` upwards that lists the app (the workspace root's for a workspace app), else `node_modules/.package-lock.json`; lockfile versions 2 and 3. Without one, nothing is installed and nothing is reported. The walk starts from the app's `dependencies`, `devDependencies` and `optionalDependencies`, except the framework, whose own tree (SST, Wrangler, PGlite) runs on the owner's machine and never reaches a bundle. It follows `dependencies`, `optionalDependencies` and non-optional `peerDependencies`, resolved as Node resolves them (nearest `node_modules/<name>` upwards; workspace links to their target), breadth first. Each app dependency that reaches a denied package is reported once per denied package with a shortest chain, on its line of `package.json`, under `prototype-framework/allowed-imports` (so no new rule ID, and the CHECK-AC-003 reference mapping holds). Checked against this repository's lockfile: the template, reference and demo apps pass. (`better-auth`, a framework dependency, installs `kysely`; an app that added `better-auth` itself would be reported, which is intended.)
+- **Bundle inspection** (`build/inspect.ts` `providerSdksIn`, run by every build after the Node module check). It fails the build with `CORE.MISCONFIGURED` when esbuild bundled a module from a denied package (read from the module's `node_modules/<package>/` path in the metafile), or when the bundle text carries a marker string a provider SDK has in its own code: the package scopes `@aws-sdk/`, `@smithy/`, `@google-cloud/`, `@azure/`, `@cloudflare/`, `@pulumi/`, `@vercel/`, `@netlify/`, `@neondatabase/`, `@planetscale/`, `@libsql/`, `firebase-admin`, and the client headers `aws-sdk-js`, `x-goog-api-client`, `azsdk-js-`, `cloudflare-typescript`. `@prisma/client` was tried as a marker and dropped: Better Auth's bundled code names it in an adapter message, so it would fail every framework bundle; a Prisma client is still caught by its module path. The framework's own signer (aws4fetch, with `X-Amz-*` headers) carries no marker.
+- **Ordinary packages.** Only packages on the deny list, or bundles carrying an SDK's own marker, fail. The unit tests use fixture lockfiles (standalone, nested `node_modules`, workspace links, peers, the hidden lockfile) and fixture bundles.
+
+CHECK-AC-001 and CF-AC-003 gain a clause each; their criterion tests (`tests/compliance/criteria/check/…`, the CF-AC-003 bundle test) must add fixtures for them.
+
+### DEC-0555 — The owner-review digest is closed
+Origin: owner · Status: accepted · Affects: every entry whose status said "owner review open", "proposed", "assumption" or "owner decision outstanding", plan.md §11 item 5
+
+The owner, 2026-10-25: "you should not be asking detailed minor questions about things you designed yourself with no input from me."
+
+- **Accepted.** Every such entry is set to `accepted` with the note "accepted under the owner's instruction of 2026-10-25"; any other notes in its status (amendments, supersessions, "unverified live") stay. The closing line "open for owner review" of those entries now carries the same note.
+- **Not changed here.** The entries batches A and B change (DEC-0091, DEC-0096, DEC-0101, DEC-0137, DEC-0146, DEC-0165, DEC-0314, DEC-0328, DEC-0350, DEC-0376, DEC-0380, DEC-0414, DEC-0430, and DEC-0280's SEC-AC-005 bullet; DEC-0280 itself is accepted with that bullet excepted); the AWS-branch entries (items G-*); DEC-0374 (superseded by DEC-0550 and DEC-0551) and DEC-0180 (amended by DEC-0554).
+- **Resolved by the owner.** DEC-0086 and DEC-0333: the owner renamed the `workers.dev` subdomain to a neutral name; the framework registers `pf-<random>` (DEC-0552).
+- **Superseded.** The Google-provider entries DEC-0227, DEC-0232, DEC-0233 and DEC-0234 by DEC-0513; the Google parts of DEC-0189, DEC-0299 and DEC-0368 (the placeholder Google client ID of `production-stage.json`) by DEC-0513 (DEC-0367 names no Google client ID, so it is only accepted); DEC-0226 (the configuration admin and user lists in `createTestApp`) by DEC-0521 and DEC-0522.
+- plan.md §11 item 5 says it is closed.

@@ -22,10 +22,14 @@ Each stage MUST have its own:
 
 It MUST also have a write binding to the account's shared log bucket.
 
+Amendment (Origin: ai-proposed · Decision: DEC-0550): the R2 signing credential is the account's, not each stage's: `setup-account` creates it once, so `deploy` needs no permission to create API tokens. Each stage holds it in its own Worker secrets; each stage's tickets name only that stage's bucket; the credential is denied on the account buckets (the log bucket, the state home, the mail sink's bucket).
+
 #### CF-REQ-003 — Workers-compatible bundle
 Origin: provenance-unclear · Derives from: SYS-REQ-001, SYS-REQ-004
 
 The Worker bundle MUST contain only Workers-compatible code. It MUST NOT include AWS SDKs, provisioning code, the Postgres harness, filesystem access, or unsupported Node.js modules.
+
+Amendment (Origin: ai-proposed · Decision: DEC-0554): the build MUST fail when the bundle contains a provider SDK: a module bundled from a package of `allowed-imports`' deny list, or a marker string a provider SDK carries in its own code (`PROVIDER_SDK_MARKERS`, `src/build/inspect.ts`).
 
 Amendment (Origin: ai-proposed · Decision: DEC-0516): the only Node.js modules the bundle MAY import are `node:crypto` and `node:async_hooks`, which the password provider needs, and the Worker MUST be configured with the `nodejs_compat` compatibility flag. The minified bundle MUST stay within PAR-245.
 
@@ -50,15 +54,15 @@ The stage's public origin is its `workers.dev` URL. It is computed before deploy
 
 ### Deploy mechanics
 
-How this target implements the per-target operations (PROV §2, Per-target operations). The stage's resources have fixed names (DEC-0331): the Worker script `<app>-<stage>`, the R2 bucket `<app>-<stage>-files` and the R2 signing token `<app>-<stage>-files-signing`; databases follow MIG's `<app>-<stage>-db-<n>`.
-- **`setupAccount`** creates the shared R2 log bucket (LOG §2) and the provisioning tool's state home on Cloudflare, checks that this account owns them, and registers and records the `workers.dev` subdomain as above. It also records the email domain in the account settings record `framework/account.json` in `sst-state` (DEC-0514), onboards the domain for Email Sending, enables Email Routing on `t.<emailDomain>` with subaddressing and one literal rule `sink@t.<emailDomain>` → the sink Worker `prototype-mailsink` (Cloudflare allows catch-all rules only on the apex; DEC-0527; enabling the subdomain also turns routing on zone-wide, without an apex MX), deploys that Worker, and creates the R2 bucket `prototype-mailsink` with its lifecycle rule (MAIL §2). Each part lists first and creates only what is absent. Cloudflare holds the subdomain, so it is read again on every deploy; on an account without one, `setup-account` registers `pf-<first 12 characters of the account ID>` (DEC-0333).
-- **`deploy`** runs SST with the Worker settings above. The current D1 database is an input; it is not in the provisioning tool's state.
+How this target implements the per-target operations (PROV §2, Per-target operations). The stage's resources have fixed names (DEC-0331): the Worker script `<app>-<stage>` and the R2 bucket `<app>-<stage>-files`; databases follow MIG's `<app>-<stage>-db-<n>`. The R2 signing credential is the account's token `prototype-r2-signing` (DEC-0550); a stage deployed before DEC-0550 may still have a legacy token `<app>-<stage>-files-signing`.
+- **`setupAccount`** creates the shared R2 log bucket (LOG §2) and the provisioning tool's state home on Cloudflare, checks that this account owns them, and registers and records the `workers.dev` subdomain as above. It also records the email domain in the account settings record `framework/account.json` in `sst-state` (DEC-0514), onboards the domain for Email Sending, enables Email Routing on `t.<emailDomain>` with subaddressing and one literal rule `sink@t.<emailDomain>` → the sink Worker `prototype-mailsink` (Cloudflare allows catch-all rules only on the apex; DEC-0527; enabling the subdomain also turns routing on zone-wide, without an apex MX), deploys that Worker, and creates the R2 bucket `prototype-mailsink` with its lifecycle rule (MAIL §2). It also creates the account's R2 signing credential when absent: the token `prototype-r2-signing` and its record `framework/r2-signing.json` in `sst-state` (DEC-0550). Each part lists first and creates only what is absent. Cloudflare holds the subdomain, so it is read again on every deploy; on an account without one, `setup-account` registers `pf-<random>`, `pf-` and PAR-320's random part, never a name derived from the account ID or other personal data (DEC-0552).
+- **`deploy`** runs SST with the Worker settings above. The current D1 database is an input; it is not in the provisioning tool's state. After step 5's SST run it writes the framework-internal secrets: the session key and auth secret when absent, and on every deploy the account's R2 signing credential from its record (DEC-0550). It creates no API token.
 - **`setSecret`** sets the Worker secret `SECRET_<NAME>` (SEC-REQ-003) through the Cloudflare API.
 - **`stopApp`** turns off the stage Worker's public address (its `workers.dev` route) through the Cloudflare API. **`startApp`** turns it back on. The Worker is never deleted, so its secrets and bindings survive a stop (DEC-0078). The provisioning tool does not undo a change made outside its state, so the start is always an explicit CLI call, made on every deploy (PROV-REQ-002 step 6) and after a failed migration or check (MIG-REQ-003).
   Early spike: confirm that an SST/Pulumi update of the Worker script keeps the secrets set by `secrets set`. If it does not, the deploy keeps them through the Cloudflare API's handling of a script's existing secret bindings, never by storing a second copy of the secrets.
 - **`createDatabase`, `copyDatabase` and `dropDatabase`** use the D1 HTTP API from the CLI (MIG §2).
-- **`remove`** empties the stage's R2 bucket, deletes the stage's R2 API token (the R2 signing credential, which is outside the provisioning tool's state) and its D1 databases, then runs the provisioning tool's removal (PROV §2, Removal).
-- **`listStageResources`** reports the Worker, the R2 bucket and the R2 API token by their identifiers, and the D1 databases by the exact database pattern.
+- **`remove`** empties the stage's R2 bucket, deletes a legacy per-stage R2 API token if there is one and the credentials may list tokens (with the everyday token they may not, and the step is skipped), deletes its D1 databases, then runs the provisioning tool's removal (PROV §2, Removal). It never touches the account's signing credential.
+- **`listStageResources`** reports the Worker, the R2 bucket and a legacy R2 API token by their identifiers, and the D1 databases by the exact database pattern.
 
 ## 3. Uses
 
@@ -69,8 +73,8 @@ All capability components, PROV.
 | ID | Criterion | Verifies | Where |
 | --- | --- | --- | --- |
 | CF-AC-001 | A deployed test stage serves the client and the API from one origin, and unknown API paths return JSON 404s. | CF-REQ-001 | Cloud |
-| CF-AC-002 | Two stages of one app have disjoint databases, buckets, credentials, and secrets; both write to the shared log bucket. | CF-REQ-002 | Cloud |
-| CF-AC-003 | Bundle inspection finds none of the excluded modules, and no `node:*` specifier other than `node:crypto` and `node:async_hooks`; the generated Worker settings carry the `nodejs_compat` flag; the minified bundle of the reference app is within PAR-245. | CF-REQ-003 | Local |
+| CF-AC-002 | Two stages of one app have disjoint databases, buckets and secrets; both write to the shared log bucket. Both stages' tickets are signed with the account's R2 signing credential, and each stage's ticket names only its own bucket (DEC-0550). | CF-REQ-002 | Cloud |
+| CF-AC-003 | Bundle inspection finds none of the excluded modules, and no `node:*` specifier other than `node:crypto` and `node:async_hooks`; the generated Worker settings carry the `nodejs_compat` flag; the minified bundle of the reference app is within PAR-245. A bundle with a module from a denied package, or with a provider SDK's marker string, fails the build naming it; the template's and reference app's bundles pass (DEC-0554). | CF-REQ-003 | Local |
 
 ## 5. Portability note
 

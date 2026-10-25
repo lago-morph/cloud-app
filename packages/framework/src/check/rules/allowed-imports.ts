@@ -13,18 +13,10 @@ import type { TSESTree } from "@typescript-eslint/utils";
 import ts from "typescript";
 import { classifyPath, type CodeKind } from "../paths.js";
 import { codeKind, createRule, report, typeInfo } from "../rule-kit.js";
+import { isDeniedPackage } from "../denied-packages.js";
 import { FRAMEWORK_PACKAGE } from "../resolve.js";
 
 const BUILTINS = new Set(builtinModules.filter((m) => !m.startsWith("_")));
-
-/** Package-name patterns of platform SDKs, database drivers and query tooling. */
-const DENIED_PACKAGES: readonly RegExp[] = [
-  /^@cloudflare\//, /^wrangler$/, /^miniflare$/, /^@aws-sdk\//, /^aws-sdk$/, /^aws-lambda$/, /^@aws-lambda-powertools\//,
-  /^@smithy\//, /^sst$/, /^@pulumi\//, /^@vercel\//, /^@netlify\//, /^@google-cloud\//, /^@azure\//, /^firebase-admin$/,
-  /^@electric-sql\/pglite/, /^pg$/, /^pg-/, /^postgres$/, /^mysql2?$/, /^better-sqlite3$/, /^sqlite3?$/, /^@libsql\//,
-  /^@neondatabase\//, /^@planetscale\//, /^drizzle-kit$/, /^mongodb$/, /^redis$/, /^ioredis$/, /^@prisma\//, /^prisma$/,
-  /^kysely$/, /^knex$/, /^typeorm$/, /^sequelize$/, /^@hono\/node-server$/,
-];
 
 /** Hono subpaths that expose a platform (adapters, `env()`, connection info). */
 const HONO_PLATFORM = /^hono\/(?:adapter|cloudflare-workers|cloudflare-pages|aws-lambda|lambda-edge|bun|deno|vercel|netlify|service-worker|conninfo)(?:\/|$)/;
@@ -60,7 +52,7 @@ export function packageImportProblem(specifier: string, kind: CodeKind): string 
   }
   if (name === "drizzle-orm" && specifier !== name) return `"${specifier}" is a Drizzle dialect module; use the framework's SQL API`;
   if (HONO_PLATFORM.test(specifier)) return `"${specifier}" is a platform-specific Hono module`;
-  if (DENIED_PACKAGES.some((re) => re.test(name))) return `"${specifier}" is a platform SDK or database driver`;
+  if (isDeniedPackage(name)) return `"${specifier}" is a platform SDK or database driver`;
   return undefined;
 }
 

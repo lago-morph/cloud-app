@@ -24,16 +24,16 @@ Set the stage's name in `STAGE` once in each new terminal (`<stage>` is for exam
 STAGE='<stage>'
 ```
 
-## 2. Cloudflare account and API token (once)
+## 2. Cloudflare account and API tokens (once)
 
 1. Sign up or log in at https://dash.cloudflare.com. The email domain must be a zone on this account, with Cloudflare DNS active (Websites → Add a site). Its mail need not be on Cloudflare: the framework uses the subdomain `t.<domain>` for test mail.
 2. Copy your **Account ID** from the account's overview page (menu names here are not yet verified).
-3. Create an **account API token**: Manage Account → Account API Tokens → Create Token → Create Custom Token. Name it `prototype-framework`. Add these permissions:
-   - Account: Workers Scripts Edit, Workers R2 Storage Edit, D1 Edit, Account API Tokens Edit, Email Sending Edit, Email Routing Addresses Edit;
-   - Zone (the email domain's zone): Email Routing Rules Edit, DNS Edit, Zone Settings Edit, Zone Read.
+3. Create two **account API tokens**: Manage Account → Account API Tokens → Create Token → Create Custom Token. Account resources: this account only; zone resources: the email domain's zone. Copy each token when shown; Cloudflare shows it only once.
+   - **Everyday token** `prototype-framework`, for every command but `setup-account`. Account: Workers Scripts Edit, Workers R2 Storage Edit, D1 Edit, Email Sending Read. Zone: Zone Read, Analytics Read. It cannot create tokens.
+   - **Setup token** `prototype-framework-setup`, for `setup-account` only (§3), used rarely. Account: Workers Scripts Edit, Workers R2 Storage Edit, Account API Tokens Edit, Email Sending Edit, Email Routing Addresses Edit. Zone: Email Routing Rules Edit, DNS Edit, Zone Settings Edit, Zone Read. Store it apart from the everyday token.
 
-   Create the token and copy it now; Cloudflare shows it only once. `setup-account` and a production `deploy` name any permission that is missing; add it to the token.
-4. In each new terminal where you deploy, set both values. `read` keeps the token out of your shell history. Paste the token when it waits, then press Enter:
+   A command names any permission its token lacks.
+4. In each new terminal, set both values; paste the everyday token when `read` waits, then press Enter (`read` keeps it out of your shell history):
    ```sh
    export CLOUDFLARE_ACCOUNT_ID='<your Account ID>'
    read -rs CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN
@@ -47,11 +47,13 @@ If a command says it needs `NODE_USE_ENV_PROXY=1`, you are behind an HTTPS proxy
 
 ## 3. One-time account setup, with the email domain
 
+Paste the **setup token** into `read -rs CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN` (§2), run, then set the everyday token again the same way:
+
 ```sh
 npm run setup-account -- --target cloudflare --email-domain <domain>
 ```
 
-This creates the shared resources once per account: the log bucket `prototype-logs`, the deploy-state bucket `sst-state`, the `workers.dev` address, sending from `no-reply@<domain>`, and the test mailbox: mail to `sink+<tag>@t.<domain>` is stored for a day, so an agent can read it. When it creates the mailbox rule it waits about a minute, so the first test mail does not arrive before the rule. Running it again changes nothing. To change the domain later, run it with the new `--email-domain`. `deploy` never creates these resources; if they are missing, it tells you to run this command.
+This creates the shared resources once per account, including the file-signing credential every stage uses: the log bucket `prototype-logs`, the deploy-state bucket `sst-state`, the `workers.dev` address, sending from `no-reply@<domain>`, and the test mailbox: mail to `sink+<tag>@t.<domain>` is stored for a day, so an agent can read it. When it creates the mailbox rule it waits about a minute, so the first test mail does not arrive before the rule. Running it again changes nothing. To change the domain later, run it with the new `--email-domain`. `deploy` never creates these resources; if they are missing, it tells you to run this command.
 
 ## 4. Secrets
 

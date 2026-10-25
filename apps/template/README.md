@@ -47,21 +47,16 @@ People sign in with an email address and a password. **Anyone who signs up and v
    ```
 7. To start again from empty local data (the database, files and logs), run `npm run reset-local`. Your code, configuration and `.dev.vars` stay.
 
-## 2. Cloudflare account and API token (once)
+## 2. Cloudflare account and API tokens (once)
 
 1. Sign up or log in at https://dash.cloudflare.com.
 2. Copy your **Account ID**. Open Account home, choose your account, and copy the Account ID from its overview page. The Cloudflare dashboard menu names on this page are **not yet verified**.
-3. Create an **account API token**: go to Manage Account → Account API Tokens → Create Token → Create Custom Token (not yet verified). Name it `prototype-framework`. Add these **Account** permissions:
-   - Workers Scripts: Edit
-   - Workers R2 Storage: Edit
-   - D1: Edit
-   - Account API Tokens: Edit (each stage gets its own file-signing token)
-   - Email Sending: Edit, and Email Routing Addresses: Edit
+3. Create two **account API tokens**: go to Manage Account → Account API Tokens → Create Token → Create Custom Token (not yet verified). The email domain must be a zone on this account with Cloudflare DNS active. For each token, under Account Resources include only your account, and under Zone Resources the email domain's zone. Create the token, then copy it. Cloudflare shows it only once.
+   - The **everyday token**, named `prototype-framework`, for every command except `setup-account`. **Account** permissions: Workers Scripts: Edit, Workers R2 Storage: Edit, D1: Edit, Email Sending: Read. **Zone** permissions: Zone: Read, Analytics: Read. It cannot create API tokens.
+   - The **setup token**, named `prototype-framework-setup`, for `setup-account` only (§3), which you run rarely. **Account** permissions: Workers Scripts: Edit, Workers R2 Storage: Edit, Account API Tokens: Edit (it creates the file-signing credential all stages share), Email Sending: Edit, Email Routing Addresses: Edit. **Zone** permissions: Email Routing Rules: Edit, DNS: Edit, Zone Settings: Edit, Zone: Read. Keep it apart from the everyday token.
 
-   Then add these **Zone** permissions for the email domain's zone: Email Routing Rules: Edit, DNS: Edit, Zone Settings: Edit, Zone: Read. The email domain must be a zone on this account with Cloudflare DNS active.
-
-   Under Account Resources, include only your account. Create the token, then copy it. Cloudflare shows it only once. This permission list is the framework's reading of the calls it makes. It is not yet verified on Cloudflare in this phase. If `deploy` names a missing permission, add it to the token.
-4. In every new terminal where you deploy, set both values. `read` keeps the token out of your shell history. Paste the token when it waits, then press Enter:
+   These lists are checked against the Cloudflare API: a token with exactly the everyday permissions passed every read `deploy` makes before it changes anything. A command that lacks a permission names it.
+4. In every new terminal where you deploy, set both values. `read` keeps the token out of your shell history. Paste the everyday token when it waits, then press Enter:
    ```sh
    export CLOUDFLARE_ACCOUNT_ID='<your Account ID>'
    read -rs CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN
@@ -75,11 +70,13 @@ If a command says it needs `NODE_USE_ENV_PROXY=1`, you are behind an HTTPS proxy
 
 ## 3. One-time account setup
 
+Set the **setup token** first, the same way as in §2 step 4 (`read -rs CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN`, paste the setup token). Run:
+
 ```sh
 npm run setup-account -- --target cloudflare --email-domain <domain>
 ```
 
-This creates the account's shared resources once: the log bucket `prototype-logs`, the deploy-state bucket `sst-state`, the account's `workers.dev` address, sending from `no-reply@<domain>`, and a test mailbox for agents: mail to `sink+<tag>@t.<domain>` is kept for a day. When it creates the mailbox rule, it waits about a minute before it finishes. Running it again changes nothing; to change the domain, run it again with the new `--email-domain`. `deploy` never creates these resources.
+Then set the everyday token again the same way. This creates the account's shared resources once, including the file-signing credential every stage uses: the log bucket `prototype-logs`, the deploy-state bucket `sst-state`, the account's `workers.dev` address, sending from `no-reply@<domain>`, and a test mailbox for agents: mail to `sink+<tag>@t.<domain>` is kept for a day. When it creates the mailbox rule, it waits about a minute before it finishes. Running it again changes nothing; to change the domain, run it again with the new `--email-domain`. `deploy` never creates these resources.
 
 ## 4. Deploy a test stage, test it, remove it
 
@@ -108,7 +105,7 @@ npm run smoke -- --target cloudflare --stage "$STAGE"
 npm run remove -- --target cloudflare --stage "$STAGE"
 ```
 
-`remove` deletes the stage's Worker and secrets, its databases, its file bucket and files, its file-signing token and its deploy state. It keeps the log entries. If it prints leftovers and exits with an error, run it again. If a leftover stays, delete it in the dashboard by the exact name printed.
+`remove` deletes the stage's Worker and secrets, its databases, its file bucket and files, and its deploy state. The file-signing credential belongs to the account and stays. It keeps the log entries. If it prints leftovers and exits with an error, run it again. If a leftover stays, delete it in the dashboard by the exact name printed.
 
 ## 5. The production stage's values file
 

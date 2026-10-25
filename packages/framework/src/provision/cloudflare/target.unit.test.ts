@@ -9,7 +9,7 @@ import type { HealthOutcome } from "../core/operations.js";
 import { runRemove } from "../core/remove.js";
 import { runSetupAccount } from "../core/setup-account.js";
 import { unwiredDatabases } from "./databases.js";
-import { ACCOUNT, FakeCloud, FakeDatabases } from "./fake-cloud.test-support.js";
+import { ACCOUNT, FAKE_SIGNING, FakeCloud, FakeDatabases, FULL_POLICIES } from "./fake-cloud.test-support.js";
 import { createCloudflareTarget, type CloudflareTargetOptions } from "./target.js";
 
 const stage = { app: "notes", stage: "test-abc" };
@@ -57,19 +57,41 @@ describe("Cloudflare preflight (PROV-REQ-002 step 1)", () => {
     expect(cloud.requests).toEqual([]);
   });
 
-  it("an unusable token is named; a usable token without the token permission names that permission", async () => {
+  it("an unusable token is named; a usable token needs no permission on API tokens (DEC-0550, DEC-0551)", async () => {
     const a = setup();
     a.cloud.override.set(`GET /accounts/${ACCOUNT}/tokens/verify`, { status: 401, body: { success: false, errors: [{ code: 1000, message: "Invalid API Token" }] } });
     expect(await a.target.preflight(stage)).toEqual(["CLOUDFLARE_API_TOKEN is not usable: HTTP 401: Invalid API Token (code 1000)"]);
 
     const b = setup();
-    b.cloud.override.set(`GET /accounts/${ACCOUNT}/tokens/permission_groups`, { status: 403, body: { success: false, errors: [{ code: 9109, message: "Unauthorized" }] } });
-    const problems = await b.target.preflight(stage);
-    expect(problems).toHaveLength(1);
-    expect(problems[0]).toMatch(/permission to create R2 API tokens/);
-    expect(b.cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
+    const refused = { status: 403, body: { success: false, errors: [{ code: 9109, message: "Unauthorized to access requested resource" }] } };
+    b.cloud.override.set(`GET /accounts/${ACCOUNT}/tokens/permission_groups`, refused);
+    b.cloud.override.set(`GET /accounts/${ACCOUNT}/tokens?per_page=50&page=1`, refused);
+    expect(await b.target.preflight(stage)).toEqual([]);
+    expect(b.cloud.requests).toEqual([`GET /accounts/${ACCOUNT}/tokens/verify`]);
+  });
 
-    expect(await setup().target.preflight(stage)).toEqual([]);
+  it("[PROV-AC-002] unit part: deploy with the everyday token's permissions (no Account API Tokens at all) deploys a stage; without the account's signing credential it stops at step 1, naming it and setup-account", async () => {
+    const { cloud, target } = setup();
+    const refused = { status: 403, body: { success: false, errors: [{ code: 9109, message: "Unauthorized to access requested resource" }] } };
+    cloud.override.set(`GET /accounts/${ACCOUNT}/tokens/permission_groups`, refused);
+    cloud.override.set(`GET /accounts/${ACCOUNT}/tokens?per_page=50&page=1`, refused);
+    cloud.override.set(`POST /accounts/${ACCOUNT}/tokens`, refused);
+    const io = captureIo();
+    expect((await runDeploy(target, request(), io)).status).toBe(0);
+    expect(io.err).toBe("");
+    const secrets = cloud.workers.get("notes-test-abc")!.secrets;
+    expect(secrets.get("SECRET_FRAMEWORK_R2_ACCESS_KEY_ID")).toBe(FAKE_SIGNING.accessKeyId);
+    expect(secrets.get("SECRET_FRAMEWORK_R2_SECRET_ACCESS_KEY")).toBe(FAKE_SIGNING.secretAccessKey);
+    expect((await target.listStageResources(stage)).resources.map((r) => r.kind)).not.toContain("R2 API token");
+
+    const b = setup();
+    b.cloud.buckets.get("sst-state")!.delete("framework/r2-signing.json");
+    const io2 = captureIo();
+    const result = await runDeploy(b.target, request(), io2);
+    expect(result.failure?.step).toBe("preflight");
+    expect(io2.err).toMatch(/R2 signing credential prototype-r2-signing.*run setup-account --target cloudflare first/);
+    expect(b.cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
+    expect(io2.err).not.toContain(FAKE_SIGNING.secretAccessKey);
   });
 });
 
@@ -84,6 +106,7 @@ describe("setup-account on Cloudflare (PROV-REQ-004)", () => {
         "R2 bucket prototype-logs",
         "R2 bucket sst-state",
         "workers.dev subdomain",
+        "R2 signing credential prototype-r2-signing",
         "Email Sending entry example.test",
         "R2 bucket prototype-mailsink",
         "lifecycle rule of R2 bucket prototype-mailsink (PAR-241)",
@@ -95,6 +118,11 @@ describe("setup-account on Cloudflare (PROV-REQ-004)", () => {
       recorded: "example.test",
     });
     expect(cloud.objectBodies.get("sst-state/framework/account.json")).toEqual({ emailDomain: "example.test" });
+    // DEC-0552: a random pf- subdomain; DEC-0550: one account signing token and its record.
+    expect(cloud.subdomain).toMatch(/^pf-[a-z0-9]{12}$/);
+    expect(cloud.subdomain).not.toContain(ACCOUNT.slice(0, 6));
+    expect([...cloud.tokens.values()].map((t) => t.name)).toEqual(["prototype-r2-signing"]);
+    expect(Object.keys(cloud.objectBodies.get("sst-state/framework/r2-signing.json") as object).sort()).toEqual(["accessKeyId", "secretAccessKey", "tokenId"]);
     cloud.requests.length = 0;
     // The record now names the domain, so --email-domain may be left out; the same domain changes nothing either.
     expect(await runSetupAccount(target, captureIo())).toEqual({ status: 0, created: [] });
@@ -265,8 +293,11 @@ describe("deploy on Cloudflare (PROV-REQ-002 steps 3, 5, 6, 7)", () => {
     ]);
     expect(worker.secrets.get("SECRET_FRAMEWORK_SESSION_KEY")).toBe("generated-session-key");
     expect(worker.secrets.get("SECRET_FRAMEWORK_AUTH_SECRET")).toBe("generated-session-key");
-    expect(worker.secrets.get("SECRET_FRAMEWORK_R2_ACCESS_KEY_ID")).toBe("tok1");
-    expect([...cloud.tokens.values()].map((t) => t.name)).toEqual(["notes-test-abc-files-signing"]);
+    expect(worker.secrets.get("SECRET_FRAMEWORK_R2_ACCESS_KEY_ID")).toBe(FAKE_SIGNING.accessKeyId);
+    expect(worker.secrets.get("SECRET_FRAMEWORK_R2_SECRET_ACCESS_KEY")).toBe(FAKE_SIGNING.secretAccessKey);
+    // DEC-0550: deploy creates no API token; the stages share the account's signing credential.
+    expect([...cloud.tokens.values()].map((t) => t.name)).toEqual(["prototype-r2-signing"]);
+    expect(cloud.requests.filter((r) => r.includes("/tokens") && !r.startsWith("GET "))).toEqual([]);
     expect({ enabled: worker.enabled, previews: worker.previews }).toEqual({ enabled: true, previews: false });
     expect(preflights).toEqual([{ origin: "https://notes-test-abc.example.workers.dev", bucket: "notes-test-abc-files" }]);
     expect(cloud.programs.at(-1)).not.toMatch(/"SECRET_/);
@@ -313,13 +344,31 @@ describe("deploy on Cloudflare (PROV-REQ-002 steps 3, 5, 6, 7)", () => {
     expect(auth).not.toBe(session);
   });
 
-  it("a token left without its secrets (an interrupted deploy) is deleted and replaced, since its value is shown only once", async () => {
+  it("every deploy writes the account's current signing credential into the stage's secrets, so a replaced credential or a legacy stage switches over (DEC-0550)", async () => {
     const { cloud, target } = setup();
     await runDeploy(target, request(), captureIo());
-    cloud.workers.get("notes-test-abc")!.secrets.delete("SECRET_FRAMEWORK_R2_SECRET_ACCESS_KEY");
+    cloud.workers.get("notes-test-abc")!.secrets.set("SECRET_FRAMEWORK_R2_ACCESS_KEY_ID", "legacy-stage-token");
+    cloud.objectBodies.set("sst-state/framework/r2-signing.json", { tokenId: "tok7", accessKeyId: "tok7", secretAccessKey: "7".repeat(64) });
     await runDeploy(target, request(), captureIo());
-    expect([...cloud.tokens.keys()]).toEqual(["tok2"]);
-    expect(cloud.workers.get("notes-test-abc")!.secrets.get("SECRET_FRAMEWORK_R2_ACCESS_KEY_ID")).toBe("tok2");
+    const secrets = cloud.workers.get("notes-test-abc")!.secrets;
+    expect(secrets.get("SECRET_FRAMEWORK_R2_ACCESS_KEY_ID")).toBe("tok7");
+    expect(secrets.get("SECRET_FRAMEWORK_R2_SECRET_ACCESS_KEY")).toBe("7".repeat(64));
+  });
+
+  it("[PROV-AC-004] unit part: setup-account without Account API Tokens Write, while the signing credential is absent, names that permission and changes nothing (DEC-0551)", async () => {
+    const { cloud, target } = setup();
+    cloud.buckets.clear();
+    cloud.tokens.clear();
+    cloud.tokenPolicies = FULL_POLICIES.map((p) => ({ ...p, permission_groups: p.permission_groups.filter((g) => g.name !== "Account API Tokens Write").concat(p.id === "p1" ? [{ id: "r", name: "Account API Tokens Read" }] : []) }));
+    const io = captureIo();
+    expect(await runSetupAccount(target, io, { emailDomain: "example.test" })).toEqual({ status: 1, created: [] });
+    expect(io.err).toMatch(/lacks the permission "Account API Tokens Write" \(account\), which creating the R2 signing credential prototype-r2-signing needs/);
+    expect(cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
+    expect(cloud.buckets.size).toBe(0);
+    // With the credential in place, the setup token's token permission is no longer needed.
+    const b = setup();
+    b.cloud.tokenPolicies = cloud.tokenPolicies;
+    expect((await runSetupAccount(b.target, captureIo(), { emailDomain: "example.test" })).status).toBe(0);
   });
 
   it("deploying code without the built Worker fails naming what is missing", async () => {
@@ -399,15 +448,17 @@ describe("deploy on Cloudflare (PROV-REQ-002 steps 3, 5, 6, 7)", () => {
 });
 
 describe("listStageResources and remove on Cloudflare (PROV-REQ-003; DEC-0084, DEC-0263)", () => {
-  it("lists the Worker, the bucket, the R2 API token and the SST state objects by exact identifier, and every listed database", async () => {
-    const { target } = setup();
+  it("lists the Worker, the bucket, a legacy R2 API token and the SST state objects by exact identifier, and every listed database", async () => {
+    const { cloud, target } = setup();
     await runDeploy(target, request(), captureIo());
     await runDeploy(target, request(other), captureIo());
+    // A stage deployed before DEC-0550 still has its own token.
+    cloud.tokens.set("legacy1", { name: "notes-test-abc-files-signing", resources: {} });
     const listed = await target.listStageResources(stage);
     expect(listed.resources).toEqual([
       { kind: "Worker", id: "notes-test-abc" },
       { kind: "R2 bucket", id: "notes-test-abc-files" },
-      { kind: "R2 API token", id: "tok1" },
+      { kind: "R2 API token", id: "legacy1" },
       { kind: "SST state object", id: "app/notes/test-abc" },
       { kind: "SST state object", id: "passphrase/notes/test-abc" },
       ...listed.resources.filter((r) => r.kind === "SST state object" && r.id.startsWith("update/notes/test-abc/")),
@@ -421,14 +472,16 @@ describe("listStageResources and remove on Cloudflare (PROV-REQ-003; DEC-0084, D
     const { cloud, target, databases } = setup();
     await runDeploy(target, request(), captureIo());
     await runDeploy(target, request(other), captureIo());
+    cloud.tokens.set("legacy1", { name: "notes-test-abc-files-signing", resources: {} });
+    cloud.tokens.set("legacy2", { name: "notes-test-xyz-files-signing", resources: {} });
     cloud.buckets.get("notes-test-abc-files")!.add("uploads/a.png");
     cloud.buckets.get("prototype-logs")!.add("notes/test-abc/2026/10/20/x.json");
     const io = captureIo();
     expect(await runRemove(target, stage, io)).toEqual({ status: 0, leftovers: [] });
     expect(cloud.workers.has("notes-test-abc")).toBe(false);
     expect(cloud.buckets.has("notes-test-abc-files")).toBe(false);
-    expect([...cloud.tokens.values()].map((t) => t.name)).toEqual(["notes-test-xyz-files-signing"]);
-    expect([...cloud.buckets.get("sst-state")!].every((k) => k.includes("/test-xyz"))).toBe(true);
+    expect([...cloud.tokens.values()].map((t) => t.name).sort()).toEqual(["notes-test-xyz-files-signing", "prototype-r2-signing"]);
+    expect([...cloud.buckets.get("sst-state")!].every((k) => k.includes("/test-xyz") || k.startsWith("framework/"))).toBe(true);
     expect(cloud.buckets.get("prototype-logs")!.size).toBe(1);
     expect(cloud.workers.has("notes-test-xyz")).toBe(true);
     expect([...databases.dbs.values()].map((d) => d.name)).toEqual(["notes-test-xyz-db-1"]);
@@ -448,7 +501,7 @@ describe("listStageResources and remove on Cloudflare (PROV-REQ-003; DEC-0084, D
     expect(await runRemove(target, stage, io)).toEqual({ status: 0, leftovers: [] });
     expect(io.err).toBe("");
     expect(cloud.sstRuns.some((r) => r.startsWith("remove"))).toBe(false);
-    expect([...state]).toEqual(["app/notes/test-abcd"]);
+    expect([...state].filter((k) => !k.startsWith("framework/"))).toEqual(["app/notes/test-abcd"]);
   });
 
   it("R3: when the state listing fails, sst remove still runs and the failure is reported", async () => {
