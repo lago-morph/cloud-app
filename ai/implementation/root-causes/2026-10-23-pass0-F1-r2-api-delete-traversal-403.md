@@ -1,5 +1,7 @@
 # Root cause: pass 0 F-1, `DELETE …/r2/buckets/<b>/objects/x%2F..%2Fy` answered 403 "request rejected: path contains traversal sequence". No defect found; real Cloudflare unverified. The evidence points to the sandbox's egress proxy as the source of the refusal. Whether real Cloudflare, reached without the proxy, accepts the path is unverified. If it refuses it, that is a PROV-REQ-003 defect, and the S3-DELETE fallback becomes the fix. No code change is made now; the sandbox limitation (names with a `..` segment) is recorded.
 
+**Archived 2026-10-25** to branch `archive/implement-local-cloudflare` (same paths; `ai/ARCHIVE.md`, then `ARCHIVE-INDEX.md` there): the decision-draft map `ai/implementation/decisions/fix-pass0.md` cited below.
+
 Author: diagnosing subagent (prompt §8 step 1). I did not write the code under diagnosis, and I did not run pass 0. This is a diagnosis only. No code or test was changed, and no Cloudflare call was made. The only network requests were to the local proxy status endpoint and to `example.com`.
 
 Base: branch `claude/implement-local-cloudflare-diag-pass0`, from `origin/claude/implement-local-cloudflare` `80bfd9b` (pass-0 evidence merged). Evidence: `validation/cloudflare/pass-0/SUMMARY.md` and `validation/cloudflare/pass-0/logs/` (`request-ledger.txt`, `responses.jsonl`, `d02-r2-checks.json`).

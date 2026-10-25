@@ -1,5 +1,7 @@
 # Root cause: pass 2. SEC-AC-005 fails because on Cloudflare a secret change takes effect through a Worker version rollout that lasts a few seconds. The request 160 ms after `secrets set` was still served by the previous version. The framework does not cache. As written, the criterion's "next request" cannot be met on Cloudflare: not the `secrets set` clause without a new framework wait, and not the store-deletion clause at all.
 
+**Archived 2026-10-25** to branch `archive/implement-local-cloudflare` (same paths; `ai/ARCHIVE.md`, then `ARCHIVE-INDEX.md` there): the record `cwcrlz8fxgo3ud4` (`validation/cloudflare/cwcrlz8fxgo3ud4.json` and `raw/`) cited below; `validation/cloudflare/pass-2to5/` stays here.
+
 Author: diagnosing subagent (prompt §8). I did not write the code under diagnosis, and I did not run pass 2. This is a diagnosis only. No code or test was changed, and no Cloudflare call was made.
 
 Base: `origin/claude/implement-local-cloudflare` `24327c7` (the run was on `71ac98d`). Evidence: `validation/cloudflare/cwcrlz8fxgo3ud4.json`, `validation/cloudflare/cwcrlz8fxgo3ud4/raw/vitest.log`, `validation/cloudflare/pass-2to5/logs/{2-pass2.log,trace-2-pass2.log}`.

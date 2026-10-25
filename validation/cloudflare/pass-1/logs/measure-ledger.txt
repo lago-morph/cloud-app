@@ -1,7 +1,0 @@
-2026-10-23T17:27:22Z measure-before POST api.cloudflare.com/client/v4/graphql (curl)
-2026-10-23T17:27:25Z measure-before wrangler d1 list --json (GET .../d1/database; counted as 2)
-2026-10-23T17:29:05Z after-inventory GET buckets (curl)
-2026-10-23T17:29:05Z after-inventory GET workers (curl)
-2026-10-23T17:29:05Z after-inventory GET sststate (curl)
-2026-10-23T17:29:10Z measure-after POST api.cloudflare.com/client/v4/graphql (curl)
-2026-10-23T17:29:13Z measure-after wrangler d1 list --json (GET .../d1/database; counted as 2)

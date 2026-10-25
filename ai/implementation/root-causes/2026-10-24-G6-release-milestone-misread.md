@@ -1,5 +1,7 @@
 # Root cause: G6. The release report for `1b474c1` misreads E2E-010, E2E-012, PROV-AC-003, PROV-AC-004 and PROV-AC-006 on Cloudflare as `not-run` from milestone run `0reagqr1j01rqfv`, which did not select them. `releaseReport` treats a record that lists an ID as "not selected for this run (--only)" as one that contains that ID.
 
+**Archived 2026-10-25** to branch `archive/implement-local-cloudflare` (same paths; `ai/ARCHIVE.md`, then `ARCHIVE-INDEX.md` there): the record `sysad9rajoir4yt` (`validation/cloudflare/sysad9rajoir4yt.json` and `raw/`) cited below.
+
 Author: diagnosing subagent. I did not write the code under diagnosis. This is a diagnosis only: no code or test was committed, and no Cloudflare call was made.
 
 Base: `origin/claude/implement-local-cloudflare` `ad0e252` (D-EV merge). Evidence: `validation/release/2026-10-24-1b474c1.md`, `validation/cloudflare/{0reagqr1j01rqfv,6e5ya5y8z05u4ce,e22y1n7jn93xoz4,xxiuurmy40pnr33,sysad9rajoir4yt}.json`, `ai/implementation/evaluations/D-cloudflare.md` §3 (G6), `final.md` §8.

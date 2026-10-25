@@ -1,6 +1,0 @@
-E2E-002 / DEMO-AC-010 source-difference check, 2026-10-24 ~06:03 UTC (after both smoke runs)
-git rev-parse HEAD           -> <HEX32+>
-git rev-parse HEAD:apps/demo -> <HEX32+>
-git diff --quiet HEAD -- apps/demo -> exit 0
-git status --porcelain --ignored=no -- apps/demo -> (no output)
-Cloud smoke (validation/cloudflare/vn8cm0ie7v2rhul.json) and local smoke (validation/local/kbe5rzjb8ls9p8z.json) ran from this commit.
