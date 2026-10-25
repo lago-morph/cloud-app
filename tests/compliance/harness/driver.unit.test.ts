@@ -839,7 +839,8 @@ describe("[COMPL-AC-003] the cloud account at the start and end of a run: D1 pla
 
   it("deletes the token also when the run failed, and first deletes test tokens an earlier run left, but no other token", async () => {
     const api = fakeCfApi();
-    addForeignToken(api, "prototype-compliance-old000000000001-no-email");
+    // Created 7 h before the run (its 6 h expiry passed an hour ago): an interrupted earlier run left it.
+    addForeignToken(api, "prototype-compliance-old000000000001-no-email", { issued_on: "2026-10-20T03:00:00Z", expires_on: "2026-10-20T09:00:00Z" });
     addForeignToken(api, "owner-main-token");
     const h = harness({ catalogue: TOKEN_CATALOGUE, cloud: { deploy: () => Promise.reject(new Error("deploy failed at step 3")) } });
     const result = await runCompliance(parseArgs(["--target", "cloudflare"]), [], withAccount(h, api));
@@ -848,6 +849,27 @@ describe("[COMPL-AC-003] the cloud account at the start and end of a run: D1 pla
     expect([...api.tokens.values()].map((t) => t.name)).toEqual(["owner-main-token"]);
     expect(h.logs.join("\n")).toContain("deleted the test token prototype-compliance-old000000000001-no-email an earlier run left");
     expect(recordOf(h).leftovers).toEqual([]);
+  });
+
+  it("at the start deletes only other runs' test tokens older than PAR-286: a live other run's token and the current run's tokens are kept (compliance.md §4)", async () => {
+    // The driver's clock is 2026-10-20T10:00Z; a test token expires PAR-286 (6 h) after it is created.
+    const api = fakeCfApi();
+    addForeignToken(api, "prototype-compliance-live00000000001-no-r2-token", { issued_on: "2026-10-20T09:00:00Z", expires_on: "2026-10-20T15:00:00Z" });
+    addForeignToken(api, "prototype-compliance-live00000000002-no-email", { expires_on: "2026-10-20T15:59:00Z" });
+    addForeignToken(api, "prototype-compliance-stale0000000001-no-email", { issued_on: "2026-10-20T03:59:00Z", expires_on: "2026-10-20T09:59:00Z" });
+    addForeignToken(api, "prototype-compliance-stale0000000002-no-email", { issued_on: "2026-10-20T03:00:00Z" });
+    addForeignToken(api, "prototype-compliance-abcdefghij12345-no-email", { issued_on: "2026-10-19T00:00:00Z", expires_on: "2026-10-19T06:00:00Z" });
+    addForeignToken(api, "prototype-compliance-unknown00000001-no-email");
+    const h = harness({ catalogue: TOKEN_CATALOGUE });
+    await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], withAccount(h, api));
+    const deleted = api.requests.filter((r) => r.method === "DELETE").map((r) => r.path.slice(r.path.lastIndexOf("/") + 1));
+    expect(deleted.sort()).toEqual(["foreign-prototype-compliance-stale0000000001-no-email", "foreign-prototype-compliance-stale0000000002-no-email"]);
+    expect([...api.tokens.values()].map((t) => t.name).sort()).toEqual([
+      "prototype-compliance-abcdefghij12345-no-email",
+      "prototype-compliance-live00000000001-no-r2-token",
+      "prototype-compliance-live00000000002-no-email",
+      "prototype-compliance-unknown00000001-no-email",
+    ]);
   });
 
   it("a test token that could not be deleted is a leftover, and so is a token check that cannot run", async () => {

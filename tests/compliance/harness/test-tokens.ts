@@ -32,6 +32,7 @@
  */
 import { detectD1Plan, type CfCall, type PlanReading } from "./d1-budget.js";
 import { USER_AGENT } from "./http.js";
+import { guardFetch, MAIN_TOKEN_PURPOSE } from "./token-guard.js";
 
 export const TEST_TOKEN_PREFIX = "prototype-compliance-";
 /** PAR-286: lifetime of a self-created test token (a backstop; the driver deletes it at the end of the run). */
@@ -132,14 +133,47 @@ export async function createRestrictedToken(call: CfCall, accountId: string, spe
   return { id: result.id, name, value: result.value };
 }
 
+/** A listed `prototype-compliance-*` token, with the times Cloudflare gives for it (ISO 8601), when it gives them. */
+export interface ListedTestToken {
+  readonly id: string;
+  readonly name: string;
+  readonly issuedOn?: string;
+  readonly expiresOn?: string;
+}
+
+/**
+ * The test tokens an interrupted earlier run left (compliance.md §4), which a run may delete at
+ * its start: not the current run's (`prototype-compliance-<run ID>-*`), and older than PAR-286.
+ * The age is read from the creation time, or else from the expiry (the driver gives each token
+ * a PAR-286 lifetime, so a passed expiry means it was created at least PAR-286 ago). A token
+ * whose age is unknown is kept: it may belong to a run still going.
+ */
+export function staleTestTokens<T extends ListedTestToken>(tokens: readonly T[], runId: string, now: Date, lifetimeMs = TEST_TOKEN_LIFETIME_MS): T[] {
+  const own = `${TEST_TOKEN_PREFIX}${runId}-`;
+  const time = (iso: string | undefined): number | undefined => {
+    const t = iso === undefined ? NaN : Date.parse(iso);
+    return Number.isNaN(t) ? undefined : t;
+  };
+  return tokens.filter((t) => {
+    if (!t.name.startsWith(TEST_TOKEN_PREFIX) || t.name.startsWith(own)) return false;
+    const issued = time(t.issuedOn);
+    if (issued !== undefined) return now.getTime() - issued >= lifetimeMs;
+    const expires = time(t.expiresOn);
+    return expires !== undefined && expires <= now.getTime();
+  });
+}
+
 /** Every listed token whose name starts with `prototype-compliance-` (bounded: 20 pages of 50). */
-export async function listTestTokens(call: CfCall, accountId: string): Promise<{ id: string; name: string }[]> {
-  const out: { id: string; name: string }[] = [];
+export async function listTestTokens(call: CfCall, accountId: string): Promise<ListedTestToken[]> {
+  const out: ListedTestToken[] = [];
   for (let page = 1; page <= 20; page++) {
     const r = await call("GET", `/accounts/${accountId}/tokens?per_page=50&page=${String(page)}`);
     if (!ok(r)) throw failure("listing the account's API tokens", r);
-    const body = r.body as { result: { id: string; name?: string }[]; result_info?: { total_pages?: unknown } };
-    for (const t of body.result) if ((t.name ?? "").startsWith(TEST_TOKEN_PREFIX)) out.push({ id: t.id, name: t.name ?? "" });
+    const body = r.body as { result: { id: string; name?: string; issued_on?: unknown; expires_on?: unknown }[]; result_info?: { total_pages?: unknown } };
+    for (const t of body.result) {
+      if (!(t.name ?? "").startsWith(TEST_TOKEN_PREFIX)) continue;
+      out.push({ id: t.id, name: t.name ?? "", ...(typeof t.issued_on === "string" ? { issuedOn: t.issued_on } : {}), ...(typeof t.expires_on === "string" ? { expiresOn: t.expires_on } : {}) });
+    }
     const total = body.result_info?.total_pages;
     // Cloudflare may serve fewer per page than asked: the page count decides when it is given.
     if (typeof total === "number" ? page >= total : body.result.length < 50) return out;
@@ -160,16 +194,20 @@ export interface CloudAccountOps {
   createRestrictedToken(spec: RestrictedTokenSpec, runId: string): Promise<CreatedToken>;
   deleteToken(id: string): Promise<void>;
   /** The `prototype-compliance-*` tokens the account lists. */
-  testTokens(): Promise<readonly { readonly id: string; readonly name: string }[]>;
+  testTokens(): Promise<readonly ListedTestToken[]>;
   /** Set when these operations are fakes. */
   readonly dryRun?: string;
 }
 
-/** A `CfCall` over `fetch` with the main token from `CLOUDFLARE_API_TOKEN` (never printed). Needs `NODE_USE_ENV_PROXY=1` behind a proxy. */
+/**
+ * A `CfCall` over `fetch` with the main token from `CLOUDFLARE_API_TOKEN` (never printed). Needs
+ * `NODE_USE_ENV_PROXY=1` behind a proxy. A 401 answer rejects with `InvalidTokenError`, and the
+ * token is then sent no further request in this process (token-guard.ts).
+ */
 export function fetchCfCall(env: Readonly<Record<string, string | undefined>> = process.env, doFetch: typeof fetch = fetch): CfCall {
   return async (method, path, body) => {
     const token = env.CLOUDFLARE_API_TOKEN;
-    const response = await doFetch(`https://api.cloudflare.com/client/v4${path}`, {
+    const response = await guardFetch(doFetch, token, MAIN_TOKEN_PURPOSE)(`https://api.cloudflare.com/client/v4${path}`, {
       method,
       headers: {
         "user-agent": USER_AGENT,

@@ -16,6 +16,7 @@ import { defaultBudgetDeps, rateLimitIn, withSignUpSlot, type BudgetDeps } from 
 import type { EvidenceRecord } from "../../../packages/framework/src/evidence/public.js";
 import { waitFor } from "./wait.js";
 import { cloudflareAccountOps, fetchCfCall, type CloudAccountOps } from "./test-tokens.js";
+import { assertTokenUsable, guardFetch, InvalidTokenError, MAIN_TOKEN_PURPOSE, markTokenRefused, outputShowsRefusedToken } from "./token-guard.js";
 import type { CfCall } from "./d1-budget.js";
 import { classifyCriterionStages, criterionStagesIn, isCriterionProductionStage, markerKey, MARKER_PREFIX, stageOfMarkerKey } from "./criterion-stages.js";
 import { TEST_TOKEN_LIFETIME_MS } from "./test-tokens.js";
@@ -187,7 +188,8 @@ export async function stageResourceOperations(
   const problems = cloudProcessProblems(options.env);
   if (problems.length > 0) throw new Error(`the leftover check cannot reach ${target}: ${problems.join("; ")}`);
   const factory: OperationsFactory = options.operations ?? targetOperations;
-  const make = factory({ env: options.env, requireCredentials: true, ...(options.fetch === undefined ? {} : { fetch: options.fetch }) });
+  // The main token is sent no further request once the API answered it 401 in this process (token-guard.ts).
+  const make = factory({ env: options.env, requireCredentials: true, fetch: guardFetch(options.fetch ?? fetch, options.env.CLOUDFLARE_API_TOKEN, MAIN_TOKEN_PURPOSE) });
   return make({ appDir: join(repoRoot, "apps", REFERENCE_APP), target });
 }
 
@@ -214,14 +216,28 @@ export function cliStageOps(
   const env = options.env ?? process.env;
   // G-EV F3: operations built on a fake runner or factory say so, and the driver marks the record.
   const fakes = [...(options.run === undefined ? [] : ["fake framework CLI runner"]), ...(options.operations === undefined ? [] : ["fake stage operations (OperationsFactory)"])];
-  const cli = (args: string[], input?: string): Promise<{ status: number; output: string }> =>
-    runner({
+  /**
+   * One framework CLI call with the main token. Once a call's output shows the Cloudflare API's
+   * HTTP 401, the token is invalid: that call rejects with `InvalidTokenError` (naming the token's
+   * purpose, never its value), and no further CLI call or harness request is made with it.
+   */
+  const cli = async (args: string[], input?: string): Promise<{ status: number; output: string }> => {
+    const token = process.env.CLOUDFLARE_API_TOKEN;
+    const what = `prototype-framework ${args.slice(0, 1).join(" ")}`;
+    assertTokenUsable(token, what);
+    const result = await runner({
       command: "npx",
       args: ["prototype-framework", ...args],
       cwd: join(repoRoot, "apps", "reference"),
       env: { ...(process.env as Record<string, string>), NODE_USE_ENV_PROXY: "1" },
       ...(input === undefined ? {} : { input, redact: [input] }),
     });
+    if (result.status !== 0 && token !== undefined && token !== "" && outputShowsRefusedToken(result.output)) {
+      markTokenRefused(token, MAIN_TOKEN_PURPOSE);
+      throw new InvalidTokenError(MAIN_TOKEN_PURPOSE, what);
+    }
+    return result;
+  };
   return {
     ...(fakes.length === 0 ? {} : { dryRun: fakes.join("; ") }),
     async deploy(stage) {

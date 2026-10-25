@@ -30,6 +30,7 @@ export interface FakeToken {
   readonly value: string;
   readonly policies: unknown;
   readonly expires_on?: string;
+  readonly issued_on?: string;
 }
 
 export interface FakeCfApi {
@@ -70,7 +71,7 @@ export function fakeCfApi(options: { subscriptions?: unknown[] | number; perPage
         const params = new URLSearchParams(query);
         const perPage = Math.min(Number(params.get("per_page") ?? "20"), options.perPage ?? 50);
         const page = Number(params.get("page") ?? "1");
-        const all = [...api.tokens.values()].map((t) => ({ id: t.id, name: t.name, status: "active", ...(t.expires_on === undefined ? {} : { expires_on: t.expires_on }) }));
+        const all = [...api.tokens.values()].map((t) => ({ id: t.id, name: t.name, status: "active", ...(t.expires_on === undefined ? {} : { expires_on: t.expires_on }), ...(t.issued_on === undefined ? {} : { issued_on: t.issued_on }) }));
         const total = Math.max(1, Math.ceil(all.length / perPage));
         return Promise.resolve(ok(all.slice((page - 1) * perPage, page * perPage), { result_info: { page, per_page: perPage, total_pages: total, total_count: all.length } }));
       }
@@ -95,6 +96,6 @@ export function fakeCfApi(options: { subscriptions?: unknown[] | number; perPage
 }
 
 /** A token another tool or person made, which the harness must leave alone. */
-export function addForeignToken(api: FakeCfApi, name: string): void {
-  api.tokens.set(`foreign-${name}`, { id: `foreign-${name}`, name, value: "x", policies: [] });
+export function addForeignToken(api: FakeCfApi, name: string, times: { readonly expires_on?: string; readonly issued_on?: string } = {}): void {
+  api.tokens.set(`foreign-${name}`, { id: `foreign-${name}`, name, value: "x", policies: [], ...times });
 }

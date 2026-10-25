@@ -48,6 +48,11 @@ function stageForm(): RegExp {
   return new RegExp(`^test-[a-z0-9]{${String(length)}}$`);
 }
 
+/** True when an evidence record's command shows that the compliance driver wrote it. */
+function isDriverRecord(command: string | undefined): boolean {
+  return (command ?? "").startsWith("npm run compliance ");
+}
+
 interface DriverRun {
   readonly leftovers: readonly string[];
   readonly log: readonly string[];
@@ -59,7 +64,8 @@ interface DriverRun {
  * record is captured, not written.
  */
 async function driverCleanup(targetName: "cloudflare", pendingFile: string, cloud: CloudStageOps): Promise<DriverRun> {
-  const real = nodeDeps(REPO_ROOT);
+  // Without `cloudAccount` (DriverDeps: absent means no plan read and no token created, deleted or checked).
+  const { cloudAccount: _noAccount, ...real } = nodeDeps(REPO_ROOT);
   const log: string[] = [];
   let leftovers: readonly string[] = [];
   const deps: DriverDeps = {
@@ -77,7 +83,11 @@ async function driverCleanup(targetName: "cloudflare", pendingFile: string, clou
     log: (line) => log.push(line),
   };
   const argv = ["--target", targetName, "--base-url", "https://cleanup-check.invalid", "--only", "CF-AC-001"];
+  // The nested driver gets no cloud account: its clauses need no test token, so it can never list,
+  // create or delete the account's tokens (the live run's PROV-AC-002 token among them).
+  expect(deps.cloudAccount, "the nested driver's cloud account").toBeUndefined();
   await runCompliance(parseArgs(argv), argv, deps);
+  expect(log.filter((l) => l.includes("test token")), "token operations of the nested driver").toEqual([]);
   return { leftovers, log };
 }
 
@@ -100,7 +110,11 @@ if (!isLocal()) {
       }
       const stages = files
         .map((f) => (JSON.parse(readFileSync(join(dir, f), "utf8")) as { stage?: string; command?: string }))
-        .filter((r) => !(r.command ?? "").includes("--base-url"))
+        // Only records the compliance driver wrote (its command is `npm run compliance -- …`) are cloud
+        // runs that may have created a test stage, and a run given --base-url created none (COMPL-AC-004).
+        // Other records, such as `check-login` on `prodcheck` (PWD-AC-009, COMPL-AC-006), are not test
+        // stages: COMPL-REQ-004 exempts `prodcheck`.
+        .filter((r) => isDriverRecord(r.command) && !(r.command ?? "").includes("--base-url"))
         .map((r) => r.stage)
         .filter((s): s is string => s !== undefined);
       for (const s of stages) expect(s, "a recorded run's stage").toMatch(form);

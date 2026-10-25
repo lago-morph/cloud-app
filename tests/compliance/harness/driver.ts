@@ -43,7 +43,7 @@ import { grepPattern, parsePlaywrightJson, parseVitestJson } from "./reports.js"
 import { criterionResults, type TestOutcome } from "./results.js";
 import { idsFor, runnerSelection, scopeTests } from "./selection.js";
 import { d1Budget, describeBudget, RUN_PLAN_ENV, type D1Plan } from "./d1-budget.js";
-import { RESTRICTED_TOKENS, type CloudAccountOps, type CreatedToken } from "./test-tokens.js";
+import { RESTRICTED_TOKENS, staleTestTokens, type CloudAccountOps, type CreatedToken } from "./test-tokens.js";
 
 /** How evidence and the driver's output show a self-created test token's value (DEC-0531). */
 export const TEST_TOKEN_REPLACEMENT = "<test-token>";
@@ -342,7 +342,9 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
     const budget = d1Budget(reading.plan);
     raw["d1-budget.json"] = `${JSON.stringify({ ...reading, budget }, null, 2)}\n`;
     log(`compliance: ${describeBudget(budget)} (plan from ${reading.source}: ${reading.detail})`);
-    for (const old of await acc.testTokens()) {
+    // Only tokens an interrupted earlier run left (compliance.md §4): another run's tokens younger
+    // than PAR-286 may be in use (a nested or concurrent run), and the current run's are its own.
+    for (const old of staleTestTokens(await acc.testTokens(), runId, deps.now())) {
       await acc.deleteToken(old.id);
       log(`compliance: deleted the test token ${old.name} an earlier run left`);
     }
