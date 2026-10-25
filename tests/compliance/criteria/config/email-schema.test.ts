@@ -10,7 +10,12 @@
  *
  * Checked through the build (`build --target local --stage local` in a scratch copy of the
  * reference app, whose committed `config/local.json` is edited there): a refused file fails the
- * build with `CORE.MISCONFIGURED` naming the field (DEC-0152); `senderName` alone builds.
+ * build, and the printed message names the file and reports the field as an unknown field, the
+ * form of a schema violation (config.md §2 "Build failures", DEC-0152); `senderName` alone builds.
+ *
+ * Neither criterion requires the error code in the CLI's output. The build's error is a
+ * `CORE.MISCONFIGURED` FrameworkError (config.md §2), but a CLI failure prints only its message
+ * (cli.md §2 "Implementation"), so the code is not asserted in the output.
  */
 import { describe, expect, it } from "vitest";
 import { tag } from "../../harness/index.js";
@@ -40,8 +45,7 @@ if (isLocal()) {
             await copy.write("config/local.json", original);
             const r = await buildWith(copy, c.framework);
             expect(r.status, `${c.what}: the build fails\n${r.output.slice(-3000)}`).not.toBe(0);
-            expect(r.output, `${c.what}: CORE.MISCONFIGURED`).toContain("CORE.MISCONFIGURED");
-            expect(r.output, `${c.what}: the error names the field`).toContain(c.field);
+            expect(r.output, `${c.what}: rejected by schema validation as an unknown field naming it (DEC-0152)`).toMatch(new RegExp(`unknown[^\\n]*\\b${c.field}\\b`, "i"));
             expect(r.output, `${c.what}: the error names the file`).toContain("local.json");
           }
           await copy.write("config/local.json", original);
