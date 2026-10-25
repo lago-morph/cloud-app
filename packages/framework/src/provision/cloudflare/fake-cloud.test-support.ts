@@ -66,10 +66,35 @@ export interface FakeZone {
   sending: { id: string; name: string; enabled: boolean; pollsUntilEnabled: number }[];
   /** Subdomains whose Email Routing MX/SPF records exist. */
   routedSubdomains: Set<string>;
-  /** GETs of a subdomain's routing records after enabling, before the records show (propagation). */
+  /** `GET …/dns_records` reads after a routing POST before its records show (propagation). */
   routingPollsLeft: number;
+  /** Email Routing on the zone (`GET /zones/<z>/email/routing` `enabled`); a subdomain POST turns it on, as live. */
+  routingEnabled: boolean;
+  /** The zone's DNS records (`GET /zones/<z>/dns_records`). */
+  dnsRecords: FakeDnsRecord[];
   supportSubaddress: boolean;
   rules: FakeRoutingRule[];
+}
+
+export interface FakeDnsRecord {
+  name: string;
+  type: string;
+  content: string;
+  priority?: number;
+  ttl: number;
+}
+
+/** Email Routing's SPF TXT content, quoted as the API returns it. */
+export const ROUTING_SPF = '"v=spf1 include:_spf.mx.cloudflare.net ~all"';
+
+/** The records `GET /zones/<z>/email/routing/dns?subdomain=<sub>` lists for `sub`, exactly as live on 2026-10-25. */
+export function routingRecordsFor(sub: string): FakeDnsRecord[] {
+  return [
+    { name: sub, content: "route1.mx.cloudflare.net.", type: "MX", priority: 96, ttl: 1 },
+    { name: sub, content: "route2.mx.cloudflare.net.", type: "MX", priority: 97, ttl: 1 },
+    { name: sub, content: "route3.mx.cloudflare.net.", type: "MX", priority: 97, ttl: 1 },
+    { name: sub, content: ROUTING_SPF, type: "TXT", ttl: 1 },
+  ];
 }
 
 export class FakeCloud {
@@ -117,6 +142,8 @@ export class FakeCloud {
       sending: [],
       routedSubdomains: new Set(),
       routingPollsLeft: 0,
+      routingEnabled: false,
+      dnsRecords: [],
       supportSubaddress: false,
       rules: [{ id: `rule${this.nextZoneThing++}`, name: "", enabled: false, matchers: [{ type: "all" }], actions: [{ type: "drop" }] }],
     };
@@ -270,6 +297,16 @@ export class FakeCloud {
       const zone = name === null ? undefined : this.zones.get(name);
       return ok(zone ? [{ id: zone.id, name: zone.name, status: zone.status, account: { id: ACCOUNT } }] : [], { result_info: { page: 1, total_pages: 1 } });
     }
+    const dns = /^\/zones\/([^/]+)\/dns_records$/.exec(p);
+    if (dns && method === "GET") {
+      const z = this.zoneById(dns[1]!);
+      if (!z) return err(404, 1001, "zone not found");
+      const name = url.searchParams.get("name");
+      // Records added by a routing POST show only after `routingPolls` reads (propagation).
+      const hidden = z.routingPollsLeft-- > 0;
+      const list = hidden ? [] : z.dnsRecords.filter((r) => name === null || r.name === name);
+      return ok(list.map((r, i) => ({ id: `dns${i}`, name: r.name, type: r.type, content: r.content, ...(r.priority === undefined ? {} : { priority: r.priority }), ttl: r.ttl, locked: true })), { result_info: { page: 1, per_page: 100, count: list.length, total_count: list.length, total_pages: 1 } });
+    }
     const m = /^\/zones\/([^/]+)\/email\/(sending\/subdomains|routing)(\/.*)?$/.exec(p);
     const zone = m ? this.zoneById(m[1]!) : undefined;
     if (!m || !zone) return err(404, 1001, "zone not found");
@@ -290,21 +327,32 @@ export class FakeCloud {
       }
       return err(404, 1002, "not found");
     }
-    if (rest === "" && method === "GET") return ok({ name: zone.name, enabled: false, support_subaddress: zone.supportSubaddress, status: "unconfigured" });
+    const view = () => ({ name: zone.name, enabled: zone.routingEnabled, support_subaddress: zone.supportSubaddress, status: zone.routingEnabled ? "misconfigured" : "unconfigured" });
+    if (rest === "" && method === "GET") return ok(view());
     if (rest === "" && method === "PATCH") {
       if (typeof b.support_subaddress === "boolean") zone.supportSubaddress = b.support_subaddress;
-      return ok({ name: zone.name, enabled: false, support_subaddress: zone.supportSubaddress });
+      return ok(view());
     }
     if (rest === "/dns" && method === "GET") {
+      // As live (2026-10-25): with `subdomain`, `result` is `{ errors, records }`, and `records`
+      // lists every required record whether it exists or not; `errors` is null once they exist.
       const sub = url.searchParams.get("subdomain") ?? zone.name;
-      const records = [1, 2, 3].map((n) => ({ name: sub, content: `route${n}.mx.cloudflare.net.`, type: "MX", priority: n === 1 ? 96 : 97, ttl: 1 }));
-      const present = zone.routedSubdomains.has(sub) && zone.routingPollsLeft-- <= 0;
-      return ok({ errors: present ? [] : records.map((r) => ({ code: "mx.missing", missing: r })), records });
+      const records = routingRecordsFor(sub);
+      const present = records.every((want) => zone.dnsRecords.some((have) => have.name === want.name && have.type === want.type));
+      return ok({ errors: present ? null : records.map((r) => ({ code: r.type === "MX" ? "mx.missing" : "spf.missing", missing: r })), records });
     }
     if (rest === "/dns" && method === "POST") {
+      // As live: routing is turned on for the whole zone, with an apex SPF and DKIM TXT but no apex MX.
       const sub = String(b.name ?? zone.name);
       zone.routedSubdomains.add(sub);
       zone.routingPollsLeft = this.routingPolls;
+      zone.routingEnabled = true;
+      const add = (r: FakeDnsRecord) => {
+        if (!zone.dnsRecords.some((x) => x.name === r.name && x.type === r.type && x.content === r.content)) zone.dnsRecords.push(r);
+      };
+      for (const r of routingRecordsFor(sub)) add({ ...r, content: r.type === "MX" ? r.content.replace(/\.$/, "") : r.content });
+      add({ name: zone.name, type: "TXT", content: ROUTING_SPF, ttl: 1 });
+      add({ name: `cf2024-1._domainkey.${zone.name}`, type: "TXT", content: '"v=DKIM1; h=sha256; k=rsa; p=FAKE"', ttl: 1 });
       return ok({ name: sub, enabled: true, status: "ready" });
     }
     if (rest === "/rules" && method === "GET") return ok(zone.rules, { result_info: { page: 1, per_page: 50, count: zone.rules.length, total_count: zone.rules.length } });

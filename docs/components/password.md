@@ -101,7 +101,7 @@ Every endpoint can also answer 403 `AUTH.REQUEST_FORGERY` (AUTH-REQ-007) and 429
 **Mail.** Through MAIL's `MailSender`, inside `waitUntil`. Three messages: verification, reset, and "someone tried to register with this address". The links come from BA, built from `baseURL`, so a forged `Host` or `X-Forwarded-Host` never changes them (RESULT.md S3).
 
 **Real-provider check** (`check-login --target cloudflare --stage <s>`, DEC-0512). It refuses `test-*` stages. The base URL comes from the recorded deploy output, the domain from the account settings record (DEC-0514), and the mail from the sink (MAIL §2). The steps, stopping at the first failure:
-1. sign up `<run ID>@t.<domain>` with a random password; a forged `Host` header is sent with this request;
+1. sign up `sink+<run ID>@t.<domain>` (`sinkAddress`, DEC-0527) with a random password; a forged `Host` header is sent with this request;
 2. sign-in is refused with 403 `AUTH.NOT_VERIFIED`, and no new mail arrives;
 3. read the verification mail from the sink; its link is on the public origin; a bogus token gets 400 `AUTH.LOGIN_FAILED` and sets no cookie; the real token verifies;
 4. sign in; `/api/auth/me` shows level `user` and a well-formed ID;

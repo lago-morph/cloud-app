@@ -15,10 +15,12 @@
  *   3. The sink Worker `prototype-mailsink` (`src/mail/sink-worker.ts`), uploaded with
  *      `PUT …/workers/scripts/prototype-mailsink` only when `GET …/settings` lacks the tag
  *      carrying the source's hash.
- *   4. Email Routing on `t.<domain>` only, never the apex: `GET /zones/<z>/email/routing/dns
- *      ?subdomain=t.<domain>` lists the MX and SPF records still missing; when any is,
- *      `POST /zones/<z>/email/routing/dns` with `{ "name": "t.<domain>" }` adds and locks them,
- *      and the GET is polled until none is missing.
+ *   4. Email Routing on `t.<domain>`: `GET /zones/<z>/email/routing/dns?subdomain=t.<domain>`
+ *      lists every MX and SPF record the subdomain needs, present or not, and
+ *      `GET /zones/<z>/dns_records?name=t.<domain>` lists those that exist. Only when one is
+ *      absent (or Cloudflare reports an error) is `POST /zones/<z>/email/routing/dns`
+ *      `{ "name": "t.<domain>" }` sent; then both GETs are polled until none is. That POST also
+ *      turns on routing for the whole zone (apex SPF and DKIM, but no apex MX; DEC-0527, i-f.md).
  *   5. Subaddressing (`support_subaddress`, `GET`/`PATCH /zones/<z>/email/routing`).
  *   6. The routing rule: `sink@t.<domain>` → Worker `prototype-mailsink`. Cloudflare allows
  *      catch-all rules on the apex only, so the sink receives `sink+<tag>@t.<domain>` through
@@ -123,6 +125,27 @@ interface RoutingRule {
   readonly enabled?: boolean;
   readonly matchers?: readonly { readonly type?: string; readonly field?: string; readonly value?: string }[];
   readonly actions?: readonly { readonly type?: string; readonly value?: readonly string[] }[];
+}
+
+/** A DNS record as Email Routing's `…/routing/dns` and the zone's `dns_records` list it. */
+export interface RoutingDnsRecord {
+  readonly name: string;
+  readonly type: string;
+  readonly content: string;
+  readonly priority?: number;
+}
+
+function isRoutingDnsRecord(value: unknown): value is RoutingDnsRecord {
+  const v = value as { name?: unknown; type?: unknown; content?: unknown } | null;
+  return typeof v === "object" && v !== null && typeof v.name === "string" && typeof v.type === "string" && typeof v.content === "string";
+}
+
+/** Record content compared loosely: case, surrounding quotes (TXT) and a trailing dot (MX targets) do not count. */
+const dnsContent = (content: string): string => content.trim().replace(/^"(.*)"$/s, "$1").replace(/\.$/, "").toLowerCase();
+
+/** Whether an existing zone record satisfies a required one: same name, type and content. MX priority is Cloudflare's choice, so it is not compared. */
+export function sameDnsRecord(want: RoutingDnsRecord, have: RoutingDnsRecord): boolean {
+  return want.name.toLowerCase() === have.name.toLowerCase() && want.type.toUpperCase() === have.type.toUpperCase() && dnsContent(want.content) === dnsContent(have.content);
 }
 
 /** The zone names a domain may belong to: itself, then each parent with at least two labels. */
@@ -251,21 +274,62 @@ export function createCloudflareEmailSetup(options: EmailSetupOptions): Cloudfla
 
   // ---- Email Routing on t.<domain> ----
   const routingPath = (zone: Zone) => `/zones/${zone.id}/email/routing`;
-  async function missingRoutingRecords(zone: Zone, sub: string): Promise<string[]> {
+  /**
+   * The records Cloudflare requires for `sub`, and the errors it reports. The API reference
+   * ("Email Routing DNS settings: Get", i-f.md) documents `result` as the list of DNS records
+   * "needed to configure your Email Routing zone". With the deprecated `subdomain` parameter
+   * the live answer is `{ errors, records }` instead (2026-10-25), and `records` lists every
+   * required record whether it exists or not. Both shapes are accepted.
+   */
+  async function requiredRoutingRecords(zone: Zone, sub: string): Promise<{ records: RoutingDnsRecord[]; errors: string[] }> {
     const r = await api("GET", `${routingPath(zone)}/dns?subdomain=${encodeURIComponent(sub)}`);
-    const result = resultOf<unknown>(r, `reading the Email Routing DNS records of ${sub}`);
-    // With `subdomain`, the answer is `{ errors: [{ code, missing }], records }` (seen live 2026-10-25).
-    const errors = typeof result === "object" && result !== null && !Array.isArray(result) ? (result as { errors?: unknown }).errors : undefined;
-    if (!Array.isArray(errors)) throw new Error(`reading the Email Routing DNS records of ${sub}: unexpected answer shape (${describeFailure(r)})`);
-    return errors.map((e: { code?: unknown; missing?: { type?: unknown; content?: unknown } }) => `${String(e.code ?? "error")}${e.missing ? ` ${String(e.missing.type ?? "")} ${String(e.missing.content ?? "")}` : ""}`.trim());
+    const what = `reading the Email Routing DNS records of ${sub}`;
+    const result = resultOf<unknown>(r, what);
+    const shapeError = () => new Error(`${what}: unexpected answer shape (${describeFailure(r)})`);
+    let records: unknown;
+    let errors: unknown = null;
+    if (Array.isArray(result)) records = result;
+    else if (typeof result === "object" && result !== null) ({ records, errors = null } = result as { records?: unknown; errors?: unknown });
+    else throw shapeError();
+    if (!Array.isArray(records) || records.length === 0 || !records.every(isRoutingDnsRecord)) throw shapeError();
+    if (errors !== null && !Array.isArray(errors)) throw shapeError();
+    const reported = ((errors as { code?: unknown; missing?: { type?: unknown; content?: unknown } }[] | null) ?? []).map(
+      (e) => `${String(e.code ?? "error")}${e.missing ? ` ${String(e.missing.type ?? "")} ${String(e.missing.content ?? "")}` : ""}`.trim(),
+    );
+    return { records, errors: reported };
+  }
+
+  /** The zone's DNS records named `name` (`GET /zones/<z>/dns_records?name=<name>`, an exact match). */
+  async function zoneDnsRecords(zone: Zone, name: string): Promise<RoutingDnsRecord[]> {
+    const out: RoutingDnsRecord[] = [];
+    for (let page = 1; page <= 10; page++) {
+      const r = await api("GET", `/zones/${zone.id}/dns_records?name=${encodeURIComponent(name)}&per_page=100&page=${page}`);
+      const batch = resultOf<unknown>(r, `listing the DNS records of ${name}`);
+      if (!Array.isArray(batch)) throw new Error(`listing the DNS records of ${name}: unexpected answer shape (${describeFailure(r)})`);
+      out.push(...batch.filter(isRoutingDnsRecord));
+      const pages = (r.body as { result_info?: { total_pages?: unknown } }).result_info?.total_pages;
+      if (batch.length < 100 || typeof pages !== "number" || page >= pages) return out;
+    }
+    throw new Error(`listing the DNS records of ${name}: more than 10 pages`);
+  }
+
+  /** What still stops routing on `sub`: required records absent from the zone's DNS, and the errors Cloudflare reports. Empty when ready. */
+  async function routingGaps(zone: Zone, sub: string): Promise<string[]> {
+    const { records, errors } = await requiredRoutingRecords(zone, sub);
+    const existing = await zoneDnsRecords(zone, sub);
+    const missing = records.filter((want) => !existing.some((have) => sameDnsRecord(want, have))).map((want) => `${want.type} ${want.content}`);
+    return [...new Set([...missing, ...errors])];
   }
 
   async function ensureRouting(zone: Zone, domain: string, created: string[]): Promise<void> {
     const sub = testMailDomain(domain);
-    if ((await missingRoutingRecords(zone, sub)).length === 0) return;
+    if ((await routingGaps(zone, sub)).length === 0) return;
+    // Known Cloudflare behaviour (seen live 2026-10-25; DEC-0527, i-f.md): this POST also turns
+    // on Email Routing for the whole zone and adds an apex SPF TXT and a DKIM TXT. The apex gets
+    // no MX, so the zone reads `status: "misconfigured"` and the apex receives nothing.
     resultOf(await api("POST", `${routingPath(zone)}/dns`, { name: sub }), `enabling Email Routing on ${sub}`);
     created.push(EMAIL_RESOURCES.routing(domain));
-    await poll(`the Email Routing DNS records of ${sub}`, () => missingRoutingRecords(zone, sub), (m) => m.length === 0, (m) => `missing: ${m.join(", ")}`);
+    await poll(`the Email Routing DNS records of ${sub}`, () => routingGaps(zone, sub), (m) => m.length === 0, (m) => `missing: ${m.join(", ")}`);
   }
 
   async function ensureSubaddressing(zone: Zone, created: string[]): Promise<void> {

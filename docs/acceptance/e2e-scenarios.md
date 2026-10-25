@@ -81,7 +81,7 @@ Follow only the documented steps (DEC-0521, DEC-0523, DEC-0526):
 3. Send the next request with the same session: no new login, no deploy.
 4. Revoke the role with `admins revoke`, and send one more request.
 
-Locally this runs through `dev` and the reference app's local D1, with `--target local`. On each cloud it runs on the `prodcheck` stage, with an address under `t.<domain>`, the mail read from the sink, and `--confirm-production prodcheck`. It is automated on every cloud run, with no owner step and no commit.
+Locally this runs through `dev` and the reference app's local D1, with `--target local`. On each cloud it runs on the `prodcheck` stage, with a sink address `sink+<run ID>@t.<domain>` (DEC-0527), the mail read from the sink, and `--confirm-production prodcheck`. It is automated on every cloud run, with no owner step and no commit.
 
 Pass:
 - the user is `user` before the grant;
