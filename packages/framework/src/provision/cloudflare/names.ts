@@ -29,8 +29,8 @@ export const MAIL_SINK_NAME = "prototype-mailsink";
 
 /** Worker scripts that are account resources, never a stage's (PROV-REQ-003, PROV-REQ-004). */
 export const ACCOUNT_WORKERS: readonly string[] = Object.freeze([MAIL_SINK_NAME]);
-/** R2 buckets that are account resources, never a stage's: the log bucket, the state home and the mail sink's. */
-export const ACCOUNT_BUCKETS: readonly string[] = Object.freeze(["prototype-logs", STATE_BUCKET, MAIL_SINK_NAME]);
+/** R2 buckets that are account resources, never a stage's: the log bucket, the state home, the mail sink's and the backup bucket (DEC-0543). */
+export const ACCOUNT_BUCKETS: readonly string[] = Object.freeze(["prototype-logs", STATE_BUCKET, MAIL_SINK_NAME, "prototype-backups"]);
 
 /**
  * Why the stage's fixed names would collide with an account resource, or undefined. App names

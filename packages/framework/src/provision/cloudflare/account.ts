@@ -3,6 +3,8 @@
  * mechanics" `setupAccount`; LOG §2; PROV §2 "State home"). The account's shared resources are:
  * - the shared R2 log bucket `prototype-logs`;
  * - SST's state home, the R2 bucket `sst-state` (DEC-0084);
+ * - the backup bucket `prototype-backups` and its PAR-311 lifecycle rule, where the production
+ *   `remove` writes a stage's data before deleting it (DEC-0543; `backup.ts`);
  * - the account's `workers.dev` subdomain (DEC-0086), the account setting that every stage's
  *   public origin is built from. Cloudflare keeps it; it is read from there on every deploy,
  *   never only recorded on the owner's machine (DEC-0333).
@@ -22,6 +24,7 @@
  */
 import type { SharedResource } from "../core/operations.js";
 import { describeFailure, resultOf, succeeded, type CloudflareApi } from "./api.js";
+import { BACKUP_BUCKET, BACKUP_BUCKET_RESOURCE, BACKUP_LIFECYCLE_RESOURCE, inspectBackupResources, setBackupLifecycle } from "./backup.js";
 import { STATE_BUCKET } from "./names.js";
 
 export type { CloudflareApi } from "./api.js";
@@ -89,6 +92,7 @@ export async function inspectSharedResources(api: CloudflareApi, accountId: stri
   return [
     await inspectBucket(api, accountId, LOG_BUCKET),
     await inspectBucket(api, accountId, STATE_BUCKET),
+    ...(await inspectBackupResources(api, accountId)),
     { name: SUBDOMAIN_RESOURCE, state: (await readSubdomain(api, accountId)) === undefined ? "absent" : "owned" },
   ];
 }
@@ -98,6 +102,8 @@ export async function createSharedResources(api: CloudflareApi, accountId: strin
   for (const resource of absent) {
     if (resource.name === LOG_BUCKET_RESOURCE) await createBucket(api, accountId, LOG_BUCKET);
     else if (resource.name === STATE_HOME_RESOURCE) await createBucket(api, accountId, STATE_BUCKET);
+    else if (resource.name === BACKUP_BUCKET_RESOURCE) await createBucket(api, accountId, BACKUP_BUCKET);
+    else if (resource.name === BACKUP_LIFECYCLE_RESOURCE) await setBackupLifecycle(api, accountId);
     else if (resource.name === SUBDOMAIN_RESOURCE) await registerSubdomain(api, accountId);
     else throw new Error(`unknown Cloudflare shared resource ${resource.name}`);
   }

@@ -32,6 +32,33 @@ export interface StageDatabase {
   readonly id: string;
 }
 
+/** What `copyDatabase` returns: the new database and how the target copied it. */
+export interface CopiedDatabase extends StageDatabase {
+  /**
+   * How the copy was made, printed in the deploy output (DEC-0545; Cloudflare: `D1 native
+   * export/import`, or `row-by-row copy (<why>)`). Absent when the target has one way only.
+   */
+  readonly method?: string;
+}
+
+/**
+ * The stage's own record in the target's state home (DEC-0544; Cloudflare:
+ * `framework/<app>/<stage>/stage.json` in `sst-state`). `stopped`: the owner stopped the stage
+ * with `stop`, and a deploy without `--start` leaves it stopped. A stage without a record is
+ * not stopped.
+ */
+export interface StageRecord {
+  readonly stopped: boolean;
+}
+
+/** Where the production `remove`'s backup was written, and what it holds (DEC-0543). */
+export interface StageBackup {
+  /** For the owner, e.g. `R2 bucket prototype-backups, prefix notes/prod/20261025T150301Z/`. */
+  readonly location: string;
+  /** What was backed up, e.g. `database notes-prod-db-3`, `12 files`. */
+  readonly items: readonly string[];
+}
+
 /** A database as a target lists it, before the core matches its name against the anchored pattern. */
 export interface ListedDatabase {
   readonly name: string;
@@ -155,10 +182,14 @@ export interface TargetOperations {
   stopApp(stage: Stage): Promise<void>;
   /** Restarts it; called explicitly on every deploy and after a failed migration or check. */
   startApp(stage: Stage): Promise<void>;
+  /** The stage's record (DEC-0544); `{ stopped: false }` when it has none. Reads only. */
+  readStageRecord(stage: Stage): Promise<StageRecord>;
+  /** Writes the stage's record; `{ stopped: false }` deletes it. Only `stop`, `start` and `deploy --start` call it. */
+  writeStageRecord(stage: Stage, record: StageRecord): Promise<void>;
 
   createDatabase(stage: Stage, name: string): Promise<StageDatabase>;
   /** Creates database `name` as a full copy of `from`. */
-  copyDatabase(stage: Stage, from: StageDatabase, name: string): Promise<StageDatabase>;
+  copyDatabase(stage: Stage, from: StageDatabase, name: string): Promise<CopiedDatabase>;
   dropDatabase(stage: Stage, database: StageDatabase): Promise<void>;
   /** Access to one database's migration record and atomic per-file application (MIG §2 "Record"). */
   migrationDatabase(database: StageDatabase): MigrationDatabase;
@@ -177,4 +208,10 @@ export interface TargetOperations {
    * resources or other stages. May throw; the core then reports leftovers from `listStageResources`.
    */
   removeStage(stage: Stage): Promise<void>;
+  /**
+   * The production `remove`'s backup (DEC-0543), before anything is deleted: exports each of
+   * `databases` and copies the stage's files into the account's backup bucket, then checks that
+   * everything arrived. Throws when any step fails; it never deletes anything of the stage.
+   */
+  backupStage(stage: Stage, databases: readonly StageDatabase[]): Promise<StageBackup>;
 }

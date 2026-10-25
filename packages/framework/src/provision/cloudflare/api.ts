@@ -77,3 +77,40 @@ export function errorCode(r: ApiReply): number | undefined {
   const code = Array.isArray(errors) ? errors[0]?.code : undefined;
   return typeof code === "number" ? code : undefined;
 }
+
+/**
+ * One request whose bodies are bytes, not JSON (DEC-0543): an R2 object's own bytes through the
+ * R2 object endpoints of `api.cloudflare.com` (`GET`/`PUT …/r2/buckets/<bucket>/objects/<key>`),
+ * used by the production `remove`'s backup. Same token handling as `CloudflareApi`; the answer
+ * keeps its bytes and content type. `body` is parsed JSON when the answer is JSON (an error).
+ */
+export type CloudflareBytesApi = (
+  method: "GET" | "PUT",
+  path: string,
+  body?: { readonly bytes: Uint8Array; readonly contentType?: string },
+) => Promise<{ readonly status: number; readonly bytes: Uint8Array; readonly contentType?: string; readonly body: unknown }>;
+
+export function createCloudflareBytesApi(options: CloudflareApiOptions): CloudflareBytesApi {
+  const doFetch = options.fetch ?? fetch;
+  return async (method, path, body) => {
+    const headers: Record<string, string> = { authorization: `Bearer ${options.token}` };
+    if (body !== undefined) headers["content-type"] = body.contentType ?? "application/octet-stream";
+    let response: Response;
+    try {
+      response = await doFetch(`${API_BASE}${path}`, { method, headers, ...(body === undefined ? {} : { body: new Blob([body.bytes.slice()]) }) });
+    } catch (error) {
+      throw new Error(`Cloudflare API request ${method} ${path} got no response: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const contentType = response.headers.get("content-type") ?? undefined;
+    let parsed: unknown = null;
+    if (contentType?.includes("application/json") === true) {
+      try {
+        parsed = JSON.parse(new TextDecoder().decode(bytes));
+      } catch {
+        // not JSON after all
+      }
+    }
+    return { status: response.status, bytes, ...(contentType === undefined ? {} : { contentType }), body: parsed };
+  };
+}

@@ -13,12 +13,13 @@ import { describeFailure, resultOf, succeeded, type CloudflareApi } from "./api.
 
 const objectsPath = (accountId: string, bucket: string) => `/accounts/${accountId}/r2/buckets/${bucket}/objects`;
 
-/** Every object key in the bucket; empty when the bucket does not exist. */
-export async function listObjectKeys(api: CloudflareApi, accountId: string, bucket: string): Promise<string[]> {
+/** Every object key in the bucket (under `prefix`, when given); empty when the bucket does not exist. */
+export async function listObjectKeys(api: CloudflareApi, accountId: string, bucket: string, prefix?: string): Promise<string[]> {
   const keys: string[] = [];
   let cursor: string | undefined;
+  const filter = prefix === undefined ? "" : `&prefix=${encodeURIComponent(prefix)}`;
   do {
-    const r = await api("GET", `${objectsPath(accountId, bucket)}?per_page=1000${cursor === undefined ? "" : `&cursor=${encodeURIComponent(cursor)}`}`);
+    const r = await api("GET", `${objectsPath(accountId, bucket)}?per_page=1000${filter}${cursor === undefined ? "" : `&cursor=${encodeURIComponent(cursor)}`}`);
     if (r.status === 404) return [];
     for (const o of resultOf<{ key: string }[]>(r, `listing the objects of R2 bucket ${bucket}`)) keys.push(o.key);
     const info = (r.body as { result_info?: { cursor?: unknown; is_truncated?: unknown } }).result_info;

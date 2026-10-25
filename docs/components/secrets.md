@@ -57,6 +57,8 @@ The Data API's database credentials are the one exception to SEC-REQ-003's AWS r
 
 **Local.** Missing framework-internal development secrets are generated into `.dev.vars` on first `dev`; existing values are never overwritten. These are `frameworkSessionKey`, `frameworkAuthSecret` and `frameworkLocalTicketKey`, each 32 random bytes (PAR-253) in base64url; an assignment with an empty value counts as missing. `.dev.vars` is written with owner-only permissions. Values are written in the form Wrangler reads back unchanged (its dotenv parse and `$` expansion): `$` is escaped and the value is quoted with the first of `'`, `"`, `` ` `` that reads back exactly; a value with a line break, or one no quoting can represent, is refused. Setting a name replaces its existing assignment in place and keeps other lines (DEC-0159).
 
+**Propagation on Cloudflare.** A Worker secret is part of the Worker's version: setting or deleting one rolls out a new version, and requests reach it a few seconds later (DEC-0092). The framework reads the binding on every request and never caches across requests (SEC-REQ-005), so the delay is the platform's alone. SEC-AC-005 therefore allows PAR-310 for the change to reach requests (DEC-0540).
+
 **AWS.** `GetParameter` with decryption, using the Lambda role. The role is granted read access to the stage's `/<app>/<stage>/secrets/` path only. Deferred (branch `aws`).
 
 ## 3. Uses
@@ -71,7 +73,7 @@ CFG (declared names and resolved locations), CLI (setting values), PROV (IAM per
 | SEC-AC-002 | A scan of the repository, the build output, the deployed browser assets, the stored log entries, and error responses from a test run finds no test secret value. The stored log entries also contain no test session cookie value and no issued ticket URL; locally, they also contain no stub login provider authorization code, and no test password, verification token or reset token of the password provider. | SEC-REQ-002 | Local, cloud |
 | SEC-AC-003 | After a secret is set with the CLI, it exists at the specified location on each target. IAM policy simulation against the stage role shows the AWS Lambda role cannot read another stage's secrets. (IAM simulation clause: deferred, branch `aws`.) | SEC-REQ-003 | Local, cloud |
 | SEC-AC-004 | The CLI rejects a secret value supplied as a command-line argument. | SEC-REQ-004 | Local |
-| SEC-AC-005 | On each cloud, after `secrets set`, the next request sees the new value; after the test deletes the secret directly through the target's store (a test hook), the next request fails with `SEC.MISSING`. | SEC-REQ-005 | Cloud |
+| SEC-AC-005 | On each cloud, after `secrets set`, requests see the new value within PAR-310, and 5 consecutive requests after the first that sees it all see it; after the test deletes the secret directly through the target's store (a test hook), requests fail with `SEC.MISSING` within PAR-310, and 5 consecutive requests after the first that fails all fail with it (amended by DEC-0540, owner). | SEC-REQ-005 | Cloud |
 
 ## 5. Portability note
 
