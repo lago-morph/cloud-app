@@ -188,8 +188,7 @@ describe("production remove backs up first (DEC-0543)", () => {
 
   it("after turning the route off, remove waits PAR-315 for requests in flight before it reads anything for the backup", async () => {
     const waits: { ms: number; route: boolean | undefined; exports: number }[] = [];
-    let s!: ReturnType<typeof setup>;
-    s = setup({ sleep: async (ms) => void waits.push({ ms, route: route(s.cloud, prod), exports: s.databases.calls.filter((c) => c.startsWith("export")).length }) });
+    const s: ReturnType<typeof setup> = setup({ sleep: async (ms) => void waits.push({ ms, route: route(s.cloud, prod), exports: s.databases.calls.filter((c) => c.startsWith("export")).length }) });
     expect((await runDeploy(s.target, request(prod), captureIo())).status).toBe(0);
     waits.length = 0;
     const io = captureIo();
