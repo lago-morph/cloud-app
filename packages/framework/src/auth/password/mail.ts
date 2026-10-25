@@ -9,24 +9,14 @@
  * - Sends run in the request's `waitUntil` (MAIL-REQ-001) and never reject: a failed send is one
  *   `MAIL` error entry naming the provider's error code, never the address.
  *
- * `MailInput` and `MailSender` are MAIL's sender interface (mail.md §2 "Interface"), structurally;
- * `src/mail/sender.ts` (I-D) declares the same shapes.
+ * `MailInput` and `MailSender` are MAIL's sender interface (`src/mail/sender.ts`, mail.md §2
+ * "Interface"); the send goes through MAIL's `sendInBackground`, the same path as `sendRequestMail`.
  */
 import type { LogService } from "../../log/public.js";
+import { sendInBackground, type MailInput, type MailSender } from "../../mail/sender.js";
 import { RESET_LINK_SECONDS, VERIFICATION_LINK_SECONDS } from "./options.js";
 
-/** What a caller asks MAIL to send. */
-export interface MailInput {
-  readonly to: string;
-  readonly subject: string;
-  readonly text: string;
-  readonly html: string;
-}
-
-/** MAIL's sender interface. */
-export interface MailSender {
-  send(message: MailInput): Promise<void>;
-}
+export type { MailInput, MailSender };
 
 export type PasswordMailKind = "verification" | "reset" | "existing";
 
@@ -79,24 +69,7 @@ export function passwordMessage(kind: PasswordMailKind, to: string, displayName:
   return { to, subject: c.subject, text, html };
 }
 
-/** Only codes of this shape are logged (Email Service's `E_SENDER_NOT_VERIFIED`, ...). */
-const ERROR_CODE = /^[A-Z][A-Z0-9_]{0,63}$/;
-
-/** Starts `message` in the background; a rejection becomes one `MAIL` entry without the address. */
+/** Starts `message` in the background through MAIL (MAIL-REQ-001); a failure becomes one `MAIL` entry without the address. */
 export function sendLater(waitUntil: (work: Promise<unknown>) => void, sender: MailSender, log: LogService, message: MailInput): void {
-  let pending: Promise<void>;
-  try {
-    pending = sender.send(message);
-  } catch (thrown) {
-    pending = Promise.reject(thrown);
-  }
-  const settled = pending.catch((thrown: unknown) => {
-    const code = typeof thrown === "object" && thrown !== null ? (thrown as { code?: unknown }).code : undefined;
-    log.write("MAIL", "error", `mail send failed: ${typeof code === "string" && ERROR_CODE.test(code) ? code : "unknown"}`);
-  });
-  try {
-    waitUntil(settled);
-  } catch {
-    // No usable background-task mechanism: the send still runs to completion on its own.
-  }
+  sendInBackground({ waitUntil }, sender, log, message);
 }

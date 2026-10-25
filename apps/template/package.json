@@ -14,7 +14,8 @@
     "secrets": "prototype-framework secrets",
     "setup-account": "prototype-framework setup-account",
     "certify-auth": "prototype-framework certify-auth",
-    "reset-local": "prototype-framework reset-local"
+    "reset-local": "prototype-framework reset-local",
+    "mail": "prototype-framework mail"
   },
   "dependencies": {
     "@lago-morph/prototype-framework": "0.1.0",

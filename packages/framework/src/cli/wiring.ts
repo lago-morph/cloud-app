@@ -65,3 +65,6 @@ export const verifyBinding: Command = lazy(async () => {
 });
 
 export const devBinding: Command = lazy(async () => (await import("./commands/dev.js")).devBinding());
+
+/** `mail last`: locally only for now; the Cloudflare mail-sink reader comes with the sink's provisioning. */
+export const mailBinding: Command = lazy(async () => (await import("./commands/mail.js")).mailCommand());

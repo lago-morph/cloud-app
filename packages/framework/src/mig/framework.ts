@@ -11,6 +11,10 @@
  * - `__framework_auth_{user,account,session,verification,rate_limit}` — Better Auth's tables
  *   for the password provider (password.md §2 "Tables"), defined in `auth/password/tables.ts`
  *   and added by the history's second migration, `0001_auth_tables`.
+ * - `__framework_test_mail(id, recipient, sender, subject, text_body, html_body, sent_at)` — the
+ *   test-stage mail capture (mail.md §2): written only by the `test-*` stages' capture sender,
+ *   so it stays empty on production stages. `sent_at` is an ISO 8601 UTC time (sortable as text).
+ *   Added by the third migration, `0002_framework_test_mail`.
  *
  * These are plain Drizzle tables, not `defineTable` tables: their keys are not UUIDs.
  * Workers-compatible; the histories' location (Node only) is `migrations-dir.ts`.
@@ -22,6 +26,9 @@ import type { Dialect } from "../sql/dialect.js";
 
 export const KV_TABLE = "__framework_kv";
 export const MIGRATIONS_TABLE = "__framework_migrations";
+export const TEST_MAIL_TABLE = "__framework_test_mail";
+
+const TEST_MAIL_COLUMNS = ["id", "recipient", "sender", "subject", "text_body", "html_body", "sent_at"] as const;
 
 function build(dialect: Dialect) {
   if (dialect === "sqlite") {
@@ -33,6 +40,15 @@ function build(dialect: Dialect) {
         checksum: sqliteText("checksum").notNull(),
         appliedAt: sqliteInteger("applied_at", { mode: "number" }).notNull(),
       }),
+      testMail: sqliteTable(TEST_MAIL_TABLE, {
+        id: sqliteText(TEST_MAIL_COLUMNS[0]).primaryKey(),
+        recipient: sqliteText(TEST_MAIL_COLUMNS[1]).notNull(),
+        sender: sqliteText(TEST_MAIL_COLUMNS[2]).notNull(),
+        subject: sqliteText(TEST_MAIL_COLUMNS[3]).notNull(),
+        text: sqliteText(TEST_MAIL_COLUMNS[4]).notNull(),
+        html: sqliteText(TEST_MAIL_COLUMNS[5]).notNull(),
+        sentAt: sqliteText(TEST_MAIL_COLUMNS[6]).notNull(),
+      }),
     };
   }
   return {
@@ -42,6 +58,15 @@ function build(dialect: Dialect) {
       dialect: pgText("dialect").notNull(),
       checksum: pgText("checksum").notNull(),
       appliedAt: pgBigint("applied_at", { mode: "number" }).notNull(),
+    }),
+    testMail: pgTable(TEST_MAIL_TABLE, {
+      id: pgText(TEST_MAIL_COLUMNS[0]).primaryKey(),
+      recipient: pgText(TEST_MAIL_COLUMNS[1]).notNull(),
+      sender: pgText(TEST_MAIL_COLUMNS[2]).notNull(),
+      subject: pgText(TEST_MAIL_COLUMNS[3]).notNull(),
+      text: pgText(TEST_MAIL_COLUMNS[4]).notNull(),
+      html: pgText(TEST_MAIL_COLUMNS[5]).notNull(),
+      sentAt: pgText(TEST_MAIL_COLUMNS[6]).notNull(),
     }),
   };
 }

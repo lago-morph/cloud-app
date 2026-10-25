@@ -5,9 +5,10 @@ node_modules/
 dist/
 .framework/
 
-# Local runtime state, logs and dev-only secrets (never commit .dev.vars)
+# Local runtime state, logs, captured mail and dev-only secrets (never commit .dev.vars)
 .wrangler/
 .logs/
+.mail/
 .dev.vars
 
 # Playwright output

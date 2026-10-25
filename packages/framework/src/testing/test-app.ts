@@ -4,7 +4,7 @@
  * (DEC-0105), or PGlite for SQL when the process runs the Postgres dialect
  * (`PROTOTYPE_FRAMEWORK_DIALECT=postgres`) — with migrations applied and the local target's
  * runtime (the same stage runtime the local Worker uses), the authentication mock, the stub
- * login provider or the password provider (PWD) with an in-memory outbox, and an in-memory log.
+ * login provider or the password provider (PWD) sending through MAIL's in-memory outbox, and an in-memory log.
  * Node only; never part of a Worker bundle.
  */
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -13,7 +13,7 @@ import { join } from "node:path";
 import type { PGlite } from "@electric-sql/pglite";
 import { drizzle as drizzleD1, type AnyD1Database } from "drizzle-orm/d1";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
-import type { RuntimeEnv } from "../core/assemble.js";
+import type { RuntimeContext, RuntimeEnv } from "../core/assemble.js";
 import { createDeployment } from "../core/identity.js";
 import type { DefinedApp } from "../core/public.js";
 import type { ConfigDeclaration } from "../config/public.js";
@@ -26,7 +26,6 @@ import { createStubLoginProvider, stubCallbackUrl, type StubFailure } from "../a
 import type { CurrentUser } from "../auth/public.js";
 import { createPasswordProvider } from "../auth/password/provider.js";
 import type { PasswordDatabase } from "../auth/password/options.js";
-import { createOutbox, failingMailSender, neverCompletingMailSender, type TestMail } from "./test-outbox.js";
 import { appUrl } from "./connect.js";
 import { checkSecretDeclarations, FRAMEWORK_SECRETS } from "../secrets/names.js";
 import { LOCAL_FRAMEWORK_SECRETS, LOCAL_TICKET_KEY } from "../secrets/local-names.js";
@@ -43,6 +42,10 @@ import { generateAppMigrations } from "../mig/generate.js";
 import type { FilesStore } from "../files/service.js";
 import { createLocalTicketIssuer } from "../files/local/tickets.js";
 import { registerLocalTransferRoute } from "../files/local/route.js";
+import { createOutbox, failingMailSender, neverCompletingMailSender, type TestMail } from "../mail/outbox.js";
+import type { MailSender } from "../mail/sender.js";
+import { mailSenderName } from "../mail/config.js";
+import { requestMailSender } from "../mail/request.js";
 import { assembleStage } from "../targets/stage.js";
 import { startPlatformProxy } from "../targets/local/platform-proxy.js";
 
@@ -70,16 +73,24 @@ export interface TestAppOptions {
   readonly logWriter?: "failing" | "never-completing";
 }
 
-export type { MailMessage, TestMail } from "./test-outbox.js";
+export type { TestMail } from "../mail/outbox.js";
+export type { MailMessage } from "../mail/sender.js";
 
 export interface TestApp {
   request(path: string, init?: RequestInit): Promise<Response>;
-  /** The framework's outgoing email: the in-memory outbox of this test app. */
+  /** The framework's outgoing email: the in-memory outbox (in-process) or the stage's capture (connected). */
   readonly mail: TestMail;
   as(user: CurrentUser): TestApp;
   logs(): readonly LogEntry[];
   loginWithStub(subject: string, options?: { readonly displayName?: string; readonly stubFailure?: "refused" | "replayed" }): Promise<void>;
   dispose(): Promise<void>;
+}
+
+/** The request's mail sender as the stage runtime bound it (MAIL's sender path, mail/request.ts). */
+function requestSender(c: RuntimeContext): MailSender {
+  const sender = requestMailSender(c);
+  if (sender === undefined) throw new Error("this test app has no mail sender");
+  return sender;
 }
 
 /** The test app's public origin: state-changing requests carry it in `Origin`. */
@@ -271,7 +282,7 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
   const fixed = new WeakMap<Request, CurrentUser>();
   const env = proxy.env as unknown as RuntimeEnv["Bindings"];
   const store = unavailable.has("files") ? unreachableStore() : proxy.env.FILES;
-  const outbox = createOutbox({ senderName: defined.definition.name });
+  const outbox = createOutbox({ senderName: mailSenderName(resolved) });
   const mailSender = options.mailSender === "failing" ? failingMailSender() : options.mailSender === "never-completing" ? neverCompletingMailSender() : outbox.sender;
   // The request's background tasks (`waitUntil`): sends run after the response, as on a Worker.
   const executionCtx = { waitUntil: (pending: Promise<unknown>) => void pending.catch(() => undefined), passThroughOnException: () => undefined, props: {} };
@@ -298,9 +309,10 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
     ...(stub
       ? { provider: createStubLoginProvider() }
       : password
-        ? { credentialProvider: (c) => createPasswordProvider({ database: passwordDatabase, log: c.var.log, mail: mailSender }) }
+        ? { credentialProvider: (c) => createPasswordProvider({ database: passwordDatabase, log: c.var.log, mail: requestSender(c) }) }
         : { mock: createAuthMock({ fixedUser: (c) => fixed.get(c.req.raw) }) }),
     routes: (api) => registerLocalTransferRoute(api, { key: ticketKey }),
+    mail: () => mailSender,
   });
 
   const shared: Shared = {

@@ -26,6 +26,7 @@ describe("reset-local (LOCAL-REQ-002)", () => {
     const dir = app({
       ".wrangler/state/v3/d1/db.sqlite": "x",
       ".logs/2026-01-01.log": "{}\n",
+      ".mail/20261025T101112123Z-ab.json": "{}\n",
       ".dev.vars": "SECRET_API_KEY=kept\n",
       "src/app.ts": "export {};\n",
       "config/local.json": "{}\n",
@@ -35,6 +36,7 @@ describe("reset-local (LOCAL-REQ-002)", () => {
     expect(await resetLocalCommand()([], io)).toBe(0);
     expect(existsSync(join(dir, ".wrangler"))).toBe(false);
     expect(existsSync(join(dir, ".logs"))).toBe(false);
+    expect(existsSync(join(dir, ".mail"))).toBe(false);
     for (const kept of [".dev.vars", "src/app.ts", "config/local.json", "migrations/checksums.json"]) expect(existsSync(join(dir, kept)), kept).toBe(true);
     expect(io.out).toMatch(/\.wrangler/);
   });
