@@ -1,0 +1,30 @@
+{
+  "runId": "9o3vziyb8vp4m6p",
+  "commit": "a1c04ce7b5ab89d061297ece10beb4fcab149c67",
+  "target": "cloudflare",
+  "stage": "prodcheck",
+  "command": "check-login --target cloudflare --stage prodcheck",
+  "startedAt": "2026-10-25T23:22:51.394Z",
+  "finishedAt": "2026-10-25T23:23:28.886Z",
+  "exitStatus": 1,
+  "results": [
+    {
+      "id": "PWD-AC-009",
+      "status": "failed",
+      "detail": "step 8: a burst of 6 wrong-password sign-ins got no 429 AUTH.RATE_LIMITED (PAR-258)"
+    },
+    {
+      "id": "AUTH-AC-011",
+      "status": "passed"
+    },
+    {
+      "id": "E2E-008",
+      "status": "failed",
+      "detail": "step 8: a burst of 6 wrong-password sign-ins got no 429 AUTH.RATE_LIMITED (PAR-258)"
+    }
+  ],
+  "versions": {
+    "node": "v22.22.0",
+    "@lago-morph/prototype-framework": "0.1.0"
+  }
+}

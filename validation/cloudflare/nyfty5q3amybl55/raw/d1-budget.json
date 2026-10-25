@@ -1,0 +1,18 @@
+{
+  "plan": "paid",
+  "source": "api",
+  "detail": "the account's subscriptions include Workers Paid",
+  "budget": {
+    "plan": "paid",
+    "perPass": {
+      "rowsWritten": 100000,
+      "rowsRead": 5000000
+    },
+    "perDay": {
+      "rowsWritten": 500000,
+      "rowsRead": 25000000
+    },
+    "maxDatabases": 20,
+    "parameter": "PAR-285"
+  }
+}

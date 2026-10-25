@@ -1,0 +1,12 @@
+Updating (test-02yo2n87eya5fp5):
+
+@ updating.........
+    pulumi:pulumi:Stack reference-test-02yo2n87eya5fp5  
+Outputs:
+    _protect: false
+
+Resources:
+    8 unchanged
+
+Duration: 6s
+

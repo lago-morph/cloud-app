@@ -1,0 +1,12 @@
+Updating (test-z8ey6q3j123mpoe):
+
+@ updating..........
+    pulumi:pulumi:Stack demo-test-z8ey6q3j123mpoe  
+Outputs:
+    _protect: false
+
+Resources:
+    8 unchanged
+
+Duration: 7s
+

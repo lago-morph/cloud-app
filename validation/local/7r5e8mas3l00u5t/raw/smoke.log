@@ -1,0 +1,10 @@
+smoke: running tests/smoke/**/*.test.ts against http://localhost:43447 (target local, stage local)
+  passed  the app is healthy and serves its configuration (DEMO-REQ-006)
+  passed  the account's ID is the one /api/auth/me reports (DEMO-REQ-009)
+  passed  posts: drafts are private, only admins publish, anyone reads published posts newest first (DEMO-REQ-001, -002, -008)
+  passed  photos: a 20 MB JPEG round-trips, the maximum holds, deleting removes rows and files (DEMO-REQ-003)
+  passed  the banner set by an admin reaches anonymous visitors; users cannot set it (DEMO-REQ-004)
+  passed  the posts-per-page choice survives a new login (DEMO-REQ-005)
+  passed  a share link shows a draft to an anonymous visitor; an altered link is refused (DEMO-REQ-007)
+smoke: 7 passed, 0 failed
+smoke: log for today: .logs/2026-10-25.log (in the app directory)

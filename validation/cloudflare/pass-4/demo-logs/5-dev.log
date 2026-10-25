@@ -1,0 +1,104 @@
+dev: built demo for the local target
+dev: generated development secrets in .dev.vars: frameworkSessionKey, frameworkAuthSecret, frameworkLocalTicketKey
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+dev: applied migrations: framework/0000_framework_tables, framework/0001_auth_tables, framework/0002_framework_test_mail, framework/0003_auth_role, app/0000_schema
+[wrangler] [33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+[wrangler]  ⛅️ wrangler 4.149.0
+[wrangler] ────────────────────
+[wrangler] Using secrets defined in .dev.vars
+[wrangler] Your Worker has access to the following bindings:
+[wrangler] Binding                                                 Resource                  Mode
+[wrangler] env.DB (demo-local)                                     D1 Database               local
+[wrangler] env.FILES (demo-local)                                  R2 Bucket                 local
+[wrangler] env.SECRET_SHARE_KEY ("(hidden)")                       Environment Variable      local
+[wrangler] env.SECRET_FRAMEWORK_SESSION_KEY ("(hidden)")           Environment Variable      local
+[wrangler] env.SECRET_FRAMEWORK_AUTH_SECRET ("(hidden)")           Environment Variable      local
+[wrangler] env.SECRET_FRAMEWORK_LOCAL_TICKET_KEY ("(hidden)")      Environment Variable      local
+[wrangler] env.FRAMEWORK_PUBLIC_ORIGIN ("(hidden)")                Environment Variable      local
+[wrangler] Wrangler detected this dev session is running in an AI agent.
+[wrangler] The Local Explorer API is available at http://127.0.0.1:45119/cdn-cgi/local/explorer/api
+[wrangler] Useful routes:
+[wrangler]   GET http://127.0.0.1:45119/cdn-cgi/local/explorer/api/local/workers - local Workers and bindings
+[wrangler]   POST http://127.0.0.1:45119/cdn-cgi/local/explorer/api/local/scheduled?worker=<name> - invoke a Worker's scheduled handler; cron is required (see the OpenAPI schema for the full request)
+[wrangler]   GET http://127.0.0.1:45119/cdn-cgi/local/explorer/api/storage/kv/namespaces - KV namespaces
+[wrangler]   GET http://127.0.0.1:45119/cdn-cgi/local/explorer/api/d1/database - D1 databases
+[wrangler]   GET http://127.0.0.1:45119/cdn-cgi/local/explorer/api/r2/buckets - R2 buckets
+[wrangler]   GET http://127.0.0.1:45119/cdn-cgi/local/explorer/api/workers/durable_objects/namespaces - Durable Object namespaces
+[wrangler]   GET http://127.0.0.1:45119/cdn-cgi/local/explorer/api/workflows - Workflows
+[wrangler]   POST http://127.0.0.1:45119/cdn-cgi/local/explorer/api/local/observability/query - run a read-only SQL query (SELECT/WITH only) over captured request traces and console logs. Tables: spans, logs (read attributes via json(attributes)). Example:
+[wrangler]     curl -X POST http://127.0.0.1:45119/cdn-cgi/local/explorer/api/local/observability/query -H 'Content-Type: application/json' -d '{"sql":"SELECT service, name, outcome, duration_ms FROM spans WHERE parent_id IS NULL LIMIT 20"}'
+[wrangler]   POST http://127.0.0.1:45119/cdn-cgi/local/explorer/api/local/observability/clear - clear all captured traces and logs
+[wrangler] If the routes above don't cover what you need, fetch the full OpenAPI schema (large - use only as a last resort):
+[wrangler]   GET http://127.0.0.1:45119/cdn-cgi/local/explorer/api - OpenAPI schema
+
+  demo is running at http://localhost:43447/  (client and /api; Ctrl-C stops)
+
+[wrangler] ⎔ Starting local server...
+[wrangler] [wrangler:info] Ready on http://127.0.0.1:45119
+[wrangler] [wrangler:info] GET /api/auth/me 200 OK (19ms)
+[wrangler] [wrangler:info] GET /api/__framework/health 204 No Content (19ms)
+[wrangler] [wrangler:info] GET /api/site 200 OK (10ms)
+[wrangler] [wrangler:info] POST /api/auth/mock-login 204 No Content (9ms)
+[wrangler] [wrangler:info] GET /api/auth/me 200 OK (5ms)
+[wrangler] [wrangler:info] POST /api/posts 201 Created (11ms)
+[wrangler] [wrangler:info] POST /api/posts 201 Created (9ms)
+[wrangler] [wrangler:info] GET /api/my/drafts 200 OK (11ms)
+[wrangler] [wrangler:info] GET /api/posts/c862aa0f-6380-44a7-89b4-6254954dd717 404 Not Found (9ms)
+[wrangler] [wrangler:info] POST /api/auth/mock-login 204 No Content (5ms)
+[wrangler] [wrangler:info] PATCH /api/posts/c862aa0f-6380-44a7-89b4-6254954dd717 404 Not Found (15ms)
+[wrangler] [wrangler:info] POST /api/posts 401 Unauthorized (10ms)
+[wrangler] [wrangler:info] PATCH /api/posts/c862aa0f-6380-44a7-89b4-6254954dd717 200 OK (28ms)
+[wrangler] [wrangler:info] POST /api/posts/c862aa0f-6380-44a7-89b4-6254954dd717/publish 403 Forbidden (5ms)
+[wrangler] [wrangler:info] POST /api/auth/mock-login 204 No Content (5ms)
+[wrangler] [wrangler:info] POST /api/posts/13320db8-e916-4565-8c9d-8e5e539e9610/publish 200 OK (25ms)
+[wrangler] [wrangler:info] POST /api/posts/c862aa0f-6380-44a7-89b4-6254954dd717/publish 200 OK (18ms)
+[wrangler] [wrangler:info] DELETE /api/posts/c862aa0f-6380-44a7-89b4-6254954dd717 403 Forbidden (9ms)
+[wrangler] [wrangler:info] GET /api/posts 200 OK (8ms)
+[wrangler] [wrangler:info] GET /api/posts/c862aa0f-6380-44a7-89b4-6254954dd717 200 OK (12ms)
+[wrangler] [wrangler:info] POST /api/posts/c862aa0f-6380-44a7-89b4-6254954dd717/unpublish 200 OK (17ms)
+[wrangler] [wrangler:info] GET /api/posts/c862aa0f-6380-44a7-89b4-6254954dd717 404 Not Found (16ms)
+[wrangler] [wrangler:info] DELETE /api/posts/13320db8-e916-4565-8c9d-8e5e539e9610 204 No Content (42ms)
+[wrangler] [wrangler:info] DELETE /api/posts/c862aa0f-6380-44a7-89b4-6254954dd717 204 No Content (18ms)
+[wrangler] [wrangler:info] GET /api/site 200 OK (9ms)
+[wrangler] [wrangler:info] POST /api/posts 201 Created (9ms)
+[wrangler] [wrangler:info] POST /api/posts/f51c0c85-042f-4742-957e-456b8d207346/photos/upload-ticket 200 OK (19ms)
+[wrangler] [wrangler:info] PUT /api/__framework/files/eyJvIjoidXBsb2FkIiwibiI6InBob3Rvcy9mNTFjMGM4NS0wNDJmLTQ3NDItOTU3ZS00NTZiOGQyMDczNDYvNDFkYjgyNTYtYWQ2ZS00Mjc0LWIyOGEtMTc1NDI3YWY1MzBhIiwidCI6ImltYWdlL2pwZWciLCJlIjoxNzkyOTcxOTg1MTAxfQ.bp6_Mb7y6rtSUmi8enDz9J7Wfr9Wneg23DbSpkAe93I 200 OK (633ms)
+[wrangler] [wrangler:info] POST /api/posts/f51c0c85-042f-4742-957e-456b8d207346/photos/finalize 201 Created (19ms)
+[wrangler] [wrangler:info] POST /api/posts/f51c0c85-042f-4742-957e-456b8d207346/photos/upload-ticket 200 OK (10ms)
+[wrangler] [wrangler:info] PUT /api/__framework/files/eyJvIjoidXBsb2FkIiwibiI6InBob3Rvcy9mNTFjMGM4NS0wNDJmLTQ3NDItOTU3ZS00NTZiOGQyMDczNDYvOTM0MmMzMzktZWE1ZC00NzRmLWI5MjctZmE5MTBjY2E5NmU5IiwidCI6ImltYWdlL3BuZyIsImUiOjE3OTI5NzE5ODU4NDl9.22RILaEYSe4ckKza5-vFFQ5j-domsVJghvjOEuxJ3ZA 200 OK (8ms)
+[wrangler] [wrangler:info] POST /api/posts/f51c0c85-042f-4742-957e-456b8d207346/photos/finalize 201 Created (19ms)
+[wrangler] [wrangler:info] POST /api/posts/f51c0c85-042f-4742-957e-456b8d207346/photos/upload-ticket 200 OK (14ms)
+[wrangler] [wrangler:info] PUT /api/__framework/files/eyJvIjoidXBsb2FkIiwibiI6InBob3Rvcy9mNTFjMGM4NS0wNDJmLTQ3NDItOTU3ZS00NTZiOGQyMDczNDYvYzczZjAzYTMtMjVlZC00M2FhLTk0MGYtNThhZTkyNDk5ZWFiIiwidCI6ImltYWdlL3BuZyIsImUiOjE3OTI5NzE5ODU5MDh9.J_xhmVvE7qml8a1doYFL7pXvC6ijn-jft0CMhazJjw4 200 OK (10ms)
+[wrangler] [wrangler:info] POST /api/posts/f51c0c85-042f-4742-957e-456b8d207346/photos/finalize 201 Created (17ms)
+[wrangler] [wrangler:info] POST /api/posts/f51c0c85-042f-4742-957e-456b8d207346/photos/upload-ticket 200 OK (13ms)
+[wrangler] [wrangler:info] PUT /api/__framework/files/eyJvIjoidXBsb2FkIiwibiI6InBob3Rvcy9mNTFjMGM4NS0wNDJmLTQ3NDItOTU3ZS00NTZiOGQyMDczNDYvODg5MTFmZTYtMWE1My00ODc5LWEzNjgtNGI5NDkyYmMwMjcxIiwidCI6ImltYWdlL3BuZyIsImUiOjE3OTI5NzE5ODU5Njd9.msPCGVg46RyF-JJcHn1xAT3j3KaRLDyKofwsO-z9Lxk 200 OK (12ms)
+[wrangler] [wrangler:info] POST /api/posts/f51c0c85-042f-4742-957e-456b8d207346/photos/finalize 201 Created (19ms)
+[wrangler] [wrangler:info] POST /api/posts/f51c0c85-042f-4742-957e-456b8d207346/photos/upload-ticket 200 OK (14ms)
+[wrangler] [wrangler:info] PUT /api/__framework/files/eyJvIjoidXBsb2FkIiwibiI6InBob3Rvcy9mNTFjMGM4NS0wNDJmLTQ3NDItOTU3ZS00NTZiOGQyMDczNDYvM2U2YWI0ZjUtYTIyMi00ODEyLTgyZWQtOTE3NDFjYTI2YWFiIiwidCI6ImltYWdlL3BuZyIsImUiOjE3OTI5NzE5ODYwMzZ9.dmlfyJ9_HN6l5iZ6jCYdXuCzPs7GYsWpa_2UbE8nQOc 200 OK (9ms)
+[wrangler] [wrangler:info] POST /api/posts/f51c0c85-042f-4742-957e-456b8d207346/photos/finalize 201 Created (14ms)
+[wrangler] [wrangler:info] POST /api/posts/f51c0c85-042f-4742-957e-456b8d207346/photos/upload-ticket 409 Conflict (13ms)
+[wrangler] [wrangler:info] GET /api/posts/f51c0c85-042f-4742-957e-456b8d207346 200 OK (19ms)
+[wrangler] [wrangler:info] GET /api/__framework/files/eyJvIjoiZG93bmxvYWQiLCJuIjoicGhvdG9zL2Y1MWMwYzg1LTA0MmYtNDc0Mi05NTdlLTQ1NmI4ZDIwNzM0Ni80MWRiODI1Ni1hZDZlLTQyNzQtYjI4YS0xNzU0MjdhZjUzMGEiLCJlIjoxNzkyOTcxOTg2MTE1fQ.0yo6-4lbquT-Y4F150_WI6Z5znwWknV-0jIqdIif-tI 200 OK (7ms)
+[wrangler] [wrangler:info] DELETE /api/posts/f51c0c85-042f-4742-957e-456b8d207346 204 No Content (48ms)
+[wrangler] [wrangler:info] GET /api/posts/f51c0c85-042f-4742-957e-456b8d207346 404 Not Found (9ms)
+[wrangler] [wrangler:info] GET /api/__framework/files/eyJvIjoiZG93bmxvYWQiLCJuIjoicGhvdG9zL2Y1MWMwYzg1LTA0MmYtNDc0Mi05NTdlLTQ1NmI4ZDIwNzM0Ni80MWRiODI1Ni1hZDZlLTQyNzQtYjI4YS0xNzU0MjdhZjUzMGEiLCJlIjoxNzkyOTcxOTg2MTE1fQ.0yo6-4lbquT-Y4F150_WI6Z5znwWknV-0jIqdIif-tI 404 Not Found (7ms)
+[wrangler] [wrangler:info] PUT /api/banner 403 Forbidden (5ms)
+[wrangler] [wrangler:info] PUT /api/banner 200 OK (11ms)
+[wrangler] [wrangler:info] GET /api/site 200 OK (9ms)
+[wrangler] [wrangler:info] PUT /api/banner 200 OK (9ms)
+[wrangler] [wrangler:info] GET /api/banner 200 OK (7ms)
+[wrangler] [wrangler:info] PUT /api/preferences 200 OK (8ms)
+[wrangler] [wrangler:info] POST /api/auth/mock-login 204 No Content (4ms)
+[wrangler] [wrangler:info] GET /api/preferences 200 OK (7ms)
+[wrangler] [wrangler:info] GET /api/posts 200 OK (16ms)
+[wrangler] [wrangler:info] POST /api/posts 201 Created (8ms)
+[wrangler] [wrangler:info] POST /api/posts/acd4f0f1-fb51-46b6-beb5-c14eaf568ead/share 201 Created (9ms)
+[wrangler] [wrangler:info] GET /api/shared 200 OK (11ms)
+[wrangler] [wrangler:info] GET /api/shared 404 Not Found (4ms)
+[wrangler] [wrangler:info] DELETE /api/posts/acd4f0f1-fb51-46b6-beb5-c14eaf568ead 204 No Content (14ms)
+[wrangler] [wrangler:info] POST /api/auth/logout 204 No Content (5ms)
+[wrangler] [wrangler:info] POST /api/auth/logout 204 No Content (4ms)
+[wrangler] [wrangler:info] POST /api/auth/logout 204 No Content (5ms)
+dev: wrangler exited on its own (status 143); dev stopped
