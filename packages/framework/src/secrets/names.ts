@@ -17,6 +17,8 @@ export const FRAMEWORK_SECRET_PREFIX = "framework";
 export const FRAMEWORK_SECRETS = Object.freeze({
   /** AUTH's session signing key (PAR-253); generated per stage by the CLI when absent. */
   sessionKey: "frameworkSessionKey",
+  /** PWD's signing secret (the credential library's `secret`, which signs verification tokens; PAR-253); generated per stage by the CLI when absent. */
+  authSecret: "frameworkAuthSecret",
   /** GOOGLE's OAuth client secret; set by the owner with `secrets set`. */
   googleClientSecret: "frameworkGoogleClientSecret",
   /** FILES' stage-scoped R2 API token (S3 credentials), created by provisioning on Cloudflare. */

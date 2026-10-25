@@ -20,7 +20,7 @@ import { createHttpParts, type HealthCheck } from "../http/runtime.js";
 import { createAuthParts } from "../auth/runtime.js";
 import type { AuthMock } from "../auth/mock.js";
 import type { CookieSettings } from "../auth/cookies.js";
-import type { LoginProvider } from "../auth/login-provider.js";
+import type { CredentialProvider, LoginProvider } from "../auth/login-provider.js";
 import { createKv } from "../kv/service.js";
 import { createFilesService, type FilesStore, type TicketIssuer } from "../files/service.js";
 import { createFrameworkSecrets, createSecretsService, type SecretReader } from "../secrets/service.js";
@@ -72,8 +72,10 @@ export interface StageOptions {
   readonly cookies?: CookieSettings;
   /** The authentication mock: only locally and on test stages. */
   readonly mock?: AuthMock;
-  /** The stage's real login provider (GOOGLE), or the stub in tests. */
+  /** A redirect login provider: the stub in tests. */
   readonly provider?: LoginProvider;
+  /** The stage's credential provider (PWD), built per request over the request's database (password.md §2). */
+  readonly credentialProvider?: (c: RuntimeContext) => CredentialProvider;
   /** Further framework routes under `/api` (the local file-transfer route). */
   readonly routes?: (api: Hono<RuntimeEnv>) => void;
 }
@@ -120,6 +122,7 @@ export function assembleStage<C extends ConfigDeclaration, S extends string>(def
     },
     secret: (c, name) => frameworkSecrets(c.env, c.var.log).get(name as FrameworkSecretName),
     ...(options.provider === undefined ? {} : { provider: options.provider }),
+    ...(options.credentialProvider === undefined ? {} : { credentialProvider: options.credentialProvider }),
     ...(options.mock === undefined ? {} : { mock: options.mock }),
     ...(options.cookies === undefined ? {} : { cookies: options.cookies }),
   });

@@ -172,6 +172,11 @@ function connectedApp(c: Connection, user: CurrentUser | undefined): TestApp {
       storeCookies(jar, res);
       return res;
     },
+    // The stage's mail capture is read through MAIL's test-mail route (mail.md §2, item I-D).
+    mail: {
+      lastTo: () => Promise.reject(new Error("reading a connected stage's mail needs MAIL's test-mail route (not wired yet)")),
+      all: () => Promise.reject(new Error("on a connected stage, read one address at a time with mail.lastTo")),
+    },
     as: (next) => connectedApp(c, next),
     logs(): readonly LogEntry[] {
       throw new Error("logs() is not available on a connected stage: its entries are in the stage's log location, which `smoke` prints");

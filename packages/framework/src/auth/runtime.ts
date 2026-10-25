@@ -12,7 +12,7 @@ import { FRAMEWORK_SECRETS } from "../secrets/names.js";
 import { deferredCheck } from "../core/deferred.js";
 import { clearCookie, cookieSettings, readCookie, setCookie, type CookieSettings } from "./cookies.js";
 import { evaluateLogin, type AccessLists } from "./levels.js";
-import type { LoginProvider, ProviderContext, ProviderIdentity } from "./login-provider.js";
+import type { CredentialContext, CredentialProvider, LoginProvider, ProviderContext, ProviderIdentity } from "./login-provider.js";
 import { MOCK_DEFAULT_IDS } from "./mock-ids.js";
 import type { AuthMock } from "./mock.js";
 import type { CurrentUser } from "./public.js";
@@ -29,12 +29,36 @@ export interface AuthOptions {
   readonly framework: AccessLists & { readonly google?: { readonly clientId: string } };
   /** Reads a framework-internal secret (SEC) for this request: the session key and provider secrets. */
   readonly secret: (c: RuntimeContext, name: string) => Promise<string>;
-  /** The stage's login provider: GOOGLE in production, the stub in some tests. */
+  /** The stage's redirect login provider: the stub in some tests. */
   readonly provider?: LoginProvider;
+  /**
+   * The stage's credential provider (PWD), built per request over that request's SQL database
+   * (DEC-0510). AUTH derives the user ID from its `id` and subject and issues the session.
+   */
+  readonly credentialProvider?: (c: RuntimeContext) => CredentialProvider;
   /** The authentication mock: only locally and on test stages. */
   readonly mock?: AuthMock;
   /** Cookie settings; default: the cloud settings. The local runtime passes `LOCAL_COOKIES`; non-Secure settings on a cloud target are CORE.MISCONFIGURED. */
   readonly cookies?: CookieSettings;
+}
+
+/**
+ * The credential operations the password routes call (password.md §2, auth.md §2 "Credential
+ * login"), each over the request's credential provider and a context AUTH builds. Only
+ * `signIn` creates a session: on success it appends the framework session cookie to the
+ * response (`c.header("Set-Cookie", ...)`), with the user ID `deriveUserId(provider.id, subject)`.
+ * Failures are the provider's FrameworkErrors (internal/login-provider.d.ts).
+ */
+export interface CredentialOperations {
+  /** The context handed to the provider for this request. */
+  context(c: RuntimeContext): CredentialContext;
+  signUp(c: RuntimeContext, input: { readonly email: string; readonly password: string; readonly displayName: string }): Promise<void>;
+  /** Validates the credentials, sets the session cookie, and returns the derived user ID. */
+  signIn(c: RuntimeContext, input: { readonly email: string; readonly password: string }): Promise<{ readonly id: string }>;
+  sendVerification(c: RuntimeContext, input: { readonly email: string }): Promise<void>;
+  verify(c: RuntimeContext, input: { readonly token: string }): Promise<void>;
+  requestReset(c: RuntimeContext, input: { readonly email: string }): Promise<void>;
+  reset(c: RuntimeContext, input: { readonly token: string; readonly newPassword: string }): Promise<void>;
 }
 
 export interface AuthParts {
@@ -42,7 +66,12 @@ export interface AuthParts {
   readonly forgeryCheck: MiddlewareHandler<RuntimeEnv>;
   /** Registers `/auth/*` on the framework's `/api` router. */
   readonly routes: (api: Hono<RuntimeEnv>) => void;
+  /** Present when the stage has a credential provider. */
+  readonly credentials: CredentialOperations | undefined;
 }
+
+/** CredentialContext.clientIp where the request has no `CF-Connecting-IP` (locally, createTestApp). */
+export const LOCAL_CLIENT_IP = "127.0.0.1";
 
 const ANONYMOUS: CurrentUser = Object.freeze({ level: "anonymous" });
 const STATE_CHANGING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -100,6 +129,44 @@ export function createAuthParts(options: AuthOptions): AuthParts {
     };
   }
 
+  function credentialContext(c: RuntimeContext): CredentialContext {
+    const config = { framework: options.framework };
+    return {
+      publicOrigin: originOf(c),
+      origin: c.req.header("origin") ?? "",
+      clientIp: c.req.header("cf-connecting-ip") ?? LOCAL_CLIENT_IP,
+      userAgent: c.req.header("user-agent") ?? null,
+      waitUntil: (work) => {
+        try {
+          c.executionCtx.waitUntil(work);
+        } catch {
+          // No execution context (Hono throws): the work still runs to completion on its own.
+          work.catch(() => undefined);
+        }
+      },
+      getSecret: (name) => options.secret(c, name),
+      getConfig: (key) => lookup(config, key),
+    };
+  }
+
+  function credentialOperations(factory: (c: RuntimeContext) => CredentialProvider): CredentialOperations {
+    return {
+      context: credentialContext,
+      signUp: (c, input) => factory(c).signUp(credentialContext(c), input),
+      async signIn(c, input) {
+        const provider = factory(c);
+        const identity = await provider.signIn(credentialContext(c), input);
+        const id = await deriveUserId(provider.id, identity.subject);
+        c.header("Set-Cookie", await issueSessionCookie(c, { id, displayName: identity.displayName }), { append: true });
+        return { id };
+      },
+      sendVerification: (c, input) => factory(c).sendVerification(credentialContext(c), input),
+      verify: (c, input) => factory(c).verify(credentialContext(c), input),
+      requestReset: (c, input) => factory(c).requestReset(credentialContext(c), input),
+      reset: (c, input) => factory(c).reset(credentialContext(c), input),
+    };
+  }
+
   async function identify(c: RuntimeContext): Promise<CurrentUser> {
     const fixed = mock?.fixedUser(c);
     if (fixed !== undefined) return fixed;
@@ -117,6 +184,7 @@ export function createAuthParts(options: AuthOptions): AuthParts {
   }
 
   return {
+    credentials: options.credentialProvider === undefined ? undefined : credentialOperations(options.credentialProvider),
     currentUser: async (c, next) => {
       cookies();
       c.set("user", await identify(c));

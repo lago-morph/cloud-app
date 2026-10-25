@@ -4,9 +4,10 @@ import { DEV_GENERATED_SECRETS, LOCAL_FRAMEWORK_SECRETS, LOCAL_TICKET_KEY } from
 import { checkSecretDeclarations, FRAMEWORK_SECRETS, isReservedSecretName } from "./names.js";
 
 describe("framework-internal secret names (secrets.md §2, DEC-0064)", () => {
-  it("names the session key, Google client secret and R2 credentials; the local ticket key is in a local-only module", () => {
+  it("names the session key, the password provider's secret, Google client secret and R2 credentials; the local ticket key is in a local-only module", () => {
     expect(FRAMEWORK_SECRETS).toEqual({
       sessionKey: "frameworkSessionKey",
+      authSecret: "frameworkAuthSecret",
       googleClientSecret: "frameworkGoogleClientSecret",
       r2AccessKeyId: "frameworkR2AccessKeyId",
       r2SecretAccessKey: "frameworkR2SecretAccessKey",
