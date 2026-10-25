@@ -126,3 +126,65 @@ describe("a write that commits after PAR-210 is not reported as failed (DEC-0542
     await expect(createGuard({ budgetMs: 20 })(() => Promise.reject(new Error("Network connection lost.")), { write: true })).rejects.toMatchObject({ code: "SQL.UNAVAILABLE" });
   });
 });
+
+describe("before the handoff to the driver, a write is bounded by PAR-210 (SQL-REQ-006, DEC-0557)", () => {
+  it("a write that cannot get the connection within the budget is SQL.UNAVAILABLE and never runs, even when the connection comes later", async () => {
+    let ran = false;
+    const never = createGuard({ budgetMs: 20, connection: () => new Promise(() => {}) });
+    await expect(never(async () => void (ran = true), { write: true })).rejects.toMatchObject({ code: "SQL.UNAVAILABLE" });
+
+    let released = false;
+    const late = createGuard({ budgetMs: 20, connection: () => new Promise((r) => setTimeout(() => r(() => void (released = true)), 60)) });
+    await expect(late(async () => void (ran = true), { write: true })).rejects.toMatchObject({ code: "SQL.UNAVAILABLE" });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(ran).toBe(false);
+    expect(released).toBe(true);
+  });
+
+  it("after the handoff the write is not timed, and the connection is released when it settles", async () => {
+    let released = 0;
+    const guard = createGuard({ budgetMs: 20, connection: async () => () => void released++ });
+    await expect(guard(() => new Promise((r) => setTimeout(() => r("committed"), 80)), { write: true })).resolves.toBe("committed");
+    expect(released).toBe(1);
+  });
+
+  it("on PGlite, a write queued behind a slow operation on the single connection times out and is never stored; a PGlite that never gets ready is bounded too", async () => {
+    const pg = new PGlite();
+    try {
+      await pg.exec(`CREATE TABLE "notes" ("id" text PRIMARY KEY NOT NULL, "title" text NOT NULL)`);
+      const notes = tableFor(defineTable("notes", { id: id(), title: text() }), "postgres") as unknown as AnyTable;
+      const db = postgresDb(slowQueries(pg, 150), { budgetMs: 30 }) as unknown as { insert(t: unknown): { values(v: unknown): { execute(): Promise<unknown> } } };
+      const [first, second] = [newId(), newId()];
+      // Both started now, in this order (a builder runs when executed or awaited).
+      const a = db.insert(notes).values({ id: first, title: "first" }).execute();
+      const b = db.insert(notes).values({ id: second, title: "second" }).execute();
+      await expect(b).rejects.toMatchObject({ code: "SQL.UNAVAILABLE" });
+      await expect(a).resolves.toBeUndefined();
+      await new Promise((r) => setTimeout(r, 300));
+      expect((await pg.query(`SELECT "id" FROM "notes"`)).rows).toEqual([{ id: first }]);
+
+      const stuck = new Proxy(pg, { get: (t, p) => (p === "waitReady" ? new Promise(() => {}) : typeof Reflect.get(t, p, t) === "function" ? (Reflect.get(t, p, t) as (...a: unknown[]) => unknown).bind(t) : Reflect.get(t, p, t)) });
+      const never = postgresDb(stuck, { budgetMs: 30 }) as unknown as typeof db;
+      await expect(never.insert(notes).values({ id: newId(), title: "never" }).execute()).rejects.toMatchObject({ code: "SQL.UNAVAILABLE" });
+    } finally {
+      await pg.close();
+    }
+  });
+});
+
+/** A PGlite client each of whose queries takes `delayMs` before it runs (holding the connection). */
+function slowQueries(pg: PGlite, delayMs: number): PGlite {
+  return new Proxy(pg, {
+    get(target, property) {
+      const value: unknown = Reflect.get(target, property, target);
+      if (typeof value !== "function") return value;
+      if (property === "query" || property === "exec" || property === "transaction") {
+        return async (...args: unknown[]) => {
+          await new Promise((r) => setTimeout(r, delayMs));
+          return (value as (...a: unknown[]) => Promise<unknown>).apply(target, args);
+        };
+      }
+      return (value as (...a: unknown[]) => unknown).bind(target);
+    },
+  });
+}
