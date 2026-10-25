@@ -69,7 +69,7 @@ One literal route per catalogue code that has an HTTP status: `/errors/<CODE>` (
 | `GET /errors/AUTH.FORBIDDEN` | app throws `FrameworkError("AUTH.FORBIDDEN")` (any level) | — |
 | `POST /errors/AUTH.REQUEST_FORGERY` | the framework's forgery check | carry a session and a missing or wrong `Origin` |
 
-A route that answers 200 because the condition is absent returns `{ raised: false }`. `AUTH.LOGIN_FAILED` (400) has no app route: app code may not raise it, and the framework's `/api/auth/callback` answers a failed login with a redirect, not with an `ErrorResponse` (DEC-0168). Status-null codes (`HTTP.NETWORK_ERROR`, `FILES.TRANSFER_FAILED`) never cross HTTP.
+A route that answers 200 because the condition is absent returns `{ raised: false }`. `AUTH.LOGIN_FAILED` (400) has no app route: app code may not raise it, and the framework's `/api/auth/callback` answers a failed login with a redirect, not with an `ErrorResponse` (DEC-0168). `AUTH.NOT_VERIFIED` (403) and `AUTH.RATE_LIMITED` (429) have no app route either: only the password provider's own routes raise them (PWD §2, DEC-0520). Status-null codes (`HTTP.NETWORK_ERROR`, `FILES.TRANSFER_FAILED`) never cross HTTP.
 
 ## KV (user)
 

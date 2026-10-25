@@ -68,6 +68,8 @@ export declare const ERROR_CATALOGUE: {
   readonly "AUTH.FORBIDDEN":           { status: 403; retryable: false; meaning: "The user's access level is insufficient, or the user may see the resource but not change it." };
   readonly "AUTH.REQUEST_FORGERY":     { status: 403; retryable: false; meaning: "A state-changing request with a session came from another origin." };
   readonly "AUTH.LOGIN_FAILED":        { status: 400; retryable: false; meaning: "Login could not be completed." };
+  readonly "AUTH.NOT_VERIFIED":        { status: 403; retryable: false; meaning: "The account's email address has not been verified yet." };
+  readonly "AUTH.RATE_LIMITED":        { status: 429; retryable: true;  meaning: "Too many attempts from this client; try again later." };
 };
 
 export type ErrorCode = keyof typeof ERROR_CATALOGUE;

@@ -186,6 +186,19 @@ describe("createTestApp", { timeout: 60_000 }, () => {
     expect(none.status).toBe(404);
   });
 
+  it("passwordLoginProvider installs the password provider instead of the mock, with an empty outbox and its secret", async () => {
+    const t = await open({ ...base, passwordLoginProvider: true, secrets: { apiKey: "k" } });
+    expect(() => t.as(mockUsers.user())).toThrow(/password login provider/);
+    const none = await t.request("/api/auth/mock-login", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    expect(none.status).toBe(404);
+    expect(await t.mail.all()).toEqual([]);
+    expect(await t.mail.lastTo("nobody@example.test")).toBeUndefined();
+    // The health check finds frameworkAuthSecret.
+    expect((await t.request("/api/__framework/health")).status).toBe(204);
+    await expect(createTestApp(app, { ...base, passwordLoginProvider: true, stubLoginProvider: true })).rejects.toThrow(/cannot be combined/);
+    await expect(createTestApp(app, { ...base, passwordLoginProvider: true, user: mockUsers.user() })).rejects.toThrow(/cannot be combined/);
+  });
+
   it("refuses URLs on any other origin or protocol before the app sees them (root cause F-02 entry 2 revised)", async () => {
     const t = await open({ ...base, user: mockUsers.admin("a1") });
     const refused = /is not the app's origin \(http:\/\/localhost:8787\); the test app sends requests only to the app\. Send requests to other hosts, such as a cloud upload or download ticket's url, with fetch\./;
