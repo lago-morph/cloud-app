@@ -1,0 +1,1465 @@
+{
+  "config": {
+    "argv": [
+      "/opt/node22/bin/node",
+      "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/node_modules/.bin/playwright",
+      "test",
+      "tests/compliance/",
+      "--project",
+      "integration",
+      "--project",
+      "e2e",
+      "--grep",
+      "\\[(?:AUTH-AC-004|AUTH-AC-005|AUTH-AC-006|AUTH-AC-007|AUTH-AC-009|AUTH-AC-011|AUTH-AC-014|CF-AC-001|CF-AC-002|CFG-AC-003|CFG-AC-004|CLI-AC-004|CLI-AC-005|CLI-AC-007|COMPL-AC-001|COMPL-AC-003|COMPL-AC-004|COMPL-AC-005|CORE-AC-002|CORE-AC-003|DEMO-AC-001|DEMO-AC-002|DEMO-AC-003|DEMO-AC-004|DEMO-AC-005|DEMO-AC-007|DEMO-AC-008|DEMO-AC-009|DEMO-AC-010|E2E-002|E2E-004|E2E-005|E2E-006|E2E-007|E2E-008|E2E-009|E2E-011|E2E-013|E2E-014|FILES-AC-001|FILES-AC-002|FILES-AC-003|FILES-AC-004|FILES-AC-005|HTTP-AC-001|HTTP-AC-002|HTTP-AC-003|HTTP-AC-004|HTTP-AC-005|KV-AC-001|KV-AC-002|KV-AC-003|KV-AC-004|KV-AC-005|LOG-AC-001|LOG-AC-002|LOG-AC-004|LOG-AC-005|MAIL-AC-006|MIG-AC-002|MIG-AC-003|MIG-AC-006|PROV-AC-001|PROV-AC-002|PWD-AC-008|PWD-AC-009|SEC-AC-001|SEC-AC-002|SEC-AC-003|SEC-AC-005|SQL-AC-003|SQL-AC-004|SQL-AC-005|SQL-AC-006)\\]",
+      "--reporter=json",
+      "--pass-with-no-tests"
+    ],
+    "configFile": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/playwright.config.ts",
+    "rootDir": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 2
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "integration",
+        "name": "integration",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54",
+        "testIgnore": [],
+        "testMatch": [
+          "packages/framework/test/integration/**/*.spec.ts",
+          "tests/compliance/criteria/**/*.spec.ts"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "e2e",
+        "name": "e2e",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "filteredProjects": [
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "name": "integration",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54",
+        "snapshotDir": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54",
+        "testIgnore": [],
+        "testMatch": [
+          "packages/framework/test/integration/**/*.spec.ts",
+          "tests/compliance/criteria/**/*.spec.ts"
+        ],
+        "timeout": 30000,
+        "use": {
+          "browserName": "chromium"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "integration"
+      },
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "name": "e2e",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e",
+        "snapshotDir": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e",
+        "testIgnore": [],
+        "testMatch": "**/*.spec.ts",
+        "timeout": 30000,
+        "use": {
+          "browserName": "chromium"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "e2e"
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "default",
+    "updateSourceMethod": "patch",
+    "version": "1.64.1",
+    "workers": 2,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "tests/compliance/criteria/files/expired-ticket.spec.ts",
+      "file": "tests/compliance/criteria/files/expired-ticket.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[FILES-AC-003] expired-ticket clause: an expired ticket fails with FILES.TRANSFER_FAILED, storage's status and a rejected by storage (HTTP n) message without storage's error body",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 1200000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "integration",
+              "projectName": "integration",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 934472,
+                  "error": {
+                    "message": "Error: status is storage's HTTP status, got null\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m\"number\"\u001b[39m\nReceived: \u001b[31m\"object\"\u001b[39m",
+                    "stack": "Error: status is storage's HTTP status, got null\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m\"number\"\u001b[39m\nReceived: \u001b[31m\"object\"\u001b[39m\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/criteria/files/expired-ticket.spec.ts:51:93",
+                    "location": {
+                      "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/criteria/files/expired-ticket.spec.ts",
+                      "column": 93,
+                      "line": 51
+                    },
+                    "snippet": "  49 |\n  50 |     expect(out).toMatchObject({ ok: false, isApiError: true, code: \"FILES.TRANSFER_FAILED\" });\n> 51 |     expect(typeof out.status, `status is storage's HTTP status, got ${String(out.status)}`).toBe(\"number\");\n     |                                                                                             ^\n  52 |     expect(out.status).toBeGreaterThanOrEqual(400);\n  53 |     expect(out.message).toContain(`rejected by storage (HTTP ${String(out.status)})`);\n  54 |     for (const body of storageBodies) expect(out.message ?? \"\").not.toContain(body);"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/criteria/files/expired-ticket.spec.ts",
+                        "column": 93,
+                        "line": 51
+                      },
+                      "message": "Error: status is storage's HTTP status, got null\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m\"number\"\u001b[39m\nReceived: \u001b[31m\"object\"\u001b[39m\n\n  49 |\n  50 |     expect(out).toMatchObject({ ok: false, isApiError: true, code: \"FILES.TRANSFER_FAILED\" });\n> 51 |     expect(typeof out.status, `status is storage's HTTP status, got ${String(out.status)}`).toBe(\"number\");\n     |                                                                                             ^\n  52 |     expect(out.status).toBeGreaterThanOrEqual(400);\n  53 |     expect(out.message).toContain(`rejected by storage (HTTP ${String(out.status)})`);\n  54 |     for (const body of storageBodies) expect(out.message ?? \"\").not.toContain(body);\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/criteria/files/expired-ticket.spec.ts:51:93"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:12:40.590Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results/tests-compliance-criteria--26aa9-ithout-storage-s-error-body-integration/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/criteria/files/expired-ticket.spec.ts",
+                    "column": 93,
+                    "line": 51
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "9b9ba0c4aa751ffc3bc9-9f09dd21c13566080bd6",
+          "file": "tests/compliance/criteria/files/expired-ticket.spec.ts",
+          "line": 23,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/criteria/files/transfers.spec.ts",
+      "file": "tests/compliance/criteria/files/transfers.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[FILES-AC-003] a 20 MB file uploads through uploadFile and downloads through downloadUrl byte-exact",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 240000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "integration",
+              "projectName": "integration",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 5774,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:12:40.552Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "95c249fab52ec4ff3629-759e6cdf63e17cdc4b6a",
+          "file": "tests/compliance/criteria/files/transfers.spec.ts",
+          "line": 49,
+          "column": 1
+        },
+        {
+          "title": "[FILES-AC-003] a ticket for one name cannot write another",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "integration",
+              "projectName": "integration",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 2877,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:12:46.453Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "95c249fab52ec4ff3629-04bdb7eefd6b439eb874",
+          "file": "tests/compliance/criteria/files/transfers.spec.ts",
+          "line": 63,
+          "column": 1
+        },
+        {
+          "title": "[FILES-AC-003] an upload with a content type other than the ticket's is rejected and stores nothing",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "integration",
+              "projectName": "integration",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 2077,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:12:49.349Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "95c249fab52ec4ff3629-a57e614379ff3293b6c7",
+          "file": "tests/compliance/criteria/files/transfers.spec.ts",
+          "line": 90,
+          "column": 1
+        },
+        {
+          "title": "[FILES-AC-003] uploadFile rejects a Blob whose non-empty type differs from the ticket's before sending: FILES.TRANSFER_FAILED, status null, content type does not match ticket",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "integration",
+              "projectName": "integration",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 603,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:12:51.437Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "95c249fab52ec4ff3629-31a4187f3b43124cef7a",
+          "file": "tests/compliance/criteria/files/transfers.spec.ts",
+          "line": 105,
+          "column": 1
+        },
+        {
+          "title": "[FILES-AC-004] browser part: an upload and a download attempted from an unrelated origin are rejected by the browser",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "integration",
+              "projectName": "integration",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 3348,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:12:52.055Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "95c249fab52ec4ff3629-29ec1bfef90bb4ae03f2",
+          "file": "tests/compliance/criteria/files/transfers.spec.ts",
+          "line": 123,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/criteria/http/one-origin.spec.ts",
+      "file": "tests/compliance/criteria/http/one-origin.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[HTTP-AC-004] the deployed client's API calls are all same-origin, with no CORS preflight",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "integration",
+              "projectName": "integration",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 2025,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:12:58.077Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c129cbb977c78a948998-1327ab53a0fa27de124f",
+          "file": "tests/compliance/criteria/http/one-origin.spec.ts",
+          "line": 9,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/demo-criteria.spec.ts",
+      "file": "tests/compliance/e2e/demo-criteria.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[DEMO-AC-002] each cell of the permissions table with mock identities (anonymous, user, another user, admin): permitted actions succeed through the page, forbidden ones are refused by the app and change nothing",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 1,
+                  "status": "failed",
+                  "duration": 11,
+                  "error": {
+                    "message": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)",
+                    "stack": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)\n    at prerequisiteMissing (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts:17:9)\n    at requireDemo (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/support/demo.ts:157:27)\n    at origin (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-criteria.spec.ts:78:10)\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-criteria.spec.ts:139:13",
+                    "location": {
+                      "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                      "column": 9,
+                      "line": 17
+                    },
+                    "snippet": "\u001b[90m   at \u001b[39mtests/compliance/harness/blocked.ts:17\n\n  15 |\n  16 | export function prerequisiteMissing(detail: string): never {\n> 17 |   throw new PrerequisiteMissingError(detail);\n     |         ^\n  18 | }\n  19 |"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                        "column": 9,
+                        "line": 17
+                      },
+                      "message": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)\n\n   at tests/compliance/harness/blocked.ts:17\n\n  15 |\n  16 | export function prerequisiteMissing(detail: string): never {\n> 17 |   throw new PrerequisiteMissingError(detail);\n     |         ^\n  18 | }\n  19 |\n    at prerequisiteMissing (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts:17:9)\n    at requireDemo (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/support/demo.ts:157:27)\n    at origin (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-criteria.spec.ts:78:10)\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-criteria.spec.ts:139:13"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:13:03.477Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results/demo-criteria--DEMO-AC-002-acbe0--the-app-and-change-nothing-e2e/error-context.md"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results/demo-criteria--DEMO-AC-002-acbe0--the-app-and-change-nothing-e2e/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                    "column": 9,
+                    "line": 17
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "7dfa15f81d16dda24a6d-398e2160cb85797f0151",
+          "file": "tests/compliance/e2e/demo-criteria.spec.ts",
+          "line": 137,
+          "column": 1
+        },
+        {
+          "title": "[DEMO-AC-004] a banner an admin sets through the page appears at the top of the page for anonymous visitors; a user's attempt to set it is refused and changes nothing",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 300000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 1,
+                  "status": "failed",
+                  "duration": 8,
+                  "error": {
+                    "message": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)",
+                    "stack": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)\n    at prerequisiteMissing (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts:17:9)\n    at requireDemo (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/support/demo.ts:157:27)\n    at origin (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-criteria.spec.ts:78:10)\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-criteria.spec.ts:332:13",
+                    "location": {
+                      "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                      "column": 9,
+                      "line": 17
+                    },
+                    "snippet": "\u001b[90m   at \u001b[39mtests/compliance/harness/blocked.ts:17\n\n  15 |\n  16 | export function prerequisiteMissing(detail: string): never {\n> 17 |   throw new PrerequisiteMissingError(detail);\n     |         ^\n  18 | }\n  19 |"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                        "column": 9,
+                        "line": 17
+                      },
+                      "message": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)\n\n   at tests/compliance/harness/blocked.ts:17\n\n  15 |\n  16 | export function prerequisiteMissing(detail: string): never {\n> 17 |   throw new PrerequisiteMissingError(detail);\n     |         ^\n  18 | }\n  19 |\n    at prerequisiteMissing (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts:17:9)\n    at requireDemo (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/support/demo.ts:157:27)\n    at origin (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-criteria.spec.ts:78:10)\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-criteria.spec.ts:332:13"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:13:07.261Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results/demo-criteria--DEMO-AC-004-a1fa6-refused-and-changes-nothing-e2e/error-context.md"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results/demo-criteria--DEMO-AC-004-a1fa6-refused-and-changes-nothing-e2e/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                    "column": 9,
+                    "line": 17
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "7dfa15f81d16dda24a6d-035573a27614bea27b80",
+          "file": "tests/compliance/e2e/demo-criteria.spec.ts",
+          "line": 330,
+          "column": 1
+        },
+        {
+          "title": "[DEMO-AC-005] a user's posts-per-page choice, made through the page, is still the choice after logging out and in again (same browser and a new one); another user keeps the default",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 300000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 1,
+                  "status": "failed",
+                  "duration": 12,
+                  "error": {
+                    "message": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)",
+                    "stack": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)\n    at prerequisiteMissing (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts:17:9)\n    at requireDemo (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/support/demo.ts:157:27)\n    at origin (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-criteria.spec.ts:78:10)\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-criteria.spec.ts:368:13",
+                    "location": {
+                      "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                      "column": 9,
+                      "line": 17
+                    },
+                    "snippet": "\u001b[90m   at \u001b[39mtests/compliance/harness/blocked.ts:17\n\n  15 |\n  16 | export function prerequisiteMissing(detail: string): never {\n> 17 |   throw new PrerequisiteMissingError(detail);\n     |         ^\n  18 | }\n  19 |"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                        "column": 9,
+                        "line": 17
+                      },
+                      "message": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)\n\n   at tests/compliance/harness/blocked.ts:17\n\n  15 |\n  16 | export function prerequisiteMissing(detail: string): never {\n> 17 |   throw new PrerequisiteMissingError(detail);\n     |         ^\n  18 | }\n  19 |\n    at prerequisiteMissing (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts:17:9)\n    at requireDemo (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/support/demo.ts:157:27)\n    at origin (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-criteria.spec.ts:78:10)\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-criteria.spec.ts:368:13"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:13:10.687Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results/demo-criteria--DEMO-AC-005-12331-ther-user-keeps-the-default-e2e/error-context.md"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results/demo-criteria--DEMO-AC-005-12331-ther-user-keeps-the-default-e2e/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                    "column": 9,
+                    "line": 17
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "7dfa15f81d16dda24a6d-82b51f35a535cf2729bf",
+          "file": "tests/compliance/e2e/demo-criteria.spec.ts",
+          "line": 366,
+          "column": 1
+        },
+        {
+          "title": "[DEMO-AC-007] a share link created through the page shows the draft to an anonymous visitor; the same link with one character altered is refused and shows nothing of the draft",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 300000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 5,
+                  "parallelIndex": 1,
+                  "status": "failed",
+                  "duration": 6,
+                  "error": {
+                    "message": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)",
+                    "stack": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)\n    at prerequisiteMissing (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts:17:9)\n    at requireDemo (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/support/demo.ts:157:27)\n    at origin (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-criteria.spec.ts:78:10)\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-criteria.spec.ts:453:13",
+                    "location": {
+                      "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                      "column": 9,
+                      "line": 17
+                    },
+                    "snippet": "\u001b[90m   at \u001b[39mtests/compliance/harness/blocked.ts:17\n\n  15 |\n  16 | export function prerequisiteMissing(detail: string): never {\n> 17 |   throw new PrerequisiteMissingError(detail);\n     |         ^\n  18 | }\n  19 |"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                        "column": 9,
+                        "line": 17
+                      },
+                      "message": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)\n\n   at tests/compliance/harness/blocked.ts:17\n\n  15 |\n  16 | export function prerequisiteMissing(detail: string): never {\n> 17 |   throw new PrerequisiteMissingError(detail);\n     |         ^\n  18 | }\n  19 |\n    at prerequisiteMissing (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts:17:9)\n    at requireDemo (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/support/demo.ts:157:27)\n    at origin (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-criteria.spec.ts:78:10)\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-criteria.spec.ts:453:13"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:13:14.281Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results/demo-criteria--DEMO-AC-007-5a490--shows-nothing-of-the-draft-e2e/error-context.md"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results/demo-criteria--DEMO-AC-007-5a490--shows-nothing-of-the-draft-e2e/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                    "column": 9,
+                    "line": 17
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "7dfa15f81d16dda24a6d-6aae9dabb86ebdc9ae67",
+          "file": "tests/compliance/e2e/demo-criteria.spec.ts",
+          "line": 451,
+          "column": 1
+        },
+        {
+          "title": "[DEMO-AC-008] publishing a post and deleting it through the page each produce an info entry of the demo, written during that request, in the target's log",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 360000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 6,
+                  "parallelIndex": 1,
+                  "status": "failed",
+                  "duration": 11,
+                  "error": {
+                    "message": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)",
+                    "stack": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)\n    at prerequisiteMissing (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts:17:9)\n    at requireDemo (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/support/demo.ts:157:27)\n    at origin (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-criteria.spec.ts:78:10)\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-criteria.spec.ts:600:13",
+                    "location": {
+                      "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                      "column": 9,
+                      "line": 17
+                    },
+                    "snippet": "\u001b[90m   at \u001b[39mtests/compliance/harness/blocked.ts:17\n\n  15 |\n  16 | export function prerequisiteMissing(detail: string): never {\n> 17 |   throw new PrerequisiteMissingError(detail);\n     |         ^\n  18 | }\n  19 |"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                        "column": 9,
+                        "line": 17
+                      },
+                      "message": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)\n\n   at tests/compliance/harness/blocked.ts:17\n\n  15 |\n  16 | export function prerequisiteMissing(detail: string): never {\n> 17 |   throw new PrerequisiteMissingError(detail);\n     |         ^\n  18 | }\n  19 |\n    at prerequisiteMissing (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts:17:9)\n    at requireDemo (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/support/demo.ts:157:27)\n    at origin (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-criteria.spec.ts:78:10)\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-criteria.spec.ts:600:13"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:13:17.820Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results/demo-criteria--DEMO-AC-008-144de-request-in-the-target-s-log-e2e/error-context.md"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results/demo-criteria--DEMO-AC-008-144de-request-in-the-target-s-log-e2e/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                    "column": 9,
+                    "line": 17
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "7dfa15f81d16dda24a6d-29307314ebfef747ba30",
+          "file": "tests/compliance/e2e/demo-criteria.spec.ts",
+          "line": 598,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/demo-pages.spec.ts",
+      "file": "tests/compliance/e2e/demo-pages.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[DEMO-AC-001] a post title containing <script>…</script> shows as literal text to its author and, published, to an anonymous visitor in the list and on the post; no script element is added and the script does not run",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 240000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 7,
+                  "parallelIndex": 1,
+                  "status": "failed",
+                  "duration": 3,
+                  "error": {
+                    "message": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)",
+                    "stack": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)\n    at prerequisiteMissing (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts:17:9)\n    at origin (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-pages.spec.ts:84:5)\n    at session (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-pages.spec.ts:91:55)\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-pages.spec.ts:169:24",
+                    "location": {
+                      "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                      "column": 9,
+                      "line": 17
+                    },
+                    "snippet": "\u001b[90m   at \u001b[39mtests/compliance/harness/blocked.ts:17\n\n  15 |\n  16 | export function prerequisiteMissing(detail: string): never {\n> 17 |   throw new PrerequisiteMissingError(detail);\n     |         ^\n  18 | }\n  19 |"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                        "column": 9,
+                        "line": 17
+                      },
+                      "message": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)\n\n   at tests/compliance/harness/blocked.ts:17\n\n  15 |\n  16 | export function prerequisiteMissing(detail: string): never {\n> 17 |   throw new PrerequisiteMissingError(detail);\n     |         ^\n  18 | }\n  19 |\n    at prerequisiteMissing (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts:17:9)\n    at origin (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-pages.spec.ts:84:5)\n    at session (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-pages.spec.ts:91:55)\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-pages.spec.ts:169:24"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:13:19.390Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results/demo-pages--DEMO-AC-001-a--75aab-and-the-script-does-not-run-e2e/error-context.md"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results/demo-pages--DEMO-AC-001-a--75aab-and-the-script-does-not-run-e2e/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                    "column": 9,
+                    "line": 17
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "9f7dc3aab52ef27785ad-b459c08bcb551d5c4f10",
+          "file": "tests/compliance/e2e/demo-pages.spec.ts",
+          "line": 163,
+          "column": 1
+        },
+        {
+          "title": "[DEMO-AC-003] a JPEG of at least 20 MB attached through the page displays: an image on the post is complete with naturalWidth > 0, at the photo's size",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 900000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 8,
+                  "parallelIndex": 1,
+                  "status": "failed",
+                  "duration": 4,
+                  "error": {
+                    "message": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)",
+                    "stack": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)\n    at prerequisiteMissing (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts:17:9)\n    at origin (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-pages.spec.ts:84:5)\n    at session (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-pages.spec.ts:91:55)\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-pages.spec.ts:235:24",
+                    "location": {
+                      "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                      "column": 9,
+                      "line": 17
+                    },
+                    "snippet": "\u001b[90m   at \u001b[39mtests/compliance/harness/blocked.ts:17\n\n  15 |\n  16 | export function prerequisiteMissing(detail: string): never {\n> 17 |   throw new PrerequisiteMissingError(detail);\n     |         ^\n  18 | }\n  19 |"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                        "column": 9,
+                        "line": 17
+                      },
+                      "message": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)\n\n   at tests/compliance/harness/blocked.ts:17\n\n  15 |\n  16 | export function prerequisiteMissing(detail: string): never {\n> 17 |   throw new PrerequisiteMissingError(detail);\n     |         ^\n  18 | }\n  19 |\n    at prerequisiteMissing (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts:17:9)\n    at origin (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-pages.spec.ts:84:5)\n    at session (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-pages.spec.ts:91:55)\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-pages.spec.ts:235:24"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:13:21.158Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results/demo-pages--DEMO-AC-003-a--bbacc-Width-0-at-the-photo-s-size-e2e/error-context.md"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results/demo-pages--DEMO-AC-003-a--bbacc-Width-0-at-the-photo-s-size-e2e/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                    "column": 9,
+                    "line": 17
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "9f7dc3aab52ef27785ad-3d32aa5c1c6854e853a0",
+          "file": "tests/compliance/e2e/demo-pages.spec.ts",
+          "line": 231,
+          "column": 1
+        },
+        {
+          "title": "[DEMO-AC-009] with clipboard permissions granted, the account page's copy button puts exactly the /api/auth/me user ID on the clipboard",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 9,
+                  "parallelIndex": 1,
+                  "status": "failed",
+                  "duration": 6,
+                  "error": {
+                    "message": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)",
+                    "stack": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)\n    at prerequisiteMissing (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts:17:9)\n    at origin (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-pages.spec.ts:84:5)\n    at session (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-pages.spec.ts:91:55)\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-pages.spec.ts:266:22",
+                    "location": {
+                      "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                      "column": 9,
+                      "line": 17
+                    },
+                    "snippet": "\u001b[90m   at \u001b[39mtests/compliance/harness/blocked.ts:17\n\n  15 |\n  16 | export function prerequisiteMissing(detail: string): never {\n> 17 |   throw new PrerequisiteMissingError(detail);\n     |         ^\n  18 | }\n  19 |"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                        "column": 9,
+                        "line": 17
+                      },
+                      "message": "PrerequisiteMissingError: PREREQUISITE MISSING: no running demo on cloudflare: set COMPLIANCE_DEMO_BASE_URL to the demo's test stage origin (F-03 deploys it)\n\n   at tests/compliance/harness/blocked.ts:17\n\n  15 |\n  16 | export function prerequisiteMissing(detail: string): never {\n> 17 |   throw new PrerequisiteMissingError(detail);\n     |         ^\n  18 | }\n  19 |\n    at prerequisiteMissing (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts:17:9)\n    at origin (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-pages.spec.ts:84:5)\n    at session (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-pages.spec.ts:91:55)\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/demo-pages.spec.ts:266:22"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:13:22.797Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results/demo-pages--DEMO-AC-009-wi-a9e52-me-user-ID-on-the-clipboard-e2e/error-context.md"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results/demo-pages--DEMO-AC-009-wi-a9e52-me-user-ID-on-the-clipboard-e2e/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                    "column": 9,
+                    "line": 17
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "9f7dc3aab52ef27785ad-185e016b52d9a294e368",
+          "file": "tests/compliance/e2e/demo-pages.spec.ts",
+          "line": 263,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/E2E-002.spec.ts",
+      "file": "tests/compliance/e2e/E2E-002.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[E2E-002][DEMO-AC-010] cloud part: the demo's smoke test on a deployed demo test stage, from the same commit",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 10,
+                  "parallelIndex": 1,
+                  "status": "failed",
+                  "duration": 3,
+                  "error": {
+                    "message": "PrerequisiteMissingError: PREREQUISITE MISSING: cloud part on cloudflare: F-03 deploys the demo to a test- stage and runs smoke --target cloudflare there (plan §7 F-03); this run has no demo stage",
+                    "stack": "PrerequisiteMissingError: PREREQUISITE MISSING: cloud part on cloudflare: F-03 deploys the demo to a test- stage and runs smoke --target cloudflare there (plan §7 F-03); this run has no demo stage\n    at prerequisiteMissing (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts:17:9)\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/E2E-002.spec.ts:81:5",
+                    "location": {
+                      "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                      "column": 9,
+                      "line": 17
+                    },
+                    "snippet": "\u001b[90m   at \u001b[39mtests/compliance/harness/blocked.ts:17\n\n  15 |\n  16 | export function prerequisiteMissing(detail: string): never {\n> 17 |   throw new PrerequisiteMissingError(detail);\n     |         ^\n  18 | }\n  19 |"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                        "column": 9,
+                        "line": 17
+                      },
+                      "message": "PrerequisiteMissingError: PREREQUISITE MISSING: cloud part on cloudflare: F-03 deploys the demo to a test- stage and runs smoke --target cloudflare there (plan §7 F-03); this run has no demo stage\n\n   at tests/compliance/harness/blocked.ts:17\n\n  15 |\n  16 | export function prerequisiteMissing(detail: string): never {\n> 17 |   throw new PrerequisiteMissingError(detail);\n     |         ^\n  18 | }\n  19 |\n    at prerequisiteMissing (/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts:17:9)\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/E2E-002.spec.ts:81:5"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:13:26.800Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results/E2E-002--E2E-002-DEMO-AC-0-64160--stage-from-the-same-commit-e2e/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/harness/blocked.ts",
+                    "column": 9,
+                    "line": 17
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "ad1a3242baf10630d172-b3d1a219eead33038297",
+          "file": "tests/compliance/e2e/E2E-002.spec.ts",
+          "line": 80,
+          "column": 3
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/E2E-004.spec.ts",
+      "file": "tests/compliance/e2e/E2E-004.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[E2E-004] coverage part: every criterion and scenario applicable on this target has a tagged test in the suite this run executes",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 11,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 14950,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:13:28.501Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c7890dfde9f6f90e5b52-6da7b6a3efa59baef18e",
+          "file": "tests/compliance/e2e/E2E-004.spec.ts",
+          "line": 32,
+          "column": 1
+        },
+        {
+          "title": "[E2E-004] record part: the evidence writer accepts a record of this target and rejects an invalid one",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 11,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 14,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:13:43.509Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c7890dfde9f6f90e5b52-f169a49cf7dfed4d9239",
+          "file": "tests/compliance/e2e/E2E-004.spec.ts",
+          "line": 50,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/E2E-005.spec.ts",
+      "file": "tests/compliance/e2e/E2E-005.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[E2E-005] anonymous, user and admin each get exactly their permitted actions in a browser, and no API response exposes login-provider details",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 11,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 5920,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:13:43.895Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8d4d88bfbeab4d4e69d0-7f92d345702830589e2f",
+          "file": "tests/compliance/e2e/E2E-005.spec.ts",
+          "line": 113,
+          "column": 1
+        },
+        {
+          "title": "[E2E-005] no app-facing type exposes login-provider names, tokens, issuers or email addresses",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 11,
+                  "parallelIndex": 1,
+                  "status": "failed",
+                  "duration": 36,
+                  "error": {
+                    "message": "Error: app-facing types exposing login-provider details:\ndist/core/errors.d.ts: \"The account's email address has not been verified yet.\" (word \"email\")\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"dist/core/errors.d.ts: \\\"The account's email address has not been verified yet.\\\" (word \\\"email\\\")\",\u001b[39m\n\u001b[31m+ ]\u001b[39m",
+                    "stack": "Error: app-facing types exposing login-provider details:\ndist/core/errors.d.ts: \"The account's email address has not been verified yet.\" (word \"email\")\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"dist/core/errors.d.ts: \\\"The account's email address has not been verified yet.\\\" (word \\\"email\\\")\",\u001b[39m\n\u001b[31m+ ]\u001b[39m\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/E2E-005.spec.ts:189:99",
+                    "location": {
+                      "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/E2E-005.spec.ts",
+                      "column": 99,
+                      "line": 189
+                    },
+                    "snippet": "  187 |   }\n  188 |   expect(seen.size, \"declaration files scanned\").toBeGreaterThan(3);\n> 189 |   expect(exposures, `app-facing types exposing login-provider details:\\n${exposures.join(\"\\n\")}`).toEqual([]);\n      |                                                                                                   ^\n  190 | });\n  191 |"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/E2E-005.spec.ts",
+                        "column": 99,
+                        "line": 189
+                      },
+                      "message": "Error: app-facing types exposing login-provider details:\ndist/core/errors.d.ts: \"The account's email address has not been verified yet.\" (word \"email\")\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"dist/core/errors.d.ts: \\\"The account's email address has not been verified yet.\\\" (word \\\"email\\\")\",\u001b[39m\n\u001b[31m+ ]\u001b[39m\n\n  187 |   }\n  188 |   expect(seen.size, \"declaration files scanned\").toBeGreaterThan(3);\n> 189 |   expect(exposures, `app-facing types exposing login-provider details:\\n${exposures.join(\"\\n\")}`).toEqual([]);\n      |                                                                                                   ^\n  190 | });\n  191 |\n    at /home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/E2E-005.spec.ts:189:99"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:13:49.903Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/test-results/E2E-005--E2E-005-no-app-fa-c5b89--issuers-or-email-addresses-e2e/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/home/user/cloud-app/.claude/worktrees/agent-a434b8bf104d60f54/tests/compliance/e2e/E2E-005.spec.ts",
+                    "column": 99,
+                    "line": 189
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "8d4d88bfbeab4d4e69d0-923e83ac288b6807b32a",
+          "file": "tests/compliance/e2e/E2E-005.spec.ts",
+          "line": 163,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/E2E-009-large-photos.spec.ts",
+      "file": "tests/compliance/e2e/E2E-009-large-photos.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[E2E-009] upload a 20 MB and a 100 MB photo from a real browser, view and download them byte-identical; app browser code used only the app's API and framework helpers; no storage or CORS settings in the app",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 1200000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 12,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 24576,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:13:50.655Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "cfa91347479fbcfcd5a2-f667bfab36f692aab5d9",
+          "file": "tests/compliance/e2e/E2E-009-large-photos.spec.ts",
+          "line": 91,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/E2E-011.spec.ts",
+      "file": "tests/compliance/e2e/E2E-011.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[E2E-011] app and framework entries are stored under the app and stage with timestamps, and the plain-Error request's entry is found by its requestId",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 12,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 9276,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [
+                    {
+                      "buffer": "KG5vZGU6MTk4MTEpIFtVTkRJQ0ktRUhQQV0gV2FybmluZzogRW52SHR0cFByb3h5QWdlbnQgaXMgZXhwZXJpbWVudGFsLCBleHBlY3QgdGhlbSB0byBjaGFuZ2UgYXQgYW55IHRpbWUuCihVc2UgYG5vZGUgLS10cmFjZS13YXJuaW5ncyAuLi5gIHRvIHNob3cgd2hlcmUgdGhlIHdhcm5pbmcgd2FzIGNyZWF0ZWQpCg=="
+                    }
+                  ],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:14:18.267Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1c2b7b7a65e2d8a56742-c8094429b40efbbaa6fc",
+          "file": "tests/compliance/e2e/E2E-011.spec.ts",
+          "line": 135,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/E2E-013.spec.ts",
+      "file": "tests/compliance/e2e/E2E-013.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[E2E-013] invalid input, unauthenticated, forbidden, unknown route and plain-Error requests get catalogue errors with no stack traces, provider messages or secret values",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 12,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 2254,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:14:27.859Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "38f9c0c5e655021dda9b-65efecfbd5d029a56d6c",
+          "file": "tests/compliance/e2e/E2E-013.spec.ts",
+          "line": 66,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/E2E-014.spec.ts",
+      "file": "tests/compliance/e2e/E2E-014.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[E2E-014] the stage reports exactly its committed configuration values",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 12,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 47,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:14:30.141Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8e17ea21a5abb3204ca2-32b90b129c3c99f2f84a",
+          "file": "tests/compliance/e2e/E2E-014.spec.ts",
+          "line": 66,
+          "column": 1
+        },
+        {
+          "title": "[E2E-014] cloud part: a secret set with the CLI appears nowhere in the repository, build outputs, deployed browser assets or logs",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 1800000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 12,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 53155,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T07:14:30.197Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8e17ea21a5abb3204ca2-2092fe064d140b6c3694",
+          "file": "tests/compliance/e2e/E2E-014.spec.ts",
+          "line": 74,
+          "column": 3
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-25T07:12:34.305Z",
+    "duration": 940980.037,
+    "expected": 14,
+    "skipped": 0,
+    "unexpected": 11,
+    "flaky": 0
+  }
+}
