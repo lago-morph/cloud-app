@@ -1,12 +1,14 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { validateEvidence, writeEvidence, type EvidenceRecord, type GitState, type WriteEvidenceInput } from "../../../packages/framework/src/evidence/public.js";
 import { parseArgs } from "./args.js";
 import { NOT_SELECTED, parseWhere, type CatalogueEntry } from "./catalogue.js";
 import { runCompliance, SecretsNotSetError, SKIP_NOTES_REPORTER, type CloudStageOps, type DriverDeps, type RunCall } from "./driver.js";
 import type { NotRunRule } from "./expected.js";
+import { buildApp } from "../../../packages/framework/src/build/public.js";
+import { readDeployedOrigin, recordDeployOutput } from "../../../packages/framework/src/cli/commands/smoke.js";
 
 const entry = (id: string, where: string, source = "components/x.md"): CatalogueEntry => ({ id, where, source, applies: parseWhere(where, source) });
 const CATALOGUE = [entry("KV-AC-001", "Local, cloud"), entry("KV-AC-002", "Local, cloud"), entry("CLI-AC-002", "Local"), entry("CLI-AC-001", "Local, cloud"), entry("PROV-AC-003", "Cloud (milestone)")];
@@ -682,6 +684,55 @@ describe("[COMPL-AC-005] the production checks on prodcheck", () => {
     }
     expect(h.written[0]?.redactions).toContainEqual({ value: SECRET, replacement: "<test-secret>" });
   });
+
+  // The live run k9cc5zjcbm5mrkc: check-login found no recorded deploy output for prodcheck although
+  // the driver had just redeployed it. Each `deploy` builds the app first, and the build cleared
+  // `.framework/<target>/`, where every stage's deploy output is recorded (cli.md §2). These fake
+  // stage operations do what the CLI's deploy and check-login do to that directory, with the real
+  // build: a deploy builds (stopping on the unset secret the first time) and then records its origin.
+  it("check-login finds prodcheck's recorded deploy output after the test layers deployed other stages of the app", async () => {
+    const src = join(dirname(dirname(dirname(dirname(new URL(import.meta.url).pathname)))), "packages", "framework", "src");
+    const appDir = mkdtempSync(join(tmpdir(), "driver-prodcheck-"));
+    const files: Record<string, string> = {
+      "src/app.ts": `import { defineApp } from ${JSON.stringify(join(src, "index.ts"))};\nexport default defineApp({ name: "reference", config: {}, secrets: ["apiKey"], tables: {}, routes: () => undefined });\n`,
+      "config/cloudflare/test.json": JSON.stringify({ values: {}, framework: {} }),
+      "config/cloudflare/prodcheck.json": JSON.stringify({ values: {}, framework: {} }),
+    };
+    for (const [path, text] of Object.entries(files)) (mkdirSync(dirname(join(appDir, path)), { recursive: true }), writeFileSync(join(appDir, path), text));
+    const secrets = new Set<string>();
+    const deploy = async (stage: string): Promise<{ baseUrl: string; output: string }> => {
+      await buildApp({ appDir, target: "cloudflare", stage, runtimeImport: join(src, "targets", "cloudflare", "public.ts") });
+      if (!secrets.has(stage)) throw new SecretsNotSetError("required secrets are not set: apiKey", "stopped at step 5");
+      const baseUrl = `https://reference-${stage}.owner-sub.workers.dev`;
+      recordDeployOutput(appDir, "cloudflare", stage, baseUrl);
+      return { baseUrl, output: `deployed ${stage}` };
+    };
+    const ok = checkLoginRecord([{ id: "PWD-AC-009", status: "passed" }, { id: "AUTH-AC-011", status: "passed" }, { id: "E2E-008", status: "passed" }]);
+    try {
+      const h = harness({
+        catalogue,
+        cloud: {
+          deploy,
+          setSecret: (stage) => (secrets.add(stage), Promise.resolve("set")),
+          checkLogin: (stage) =>
+            Promise.resolve(
+              readDeployedOrigin(appDir, "cloudflare", stage) === undefined
+                ? { status: 1, output: `check-login: no recorded deploy output for stage ${stage} on cloudflare` }
+                : { status: 0, output: "check-login passed", record: ok },
+            ),
+        },
+      });
+      const run = h.deps.run;
+      // A test layer deploys a stage of its own from the same app directory (as the cloud tests do).
+      const deps: DriverDeps = { ...h.deps, run: async (c) => (c.args[0] === "vitest" ? (secrets.add("test-layer1"), await deploy("test-layer1")) : undefined, run(c)) };
+      const result = await runCompliance(parseArgs(["--target", "cloudflare"]), [], deps);
+      for (const id of ["PWD-AC-009", "AUTH-AC-011", "E2E-008"]) expect(recordOf(h).results.filter((r) => r.id === id), id).toEqual([{ id, status: "passed" }]);
+      expect(result.exitStatus).toBe(0);
+      expect(readDeployedOrigin(appDir, "cloudflare", "test-abcdefghij12345"), "the run stage's record outlives prodcheck's deploy (COMPL-AC-005 orders the two)").toBeDefined();
+    } finally {
+      rmSync(appDir, { recursive: true, force: true });
+    }
+  }, 120_000);
 
   it("local runs, milestone runs and runs selecting no prodcheck criterion never touch prodcheck", async () => {
     for (const argv of [["--target", "local"], ["--target", "cloudflare", "--milestone"], ["--target", "cloudflare", "--only", "KV-AC-001"]]) {

@@ -17,7 +17,7 @@
  * Everything goes under `<app>/.framework/<target>/`, which is replaced on every build.
  * Node only.
  */
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import { createDeployment, type Deployment, type Target } from "../core/identity.js";
 import { nodeFileReader, resolveStageConfig } from "../config/files.js";
@@ -119,6 +119,21 @@ export function localWranglerConfig(deployment: Deployment): string {
   )}\n`;
 }
 
+/**
+ * The per-stage deploy records `deploy` writes beside the build output (`.framework/<target>/stages/<stage>.json`,
+ * cli.md §2, DEC-0272). They outlive any build: `smoke` and `check-login` read a stage's record
+ * after other stages of the same app were built or deployed.
+ */
+const STAGE_RECORDS_DIR = "stages"; // as `deployRecordPath` (cli/commands/smoke.ts)
+
+/** Removes the previous build output in `outDir`, keeping the stages' deploy records. */
+function clearBuildOutput(outDir: string): void {
+  if (!existsSync(outDir)) return;
+  for (const name of readdirSync(outDir)) {
+    if (name !== STAGE_RECORDS_DIR) rmSync(join(outDir, name), { recursive: true, force: true });
+  }
+}
+
 export async function buildApp(options: BuildOptions): Promise<BuildResult> {
   const appDir = resolve(options.appDir);
   const { defined, exportName } = await loadAppModule(appDir);
@@ -128,7 +143,7 @@ export async function buildApp(options: BuildOptions): Promise<BuildResult> {
   const resolved = resolveStageConfig(deployment, { config: definition.config, secrets: definition.secrets }, nodeFileReader(appDir));
 
   const outDir = join(appDir, BUILD_DIR, options.target);
-  rmSync(outDir, { recursive: true, force: true });
+  clearBuildOutput(outDir);
   mkdirSync(outDir, { recursive: true });
   const configModule = join(outDir, "config.mjs");
   writeFileSync(configModule, generateConfigModule(resolved));

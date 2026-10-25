@@ -14,6 +14,7 @@ import { unstable_startWorker } from "wrangler";
 import { tag } from "../../../../tests/support/tags.js";
 import { FrameworkError } from "../core/errors.js";
 import { buildApp, loadApp, type BuildOptions } from "./public.js";
+import { readDeployedOrigin, recordDeployOutput } from "../cli/commands/smoke.js";
 
 const SRC = dirname(dirname(fileURLToPath(import.meta.url)));
 const runtimeImport = (target: string) => join(SRC, "targets", target, "public.ts");
@@ -80,6 +81,21 @@ describe("loadApp", () => {
 });
 
 describe("buildApp --target cloudflare", () => {
+  // cli.md §2: `deploy` records each stage's origin in `.framework/<target>/stages/<stage>.json` for
+  // `smoke` and `check-login`. A later build of the app (another stage's deploy) must keep them:
+  // the compliance driver deploys the run stage, then prodcheck, then runs the tests (which deploy
+  // further stages from the same app directory), then check-login on prodcheck.
+  it("a build keeps the recorded deploy outputs of every stage under .framework/<target>/stages/", async () => {
+    const dir = fixture({ "config/cloudflare/prodcheck.json": JSON.stringify({ values: { greeting: "p" }, framework: {} }) });
+    await buildApp(options(dir, "cloudflare", "test-run1"));
+    recordDeployOutput(dir, "cloudflare", "test-run1", "https://reference-test-run1.sub.workers.dev");
+    await buildApp(options(dir, "cloudflare", "prodcheck"));
+    recordDeployOutput(dir, "cloudflare", "prodcheck", "https://reference-prodcheck.sub.workers.dev");
+    await buildApp(options(dir, "cloudflare", "test-other"));
+    expect(readDeployedOrigin(dir, "cloudflare", "test-run1")).toBe("https://reference-test-run1.sub.workers.dev");
+    expect(readDeployedOrigin(dir, "cloudflare", "prodcheck")).toBe("https://reference-prodcheck.sub.workers.dev");
+  });
+
   it(tag("PROV-AC-005", "build part: a test-<id> stage reads config/cloudflare/test.json and includes the mock"), async () => {
     const dir = fixture({});
     const result = await buildApp(options(dir, "cloudflare", "test-b16"));
