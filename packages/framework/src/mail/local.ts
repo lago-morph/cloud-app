@@ -16,11 +16,9 @@ export interface MailLine {
   readonly message: MailFile;
 }
 
-/** The content of one `.mail/<timestamp>-<id>.json` file (mail.md §2: `{ to, subject, text, html, time }`, plus `from`). */
+/** The content of one `.mail/<timestamp>-<id>.json` file: exactly `{ to, subject, text, html, time }` (mail.md §2). */
 export interface MailFile {
   readonly to: string;
-  /** `"<sender name> <no-reply@localhost>"`. */
-  readonly from: string;
   readonly subject: string;
   readonly text: string;
   readonly html: string;
@@ -52,7 +50,7 @@ export function workerOutputMailSender(options: WorkerOutputMailOptions): MailSe
   return {
     send(input) {
       const m = capturedMessage(input, localFrom(options.senderName), now());
-      print(formatMailLine({ id: messageId(), message: { to: m.to, from: m.from, subject: m.subject, text: m.text, html: m.html, time: m.sentAt } }));
+      print(formatMailLine({ id: messageId(), message: { to: m.to, subject: m.subject, text: m.text, html: m.html, time: m.sentAt } }));
       return Promise.resolve();
     },
   };

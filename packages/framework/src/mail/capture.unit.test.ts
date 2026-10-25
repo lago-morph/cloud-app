@@ -33,7 +33,7 @@ async function workerLines(count = 1, at = AT): Promise<string[]> {
 }
 
 describe("the local Worker's sender", () => {
-  it("prints one marked line per message, from no-reply@localhost, with line breaks escaped", async () => {
+  it("prints one marked line per message with line breaks escaped", async () => {
     const lines = await workerLines(2);
     expect(lines).toHaveLength(2);
     for (const line of lines) {
@@ -41,7 +41,7 @@ describe("the local Worker's sender", () => {
       expect(line).not.toContain("\n");
     }
     const parsed = parseMailLine(lines[0] ?? "");
-    expect(parsed?.message).toEqual({ ...MESSAGE, from: "Demo <no-reply@localhost>", time: AT.toISOString() });
+    expect(parsed?.message).toEqual({ ...MESSAGE, time: AT.toISOString() });
     expect(parsed?.id).toMatch(/^[0-9a-f]{16}$/);
     expect(parseMailLine(lines[1] ?? "")?.id).not.toBe(parsed?.id);
   });
@@ -57,7 +57,7 @@ describe("parseMailLine", () => {
     expect(parseMailLine("Ready on http://127.0.0.1:8787")).toBeUndefined();
     expect(parseMailLine('[prototype-framework:log] {"time":"x"}')).toBeUndefined();
     expect(parseMailLine(`${MAIL_LINE_MARKER}{not json`)).toBeUndefined();
-    expect(parseMailLine(`${MAIL_LINE_MARKER}${JSON.stringify({ id: "../x", message: { ...MESSAGE, from: "f", time: AT.toISOString() } })}`)).toBeUndefined();
+    expect(parseMailLine(`${MAIL_LINE_MARKER}${JSON.stringify({ id: "../x", message: { ...MESSAGE, time: AT.toISOString() } })}`)).toBeUndefined();
     expect(parseMailLine(`${MAIL_LINE_MARKER}${JSON.stringify({ id: "ab", message: { to: TO } })}`)).toBeUndefined();
   });
 });
@@ -65,7 +65,7 @@ describe("parseMailLine", () => {
 describe("file names", () => {
   it("are .mail/<sortable UTC timestamp>-<id>.json", () => {
     expect(fileTimestamp(AT.toISOString())).toBe("20261025T101112123Z");
-    expect(mailFilePath({ id: "abc123", message: { ...MESSAGE, from: "f", time: AT.toISOString() } })).toBe(".mail/20261025T101112123Z-abc123.json");
+    expect(mailFilePath({ id: "abc123", message: { ...MESSAGE, time: AT.toISOString() } })).toBe(".mail/20261025T101112123Z-abc123.json");
   });
 });
 
@@ -80,7 +80,7 @@ describe("createMailCapture", () => {
     expect(other).toEqual(["starting"]);
     expect(written).toHaveLength(1);
     expect(written[0]?.[0]).toMatch(/^\.mail\/20261025T101112123Z-[0-9a-f]{16}\.json$/);
-    expect(JSON.parse(written[0]?.[1] ?? "")).toEqual({ ...MESSAGE, from: "Demo <no-reply@localhost>", time: AT.toISOString() });
+    expect(JSON.parse(written[0]?.[1] ?? "")).toEqual({ ...MESSAGE, time: AT.toISOString() });
   });
 });
 
@@ -97,7 +97,7 @@ describe("the app's .mail/ directory", () => {
     expect(other).toEqual([]);
     const latest = latestLocalMail(app, TO);
     expect(latest?.subject).toBe("Reset");
-    expect(latest === undefined ? undefined : asMailMessage(latest)).toEqual({ ...MESSAGE, subject: "Reset", from: "Demo <no-reply@localhost>", sentAt: "2026-10-25T11:00:00.000Z" });
+    expect(latest === undefined ? undefined : asMailMessage(latest)).toEqual({ ...MESSAGE, subject: "Reset", from: "no-reply@localhost", sentAt: "2026-10-25T11:00:00.000Z" });
     expect(latestLocalMail(app, "nobody@example.test")).toBeUndefined();
   });
 
@@ -105,14 +105,14 @@ describe("the app's .mail/ directory", () => {
     const app = tempDir();
     expect(latestLocalMail(app, TO)).toBeUndefined();
     mkdirSync(join(app, ".mail"));
-    writeFileSync(join(app, ".mail", "notes.json"), JSON.stringify({ ...MESSAGE, from: "f", time: AT.toISOString() }));
+    writeFileSync(join(app, ".mail", "notes.json"), JSON.stringify({ ...MESSAGE, time: AT.toISOString() }));
     writeFileSync(join(app, ".mail", "20261025T101112123Z-ab.json"), "{broken");
     expect(latestLocalMail(app, TO)).toBeUndefined();
     expect(readFileSync(join(app, ".mail", "notes.json"), "utf8")).toContain(TO);
   });
 
   it("latestMailTo breaks a time tie by file name", () => {
-    const content = (subject: string) => JSON.stringify({ ...MESSAGE, subject, from: "f", time: AT.toISOString() });
+    const content = (subject: string) => JSON.stringify({ ...MESSAGE, subject, time: AT.toISOString() });
     const files = [
       { name: "20261025T101112123Z-bb.json", content: content("second") },
       { name: "20261025T101112123Z-aa.json", content: content("first") },
@@ -121,7 +121,7 @@ describe("the app's .mail/ directory", () => {
   });
 
   it("formatMailLine round-trips through parseMailLine", () => {
-    const line = { id: "0f", message: { ...MESSAGE, from: "f", time: AT.toISOString() } };
+    const line = { id: "0f", message: { ...MESSAGE, time: AT.toISOString() } };
     expect(parseMailLine(formatMailLine(line))).toEqual(line);
   });
 });

@@ -34,7 +34,7 @@ describe("mail last", () => {
     const dir = await appWithMail();
     const io = captureIo(dir);
     expect(await mailCommand()(["last", "--to", TO], io)).toBe(0);
-    expect(JSON.parse(io.out)).toEqual({ to: TO, from: "Demo <no-reply@localhost>", subject: "Reset", text: "second", html: "<p>second</p>", time: "2026-10-25T10:00:01.000Z" });
+    expect(JSON.parse(io.out)).toEqual({ to: TO, subject: "Reset", text: "second", html: "<p>second</p>", time: "2026-10-25T10:00:01.000Z" });
     const explicit = captureIo(dir);
     expect(await mailCommand()(["last", `--to=${TO}`, "--target", "local"], explicit)).toBe(0);
     expect(explicit.out).toBe(io.out);

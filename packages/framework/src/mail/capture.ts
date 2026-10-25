@@ -17,7 +17,7 @@ function isString(v: unknown): v is string {
 export function isMailFile(value: unknown): value is MailFile {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
-  return isString(v.to) && isString(v.from) && isString(v.subject) && isString(v.text) && isString(v.html) && isString(v.time) && !Number.isNaN(Date.parse(v.time));
+  return isString(v.to) && isString(v.subject) && isString(v.text) && isString(v.html) && isString(v.time) && !Number.isNaN(Date.parse(v.time));
 }
 
 /** The message in a marked output line, or undefined for any other line. */
@@ -32,8 +32,8 @@ export function parseMailLine(line: string): MailLine | undefined {
   }
   const v = value as { id?: unknown; message?: unknown } | null;
   if (typeof v !== "object" || v === null || !isString(v.id) || !ID.test(v.id) || !isMailFile(v.message)) return undefined;
-  const { to, from, subject, text, html, time } = v.message;
-  return { id: v.id, message: { to, from, subject, text, html, time } };
+  const { to, subject, text, html, time } = v.message;
+  return { id: v.id, message: { to, subject, text, html, time } };
 }
 
 /** `20261025T101112123Z`: the message time, safe in a file name and sorting like the time. */

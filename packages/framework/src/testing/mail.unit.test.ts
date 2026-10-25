@@ -110,7 +110,8 @@ describe("a connected stage's mail", () => {
     await sender.send({ to: TO, subject: "Verify", text: "t", html: "h" });
     const fetch = async (): Promise<Response> => Response.json({ level: "anonymous" });
     const stage = await connectWith(LOCAL, fetch, dir);
-    expect(await stage.mail.lastTo(TO)).toEqual(message);
+    // A .mail/ file holds no sender (mail.md §2), so `from` is the bare local address.
+    expect(await stage.mail.lastTo(TO)).toEqual({ ...message, from: "no-reply@localhost" });
     expect(await stage.mail.lastTo("nobody@example.test")).toBeUndefined();
   });
 });

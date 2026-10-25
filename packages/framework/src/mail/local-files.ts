@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, join } from "node:path";
 import { createMailCapture, latestMailTo, MAIL_DIR } from "./capture.js";
 import type { MailFile } from "./local.js";
-import type { MailMessage } from "./sender.js";
+import { LOCAL_SENDER_ADDRESS, type MailMessage } from "./sender.js";
 
 /** A line handler for `dev`: mail lines become `<appDir>/.mail/<timestamp>-<id>.json`, others go to `other`. */
 export function createDevMailCapture(appDir: string, other: (line: string) => void): (line: string) => void {
@@ -31,7 +31,10 @@ export function latestLocalMail(appDir: string, address: string): MailFile | und
   return latestMailTo(files, address);
 }
 
-/** A `.mail/` file as testing.d.ts's `MailMessage`. */
+/**
+ * A `.mail/` file as testing.d.ts's `MailMessage`. The file holds no sender (mail.md §2), so
+ * `from` is the local sender address without the display name.
+ */
 export function asMailMessage(file: MailFile): MailMessage {
-  return { to: file.to, from: file.from, subject: file.subject, text: file.text, html: file.html, sentAt: file.time };
+  return { to: file.to, from: LOCAL_SENDER_ADDRESS, subject: file.subject, text: file.text, html: file.html, sentAt: file.time };
 }
