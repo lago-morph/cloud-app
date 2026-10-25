@@ -29,8 +29,12 @@
  *      `RULE_SETTLE_MS` before it reports success: a send right after the rule was created was
  *      rejected `550 5.1.1 Address does not exist` (`routing_unknown_address`) because the rule
  *      had not spread yet (live, 2026-10-25; decision note i-g.md).
- * - `productionPrerequisites` (deploy step 1, production stages; reads only): the zone, the
- *   DEC-0515 permissions, and the domain's Email Sending entry present and enabled.
+ * - `productionPrerequisites` (deploy step 1, production stages; reads only): the zone and the
+ *   domain's Email Sending entry present and enabled. It reads them with the everyday token's
+ *   permissions ("Zone Read" on the zone, "Email Sending Read" on the account) and names the one a
+ *   refusal shows is missing; it does not read the token's own policies, so deploy needs no
+ *   permission on API tokens, and the write permissions of DEC-0515 are `setup-account`'s only
+ *   (DEC-0553; live, 2026-10-25: without "Email Sending Read" the sending listing answers 403).
  */
 import { createHash } from "node:crypto";
 import { MAIL_SINK_BINDING, MAIL_SINK_COMPATIBILITY_DATE, MAIL_SINK_MODULE, MAIL_SINK_SOURCE } from "../../mail/sink-worker.js";
@@ -48,6 +52,9 @@ export interface CloudflareEmailSetup {
   /** Deploy step 1, production stages: the missing email prerequisites by name. Changes nothing. */
   productionPrerequisites(emailDomain: string): Promise<readonly string[]>;
 }
+
+/** What a production deploy reads the Email Sending entry with (DEC-0553); "Email Sending Write" also grants it. */
+export const DEPLOY_SENDING_PERMISSION = "Email Sending Read";
 
 /** The local part of the sink's routed address (`sink@t.<domain>`); subaddresses `sink+<tag>@…` reach it too. */
 export const MAIL_SINK_LOCAL_PART = "sink";
@@ -193,7 +200,7 @@ export function createCloudflareEmailSetup(options: EmailSetupOptions): Cloudfla
     try {
       zone = await findZone(domain);
     } catch (error) {
-      return { problem: `${error instanceof Error ? error.message : String(error)} (the token needs "Zone Read" on the email domain's zone; DEC-0515)` };
+      return { problem: `${error instanceof Error ? error.message : String(error)} (the token needs "Zone Read" on the email domain's zone; DEC-0515, DEC-0553)` };
     }
     if (!zone) return { problem: `the email domain ${domain} is not in a zone of this Cloudflare account; add the domain to Cloudflare DNS first` };
     if (zone.status !== "active") return { problem: `the zone ${zone.name} of the email domain is ${zone.status}, not active; finish adding it to Cloudflare DNS first` };
@@ -420,12 +427,12 @@ export function createCloudflareEmailSetup(options: EmailSetupOptions): Cloudfla
     async productionPrerequisites(emailDomain) {
       const { zone, problem } = await zoneOrProblem(emailDomain);
       if (!zone) return [problem ?? `no zone for ${emailDomain}`];
-      const missing = await permissionProblems(emailDomain, zone, EMAIL_PERMISSIONS);
+      const missing: string[] = [];
       let entry: SendingEntry | undefined;
       try {
         entry = await sendingEntry(zone, emailDomain);
       } catch (error) {
-        missing.push(error instanceof Error ? error.message : String(error));
+        missing.push(`${error instanceof Error ? error.message : String(error)} (the token needs "${DEPLOY_SENDING_PERMISSION}" on the account; DEC-0553)`);
         return missing;
       }
       if (!entry) missing.push(`${emailDomain} is not onboarded for Email Sending; run setup-account --target cloudflare`);

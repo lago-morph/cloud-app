@@ -31,6 +31,9 @@ export interface FakeWorker {
   modules?: Map<string, string>;
 }
 
+/** The account signing record `setup-account` writes in the fake (DEC-0550); the secret is a fixed test value. */
+export const FAKE_SIGNING = Object.freeze({ tokenId: "tok0", accessKeyId: "tok0", secretAccessKey: "5".repeat(64) });
+
 /** The fake's own token: its ID and its policies (`GET /accounts/<a>/tokens/<id>`). */
 export const SELF_TOKEN_ID = "selftoken";
 
@@ -478,7 +481,15 @@ export class FakeCloud {
     const c = new FakeCloud();
     c.buckets.set("prototype-logs", new Set());
     c.buckets.set("sst-state", new Set());
+    c.addSigningCredential();
     return c;
+  }
+
+  /** The account's R2 signing credential as `setup-account` leaves it (DEC-0550): token `tok0` and its record. */
+  addSigningCredential(): void {
+    this.tokens.set(FAKE_SIGNING.tokenId, { name: "prototype-r2-signing", resources: { [`com.cloudflare.api.account.${ACCOUNT}`]: "*" } });
+    this.buckets.get("sst-state")?.add("framework/r2-signing.json");
+    this.objectBodies.set("sst-state/framework/r2-signing.json", { ...FAKE_SIGNING });
   }
 }
 

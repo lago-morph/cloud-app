@@ -2,8 +2,9 @@
  * The Cloudflare `TargetOperations` (PROV §2 "Per-target operations"; cloudflare.md "Deploy
  * mechanics"; DEC-0267). It owns every Cloudflare call; the target-neutral core sequences them.
  *
- * - `preflight`: the credential variables by name, the token's usability, and the permission
- *   to create R2 API tokens. Reads only.
+ * - `preflight`: the credential variables by name and the token's usability. Reads only. It needs
+ *   no permission on API tokens: the stages' R2 signing credential is an account resource that
+ *   `setup-account` creates (DEC-0550), checked by `inspectAccount` like the other shared resources.
  * - `inspectAccount` / `createSharedResources`: `account.ts`.
  * - `readAccountSettings` / `writeAccountSettings`: the account settings record
  *   `framework/account.json` in `sst-state` (`account-settings.ts`, DEC-0514).
@@ -18,14 +19,17 @@
  *   SST resolves `--target` only in the stage's state (root cause 2026-10-23-pass1).
  * - `deployCode` (step 5): a full `sst deploy` with the current database as an input, then the
  *   framework-internal secrets the CLI creates: the session key and the password provider's
- *   secret `frameworkAuthSecret` (each generated when absent, PAR-253), and the stage's R2 signing token as S3 credentials (created when absent; a token whose secrets are
- *   missing is replaced, since its value is shown only once).
+ *   secret `frameworkAuthSecret` (each generated when absent, PAR-253), and the account's R2
+ *   signing credential as S3 credentials, copied from its record on every deploy (DEC-0550).
  * - `setSecret`, `listSetSecrets`, `stopApp`, `startApp`: `worker.ts`.
  * - Databases: D-04's operations through `databases.ts`.
  * - `checkHealth`: `health.ts` with FILES' storage preflight.
- * - `listStageResources`: the Worker, the bucket, the token and the SST state objects, each by
- *   its exact identifier, plus every D1 database.
- * - `removeStage`: every step attempted: empty the bucket, delete the token, `sst remove` (skipped
+ * - `listStageResources`: the Worker, the bucket, a legacy per-stage signing token (when the
+ *   credential may list tokens) and the SST state objects, each by its exact identifier, plus
+ *   every D1 database.
+ * - `emailSetupProblems` also names "Account API Tokens Write" when the account's signing
+ *   credential is absent, since `setup-account` then creates it (DEC-0551).
+ * - `removeStage`: every step attempted: empty the bucket, delete a legacy token, `sst remove` (skipped
  *   when `sst-state` has no `app/<app>/<stage>`; its leftover `app/` object deleted after), then
  *   delete the Worker and the bucket by exact name if they are still there (e.g. when SST's
  *   removal failed or its state was lost), then the stage's SST state objects (DEC-0084).
@@ -36,7 +40,7 @@ import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import { FRAMEWORK_SECRETS } from "../../secrets/names.js";
 import type { DeployedCode, DeployInput, HealthOutcome, Stage, StageDatabase, StageResource, StageResources, TargetOperations } from "../core/operations.js";
-import { accountSubdomain, createSharedResources, inspectSharedResources } from "./account.js";
+import { accountSubdomain, createSharedResources, inspectSharedResources, type SharedResourceOptions } from "./account.js";
 import { readAccountSettings, writeAccountSettings } from "./account-settings.js";
 import { createCloudflareEmailSetup, type CloudflareEmailSetup } from "./email.js";
 import { describeFailure, succeeded, type CloudflareApi } from "./api.js";
@@ -45,7 +49,7 @@ import { missingCredentials, type Environment } from "./environment.js";
 import { checkStageHealth } from "./health.js";
 import { accountResourceClash, filesBucketName, isStageStateObject, publicOrigin, STATE_BUCKET, workerName } from "./names.js";
 import { deleteObjects, listObjectKeys } from "./objects.js";
-import { createSigningToken, deleteSigningToken, findSigningToken, tokenCreationProblems } from "./r2-token.js";
+import { deleteSigningToken, findLegacySigningToken, readSigningCredentials, SIGNING_RESOURCE, tokenWriteProblems } from "./r2-token.js";
 import { INFRASTRUCTURE_COMPONENT, processSstExec, runSst, writeSstApp, type SstExec, type WorkerCode } from "./sst.js";
 import { listSetSecrets, setRoute, setSecret } from "./worker.js";
 
@@ -77,6 +81,8 @@ export interface CloudflareTargetOptions {
   readonly randomKey?: () => string;
   /** The email setup's Cloudflare calls; default `createCloudflareEmailSetup` over `api`. */
   readonly email?: CloudflareEmailSetup;
+  /** The subdomain `setup-account` registers on an account without one (default random, DEC-0552). */
+  readonly newSubdomain?: SharedResourceOptions["newSubdomain"];
   readonly healthTimeoutMs?: number;
   readonly now?: () => number;
   readonly sleep?: (ms: number) => Promise<void>;
@@ -111,10 +117,10 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
     for (const name of [FRAMEWORK_SECRETS.sessionKey, FRAMEWORK_SECRETS.authSecret]) {
       if (!set.has(name)) await setSecret(api, accountId, stage, name, randomKey());
     }
-    if (set.has(FRAMEWORK_SECRETS.r2AccessKeyId) && set.has(FRAMEWORK_SECRETS.r2SecretAccessKey)) return;
-    const existing = await findSigningToken(api, accountId, stage);
-    if (existing) await deleteSigningToken(api, accountId, existing.id);
-    const credentials = await createSigningToken(api, accountId, stage);
+    // Written on every deploy, so a stage with a legacy per-stage token, or one deployed before the
+    // credential was replaced, signs with the account's current credential (DEC-0550).
+    const credentials = await readSigningCredentials(api, accountId);
+    if (!credentials) throw new Error(`the account's ${SIGNING_RESOURCE} is missing; run setup-account --target cloudflare with the setup token (DEC-0551)`);
     await setSecret(api, accountId, stage, FRAMEWORK_SECRETS.r2AccessKeyId, credentials.accessKeyId);
     await setSecret(api, accountId, stage, FRAMEWORK_SECRETS.r2SecretAccessKey, credentials.secretAccessKey);
   }
@@ -140,14 +146,18 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       if (missing.length > 0) return missing;
       const verify = await api("GET", `/accounts/${accountId}/tokens/verify`);
       if (!succeeded(verify)) return [`CLOUDFLARE_API_TOKEN is not usable: ${describeFailure(verify)}`];
-      return tokenCreationProblems(api, accountId);
+      return [];
     },
 
     inspectAccount: () => inspectSharedResources(api, accountId),
-    createSharedResources: (absent) => createSharedResources(api, accountId, absent),
+    createSharedResources: (absent) => createSharedResources(api, accountId, absent, options.newSubdomain === undefined ? {} : { newSubdomain: options.newSubdomain }),
     readAccountSettings: () => readAccountSettings(api, accountId),
     writeAccountSettings: (settings) => writeAccountSettings(api, accountId, settings),
-    emailSetupProblems: (emailDomain) => email.setupProblems(emailDomain),
+    async emailSetupProblems(emailDomain) {
+      const problems = [...(await email.setupProblems(emailDomain))];
+      if ((await readSigningCredentials(api, accountId)) === undefined) problems.push(...(await tokenWriteProblems(api, accountId)));
+      return problems;
+    },
     setUpEmail: (emailDomain) => email.setUp(emailDomain),
     emailPrerequisites: (_stage, emailDomain) => email.productionPrerequisites(emailDomain),
 
@@ -213,7 +223,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       const resources: StageResource[] = [];
       if (await exists(`${workerPath(stage)}/settings`, `Worker ${workerName(stage)}`)) resources.push({ kind: "Worker", id: workerName(stage) });
       if (await exists(bucketPath(stage), `R2 bucket ${filesBucketName(stage)}`)) resources.push({ kind: "R2 bucket", id: filesBucketName(stage) });
-      const token = await findSigningToken(api, accountId, stage);
+      const token = await findLegacySigningToken(api, accountId, stage);
       if (token) resources.push({ kind: "R2 API token", id: token.id });
       for (const key of await stateObjects(stage)) resources.push({ kind: "SST state object", id: key });
       return { resources, databases: await databases.listDatabases() };
@@ -232,7 +242,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       const bucket = filesBucketName(stage);
       await attempt(async () => deleteObjects(api, accountId, bucket, await listObjectKeys(api, accountId, bucket)));
       await attempt(async () => {
-        const token = await findSigningToken(api, accountId, stage);
+        const token = await findLegacySigningToken(api, accountId, stage);
         if (token) await deleteSigningToken(api, accountId, token.id);
       });
       await attempt(async () => {

@@ -4,7 +4,8 @@ import { runDeploy } from "../core/deploy.js";
 import { FakeTarget } from "../core/fake-target.js";
 import type { SharedResource } from "../core/operations.js";
 import { runSetupAccount } from "../core/setup-account.js";
-import { accountSubdomain, createSharedResources, inspectSharedResources, LOG_BUCKET, LOG_BUCKET_RESOURCE, STATE_HOME_RESOURCE, SUBDOMAIN_RESOURCE, type CloudflareApi } from "./account.js";
+import { accountSubdomain, createSharedResources, inspectSharedResources, LOG_BUCKET, LOG_BUCKET_RESOURCE, randomSubdomain, STATE_HOME_RESOURCE, SUBDOMAIN_RESOURCE, type CloudflareApi } from "./account.js";
+import { SIGNING_RECORD_KEY, SIGNING_RESOURCE } from "./r2-token.js";
 
 const ACCOUNT = "0123456789abcdef0123456789abcdef";
 
@@ -27,11 +28,15 @@ function stubApi(replies: Record<string, Reply>): CloudflareApi & { requests: st
 const BUCKET_PATH = `/accounts/${ACCOUNT}/r2/buckets/${LOG_BUCKET}`;
 const STATE_PATH = `/accounts/${ACCOUNT}/r2/buckets/sst-state`;
 const SUBDOMAIN_PATH = `/accounts/${ACCOUNT}/workers/subdomain`;
+const SIGNING_PATH = `/accounts/${ACCOUNT}/r2/buckets/sst-state/objects/${encodeURIComponent(SIGNING_RECORD_KEY)}`;
+/** A valid signing record (DEC-0550). */
+const SIGNING_RECORD: Reply = { status: 200, body: { tokenId: "tok1", accessKeyId: "tok1", secretAccessKey: "a".repeat(64) } };
 /** The state home and the subdomain present: the replies the log-bucket tests do not vary. */
-const OTHERS_PRESENT: Record<string, Reply> = { [`GET ${STATE_PATH}`]: ok({ name: "sst-state" }), [`GET ${SUBDOMAIN_PATH}`]: ok({ subdomain: "example" }) };
+const OTHERS_PRESENT: Record<string, Reply> = { [`GET ${STATE_PATH}`]: ok({ name: "sst-state" }), [`GET ${SUBDOMAIN_PATH}`]: ok({ subdomain: "example" }), [`GET ${SIGNING_PATH}`]: SIGNING_RECORD };
 const OTHERS_OWNED: SharedResource[] = [
   { name: STATE_HOME_RESOURCE, state: "owned" },
   { name: SUBDOMAIN_RESOURCE, state: "owned" },
+  { name: SIGNING_RESOURCE, state: "owned" },
 ];
 
 describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
@@ -130,6 +135,7 @@ describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
     const requests: string[] = [];
     const api: CloudflareApi = async (method, path) => {
       requests.push(`${method} ${path}`);
+      if (path === SIGNING_PATH) return SIGNING_RECORD;
       if (path === STATE_PATH || path === SUBDOMAIN_PATH) return path === STATE_PATH ? ok({ name: "sst-state" }) : ok({ subdomain: "example" });
       if (method === "GET") return exists ? ok({ name: LOG_BUCKET }) : err(404, 10006, "The specified bucket does not exist.");
       exists = true;
@@ -139,11 +145,11 @@ describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
     expect(await runSetupAccount(t, captureIo())).toEqual({ status: 0, created: [LOG_BUCKET_RESOURCE] });
     requests.length = 0;
     expect(await runSetupAccount(t, captureIo())).toEqual({ status: 0, created: [] });
-    expect(requests).toEqual([`GET ${BUCKET_PATH}`, `GET ${STATE_PATH}`, `GET ${SUBDOMAIN_PATH}`]);
+    expect(requests).toEqual([`GET ${BUCKET_PATH}`, `GET ${STATE_PATH}`, `GET ${SUBDOMAIN_PATH}`, `GET ${SIGNING_PATH}`]);
   });
 
   it("the state home sst-state is a shared bucket read the same way: owned, absent, foreign (DEC-0084, DEC-0270)", async () => {
-    const replies = (state: Reply) => ({ [`GET ${BUCKET_PATH}`]: ok({ name: LOG_BUCKET }), [`GET ${STATE_PATH}`]: state, [`GET ${SUBDOMAIN_PATH}`]: ok({ subdomain: "example" }) });
+    const replies = (state: Reply) => ({ [`GET ${BUCKET_PATH}`]: ok({ name: LOG_BUCKET }), [`GET ${STATE_PATH}`]: state, [`GET ${SUBDOMAIN_PATH}`]: ok({ subdomain: "example" }), [`GET ${SIGNING_PATH}`]: SIGNING_RECORD });
     const stateOf = async (r: Reply) => (await inspectSharedResources(stubApi(replies(r)), ACCOUNT)).find((x) => x.name === STATE_HOME_RESOURCE)?.state;
     expect(STATE_HOME_RESOURCE).toBe("R2 bucket sst-state");
     expect(await stateOf(ok({ name: "sst-state" }))).toBe("owned");
@@ -152,7 +158,7 @@ describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
   });
 
   it("the workers.dev subdomain is an account setting: set → owned, none → absent; it is never foreign (DEC-0086)", async () => {
-    const replies = (sub: Reply) => ({ [`GET ${BUCKET_PATH}`]: ok({ name: LOG_BUCKET }), [`GET ${STATE_PATH}`]: ok({ name: "sst-state" }), [`GET ${SUBDOMAIN_PATH}`]: sub });
+    const replies = (sub: Reply) => ({ [`GET ${BUCKET_PATH}`]: ok({ name: LOG_BUCKET }), [`GET ${STATE_PATH}`]: ok({ name: "sst-state" }), [`GET ${SUBDOMAIN_PATH}`]: sub, [`GET ${SIGNING_PATH}`]: SIGNING_RECORD });
     const stateOf = async (r: Reply) => (await inspectSharedResources(stubApi(replies(r)), ACCOUNT)).find((x) => x.name === SUBDOMAIN_RESOURCE)?.state;
     expect(SUBDOMAIN_RESOURCE).toBe("workers.dev subdomain");
     expect(await stateOf(ok({ subdomain: "example" }))).toBe("owned");
@@ -161,23 +167,57 @@ describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
     await expect(stateOf(err(403, 10000, "Authentication error"))).rejects.toThrow(/workers\.dev subdomain.*HTTP 403/);
   });
 
-  it("setup-account creates the absent state home and registers a subdomain derived from the account ID", async () => {
+  it("setup-account creates the absent state home and registers a random pf- subdomain, never one derived from the account ID (DEC-0552)", async () => {
     const api = stubApi({
       [`POST /accounts/${ACCOUNT}/r2/buckets`]: ok({ name: "sst-state" }),
-      [`PUT ${SUBDOMAIN_PATH}`]: ok({ subdomain: "pf-0123456789ab" }),
+      [`PUT ${SUBDOMAIN_PATH}`]: ok({ subdomain: "pf-k3x9q0m2v7ab" }),
     });
-    await createSharedResources(api, ACCOUNT, [
-      { name: STATE_HOME_RESOURCE, state: "absent" },
-      { name: SUBDOMAIN_RESOURCE, state: "absent" },
-    ]);
-    expect(api.requests).toEqual([`POST /accounts/${ACCOUNT}/r2/buckets {"name":"sst-state"}`, `PUT ${SUBDOMAIN_PATH} {"subdomain":"pf-0123456789ab"}`]);
+    await createSharedResources(
+      api,
+      ACCOUNT,
+      [
+        { name: SUBDOMAIN_RESOURCE, state: "absent" },
+        { name: STATE_HOME_RESOURCE, state: "absent" },
+      ],
+      { newSubdomain: () => "pf-k3x9q0m2v7ab" },
+    );
+    expect(api.requests).toEqual([`PUT ${SUBDOMAIN_PATH} {"subdomain":"pf-k3x9q0m2v7ab"}`, `POST /accounts/${ACCOUNT}/r2/buckets {"name":"sst-state"}`]);
+    const names = new Set(Array.from({ length: 20 }, () => randomSubdomain()));
+    expect(names.size).toBe(20);
+    for (const name of names) {
+      expect(name).toMatch(/^pf-[a-z0-9]{12}$/);
+      expect(ACCOUNT.includes(name.slice(3, 9))).toBe(false);
+    }
+    // Byte 251 is the last kept value (251 % 36 = 35, "9"); bytes 252–255 are dropped.
+    expect(randomSubdomain(() => new Uint8Array([255, 252, ...Array.from({ length: 22 }, () => 251)]))).toBe("pf-999999999999");
   });
 
   it("a subdomain registration that is refused names the subdomain and tells the owner how to register one", async () => {
     const api = stubApi({ [`PUT ${SUBDOMAIN_PATH}`]: err(409, 10032, "subdomain unavailable") });
-    await expect(createSharedResources(api, ACCOUNT, [{ name: SUBDOMAIN_RESOURCE, state: "absent" }])).rejects.toThrow(
-      /registering the workers\.dev subdomain pf-0123456789ab failed: HTTP 409.*register one in the Cloudflare dashboard/,
+    await expect(createSharedResources(api, ACCOUNT, [{ name: SUBDOMAIN_RESOURCE, state: "absent" }], { newSubdomain: () => "pf-k3x9q0m2v7ab" })).rejects.toThrow(
+      /registering the workers\.dev subdomain pf-k3x9q0m2v7ab failed: HTTP 409.*register one in the Cloudflare dashboard/,
     );
+  });
+
+  it("the account's R2 signing credential is a shared resource: its record present → owned, absent → absent; it is created after the buckets (DEC-0550)", async () => {
+    const replies = (record: Reply) => ({ [`GET ${BUCKET_PATH}`]: ok({ name: LOG_BUCKET }), [`GET ${STATE_PATH}`]: ok({ name: "sst-state" }), [`GET ${SUBDOMAIN_PATH}`]: ok({ subdomain: "example" }), [`GET ${SIGNING_PATH}`]: record });
+    const stateOf = async (r: Reply) => (await inspectSharedResources(stubApi(replies(r)), ACCOUNT)).find((x) => x.name === SIGNING_RESOURCE)?.state;
+    expect(SIGNING_RESOURCE).toBe("R2 signing credential prototype-r2-signing");
+    expect(await stateOf(SIGNING_RECORD)).toBe("owned");
+    expect(await stateOf(err(404, 10007, "The specified key does not exist."))).toBe("absent");
+    const api = stubApi({
+      [`POST /accounts/${ACCOUNT}/r2/buckets`]: ok({ name: "sst-state" }),
+      [`GET /accounts/${ACCOUNT}/tokens?per_page=50&page=1`]: ok([]),
+      [`GET /accounts/${ACCOUNT}/tokens/permission_groups`]: ok([{ id: "g1", name: "Workers R2 Storage Bucket Item Write" }]),
+      [`POST /accounts/${ACCOUNT}/tokens`]: ok({ id: "tok9", value: "v" }),
+      [`PUT ${SIGNING_PATH}`]: ok({}),
+    });
+    await createSharedResources(api, ACCOUNT, [
+      { name: SIGNING_RESOURCE, state: "absent" },
+      { name: STATE_HOME_RESOURCE, state: "absent" },
+    ]);
+    expect(api.requests[0]).toBe(`POST /accounts/${ACCOUNT}/r2/buckets {"name":"sst-state"}`);
+    expect(api.requests.at(-1)?.startsWith(`PUT ${SIGNING_PATH}`)).toBe(true);
   });
 
   it("the account subdomain is read from Cloudflare each time (recorded there, not on the owner's machine)", async () => {

@@ -5,7 +5,9 @@
  * - SST's state home, the R2 bucket `sst-state` (DEC-0084);
  * - the account's `workers.dev` subdomain (DEC-0086), the account setting that every stage's
  *   public origin is built from. Cloudflare keeps it; it is read from there on every deploy,
- *   never only recorded on the owner's machine (DEC-0333).
+ *   never only recorded on the owner's machine (DEC-0333);
+ * - the account's R2 signing credential `prototype-r2-signing` and its record in `sst-state`
+ *   (`r2-token.ts`, DEC-0550), which every stage's upload and download tickets are signed with.
  * Used by `setupAccount` (create when absent) and by the deploy preflight (inspect only),
  * through the per-target operations `inspectAccount` and `createSharedResources`.
  *
@@ -20,9 +22,11 @@
  * says "already exists, and you own it". The 403 reading stays unverified (one account
  * cannot produce it, DEC-0334).
  */
+import { randomBytes } from "node:crypto";
 import type { SharedResource } from "../core/operations.js";
 import { describeFailure, resultOf, succeeded, type CloudflareApi } from "./api.js";
 import { STATE_BUCKET } from "./names.js";
+import { createAccountSigningCredential, readSigningCredentials, SIGNING_RESOURCE } from "./r2-token.js";
 
 export type { CloudflareApi } from "./api.js";
 
@@ -65,11 +69,26 @@ async function readSubdomain(api: CloudflareApi, accountId: string): Promise<str
   return typeof result?.subdomain === "string" && result.subdomain !== "" ? result.subdomain : undefined;
 }
 
-/** The subdomain `setup-account` registers on an account that has none (DEC-0333). */
-export const defaultSubdomain = (accountId: string): string => `pf-${accountId.slice(0, 12).toLowerCase()}`;
+/**
+ * The subdomain `setup-account` registers on an account that has none: `pf-` and 12 random
+ * lowercase letters and digits (DEC-0552). It is never derived from the account ID, the owner's
+ * name or any other personal data, since it is part of every stage's public address.
+ */
+export function randomSubdomain(random: (size: number) => Uint8Array = randomBytes): string {
+  const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+  // 252 is the largest multiple of 36 not above 256: dropping bytes from 252 up keeps every character equally likely.
+  let out = "";
+  while (out.length < 12) for (const byte of random(24)) if (byte < 252 && out.length < 12) out += alphabet[byte % 36];
+  return `pf-${out}`;
+}
 
-async function registerSubdomain(api: CloudflareApi, accountId: string): Promise<void> {
-  const subdomain = defaultSubdomain(accountId);
+export interface SharedResourceOptions {
+  /** The subdomain to register when there is none; default `randomSubdomain()`. */
+  readonly newSubdomain?: () => string;
+}
+
+async function registerSubdomain(api: CloudflareApi, accountId: string, options: SharedResourceOptions): Promise<void> {
+  const subdomain = (options.newSubdomain ?? randomSubdomain)();
   const r = await api("PUT", `/accounts/${accountId}/workers/subdomain`, { subdomain });
   if (succeeded(r)) return;
   throw new Error(
@@ -90,15 +109,19 @@ export async function inspectSharedResources(api: CloudflareApi, accountId: stri
     await inspectBucket(api, accountId, LOG_BUCKET),
     await inspectBucket(api, accountId, STATE_BUCKET),
     { name: SUBDOMAIN_RESOURCE, state: (await readSubdomain(api, accountId)) === undefined ? "absent" : "owned" },
+    { name: SIGNING_RESOURCE, state: (await readSigningCredentials(api, accountId)) === undefined ? "absent" : "owned" },
   ];
 }
 
 /** Creates the given absent shared resources. The core calls it only when none is foreign. */
-export async function createSharedResources(api: CloudflareApi, accountId: string, absent: readonly SharedResource[]): Promise<void> {
-  for (const resource of absent) {
+export async function createSharedResources(api: CloudflareApi, accountId: string, absent: readonly SharedResource[], options: SharedResourceOptions = {}): Promise<void> {
+  // The signing credential's record lives in the state home, so it comes after the buckets.
+  const ordered = [...absent].sort((a, b) => Number(a.name === SIGNING_RESOURCE) - Number(b.name === SIGNING_RESOURCE));
+  for (const resource of ordered) {
     if (resource.name === LOG_BUCKET_RESOURCE) await createBucket(api, accountId, LOG_BUCKET);
     else if (resource.name === STATE_HOME_RESOURCE) await createBucket(api, accountId, STATE_BUCKET);
-    else if (resource.name === SUBDOMAIN_RESOURCE) await registerSubdomain(api, accountId);
+    else if (resource.name === SUBDOMAIN_RESOURCE) await registerSubdomain(api, accountId, options);
+    else if (resource.name === SIGNING_RESOURCE) await createAccountSigningCredential(api, accountId);
     else throw new Error(`unknown Cloudflare shared resource ${resource.name}`);
   }
 }

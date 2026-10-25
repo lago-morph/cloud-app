@@ -295,11 +295,16 @@ describe("CloudflareEmailSetup.productionPrerequisites (PROV-REQ-002 step 1)", (
     expect(writes(cloud)).toEqual([]);
   });
 
-  it("names a missing DEC-0515 permission, but not the sink's Workers permission", async () => {
+  it("needs no write permission of DEC-0515 and does not read the token's policies (DEC-0553); a refused read names the permission deploy reads with", async () => {
     const { cloud, email } = setup();
     zoneOf(cloud).sending.push({ id: "s", name: DOMAIN, enabled: true, pollsUntilEnabled: 0 });
-    cloud.tokenPolicies = FULL_POLICIES.map((p) => ({ ...p, permission_groups: p.permission_groups.filter((g) => g.name !== "DNS Write" && g.name !== "Workers Scripts Write") }));
-    expect(await email.productionPrerequisites(DOMAIN)).toEqual(['the Cloudflare API token lacks the permission "DNS Write" (zone example.test; DEC-0515)']);
+    cloud.tokenPolicies = [];
+    expect(await email.productionPrerequisites(DOMAIN)).toEqual([]);
+    expect(cloud.requests.some((r) => r.includes("/tokens"))).toBe(false);
+    cloud.override.set(`GET /zones/${zoneOf(cloud).id}/email/sending/subdomains`, { status: 403, body: { success: false, errors: [{ code: 10000, message: "Authentication error" }] } });
+    const problems = await email.productionPrerequisites(DOMAIN);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatch(/listing the Email Sending domains of zone example\.test failed: HTTP 403.*"Email Sending Read"/);
   });
 });
 

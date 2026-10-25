@@ -1,7 +1,8 @@
 /**
- * The S3 credentials of a stage's R2 API token (DEC-0100), for provisioning: it creates the token
- * (`POST /accounts/<account>/tokens`), derives these once from the response, and stores them as
- * the framework-internal Worker secrets `frameworkR2AccessKeyId` / `frameworkR2SecretAccessKey`.
+ * The S3 credentials of an R2 API token (the derivation of DEC-0100), for provisioning: the
+ * account's signing token, which `setup-account` creates (`POST /accounts/<account>/tokens`,
+ * DEC-0550); these are derived once from the response and kept in its record, from which every
+ * deploy sets the stage's Worker secrets `frameworkR2AccessKeyId` / `frameworkR2SecretAccessKey`.
  * The token value is returned once by Cloudflare and must never be printed. Web Crypto only.
  */
 import type { S3Credentials } from "../s3/sign.js";

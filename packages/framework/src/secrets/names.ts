@@ -22,7 +22,7 @@ export const FRAMEWORK_SECRETS = Object.freeze({
    * base64url), generated per stage by the CLI when absent, like the session key (DEC-0509).
    */
   authSecret: "frameworkAuthSecret",
-  /** FILES' stage-scoped R2 API token (S3 credentials), created by provisioning on Cloudflare. */
+  /** FILES' R2 signing credential (S3 credentials) on Cloudflare: the account's, set on every stage by deploy (DEC-0550). */
   r2AccessKeyId: "frameworkR2AccessKeyId",
   r2SecretAccessKey: "frameworkR2SecretAccessKey",
 } as const);

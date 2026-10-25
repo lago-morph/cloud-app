@@ -1,11 +1,11 @@
 /**
  * The Cloudflare API token's email permissions (DEC-0515; PROV-REQ-002 step 1, PROV-REQ-004
- * amendment, PROV-AC-004): `setup-account` and a production stage's deploy preflight name each
+ * amendment, PROV-AC-004): `setup-account` names each
  * one the token lacks, before anything changes.
  *
  * How (read only): `GET /accounts/<a>/tokens/verify` gives the token's own ID, and
- * `GET /accounts/<a>/tokens/<id>` its policies (the token already needs "Account API Tokens"
- * for the R2 signing tokens, DEC-0100). Each policy names permission groups and resources:
+ * `GET /accounts/<a>/tokens/<id>` its policies (the setup token has "Account API Tokens Write",
+ * which grants the read; DEC-0551). Each policy names permission groups and resources:
  * - account scope: `com.cloudflare.api.account.<account>` (or `…account.*`);
  * - zone scope: `com.cloudflare.api.account.zone.<zone>` or `…zone.*`, at the top level or nested
  *   under the account key (`{ "com.cloudflare.api.account.<a>": { "com.cloudflare.api.account.zone.*": "*" } }`),

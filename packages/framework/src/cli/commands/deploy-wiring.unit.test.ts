@@ -99,6 +99,8 @@ describe("cloud commands: the Cloudflare operations from the process environment
     const requests: { url: string; auth: string | null }[] = [];
     const stub: typeof fetch = async (input, init) => {
       requests.push({ url: String(input), auth: new Headers(init?.headers).get("authorization") });
+      // The signing credential's record (DEC-0550) is an object: absent here.
+      if (String(input).includes("/objects/")) return new Response(JSON.stringify({ success: false, errors: [{ code: 10007, message: "The specified key does not exist." }] }), { status: 404 });
       return new Response(JSON.stringify({ success: true, result: { subdomain: "sub" } }), { status: 200, headers: { "content-type": "application/json" } });
     };
     const ops = cloudflareOperations({ env: { CLOUDFLARE_API_TOKEN: "placeholder", CLOUDFLARE_ACCOUNT_ID: "acc123" }, fetch: stub, requireCredentials: true })({ appDir: appDir(), target: "cloudflare" });
