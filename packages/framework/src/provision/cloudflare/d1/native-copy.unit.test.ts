@@ -91,6 +91,12 @@ describe("D1 copyDatabase: native export/import when the pre-check allows it (DE
       (db) => db.batch([db.prepare(`CREATE TABLE "a_child" ("id" text PRIMARY KEY NOT NULL, "z_id" text REFERENCES "z_parent"("id"))`), db.prepare(`CREATE TABLE "z_parent" ("id" text PRIMARY KEY NOT NULL)`)]),
       /table a_child references table z_parent, which was created after it/,
     ],
+    ["a self-reference spelled in another case", (db) => db.prepare(`CREATE TABLE "tree" ("id" text PRIMARY KEY NOT NULL, "up" text REFERENCES "TREE"("id"))`).run(), /table tree references itself/],
+    [
+      "a reference to a table created later, spelled in another case",
+      (db) => db.batch([db.prepare(`CREATE TABLE "a_child" ("id" text PRIMARY KEY NOT NULL, "z_id" text REFERENCES "Z_Parent"("id"))`), db.prepare(`CREATE TABLE "z_parent" ("id" text PRIMARY KEY NOT NULL)`)]),
+      /table a_child references table Z_Parent, which was created after it/,
+    ],
     ["a row over PAR-312", (db) => db.prepare(`INSERT INTO "parents" VALUES ('big', ?, NULL, NULL)`).bind("x".repeat(40_001)).run(), /a row of \d+ bytes, more than 40000 \(PAR-312\)/],
     ["a NUL in text", (db) => db.prepare(`INSERT INTO "parents" VALUES ('nul', ?, NULL, NULL)`).bind("a\u0000b").run(), /NUL character or an integer beyond/],
     ["an integer beyond 2^53", (db) => db.prepare(`INSERT INTO "parents" VALUES ('i64', 'i', CAST('9223372036854775807' AS INTEGER), NULL)`).run(), /NUL character or an integer beyond/],
@@ -107,6 +113,20 @@ describe("D1 copyDatabase: native export/import when the pre-check allows it (DE
       expect(await fingerprint(fake.database(copied.id))).toEqual(before);
     });
   }
+
+  it("a pre-check that fails (D1 refuses its scan, e.g. a big database) falls back to the row-by-row path, naming why", async () => {
+    await seedSafe(fake.database(source.id));
+    const before = await fingerprint(fake.database(source.id));
+    fake.intercept = async (req, run) =>
+      req.path.endsWith(`/${source.id}/query`) && JSON.stringify(req.body).includes('AS \\"bad\\"')
+        ? { status: 400, body: { success: false, errors: [{ code: 7500, message: "D1_ERROR: query exceeded the CPU limit" }], messages: [], result: [] } }
+        : run();
+    const copied = await copy();
+    expect(copied.method).toMatch(/^row-by-row copy \(the native copy's pre-check failed \(.*CPU limit/);
+    expect(nativeRequests()).toEqual([]);
+    fake.intercept = undefined;
+    expect(await fingerprint(fake.database(copied.id))).toEqual(before);
+  });
 
   it("a database over PAR-313 in all takes the row-by-row path", async () => {
     ops = d1DatabaseOperations({ api: fake.api, accountId: ACCOUNT, native: { transfer: fake.transfer, limits: { maxTotalBytes: 50 } } });

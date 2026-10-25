@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 import { FrameworkError } from "../core/errors.js";
 import { wasLogged } from "../log/failures.js";
 import type { LogService } from "../log/public.js";
+import { PGlite } from "@electric-sql/pglite";
+import { atomic } from "./atomic.js";
+import { id, text } from "./columns.js";
 import { createGuard, normalizeError, PAR_210_MS } from "./guard.js";
+import { postgresDb } from "./postgres.js";
+import { defineTable, tableFor } from "./table.js";
+import type { AnyTable } from "./types.js";
+import { newId } from "./values.js";
 
 const wrapped = (cause: unknown): Error => Object.assign(new Error("Failed query: insert into x values (?)\nparams: secret"), { cause });
 
@@ -71,5 +78,51 @@ describe("driver error normalisation (SQL-REQ-006)", () => {
     expect(e.code).toBe("CORE.INTERNAL");
     expect(e.message).toContain("syntax error");
     await expect(createGuard()(() => Promise.reject(driver))).rejects.toMatchObject({ code: "CORE.INTERNAL" });
+  });
+});
+
+describe("a write that commits after PAR-210 is not reported as failed (DEC-0542, SQL-REQ-006)", () => {
+  /** A PGlite client whose every answer arrives `delayMs` after the database executed (and committed) the statement. */
+  function slowClient(pg: PGlite, delayMs: number): PGlite {
+    const late = <T>(value: T) => new Promise<T>((r) => setTimeout(() => r(value), delayMs));
+    return new Proxy(pg, {
+      get(target, property) {
+        const value: unknown = Reflect.get(target, property, target);
+        if (typeof value !== "function") return value;
+        if (property === "query" || property === "exec" || property === "transaction") {
+          return async (...args: unknown[]) => late(await (value as (...a: unknown[]) => Promise<unknown>).apply(target, args));
+        }
+        return (value as (...a: unknown[]) => unknown).bind(target);
+      },
+    });
+  }
+
+  it("an insert, an update and an atomic call whose answer arrives after the budget resolve with their rows; a read still times out", async () => {
+    const pg = new PGlite();
+    try {
+      await pg.exec(`CREATE TABLE "notes" ("id" text PRIMARY KEY NOT NULL, "title" text NOT NULL)`);
+      const notes = tableFor(defineTable("notes", { id: id(), title: text() }), "postgres") as unknown as AnyTable;
+      const db = postgresDb(slowClient(pg, 120), { budgetMs: 20 });
+      const [n1, n2] = [newId(), newId()].sort() as [string, string];
+      const w = db as unknown as {
+        insert(t: unknown): { values(v: unknown): { returning(): Promise<unknown[]> } };
+        update(t: unknown): { set(v: unknown): { returning(): Promise<unknown[]> } };
+        select(): { from(t: unknown): Promise<unknown[]> };
+      };
+      await expect(w.insert(notes).values({ id: n1, title: "one" }).returning()).resolves.toEqual([{ id: n1, title: "one" }]);
+      await expect(w.update(notes).set({ title: "uno" }).returning()).resolves.toEqual([{ id: n1, title: "uno" }]);
+      await expect(atomic(db, [(tx) => (tx as unknown as typeof w).insert(notes).values({ id: n2, title: "two" }) as never])).resolves.toHaveLength(1);
+      expect((await pg.query(`SELECT "id", "title" FROM "notes" ORDER BY "id"`)).rows).toEqual([
+        { id: n1, title: "uno" },
+        { id: n2, title: "two" },
+      ]);
+      await expect(w.select().from(notes)).rejects.toMatchObject({ code: "SQL.UNAVAILABLE" });
+    } finally {
+      await pg.close();
+    }
+  });
+
+  it("a write whose driver reports the database unreachable is still SQL.UNAVAILABLE", async () => {
+    await expect(createGuard({ budgetMs: 20 })(() => Promise.reject(new Error("Network connection lost.")), { write: true })).rejects.toMatchObject({ code: "SQL.UNAVAILABLE" });
   });
 });

@@ -87,7 +87,13 @@ export function d1DatabaseOperations(options: D1Options): D1DatabaseOperations {
    */
   async function tryNative(from: StageDatabase, next: StageDatabase): Promise<{ done: true } | { done: false; why: string; dirty: boolean }> {
     if (options.native === undefined) return { done: false, why: "the native copy is not configured", dirty: false };
-    const check = await nativeCopyPrecheck(client, from.id, nativeLimits);
+    let check;
+    try {
+      check = await nativeCopyPrecheck(client, from.id, nativeLimits);
+    } catch (error) {
+      // The pre-check only reads; D1 may refuse its scan (a big database, a limit). The row-by-row copy needs no pre-check.
+      return { done: false, why: `the native copy's pre-check failed (${messageOf(error)})`, dirty: false };
+    }
     if (!check.safe) return { done: false, why: check.reason, dirty: false };
     try {
       await nativeCopy(client, from.id, next.id, check.tables, dump);

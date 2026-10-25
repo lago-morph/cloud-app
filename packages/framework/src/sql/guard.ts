@@ -2,13 +2,23 @@
  * Every database operation runs through a guard (SQL-REQ-006): driver errors never reach app
  * code. Uniqueness and reference violations become `SQL.CONFLICT`; other driver errors become
  * `CORE.INTERNAL`, whose message (logged, never returned) carries the driver's message.
+ *
+ * A read that has not settled within PAR-210 is `SQL.UNAVAILABLE`. A write (an `insert`,
+ * `update` or `delete`, or a whole `atomic` call) is not cut off by the budget: once sent, it may
+ * commit after any deadline, so its outcome is the driver's. A write that commits is never
+ * reported as failed (DEC-0542, DEC-0556); one the driver reports unreachable is `SQL.UNAVAILABLE`.
  */
 import { FrameworkError } from "../core/errors.js";
 import { logFailure } from "../log/failures.js";
 import type { LogService } from "../log/public.js";
 
+/** How an operation is guarded: a `write` is never cut off by the PAR-210 budget (DEC-0556). */
+export interface GuardCall {
+  readonly write?: boolean;
+}
+
 /** Runs one database operation. */
-export type Guard = <T>(operation: () => Promise<T>) => Promise<T>;
+export type Guard = <T>(operation: () => Promise<T>, call?: GuardCall) => Promise<T>;
 
 /** PAR-210: time budget for reaching the database, in milliseconds. */
 export const PAR_210_MS = 45_000;
@@ -31,8 +41,16 @@ export function createGuard(options: GuardOptions = {}): Guard {
     if (options.log !== undefined) logFailure(options.log, failure);
     return failure;
   };
-  return async (operation) => {
+  return async (operation, call = {}) => {
     if (options.unavailable === true) throw unavailable("it is unavailable (forced for this test app)");
+    if (call.write === true) {
+      // A write may commit after any deadline: report the driver's outcome, never a timeout (DEC-0556).
+      try {
+        return await operation();
+      } catch (thrown) {
+        throw normalizeError(thrown, unavailable, options.unreachable);
+      }
+    }
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(unavailable(`no answer within ${budgetMs} ms (PAR-210)`)), budgetMs);

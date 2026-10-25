@@ -21,6 +21,7 @@
  * reads its rowids and keys once to order rows parents first, and a row cycle never spans pages.
  */
 import type { D1Client, D1Row, D1Statement } from "./client.js";
+import { foldCase } from "./native-copy.js";
 
 export interface CopyLimits {
   /** PAR-218: rows per write request. */
@@ -164,7 +165,10 @@ export async function copyD1Database(client: D1Client, from: string, to: string,
     if (cols.length > limits.maxParams) {
       throw new Error(`table ${name} has ${cols.length} columns including rowid; the copy binds at most ${limits.maxParams} values per statement (PAR-216)`);
     }
-    const refs = (info[2 * i + 1] ?? []).map((f) => ({ parent: String(f["table"]), from: String(f["from"]) })).filter((f) => names.includes(f.parent));
+    // SQLite matches table names without regard to ASCII case: a reference names its parent's canonical spelling here.
+    const refs = (info[2 * i + 1] ?? [])
+      .map((f) => ({ parent: names.find((n) => foldCase(n) === foldCase(String(f["table"]))), from: String(f["from"]) }))
+      .filter((f): f is { parent: string; from: string } => f.parent !== undefined);
     return { name, cols, pk: pkCols.map((c) => String(c["name"])), refs };
   });
   const sizes =

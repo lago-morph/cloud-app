@@ -85,6 +85,54 @@ describe("stop and start (DEC-0544)", () => {
     expect(t.answering(stage)).toBe(db(stage, 1));
   });
 
+  it("a stopped stage whose code deploy fails after turning the route on (DEC-0091) is turned off again, and the failure says so", async () => {
+    const t = deployed();
+    await runStop(t, stage, captureIo());
+    // The real target: `sst deploy` turns the route on, then the framework secrets fail.
+    const deployCode = t.deployCode.bind(t);
+    t.deployCode = async (input) => {
+      await deployCode(input);
+      t.stageState(stage).running = true;
+      throw new Error("setting the framework secrets failed");
+    };
+    t.calls.length = 0;
+    const io = captureIo();
+    const result = await runDeploy(t, request(), io);
+    expect(result.status).toBe(1);
+    expect(t.answering(stage)).toBeNull();
+    expect(t.calls.slice(t.calls.findIndex((c) => c.startsWith("deployCode")))).toContain("stopApp notes/test-abc");
+    expect(t.calls.some((c) => c.startsWith("startApp"))).toBe(false);
+    expect(result.failure?.stageState).toMatch(/turned off again, as recorded by stop/);
+    expect(result.failure?.stageState).not.toMatch(/may be stopped/);
+    expect(io.err).toMatch(/turned off again/);
+  });
+
+  it("a stopped stage whose re-stop fails after a failed code deploy reports that it may be answering, and how to stop it", async () => {
+    const t = deployed();
+    await runStop(t, stage, captureIo());
+    t.fail("deployCode", new Error("sst deploy failed"), 1).fail("stopApp", new Error("route API down"));
+    const result = await runDeploy(t, request(), captureIo());
+    expect(result.status).toBe(1);
+    expect(result.failure?.cleanupErrors.join("\n")).toMatch(/turning the app off again.*route API down/);
+    expect(result.failure?.stageState).toMatch(/may be answering although the stage is recorded as stopped/);
+    expect(result.failure?.nextAction).toMatch(/run stop --target fake --stage test-abc/);
+  });
+
+  it("a stopped stage stopped at the after-code abort point is turned off again", async () => {
+    const t = deployed();
+    await runStop(t, stage, captureIo());
+    const deployCode = t.deployCode.bind(t);
+    t.deployCode = async (input) => {
+      const out = await deployCode(input);
+      t.stageState(stage).running = true;
+      return out;
+    };
+    const result = await runDeploy(t, request({ abortAt: "after-code" }), captureIo());
+    expect(result.status).toBe(1);
+    expect(t.answering(stage)).toBeNull();
+    expect(result.failure?.stageState).toMatch(/turned off again, as recorded by stop/);
+  });
+
   it("a failed migration of a stopped stage deletes the new database and leaves the previous version stopped", async () => {
     const t = deployed();
     await runStop(t, stage, captureIo());

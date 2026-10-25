@@ -55,7 +55,7 @@ export async function atomic<const Steps extends readonly WriteStep[]>(db: Porta
       for (const write of writes) out.push(normalizeResult(await write.execute()));
       return out;
     });
-  });
+  }, { write: true });
   // Every step is a write that has committed: its RETURNING rows are returned in full (DEC-0542).
   return results as AtomicResults<Steps>;
 }

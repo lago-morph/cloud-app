@@ -60,6 +60,9 @@ const NOT_INTERNAL = `"name" NOT LIKE 'sqlite\\_%' ESCAPE '\\' AND "name" NOT LI
 /** ±(2^53 − 1): integers beyond it are rounded by the dump (A-06). */
 const SAFE = "9007199254740991";
 
+/** A SQLite identifier as SQLite compares it: ASCII letters without regard to case. */
+export const foldCase = (name: string): string => name.replace(/[A-Z]/g, (c) => c.toLowerCase());
+
 export type Precheck = { readonly safe: true; readonly tables: readonly string[] } | { readonly safe: false; readonly reason: string };
 
 /** Whether the native export/import copies database `uuid` exactly (DEC-0096's failure shapes absent). Reads only. */
@@ -83,10 +86,12 @@ export async function nativeCopyPrecheck(client: D1Client, uuid: string, limits:
             .join(" OR ");
     return { sql: `SELECT count(*) AS "n", coalesce(max(${size}), 0) AS "big", coalesce(sum(${size}), 0) AS "total", coalesce(sum(CASE WHEN ${bad} THEN 1 ELSE 0 END), 0) AS "bad" FROM ${q(t)}` };
   });
+  // SQLite matches table names without regard to ASCII case, so a reference may spell its parent differently.
+  const folded = names.map(foldCase);
   for (const [i, t] of names.entries()) {
     for (const ref of info[2 * i + 1] ?? []) {
       const parent = String(ref["table"]);
-      const at = names.indexOf(parent);
+      const at = folded.indexOf(foldCase(parent));
       if (at === i) return { safe: false, reason: `table ${t} references itself` };
       if (at > i) return { safe: false, reason: `table ${t} references table ${parent}, which was created after it` };
     }
