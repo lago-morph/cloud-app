@@ -137,14 +137,11 @@ describe("current user", () => {
     ]);
   });
 
-  it("a session of a provider the stage does not install, or of one without accountStatus, is anonymous with no read", async () => {
+  it("a session of a provider the stage does not install is anonymous with no read", async () => {
     const fake = fakeProvider();
     const { request } = harness({ provider: fake.provider });
     const other = await session({ id: "u_X", displayName: null, provider: "other", subject: "s-user" });
     expect(await (await request("/api/whoami", { headers: { cookie: other } })).json()).toStrictEqual({ level: "anonymous" });
-    const { accountStatus: _dropped, ...withoutStatus } = fake.provider;
-    const bare = harness({ provider: withoutStatus });
-    expect(await (await bare.request("/api/whoami", { headers: { cookie: await session(real("u_X", null)) } })).json()).toStrictEqual({ level: "anonymous" });
     expect(fake.reads).toEqual([]);
   });
 

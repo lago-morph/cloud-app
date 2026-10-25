@@ -92,7 +92,7 @@ export function lookupErrorCode(thrown: unknown): string {
   return typeof code === "string" && ERROR_CODE.test(code) ? code : "unknown";
 }
 
-/** Dotted-path read for the provider's `getConfig` (e.g. `framework.google.clientId`). */
+/** Dotted-path read for the provider's `getConfig` (e.g. `framework.email.senderName`). */
 function lookup(root: unknown, key: string): unknown {
   let value = root;
   for (const part of key.split(".")) {
@@ -199,16 +199,15 @@ export function createAuthParts(options: AuthOptions): AuthParts {
 
   /**
    * AUTH-REQ-003, DEC-0524: a valid real-provider session's level, from one read of its account
-   * through the session's provider. A provider the stage does not install, or one without
-   * `accountStatus`, is anonymous (fail closed); a failed read is anonymous with one `warn` entry.
+   * through the session's provider. A provider the stage does not install is anonymous (fail closed); a failed read is anonymous with one `warn` entry.
    */
   async function levelOf(c: RuntimeContext, session: ProviderSessionData): Promise<CurrentUser> {
     let read: ((subject: string) => Promise<AccountStatus | null>) | undefined;
     const credential = options.credentialProvider?.(c);
     if (credential !== undefined && credential.id === session.provider) read = (subject) => credential.accountStatus(subject);
-    else if (options.provider !== undefined && options.provider.id === session.provider && options.provider.accountStatus !== undefined) {
+    else if (options.provider !== undefined && options.provider.id === session.provider) {
       const { provider } = options;
-      read = (subject) => (provider.accountStatus as (s: string) => Promise<AccountStatus | null>).call(provider, subject);
+      read = (subject) => provider.accountStatus(subject);
     }
     if (read === undefined) return ANONYMOUS;
     let status: AccountStatus | null;
