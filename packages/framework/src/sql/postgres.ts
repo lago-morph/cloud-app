@@ -18,11 +18,23 @@ export type { SqlAdapterOptions } from "./d1.js";
 const PGLITE_UNREACHABLE: readonly RegExp[] = [/PGlite is closed/i];
 
 /**
- * PGlite has one connection, which it takes in turn, and must start first. The handle's
- * operations take it in turn here, so the guard can bound the wait for it (and for the start) by
- * PAR-210: getting it is the handoff to the driver (DEC-0557). Released when the operation settles.
+ * PGlite has one connection, which it takes in turn, and must start first. Every handle's
+ * operations over one client take it in turn here (one queue per client: a test app's SQL and KV
+ * handles share it), so the guard can bound the wait for it (and for the start) by PAR-210:
+ * getting it is the handoff to the driver (DEC-0557). Released when the operation settles.
  */
+const TURNS = new WeakMap<PGlite, () => Promise<() => void>>();
+
 function connectionTurns(client: PGlite): () => Promise<() => void> {
+  let turns = TURNS.get(client);
+  if (turns === undefined) {
+    turns = newTurns(client);
+    TURNS.set(client, turns);
+  }
+  return turns;
+}
+
+function newTurns(client: PGlite): () => Promise<() => void> {
   let tail: Promise<void> = Promise.resolve();
   return async () => {
     let release!: () => void;

@@ -38,10 +38,12 @@ export function lossyRowCondition(cols: readonly string[]): string {
   return cols.map((c) => `(typeof(${q(c)}) = 'text' AND instr(CAST(${q(c)} AS BLOB), X'00') > 0) OR (typeof(${q(c)}) = 'integer' AND (${q(c)} > ${SAFE} OR ${q(c)} < -${SAFE}))`).join(" OR ");
 }
 
+
 interface TableShape {
   readonly name: string;
   readonly columns: readonly string[];
-  readonly rowid: boolean;
+  /** The keyset the table is paged by: `rowid`, or a WITHOUT ROWID table's primary key columns in key order. */
+  readonly keys: readonly string[];
 }
 
 async function tableShapes(client: D1Client, uuid: string): Promise<TableShape[]> {
@@ -51,24 +53,37 @@ async function tableShapes(client: D1Client, uuid: string): Promise<TableShape[]
   if (tables.length === 0) return [];
   const info = await client.batch(uuid, tables.map((m) => ({ sql: `PRAGMA table_info(${q(String(m["name"]))})` })));
   return tables
-    .map((m, i) => ({ name: String(m["name"]), columns: (info[i] ?? []).map((c) => String(c["name"])), rowid: !/WITHOUT\s+ROWID/i.test(String(m["sql"])) }))
-    .filter((t) => t.columns.length > 0);
+    .map((m, i) => {
+      const cols = info[i] ?? [];
+      const pk = cols.filter((c) => Number(c["pk"]) > 0).sort((a, b) => Number(a["pk"]) - Number(b["pk"]));
+      const withoutRowid = /WITHOUT\s+ROWID/i.test(String(m["sql"]));
+      return { name: String(m["name"]), columns: cols.map((c) => String(c["name"])), keys: withoutRowid ? pk.map((c) => q(String(c["name"]))) : ["rowid"] };
+    })
+    .filter((t) => t.columns.length > 0 && t.keys.length > 0);
 }
 
-/** Whether the table holds a lossy value: paged reads, stopping at the first lossy page. */
+/**
+ * One keyset page of `t` (DEC-0557): `ORDER BY` the keys, after the last page's keys (exact SQL
+ * literals from `quote()`), `pageRows` rows. Never `OFFSET`, whose cost grows with every page.
+ */
+function keysetPage(t: TableShape, select: string, after: readonly string[] | undefined, pageRows: number): string {
+  const keys = t.keys.join(", ");
+  const quoted = t.keys.map((k, i) => `quote(${k}) AS "k${i}"`).join(", ");
+  const where = after === undefined ? "" : ` WHERE (${keys}) > (${after.join(", ")})`;
+  return `SELECT ${quoted}, ${select} FROM ${q(t.name)}${where} ORDER BY ${keys} LIMIT ${pageRows}`;
+}
+
+const lastKeys = (t: TableShape, page: readonly D1Row[]): string[] => t.keys.map((_, i) => String(page[page.length - 1]?.[`k${i}`]));
+
+/** Whether the table holds a lossy value: keyset pages, stopping at the first lossy row. */
 async function tableIsLossy(client: D1Client, uuid: string, t: TableShape, pageRows: number): Promise<boolean> {
   const lossy = `CASE WHEN ${lossyRowCondition(t.columns)} THEN 1 ELSE 0 END AS "lossy"`;
-  let last: string | undefined;
-  for (let offset = 0; ; offset += pageRows) {
-    const inner = t.rowid
-      ? `SELECT rowid AS "r", ${lossy} FROM ${q(t.name)}${last === undefined ? "" : " WHERE rowid > CAST(? AS INTEGER)"} ORDER BY rowid LIMIT ${pageRows}`
-      : `SELECT ${lossy} FROM ${q(t.name)} LIMIT ${pageRows} OFFSET ${offset}`;
-    const sql = `SELECT ${t.rowid ? `CAST(max("r") AS TEXT)` : "NULL"} AS "last", count(*) AS "n", coalesce(sum("lossy"), 0) AS "lossy" FROM (${inner})`;
-    const [rows = []] = await client.batch(uuid, [{ sql, ...(t.rowid && last !== undefined ? { params: [last] } : {}) }]);
-    const row = rows[0] ?? {};
-    if (Number(row["lossy"]) > 0) return true;
-    if (Number(row["n"]) < pageRows) return false;
-    last = String(row["last"]);
+  let after: string[] | undefined;
+  for (;;) {
+    const [page = []] = await client.batch(uuid, [{ sql: keysetPage(t, lossy, after, pageRows) }]);
+    if (page.some((r) => Number(r["lossy"]) > 0)) return true;
+    if (page.length < pageRows) return false;
+    after = lastKeys(t, page);
   }
 }
 
@@ -90,19 +105,16 @@ function selectValues(cols: readonly string[]): string {
     .join(", ");
 }
 
-/** Every row of `table`, `pageRows` per read: by rowid, or by offset for a WITHOUT ROWID table. */
+/** Every row of `table`, in keyset pages of `pageRows`. */
 async function readRows(client: D1Client, uuid: string, table: TableShape, pageRows: number): Promise<Stored[][]> {
   const rows: Stored[][] = [];
   const toRow = (r: D1Row) => table.columns.map((_, k) => ({ type: String(r[`t${k}`]), raw: r[`v${k}`] }));
-  let last: string | undefined;
-  for (let offset = 0; ; offset += pageRows) {
-    const sql = table.rowid
-      ? `SELECT CAST(rowid AS TEXT) AS "r", ${selectValues(table.columns)} FROM ${q(table.name)}${last === undefined ? "" : " WHERE rowid > CAST(? AS INTEGER)"} ORDER BY rowid LIMIT ${pageRows}`
-      : `SELECT ${selectValues(table.columns)} FROM ${q(table.name)} LIMIT ${pageRows} OFFSET ${offset}`;
-    const [page = []] = await client.batch(uuid, [{ sql, ...(table.rowid && last !== undefined ? { params: [last] } : {}) }]);
+  let after: string[] | undefined;
+  for (;;) {
+    const [page = []] = await client.batch(uuid, [{ sql: keysetPage(table, selectValues(table.columns), after, pageRows) }]);
     rows.push(...page.map(toRow));
     if (page.length < pageRows) return rows;
-    last = String(page[page.length - 1]?.["r"]);
+    after = lastKeys(table, page);
   }
 }
 
@@ -182,14 +194,18 @@ function trimBytes(bytes: Uint8Array): Uint8Array {
 }
 
 /**
- * The SQL statements of a dump, split at `;` outside quoted strings and identifiers. It works on
- * the bytes (the delimiters are ASCII, which UTF-8 never uses inside a character), so every other
- * byte, invalid UTF-8 and NUL included, is kept exactly.
+ * The SQL statements of a dump, split at `;` outside quoted strings and identifiers, and outside a
+ * trigger's `BEGIN … END` body and any `CASE … END` (whose inner `;` do not end the statement;
+ * DEC-0557). It works on the bytes (the delimiters and keywords are ASCII, which UTF-8 never uses
+ * inside a character), so every other byte, invalid UTF-8 and NUL included, is kept exactly.
  */
 export function splitStatements(dump: Uint8Array): Uint8Array[] {
   const out: Uint8Array[] = [];
+  const latin = new TextDecoder("latin1");
   let start = 0;
   let quote: number | undefined;
+  let depth = 0;
+  let trigger: boolean | undefined;
   for (let i = 0; i < dump.length; i++) {
     const c = dump[i]!;
     if (quote !== undefined) {
@@ -197,16 +213,28 @@ export function splitStatements(dump: Uint8Array): Uint8Array[] {
       continue;
     }
     if (QUOTES.has(c)) quote = c;
-    else if (c === SEMICOLON) {
+    else if (isWordByte(c) && (i === 0 || !isWordByte(dump[i - 1]))) {
+      let j = i;
+      while (j < dump.length && isWordByte(dump[j])) j++;
+      const word = latin.decode(dump.subarray(i, j)).toUpperCase();
+      trigger ??= /^CREATE\s+(TEMP\s+|TEMPORARY\s+)?TRIGGER\b/i.test(latin.decode(trimBytes(dump.subarray(start, Math.min(dump.length, start + 200)))));
+      if ((word === "BEGIN" && trigger) || word === "CASE") depth++;
+      else if (word === "END" && depth > 0) depth--;
+      i = j - 1;
+    } else if (c === SEMICOLON && depth === 0) {
       const statement = trimBytes(dump.subarray(start, i + 1));
       if (statement.length > 1) out.push(statement);
       start = i + 1;
+      trigger = undefined;
     }
   }
   const rest = trimBytes(dump.subarray(start));
   if (rest.length > 0) out.push(rest);
   return out;
 }
+
+/** A byte of an SQL word: ASCII letters, digits, `_`, `$`, and every byte of a non-ASCII character. */
+const isWordByte = (b: number | undefined) => b !== undefined && ((b >= 0x30 && b <= 0x39) || (b >= 0x41 && b <= 0x5a) || (b >= 0x61 && b <= 0x7a) || b === 0x5f || b === 0x24 || b >= 0x80);
 
 function concatLines(parts: readonly Uint8Array[]): Uint8Array {
   const out = new Uint8Array(parts.reduce((n, p) => n + p.length + 1, 0));

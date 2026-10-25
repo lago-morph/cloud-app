@@ -172,6 +172,29 @@ describe("before the handoff to the driver, a write is bounded by PAR-210 (SQL-R
   });
 });
 
+describe("PGlite's connection turns are per client, not per handle (DEC-0557)", () => {
+  it("a write on a second handle over the same client, queued behind the first handle's write, times out and is never stored", async () => {
+    const pg = new PGlite();
+    try {
+      await pg.exec(`CREATE TABLE "notes" ("id" text PRIMARY KEY NOT NULL, "title" text NOT NULL)`);
+      const notes = tableFor(defineTable("notes", { id: id(), title: text() }), "postgres") as unknown as AnyTable;
+      type W = { insert(t: unknown): { values(v: unknown): { execute(): Promise<unknown> } } };
+      const client = slowQueries(pg, 150);
+      const sqlHandle = postgresDb(client, { budgetMs: 30 }) as unknown as W;
+      const kvHandle = postgresDb(client, { budgetMs: 30 }) as unknown as W;
+      const [first, second] = [newId(), newId()];
+      const a = sqlHandle.insert(notes).values({ id: first, title: "first" }).execute();
+      const b = kvHandle.insert(notes).values({ id: second, title: "second" }).execute();
+      await expect(b).rejects.toMatchObject({ code: "SQL.UNAVAILABLE" });
+      await expect(a).resolves.toBeUndefined();
+      await new Promise((r) => setTimeout(r, 300));
+      expect((await pg.query(`SELECT "id" FROM "notes"`)).rows).toEqual([{ id: first }]);
+    } finally {
+      await pg.close();
+    }
+  });
+});
+
 /** A PGlite client each of whose queries takes `delayMs` before it runs (holding the connection). */
 function slowQueries(pg: PGlite, delayMs: number): PGlite {
   return new Proxy(pg, {

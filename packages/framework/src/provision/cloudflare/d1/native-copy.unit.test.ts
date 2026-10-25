@@ -215,6 +215,46 @@ describe("D1 copyDatabase: native export/import when the pre-check allows it (DE
     expect(exported.lossless?.tables).toEqual(["parents"]);
   });
 
+  it("a WITHOUT ROWID table is scanned and read in pages by its primary key (keyset), never by OFFSET", async () => {
+    ops = d1DatabaseOperations({ api: fake.api, accountId: ACCOUNT, limits: { pageRows: 2 }, native: { transfer: fake.transfer, sleep: async () => undefined } });
+    const db = fake.database(source.id);
+    await db.batch([
+      db.prepare(`CREATE TABLE "kv" ("ns" text NOT NULL, "k" integer NOT NULL, "v" text, PRIMARY KEY ("ns", "k")) WITHOUT ROWID`),
+      ...Array.from({ length: 7 }, (_, i) => db.prepare(`INSERT INTO "kv" VALUES (?, ?, ?)`).bind(i % 2 === 0 ? "a" : "b", i, i === 5 ? "x\u0000y" : `v${i}`)),
+    ]);
+    const contents = async (d: D1Like) => (await d.prepare(`SELECT "ns", "k", hex("v") AS "v" FROM "kv" ORDER BY "ns", "k"`).all()).results;
+    const before = await contents(db);
+    const exported = await ops.exportDatabase(source);
+    expect(exported.lossless?.tables).toEqual(["kv"]);
+    const kvReads = fake.requests.filter((r) => r.path.endsWith(`/${source.id}/query`) && JSON.stringify(r.body).includes(`FROM \\"kv\\"`)).map((r) => JSON.stringify(r.body));
+    expect(kvReads.length).toBeGreaterThan(3);
+    for (const sql of kvReads) {
+      expect(sql).not.toMatch(/OFFSET/);
+      expect(sql).toMatch(/ORDER BY \\"ns\\", \\"k\\" LIMIT 2/);
+    }
+    expect(kvReads.some((sql) => /WHERE \(\\"ns\\", \\"k\\"\) > \(/.test(sql))).toBe(true);
+    const rows = (JSON.parse(new TextDecoder().decode(exported.lossless!.json)) as { tables: { rows: unknown[][] }[] }).tables[0]!.rows;
+    expect(rows).toHaveLength(7);
+    const restored = await ops.createDatabase(stage, "notes-test-abc-db-2");
+    await importDump(d1Client(fake.api, ACCOUNT), restored.id, exported.lossless!.restore, { transfer: fake.transfer, sleep: async () => undefined });
+    expect(await contents(fake.database(restored.id))).toEqual(before);
+  });
+
+  it("a trigger body's inner semicolons do not split it: a trigger inserting into a lossy table keeps the restore file's count right", async () => {
+    const db = fake.database(source.id);
+    await seedSafe(db);
+    await db.batch([
+      db.prepare(`CREATE TABLE "audit" ("id" integer PRIMARY KEY, "what" text)`),
+      db.prepare(`INSERT INTO "audit" ("what") VALUES (?)`).bind("a\u0000b"),
+      db.prepare(
+        `CREATE TRIGGER "parents_audit" AFTER INSERT ON "parents" BEGIN INSERT INTO "audit" ("what") VALUES (CASE WHEN NEW."n" IS NULL THEN 'none' ELSE 'some' END); INSERT INTO "audit" ("what") VALUES ('x'); END`,
+      ),
+    ]);
+    const exported = await ops.exportDatabase(source);
+    expect(exported.lossless?.tables).toEqual(["audit"]);
+    expect(new TextDecoder().decode(exported.lossless!.restore)).toContain(`CREATE TRIGGER "parents_audit" AFTER INSERT ON "parents" BEGIN INSERT INTO "audit"`);
+  });
+
   it("a table whose scan D1 still refuses is backed up losslessly instead of failing the backup", async () => {
     const db = fake.database(source.id);
     await seedSafe(db);

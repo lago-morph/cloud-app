@@ -135,7 +135,7 @@ export async function openFakeD1Api(options: { accountId: string; maxDatabases?:
       lines.push(`${String(t["sql"])};`);
       const cols = (await all(`PRAGMA table_info(${q(name)})`)).map((c) => String(c["name"]));
       const values = cols.map((c) => `replace(replace(quote(${q(c)}), char(13), '''||char(13)||'''), char(10), '''||char(10)||''')`).join(` || ',' || `);
-      for (const r of await all(`SELECT 'INSERT INTO ${q(name).replace(/'/g, "''")} (${cols.map(q).join(",").replace(/'/g, "''")}) VALUES(' || ${values} || ');' AS "line" FROM ${q(name)} ORDER BY rowid`)) lines.push(String(r["line"]));
+      for (const r of await all(`SELECT 'INSERT INTO ${q(name).replace(/'/g, "''")} (${cols.map(q).join(",").replace(/'/g, "''")}) VALUES(' || ${values} || ');' AS "line" FROM ${q(name)}${/WITHOUT\s+ROWID/i.test(String(t["sql"])) ? "" : " ORDER BY rowid"}`)) lines.push(String(r["line"]));
     }
     if ((await all(`SELECT 1 FROM sqlite_master WHERE "name" = 'sqlite_sequence'`)).length > 0) {
       lines.push("DELETE FROM sqlite_sequence;");
