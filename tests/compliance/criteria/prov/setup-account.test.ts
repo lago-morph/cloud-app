@@ -16,16 +16,22 @@
  *
  * "Deploying without it": needs an account on which `setup-account` has never run. The test
  * never deletes the shared resources (they hold other stages' state and retained log entries),
- * so it runs only when the operator says the account is fresh (`COMPLIANCE_CLOUDFLARE_FRESH_ACCOUNT=1`)
- * and the log bucket is indeed absent; otherwise it reports a missing prerequisite (`blocked`).
- * It then runs before the idempotence test (file order). The deploy must exit non-zero, name
- * `setup-account` and the missing shared resource, and create nothing.
+ * so it needs a second Cloudflare account. The owner deferred it (2026-10-25: "Defer the tests
+ * that require another account"; DEC-0532): the driver records the clause `not-run` with
+ * "deferred: needs a second Cloudflare account (owner, 2026-10-25)" (`harness/expected.ts`), and
+ * the test is defined only when the operator says the account is fresh
+ * (`COMPLIANCE_CLOUDFLARE_FRESH_ACCOUNT=1`), for when the deferral is lifted. It then checks that
+ * the log bucket is indeed absent (else a missing prerequisite) and runs before the idempotence
+ * test (file order). The deploy must exit non-zero, name `setup-account` and the missing shared
+ * resource, and create nothing.
  *
  * The email setup (plan-auth.md item T2) is the state `_cloud/email.ts` reads: the domain's
  * sending entry, Email Routing on `t.<emailDomain>` and its rules and DNS records, the sink Worker
- * and bucket, and the account settings record. It joins the snapshot. The token clause needs an
- * operator-supplied token that lacks exactly one of DEC-0515's email permissions
- * (`COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_EMAIL_PERMISSION`); without one the clause is `blocked`.
+ * and bucket, and the account settings record. It joins the snapshot. The token clause needs a
+ * token that lacks exactly one of DEC-0515's email permissions
+ * (`COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_EMAIL_PERMISSION`): the driver creates one lacking
+ * "Email Routing Addresses Write" for a run that selects PROV-AC-004, unless the operator supplied
+ * one (`harness/test-tokens.ts`, DEC-0531); without one the clause is `blocked`.
  * The production stage is a new name in a scratch copy, with prodcheck's values copied as its
  * committed values file; a deploy that wrongly gets past the preflight is removed again.
  *
@@ -44,10 +50,11 @@ import { emailDomain } from "../cli/support/admins.js";
 import { scratchCopy } from "../core/support/processes.js";
 import { isLocal, REFERENCE_DIR, uniqueValue } from "../core/support/repo.js";
 import { runCli, tail } from "./support/stage.js";
+import { NO_EMAIL_PERMISSION_ENV } from "../../harness/test-tokens.js";
 
 const FRESH_ENV = "COMPLIANCE_CLOUDFLARE_FRESH_ACCOUNT";
-/** An operator-supplied Cloudflare API token lacking exactly one email permission of DEC-0515. */
-const NO_EMAIL_PERMISSION_ENV = "COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_EMAIL_PERMISSION";
+/** Deferred by the owner (DEC-0532): defined only on an account the operator says is fresh. */
+const itOnFreshAccount = process.env[FRESH_ENV] === "1" ? it : undefined;
 /** DEC-0515's email permissions, as an output naming one of them may write it ("Write" or "Edit"). */
 const EMAIL_PERMISSION = /Email Sending|Email Routing Addresses|Email Routing Rules|DNS (?:Write|Edit)|Zone Settings|Zone Read/i;
 /** A log entry's key (LOG-REQ-004): `<app>/<stage>/<yyyy>/<mm>/<dd>/<file>`. */
@@ -77,12 +84,7 @@ async function accountSnapshot(): Promise<unknown> {
 
 if (!isLocal()) {
   describe("PROV-AC-004 setup-account (cloud, milestone, no D1)", () => {
-    it(tag("PROV-AC-004", "deploying on an account without setup-account fails with a clear message and creates nothing"), async () => {
-      if (process.env[FRESH_ENV] !== "1") {
-        prerequisiteMissing(
-          `needs a Cloudflare account on which setup-account has never run (set ${FRESH_ENV}=1 on such an account); this test never deletes the shared log bucket or state home, which hold other stages' state and retained log entries`,
-        );
-      }
+    itOnFreshAccount?.(tag("PROV-AC-004", "deploying on an account without setup-account fails with a clear message and creates nothing"), async () => {
       if ((await sharedResources()).logBucket) prerequisiteMissing(`${FRESH_ENV}=1 is set, but the shared log bucket ${LOG_BUCKET} exists: the account is not fresh`);
       const t = target().target;
       const copy = await scratchCopy(REFERENCE_DIR, "d-t1-prov004");

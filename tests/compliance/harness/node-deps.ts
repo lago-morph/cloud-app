@@ -15,6 +15,7 @@ import { checkLoginRecordPath } from "./prodcheck.js";
 import { defaultBudgetDeps, rateLimitIn, withSignUpSlot, type BudgetDeps } from "./sign-up-budget.js";
 import type { EvidenceRecord } from "../../../packages/framework/src/evidence/public.js";
 import { waitFor } from "./wait.js";
+import { cloudflareAccountOps, fetchCfCall, type CloudAccountOps } from "./test-tokens.js";
 import type { TargetOperations } from "../../../packages/framework/src/provision/core/operations.js";
 import { targetOperations } from "../../../packages/framework/src/cli/commands/operations.js";
 import { cloudProcessProblems } from "../../../packages/framework/src/cli/commands/smoke-cloud.js";
@@ -261,6 +262,16 @@ export function cliStageOps(
   };
 }
 
+/**
+ * The Cloudflare account's reads and test tokens (DEC-0530, DEC-0531) with the main token from
+ * the driver's environment. Undefined without `CLOUDFLARE_ACCOUNT_ID` (the deploy then names it).
+ */
+export function cloudAccount(target: Target, env: Readonly<Record<string, string | undefined>> = process.env, doFetch: typeof fetch = fetch): CloudAccountOps | undefined {
+  const accountId = env.CLOUDFLARE_ACCOUNT_ID;
+  if (target !== "cloudflare" || accountId === undefined || accountId === "") return undefined;
+  return cloudflareAccountOps({ call: fetchCfCall(env, doFetch), accountId, env });
+}
+
 export function nodeDeps(repoRoot: string): DriverDeps {
   return {
     repoRoot,
@@ -281,6 +292,7 @@ export function nodeDeps(repoRoot: string): DriverDeps {
     run: runProcess,
     startLocal: () => startReferenceDev(repoRoot),
     cloud: (target) => cliStageOps(repoRoot, target),
+    cloudAccount: (target) => cloudAccount(target),
     pendingStages: pendingStageStore(join(repoRoot, ".framework", "compliance", "pending-stages.json")),
     writeEvidence,
     log: (line) => process.stdout.write(`${line}\n`),

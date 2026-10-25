@@ -1,7 +1,9 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { addForeignToken, FAKE_ACCOUNT, fakeCfApi, type FakeCfApi } from "./fake-cf-api.test-support.js";
+import { cloudflareAccountOps, NO_EMAIL_PERMISSION_ENV, NO_R2_TOKEN_PERMISSION_ENV } from "./test-tokens.js";
 import { validateEvidence, writeEvidence, type EvidenceRecord, type GitState, type WriteEvidenceInput } from "../../../packages/framework/src/evidence/public.js";
 import { parseArgs } from "./args.js";
 import { NOT_SELECTED, parseWhere, type CatalogueEntry } from "./catalogue.js";
@@ -744,5 +746,112 @@ describe("[COMPL-AC-005] the production checks on prodcheck", () => {
       await runCompliance(parseArgs(argv), argv, h.deps);
       expect(events.filter((e) => e.includes("prodcheck") || e === "check-login"), argv.join(" ")).toEqual([]);
     }
+  });
+});
+
+describe("[COMPL-AC-003] the cloud account at the start and end of a run: D1 plan and self-created test tokens (DEC-0530, DEC-0531, DEC-0532)", () => {
+  const TOKEN_CATALOGUE = [entry("KV-AC-001", "Local, cloud"), entry("PROV-AC-002", "Cloud"), entry("PROV-AC-004", "Cloud (milestone)")];
+  const withAccount = (h: Harness, api: FakeCfApi, dryRun?: string): DriverDeps => ({
+    ...h.deps,
+    cloudAccount: () => cloudflareAccountOps({ call: api.call, accountId: FAKE_ACCOUNT, env: {}, now: () => new Date("2026-10-25T10:00:00Z"), ...(dryRun === undefined ? {} : { dryRun }) }),
+  });
+  const posts = (api: FakeCfApi) => api.requests.filter((r) => r.method === "POST");
+
+  it("reads the plan once, creates PROV-AC-002's token, hands it and the plan to the tests only, redacts it, and deletes it at the end", async () => {
+    const api = fakeCfApi();
+    let seen: string | undefined;
+    const h = harness({ catalogue: TOKEN_CATALOGUE, vitest: vitestReport([{ title: "[PROV-AC-002] restricted", status: "passed" }]) });
+    const run = h.deps.run;
+    const deps: DriverDeps = { ...withAccount(h, api), run: (c) => (c.args[0] === "vitest" && (seen = c.env[NO_R2_TOKEN_PERMISSION_ENV]), run(c)) };
+    const result = await runCompliance(parseArgs(["--target", "cloudflare"]), [], deps);
+    expect(result.exitStatus).toBe(0);
+    expect(api.requests.filter((r) => r.path.endsWith("/subscriptions"))).toHaveLength(1);
+    expect(posts(api).map((r) => (r.body as { name: string }).name)).toEqual(["prototype-compliance-abcdefghij12345-no-r2-token"]);
+    expect(seen).toMatch(/^fake-value-tok1-/);
+    const vitest = h.calls.find((c) => c.args[0] === "vitest");
+    expect(vitest?.env.COMPLIANCE_D1_PLAN).toBe("paid");
+    expect(vitest?.redact).toContain(seen);
+    expect(h.calls.filter((c) => c.command === "npm").every((c) => c.env[NO_R2_TOKEN_PERMISSION_ENV] === undefined)).toBe(true);
+    expect(h.written[0]?.redactions).toContainEqual({ value: seen, replacement: "<test-token>" });
+    expect(h.logs.join("\n")).toContain("Workers Paid D1 budget (PAR-285)");
+    expect(h.logs.join("\n")).toContain("created the test token prototype-compliance-abcdefghij12345-no-r2-token (lacks Account API Tokens (Read and Write)) for PROV-AC-002");
+    expect(h.logs.join("\n")).not.toContain(seen ?? "-");
+    expect(JSON.parse(h.written[0]?.raw?.["d1-budget.json"] ?? "{}")).toMatchObject({ plan: "paid", source: "api", budget: { maxDatabases: 20 } });
+    expect(api.tokens.size).toBe(0);
+    expect(recordOf(h).leftovers).toEqual([]);
+    expect(recordOf(h)).not.toHaveProperty("dryRun");
+  });
+
+  it("creates no token when the run selects no clause that needs one, or the operator supplied the variable", async () => {
+    const api = fakeCfApi();
+    const h = harness({ catalogue: TOKEN_CATALOGUE });
+    await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], withAccount(h, api));
+    expect(posts(api)).toEqual([]);
+    expect(h.calls.find((c) => c.args[0] === "vitest")?.env.COMPLIANCE_D1_PLAN).toBe("paid");
+
+    vi.stubEnv(NO_R2_TOKEN_PERMISSION_ENV, "operator-supplied-not-a-credential");
+    try {
+      const api2 = fakeCfApi();
+      const h2 = harness({ catalogue: TOKEN_CATALOGUE });
+      await runCompliance(parseArgs(["--target", "cloudflare"]), [], withAccount(h2, api2));
+      expect(posts(api2)).toEqual([]);
+      expect(h2.calls.find((c) => c.args[0] === "vitest")?.env[NO_R2_TOKEN_PERMISSION_ENV]).toBe("operator-supplied-not-a-credential");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("deletes the token also when the run failed, and first deletes test tokens an earlier run left, but no other token", async () => {
+    const api = fakeCfApi();
+    addForeignToken(api, "prototype-compliance-old000000000001-no-email");
+    addForeignToken(api, "owner-main-token");
+    const h = harness({ catalogue: TOKEN_CATALOGUE, cloud: { deploy: () => Promise.reject(new Error("deploy failed at step 3")) } });
+    const result = await runCompliance(parseArgs(["--target", "cloudflare"]), [], withAccount(h, api));
+    expect(result.exitStatus).toBe(1);
+    expect(posts(api)).toHaveLength(1);
+    expect([...api.tokens.values()].map((t) => t.name)).toEqual(["owner-main-token"]);
+    expect(h.logs.join("\n")).toContain("deleted the test token prototype-compliance-old000000000001-no-email an earlier run left");
+    expect(recordOf(h).leftovers).toEqual([]);
+  });
+
+  it("a test token that could not be deleted is a leftover, and so is a token check that cannot run", async () => {
+    const api = fakeCfApi();
+    api.failing.add(`DELETE /accounts/${FAKE_ACCOUNT}/tokens/tok1`);
+    const h = harness({ catalogue: TOKEN_CATALOGUE });
+    const result = await runCompliance(parseArgs(["--target", "cloudflare"]), [], withAccount(h, api));
+    expect(recordOf(h).leftovers).toEqual(["API token prototype-compliance-abcdefghij12345-no-r2-token"]);
+    expect(result.exitStatus).toBe(1);
+
+    const api2 = fakeCfApi();
+    const h2 = harness({ catalogue: TOKEN_CATALOGUE });
+    const deps = withAccount(h2, api2);
+    const run = deps.run;
+    await runCompliance(parseArgs(["--target", "cloudflare"]), [], { ...deps, run: (c) => (c.args[0] === "vitest" && api2.failing.add(`GET /accounts/${FAKE_ACCOUNT}/tokens?`), run(c)) });
+    expect(recordOf(h2).leftovers).toEqual(["test token check failed: listing the account's API tokens failed: HTTP 500 (10000 internal error)"]);
+  });
+
+  it("milestone: creates PROV-AC-004's token and records the fresh-account clause as deferred", async () => {
+    const api = fakeCfApi({ subscriptions: 403 });
+    const h = harness({ catalogue: TOKEN_CATALOGUE, vitest: vitestReport([{ title: "[PROV-AC-004] twice", status: "passed" }]) });
+    await runCompliance(parseArgs(["--target", "cloudflare", "--milestone"]), [], withAccount(h, api));
+    expect(posts(api).map((r) => (r.body as { name: string }).name)).toEqual(["prototype-compliance-abcdefghij12345-no-email"]);
+    expect(h.calls.find((c) => c.args[0] === "vitest")?.env[NO_EMAIL_PERMISSION_ENV]).toMatch(/^fake-value-/);
+    expect(h.calls.find((c) => c.args[0] === "vitest")?.env.COMPLIANCE_D1_PLAN).toBe("free");
+    expect(recordOf(h).results).toEqual([
+      { id: "PROV-AC-004", status: "passed" },
+      { id: "PROV-AC-004", status: "not-run", detail: "fresh-account clause: deploying without setup-account fails with a clear message: deferred: needs a second Cloudflare account (owner, 2026-10-25)" },
+    ]);
+    expect(api.tokens.size).toBe(0);
+  });
+
+  it("fake account operations mark the record as a dry run; without account operations nothing is read or created", async () => {
+    const api = fakeCfApi();
+    const h = harness({ catalogue: TOKEN_CATALOGUE });
+    await runCompliance(parseArgs(["--target", "cloudflare"]), [], withAccount(h, api, "fake Cloudflare account API"));
+    expect(recordOf(h).dryRun).toBe("fake Cloudflare account API");
+    const plain = harness({ catalogue: TOKEN_CATALOGUE });
+    await runCompliance(parseArgs(["--target", "cloudflare"]), [], plain.deps);
+    expect(plain.calls.find((c) => c.args[0] === "vitest")?.env.COMPLIANCE_D1_PLAN).toBeUndefined();
+    expect(plain.written[0]?.raw?.["d1-budget.json"]).toBeUndefined();
   });
 });

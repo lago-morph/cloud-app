@@ -5142,3 +5142,46 @@ From the diagnosis of the Cloudflare pass-auth run `k9cc5zjcbm5mrkc` (2026-10-25
 Origin: ai-proposed · Status: accepted · Affects: cli.md §2 (`build`, `deploy`, `smoke`, `check-login`), `packages/framework/src/build/build.ts`
 
 From the same diagnosis. `build` cleared `.framework/<target>/`, which also holds every stage's recorded deploy output `stages/<stage>.json`. Every `deploy` builds first, so deploying one stage of an app erased the records of its other stages, and `check-login` on `prodcheck` found none after the compliance run's tests had deployed further stages. `build` now clears its own output there and keeps `stages/`; `remove` still deletes a stage's record.
+
+## Compliance harness: D1 budgets by plan, self-created test tokens, deferred second-account clauses (2026-10-25)
+
+Three owner instructions of 2026-10-25 for the compliance harness, and how the harness applies them (item ba-harness-limits). No requirement or criterion text changes.
+
+### DEC-0530 — D1 budgets for the Free and the Workers Paid plan; the harness reads the plan from Cloudflare
+Origin: owner · Status: accepted · Amends: DEC-0419 (its caps become the Free budget) · Affects: plan §1 "Cloud usage limits", PAR-219, PAR-284, PAR-285, `tests/compliance/harness/d1-budget.ts`, `tests/compliance/criteria/_cloud/d1.ts`, the compliance driver
+
+The owner, 2026-10-25: "you need to use different D1 limits for free and paid accounts. Still no limit testing though."
+
+Cloudflare's D1 limits and pricing (developers.cloudflare.com/d1/platform/pricing/ and developers.cloudflare.com/d1/platform/limits/, read 2026-10-25):
+- **Workers Free:** 5,000,000 rows read and 100,000 rows written per day, reset at 00:00 UTC; 5 GB storage; 10 databases per account; 500 MB per database.
+- **Workers Paid:** 25 billion rows read and 50 million rows written included per month (then $0.001 per million read and $1.00 per million written), reset on the subscription's renewal date; 5 GB storage included; 50,000 databases per account; 10 GB per database.
+
+Budgets, in DEC-0419's spirit (well inside the included usage, not crippling):
+- **Free (PAR-284), DEC-0419 unchanged:** per pass ≤ 10,000 rows written and ≤ 500,000 read; per UTC day ≤ 50,000 written and ≤ 2,500,000 read (half the daily limits); ≤ 8 D1 databases at once (of 10).
+- **Workers Paid (PAR-285):** per pass ≤ 100,000 rows written and ≤ 5,000,000 read; per UTC day ≤ 500,000 written and ≤ 25,000,000 read; ≤ 20 D1 databases at once. Even 31 days at the daily cap use 31 % of the written and 3.1 % of the read rows included per month, so tests never cause a charge and the owner keeps most of the allowance. Per pass is a fifth of a day, as on Free. The database cap bounds what an interrupted run leaves behind; the account limit is far above it.
+- **Unchanged on both plans:** no stress tests, load tests, platform-limit probing or row loops; tens of rows per test; D1 usage measured before and after every pass. No test checks a budget by running into it.
+
+**Plan detection.** At the start of a cloud run the driver calls the documented Account Subscriptions list, `GET /accounts/<account>/subscriptions` (developers.cloudflare.com/api/resources/accounts/subresources/subscriptions/methods/get/, needs "Billing Read"). An account-scoped subscription with rate plan `workers_paid` whose state is not `Cancelled`, `Failed` or `Expired` means Workers Paid; a successful listing without one means Free. Read live on 2026-10-25: this account lists `workers_paid` (state `Paid`) besides `r2_paid`, `images_v2_stream_basic` and zone-scoped `free` plans. When Cloudflare does not answer (the token lacks Billing Read, an error), the explicit setting `COMPLIANCE_CLOUDFLARE_PLAN=free|paid` decides, and without it the Free budget applies; Cloudflare's answer wins over the setting. The driver logs the budget, writes the reading to the record's `raw/d1-budget.json`, and passes the plan to the test processes in `COMPLIANCE_D1_PLAN`, so the database guard (`requireDatabaseRoom`) applies the plan's cap without another request. A test process started outside the driver applies the setting, else Free.
+
+### DEC-0531 — The compliance driver creates and deletes the restricted test tokens itself
+Origin: owner · Status: accepted · Amends: DEC-0335, DEC-0363, DEC-0428 (the operator no longer has to supply PROV-AC-002's token) · Affects: PROV-AC-002, PROV-AC-004, COMPL-REQ-004, plan §11 Q13, PAR-286, `tests/compliance/harness/test-tokens.ts`, the compliance driver
+
+The owner, 2026-10-25: "Create your own test token."
+
+- **Which.** PROV-AC-002's clause needs a credential without the permission to create R2 API tokens (`COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_R2_TOKEN_PERMISSION`); PROV-AC-004's needs a token lacking exactly one email permission of DEC-0515 (`COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_EMAIL_PERMISSION`).
+- **When.** At the start of a cloud run that selects the criterion, unless the operator set the variable: the driver creates the token through `POST /accounts/<account>/tokens` (an account-owned token) with the main token, which has "Account API Tokens Write". The permission group IDs come from `GET /accounts/<account>/tokens/permission_groups`.
+- **Minimal permissions.**
+  - `prototype-compliance-<run ID>-no-r2-token`: Workers Scripts Write, Workers R2 Storage Write and D1 Write on the account; no "Account API Tokens" at all.
+  - `prototype-compliance-<run ID>-no-email`: the same, plus Account API Tokens Read (the DEC-0515 check reads the token's own policies; the deploy preflight reads the token lists) and Email Sending Write on the account, and Email Routing Rules Write, DNS Write, Zone Settings Write and Zone Read on the account's zones. It lacks "Email Routing Addresses Write".
+- **Expiry.** PAR-286, 6 hours, as a backstop.
+- **Secrecy.** The value is held in the driver's memory. It is passed only to the test processes in the variable, never to the build or other commands. It is redacted as `<test-token>` from the live echo, the driver's output, the raw output and the record. It is never written to disk or logged; the log names only the token.
+- **Removal.** The driver deletes its tokens at the end of the run, also when setting up the target or the tests failed. At the start it deletes `prototype-compliance-*` tokens an interrupted earlier run left. The leftover check (COMPL-REQ-004) then lists the account's tokens, and every `prototype-compliance-*` token still listed is a leftover (`API token <name>`), as is a token listing that fails.
+- **Live proof, 2026-10-25.** With the harness code, one `no-r2-token` token was created, read back (status `active`, `expires_on` 6 hours ahead, one policy on the account with exactly D1 Write, Workers R2 Storage Write and Workers Scripts Write), listed, and deleted. Afterwards reading it answered HTTP 404 and no `prototype-compliance-*` token was listed. The value was never printed.
+
+### DEC-0532 — Clauses that need a second Cloudflare account are deferred
+Origin: owner · Status: accepted · Affects: PROV-AC-004, `tests/compliance/harness/expected.ts` (not-run rules), `tests/compliance/criteria/prov/setup-account.test.ts`, plan §5 D-RUN "Not runnable here"
+
+The owner, 2026-10-25: "Defer the tests that require another account".
+
+- **PROV-AC-004, "Deploying without it fails with a clear message".** It needs an account on which `setup-account` never ran, and the test never deletes this account's shared resources. A not-run rule in `PHASE_RULES` (Cloudflare, milestone) records the part "fresh-account clause: deploying without setup-account fails with a clear message" as `not-run` with the detail "deferred: needs a second Cloudflare account (owner, 2026-10-25)". The rest of PROV-AC-004 runs. The test is defined only when the operator sets `COMPLIANCE_CLOUDFLARE_FRESH_ACCOUNT=1`, so a run no longer records the criterion `blocked` for it. Whoever lifts the deferral removes the rule.
+- **Other clauses checked.** No other criterion clause needs a second account. PROV-AC-007's foreign bucket is a stubbed cloud response in a local unit test. DEC-0270's 403 "foreign" reading needs one too (DEC-0334), but it is a reading, not a criterion clause, and stays an unverified assumption. SKILL-AC-006's "set up an account" runs `setup-account` on this account, which is idempotent; it is not-run for its own reason (DEC-0509).
