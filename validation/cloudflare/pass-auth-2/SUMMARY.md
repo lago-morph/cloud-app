@@ -1,5 +1,7 @@
 # Cloudflare pass-auth-2, 2026-10-25, at dc00996
 
+**Archived 2026-10-25** to branch `archive/implement-local-cloudflare` (same paths; `ai/ARCHIVE.md`, then `ARCHIVE-INDEX.md` there): the earlier pass `validation/cloudflare/pass-auth/` and its records `k9cc5zjcbm5mrkc` and `y5cuhf8fwk5khtd`, compared below.
+
 Written by the orchestrator from the runner's report (subagents may not write report files). Logs and usage readings are in this folder. A redaction scan of 110 files found no secret or identifier; the only match was the records' commit SHA.
 
 ## Runs

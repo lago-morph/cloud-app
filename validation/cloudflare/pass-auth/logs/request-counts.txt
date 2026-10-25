@@ -1,2 +1,0 @@
-{'trace-1-full.log': 1366, 'trace-2-milestone.log': 97, 'ledger.txt': 24, 'sstlogs-1-full (sst)': 184, 'sstlogs-2-milestone (sst)': 16}
-total 1687 max5min 274 429s 0

@@ -1,5 +1,7 @@
 # Final report: local and Cloudflare phase (interim)
 
+**Archived 2026-10-25** to branch `archive/implement-local-cloudflare` (same paths; `ai/ARCHIVE.md`, then `ARCHIVE-INDEX.md` there): the superseded runs cited below: Cloudflare records `5swm2wowq7t3yho`, `gblenqeyh7kuls5`, `651l3x1zgz7pbx5`, `5nfl3uhrzxpuz4m`, `sysad9rajoir4yt`, `cwcrlz8fxgo3ud4` and folders `pass-B/`, `pass-C/`, `pass-C1/`, `f-03/`, `cleanup-R/`; local records `kex4v2xk3522i52`, `pzeugkxrk1xcu2w` and folders `final-local-4/`, `final-local-5/`, `batch-verify-4/`, `batch-verify-5/`.
+
 Date: 2026-10-24 (first written 2026-10-20 at `faced8b`; updates 2026-10-21 at `c016e7e` and 2026-10-24 at `1b474c1`). Base: `origin/claude/implement-local-cloudflare` at `ce53772`. Pull request: https://github.com/lago-morph/cloud-app/pull/5.
 
 **Status: interim.** Local work is complete, and the Cloudflare runs (D-RUN, D-RUN-M, F-03, C-1) are done. Five Cloudflare criteria wait on owner decisions or owner-supplied credentials. The local evidence is current at `1b474c1` (L1 closed). This report is written from committed files only. No test suite was run and no Cloudflare call was made for it.

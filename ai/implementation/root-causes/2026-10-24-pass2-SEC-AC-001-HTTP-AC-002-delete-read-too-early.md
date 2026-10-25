@@ -1,5 +1,7 @@
 # Root cause: pass 2. SEC-AC-001 (cloud, "without a value" clause) and HTTP-AC-002 (SEC.MISSING on a cloud) fail because the test reads once, 126 ms after deleting the Worker secret. Cloudflare was still serving the previous Worker version, which has the secret. The test does not wait the bounded delay that DEC-0092 requires, as CF-AC-002's test does.
 
+**Archived 2026-10-25** to branch `archive/implement-local-cloudflare` (same paths; `ai/ARCHIVE.md`, then `ARCHIVE-INDEX.md` there): the records `cwcrlz8fxgo3ud4` and `5tr1c8w0x1b9lai` (`validation/cloudflare/<runId>.json` and `raw/`) cited below; `validation/cloudflare/pass-2to5/` stays here.
+
 Author: diagnosing subagent (prompt §8). I did not write the code under diagnosis, and I did not run pass 2. This is a diagnosis only. No code or test was changed, and no Cloudflare call was made.
 
 Base: `origin/claude/implement-local-cloudflare` `24327c7` (the run was on `71ac98d`). Evidence: `validation/cloudflare/cwcrlz8fxgo3ud4.json`, `validation/cloudflare/cwcrlz8fxgo3ud4/raw/vitest.log`, `validation/cloudflare/pass-2to5/logs/{2-pass2.log,trace-2-pass2.log}`, `validation/cloudflare/pass-2to5/SUMMARY.md`.

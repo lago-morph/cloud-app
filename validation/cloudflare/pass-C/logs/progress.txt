@@ -1,6 +1,0 @@
-2026-10-24T05:35:08Z measured 6-resume (D1 1904w/5193r, 1 db; R2 worker+db+files bucket present). starting 7-driver step1 (FILES-AC-001..005,AUTH-AC-005,E2E-004) = rerun of cut-off 4-driver
-2026-10-24T05:52:17Z 7-driver done exit 1, record gblenqeyh7kuls5: 6 passed, FILES-AC-003 failed (expired-ticket: status null). next: measure 7-after, then 8-driver step2
-2026-10-24T05:52:30Z measured 7-after-step1; starting 8-driver step2 (SEC-AC-001,HTTP-AC-002,SEC-AC-005)
-2026-10-24T05:56:54Z 8-driver done exit 1, record 651l3x1zgz7pbx5: SEC-AC-001, HTTP-AC-002 passed; SEC-AC-005 failed (expected). next: measure 8-after, then 9-remove R2
-2026-10-24T05:57:03Z measured 8-after-step2; starting 9-remove of R2
-2026-10-24T05:57:53Z 9-remove exit 0; measuring 9-after-remove

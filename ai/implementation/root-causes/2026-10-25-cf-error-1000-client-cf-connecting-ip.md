@@ -1,5 +1,7 @@
 # Root cause: `POST /api/auth/password/sign-up` → 403 "Error 1000: DNS points to prohibited IP" on Cloudflare stages. The compliance test browsers set `CF-Connecting-IP` themselves, and Cloudflare's edge refuses any request that already carries that header. The Worker never runs.
 
+**Archived 2026-10-25** to branch `archive/implement-local-cloudflare` (same paths; `ai/ARCHIVE.md`, then `ARCHIVE-INDEX.md` there): the evidence run `k9cc5zjcbm5mrkc` (record and `raw/`) and its runner folder `validation/cloudflare/pass-auth/`, superseded by `pass-auth-2/` (`wxnforn019mo5ic`).
+
 Author: diagnosing subagent (plan §8). Branch `claude/ba-fix-cf`, from `origin/claude/better-auth`. Evidence run: `k9cc5zjcbm5mrkc` (`validation/cloudflare/pass-auth/`). Live checks were made on one temporary stage `test-diag10250738`, which has since been removed.
 
 ## Symptom

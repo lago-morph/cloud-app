@@ -1,5 +1,7 @@
 # Spike BA-S1/S3 (+ S2 offline): Better Auth on workerd/D1 and PGlite, the handler bridge, scrypt cost
 
+**Archived 2026-10-25** to branch `archive/implement-local-cloudflare` (same paths; `ai/ARCHIVE.md`, then `ARCHIVE-INDEX.md` there): the spike's `logs/` cited below (its code and SQL stay here; `package-lock.json` was deleted and is in git history at `bd24978`).
+
 This is throwaway proof code for `ai/implementation/plan-auth.md` §8: spikes S1 and S3, and the offline part of S2. It ran on 2026-10-24 on branch `claude/better-auth-spike` (from `claude/better-auth`).
 
 - **No Cloudflare API call was made.** Everything ran in local workerd (Miniflare) and PGlite.

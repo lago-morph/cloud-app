@@ -1,5 +1,7 @@
 # Cloudflare pass 1c — 2026-10-24
 
+**Archived 2026-10-25** to branch `archive/implement-local-cloudflare` (same paths; `ai/ARCHIVE.md`, then `ARCHIVE-INDEX.md` there): the record `sysad9rajoir4yt` (`../sysad9rajoir4yt.json` and `raw/`); `xdryowrec3lephb` stays here.
+
 Written by the orchestrator from the runner reports (subagents may not write report files). Raw evidence in `logs/` (redacted; a scan of all 71 files found no token, account ID, subdomain, apiKey value or 32-hex string). Run stage R: `test-9mfkg261apxm7s2`, kept for later passes. The first driver run was killed by a container restart during its last test (log `4-driver.log`, no record); the driver was re-run once (runner loss).
 
 ## Usage

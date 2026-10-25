@@ -1,5 +1,7 @@
 # Root cause: PWD-AC-008 sign-in burst never reaches 429 on Cloudflare. The test client's requests reached Cloudflare from two IP addresses: Node's `fetch` alternates between two connections, and the sandbox's egress proxy gives each connection its own public IP. Better Auth's limiter worked; it counted two buckets of 3 and 4.
 
+**Archived 2026-10-25** to branch `archive/implement-local-cloudflare` (same paths; `ai/ARCHIVE.md`, then `ARCHIVE-INDEX.md` there): the evidence run `k9cc5zjcbm5mrkc` (record and `raw/`) and its runner folder `validation/cloudflare/pass-auth/`, superseded by `pass-auth-2/` (`wxnforn019mo5ic`).
+
 Author: diagnosing subagent (plan §8). Branch `claude/ba-fix-cf`, from `origin/claude/better-auth`. Evidence run: `k9cc5zjcbm5mrkc` (`validation/cloudflare/pass-auth/`). Live checks were made on one temporary stage `test-diag10250738`, which has since been removed.
 
 ## Symptom

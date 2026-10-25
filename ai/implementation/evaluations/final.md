@@ -1,5 +1,7 @@
 # F-EV: Final evaluation (local and Cloudflare phase)
 
+**Archived 2026-10-25** to branch `archive/implement-local-cloudflare` (same paths; `ai/ARCHIVE.md`, then `ARCHIVE-INDEX.md` there): the superseded evidence cited below: Cloudflare records `5fgih0buv8i5tc3`, `5kjbwwwpf3mvj95`, `ghref0pc0a9bwmp`, `5swm2wowq7t3yho`, `gblenqeyh7kuls5`, `651l3x1zgz7pbx5`, `5nfl3uhrzxpuz4m`, `nu3lt4mhjsn4ihq`, `pqc4u7j4o1g4rpb`, `vn8cm0ie7v2rhul`, `sysad9rajoir4yt`, `cwcrlz8fxgo3ud4`, `5tr1c8w0x1b9lai`, `2nl855v5sscoqls`, `0ljocvikeb16ebm`, folders `pass-B/`, `pass-C/`, `pass-C1/`, `f-03/`; local records `kbe5rzjb8ls9p8z`, `kex4v2xk3522i52`, `pzeugkxrk1xcu2w`, `nhtt0ff3xx72qvn` and folders `final-local-4/`, `final-local-5/`, `batch-verify-4/`, `batch-verify-5/`.
+
 **Update 5 (D-EV5), 2026-10-24.** Base: `origin/claude/implement-local-cloudflare` at `ce53772` ("Batch verify 5 / final local 5 summaries"). Branch: `claude/implement-local-cloudflare-ev5`. A different independent evaluator subagent; I wrote none of the code, evidence or reviews judged here, ran no test suite and made no Cloudflare call. `npm ci` and the read-only release generator were run only to confirm that `validation/release/2026-10-24-33b3df7.md` is the generator's unedited output (identical). Changes from Update 4:
 - **Local column re-based on R5** (`validation/local/kex4v2xk3522i52.json`, full and unfiltered, at `1b474c1`, with BV5 at the same commit). **L1 closed** (§1, §6).
 - **C-1 closed:** E2E-009 passed on Cloudflare after fix-r2order (`5nfl3uhrzxpuz4m`, pass C-1).
