@@ -69,7 +69,7 @@ export function defineKvSuite(place: Place, makeRunner: () => Promise<CaseRunner
 
     // ---- KV-AC-002 ------------------------------------------------------------------------
 
-    it(t("KV-AC-002", "empty, oversized and malformed keys and oversized and malformed values are rejected with the specified codes; a key of exactly PAR-220 bytes and a value of exactly PAR-223 bytes are accepted"), async () => {
+    it(t("KV-AC-002", "empty keys, oversized keys and values, and malformed keys and values are rejected with the specified codes; a key of exactly PAR-220 bytes and a value of exactly PAR-223 bytes are accepted"), async () => {
       const invalidKey = "KV.INVALID_KEY";
       expect(valueOf(await run("limits", { ns, keyBytes: PAR_220, valueBytes: PAR_223 }))).toEqual({
         sizes: { exactKey: PAR_220, overKey: PAR_220 + 1, astralOverKey: PAR_220 + 1, astralOverKeyUtf16: PAR_220 - 1, exactValue: PAR_223, overValue: PAR_223 + 1 },
@@ -88,7 +88,7 @@ export function defineKvSuite(place: Place, makeRunner: () => Promise<CaseRunner
       });
     }, TEST_MS);
 
-    it(t("KV-AC-002", "empty value clause: KV-REQ-002 accepts the empty value and get returns \"\" (the criterion's 'empty values are rejected' has no specified code; DEC-0146, owner item open)"), async () => {
+    it(t("KV-AC-002", "an empty value is accepted and read back as \"\""), async () => {
       expect(valueOf(await run("emptyValue"))).toEqual({ put: "ok", get: { ok: "" } });
     }, TEST_MS);
 

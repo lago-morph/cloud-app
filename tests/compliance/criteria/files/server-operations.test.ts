@@ -112,10 +112,16 @@ describe("FILES-AC-001 server operations", () => {
 });
 
 describe("FILES-AC-002 names", () => {
-  it(tag("FILES-AC-002", "names with spaces, %, /, .. and non-ASCII characters round-trip unchanged"), async () => {
+  it(tag("FILES-AC-002", "names with spaces, %, /, . segments, other dots (notes..txt, ..., .hidden, a/.b, a..b/c) and non-ASCII characters round-trip unchanged"), async () => {
     const u = await user();
     const p = prefix("ac002-names");
-    const names = ["with space.txt", "100%.txt", "%2F%41", "a/b/c.txt", "../up.txt", "x/../y", "./dot", "a//b", "ünïcødé-日本語-😀.txt"].map((n) => `${p}${n}`);
+    // `..` segments are invalid since DEC-0533 (FILES-REQ-002); names that merely contain dots, and
+    // names with `.` segments, stay valid and are not resolved as paths.
+    const names = [
+      "with space.txt", "100%.txt", "%2F%41", "a/b/c.txt", "./dot", "a/./b", "a/.", "a//b",
+      "notes..txt", "...", ".hidden", "a/.b", "a..b/c", "a/..b/c", "..x", "x..",
+      "ünïcødé-日本語-😀.txt",
+    ].map((n) => `${p}${n}`);
     for (const [i, n] of names.entries()) await put(u, n, new Uint8Array([i]), "text/plain");
     for (const [i, n] of names.entries()) {
       expect(await head(u, n)).toStrictEqual({ name: n, size: 1, contentType: "text/plain" });
@@ -125,20 +131,24 @@ describe("FILES-AC-002 names", () => {
     }
     const listed = (await listAll(u, p)).map((f) => f.name);
     expect([...listed].sort()).toStrictEqual([...names].sort());
-    // Not interpreted as paths: "x/../y" did not become "y", and "../up.txt" stayed under the prefix.
-    expect(await head(u, `${p}y`)).toBeNull();
+    // Not interpreted as paths: "./dot" did not become "dot", and "a/./b" did not become "a/b".
+    expect(await head(u, `${p}dot`)).toBeNull();
+    expect(await head(u, `${p}a/b`)).toBeNull();
     for (const n of names) await remove(u, n);
     expect(await listAll(u, p)).toStrictEqual([]);
   });
 
-  it(tag("FILES-AC-002", "empty and oversized names, the names . and .., and names containing CR, LF or NUL, are rejected with FILES.INVALID_NAME"), async () => {
+  it(tag("FILES-AC-002", "empty and oversized names, the names . and .., names with a .. segment (../up.txt, x/../y, a/..), and names containing CR, LF or NUL, are rejected with FILES.INVALID_NAME"), async () => {
     const u = await user();
     const p = prefix("ac002-invalid");
     // PAR-230: at most 1,024 UTF-8 bytes. One name one byte over (multi-byte characters, so a
     // character count would not catch it).
     const oversized = `${p}${"é".repeat(Math.ceil((1025 - Buffer.byteLength(p)) / 2))}`;
     expect(Buffer.byteLength(oversized)).toBeGreaterThan(1024);
-    const invalid = ["", ".", "..", oversized, `${p}cr\rx`, `${p}lf\nx`, `${p}nul\u0000x`];
+    // A `..` segment anywhere (DEC-0533): leading, between slashes, trailing, after an empty
+    // segment, and the name `..` itself. `.` stays invalid (DEC-0505).
+    const dotDot = ["..", "../up.txt", "../", `${p}..`, `${p}../up.txt`, `${p}x/../y`, `${p}a/..`, `${p}a//../b`, `${p}../`];
+    const invalid = ["", ".", ...dotDot, oversized, `${p}cr\rx`, `${p}lf\nx`, `${p}nul\u0000x`];
     for (const name of invalid) {
       const q = encodeURIComponent(name);
       u.expectError(await u.request("PUT", "/api/files/content", { json: { name, base64: "AQ==" } }), 400, "FILES.INVALID_NAME");
