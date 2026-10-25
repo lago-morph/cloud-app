@@ -23,8 +23,10 @@ import { secretLocation } from "../config/secret-locations.js";
 import { createAuthMock } from "../auth/mock.js";
 import { LOCAL_COOKIES } from "../auth/local-cookies.js";
 import { createStubLoginProvider, stubCallbackUrl, type StubFailure } from "../auth/stub-provider.js";
+import type { Role } from "../auth/roles.js";
+import { changeAccountRole, subjectOfUserId } from "../auth/password/account.js";
 import type { CurrentUser } from "../auth/public.js";
-import { createPasswordProvider } from "../auth/password/provider.js";
+import { createPasswordProvider, PASSWORD_PROVIDER_ID } from "../auth/password/provider.js";
 import type { PasswordDatabase } from "../auth/password/options.js";
 import { appUrl } from "./connect.js";
 import { checkSecretDeclarations, FRAMEWORK_SECRETS } from "../secrets/names.js";
@@ -83,14 +85,33 @@ export interface TestApp {
   as(user: CurrentUser): TestApp;
   logs(): readonly LogEntry[];
   loginWithStub(subject: string, options?: { readonly displayName?: string; readonly stubFailure?: "refused" | "replayed" }): Promise<void>;
+  /**
+   * With `passwordLoginProvider` or `stubLoginProvider`: adds `role` to the account whose user ID
+   * is `userId` (DEC-0525). Rejects when no account has that ID; throws with the mock and on a
+   * connected stage.
+   */
+  grantRole(userId: string, role: TestRole): Promise<void>;
+  /** The reverse of `grantRole`; with no role left the account has none (NULL), never "user". */
+  revokeRole(userId: string, role: TestRole): Promise<void>;
   dispose(): Promise<void>;
 }
 
+/** The roles a test can grant (testing.d.ts): `admin` only; "user" is a level, not a role. */
+export type TestRole = "admin";
+
+/** Role changes of the test app's real provider: `TestApp.grantRole`, `revokeRole`. */
+type RoleChanger = (userId: string, role: Role, change: "grant" | "revoke") => Promise<boolean>;
+
 /** The request's mail sender as the stage runtime bound it (MAIL's sender path, mail/request.ts). */
 function requestSender(c: RuntimeContext): MailSender {
-  const sender = requestMailSender(c);
-  if (sender === undefined) throw new Error("this test app has no mail sender");
-  return sender;
+  // Looked up on first send: AUTH also builds the provider before the mail sender is bound (accountStatus).
+  return {
+    async send(message) {
+      const sender = requestMailSender(c);
+      if (sender === undefined) throw new Error("this test app has no mail sender");
+      return sender.send(message);
+    },
+  };
 }
 
 /** The test app's public origin: state-changing requests carry it in `Origin`. */
@@ -180,9 +201,21 @@ interface Shared {
   /** The app has no authentication mock (stub or password provider): `as` throws. */
   readonly noMock: "stub" | "password" | undefined;
   readonly stub: boolean;
+  /** Present with the stub or password provider (DEC-0525). */
+  readonly changeRole: RoleChanger | undefined;
   session: string | undefined;
   disposed: boolean;
   readonly dispose: () => Promise<void>;
+}
+
+async function changeRole(shared: Shared, userId: string, role: Role, change: "grant" | "revoke"): Promise<void> {
+  const name = change === "grant" ? "grantRole" : "revokeRole";
+  if (shared.disposed) throw new Error("this test app was disposed");
+  if (shared.changeRole === undefined) {
+    throw new Error(`${name} needs a real login provider (passwordLoginProvider or stubLoginProvider); with the authentication mock, choose the level with the user option or as()`);
+  }
+  if (role !== "admin") throw new Error(`${name}: unknown role ${JSON.stringify(role)}; the only role is "admin"`);
+  if (!(await shared.changeRole(userId, role, change))) throw new Error(`${name}: no account has the user ID ${JSON.stringify(userId)}`);
 }
 
 function testApp(shared: Shared, user: CurrentUser | undefined): TestApp {
@@ -201,18 +234,9 @@ function testApp(shared: Shared, user: CurrentUser | undefined): TestApp {
         ...(body instanceof ReadableStream ? { duplex: "half" } : {}),
       } as RequestInit);
       if (user !== undefined) shared.fixed.set(request, user);
-      const response = await shared.fetch(request);
-      // With the password provider, the app keeps the session a sign-in sets (and drops it on
-      // logout), as loginWithStub does, so later requests without a Cookie header are signed in.
-      if (shared.noMock === "password") {
-        const name = LOCAL_COOKIES.session;
-        const pairs = cookiePairs(response);
-        if (pairs.has(name)) {
-          const value = pairs.get(name) ?? "";
-          shared.session = value === "" ? undefined : `${name}=${value}`;
-        }
-      }
-      return response;
+      // Only the `loginWithStub` session is kept (local.md, DEC-0193): no other response cookie,
+      // including a password sign-in's, is sent on later requests; such tests pass `Cookie` themselves.
+      return shared.fetch(request);
     },
     mail: shared.mail,
     as(next) {
@@ -242,6 +266,8 @@ function testApp(shared: Shared, user: CurrentUser | undefined): TestApp {
       }
       shared.session = `${name}=${session}`;
     },
+    grantRole: (userId, role) => changeRole(shared, userId, role, "grant"),
+    revokeRole: (userId, role) => changeRole(shared, userId, role, "revoke"),
     dispose: () => shared.dispose(),
   };
   return self;
@@ -302,6 +328,17 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
   const sqlUnavailable = unavailable.has("sql");
   const kvUnavailable = sqlUnavailable || unavailable.has("kv");
 
+  const stubProvider = stub ? createStubLoginProvider() : undefined;
+  const roleChanger: RoleChanger | undefined =
+    stubProvider !== undefined
+      ? (userId, role, change) => stubProvider.changeRole(userId, role, change)
+      : password
+        ? async (userId, role, change) => {
+            const subject = await subjectOfUserId(passwordDatabase, PASSWORD_PROVIDER_ID, userId);
+            return subject !== undefined && (await changeAccountRole(passwordDatabase, subject, role, change));
+          }
+        : undefined;
+
   const hono = assembleStage(defined, {
     resolved,
     sink,
@@ -317,8 +354,8 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
     secretValues: () => Object.values(secretEnv),
     requiredFrameworkSecrets: [FRAMEWORK_SECRETS.sessionKey, FRAMEWORK_SECRETS.authSecret, ...LOCAL_FRAMEWORK_SECRETS],
     cookies: LOCAL_COOKIES,
-    ...(stub
-      ? { provider: createStubLoginProvider() }
+    ...(stubProvider !== undefined
+      ? { provider: stubProvider }
       : password
         ? { credentialProvider: (c) => createPasswordProvider({ database: passwordDatabase, log: c.var.log, mail: requestSender(c) }) }
         : { mock: createAuthMock({ fixedUser: (c) => fixed.get(c.req.raw) }) }),
@@ -333,6 +370,7 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
     mail: { lastTo: outbox.lastTo, all: outbox.all },
     noMock: stub ? "stub" : password ? "password" : undefined,
     stub,
+    changeRole: roleChanger,
     session: undefined,
     disposed: false,
     dispose: async () => {

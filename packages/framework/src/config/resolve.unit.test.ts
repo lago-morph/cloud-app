@@ -16,7 +16,7 @@ const declaration = {
   tags: configStringList({ default: [] }),
 } satisfies ConfigDeclaration;
 
-function values(v: Record<string, StageConfigFile["values"][string]>, framework: StageConfigFile["framework"] = { admins: [] }): StageConfigFile {
+function values(v: Record<string, StageConfigFile["values"][string]>, framework: StageConfigFile["framework"] = {}): StageConfigFile {
   return { values: v, framework };
 }
 
@@ -94,22 +94,16 @@ describe("build-time resolution: values (CFG-REQ-001, CFG-REQ-002)", () => {
 });
 
 describe("build-time resolution: framework settings (CFG-REQ-005)", () => {
-  it("admins and users come from framework.admins and framework.users", () => {
-    const resolved = resolve(values({ title: "t" }, { admins: ["google:1"], users: ["google:2"] }));
-    expect(resolved.admins).toEqual(["google:1"]);
-    expect(resolved.users).toEqual(["google:2"]);
-  });
-
-  it("without framework.users there is no users list", () => {
+  it("the resolved configuration holds no admins or users list (DEC-0521, DEC-0522)", () => {
     const resolved = resolve(values({ title: "t" }));
-    expect(resolved.admins).toEqual([]);
+    expect("admins" in resolved).toBe(false);
     expect("users" in resolved).toBe(false);
   });
 
   it("framework.email is optional and carries only the sender's display name (MAIL-REQ-003)", () => {
     expect("email" in resolve(values({ title: "t" }))).toBe(false);
-    expect(resolve(values({ title: "t" }, { admins: [], email: { senderName: "Notes" } })).email).toEqual({ senderName: "Notes" });
-    expect(resolve(values({ title: "t" }, { admins: [], email: {} })).email).toEqual({});
+    expect(resolve(values({ title: "t" }, { email: { senderName: "Notes" } })).email).toEqual({ senderName: "Notes" });
+    expect(resolve(values({ title: "t" }, { email: {} })).email).toEqual({});
   });
 });
 

@@ -369,6 +369,57 @@ describe.each([
     });
   });
 
+  describe("the account's role list (PWD-REQ-008, DEC-0521)", () => {
+    const roleOf = async (email: string) => (await h.rows(`SELECT "role" FROM "${AUTH_MODEL_NAMES.user}" WHERE "email" = ?`, email))[0]?.["role"] ?? null;
+    const subjectOf = async (email: string) => String((await h.rows(`SELECT "id" FROM "${AUTH_MODEL_NAMES.user}" WHERE "email" = ?`, email))[0]?.["id"]);
+
+    it(tag("PWD-AC-010", "a new account has no role (NULL), before and after verification and sign-in; a role in the sign-up body is not taken"), async () => {
+      const email = address();
+      const c = ctx({ clientIp: freshIp() });
+      await provider.signUp(c, { email, password: PASSWORD, displayName: "New", ...({ role: "admin" } as object) } as { email: string; password: string; displayName: string });
+      await settle();
+      expect(await roleOf(email)).toBeNull();
+      const subject = await subjectOf(email);
+      expect(await provider.accountStatus(subject)).toEqual({ verified: false, roles: [] });
+      await provider.verify(c, { token: tokenOf(mail.last(email)) });
+      await provider.signIn(ctx(), { email, password: PASSWORD });
+      expect(await roleOf(email)).toBeNull();
+      expect(await provider.accountStatus(subject)).toEqual({ verified: true, roles: [] });
+    });
+
+    it("accountStatus is null for an unknown subject and parses the stored list", async () => {
+      expect(await provider.accountStatus("no-such-subject")).toBeNull();
+      const email = address();
+      await verifiedAccount(email);
+      const subject = await subjectOf(email);
+      await h.rows(`UPDATE "${AUTH_MODEL_NAMES.user}" SET "role" = ? WHERE "id" = ?`, " admin, ,editor", subject);
+      expect(await provider.accountStatus(subject)).toEqual({ verified: true, roles: ["admin", "editor"] });
+    });
+
+    it(tag("PWD-AC-010", "grant adds admin once; revoke removes it and leaves NULL, never user; an unknown subject changes nothing"), async () => {
+      const { changeAccountRole, subjectOfUserId } = await import("./account.js");
+      const email = address();
+      await verifiedAccount(email);
+      const subject = await subjectOf(email);
+      expect(await subjectOfUserId(h.database, PASSWORD_PROVIDER_ID, await deriveUserId(PASSWORD_PROVIDER_ID, subject))).toBe(subject);
+      expect(await subjectOfUserId(h.database, PASSWORD_PROVIDER_ID, "u_NOBODY")).toBeUndefined();
+      expect(await changeAccountRole(h.database, subject, "admin", "grant")).toBe(true);
+      expect(await roleOf(email)).toBe("admin");
+      expect(await changeAccountRole(h.database, subject, "admin", "grant")).toBe(true);
+      expect(await roleOf(email)).toBe("admin");
+      expect(await changeAccountRole(h.database, subject, "admin", "revoke")).toBe(true);
+      expect(await roleOf(email)).toBeNull();
+      expect(await changeAccountRole(h.database, subject, "admin", "revoke")).toBe(true);
+      expect(await roleOf(email)).toBeNull();
+      await h.rows(`UPDATE "${AUTH_MODEL_NAMES.user}" SET "role" = ? WHERE "id" = ?`, "editor", subject);
+      await changeAccountRole(h.database, subject, "admin", "grant");
+      expect(await roleOf(email)).toBe("editor,admin");
+      await changeAccountRole(h.database, subject, "admin", "revoke");
+      expect(await roleOf(email)).toBe("editor");
+      expect(await changeAccountRole(h.database, "no-such-subject", "admin", "grant")).toBe(false);
+    });
+  });
+
   describe("password reset", () => {
     it(tag("PWD-AC-004", "forgot mails a single-use reset link; after the reset the old password fails and the new one works"), async () => {
       const email = address();
@@ -526,7 +577,7 @@ describe.each([
       const auth = createAuthParts({
         deployment,
         publicOrigin: ORIGIN,
-        framework: { admins: [] },
+       
         secret: async (_c, name) => (name === FRAMEWORK_SECRETS.sessionKey ? SESSION_KEY : name === FRAMEWORK_SECRETS.authSecret ? AUTH_SECRET : Promise.reject(new Error(name))),
         cookies: LOCAL_COOKIES,
         credentialProvider: (c) => createPasswordProvider({ database: h.database, log: c.var.log, mail: mail.sender }),
@@ -595,7 +646,7 @@ describe.each([
       const { auth } = authApp();
       const seen: CredentialContext[] = [];
       const deployment = createDeployment({ app: "pwdunit", stage: "dev", target: "local" });
-      const parts = createAuthParts({ deployment, publicOrigin: `${ORIGIN}/ignored-path`, framework: { admins: [] }, secret: async () => SESSION_KEY, cookies: LOCAL_COOKIES, credentialProvider: () => ({ ...createPasswordProvider({ database: h.database, log, mail: mail.sender }), sendVerification: async (c) => void seen.push(c) }) });
+      const parts = createAuthParts({ deployment, publicOrigin: `${ORIGIN}/ignored-path`, secret: async () => SESSION_KEY, cookies: LOCAL_COOKIES, credentialProvider: () => ({ ...createPasswordProvider({ database: h.database, log, mail: mail.sender }), sendVerification: async (c) => void seen.push(c) }) });
       const defined = defineApp({ name: "pwdunit", config: {}, secrets: [], tables: {}, routes: () => undefined });
       const hono = assembleApp(defined, {
         deployment,

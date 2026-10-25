@@ -332,38 +332,30 @@ describe("account (DEMO-REQ-009, DEMO-AC-009)", () => {
   });
 });
 
-describe("users list (DEMO-REQ-011, DEMO-AC-011)", () => {
-  async function derivedId(name: string): Promise<string> {
-    const probe = await open({ stubLoginProvider: true, config: { framework: { users: [] } } });
-    await probe.loginWithStub(name);
-    const me: Me = await (await probe.request("/api/auth/me")).json();
-    expect(me.level).toBe("anonymous");
-    if (me.unlistedId === undefined) throw new Error("no unlistedId");
-    return me.unlistedId;
-  }
-
-  it("lets a listed login create a draft and treats an unlisted login as anonymous", async () => {
-    const aliceId = await derivedId("alice");
-    const bossId = await derivedId("boss");
-    const options = { stubLoginProvider: true, config: { framework: { users: [aliceId], admins: [bossId] } } } as const;
-
+describe("signed-up users and admins by role (DEMO-REQ-002; DEC-0521, DEC-0522)", () => {
+  it("every signed-up user can post; the admin role, granted and revoked, decides who publishes", async () => {
     // One app, so every login sees the same posts.
-    const t = await open(options);
+    const t = await open({ stubLoginProvider: true });
     await t.loginWithStub("boss");
+    const bossMe: Me = await (await t.request("/api/auth/me")).json();
+    expect(bossMe.level).toBe("user");
+    expect(bossMe.unlistedId).toBeUndefined();
+    if (bossMe.id === undefined) throw new Error("no id");
+    await t.grantRole(bossMe.id, "admin");
+    expect(((await (await t.request("/api/auth/me")).json()) as Me).level).toBe("admin");
     const published = await createDraft(t, "published post");
     expect((await t.request(`/api/posts/${published}/publish`, { method: "POST" })).status).toBe(200);
 
     await t.loginWithStub("alice");
     const me: Me = await (await t.request("/api/auth/me")).json();
-    expect(me).toMatchObject({ level: "user", id: aliceId });
-    const draft = await createDraft(t, "listed user's draft");
+    expect(me.level).toBe("user");
+    const draft = await createDraft(t, "any user's draft");
+    expect(await errorCode(await t.request(`/api/posts/${draft}/publish`, { method: "POST" }), 403)).toBe("AUTH.FORBIDDEN");
 
-    await t.loginWithStub("mallory");
-    const malloryMe: Me = await (await t.request("/api/auth/me")).json();
-    expect(malloryMe.level).toBe("anonymous");
-    expect(await errorCode(await t.request("/api/posts", json("POST", { title: "unlisted", body: "" })), 401)).toBe("AUTH.UNAUTHENTICATED");
+    await t.loginWithStub("boss");
+    await t.revokeRole(bossMe.id, "admin");
+    expect(((await (await t.request("/api/auth/me")).json()) as Me).level).toBe("user");
     const page: PostPage = await (await t.request("/api/posts")).json();
     expect(page.posts.map((p) => p.id)).toEqual([published]);
-    expect(await errorCode(await t.request(`/api/posts/${draft}`), 404)).toBe("HTTP.NOT_FOUND");
   });
 });

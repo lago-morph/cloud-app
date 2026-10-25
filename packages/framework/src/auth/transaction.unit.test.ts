@@ -18,7 +18,7 @@ describe("login transaction tokens", () => {
   });
 
   it(tag("AUTH-AC-010", "a session token is not a transaction"), async () => {
-    const session = await issueSession(KEY, { id: "u_X", displayName: null }, T0);
+    const session = await issueSession(KEY, { id: "u_X", displayName: null, provider: "stub", subject: "s" }, T0);
     expect(await readTransaction(KEY, session, T0)).toBeUndefined();
   });
 });

@@ -211,6 +211,12 @@ function connectedApp(c: Connection, user: CurrentUser | undefined): TestApp {
     loginWithStub() {
       return Promise.reject(new Error("loginWithStub is not available on a connected stage: use as(user), which logs in through mock-login"));
     },
+    grantRole() {
+      return Promise.reject(new Error("grantRole is not available on a connected stage: use the admins command (npm run admins -- grant <email> ...)"));
+    },
+    revokeRole() {
+      return Promise.reject(new Error("revokeRole is not available on a connected stage: use the admins command (npm run admins -- revoke <email> ...)"));
+    },
     async dispose() {
       if (disposed) return;
       disposed = true;

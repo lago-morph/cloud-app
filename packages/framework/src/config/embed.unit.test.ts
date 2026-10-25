@@ -10,7 +10,7 @@ const resolved = resolveConfig({
   declaration: { title: configString(), tags: configStringList({ default: [] }) },
   secrets: ["apiKey"],
   file: "config/cloudflare/test.json",
-  config: { values: { title: 'Line "one"\n</script>\u2028' }, framework: { admins: ["u1"], users: [] } },
+  config: { values: { title: 'Line "one"\n</script>\u2028' }, framework: {} },
 });
 
 async function load(source: string): Promise<unknown> {

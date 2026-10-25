@@ -24,9 +24,6 @@ export interface ResolvedConfig {
   readonly deployment: Deployment;
   /** Every declared key with its value for this deployment. */
   readonly values: Readonly<Record<string, ConfigValue>>;
-  readonly admins: readonly string[];
-  /** Present exactly when `framework.users` is in the values file. */
-  readonly users?: readonly string[];
   /** Present exactly when `framework.email` is in the values file (MAIL: the sender's display name). */
   readonly email?: { readonly senderName?: string };
   readonly secrets: readonly ResolvedSecret[];
@@ -81,12 +78,10 @@ export function resolveConfig(input: ResolveInput): ResolvedConfig {
   if (problems.length > 0) {
     throw new FrameworkError("CORE.MISCONFIGURED", `configuration for stage "${input.deployment.stage}" from ${input.file} is invalid:\n- ${problems.join("\n- ")}`);
   }
-  const { admins, users, email } = input.config.framework;
+  const { email } = input.config.framework;
   return Object.freeze({
     deployment: input.deployment,
     values: Object.freeze(values),
-    admins: Object.freeze([...admins]),
-    ...(users === undefined ? {} : { users: Object.freeze([...users]) }),
     ...(email === undefined ? {} : { email: Object.freeze(email.senderName === undefined ? {} : { senderName: email.senderName }) }),
     secrets: Object.freeze(
       input.secrets.map((name) => Object.freeze({ name, location: secretLocation(input.deployment.target, name) })),

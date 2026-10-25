@@ -10,9 +10,9 @@
  * - `sendOnSignIn` is off (P8): a refused sign-in sends nothing.
  * - BA's logger never writes BA's message text (P10): only a fixed reason.
  *
- * Nothing here is admin-related: admins stay in configuration (SYS-REQ-018), and BA's admin
- * plugin is not used. A later `role` field on the user model would be one `user.additionalFields`
- * entry here plus a column in `tables.ts`.
+ * The user model's `role` column (PWD-REQ-008, DEC-0521) is declared as an additional field with
+ * `input: false`, so BA's sign-up and update paths never take it from a request; BA's admin
+ * plugin is not used, and nothing here writes a default role.
  */
 import { betterAuth } from "better-auth/minimal";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -110,7 +110,10 @@ export function createPasswordAuth(settings: PasswordAuthSettings): PasswordAuth
       log: () => settings.log.write("AUTH", "error", LIBRARY_ERROR_MESSAGE),
     },
     database: drizzleAdapter(settings.database.db as never, { provider, schema: authSchema(settings.database.dialect) }),
-    user: { modelName: AUTH_MODEL_NAMES.user },
+    user: {
+      modelName: AUTH_MODEL_NAMES.user,
+      additionalFields: { role: { type: "string", required: false, input: false } },
+    },
     account: { modelName: AUTH_MODEL_NAMES.account },
     session: { modelName: AUTH_MODEL_NAMES.session },
     verification: { modelName: AUTH_MODEL_NAMES.verification },

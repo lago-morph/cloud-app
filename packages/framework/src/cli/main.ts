@@ -32,6 +32,8 @@ const deployBinding: Command = lazy(async () => (await import("./commands/deploy
 const removeBinding: Command = lazy(async () => (await import("./commands/remove.js")).removeBinding());
 const setupAccountBinding: Command = lazy(async () => (await import("./commands/setup-account.js")).setupAccountBinding());
 const certifyAuthBinding: Command = lazy(async () => (await import("./commands/certify-auth.js")).certifyAuthBinding());
+/** `admins` (CLI-REQ-005): the local D1, or the D1 HTTP API on Cloudflare. */
+const adminsBinding: Command = lazy(async () => (await import("./commands/admins.js")).adminsBinding());
 
 const COMMANDS: Readonly<Record<string, Entry>> = {
   dev: { summary: "run the app locally on http://localhost:<port>", run: devBinding },
@@ -46,6 +48,7 @@ const COMMANDS: Readonly<Record<string, Entry>> = {
   "certify-auth": { summary: "certify-auth --target <t> --stage <s>: guided login-provider certification", run: certifyAuthBinding },
   "reset-local": { summary: "clear local state (local D1, R2, .logs/ and .mail/)", run: resetLocalBinding },
   mail: { summary: "mail last --to <address> [--target <t>]: print the latest framework email sent to an address", run: mailBinding },
+  admins: { summary: "admins grant <email> | revoke <email> | list --target <t> --stage <s> [--confirm-production <s>]: the admin role", run: adminsBinding },
 };
 
 export const COMMAND_NAMES: readonly string[] = Object.keys(COMMANDS);

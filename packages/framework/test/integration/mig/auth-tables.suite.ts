@@ -44,6 +44,8 @@ export function defineAuthTablesSuite(dialect: Dialect): void {
       expect(record).toEqual([
         { id: "framework/0000_framework_tables", dialect },
         { id: "framework/0001_auth_tables", dialect },
+        { id: "framework/0002_framework_test_mail", dialect },
+        { id: "framework/0003_auth_role", dialect },
       ]);
       const counts = await run(testApp, async (v) => {
         const db = v.sql as unknown as AnyDb;
@@ -74,7 +76,7 @@ export function defineAuthTablesSuite(dialect: Dialect): void {
         await db.delete(t.user).where(eq(t.user.id, "u1"));
         return { read, afterDelete: { account: (await db.select().from(t.account)).length, session: (await db.select().from(t.session)).length } };
       });
-      expect(rows.read.user).toEqual([{ id: "u1", name: "Eve", email: "eve@example.test", emailVerified: false, image: null, createdAt: at, updatedAt: at }]);
+      expect(rows.read.user).toEqual([{ id: "u1", name: "Eve", email: "eve@example.test", emailVerified: false, image: null, createdAt: at, updatedAt: at, role: null }]);
       expect(rows.read.session[0]).toMatchObject({ token: "tok", userId: "u1", expiresAt: at });
       expect(rows.read.verification[0]).toMatchObject({ identifier: "i", expiresAt: at });
       expect(rows.read.rateLimit[0]).toMatchObject({ key: "127.0.0.1|/sign-in/email", count: 1, lastRequest: at.getTime() });

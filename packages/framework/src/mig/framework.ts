@@ -15,6 +15,8 @@
  *   test-stage mail capture (mail.md §2): written only by the `test-*` stages' capture sender,
  *   so it stays empty on production stages. `sent_at` is an ISO 8601 UTC time (sortable as text).
  *   Added by the third migration, `0002_framework_test_mail`.
+ * - `__framework_auth_user.role` — the account's comma-separated role list, NULL when none
+ *   (PWD-REQ-008, DEC-0521). Added by the fourth migration, `0003_auth_role`.
  *
  * These are plain Drizzle tables, not `defineTable` tables: their keys are not UUIDs.
  * Workers-compatible; the histories' location (Node only) is `migrations-dir.ts`.

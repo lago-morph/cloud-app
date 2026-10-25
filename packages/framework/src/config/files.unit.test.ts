@@ -33,7 +33,7 @@ describe("per-stage values file selection (CFG-REQ-002, DEC-0081)", () => {
 
   it("reads and validates the selected file", () => {
     const read = readStageConfig(deployment("cloudflare", "test-x"), repo({ "config/cloudflare/test.json": EMPTY }));
-    expect(read).toEqual({ file: "config/cloudflare/test.json", config: { values: {}, framework: { admins: [] } } });
+    expect(read).toEqual({ file: "config/cloudflare/test.json", config: { values: {}, framework: {} } });
   });
 
   it(
@@ -70,11 +70,10 @@ describe("resolveStageConfig: the build's one call", () => {
 
   it("selects, validates and resolves the deployment's values file", () => {
     const resolved = resolveStageConfig(deployment("cloudflare", "test-x"), app, repo({
-      "config/cloudflare/test.json": JSON.stringify({ values: { title: "T" }, framework: { admins: ["u1"] } }),
+      "config/cloudflare/test.json": JSON.stringify({ values: { title: "T" }, framework: {} }),
       "config/cloudflare/prod.json": JSON.stringify({ values: { title: "P" }, framework: {} }),
     }));
     expect(resolved.values).toEqual({ title: "T" });
-    expect(resolved.admins).toEqual(["u1"]);
     expect(resolved.secrets).toEqual([{ name: "apiKey", location: "SECRET_API_KEY" }]);
   });
 

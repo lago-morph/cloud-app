@@ -67,6 +67,8 @@ function buildSqlite() {
       email: sqliteText("email").notNull(),
       emailVerified: sqliteInteger("email_verified", { mode: "boolean" }).notNull().default(false),
       image: sqliteText("image"),
+      /** Role names separated by commas, NULL when none (PWD-REQ-008); added by `0003_auth_role`. */
+      role: sqliteText("role"),
       createdAt: ts("created_at").notNull(),
       updatedAt: ts("updated_at").notNull(),
     },
@@ -147,6 +149,8 @@ function buildPostgres() {
       email: pgText("email").notNull(),
       emailVerified: pgBoolean("email_verified").notNull().default(false),
       image: pgText("image"),
+      /** Role names separated by commas, NULL when none (PWD-REQ-008); added by `0003_auth_role`. */
+      role: pgText("role"),
       createdAt: ts("created_at").notNull(),
       updatedAt: ts("updated_at").notNull(),
     },

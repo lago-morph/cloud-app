@@ -123,10 +123,7 @@ export function assembleStage<C extends ConfigDeclaration, S extends string>(def
   const auth = createAuthParts({
     deployment,
     publicOrigin: options.publicOrigin,
-    framework: {
-      admins: resolved.admins,
-      ...(resolved.users === undefined ? {} : { users: resolved.users }),
-    },
+    framework: resolved.email === undefined ? {} : { email: resolved.email },
     secret: (c, name) => frameworkSecrets(c.env, c.var.log).get(name as FrameworkSecretName),
     ...(options.provider === undefined ? {} : { provider: options.provider }),
     ...(options.credentialProvider === undefined ? {} : { credentialProvider: options.credentialProvider }),

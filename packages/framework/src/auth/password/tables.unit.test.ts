@@ -3,7 +3,7 @@
  * plan-auth.md item I-A), on the real local databases: local D1 through Wrangler's
  * getPlatformProxy (DEC-0105) and the PGlite harness with C collation (DEC-0106).
  *
- * - the framework history (0000, 0001_auth_tables, then MAIL's 0002_framework_test_mail) applies on both, recorded per file;
+ * - the framework history (0000, 0001_auth_tables, then MAIL's 0002_framework_test_mail and 0003_auth_role) applies on both, recorded per file;
  * - after each framework migration pair the two dialects have the same logical schema, by the
  *   migration checker's own introspection and `compareDialects` (the `migration-dialects`
  *   check), and each migration is a supported, data-free change;
@@ -33,11 +33,11 @@ const SECRET = "auth-tables-unit-test-secret-0123456789abcdef";
 const PASSWORD = "correct horse battery";
 
 describe("the framework history holds Better Auth's tables", () => {
-  it("is 0000_framework_tables then 0001_auth_tables in both dialects, paired, with checksums", () => {
+  it("is 0000_framework_tables, 0001_auth_tables, 0002_framework_test_mail, 0003_auth_role in both dialects, paired, with checksums", () => {
     const sums = JSON.parse(readFileSync(`${FRAMEWORK_MIGRATIONS_DIR}checksums.json`, "utf8")) as Record<string, string>;
     for (const dialect of ["sqlite", "postgres"] as const) {
       const history = readHistory(FRAMEWORK_MIGRATIONS_DIR, dialect, "framework");
-      expect(history.map((m) => m.id)).toEqual(["framework/0000_framework_tables", "framework/0001_auth_tables", "framework/0002_framework_test_mail"]);
+      expect(history.map((m) => m.id)).toEqual(["framework/0000_framework_tables", "framework/0001_auth_tables", "framework/0002_framework_test_mail", "framework/0003_auth_role"]);
       for (const table of AUTH_TABLES) expect(history[1]?.text).toContain(table);
       expect(sums[`${dialect}/0001_auth_tables.sql`]).toBe(history[1]?.checksum);
     }
@@ -76,7 +76,7 @@ describe("the framework history holds Better Auth's tables", () => {
       expect(Object.keys(last).sort()).toEqual(["__framework_kv", "__framework_migrations", "__framework_test_mail", ...AUTH_TABLES].sort());
       const shape = (t: TableSchema | undefined) => ({ columns: Object.keys(t?.columns ?? {}), indexes: t?.indexes, uniques: t?.uniques, foreignKeys: t?.foreignKeys });
       const cascade = ["user_id -> __framework_auth_user(id) on update no action on delete cascade"];
-      expect(shape(last[AUTH_MODEL_NAMES.user])).toEqual({ columns: ["id", "name", "email", "email_verified", "image", "created_at", "updated_at"], indexes: [], uniques: ["email"], foreignKeys: [] });
+      expect(shape(last[AUTH_MODEL_NAMES.user])).toEqual({ columns: ["id", "name", "email", "email_verified", "image", "created_at", "updated_at", "role"], indexes: [], uniques: ["email"], foreignKeys: [] });
       expect(shape(last[AUTH_MODEL_NAMES.session])).toEqual({
         columns: ["id", "expires_at", "token", "created_at", "updated_at", "ip_address", "user_agent", "user_id"],
         indexes: ["user_id"],
@@ -178,7 +178,7 @@ describe.each([
       framework: readHistory(FRAMEWORK_MIGRATIONS_DIR, h.dialect, "framework"),
       app: [],
     });
-    expect(applied.applied).toEqual(["framework/0000_framework_tables", "framework/0001_auth_tables", "framework/0002_framework_test_mail"]);
+    expect(applied.applied).toEqual(["framework/0000_framework_tables", "framework/0001_auth_tables", "framework/0002_framework_test_mail", "framework/0003_auth_role"]);
     auth = minimalAuth(h);
   }, 60_000);
   afterAll(async () => {
