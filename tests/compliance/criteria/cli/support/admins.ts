@@ -103,6 +103,25 @@ export async function emailDomain(): Promise<string> {
   return v.emailDomain;
 }
 
+/**
+ * The `role` column (PWD-REQ-008) of the account with `email` in a Cloudflare stage's current
+ * database, read with one SELECT through the D1 HTTP API. The stage must have exactly one
+ * database (MIG §2: two mean a schema-changing deploy is in progress).
+ */
+export async function cloudRole(stage: string, email: string): Promise<unknown> {
+  const { accountId, cfOk } = await import("../../_cloud/api.js");
+  const { stageDatabases } = await import("../../_cloud/stage-resources.js");
+  const dbs = await stageDatabases({ app: "reference", stage });
+  if (dbs.length !== 1) throw new Error(`stage ${stage} has ${String(dbs.length)} databases, not one`);
+  const result = await cfOk<readonly { readonly results?: readonly Record<string, unknown>[] }[]>("reading the account's role", "POST", `/accounts/${accountId()}/d1/database/${dbs[0]?.uuid ?? ""}/query`, {
+    sql: "SELECT role FROM __framework_auth_user WHERE lower(email) = lower(?)",
+    params: [email],
+  });
+  const rows = result[0]?.results ?? [];
+  if (rows.length !== 1) throw new Error(`expected one account row for the test address on ${stage}, found ${String(rows.length)}`);
+  return rows[0]?.["role"];
+}
+
 /** Needles found in a command's output, by label. */
 export function leaks(output: string, needles: Readonly<Record<string, string | undefined>>): string[] {
   return Object.entries(needles)

@@ -4,9 +4,8 @@
  * authentication mock lets a test choose any identity: access level, user ID used as given (not
  * derived), and display name. The mock is reached only through mock-login: `/api/auth/login`
  * goes to the sign-in page (DEC-0516; contract.test.ts). The "404 on a production deployment"
- * part needs the redeployed `prodcheck` stage (not-run until the password provider runs on a
- * cloud stage: tests/compliance/harness/expected.ts, DEC-0509); "production bundles contain no
- * mock module" is a build inspection, not checked here.
+ * part, and the deployed bundle without the mock module, are checked on the redeployed
+ * `prodcheck` stage in compl/prodcheck.test.ts.
  */
 import { describe, expect, it } from "vitest";
 import { client, tag } from "../../harness/index.js";

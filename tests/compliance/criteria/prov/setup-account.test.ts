@@ -1,7 +1,9 @@
 /**
- * PROV-AC-004 (provisioning.md §4; milestone): running `setup-account` twice changes nothing
- * the second time, including in the state home. Deploying without it fails with a clear
- * message.
+ * PROV-AC-004 (provisioning.md §4; milestone): "Running `setup-account` twice changes nothing
+ * the second time, including in the state home, the account settings record and the email setup.
+ * Deploying without it fails with a clear message. With a token lacking one email permission of
+ * DEC-0515, `setup-account` and a production stage's `deploy` name that permission and change
+ * nothing."
  *
  * Idempotence: `setup-account --target cloudflare` runs once (creating or confirming the shared
  * resources), then the account's shared state is snapshotted, `setup-account` runs again, and
@@ -19,6 +21,14 @@
  * It then runs before the idempotence test (file order). The deploy must exit non-zero, name
  * `setup-account` and the missing shared resource, and create nothing.
  *
+ * The email setup (plan-auth.md item T2) is the state `_cloud/email.ts` reads: the domain's
+ * sending entry, Email Routing on `t.<emailDomain>` and its rules and DNS records, the sink Worker
+ * and bucket, and the account settings record. It joins the snapshot. The token clause needs an
+ * operator-supplied token that lacks exactly one of DEC-0515's email permissions
+ * (`COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_EMAIL_PERMISSION`); without one the clause is `blocked`.
+ * The production stage is a new name in a scratch copy, with prodcheck's values copied as its
+ * committed values file; a deploy that wrongly gets past the preflight is removed again.
+ *
  * Cloud usage (estimate, D-T.md): no D1 at all (setup-account creates R2 buckets only; the
  * stopped deploy creates nothing). ≈ 20 Cloudflare API requests (two setup-account runs'
  * own requests not counted), plus the state-home and log-bucket listings through R2's S3
@@ -29,11 +39,17 @@ import { newTestStage, prerequisiteMissing, tag, target } from "../../harness/in
 import { accountId, cfApi } from "../_cloud/api.js";
 import { LOG_BUCKET, listObjects, STATE_BUCKET } from "../_cloud/r2.js";
 import { listStageResources, sharedResources } from "../_cloud/stage-resources.js";
+import { emailState, zoneOf } from "../_cloud/email.js";
+import { emailDomain } from "../cli/support/admins.js";
 import { scratchCopy } from "../core/support/processes.js";
-import { isLocal, REFERENCE_DIR } from "../core/support/repo.js";
+import { isLocal, REFERENCE_DIR, uniqueValue } from "../core/support/repo.js";
 import { runCli, tail } from "./support/stage.js";
 
 const FRESH_ENV = "COMPLIANCE_CLOUDFLARE_FRESH_ACCOUNT";
+/** An operator-supplied Cloudflare API token lacking exactly one email permission of DEC-0515. */
+const NO_EMAIL_PERMISSION_ENV = "COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_EMAIL_PERMISSION";
+/** DEC-0515's email permissions, as an output naming one of them may write it ("Write" or "Edit"). */
+const EMAIL_PERMISSION = /Email Sending|Email Routing Addresses|Email Routing Rules|DNS (?:Write|Edit)|Zone Settings|Zone Read/i;
 /** A log entry's key (LOG-REQ-004): `<app>/<stage>/<yyyy>/<mm>/<dd>/<file>`. */
 const LOG_ENTRY_KEY = /^[a-z0-9]+\/[a-z0-9-]+\/\d{4}\/\d{2}\/\d{2}\/[^/]+$/;
 
@@ -48,7 +64,9 @@ async function bucketSettings(bucket: string): Promise<unknown> {
 }
 
 async function accountSnapshot(): Promise<unknown> {
+  const domain = await emailDomain();
   return {
+    email: await emailState(await zoneOf(domain), domain),
     shared: await sharedResources(),
     logBucket: await bucketSettings(LOG_BUCKET),
     stateHome: await bucketSettings(STATE_BUCKET),
@@ -80,7 +98,7 @@ if (!isLocal()) {
       }
     }, 15 * 60_000);
 
-    it(tag("PROV-AC-004", "running setup-account twice changes nothing the second time, including in the state home"), async () => {
+    it(tag("PROV-AC-004", "running setup-account twice changes nothing the second time, including in the state home, the account settings record and the email setup"), async () => {
       const t = target().target;
       const copy = await scratchCopy(REFERENCE_DIR, "d-t1-prov004");
       try {
@@ -96,6 +114,35 @@ if (!isLocal()) {
         await copy.remove();
       }
     }, 30 * 60_000);
+
+    it(tag("PROV-AC-004", "with a token lacking one email permission of DEC-0515, setup-account and a production stage's deploy name that permission and change nothing"), async () => {
+      const token = process.env[NO_EMAIL_PERMISSION_ENV];
+      if (token === undefined || token === "") prerequisiteMissing(`needs a Cloudflare API token lacking exactly one email permission of DEC-0515 in ${NO_EMAIL_PERMISSION_ENV}`);
+      const t = target().target;
+      const copy = await scratchCopy(REFERENCE_DIR, "t2-prov004-perm");
+      // A production stage: any name not starting with test- (PROV-REQ-005), with a committed values file of its own.
+      const stage = `p004${uniqueValue("x").slice(0, 10).toLowerCase()}`;
+      try {
+        const before = await accountSnapshot();
+        const setup = await runCli(["setup-account", "--target", t], { cwd: copy.dir, timeoutMs: 10 * 60_000, env: { CLOUDFLARE_API_TOKEN: token } });
+        expect(setup.status, `setup-account with the restricted token must fail:\n${tail(setup.output)}`).not.toBe(0);
+        expect(setup.output, "setup-account names the missing email permission").toMatch(EMAIL_PERMISSION);
+        expect(setup.output.includes(token), "the output does not print the token").toBe(false);
+        expect(await accountSnapshot(), "the account after the refused setup-account").toEqual(before);
+
+        await copy.write(`config/${t}/${stage}.json`, await copy.read(`config/${t}/prodcheck.json`));
+        const deploy = await runCli(["deploy", "--target", t, "--stage", stage], { cwd: copy.dir, timeoutMs: 10 * 60_000, env: { CLOUDFLARE_API_TOKEN: token } });
+        const left = await listStageResources({ target: t, app: "reference", stage });
+        if (left.length > 0) await runCli(["remove", "--target", t, "--stage", stage, "--confirm-production", stage], { cwd: copy.dir, timeoutMs: 20 * 60_000 });
+        expect(deploy.status, `deploy of the production stage with the restricted token must fail:\n${tail(deploy.output)}`).not.toBe(0);
+        expect(deploy.output, "deploy names the missing email permission").toMatch(EMAIL_PERMISSION);
+        expect(deploy.output.includes(token), "the output does not print the token").toBe(false);
+        expect(left, "resources the refused deploy created").toEqual([]);
+        expect(await accountSnapshot(), "the account after the refused deploy").toEqual(before);
+      } finally {
+        await copy.remove();
+      }
+    }, 45 * 60_000);
   });
 } else {
   // Untagged, so never selected as evidence: keeps the file a valid suite on local runs.

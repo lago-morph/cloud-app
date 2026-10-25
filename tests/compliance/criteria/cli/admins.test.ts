@@ -40,6 +40,7 @@ import {
   testAddress,
   testIp,
   type AuthBrowser,
+  withStageSignIns,
 } from "../pwd/support.js";
 import { admins, d1ApiRequests, leaks, recordRequests } from "./support/admins.js";
 
@@ -173,7 +174,8 @@ if (isLocal()) {
   describe("CLI-AC-007 admins on a Cloudflare stage", () => {
     it(
       tag("CLI-AC-007", "on the test stage, after sign-up, verification through the test-mail route and sign-in, admins grant gives admin on the next request and admins revoke gives user again, through the D1 HTTP API; no output holds a password, token or API credential"),
-      async () => {
+      // Its sign-in shares this machine's client IP with the other tests' on the stage (withStageSignIns).
+      () => withStageSignIns(async () => {
         const t = target();
         requireCloudD1(t.target);
         const stage = t.stage ?? "";
@@ -204,8 +206,8 @@ if (isLocal()) {
         }
         const needles = { password: a.password, "verification token": verifyToken, "session cookie": session, "API token": process.env.CLOUDFLARE_API_TOKEN };
         for (const r of outputs) expect(leaks(r.output, needles), `${r.command}: output`).toEqual([]);
-      },
-      900_000,
+      }),
+      45 * 60_000,
     );
 
     it(tag("CLI-AC-007", "for prodcheck, grant, revoke and list without --confirm-production prodcheck, or with another name, exit 2 and send no request to the D1 API"), async () => {

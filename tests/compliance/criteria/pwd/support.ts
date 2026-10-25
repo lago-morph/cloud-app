@@ -24,6 +24,7 @@ import { expect } from "vitest";
 import type { LogEntry, MailMessage, TestApp as ContractTestApp, TestAppOptions as ContractTestAppOptions, TestMail } from "../../../../docs/contracts/ts/testing.js";
 import { client, createClient, target, waitFor, type ComplianceClient } from "../../harness/index.js";
 import { referenceTestApp, type TestAppOptions } from "../core/support/in-process.js";
+import { acquireLock } from "../core/support/processes.js";
 import { DOCS, parameterNumber, REFERENCE_DIR } from "../core/support/repo.js";
 
 export type { LogEntry, MailMessage };
@@ -496,17 +497,44 @@ export async function disposePasswordApps(): Promise<void> {
 
 /** A browser on an in-process app. */
 export function inProcessBrowser(app: PasswordTestApp): AuthBrowser {
+  return testAppBrowser(app, IN_PROCESS_ORIGIN, testAppMail(app.mail));
+}
+
+/**
+ * On a connected test stage (`connectTestStage()`): `TestApp.mail` is the stage's mail capture,
+ * read one address at a time (`all()` throws there, testing.d.ts), so only the latest message.
+ */
+export function connectedStageMail(mail: TestMail): MailReader {
+  return {
+    latest: (address) => mail.lastTo(address),
+    async all(address) {
+      const m = await mail.lastTo(address);
+      return m === undefined ? [] : [m];
+    },
+  };
+}
+
+/**
+ * A browser on the `TestApp` that `connectTestStage()` returns for the run's cloud test stage
+ * (testing.d.ts): requests go through `TestApp.request`, the mail through `TestApp.mail` (the
+ * stage's test-mail route, MAIL-REQ-002). `publicOrigin` is the stage's public origin.
+ */
+export function connectedBrowser(app: PasswordTestApp, publicOrigin: string): AuthBrowser {
+  return testAppBrowser(app, publicOrigin.replace(/\/$/, ""), connectedStageMail(app.mail));
+}
+
+function testAppBrowser(app: PasswordTestApp, publicOrigin: string, mail: MailReader): AuthBrowser {
   const jar = cookieJar();
   const send = async (method: string, path: string, body: Readonly<Record<string, string>> | undefined, options: SendOptions = {}): Promise<Answer> => {
-    if (options.origin === false) throw new Error("in-process requests always carry an Origin (testing.d.ts); send a missing Origin over HTTP");
-    const { headers, payload } = requestHeaders(body, options, IN_PROCESS_ORIGIN, jar.header(), method);
+    if (options.origin === false) throw new Error("TestApp requests always carry an Origin (testing.d.ts); send a missing Origin over HTTP");
+    const { headers, payload } = requestHeaders(body, options, publicOrigin, jar.header(), method);
     const response = await app.request(path, { method, headers, redirect: "manual", ...(payload === undefined ? {} : { body: payload }) });
     jar.remember(response.headers);
     return answerOf(method, path, response.status, response.headers, await response.text());
   };
   return {
-    publicOrigin: IN_PROCESS_ORIGIN,
-    mail: testAppMail(app.mail),
+    publicOrigin,
+    mail,
     post: (path, body, options) => send("POST", path, body, options),
     get: (path, options) => send("GET", path, undefined, options),
     cookies: () => jar.all(),
@@ -574,6 +602,37 @@ export async function me(b: AuthBrowser): Promise<Me> {
   const r = await b.get("/api/auth/me");
   expectAnswer(r, 200);
   return r.json<Me>();
+}
+
+/**
+ * Runs `body`, which signs in on the run's cloud test stage, alone among this run's test
+ * processes. On a cloud stage `CF-Connecting-IP` is set by Cloudflare, not by the client, so
+ * every request of this machine counts against one client IP, and `testIp()` separates nothing
+ * (PWD-REQ-006 counts per IP). A test that signs in there holds this cross-process lock, and keeps
+ * it for PAR-258's window after `body` ends, so that neither a sign-in burst (PWD-AC-008) nor a
+ * test's own sign-ins leave the next holder rate-limited. Locally `body` just runs: the client IP
+ * is the request's `CF-Connecting-IP`.
+ */
+export async function withStageSignIns<T>(body: () => Promise<T>): Promise<T> {
+  const release = await holdStageSignIns();
+  try {
+    return await body();
+  } finally {
+    await release();
+  }
+}
+
+/** `withStageSignIns` for a suite: takes the lock (on a cloud target) and resolves to its release, which first waits out PAR-258's window. */
+export async function holdStageSignIns(): Promise<() => Promise<void>> {
+  if (target().target === "local") return () => Promise.resolve();
+  const unlock = await acquireLock("cloud-test-stage-sign-ins", 45 * 60_000);
+  let released = false;
+  return async () => {
+    if (released) return;
+    released = true;
+    await new Promise((r) => setTimeout(r, (par.signIn().windowS + 5) * 1000));
+    await unlock();
+  };
 }
 
 /** Sign-up, the verification mail, verify: a verified account. Returns the verification mail. */
