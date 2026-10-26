@@ -959,6 +959,55 @@ describe("[COMPL-AC-003] the cloud account at the start and end of a run: D1 pla
     expect(recordOf(h).leftovers).toEqual([]);
   });
 
+  it("a failed plan read, or a stale prototype-compliance-* token that cannot be deleted, does not skip the start sweep of the R2 test tokens", async () => {
+    const api = fakeCfApi();
+    addForeignToken(api, "compliance-r2read-0123456789ab", { expires_on: "2026-10-20T09:00:00Z" });
+    const h = harness({ catalogue: TOKEN_CATALOGUE });
+    const base = withAccount(h, api);
+    const deps: DriverDeps = {
+      ...base,
+      cloudAccount: (t) => {
+        const acc = base.cloudAccount?.(t);
+        return acc === undefined ? undefined : { ...acc, d1Plan: () => Promise.reject(new Error("plan read failed")) };
+      },
+    };
+    const result = await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], deps);
+    expect(result.exitStatus).toBe(1);
+    expect(h.logs.join("\n")).toContain("deleted the R2 test token compliance-r2read-0123456789ab (start of run)");
+    expect(h.logs.join("\n")).toContain("setting up the target failed: plan read failed");
+    expect(api.tokens.size).toBe(0);
+
+    const api2 = fakeCfApi();
+    addForeignToken(api2, "prototype-compliance-old000000000001-no-email", { issued_on: "2026-10-20T03:00:00Z", expires_on: "2026-10-20T09:00:00Z" });
+    addForeignToken(api2, "compliance-r2scoped-0123456789ab", { expires_on: "2026-10-20T09:00:00Z" });
+    api2.failing.add(`DELETE /accounts/${FAKE_ACCOUNT}/tokens/foreign-prototype-compliance-old000000000001-no-email`);
+    const h2 = harness({ catalogue: TOKEN_CATALOGUE });
+    const result2 = await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], withAccount(h2, api2));
+    expect(result2.exitStatus).toBe(1);
+    expect(h2.logs.join("\n")).toContain("deleted the R2 test token compliance-r2scoped-0123456789ab (start of run)");
+    expect([...api2.tokens.values()].map((t) => t.name)).toEqual(["prototype-compliance-old000000000001-no-email"]);
+  });
+
+  it("when setting up the target throws (a failed deploy), the end sweep still deletes this run's R2 test tokens", async () => {
+    const api = fakeCfApi();
+    const h = harness({
+      catalogue: TOKEN_CATALOGUE,
+      cloud: {
+        deploy: () => {
+          // A process of this run (here, during setup) left its unexpired token behind.
+          addForeignToken(api, "compliance-r2read-abcdefghij12345-777777777777", { issued_on: "2026-10-20T09:59:00Z", expires_on: "2026-10-20T10:29:00Z" });
+          return Promise.reject(new Error("deploy failed at step 3"));
+        },
+      },
+    });
+    const result = await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], withAccount(h, api));
+    expect(result.exitStatus).toBe(1);
+    expect(h.logs.join("\n")).toContain("setting up the target failed: deploy failed at step 3");
+    expect(h.logs.join("\n")).toContain("deleted the R2 test token compliance-r2read-abcdefghij12345-777777777777 (end of run)");
+    expect(api.tokens.size).toBe(0);
+    expect(recordOf(h).leftovers).toEqual([]);
+  });
+
   it("an R2 test token that could not be deleted is a leftover", async () => {
     const api = fakeCfApi();
     addForeignToken(api, "compliance-r2read-0123456789ab", { expires_on: "2026-10-20T09:00:00Z" });

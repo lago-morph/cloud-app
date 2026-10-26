@@ -367,20 +367,39 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
     return deleted;
   };
   const prepareAccount = async (acc: CloudAccountOps): Promise<void> => {
-    const reading = await acc.d1Plan();
-    runPlan = reading.plan;
-    const budget = d1Budget(reading.plan);
-    raw["d1-budget.json"] = `${JSON.stringify({ ...reading, budget }, null, 2)}\n`;
-    log(`compliance: ${describeBudget(budget)} (plan from ${reading.source}: ${reading.detail})`);
-    // Only tokens an interrupted earlier run left (compliance.md §4): another run's tokens younger
-    // than PAR-286 may be in use (a nested or concurrent run), and the current run's are its own.
-    const listed = await acc.testTokens();
-    for (const old of staleTestTokens(listed, runId, deps.now())) {
-      await acc.deleteToken(old.id);
-      log(`compliance: deleted the test token ${old.name} an earlier run left`);
+    // Each step in its own try, so a failure in one (the plan read, a stale token's deletion) does
+    // not skip the sweeps after it; the first failure then fails the setup.
+    let failed: { readonly error: unknown } | undefined;
+    try {
+      const reading = await acc.d1Plan();
+      runPlan = reading.plan;
+      const budget = d1Budget(reading.plan);
+      raw["d1-budget.json"] = `${JSON.stringify({ ...reading, budget }, null, 2)}\n`;
+      log(`compliance: ${describeBudget(budget)} (plan from ${reading.source}: ${reading.detail})`);
+    } catch (error) {
+      failed ??= { error };
+    }
+    let listed: readonly ListedTestToken[] | undefined;
+    try {
+      listed = await acc.testTokens();
+      // Only tokens an interrupted earlier run left (compliance.md §4): another run's tokens younger
+      // than PAR-286 may be in use (a nested or concurrent run), and the current run's are its own.
+      for (const old of staleTestTokens(listed, runId, deps.now())) {
+        await acc.deleteToken(old.id);
+        log(`compliance: deleted the test token ${old.name} an earlier run left`);
+      }
+    } catch (error) {
+      failed ??= { error };
     }
     // The hooks' R2 tokens: expired or over an hour old (none of a live process; this run has none yet).
-    await deleteHookTokens(acc, listed, "start");
+    if (listed !== undefined) {
+      try {
+        await deleteHookTokens(acc, listed, "start");
+      } catch (error) {
+        failed ??= { error };
+      }
+    }
+    if (failed !== undefined) throw failed.error;
     for (const spec of RESTRICTED_TOKENS) {
       if (!toRun.includes(spec.criterion) || (process.env[spec.env] ?? "") !== "") continue;
       const token = await acc.createRestrictedToken(spec, runId);

@@ -152,26 +152,32 @@ export async function createRestrictedToken(call: CfCall, accountId: string, spe
   return { id: result.id, name, value: result.value };
 }
 
-/** Whether `name` is a cloud test hook's R2 token (`compliance-r2read-*`, `compliance-r2scoped-*`). */
-export const isHookToken = (name: string): boolean => HOOK_TOKEN_PREFIXES.some((p) => name.startsWith(p));
+/**
+ * The exact names the hooks generate: `<prefix><run ID>-<12 hex>` or, without a run ID (and before
+ * the run ID was added), `<prefix><12 hex>`. Nothing else is a hook token, so an owner's token
+ * with a similar name (`compliance-r2read-notes`) is never listed, deleted or reported.
+ */
+const HOOK_TOKEN_NAME = /^(compliance-r2read-|compliance-r2scoped-)(?:([a-z0-9]{1,64})-)?[0-9a-f]{12}$/;
+const RUN_ID_SHAPE = /^[a-z0-9]{1,64}$/;
+const RANDOM_SHAPE = /^[0-9a-f]{12}$/;
 
-const RUN_ID_SHAPE = /^[A-Za-z0-9]{1,64}$/;
+/** Whether `name` is a cloud test hook's R2 token (`compliance-r2read-*`, `compliance-r2scoped-*`), by its exact shape. */
+export const isHookToken = (name: string): boolean => HOOK_TOKEN_NAME.test(name);
 
 /**
  * A hook token's name: `<prefix><run ID>-<random>`, or `<prefix><random>` when the process runs
- * outside the driver (no usable run ID). `random` is lowercase hex.
+ * outside the driver (no usable run ID: lowercase letters and digits, as `newRunId` makes).
+ * `random` is 12 lowercase hex digits.
  */
 export function hookTokenName(prefix: string, runId: string | undefined, random: string): string {
   if (!HOOK_TOKEN_PREFIXES.includes(prefix)) throw new Error(`not a hook token prefix: ${prefix}`);
+  if (!RANDOM_SHAPE.test(random)) throw new Error(`a hook token name's random part is not 12 lowercase hex digits`);
   return runId !== undefined && RUN_ID_SHAPE.test(runId) ? `${prefix}${runId}-${random}` : `${prefix}${random}`;
 }
 
 /** The run ID in a hook token's name, or undefined (another token, or a name without one). */
 export function hookTokenRunId(name: string): string | undefined {
-  const prefix = HOOK_TOKEN_PREFIXES.find((p) => name.startsWith(p));
-  if (prefix === undefined) return undefined;
-  const m = /^([A-Za-z0-9]{1,64})-[0-9a-f]+$/.exec(name.slice(prefix.length));
-  return m?.[1];
+  return HOOK_TOKEN_NAME.exec(name)?.[2];
 }
 
 /**

@@ -11,6 +11,7 @@ import {
   hookTokenName,
   hookTokenRunId,
   hookTokensToDelete,
+  isHookToken,
   listTestTokens,
   NO_API_TOKENS_WRITE_ENV,
   NO_EMAIL_PERMISSION_ENV,
@@ -103,11 +104,13 @@ describe("restricted test tokens (DEC-0531)", () => {
     const api = fakeCfApi({ perPage: 2 });
     addForeignToken(api, "owner-token");
     addForeignToken(api, "compliance-r2read-abc");
+    addForeignToken(api, "compliance-r2read-notes");
+    addForeignToken(api, "compliance-r2read-0123456789ab");
     addForeignToken(api, "compliance-r2scoped-run1-0123456789ab");
     addForeignToken(api, "xcompliance-r2read-abc");
     const a = await createRestrictedToken(api.call, FAKE_ACCOUNT, spec("no-r2-token"), "r1", NOW);
     const b = await createRestrictedToken(api.call, FAKE_ACCOUNT, spec("no-email"), "r1", NOW);
-    expect((await listTestTokens(api.call, FAKE_ACCOUNT)).map((t) => t.name).sort()).toEqual(["compliance-r2read-abc", "compliance-r2scoped-run1-0123456789ab", "prototype-compliance-r1-no-email", "prototype-compliance-r1-no-r2-token"]);
+    expect((await listTestTokens(api.call, FAKE_ACCOUNT)).map((t) => t.name).sort()).toEqual(["compliance-r2read-0123456789ab", "compliance-r2scoped-run1-0123456789ab", "prototype-compliance-r1-no-email", "prototype-compliance-r1-no-r2-token"]);
     await deleteToken(api.call, FAKE_ACCOUNT, a.id);
     await deleteToken(api.call, FAKE_ACCOUNT, a.id);
     expect((await listTestTokens(api.call, FAKE_ACCOUNT)).map((t) => t.id).filter((id) => !id.startsWith("foreign-"))).toEqual([b.id]);
@@ -134,11 +137,19 @@ describe("the cloud test hooks' R2 tokens (compliance-r2read-*, compliance-r2sco
     expect(hookTokenName("compliance-r2read-", "abcdefghij12345", "0123456789ab")).toBe("compliance-r2read-abcdefghij12345-0123456789ab");
     expect(hookTokenName("compliance-r2scoped-", undefined, "0123456789ab")).toBe("compliance-r2scoped-0123456789ab");
     expect(hookTokenName("compliance-r2scoped-", "bad id!", "0123456789ab")).toBe("compliance-r2scoped-0123456789ab");
-    expect(() => hookTokenName("prototype-compliance-", "r", "00")).toThrow("not a hook token prefix");
+    expect(() => hookTokenName("prototype-compliance-", "r", "0123456789ab")).toThrow("not a hook token prefix");
+    expect(() => hookTokenName("compliance-r2read-", "r", "notes")).toThrow("not 12 lowercase hex digits");
     expect(hookTokenRunId("compliance-r2read-abcdefghij12345-0123456789ab")).toBe("abcdefghij12345");
     expect(hookTokenRunId("compliance-r2scoped-abcdefghij12345-0123456789ab")).toBe("abcdefghij12345");
     expect(hookTokenRunId("compliance-r2read-0123456789ab")).toBeUndefined();
     expect(hookTokenRunId("prototype-compliance-abcdefghij12345-no-email")).toBeUndefined();
+  });
+
+  it("recognises only the exact names the hooks generate, so an owner's token with a similar name is never touched", () => {
+    for (const name of ["compliance-r2read-0123456789ab", "compliance-r2scoped-0123456789ab", "compliance-r2read-abcdefghij12345-0123456789ab", "compliance-r2scoped-a-0123456789ab"]) expect(isHookToken(name), name).toBe(true);
+    for (const name of ["compliance-r2read-notes", "compliance-r2read-abc", "compliance-r2read-", "compliance-r2read-0123456789abc", "compliance-r2read-0123456789AB", "compliance-r2read-RUN-0123456789ab", "compliance-r2read-run-0123456789ab-x", "compliance-r2read-a-b-0123456789ab", "xcompliance-r2read-0123456789ab", "compliance-r2scoped-my-notes"]) expect(isHookToken(name), name).toBe(false);
+    const expired = { expiresOn: "2026-10-25T09:00:00Z", issuedOn: "2026-10-25T08:00:00Z" };
+    expect(hookTokensToDelete([{ id: "1", name: "compliance-r2read-notes", ...expired }, { id: "2", name: "compliance-r2scoped-run-notes", ...expired }], new Date("2026-10-25T10:00:00Z"), "run")).toEqual([]);
   });
 
   it("deletes those expired or over an hour old, and at the end of a run every one of that run; never another live one", () => {
