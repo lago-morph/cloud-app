@@ -1,0 +1,7 @@
+{
+  // The live wizard pass's guarded API layer (Node tooling lib set, as the compliance harness).
+  // Checked with `npx tsc -p ai/implementation/spikes/live-wizard/tsconfig.json`.
+  "extends": "../../../../tsconfig.node.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["./**/*.ts"]
+}

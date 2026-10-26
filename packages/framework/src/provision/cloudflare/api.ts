@@ -21,6 +21,49 @@ export type ApiReply = Awaited<ReturnType<CloudflareApi>>;
 
 export const API_BASE = "https://api.cloudflare.com/client/v4";
 
+const BASE_PATH = new URL(API_BASE).pathname;
+
+/**
+ * The path a request with `path` is sent to, for a guard to judge (DEC-0613): `API_BASE + path`
+ * through the URL parser `fetch` uses (dot segments resolved, `\` read as `/`, tabs and newlines
+ * dropped, query and fragment cut), then each segment percent-decoded (again while it changes,
+ * so a doubly encoded name is read too), any `/` or `\` the decoding reveals split, and empty and
+ * dot segments resolved once more. Relative to the API base when it is under it, else the whole
+ * path. Undefined when the URL cannot be parsed. Never shorter than what Cloudflare could route,
+ * so a guard that matches it errs toward refusing.
+ */
+export function sentPath(path: string): string | undefined {
+  let pathname: string;
+  try {
+    pathname = new URL(`${API_BASE}${path}`).pathname;
+  } catch {
+    return undefined;
+  }
+  const segments: string[] = [];
+  for (const raw of pathname.split("/")) {
+    let segment = raw;
+    for (let i = 0; i < 8; i++) {
+      let decoded: string;
+      try {
+        decoded = decodeURIComponent(segment);
+      } catch {
+        break;
+      }
+      if (decoded === segment) break;
+      segment = decoded;
+    }
+    for (const part of segment.split(/[/\\]/)) {
+      if (part === "" || part === ".") continue;
+      if (part === "..") segments.pop();
+      else segments.push(part);
+    }
+  }
+  const full = `/${segments.join("/")}`;
+  const lower = full.toLowerCase();
+  if (lower === BASE_PATH) return "/";
+  return lower.startsWith(`${BASE_PATH}/`) ? full.slice(BASE_PATH.length) : full;
+}
+
 export interface CloudflareApiOptions {
   /** The value of `CLOUDFLARE_API_TOKEN`. */
   readonly token: string;

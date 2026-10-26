@@ -18,11 +18,12 @@
  *
  * Every write leaves the file readable and writable by its owner only (mode 600, PAR-341), and
  * replaces it atomically: a temporary file at that mode in the same directory, renamed over it. A
- * `.env.cloudflare` that is a symbolic link is written through to its target (DEC-0587).
+ * `.env.cloudflare` that is a symbolic link is written through to its target (DEC-0587), also a
+ * dangling one, whose target is then created (DEC-0614).
  */
 import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync, lstatSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { chmodSync, existsSync, lstatSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import type { Environment } from "./environment.js";
 
 /** The file's name, in the project root (PAR-340). */
@@ -178,6 +179,26 @@ export function cloudflareEnvironment(projectDir: string, env: Environment): Env
 }
 
 /**
+ * The file a path's symbolic links lead to, followed one link at a time (as `lstat` sees them), so a
+ * dangling link names the target it would create (DEC-0614); the path itself when it is no link.
+ */
+function linkTarget(path: string): string {
+  let current = path;
+  for (let hops = 0; hops < 40; hops++) {
+    let isLink: boolean;
+    try {
+      isLink = lstatSync(current).isSymbolicLink();
+    } catch {
+      return current;
+    }
+    if (!isLink) return current;
+    // A relative link is read from the folder it is really in.
+    current = resolve(realpathSync(dirname(current)), readlinkSync(current));
+  }
+  throw new Error(`${ENV_CLOUDFLARE_FILE} is a chain of more than 40 symbolic links; setup did not write it`);
+}
+
+/**
  * Replaces the file atomically at mode 600: the content goes to a new temporary file at that mode
  * in the same directory, which is renamed over the file, so a reader sees the old or the new file
  * whole, and a file that had a wider mode never holds the new content.
@@ -185,8 +206,7 @@ export function cloudflareEnvironment(projectDir: string, env: Environment): Env
 function writeFile(projectDir: string, lines: readonly string[]): void {
   // A symbolic link (a file shared between projects) is written through to its target, which keeps
   // being the file; the temporary file is made next to the target, so the rename stays atomic.
-  const link = filePath(projectDir);
-  const path = existsSync(link) && lstatSync(link).isSymbolicLink() ? realpathSync(link) : link;
+  const path = linkTarget(filePath(projectDir));
   const temporary = join(dirname(path), `${basename(path)}.${randomBytes(6).toString("hex")}.tmp`);
   try {
     writeFileSync(temporary, lines.length === 0 ? "" : `${lines.join("\n")}\n`, { encoding: "utf8", mode: ENV_CLOUDFLARE_MODE, flag: "wx" });

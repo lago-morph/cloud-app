@@ -227,6 +227,26 @@ describe(".env.cloudflare and the environment (plan-setup-wizard §4.2; DEC-0570
     expect(readdirSync(shared)).toEqual(["cloudflare.env"]);
   });
 
+  it.runIf(isPosix)("a .env.cloudflare that is a dangling symbolic link is written through: the target is created at mode 600 and the link stays a link (DEC-0614)", () => {
+    const shared = join(dir, "shared");
+    mkdirSync(shared);
+    const target = join(shared, "cloudflare.env");
+    // A relative link, through a second link, to a file not made yet.
+    symlinkSync("hop", file());
+    symlinkSync(join("shared", "cloudflare.env"), join(dir, "hop"));
+    expect(writeTemplateIfAbsent(dir)).toBe(true);
+    expect(lstatSync(file()).isSymbolicLink()).toBe(true);
+    expect(lstatSync(join(dir, "hop")).isSymbolicLink()).toBe(true);
+    expect(readFileSync(target, "utf8")).toBe(ENV_CLOUDFLARE_TEMPLATE);
+    expect(statSync(target).mode & 0o777).toBe(0o600);
+    expect(readdirSync(shared)).toEqual(["cloudflare.env"]);
+    rmSync(target);
+    expect(fillInSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "example.test" })).toEqual(["CLOUDFLARE_EMAIL_DOMAIN"]);
+    expect(lstatSync(file()).isSymbolicLink()).toBe(true);
+    expect(readFileSync(target, "utf8")).toContain("CLOUDFLARE_EMAIL_DOMAIN=example.test\n");
+    expect(statSync(target).mode & 0o777).toBe(0o600);
+  });
+
   it("comments out a bootstrap line the parser cannot read, so no value stays in the file", () => {
     write(`CLOUDFLARE_BOOTSTRAP_TOKEN="${FILE_TOKEN}\nexport CLOUDFLARE_BOOTSTRAP_TOKEN = ${FILE_TOKEN} ${FILE_TOKEN}\nCLOUDFLARE_API_TOKEN=everyday\n`);
     expect(commentOutBootstrap(dir)).toBe(true);
