@@ -30,6 +30,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Playwright browser (used by the template and skill browser tests)
+        run: npx playwright install --with-deps chromium
+
       - name: Verify (build, typecheck, lint, unit tests, template and reference app verify)
         run: npm run verify
 

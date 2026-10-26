@@ -33,6 +33,8 @@ jobs:
         run: node scripts/release-check.mjs "$GITHUB_REF_NAME"
 
       - run: npm ci
+      - name: Playwright browser (used by the template and skill browser tests)
+        run: npx playwright install --with-deps chromium
       - run: npm run verify
       - run: npx vitest run --config vitest.integration.config.ts tests/skill packages/create-prototype-app
 
