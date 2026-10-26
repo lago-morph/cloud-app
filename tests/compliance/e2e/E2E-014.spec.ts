@@ -24,7 +24,7 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CLOUD_WAITS, client, createClient, REFERENCE_APP, tag, target, waitFor } from "../harness/index.js";
+import { CLOUD_WAITS, client, createClient, REFERENCE_APP, tag, target, timed, waitFor } from "../harness/index.js";
 import { expect, test } from "../harness/playwright.js";
 import { crawlAssets, filesWithValue, repositoryFiles } from "./support/assets.js";
 import { copyApp, randomSuffix, removeDir, setSecret, setSecretThenDeploy } from "./support/apps.js";
@@ -45,7 +45,8 @@ function freshSecret(): string {
 }
 
 /** Exercises the routes that read the secret and fail with it in their error message. */
-async function exerciseSecret(origin: string, value: string): Promise<void> {
+/** Reads the secret's digest, then calls the two throwing routes; resolves to the server-clock time (ms) the first throwing request may have started. */
+async function exerciseSecret(origin: string, value: string): Promise<number> {
   const api = createClient({ baseUrl: origin });
   const digest = await waitFor(
     async () => {
@@ -55,8 +56,10 @@ async function exerciseSecret(origin: string, value: string): Promise<void> {
     { what: "the stage to report the new secret's digest", timeoutMs: CLOUD_WAITS.routeToggleMs, intervalMs: 1000 },
   );
   expect(digest.status).toBe(200);
-  api.expectError(await api.get("/api/ref/throw-secret"), 500, "CORE.INTERNAL");
+  const thrown = await timed(() => api.get("/api/ref/throw-secret"));
+  api.expectError(thrown.response, 500, "CORE.INTERNAL");
   api.expectError(await api.get("/api/ref/throw-secret-app"), 409, "HTTP.CONFLICT");
+  return thrown.window.from.getTime();
 }
 
 function report(kind: string, places: readonly string[]): string {
@@ -81,7 +84,8 @@ if (target().target !== "local") {
 
     // Set the secret with the CLI, then deploy (after the D1 stop, DEC-0317: a deploy uses D1).
     const deployed = await setSecretThenDeploy(REFERENCE_DIR, t.target, stage, "apiKey", value);
-    await exerciseSecret(deployed.origin, value);
+    // On the server's clock (the response's Date header), not this machine's: entry times are the target's.
+    const thrownFrom = await exerciseSecret(deployed.origin, value);
 
     const repo = filesWithValue(repositoryFiles(REPO_ROOT), value, REPO_ROOT);
     expect(repo.length === 0, report("the repository", repo)).toBe(true);
@@ -93,12 +97,12 @@ if (target().target !== "local") {
     expect(inAssets.length === 0, report("the deployed browser assets", inAssets)).toBe(true);
 
     // The logs: the stage's entries of the day, after the throwing routes' entries have landed.
-    const days = [...new Set([utcDay(from), utcDay(new Date())])];
+    const days = [...new Set([utcDay(from), utcDay(new Date(thrownFrom)), utcDay(new Date())])];
     const entries = await waitFor(
       async () => {
         const all = [];
         for (const day of days) all.push(...(await cloudLogEntries(t.target, REFERENCE_APP, stage, day)));
-        return all.some((e) => /-error-/.test(e.key) && Date.parse((JSON.parse(e.body) as { time: string }).time) >= from.getTime() - 60_000) ? all : undefined;
+        return all.some((e) => /-error-/.test(e.key) && Date.parse((JSON.parse(e.body) as { time: string }).time) >= thrownFrom) ? all : undefined;
       },
       { what: "the stage's error entries in the shared log bucket", timeoutMs: CLOUD_WAITS.requestMs, intervalMs: 5_000 },
     );

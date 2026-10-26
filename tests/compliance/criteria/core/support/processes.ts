@@ -9,9 +9,11 @@
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { cpSync, existsSync, readFileSync } from "node:fs";
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ENV } from "../../../harness/env.js";
+import { acquireDirLock } from "../../../harness/lock.js";
 import { BIN, FRAMEWORK_DIR, PACKAGE_NAME, REPO_ROOT } from "./repo.js";
 
 export interface CommandResult {
@@ -191,44 +193,15 @@ export function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function isAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /**
- * A cross-process lock (a directory holding the owner's pid) under the OS temp directory.
- * Vitest runs files in parallel processes; scratch `dev` sessions and further cloud stages are
- * serialised through it so a run holds at most one of each at a time (plan "Cloud usage limits":
- * at most two D1 databases at once).
+ * A cross-process lock under the OS temp directory (harness/lock.ts: owner pid, start time and
+ * run id; atomic creation; stale-lock takeover by rename). Vitest runs files in parallel
+ * processes; scratch `dev` sessions and further cloud stages are serialised through it so a run
+ * holds at most one of each at a time (plan "Cloud usage limits": at most two D1 databases at
+ * once).
  */
-export async function acquireLock(name: string, timeoutMs: number): Promise<() => Promise<void>> {
-  const path = join(tmpdir(), `c-t1-${name}.lock`);
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    try {
-      await mkdir(path);
-      await writeFile(join(path, "pid"), String(process.pid));
-      return () => rm(path, { recursive: true, force: true });
-    } catch {
-      let owner = Number.NaN;
-      try {
-        owner = Number(readFileSync(join(path, "pid"), "utf8"));
-      } catch {
-        // being created
-      }
-      if (Number.isInteger(owner) && owner > 0 && !isAlive(owner)) {
-        await rm(path, { recursive: true, force: true });
-        continue;
-      }
-      if (Date.now() > deadline) throw new Error(`timed out waiting for the ${name} lock`);
-      await delay(500);
-    }
-  }
+export function acquireLock(name: string, timeoutMs: number): Promise<() => Promise<void>> {
+  return acquireDirLock(name, { dir: tmpdir(), runId: process.env[ENV.runId] ?? null, now: () => Date.now(), sleep: delay }, timeoutMs);
 }
 
 function killGroup(child: ChildProcess, signal: NodeJS.Signals): void {

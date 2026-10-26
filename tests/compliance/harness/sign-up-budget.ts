@@ -18,9 +18,11 @@
  * Everything here takes its clock, sleep and directory from `BudgetDeps`, so the unit tests run
  * offline with fakes.
  */
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ENV } from "./env.js";
+import { acquireDirLock } from "./lock.js";
 
 export interface RateLimit {
   readonly max: number;
@@ -34,6 +36,8 @@ export interface BudgetDeps {
   sleep(ms: number): Promise<void>;
   /** Whether a lock owner's process still runs (default: `process.kill(pid, 0)`). */
   isAlive?(pid: number): boolean;
+  /** A lock owner's process start time (default: lock.ts `processStartTime`). */
+  startTime?(pid: number): string | null;
   /** Told when a sign-up waits for the budget. */
   log?(line: string): void;
 }
@@ -44,19 +48,8 @@ export const SIGN_UP_SLOT_MARGIN_MS = 5_000;
 /** How long a caller may wait for a lock (another test's sign-up and a full PAR-259 window fit easily). */
 export const BUDGET_LOCK_TIMEOUT_MS = 45 * 60_000;
 
-const POLL_MS = 500;
-
 export function defaultBudgetDeps(): BudgetDeps {
   return { dir: tmpdir(), now: () => Date.now(), sleep: (ms) => new Promise((r) => setTimeout(r, ms)) };
-}
-
-function processAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "EPERM";
-  }
 }
 
 /** A file-name-safe form of a key such as `cloudflare/test-abc`. */
@@ -64,40 +57,9 @@ export function budgetFileKey(key: string): string {
   return key.replace(/[^A-Za-z0-9._-]/g, "_");
 }
 
-/**
- * A cross-process lock: a directory holding the owner's pid (mkdir is atomic). A lock whose
- * owner no longer runs is taken over. Resolves to its release.
- */
-export async function fileLock(name: string, deps: BudgetDeps, timeoutMs = BUDGET_LOCK_TIMEOUT_MS): Promise<() => Promise<void>> {
-  const path = join(deps.dir, `c-t1-${budgetFileKey(name)}.lock`);
-  const alive = deps.isAlive ?? processAlive;
-  const deadline = deps.now() + timeoutMs;
-  for (;;) {
-    try {
-      mkdirSync(path);
-      writeFileSync(join(path, "pid"), String(process.pid));
-      let released = false;
-      return () => {
-        if (!released) rmSync(path, { recursive: true, force: true });
-        released = true;
-        return Promise.resolve();
-      };
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      let owner = Number.NaN;
-      try {
-        owner = Number(readFileSync(join(path, "pid"), "utf8"));
-      } catch {
-        // being created
-      }
-      if (Number.isInteger(owner) && owner > 0 && !alive(owner)) {
-        rmSync(path, { recursive: true, force: true });
-        continue;
-      }
-      if (deps.now() > deadline) throw new Error(`timed out after ${String(timeoutMs)} ms waiting for the ${name} lock`);
-      await deps.sleep(POLL_MS);
-    }
-  }
+/** A cross-process lock (lock.ts) named after the key. Resolves to its release. */
+export function fileLock(name: string, deps: BudgetDeps, timeoutMs = BUDGET_LOCK_TIMEOUT_MS): Promise<() => Promise<void>> {
+  return acquireDirLock(budgetFileKey(name), { runId: process.env[ENV.runId] ?? null, ...deps }, timeoutMs);
 }
 
 function ledgerPath(key: string, deps: BudgetDeps): string {

@@ -26,7 +26,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { mockUsers, type TestApp } from "@lago-morph/prototype-framework/testing";
 import type { Locator, Page } from "@playwright/test";
-import { prerequisiteMissing, tag, target } from "../harness/index.js";
+import { inWindow, prerequisiteMissing, tag, target, type TimeWindow } from "../harness/index.js";
 import { expect, test } from "../harness/playwright.js";
 import { randomSuffix } from "./support/apps.js";
 import { cloudLogEntries, utcDay } from "./support/cloud.js";
@@ -48,6 +48,7 @@ import {
   mockLogin,
   openSettled,
   record,
+  recordedWindow,
   replay,
   replayInProcess,
   requireDemo,
@@ -592,7 +593,7 @@ async function logEntries(appName: string, days: readonly Date[]): Promise<LogEn
   return out;
 }
 
-const MARGIN_MS = 2_000;
+/** Between the actions, so the two requests' windows (on the server's clock) do not overlap. */
 const GAP_MS = 5_000;
 
 test(tag("DEMO-AC-008", "publishing a post and deleting it through the page each produce an info entry of the demo, written during that request, in the target's log"), async ({ browser }) => {
@@ -607,30 +608,28 @@ test(tag("DEMO-AC-008", "publishing a post and deleting it through the page each
     await createDraftAndOpen(admin.page, title);
     created = true;
     await admin.page.waitForTimeout(GAP_MS);
-    const publishFrom = new Date(Date.now() - MARGIN_MS);
-    await act(admin, ASSUMED.publishButton, "publishing the post");
-    const publishTo = new Date(Date.now() + MARGIN_MS);
+    // Each action's window is on the server's clock (its response's Date header D and the
+    // measured round trip: D − duration − 1 s to D + 1 s), never this machine's: the log's
+    // timestamps come from the target's clock.
+    const published = recordedWindow(await act(admin, ASSUMED.publishButton, "publishing the post"));
     await admin.page.waitForTimeout(GAP_MS);
-    const deleteFrom = new Date(Date.now() - MARGIN_MS);
-    await act(admin, ASSUMED.deleteButton, "deleting the post");
+    const deleted = recordedWindow(await act(admin, ASSUMED.deleteButton, "deleting the post"));
     created = false;
-    const deleteTo = new Date(Date.now() + MARGIN_MS);
 
-    const infoIn = (entries: readonly LogEntry[], from: Date, to: Date): LogEntry[] =>
-      entries.filter((e) => e.app === appName && e.severity === "info" && e.requestId !== undefined && new Date(e.time) >= from && new Date(e.time) <= to);
+    const infoIn = (entries: readonly LogEntry[], window: TimeWindow): LogEntry[] => entries.filter((e) => e.app === appName && e.severity === "info" && e.requestId !== undefined && inWindow(e.time, window));
     let entries: LogEntry[] = [];
     await expect
       .poll(
         async () => {
-          entries = await logEntries(appName, [publishFrom, deleteTo]);
-          return infoIn(entries, publishFrom, publishTo).length > 0 && infoIn(entries, deleteFrom, deleteTo).length > 0;
+          entries = await logEntries(appName, [published.from, deleted.to]);
+          return infoIn(entries, published).length > 0 && infoIn(entries, deleted).length > 0;
         },
         { message: "the log holds an info entry for the publish and one for the delete", timeout: local() ? 30_000 : 120_000, intervals: [1_000, 2_000, 5_000] },
       )
       .toBe(true)
       .catch((error: unknown) => {
-        const recent = entries.filter((e) => new Date(e.time) >= publishFrom).map((e) => `${e.time} ${e.severity} ${e.component}: ${e.message}`);
-        throw new Error(`${String(error)}\nentries since the publish:\n${recent.join("\n")}`);
+        const recent = entries.filter((e) => Date.parse(e.time) >= published.from.getTime()).map((e) => `${e.time} ${e.severity} ${e.component}: ${e.message}`);
+        throw new Error(`${String(error)}\npublish window ${published.from.toISOString()}…${published.to.toISOString()}, delete window ${deleted.from.toISOString()}…${deleted.to.toISOString()} (server clock); entries since the publish window:\n${recent.join("\n")}`);
       });
   } finally {
     if (created) await deleteAsAdmin(admin, admin.page.url());

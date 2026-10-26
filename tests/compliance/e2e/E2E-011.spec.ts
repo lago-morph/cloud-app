@@ -21,7 +21,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { mockUsers } from "@lago-morph/prototype-framework/testing";
-import { CLOUD_WAITS, client, REFERENCE_APP, tag, target, waitFor } from "../harness/index.js";
+import { CLOUD_WAITS, client, inWindow, REFERENCE_APP, tag, target, timed, waitFor, type TimeWindow } from "../harness/index.js";
 import { expect, test } from "../harness/playwright.js";
 import { randomSuffix } from "./support/apps.js";
 import { cloudLogEntries, utcDay } from "./support/cloud.js";
@@ -98,18 +98,19 @@ async function findEntries(requestIds: readonly string[], since: Date): Promise<
   );
 }
 
-function checkPlacement(found: Found, expected: { readonly stage: string; readonly severity: string; readonly requestId: string }, window: { readonly from: Date; readonly to: Date }): void {
+function checkPlacement(found: Found, expected: { readonly stage: string; readonly severity: string; readonly requestId: string }, window: TimeWindow): void {
   const { entry } = found;
   expect(entry.app).toBe(REFERENCE_APP);
   expect(entry.stage).toBe(expected.stage);
   expect(entry.target).toBe(target().target);
   expect(entry.severity).toBe(expected.severity);
   expect(entry.requestId).toBe(expected.requestId);
-  // A timestamp within the test's own time window (a minute of clock skew allowed).
+  // A timestamp within its request's window on the server's clock (the response's Date header D
+  // and the measured round trip: D − duration − 1 s to D + 1 s; harness/server-time.ts), not this
+  // machine's clock, which can be off from the target's.
   const time = Date.parse(entry.time);
   expect(Number.isNaN(time), `entry time ${entry.time} is a timestamp`).toBe(false);
-  expect(time).toBeGreaterThanOrEqual(window.from.getTime() - 60_000);
-  expect(time).toBeLessThanOrEqual(window.to.getTime() + 60_000);
+  expect(inWindow(time, window), `entry time ${entry.time} within its request's window ${window.from.toISOString()}…${window.to.toISOString()} (server clock)`).toBe(true);
   if (found.key !== undefined) {
     // Under the app and stage prefix, at the entry's UTC time, with its severity and request ID.
     const m = KEY.exec(found.key);
@@ -137,27 +138,27 @@ test(tag("E2E-011", "app and framework entries are stored under the app and stag
   const stage = t.target === "local" ? LOCAL_STAGE : (t.stage ?? "");
   expect(stage, "the run's stage").not.toBe("");
   const api = client();
-  const from = new Date();
   const message = `e2e-011 app entry ${randomSuffix()}`;
 
-  const logged = api.expectStatus(await api.post("/api/ref/log", { severity: "info", message }), 200);
+  const logRequest = await timed(() => api.post("/api/ref/log", { severity: "info", message }));
+  const logged = api.expectStatus(logRequest.response, 200);
   const appRequestId = logged.json<{ requestId: string }>().requestId;
-  const failed = api.expectError(await api.get("/api/ref/throw-plain"), 500, "CORE.INTERNAL");
+  const throwRequest = await timed(() => api.get("/api/ref/throw-plain"));
+  const failed = api.expectError(throwRequest.response, 500, "CORE.INTERNAL");
   const errorRequestId = failed.requestId ?? "";
   expect(errorRequestId).not.toBe("");
-  const to = new Date();
 
-  const found = await findEntries([appRequestId, errorRequestId], from);
+  const found = await findEntries([appRequestId, errorRequestId], logRequest.window.from);
   const appEntries = (found.get(appRequestId) ?? []).filter((f) => f.entry.component === "reference" && f.entry.message === message);
   expect(appEntries, "the app's own entry for its request").toHaveLength(1);
   const appEntry = appEntries[0];
-  if (appEntry !== undefined) checkPlacement(appEntry, { stage, severity: "info", requestId: appRequestId }, { from, to });
+  if (appEntry !== undefined) checkPlacement(appEntry, { stage, severity: "info", requestId: appRequestId }, logRequest.window);
 
   // The framework's entry for the plain Error (LOG-REQ-005: component CORE, severity error).
   const errorEntries = (found.get(errorRequestId) ?? []).filter((f) => f.entry.severity === "error");
   expect(errorEntries.map((f) => f.entry.component), "the framework's error entry for the forced error").toEqual(["CORE"]);
   const errorEntry = errorEntries[0];
-  if (errorEntry !== undefined) checkPlacement(errorEntry, { stage, severity: "error", requestId: errorRequestId }, { from, to });
+  if (errorEntry !== undefined) checkPlacement(errorEntry, { stage, severity: "error", requestId: errorRequestId }, throwRequest.window);
 });
 
 if (target().target === "local") {
