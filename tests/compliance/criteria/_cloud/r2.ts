@@ -8,9 +8,11 @@
  * - The hook creates one account API token with only "Workers R2 Storage Bucket Item Read" on
  *   those three buckets (the DEC-0100 mechanism, read instead of write), with a 30-minute expiry
  *   as a backstop, and deletes it when the process ends (or when `disposeR2Reader()` is called).
- *   Before creating one it deletes this hook's own expired or older-than-an-hour tokens (name
- *   prefixes `compliance-r2read-` and `compliance-r2scoped-`), so an interrupted process leaves
- *   none behind for long.
+ *   The token is named `compliance-r2read-<run ID>-<random>` (`compliance-r2scoped-…` for
+ *   `withR2Access`), the run ID from `COMPLIANCE_RUN_ID`, so the driver can delete a run's tokens
+ *   at its end, also a killed process's (harness/test-tokens.ts `hookTokensToDelete`). Before
+ *   creating one the hook deletes the hooks' expired or older-than-an-hour tokens (both prefixes,
+ *   with or without a run ID), so an interrupted process leaves none behind for long.
  * - S3 credentials as DEC-0100: access key ID = token ID, secret access key = SHA-256 (hex) of
  *   the token value. The value is held in memory only, never printed or written.
  * - Listing and reading use R2's S3 endpoint `<account>.r2.cloudflarestorage.com` with SigV4
@@ -22,6 +24,8 @@
  */
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import { CLOUD_WAITS, USER_AGENT, waitFor } from "../../harness/index.js";
+import { ENV } from "../../harness/env.js";
+import { hookTokenName, hookTokensToDelete, expiresOn as cfExpiresOn, HOOK_TOKEN_LIFETIME_MS, R2_READ_TOKEN_PREFIX, R2_SCOPED_TOKEN_PREFIX } from "../../harness/test-tokens.js";
 import { accountId, cfApi, cfList, cfOk, failure } from "./api.js";
 
 export const LOG_BUCKET = "prototype-logs";
@@ -32,11 +36,9 @@ export const BACKUP_BUCKET = "prototype-backups";
 export const SIGNING_RECORD_KEY = "framework/r2-signing.json";
 const READ_PERMISSION = "Workers R2 Storage Bucket Item Read";
 const WRITE_PERMISSION = "Workers R2 Storage Bucket Item Write";
-const TOKEN_PREFIX = "compliance-r2read-";
+const TOKEN_PREFIX = R2_READ_TOKEN_PREFIX;
 /** Tokens of `withR2Access`, scoped to the buckets one test names. */
-const SCOPED_PREFIX = "compliance-r2scoped-";
-const TOKEN_LIFETIME_MS = 30 * 60_000;
-const STALE_AFTER_MS = 60 * 60_000;
+const SCOPED_PREFIX = R2_SCOPED_TOKEN_PREFIX;
 const MAX_PAGES = 20;
 
 interface Credentials {
@@ -111,17 +113,37 @@ interface TokenInfo {
   readonly issued_on?: string;
 }
 
-/** Deletes this hook's own tokens that expired or are older than an hour (an interrupted process's). */
+/** Deletes the hooks' tokens that expired or are older than an hour (an interrupted process's), never a live one. */
 async function sweepStaleTokens(account: string): Promise<void> {
-  const tokens = await cfList<TokenInfo>("listing the account's API tokens", `/accounts/${account}/tokens`, 50);
-  const now = Date.now();
-  for (const t of tokens) {
-    const name = t.name ?? "";
-    if (!name.startsWith(TOKEN_PREFIX) && !name.startsWith(SCOPED_PREFIX)) continue;
-    const expired = t.expires_on !== undefined && Date.parse(t.expires_on) <= now;
-    const old = t.issued_on !== undefined && now - Date.parse(t.issued_on) > STALE_AFTER_MS;
-    if (expired || old) await cfApi("DELETE", `/accounts/${account}/tokens/${t.id}`);
-  }
+  const tokens = (await cfList<TokenInfo>("listing the account's API tokens", `/accounts/${account}/tokens`, 50)).map((t) => ({
+    id: t.id,
+    name: t.name ?? "",
+    ...(t.issued_on === undefined ? {} : { issuedOn: t.issued_on }),
+    ...(t.expires_on === undefined ? {} : { expiresOn: t.expires_on }),
+  }));
+  for (const t of hookTokensToDelete(tokens, new Date())) await cfApi("DELETE", `/accounts/${account}/tokens/${t.id}`);
+}
+
+/**
+ * The creation request of a hook token: named with the run ID (`<prefix><run ID>-<random>`, or
+ * `<prefix><random>` outside the driver), `permission` on exactly `buckets`, and always the
+ * 30-minute expiry (`HOOK_TOKEN_LIFETIME_MS`) as a backstop.
+ */
+export function bucketTokenRequest(input: {
+  readonly account: string;
+  readonly prefix: string;
+  readonly groupId: string;
+  readonly buckets: readonly string[];
+  readonly runId: string | undefined;
+  readonly random: string;
+  readonly now: Date;
+}): { readonly name: string; readonly policies: unknown[]; readonly expires_on: string } {
+  const resources = Object.fromEntries(input.buckets.map((b) => [`com.cloudflare.edge.r2.bucket.${input.account}_default_${b}`, "*"]));
+  return {
+    name: hookTokenName(input.prefix, input.runId, input.random),
+    policies: [{ effect: "allow", permission_groups: [{ id: input.groupId }], resources }],
+    expires_on: cfExpiresOn(input.now, HOOK_TOKEN_LIFETIME_MS),
+  };
 }
 
 async function permissionGroupId(account: string, permission: string): Promise<string> {
@@ -138,13 +160,11 @@ async function permissionGroupId(account: string, permission: string): Promise<s
 async function createBucketToken(account: string, prefix: string, permission: string, buckets: readonly string[]): Promise<Credentials> {
   await sweepStaleTokens(account);
   const groupId = await permissionGroupId(account, permission);
-  const resources = Object.fromEntries(buckets.map((b) => [`com.cloudflare.edge.r2.bucket.${account}_default_${b}`, "*"]));
-  const expiresOn = new Date(Date.now() + TOKEN_LIFETIME_MS).toISOString().replace(/\.\d{3}Z$/, "Z");
-  const r = await cfApi<{ id: string; value: string }>("POST", `/accounts/${account}/tokens`, {
-    name: `${prefix}${randomBytes(6).toString("hex")}`,
-    policies: [{ effect: "allow", permission_groups: [{ id: groupId }], resources }],
-    expires_on: expiresOn,
-  });
+  const r = await cfApi<{ id: string; value: string }>(
+    "POST",
+    `/accounts/${account}/tokens`,
+    bucketTokenRequest({ account, prefix, groupId, buckets, runId: process.env[ENV.runId], random: randomBytes(6).toString("hex"), now: new Date() }),
+  );
   if (r.status !== 200 || r.body === undefined || !r.body.success) throw failure(`creating the hook's R2 token for ${buckets.join(", ")}`, r);
   return { tokenId: r.body.result.id, accessKeyId: r.body.result.id, secretAccessKey: sha256(r.body.result.value) };
 }

@@ -7,6 +7,10 @@ import {
   deleteToken,
   EVERYDAY_TOKEN,
   expiresOn,
+  HOOK_TOKEN_LIFETIME_MS,
+  hookTokenName,
+  hookTokenRunId,
+  hookTokensToDelete,
   listTestTokens,
   NO_API_TOKENS_WRITE_ENV,
   NO_EMAIL_PERMISSION_ENV,
@@ -95,16 +99,18 @@ describe("restricted test tokens (DEC-0531)", () => {
     expect(api.tokens.size).toBe(0);
   });
 
-  it("lists only prototype-compliance-* tokens, over pages; deleting is idempotent", async () => {
+  it("lists only the harness's tokens (prototype-compliance-*, compliance-r2read-*, compliance-r2scoped-*), over pages; deleting is idempotent", async () => {
     const api = fakeCfApi({ perPage: 2 });
     addForeignToken(api, "owner-token");
     addForeignToken(api, "compliance-r2read-abc");
+    addForeignToken(api, "compliance-r2scoped-run1-0123456789ab");
+    addForeignToken(api, "xcompliance-r2read-abc");
     const a = await createRestrictedToken(api.call, FAKE_ACCOUNT, spec("no-r2-token"), "r1", NOW);
     const b = await createRestrictedToken(api.call, FAKE_ACCOUNT, spec("no-email"), "r1", NOW);
-    expect((await listTestTokens(api.call, FAKE_ACCOUNT)).map((t) => t.name).sort()).toEqual(["prototype-compliance-r1-no-email", "prototype-compliance-r1-no-r2-token"]);
+    expect((await listTestTokens(api.call, FAKE_ACCOUNT)).map((t) => t.name).sort()).toEqual(["compliance-r2read-abc", "compliance-r2scoped-run1-0123456789ab", "prototype-compliance-r1-no-email", "prototype-compliance-r1-no-r2-token"]);
     await deleteToken(api.call, FAKE_ACCOUNT, a.id);
     await deleteToken(api.call, FAKE_ACCOUNT, a.id);
-    expect((await listTestTokens(api.call, FAKE_ACCOUNT)).map((t) => t.id)).toEqual([b.id]);
+    expect((await listTestTokens(api.call, FAKE_ACCOUNT)).map((t) => t.id).filter((id) => !id.startsWith("foreign-"))).toEqual([b.id]);
     api.failing.add(`DELETE /accounts/${FAKE_ACCOUNT}/tokens/${b.id}`);
     await expect(deleteToken(api.call, FAKE_ACCOUNT, b.id)).rejects.toThrow(`deleting API token ${b.id} failed: HTTP 500`);
   });
@@ -117,5 +123,45 @@ describe("restricted test tokens (DEC-0531)", () => {
     expect((await ops.testTokens()).map((x) => x.name)).toEqual(["prototype-compliance-rr-no-r2-token"]);
     await ops.deleteToken(t.id);
     expect(await ops.testTokens()).toEqual([]);
+  });
+});
+
+describe("the cloud test hooks' R2 tokens (compliance-r2read-*, compliance-r2scoped-*)", () => {
+  const T = (name: string, times: { issuedOn?: string; expiresOn?: string } = {}) => ({ id: name, name, ...times });
+
+  it("are named with the run ID, and the run ID is read back; names without one (older ones) have none", () => {
+    expect(HOOK_TOKEN_LIFETIME_MS).toBe(30 * 60_000);
+    expect(hookTokenName("compliance-r2read-", "abcdefghij12345", "0123456789ab")).toBe("compliance-r2read-abcdefghij12345-0123456789ab");
+    expect(hookTokenName("compliance-r2scoped-", undefined, "0123456789ab")).toBe("compliance-r2scoped-0123456789ab");
+    expect(hookTokenName("compliance-r2scoped-", "bad id!", "0123456789ab")).toBe("compliance-r2scoped-0123456789ab");
+    expect(() => hookTokenName("prototype-compliance-", "r", "00")).toThrow("not a hook token prefix");
+    expect(hookTokenRunId("compliance-r2read-abcdefghij12345-0123456789ab")).toBe("abcdefghij12345");
+    expect(hookTokenRunId("compliance-r2scoped-abcdefghij12345-0123456789ab")).toBe("abcdefghij12345");
+    expect(hookTokenRunId("compliance-r2read-0123456789ab")).toBeUndefined();
+    expect(hookTokenRunId("prototype-compliance-abcdefghij12345-no-email")).toBeUndefined();
+  });
+
+  it("deletes those expired or over an hour old, and at the end of a run every one of that run; never another live one", () => {
+    const now = new Date("2026-10-25T10:00:00Z");
+    const tokens = [
+      T("compliance-r2read-0123456789ab", { issuedOn: "2026-10-25T08:59:00Z" }),
+      T("compliance-r2scoped-0123456789ac", { expiresOn: "2026-10-25T10:00:00Z" }),
+      T("compliance-r2read-0123456789ad", { issuedOn: "2026-10-25T09:30:00Z", expiresOn: "2026-10-25T10:00:01Z" }),
+      T("compliance-r2read-0123456789ae"),
+      T("compliance-r2read-other0000000001-0123456789ab", { issuedOn: "2026-10-25T09:45:00Z", expiresOn: "2026-10-25T10:15:00Z" }),
+      T("compliance-r2read-other0000000001-0123456789ac", { expiresOn: "2026-10-25T09:15:00Z" }),
+      T("compliance-r2read-abcdefghij12345-0123456789ab", { issuedOn: "2026-10-25T09:59:00Z", expiresOn: "2026-10-25T10:29:00Z" }),
+      T("compliance-r2scoped-abcdefghij12345-0123456789ac"),
+      T("prototype-compliance-abcdefghij12345-no-email", { expiresOn: "2026-10-25T09:00:00Z" }),
+      T("owner-token", { expiresOn: "2026-10-25T09:00:00Z" }),
+    ];
+    expect(hookTokensToDelete(tokens, now).map((t) => t.name)).toEqual(["compliance-r2read-0123456789ab", "compliance-r2scoped-0123456789ac", "compliance-r2read-other0000000001-0123456789ac"]);
+    expect(hookTokensToDelete(tokens, now, "abcdefghij12345").map((t) => t.name)).toEqual([
+      "compliance-r2read-0123456789ab",
+      "compliance-r2scoped-0123456789ac",
+      "compliance-r2read-other0000000001-0123456789ac",
+      "compliance-r2read-abcdefghij12345-0123456789ab",
+      "compliance-r2scoped-abcdefghij12345-0123456789ac",
+    ]);
   });
 });

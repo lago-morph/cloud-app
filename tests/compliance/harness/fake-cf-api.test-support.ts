@@ -22,6 +22,9 @@ const GROUP_NAMES = [
   "Workers Scripts Write",
   "Zone Read",
   "Zone Settings Write",
+  // The cloud test hooks' R2 tokens (criteria/_cloud/r2.ts).
+  "Workers R2 Storage Bucket Item Read",
+  "Workers R2 Storage Bucket Item Write",
 ];
 
 export interface FakeToken {
