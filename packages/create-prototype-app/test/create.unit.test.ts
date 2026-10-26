@@ -238,7 +238,9 @@ describe("command line", () => {
     expect(r.stdout).toContain("/plugin install prototype-framework@lago-morph");
     const pkg = JSON.parse(readFileSync(join(root, "demo", "package.json"), "utf8")) as { dependencies: Record<string, string> };
     expect(pkg.dependencies[FRAMEWORK_PACKAGE]).toBe(SELF.version);
-    expect(existsSync(join(root, "demo", ".claude"))).toBe(false);
+    expect(existsSync(join(root, "demo", ".claude", "skills"))).toBe(false);
+    // The template's settings (the .env.cloudflare deny rule, DEC-0599) come with or without the skill.
+    expect(existsSync(join(root, "demo", ".claude", "settings.json"))).toBe(true);
   });
 
   it("prints exactly plan §3.1's closing line, with the folder as typed", () => {
