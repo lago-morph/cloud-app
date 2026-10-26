@@ -269,6 +269,20 @@ describe("cloudflare-setup: a fresh account with both tokens (plan §4.3 steps 4
     expect(world.writes()).toEqual([]);
   });
 
+  it("replaces an old signing token found by name through the guard: the old one is deleted, no other token (DEC-0618)", async () => {
+    const world = freshWorld();
+    world.addToken("everyday", EVERYDAY_VALUE, "everyday-id");
+    world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
+    world.cloud().tokens.set("old-sign-id", { name: "prototype-r2-signing", resources: {} });
+    world.cloud().tokens.set("unrelated-id", { name: "someone-else", resources: {} });
+    const { status, io } = await run(world, project({ env: bothTokens() }));
+    expect(io.err).toBe("");
+    expect(status).toBe(0);
+    expect(world.requests.filter((r) => / DELETE .*\/tokens\//.test(r))).toEqual([`boot-id DELETE /accounts/${ACCOUNT}/tokens/old-sign-id`, `boot-id DELETE /accounts/${ACCOUNT}/tokens/boot-id`]);
+    expect(world.cloud().tokens.has("old-sign-id")).toBe(false);
+    expect(world.cloud().tokens.has("unrelated-id")).toBe(true);
+  });
+
   it("the same cloud environment run twice: the second run finds the bootstrap token deleted, notes it, asks for nothing, exit 0", async () => {
     const world = await setUpWorld();
     world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
@@ -562,16 +576,42 @@ describe("cloudflare-setup: the token write guard (DEC-0589)", () => {
       ["DELETE", "/accounts/a/tokens/boot"],
       ["PUT", "/accounts/a/tokens/boot"],
       ["PUT", "/accounts/a/tokens/signing"],
+      ["DELETE", "/accounts/a/tokens/tok0"],
+      ["DELETE", "/user/tokens/tok0"],
     ] as const) {
       await expect(api(method, path), `${method} ${path}`).rejects.toThrow(/setup refused to/);
     }
     expect(sent).toEqual([]);
     armed = true;
+    await expect(api("DELETE", "/accounts/a/tokens/tok0"), "an ID setup did not learn as a signing token").rejects.toThrow(/setup refused to delete/);
     await api("DELETE", "/accounts/a/tokens/boot");
     await api("PUT", "/accounts/a/tokens/every", {});
-    await api("DELETE", "/accounts/a/tokens/tok0");
     await api("GET", "/accounts/a/tokens/owner");
-    expect(sent).toEqual(["DELETE /accounts/a/tokens/boot", "PUT /accounts/a/tokens/every", "DELETE /accounts/a/tokens/tok0", "GET /accounts/a/tokens/owner"]);
+    expect(sent).toEqual(["DELETE /accounts/a/tokens/boot", "PUT /accounts/a/tokens/every", "GET /accounts/a/tokens/owner"]);
+  });
+
+  it("guardTokenWrites deletes only the signing tokens it saw by name: listed or just created as prototype-r2-signing (DEC-0618)", async () => {
+    const sent: string[] = [];
+    const replies: Record<string, unknown> = {
+      "GET /accounts/a/tokens?per_page=50&page=1": { success: true, result: [{ id: "old-sign", name: "prototype-r2-signing" }, { id: "other", name: "someone-else" }, { id: "owner", name: "prototype-r2-signing" }], result_info: { total_pages: 1 } },
+      "POST /accounts/a/tokens": { success: true, result: { id: "new-sign", name: "prototype-r2-signing", value: "v" } },
+    };
+    const api = guardTokenWrites(async (method, path) => (sent.push(`${method} ${path}`), { status: 200, body: replies[`${method} ${path}`] ?? { success: true, result: {} } }), {
+      protectedIds: new Set(["owner"]),
+      everydayId: "every",
+      bootstrapId: "boot",
+      selfDeleteArmed: () => false,
+    });
+    await expect(api("DELETE", "/accounts/a/tokens/old-sign")).rejects.toThrow(/setup refused to delete/);
+    await api("GET", "/accounts/a/tokens?per_page=50&page=1");
+    await api("POST", "/accounts/a/tokens", { name: "prototype-r2-signing" });
+    await api("DELETE", "/accounts/a/tokens/OLD-SIGN");
+    await api("DELETE", "/accounts/a/tokens/new-sign");
+    for (const path of ["/accounts/a/tokens/other", "/accounts/a/tokens/owner", "/accounts/a/tokens/every", "/accounts/a/tokens/boot"]) {
+      await expect(api("DELETE", path), path).rejects.toThrow(/setup refused to delete/);
+    }
+    await expect(api("PUT", "/accounts/a/tokens/old-sign", {})).rejects.toThrow(/setup refused to update/);
+    expect(sent).toEqual(["GET /accounts/a/tokens?per_page=50&page=1", "POST /accounts/a/tokens", "DELETE /accounts/a/tokens/OLD-SIGN", "DELETE /accounts/a/tokens/new-sign"]);
   });
 
   it("guardTokenWrites cannot be bypassed by a query string, a trailing or doubled slash, an encoded ID, a sub-path (the value roll) or another method", async () => {
@@ -645,6 +685,7 @@ describe("cloudflare-setup: the token write guard (DEC-0589)", () => {
       ["PUT", "/accounts/a/tokens/x/../signing"],
       ["PATCH", "/accounts/a/tokens\\every"],
       ["POST", "/user/tokens/x/%2e%2e/owner/value"],
+      ["DELETE", "/accounts/a/tokens/x/../tok0"],
     ] as const) {
       await expect(api(method, path), JSON.stringify(`${method} ${path}`)).rejects.toThrow(/setup refused to/);
     }
@@ -652,8 +693,7 @@ describe("cloudflare-setup: the token write guard (DEC-0589)", () => {
     // The everyday update reached by another spelling is still the everyday update; a create is not a write of an ID.
     await api("PUT", "/accounts/a/tokens/./every", {});
     await api("POST", "/accounts/a/tokens/x/..", {});
-    await api("DELETE", "/accounts/a/tokens/x/../tok0");
-    expect(sent).toEqual(["PUT /accounts/a/tokens/./every", "POST /accounts/a/tokens/x/..", "DELETE /accounts/a/tokens/x/../tok0"]);
+    expect(sent).toEqual(["PUT /accounts/a/tokens/./every", "POST /accounts/a/tokens/x/.."]);
   });
 });
 

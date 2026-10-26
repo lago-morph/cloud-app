@@ -32,9 +32,10 @@
  *
  * Output never holds a token value, an account ID, a zone ID or the `workers.dev` subdomain
  * (DEC-0573, DEC-0590): messages are written without them, and every line is also passed through a
- * redaction of each such value known to the run. Token writes go through a guard (DEC-0589): a DELETE
- * only of the bootstrap token's own ID (or setup's own signing tokens), a PUT only of the everyday
- * token's ID, and never either on an ID in `protectedTokenIds`.
+ * redaction of each such value known to the run. Token writes go through a guard (DEC-0589, DEC-0618),
+ * an allow-list: a DELETE only of the bootstrap token's own ID (in its last step) or of a signing
+ * token the guard saw by its name (`prototype-r2-signing`, listed or just created by the signing
+ * step), a PUT only of the everyday token's ID, and never either on an ID in `protectedTokenIds`.
  * Exit status: 0 when the account is set up and reachable, 1 when the run stopped for something the
  * user must do or failed (DEC-0588).
  */
@@ -63,6 +64,7 @@ import {
   type TokenPolicy,
 } from "./permissions.js";
 import { workersPlanReader } from "./plan.js";
+import { SIGNING_TOKEN_NAME } from "./r2-token.js";
 import { frameworkVersion as packageVersion } from "./setup-record.js";
 import { applySetupSteps, checkAccountSetup, SETUP_STEPS, type SetupStepOptions } from "./setup-steps.js";
 import { commentOutBootstrap, ENV_CLOUDFLARE_FILE, ENV_CLOUDFLARE_TEMPLATE, fillInSettings, readCloudflareSettings, writeTemplateIfAbsent, type CloudflareSettings } from "./token-sources.js";
@@ -198,6 +200,8 @@ function redactor(): { add(value: string | undefined): void; redact(text: string
 const TOKEN_PATH = /^\/(?:accounts\/[^/]+|user)\/tokens\/([^/]+)(\/.*)?$/i;
 /** Paths under `tokens/` that are not a token's ID. */
 const NOT_TOKEN_IDS = new Set(["verify", "permission_groups"]);
+/** The token list or create path, `/accounts/<a>/tokens` or `/user/tokens`; any case. */
+const TOKENS_LIST_PATH = /^\/(?:accounts\/[^/]+|user)\/tokens\/?$/i;
 
 /**
  * The token write guard (DEC-0589, DEC-0613): every request through `api` other than a GET that
@@ -205,9 +209,12 @@ const NOT_TOKEN_IDS = new Set(["verify", "permission_groups"]);
  * (`sentPath`: `API_BASE + path` as the URL parser normalises it, each segment decoded), and IDs
  * and the path's names are compared in any case. Refused: any such request on a protected ID; any
  * method but PUT and DELETE, and any sub-path (the value roll); a DELETE of the everyday token; a
- * DELETE of the bootstrap token outside its self-delete; a PUT of anything but the everyday token;
- * a request whose URL cannot be parsed. Creating a token (`POST …/tokens`, the signing step) names
- * no ID.
+ * DELETE of the bootstrap token outside its self-delete; a DELETE of any other ID unless the guard
+ * saw it as a signing token (DEC-0618); a PUT of anything but the everyday token; a request whose
+ * URL cannot be parsed. Creating a token (`POST …/tokens`, the signing step) names no ID. The
+ * signing step's rotation finds its old tokens by name (`GET …/tokens`) and may delete the token it
+ * just created when its record cannot be written, so the guard learns the IDs of tokens named
+ * `SIGNING_TOKEN_NAME` from the token lists and creates that pass through it.
  */
 export function guardTokenWrites(
   api: CloudflareApi,
@@ -216,6 +223,11 @@ export function guardTokenWrites(
   const protectedIds = new Set([...rules.protectedIds].map((id) => id.toLowerCase()));
   const everydayId = rules.everydayId?.toLowerCase();
   const bootstrapId = rules.bootstrapId?.toLowerCase();
+  const signingIds = new Set<string>();
+  const learnSigning = (item: unknown) => {
+    const { id, name } = (item ?? {}) as { id?: unknown; name?: unknown };
+    if (typeof id === "string" && id !== "" && name === SIGNING_TOKEN_NAME) signingIds.add(id.toLowerCase());
+  };
   return async (method, path, body) => {
     if (method !== "GET") {
       const refuse = (why: string) => {
@@ -230,10 +242,17 @@ export function guardTokenWrites(
         if ((method !== "PUT" && method !== "DELETE") || m?.[2] !== undefined) refuse("setup only deletes the bootstrap token and updates the everyday token's permissions");
         if (method === "DELETE" && id === everydayId) refuse("it is the everyday token");
         if (method === "DELETE" && id === bootstrapId && !rules.selfDeleteArmed()) refuse("the bootstrap token is deleted only by its own last step");
+        if (method === "DELETE" && id !== bootstrapId && !signingIds.has(id)) refuse("setup deletes only the bootstrap token and its own signing tokens");
         if (method === "PUT" && (id !== everydayId || id === bootstrapId)) refuse("only the everyday token is updated in place");
       }
     }
-    return api(method, path, body);
+    const reply = await api(method, path, body);
+    if ((method === "GET" || method === "POST") && succeeded(reply) && TOKENS_LIST_PATH.test(sentPath(path) ?? "")) {
+      const result = (reply.body as { result?: unknown } | null)?.result;
+      if (Array.isArray(result)) result.forEach(learnSigning);
+      else if (method === "POST" && (body as { name?: unknown } | undefined)?.name === SIGNING_TOKEN_NAME) learnSigning({ ...(result as object), name: SIGNING_TOKEN_NAME });
+    }
+    return reply;
   };
 }
 
