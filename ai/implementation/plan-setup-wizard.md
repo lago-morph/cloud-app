@@ -184,20 +184,43 @@ The everyday token reads the record through R2, then checks with its own permiss
 - **Text:** a short "Cloudflare setup" section that runs `npm run cloudflare-setup` and relays its output as is. It covers the rules of §4.5 and §4.6, and what to do on each of the setup command's stop messages.
 - **`owner-tasks.md`:** rewritten around the two links and one command. README §2–§3 shrink to a pointer.
 
-### 4.8 Getting the skill into an empty cloud session (verified 2026-10-26)
-This is the recommended cloud start. A cloud environment setup script copies the skill, pinned to a release tag, into `~/.claude/skills/prototype-framework`, and every new session in that environment has it, whatever the repository:
+### 4.8 Getting the skill into a cloud session, and the skill package (verified 2026-10-26)
+**The skill package.** `@lago-morph/prototype-framework-skill` holds only `skill/`, about 27 Markdown files, published at the framework's version by the same release. It's built from the repository's `skill/` by its own `prepack`. Owner decision, 2026-10-26.
+
+**Recommended cloud start.** A cloud environment setup script, **pinned to a version**. It never upgrades by itself (owner decision, 2026-10-26). `npm pack` only downloads the archive, so nothing is installed and no package scripts run:
 ```sh
 set -euo pipefail
-d=$(mktemp -d)
-git clone -q --depth 1 --branch v<version> https://github.com/lago-morph/cloud-app "$d"
+d=$(mktemp -d); cd "$d"
+npm pack -q @lago-morph/prototype-framework-skill@<version>
+tar xzf ./*.tgz
 mkdir -p ~/.claude/skills
 rm -rf ~/.claude/skills/prototype-framework
-cp -r "$d/skill" ~/.claude/skills/prototype-framework
-rm -rf "$d"
+cp -r package/skill ~/.claude/skills/prototype-framework
 ```
-- **The quickstart** gives this script with the current release tag filled in.
-- **A starter-made repository** still carries the committed copy in `.claude/skills/`, for environments without the script and for the command line.
-- **Versions:** when both copies exist they may differ. The skill's first step checks its own version against the app's framework version and says which to update.
+Copying the skill into `~/.claude/skills` from a setup script was verified on 2026-10-26: a session on a repository with no committed copy had the skill.
+
+**Other routes:**
+- **Committed copy:** each starter-made app keeps one in `.claude/skills/`, for environments without the script and for the command line.
+- **Marketplace:** the `lago-morph` marketplace serves command-line users. Its entry can later switch to the npm plugin source (`{"source": "npm", "package": "@lago-morph/prototype-framework-skill", "version": "<version>"}`), which the marketplace docs support.
+- **claude.ai:** uploading the skill there (Customize → Skills) also reaches cloud sessions, but each upgrade means uploading again.
+
+### 4.8a Version check (the skill's first step) and `npm run upgrade`
+The skill's first step runs a framework command, `npx prototype-framework version-check`. It **never changes anything** and only prints suggestions:
+
+| Finding | Suggestion |
+|---|---|
+| The skill is newer than the app's installed framework | run `npm run upgrade` |
+| The app's framework is newer than the setup-script skill | use the app's committed copy for this session; prints the setup-script line with the new version to paste into the environment settings |
+| npm has a newer release than both | mentioned once per session, with the CHANGELOG headline |
+
+`npm run upgrade`, run deliberately by the user or the agent:
+1. updates `@lago-morph/prototype-framework` (to the latest, or a version named);
+2. refreshes `.claude/skills/prototype-framework` from the skill copy shipped with the installed framework package (the framework package gains a `skill/` folder, built the same way);
+3. runs `npm run verify`;
+4. says whether Cloudflare setup needs re-running (§4.1 versions);
+5. prints the new setup-script version line.
+
+The setup script never updates the app's package. The app's version is its committed `package.json` and lockfile.
 
 ### 4.9 Docs
 - **New `QUICKSTART.md`:** one page covering local in one line, Cloudflare in one command, cloud and command-line variants, and the requirements.
@@ -246,7 +269,7 @@ rm -rf "$d"
 2. **Token sources and `.env.cloudflare` handling** (§4.2), plus the git-ignore warnings in the CLI and `verify` (§4.5).
 3. **Setup record and idempotent setup steps** (§4.4): refactor `setup-account` into steps that are checked first and then applied.
 4. **The `cloudflare-setup` state machine** (§4.3), including the in-place update and self-deletion.
-5. **Starter one-line local start** (§3.1).
+5. **Starter one-line local start** (§3.1), `version-check` and `npm run upgrade` (§4.8a), and the framework package's `skill/` copy.
 6. **Skill, settings deny rule, quickstart and docs** (§4.6, §4.7, §4.9), plus the spec changes (§5).
 7. **Test author:** the new criteria and tests (§6); then independent review; then a live milestone pass.
 
