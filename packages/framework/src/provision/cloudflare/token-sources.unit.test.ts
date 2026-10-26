@@ -226,7 +226,7 @@ describe(".env.cloudflare and the environment (plan-setup-wizard §4.2; DEC-0570
     expect(readdirSync(shared)).toEqual(["cloudflare.env"]);
   });
 
-  it.runIf(isPosix)("a .env.cloudflare that is a dangling symbolic link is written through: the target is created at mode 600 and the link stays a link (DEC-0614)", () => {
+  it.runIf(isPosix)("a .env.cloudflare that is a dangling symbolic link is written through by the template write (target created at mode 600, the link stays a link) and a later rewrite; fillInSettings creates nothing through it (DEC-0614, DEC-0587)", () => {
     const shared = join(dir, "shared");
     mkdirSync(shared);
     const target = join(shared, "cloudflare.env");
@@ -239,11 +239,19 @@ describe(".env.cloudflare and the environment (plan-setup-wizard §4.2; DEC-0570
     expect(readFileSync(target, "utf8")).toBe(ENV_CLOUDFLARE_TEMPLATE);
     expect(statSync(target).mode & 0o777).toBe(0o600);
     expect(readdirSync(shared)).toEqual(["cloudflare.env"]);
-    rmSync(target);
+    // A rewrite of the existing target through the links (a new file renamed over it in its own folder).
+    chmodSync(target, 0o644);
     expect(fillInSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "example.test" })).toEqual(["CLOUDFLARE_EMAIL_DOMAIN"]);
     expect(lstatSync(file()).isSymbolicLink()).toBe(true);
+    expect(lstatSync(join(dir, "hop")).isSymbolicLink()).toBe(true);
     expect(readFileSync(target, "utf8")).toContain("CLOUDFLARE_EMAIL_DOMAIN=example.test\n");
     expect(statSync(target).mode & 0o777).toBe(0o600);
+    expect(readdirSync(shared)).toEqual(["cloudflare.env"]);
+    // fillInSettings never creates a missing file (SETUP-AC-002, DEC-0587): a dangling link counts as missing.
+    rmSync(target);
+    expect(fillInSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "example.test" })).toEqual([]);
+    expect(readdirSync(shared)).toEqual([]);
+    expect(lstatSync(file()).isSymbolicLink()).toBe(true);
   });
 
   it("comments out a bootstrap line the parser cannot read, so no value stays in the file", () => {
