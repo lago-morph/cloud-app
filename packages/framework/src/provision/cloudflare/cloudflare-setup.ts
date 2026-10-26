@@ -43,7 +43,7 @@ import { emailDomainProblem } from "../core/account-settings.js";
 import { describeLocalSetup, runLocalSetup, type EnsureIgnoredResult, type LocalSetupDeps, type LocalSetupOutcome } from "../core/local-setup.js";
 import { EXIT, messageOf, type ProvisionIo, type ProvisionStatus } from "../core/output.js";
 import { accountSubdomain } from "./account.js";
-import { describeFailure, succeeded, type ApiReply, type CloudflareApi } from "./api.js";
+import { describeFailure, sentPath, succeeded, type ApiReply, type CloudflareApi } from "./api.js";
 import { zoneCandidates } from "./email.js";
 import type { Environment } from "./environment.js";
 import { ensureEnvCloudflareIgnored, gitSafetyWarnings, inspectGitSafety } from "./git-safety.js";
@@ -194,41 +194,44 @@ function redactor(): { add(value: string | undefined): void; redact(text: string
   };
 }
 
-/** An API token's own path, `/accounts/<a>/tokens/<id>` or `/user/tokens/<id>`, with any sub-path (such as `/value`, the roll). */
-const TOKEN_PATH = /^\/(?:accounts\/[^/]+|user)\/tokens\/([^/]+)(\/.*)?$/;
+/** An API token's own path, `/accounts/<a>/tokens/<id>` or `/user/tokens/<id>`, with any sub-path (such as `/value`, the roll); any case. */
+const TOKEN_PATH = /^\/(?:accounts\/[^/]+|user)\/tokens\/([^/]+)(\/.*)?$/i;
 /** Paths under `tokens/` that are not a token's ID. */
 const NOT_TOKEN_IDS = new Set(["verify", "permission_groups"]);
 
 /**
- * The token write guard (DEC-0589): every request through `api` other than a GET that names an API
- * token's ID is checked before it is sent. The path is read as Cloudflare would: without its query,
- * with doubled and trailing slashes collapsed and the ID decoded. Refused: any such request on a
- * protected ID; any method but PUT and DELETE, and any sub-path (the value roll); a DELETE of the
- * everyday token; a DELETE of the bootstrap token outside its self-delete; a PUT of anything but
- * the everyday token. Creating a token (`POST …/tokens`, the signing step) names no ID.
+ * The token write guard (DEC-0589, DEC-0613): every request through `api` other than a GET that
+ * names an API token's ID is checked before it is sent. The path judged is the one sent
+ * (`sentPath`: `API_BASE + path` as the URL parser normalises it, each segment decoded), and IDs
+ * and the path's names are compared in any case. Refused: any such request on a protected ID; any
+ * method but PUT and DELETE, and any sub-path (the value roll); a DELETE of the everyday token; a
+ * DELETE of the bootstrap token outside its self-delete; a PUT of anything but the everyday token;
+ * a request whose URL cannot be parsed. Creating a token (`POST …/tokens`, the signing step) names
+ * no ID.
  */
 export function guardTokenWrites(
   api: CloudflareApi,
   rules: { readonly protectedIds: ReadonlySet<string>; readonly everydayId?: string; readonly bootstrapId?: string; readonly selfDeleteArmed: () => boolean },
 ): CloudflareApi {
+  const protectedIds = new Set([...rules.protectedIds].map((id) => id.toLowerCase()));
+  const everydayId = rules.everydayId?.toLowerCase();
+  const bootstrapId = rules.bootstrapId?.toLowerCase();
   return async (method, path, body) => {
-    const clean = (path.split(/[?#]/)[0] ?? "").replace(/\/{2,}/g, "/").replace(/(.)\/$/, "$1");
-    const m = TOKEN_PATH.exec(clean);
-    let id: string | undefined;
-    try {
-      id = m?.[1] === undefined ? undefined : decodeURIComponent(m[1]);
-    } catch {
-      id = m?.[1];
-    }
-    if (method !== "GET" && id !== undefined && !NOT_TOKEN_IDS.has(id)) {
+    if (method !== "GET") {
       const refuse = (why: string) => {
         throw new Error(`setup refused to ${method === "DELETE" ? "delete" : "update"} an API token: ${why}`);
       };
-      if (rules.protectedIds.has(id)) refuse("its ID is protected");
-      if ((method !== "PUT" && method !== "DELETE") || m?.[2] !== undefined) refuse("setup only deletes the bootstrap token and updates the everyday token's permissions");
-      if (method === "DELETE" && id === rules.everydayId) refuse("it is the everyday token");
-      if (method === "DELETE" && id === rules.bootstrapId && !rules.selfDeleteArmed()) refuse("the bootstrap token is deleted only by its own last step");
-      if (method === "PUT" && (id !== rules.everydayId || id === rules.bootstrapId)) refuse("only the everyday token is updated in place");
+      const sent = sentPath(path);
+      if (sent === undefined) refuse("its URL cannot be read");
+      const m = TOKEN_PATH.exec(sent ?? "");
+      const id = m?.[1]?.toLowerCase();
+      if (id !== undefined && !NOT_TOKEN_IDS.has(id)) {
+        if (protectedIds.has(id)) refuse("its ID is protected");
+        if ((method !== "PUT" && method !== "DELETE") || m?.[2] !== undefined) refuse("setup only deletes the bootstrap token and updates the everyday token's permissions");
+        if (method === "DELETE" && id === everydayId) refuse("it is the everyday token");
+        if (method === "DELETE" && id === bootstrapId && !rules.selfDeleteArmed()) refuse("the bootstrap token is deleted only by its own last step");
+        if (method === "PUT" && (id !== everydayId || id === bootstrapId)) refuse("only the everyday token is updated in place");
+      }
     }
     return api(method, path, body);
   };

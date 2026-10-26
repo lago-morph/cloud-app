@@ -7,7 +7,9 @@
  * - **The owner's token is never changed or deleted.** At start, the environment token's own ID is
  *   read (`GET /accounts/<a>/tokens/verify`); any DELETE, PUT, PATCH or POST on a tokens path
  *   (`/accounts/<a>/tokens/…` or `/user/tokens/…`) that names that ID, or another protected ID, is
- *   refused with `LivePassRefusal`. The IDs are also handed to the state machine's own guard
+ *   refused with `LivePassRefusal`. The path judged is the one sent, as the URL parser normalises
+ *   it and each segment decoded (`sentPath`), so no spelling of a path reaches a token unjudged.
+ *   The IDs are also handed to the state machine's own guard
  *   (`protectedTokenIds`, DEC-0589).
  * - **Only short-lived wizard tokens are created.** A token create (`POST /accounts/<a>/tokens` or
  *   `POST /user/tokens`) must be named `prototype-compliance-wizard-<suffix>` and expire within
@@ -28,7 +30,7 @@
  * shares this pass's guards and budget), `pass.protectedTokenIds` is `CloudflareSetupDeps.protectedTokenIds`,
  * and `pass.redactingIo(io)` wraps the run's `ProvisionIo`.
  */
-import { createCloudflareApi, type ApiReply, type CloudflareApi } from "../../../../packages/framework/src/provision/cloudflare/api.js";
+import { createCloudflareApi, sentPath, type ApiReply, type CloudflareApi } from "../../../../packages/framework/src/provision/cloudflare/api.js";
 import { redact as redactText, type Redaction } from "../../../../packages/framework/src/evidence/writer.js";
 import { listTestTokens } from "../../../../tests/compliance/harness/test-tokens.js";
 import { guardFetch, MAIN_TOKEN_PURPOSE } from "../../../../tests/compliance/harness/token-guard.js";
@@ -97,19 +99,17 @@ export interface LivePass {
   cleanup(): Promise<readonly string[]>;
 }
 
-const TOKENS_PATH = /^\/(?:accounts\/[^/]+|user)\/tokens(?:\/|$)/;
-const TOKEN_CREATE_PATH = /^\/(?:accounts\/[^/]+|user)\/tokens\/?$/;
+const TOKENS_PATH = /^\/(?:accounts\/[^/]+|user)\/tokens(?:\/|$)/i;
+const TOKEN_CREATE_PATH = /^\/(?:accounts\/[^/]+|user)\/tokens\/?$/i;
 const HEX32 = /\b[0-9a-f]{32}\b/gi;
 const WORKERS_DEV_HOST = /\b([a-z0-9-]+)\.([a-z0-9-]+)\.workers\.dev\b/gi;
 
-const pathOnly = (path: string): string => {
-  const p = path.split("?")[0] ?? "";
-  try {
-    return decodeURIComponent(p);
-  } catch {
-    return p;
-  }
-};
+/**
+ * The path judged: the one sent (`sentPath`: `API_BASE + path` as the URL parser normalises it,
+ * dot segments, `\`, tabs and newlines included, each segment decoded; DEC-0615). Undefined for a
+ * URL that cannot be parsed, a write with which is refused.
+ */
+const pathOnly = (path: string): string | undefined => sentPath(path);
 
 /**
  * The guard's verdict on one request, before it is sent: a refusal message, or undefined.
@@ -117,7 +117,9 @@ const pathOnly = (path: string): string => {
  */
 export function refusalOf(method: string, path: string, body: unknown, protectedIds: ReadonlySet<string>, nowMs: number): string | undefined {
   const p = pathOnly(path);
-  if (!TOKENS_PATH.test(p) || method === "GET") return undefined;
+  if (method === "GET") return undefined;
+  if (p === undefined) return `${method} refused: its URL cannot be read`;
+  if (!TOKENS_PATH.test(p)) return undefined;
   const segments = p.split("/").map((s) => s.toLowerCase());
   if (segments.some((s) => protectedIds.has(s))) return `${method} on a protected token's ID refused (the environment token, or another protected one, is never changed or deleted)`;
   if (method === "POST" && TOKEN_CREATE_PATH.test(p)) {
@@ -132,7 +134,7 @@ export function refusalOf(method: string, path: string, body: unknown, protected
 
 /** Values an answer carries that must be redacted: token values, token IDs, zone IDs, account IDs. */
 export function secretsIn(path: string, body: unknown): Redaction[] {
-  const p = pathOnly(path);
+  const p = pathOnly(path) ?? "";
   const out: Redaction[] = [];
   const result = (body as { result?: unknown } | null)?.result;
   const items = Array.isArray(result) ? result : result === undefined || result === null ? [] : [result];

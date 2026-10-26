@@ -5636,7 +5636,7 @@ Origin: owner (plan §1, §4.3 step 7; "never change or delete the owner's token
 
 - Every PUT or DELETE of `/accounts/<a>/tokens/<id>` or `/user/tokens/<id>` by either token passes `guardTokenWrites` before it is sent. Refused: an ID in `protectedTokenIds` (the command's option and PAR-361's environment setting); a DELETE of the everyday token; a DELETE of the bootstrap token outside its own last step; a PUT of any token but the everyday token. Setup's own signing token (the `signing-record` step) is not affected unless protected.
 - The self-delete sends `DELETE /accounts/<a>/tokens/<id>` with the bootstrap token and the ID from that token's own `tokens/verify`; the in-place update `PUT`s the everyday token's ID from its own verify call. An everyday token whose ID is protected and lacks permissions is not updated: the run says so and stops.
-- The guard reads the path as Cloudflare would (no query, doubled and trailing slashes collapsed, the ID decoded) and covers every method but GET on a token's ID, sub-paths included: PATCH, POST and the value roll (`…/tokens/<id>/value`) are always refused, so no form of a write reaches a protected or other token.
+- The guard covers every method but GET on a token's ID, sub-paths included: PATCH, POST and the value roll (`…/tokens/<id>/value`) are always refused. The path it judges is the one sent, as DEC-0613 normalises it (as first written, it judged the raw path with only the query cut, slashes collapsed and the ID decoded, which dot segments, `\`, tabs and encoded segments got past).
 - A user API token in `CLOUDFLARE_BOOTSTRAP_TOKEN` is refused (it would delete a token the user made for other uses); only an account token, as the bootstrap link makes, is accepted.
 
 ### DEC-0590 — Setup output names no account ID, zone ID or subdomain, and redacts any that reach it
@@ -5644,3 +5644,20 @@ Origin: owner (never print a token value, an account ID, a zone ID or the `worke
 
 - Messages name settings, account names, the email domain and zone names, permission names and HTTP statuses only. The network check names each host by its kind: "the account's R2 storage host (`<account ID>.r2.cloudflarestorage.com`)", "the account's workers.dev subdomain (`<subdomain>.workers.dev`)", with where to change a cloud environment's network access (allow `api.cloudflare.com`, `*.r2.cloudflarestorage.com`, `*.workers.dev`). Any HTTPS answer within PAR-360 counts as reachable.
 - **Backstop.** Every line the run prints passes a redaction of each token value, account ID, zone ID, token ID and the subdomain known to the run (`[hidden]`), so a message from a lower layer (for example an API request's "got no response", which names its path) cannot leak one. A subdomain that is part of a printed name is hidden there too. The unit tests check that no run's output needs it.
+
+### DEC-0613 — The token write guard judges the path that is sent
+Origin: ai-proposed (review finding on DEC-0589) · Status: accepted · Amends: DEC-0589 · Affects: `src/provision/cloudflare/api.ts` (`sentPath`), `src/provision/cloudflare/cloudflare-setup.ts` (`guardTokenWrites`)
+
+- `createCloudflareApi` sends `API_BASE + path`, and the URL parser `fetch` uses normalises it: dot segments are resolved, `\` is read as `/`, tabs and newlines are dropped, the query and fragment are cut. So `…/x/../tokens/<id>`, `…/tokens\<id>`, `…/tok<TAB>ens/<id>` and `/user/./tokens/<id>` all reach `…/tokens/<id>`.
+- `sentPath(path)` returns that path as the guard judges it: the parser's `pathname`, each segment percent-decoded (again while it changes), any `/` or `\` a decoding reveals split, empty and dot segments resolved once more, relative to `/client/v4` when under it (else the whole path, so one that climbs out is judged too). It errs toward refusing: it never makes a path Cloudflare could route to a token look like another.
+- `guardTokenWrites` matches its token paths on `sentPath`, in any case, and compares IDs (protected, everyday, bootstrap) in any case. A non-GET whose URL cannot be parsed is refused. The request is still sent with the caller's path, which the parser turns into the same URL.
+
+### DEC-0614 — A dangling symbolic `.env.cloudflare` is written through to its target
+Origin: ai-proposed (review finding on DEC-0587) · Status: accepted · Amends: DEC-0587 · Affects: `src/provision/cloudflare/token-sources.ts`
+
+- A `.env.cloudflare` that is a symbolic link whose target does not exist yet (`existsSync` is false for it) is no longer replaced by a regular file: each write follows the link with `lstat` and `readlink`, one link at a time (a relative link from the folder it is really in, at most 40 links), and writes the target, creating it at mode 600 with the same temporary file and rename in the target's folder. The link stays a link. A target folder that does not exist fails the write.
+
+### DEC-0615 — The live pass's guard judges the path that is sent
+Origin: ai-proposed (review finding on the live pass's guarded layer) · Status: accepted · Affects: `ai/implementation/spikes/live-wizard/guarded-api.ts`
+
+- `refusalOf` and `secretsIn` read the path through `sentPath` (DEC-0613) instead of the raw path with its query cut and decoded, and match tokens paths in any case. A protected ID reached by any spelling is refused, and a token create reached by another spelling (`…/tokens/x/..`) still has its name and expiry checked. A non-GET whose URL cannot be parsed is refused.

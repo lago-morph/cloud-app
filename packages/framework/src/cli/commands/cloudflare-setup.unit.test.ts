@@ -604,6 +604,56 @@ describe("cloudflare-setup: the token write guard (DEC-0589)", () => {
     await api("GET", "/accounts/a/tokens/owner?x=1");
     expect(sent).toEqual(["POST /accounts/a/tokens", "GET /accounts/a/tokens/owner?x=1"]);
   });
+
+  it("guardTokenWrites judges the path the URL parser sends: dot segments, backslashes, tabs and newlines, encoded segments and case (DEC-0613)", async () => {
+    const sent: string[] = [];
+    const api = guardTokenWrites(async (method, path) => (sent.push(`${method} ${path}`), { status: 200, body: { success: true, result: {} } }), {
+      protectedIds: new Set(["owner"]),
+      everydayId: "every",
+      bootstrapId: "boot",
+      selfDeleteArmed: () => false,
+    });
+    for (const [method, path] of [
+      ["DELETE", "/accounts/a/x/../tokens/owner"],
+      ["DELETE", "/accounts/a/tokens/x/../owner"],
+      ["DELETE", "/accounts/a/tokens\\owner"],
+      ["DELETE", "/accounts\\a\\tokens\\owner"],
+      ["DELETE", "/accounts/a/tok\tens/owner"],
+      ["DELETE", "/accounts/a/tokens/ow\nner"],
+      ["DELETE", "/accounts/a/tokens/own\r\ner"],
+      ["DELETE", "/user/./tokens/owner"],
+      ["DELETE", "/user/tokens/./owner"],
+      ["DELETE", "/accounts/a/%74okens/owner"],
+      ["DELETE", "/%61ccounts/a/tokens/owner"],
+      ["DELETE", "/accounts/a/tokens/x/%2e%2e/owner"],
+      ["DELETE", "/accounts/a/tokens/x/%2E./owner"],
+      ["DELETE", "/accounts/a/tokens%2Fowner"],
+      ["DELETE", "/accounts/a/tokens%5Cowner"],
+      ["DELETE", "/accounts/a/tokens/%256Fwner"],
+      ["DELETE", "/../../accounts/a/tokens/owner"],
+      ["DELETE", "/accounts/a/tokens/owner#x"],
+      ["DELETE", "/accounts/a/tokens/OWNER"],
+      ["DELETE", "/accounts/a/TOKENS/owner"],
+      ["DELETE", "/USER/tokens/owner"],
+      ["DELETE", "/accounts/a/tokens/EVERY"],
+      ["DELETE", "/accounts/a/x/../tokens/every"],
+      ["DELETE", "/accounts/a/tokens/./boot"],
+      ["PUT", "/accounts/a/tokens/x/../owner"],
+      ["PUT", "/accounts/a/tokens/every/./value"],
+      ["PUT", "/accounts/a/tokens/every%2Fvalue"],
+      ["PUT", "/accounts/a/tokens/x/../signing"],
+      ["PATCH", "/accounts/a/tokens\\every"],
+      ["POST", "/user/tokens/x/%2e%2e/owner/value"],
+    ] as const) {
+      await expect(api(method, path), JSON.stringify(`${method} ${path}`)).rejects.toThrow(/setup refused to/);
+    }
+    expect(sent).toEqual([]);
+    // The everyday update reached by another spelling is still the everyday update; a create is not a write of an ID.
+    await api("PUT", "/accounts/a/tokens/./every", {});
+    await api("POST", "/accounts/a/tokens/x/..", {});
+    await api("DELETE", "/accounts/a/tokens/x/../tok0");
+    expect(sent).toEqual(["PUT /accounts/a/tokens/./every", "POST /accounts/a/tokens/x/..", "DELETE /accounts/a/tokens/x/../tok0"]);
+  });
 });
 
 describe("cloudflare-setup: local setup, git and the network (plan §4.3 steps 0, 1, 8)", () => {

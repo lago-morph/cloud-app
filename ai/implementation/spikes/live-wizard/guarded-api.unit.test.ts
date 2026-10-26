@@ -101,6 +101,34 @@ describe("protected token guard", () => {
     });
   }
 
+  it("judges the path the URL parser sends: dot segments, backslashes, tabs and newlines, encoded segments (DEC-0615)", async () => {
+    const fake = fakeCloudflare();
+    const { pass } = await start(fake);
+    const before = fake.sent.length;
+    const ids = new Set([ENV_TOKEN_ID]);
+    for (const [method, path] of [
+      ["DELETE", `/accounts/${ACCOUNT}/x/../tokens/${ENV_TOKEN_ID}`],
+      ["DELETE", `/accounts/${ACCOUNT}/tokens\\${ENV_TOKEN_ID}`],
+      ["DELETE", `/accounts/${ACCOUNT}/tok\tens/${ENV_TOKEN_ID}`],
+      ["DELETE", `/accounts/${ACCOUNT}/tokens/${ENV_TOKEN_ID.slice(0, 4)}\n${ENV_TOKEN_ID.slice(4)}`],
+      ["DELETE", `/user/./tokens/${ENV_TOKEN_ID}`],
+      ["DELETE", `/accounts/${ACCOUNT}/%74okens/${ENV_TOKEN_ID}`],
+      ["DELETE", `/accounts/${ACCOUNT}/tokens/x/%2e%2e/${ENV_TOKEN_ID}`],
+      ["DELETE", `/accounts/${ACCOUNT}/tokens%2F${ENV_TOKEN_ID}`],
+      ["DELETE", `/accounts/${ACCOUNT}/tokens/%2561${ENV_TOKEN_ID.slice(1)}`],
+      ["DELETE", `/../../accounts/${ACCOUNT}/tokens/${ENV_TOKEN_ID}`],
+      ["PUT", `/accounts/${ACCOUNT}/TOKENS/${ENV_TOKEN_ID}/value`],
+    ] as const) {
+      expect(refusalOf(method, path, undefined, ids, NOW), JSON.stringify(path.replace(ACCOUNT, "<a>"))).toMatch(/protected/);
+      await expect(pass.api(method, path)).rejects.toBeInstanceOf(LivePassRefusal);
+    }
+    expect(fake.sent.length).toBe(before);
+    // A create reached by another spelling is still a create, so its name and expiry are checked.
+    for (const path of [`/accounts/${ACCOUNT}/tokens/x/..`, `/accounts/${ACCOUNT}/tokens/.`, `/user/x/../tokens`, `/accounts/${ACCOUNT}/%74okens`]) {
+      expect(refusalOf("POST", path, { name: "prototype-framework", expires_on: expiry(60_000) }, ids, NOW), path.replace(ACCOUNT, "<a>")).toMatch(/name must be/);
+    }
+  });
+
   it("refuses an extra protected ID, through apiFor's API with another token too", async () => {
     const fake = fakeCloudflare();
     const other = "12121212121212121212121212121212";
