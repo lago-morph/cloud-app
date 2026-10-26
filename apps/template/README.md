@@ -4,7 +4,7 @@ This is the smallest app built on the prototype framework. It uses each capabili
 
 This page lists everything the owner does by hand, as copy-and-paste steps. Run the commands in a terminal, in this app's folder, on macOS or Linux with Node 22.22.0. Replace the `<…>` parts. Never paste a secret value into a command line, a committed file or a chat.
 
-**What is verified in this phase.** Local development (§1) is verified. The Cloudflare steps (§2–§11) have run against a simulated Cloudflare, and the email setup (§3) once against the real account; treat the rest as **not yet verified on Cloudflare**. AWS is a future release: this release targets local and Cloudflare only.
+This release runs apps locally (§1) and on Cloudflare (§2 on). The short version of everything here is the framework's [QUICKSTART.md](https://github.com/lago-morph/cloud-app/blob/main/QUICKSTART.md).
 
 People sign in with an email address and a password. **Anyone who signs up and verifies their address is a user.** Admins are users holding the `admin` role, granted with the `admins` command (§8); nothing about people is kept in configuration. `<domain>` below is the account's email domain.
 
@@ -22,7 +22,7 @@ People sign in with an email address and a password. **Anyone who signs up and v
    ```sh
    APP=$(npm run --silent build -- --target local --stage local | sed -n 's/^built \([^ ]*\) for .*/\1/p'); echo "$APP"
    ```
-3. Set the local value of the app's secret, which the admin page checks. `npm run dev` creates only the framework's own development keys, not the app's secrets. Run the command, paste any value, press Enter, then press Ctrl-D:
+3. The app's secret `apiKey`, which the admin page checks, needs a local value. An app made with `npm create @lago-morph/prototype-app` already has a random one, set when it was made (and `npm run cloudflare-setup` sets any that is missing). `npm run dev` generates only the framework's own development keys. To set or change the value yourself (in the framework's repository, do this once), run the command, paste any value, press Enter, then press Ctrl-D:
    ```sh
    npm run secrets -- set apiKey --target local --stage local
    ```
@@ -47,36 +47,19 @@ People sign in with an email address and a password. **Anyone who signs up and v
    ```
 7. To start again from empty local data (the database, files and logs), run `npm run reset-local`. Your code, configuration and `.dev.vars` stay.
 
-## 2. Cloudflare account and API tokens (once)
+## 2. Cloudflare setup (once per account)
 
-1. Sign up or log in at https://dash.cloudflare.com.
-2. Copy your **Account ID**. Open Account home, choose your account, and copy the Account ID from its overview page. The Cloudflare dashboard menu names on this page are **not yet verified**.
-3. Create two **account API tokens**: go to Manage Account → Account API Tokens → Create Token → Create Custom Token (not yet verified). The email domain must be a zone on this account with Cloudflare DNS active. For each token, under Account Resources include only your account, and under Zone Resources the email domain's zone. Create the token, then copy it. Cloudflare shows it only once.
-   - The **everyday token**, named `prototype-framework`, for every command except `setup-account`. **Account** permissions: Workers Scripts: Edit, Workers R2 Storage: Edit, D1: Edit, Email Sending: Read. **Zone** permissions: Zone: Read, Analytics: Read. It cannot create API tokens.
-   - The **setup token**, named `prototype-framework-setup`, for `setup-account` only (§3), which you run rarely. **Account** permissions: Workers Scripts: Edit, Workers R2 Storage: Edit, Account API Tokens: Edit (it creates the file-signing credential all stages share), Email Sending: Edit, Email Routing Addresses: Edit. **Zone** permissions: Email Routing Rules: Edit, DNS: Edit, Zone Settings: Edit, Zone: Read. Keep it apart from the everyday token.
-
-   These lists are checked against the Cloudflare API: a token with exactly the everyday permissions passed every read `deploy` makes before it changes anything. A command that lacks a permission names it.
-4. In every new terminal where you deploy, set both values. `read` keeps the token out of your shell history. Paste the everyday token when it waits, then press Enter:
-   ```sh
-   export CLOUDFLARE_ACCOUNT_ID='<your Account ID>'
-   read -rs CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN
-   ```
-5. Check the token. The output must contain `"success":true`:
-   ```sh
-   curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/tokens/verify"
-   ```
-
-If a command says it needs `NODE_USE_ENV_PROXY=1`, you are behind an HTTPS proxy. Put `NODE_USE_ENV_PROXY=1 ` in front of that command.
-
-## 3. One-time account setup
-
-Set the **setup token** first, the same way as in §2 step 4 (`read -rs CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN`, paste the setup token). Run:
+You need a Cloudflare account on the Workers Paid plan and a domain on it with Cloudflare DNS active (`<domain>` below). Run, in this app's folder (in Claude Code, say "set up Cloudflare"):
 
 ```sh
-npm run setup-account -- --target cloudflare --email-domain <domain>
+npm run cloudflare-setup
 ```
 
-Then set the everyday token again the same way. This creates the account's shared resources once, including the file-signing credential every stage uses: the log bucket `prototype-logs`, the deploy-state bucket `sst-state`, the backup bucket `prototype-backups` (a removed production stage's data, kept 30 days), the account's `workers.dev` address, sending from `no-reply@<domain>`, and a test mailbox for agents: mail to `sink+<tag>@t.<domain>` is kept for a day. When it creates the mailbox rule, it waits about a minute before it finishes. Running it again changes nothing; to change the domain, run it again with the new `--email-domain`. `deploy` never creates these resources; if any is missing (for example on an account set up before the backup bucket or the file-signing credential existed), it names them and tells you to run this command again, with the setup token.
+It prints two pre-filled dashboard links, one per token, and where to put the values (`.env.cloudflare` in this folder, or the environment). Make the tokens, put them there, and run it again until it says everything is set up. It never prints a token value, and every later command reads the tokens itself. The steps, and what to do when it stops: [QUICKSTART.md](https://github.com/lago-morph/cloud-app/blob/main/QUICKSTART.md) and the skill's `reference/owner-tasks.md` §2 (in this app, `.claude/skills/prototype-framework/reference/owner-tasks.md`).
+
+## 3. What the account setup creates
+
+Setup creates the account's shared resources once, including the file-signing credential every stage uses: the log bucket `prototype-logs`, the deploy-state bucket `sst-state`, the backup bucket `prototype-backups` (a removed production stage's data, kept 30 days), the account's `workers.dev` address, sending from `no-reply@<domain>`, and a test mailbox for agents: mail to `sink+<tag>@t.<domain>` is kept for a day. Running it again changes only what is missing. `deploy` never creates these resources; if any is missing, it says to run the setup again.
 
 ## 4. Deploy a test stage, test it, remove it
 

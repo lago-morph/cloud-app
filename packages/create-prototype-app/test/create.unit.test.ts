@@ -124,6 +124,9 @@ describe("create", () => {
     expect(got).toContain("templates/FRAMEWORK-ISSUE.md");
     expect(got.filter((f) => f.startsWith("scripts/") || f.startsWith(".claude-plugin/"))).toEqual([]);
     expect(readFileSync(join(target, SKILL_TARGET, "SKILL.md"), "utf8")).toBe(readFileSync(join(SKILL, "SKILL.md"), "utf8"));
+    // The template's committed Claude Code settings come along, with the rule that keeps the agent out of .env.cloudflare (DEC-0599).
+    const settings = JSON.parse(readFileSync(join(target, ".claude", "settings.json"), "utf8")) as { permissions: { deny: string[] } };
+    expect(settings.permissions.deny).toContain("Read(.env.cloudflare)");
   });
 
   it("gives every skill copy a VERSION marker from the plugin manifest, and keeps it when copying a copy", () => {
