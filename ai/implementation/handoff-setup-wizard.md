@@ -4,12 +4,15 @@ Plan: ai/implementation/plan-setup-wizard.md. Owner questions: ai/implementation
 
 Number ranges: b1 DEC-0563–0569/PAR-331–339; b2 DEC-0570–0576/PAR-340–349; b3 DEC-0577–0583/PAR-350–359; b4 DEC-0584–0590/PAR-360–369; b5 DEC-0591–0597/PAR-370–379; b6 DEC-0598–0604/PAR-380–389; fixes/tests DEC-0605–0619/PAR-390–399.
 
-## Status (2026-10-26, after wave 1)
-- Done (merged to main): #32 batch 1 permissions.ts (DEC-0563–0565, PAR-331–332); #33 batch 2 token-sources.ts, git-safety.ts, cli/cloudflare-settings.ts (DEC-0570–0574, PAR-340–343); #34 batch 3 setup-record.ts, setup-steps.ts (DEC-0577–0579); #35 batch 5 starter, runLocalSetup, version-check, upgrade, framework skill/ copy (DEC-0591–0597, PAR-371; PAR-370 retired). Each had CI green and an independent review with no open blocker/major (fixes re-reviewed).
-- In progress: wave 2 — b4 cloudflare-setup state machine (branch claude/wizard-b4-state-machine; also resolves the carried-forward minor findings 1–12), b6 skill/settings deny/quickstart/docs/spec (claude/wizard-b6-skill-docs).
-- Carried-forward minor findings: see the list below.
-- Next: merge wave 2 (PR, CI, independent review), clean-clone verify; then test author (§6 criteria) + independent review of everything since the plan's merge (8cea04f); fixes red-green; live Cloudflare pass (step 6 guards); final handoff.
-- Open questions: owner-questions.md.
+## Status (2026-10-26, after wave 2)
+- Done (merged to main): wave 1 #32 b1, #33 b2, #34 b3, #35 b5 (see decision log DEC-0563–0597); wave 2 #38 b4 cloudflare-setup state machine (DEC-0584–0590, PAR-360–361; carried-forward minors 1–12 fixed), #36 b6 skill/settings deny/QUICKSTART/docs/spec (DEC-0598–0604, PAR-380; SETUP-REQ/AC in docs/components/setup.md). Each PR: CI green + independent review, fixes re-reviewed.
+- Verify: main 009aa03, clean clone, `npm run verify` exit 0 (with the browser shim below).
+- In progress (step 5):
+  - #39 claude/wizard-fix-guard — token-write guard judges the URL-normalised path (`sentPath`), dangling-symlink write-through, + the live-pass guarded layer (ai/implementation/spikes/live-wizard/, preflight.md). CI failed once on an unrelated AUTH-AC-011 flake (tamper of last 2 chars can be a no-op); diagnosis under review, test fix on claude/wizard-fix-auth-flake.
+  - #40 claude/wizard-tests — compliance criteria tests (SETUP-AC-001–010, CLI-AC-008, CLI-AC-001 additions, SKILL-AC-007/008, offline starter integration). Defect found: SETUP-AC-002 env-only run creates .env.cloudflare; diagnosis confirmed; fix being added on the same branch.
+  - Whole-feature independent review of everything since 9316a19 (+#39, #40).
+- Next: fix review findings red-green, re-review, merge #39/#40/flake fix; then the live pass (step 6) with the guarded layer; final handoff + merge #37.
+- Open questions: owner-questions.md (18 items).
 
 ## Carried-forward minor findings (assigned to b4)
 1. Deny on a stronger group marks the weaker missing; treat deny as "remake token", not "upgrade".
