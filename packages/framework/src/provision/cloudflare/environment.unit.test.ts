@@ -9,6 +9,10 @@ describe("Cloudflare credentials and the SST tool environment (PROV §2 'Credent
     expect(missingCredentials({})).toEqual(["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"]);
   });
 
+  it("a value of only whitespace counts as missing", () => {
+    expect(missingCredentials({ CLOUDFLARE_API_TOKEN: "  ", CLOUDFLARE_ACCOUNT_ID: "\t" })).toEqual(["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"]);
+  });
+
   it("SST gets the token variable, the account as CLOUDFLARE_DEFAULT_ACCOUNT_ID, NODE_USE_ENV_PROXY=1, no telemetry, non-interactive; the rest of the environment is kept", () => {
     const env = sstEnvironment({ PATH: "/bin", HTTPS_PROXY: "http://proxy", CLOUDFLARE_API_TOKEN: "placeholder", CLOUDFLARE_ACCOUNT_ID: "acc" });
     expect(env).toEqual({

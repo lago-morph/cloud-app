@@ -168,6 +168,7 @@ describe("cloudflare-setup: no tokens (plan §3.2, §4.3 step 3)", () => {
     expect(status).toBe(1);
     expect(io.out).toContain("CLOUDFLARE_API_TOKEN is not set");
     expect(io.out).toContain(EVERYDAY_LINK);
+    expect(io.out).toContain("CLOUDFLARE_BOOTSTRAP_TOKEN=\nCLOUDFLARE_API_TOKEN=\nCLOUDFLARE_EMAIL_DOMAIN=\n");
     expect(io.out).not.toContain(BOOT_LINK);
     expect(world.writes()).toEqual([]);
   });
@@ -268,6 +269,30 @@ describe("cloudflare-setup: a fresh account with both tokens (plan §4.3 steps 4
     expect(world.writes()).toEqual([]);
   });
 
+  it("the same cloud environment run twice: the second run finds the bootstrap token deleted, notes it, asks for nothing, exit 0", async () => {
+    const world = await setUpWorld();
+    world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
+    const env = { CLOUDFLARE_BOOTSTRAP_TOKEN: BOOT_VALUE, CLOUDFLARE_API_TOKEN: EVERYDAY_VALUE, CLOUDFLARE_EMAIL_DOMAIN: DOMAIN, CLAUDE_CODE_REMOTE: "true" };
+    const dir = project();
+    expect((await run(world, dir, { env })).status).toBe(0);
+    expect(world.token("boot-id").deleted).toBe(true);
+    const again = await run(world, dir, { env });
+    expect(again.status).toBe(0);
+    expect(again.io.out).toContain("Everything is already set up and current: nothing to do.");
+    expect(again.io.err).toContain("note: CLOUDFLARE_BOOTSTRAP_TOKEN is no longer a valid token");
+    expect(again.io.out + again.io.err).not.toMatch(/https:\/\/dash\.cloudflare\.com\/\?to=/);
+  });
+
+  it("an invalid bootstrap token when one is needed: named, with its link only", async () => {
+    const world = freshWorld();
+    world.addToken("everyday", EVERYDAY_VALUE, "everyday-id");
+    const { status, io } = await run(world, project({ env: bothTokens() }));
+    expect(status).toBe(1);
+    expect(io.out).toContain("CLOUDFLARE_BOOTSTRAP_TOKEN (the bootstrap token): Cloudflare does not accept it as an API token");
+    expect(io.out).toContain(BOOT_LINK);
+    expect(io.out).not.toContain(EVERYDAY_LINK);
+  });
+
   it("warns when the bootstrap token has no expiry", async () => {
     const world = await setUpWorld();
     world.addToken("bootstrap", BOOT_VALUE, "boot-id");
@@ -282,6 +307,17 @@ describe("cloudflare-setup: a fresh account with both tokens (plan §4.3 steps 4
     const { status, io } = await run(world, project(), { env: { CLOUDFLARE_BOOTSTRAP_TOKEN: BOOT_VALUE, CLOUDFLARE_API_TOKEN: EVERYDAY_VALUE, CLOUDFLARE_EMAIL_DOMAIN: DOMAIN, CLAUDE_CODE_REMOTE: "true" } });
     expect(status).toBe(0);
     expect(io.out).toContain("You can now remove CLOUDFLARE_BOOTSTRAP_TOKEN from the cloud environment's settings");
+  });
+
+  it("the plan is checked before the email domain is asked for (plan §4.3 step 4)", async () => {
+    const world = freshWorld();
+    world.accounts.get(ACCOUNT)!.plan = "free";
+    world.addToken("everyday", EVERYDAY_VALUE, "everyday-id");
+    world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
+    const { status, io } = await run(world, project({ env: envFile({ CLOUDFLARE_BOOTSTRAP_TOKEN: BOOT_VALUE, CLOUDFLARE_API_TOKEN: EVERYDAY_VALUE }) }));
+    expect(status).toBe(1);
+    expect(io.out).toContain("Workers Free plan");
+    expect(io.out).not.toContain("Which domain");
   });
 
   it("the plan check with Billing Read: Workers Free stops before any change", async () => {
@@ -535,6 +571,38 @@ describe("cloudflare-setup: the token write guard (DEC-0589)", () => {
     await api("DELETE", "/accounts/a/tokens/tok0");
     await api("GET", "/accounts/a/tokens/owner");
     expect(sent).toEqual(["DELETE /accounts/a/tokens/boot", "PUT /accounts/a/tokens/every", "DELETE /accounts/a/tokens/tok0", "GET /accounts/a/tokens/owner"]);
+  });
+
+  it("guardTokenWrites cannot be bypassed by a query string, a trailing or doubled slash, an encoded ID, a sub-path (the value roll) or another method", async () => {
+    const sent: string[] = [];
+    const api = guardTokenWrites(async (method, path) => (sent.push(`${method} ${path}`), { status: 200, body: { success: true, result: {} } }), {
+      protectedIds: new Set(["owner"]),
+      everydayId: "every",
+      bootstrapId: "boot",
+      selfDeleteArmed: () => false,
+    });
+    for (const [method, path] of [
+      ["DELETE", "/accounts/a/tokens/owner?force=1"],
+      ["DELETE", "/accounts/a/tokens/owner/"],
+      ["DELETE", "//accounts/a/tokens/owner"],
+      ["DELETE", "/accounts/a/tokens/%6Fwner"],
+      ["PUT", "/accounts/a/tokens/owner/value"],
+      ["PUT", "/accounts/a/tokens/every/value"],
+      ["POST", "/accounts/a/tokens/every/value"],
+      ["PUT", "/user/tokens/owner/value?x"],
+      ["PATCH", "/accounts/a/tokens/every"],
+      ["POST", "/accounts/a/tokens/owner"],
+      ["DELETE", "/accounts/a/tokens/boot/"],
+      ["DELETE", "/accounts/a/tokens/every?x=1"],
+      ["PUT", "/accounts/a/tokens/boot?x=1"],
+    ] as const) {
+      await expect(api(method, path), `${method} ${path}`).rejects.toThrow(/setup refused to/);
+    }
+    expect(sent).toEqual([]);
+    // Creating a token (the signing step) and reading are not token writes of an ID.
+    await api("POST", "/accounts/a/tokens", {});
+    await api("GET", "/accounts/a/tokens/owner?x=1");
+    expect(sent).toEqual(["POST /accounts/a/tokens", "GET /accounts/a/tokens/owner?x=1"]);
   });
 });
 
