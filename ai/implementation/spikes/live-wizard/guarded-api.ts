@@ -10,7 +10,8 @@
  *   refused with `LivePassRefusal`. The path judged is the one sent, as the URL parser normalises
  *   it and each segment decoded (`sentPath`), so no spelling of a path reaches a token unjudged.
  *   The IDs are also handed to the state machine's own guard
- *   (`protectedTokenIds`, DEC-0589).
+ *   (`protectedTokenIds`, DEC-0589), so with the environment token as the bootstrap token setup
+ *   does not send its self-delete at all: it notes that the token is protected and goes on.
  * - **Only short-lived wizard tokens are created.** A token create (`POST /accounts/<a>/tokens` or
  *   `POST /user/tokens`) must be named `prototype-compliance-wizard-<suffix>` and expire within
  *   `MAX_TOKEN_LIFETIME_MS` (2 hours); otherwise it is refused. The prefix is under the compliance

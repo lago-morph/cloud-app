@@ -25,7 +25,8 @@
  *    bootstrap token (`GET …/tokens/<id>`, `comparePolicies`) and missing permissions added in place
  *    (`PUT …/tokens/<id>`, value unchanged); a token of the wrong account or zone, or with a deny, is
  *    explained with the everyday link only. Then the bootstrap token deletes itself (its own ID, from
- *    its own verify call) and its line in `.env.cloudflare` is commented out.
+ *    its own verify call) and its line in `.env.cloudflare` is commented out; one whose ID is
+ *    protected (`protectedTokenIds`) is not: no DELETE is sent, its line is kept and a note says so.
  * 8. **Network**: `api.cloudflare.com`, the account's R2 storage host and its `workers.dev`
  *    subdomain, each named by its kind only.
  * 9. **Summary** and the next step; `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_EMAIL_DOMAIN` filled in.
@@ -401,6 +402,8 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       return EXIT.failed;
     }
     const protectedIds = new Set([...(deps.protectedTokenIds ?? []), ...(deps.env[PROTECTED_TOKEN_IDS_ENV] ?? "").split(",").map((s) => s.trim()).filter((s) => s !== "")]);
+    /** In any case, as the write guard compares them. */
+    const isProtected = (id: string) => [...protectedIds].some((p) => p.toLowerCase() === id.toLowerCase());
     const problems: { slot: Slot; text: string }[] = [];
     // A bootstrap token Cloudflare no longer accepts (setup deleted it; the cloud environment still
     // holds it) matters only when the run needs one (DEC-0588): then it is named with its link.
@@ -536,6 +539,8 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
         if (status.missing.length > 0) reasons.push(`these setup steps are missing: ${status.missing.join(", ")}`);
         if (reasons.length === 0 && !status.current) reasons.push("the account's setup is not current");
       } catch (error) {
+        // A request layer's stop is not unreadable setup (DEC-0619): the run ends with it.
+        if (error instanceof CloudflareRequestsStopped) throw error;
         reasons = [`the account's setup could not be read with ${EVERYDAY_SETTING} (${messageOf(error)})`];
       }
       if (failedProbe.length > 0) reasons.push(`${EVERYDAY_SETTING} failed the quick check for ${probeText}; the bootstrap token adds missing permissions to it in place (its value stays the same)`);
@@ -564,7 +569,9 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       }
       const own_ = comparePolicies(ownDetails.policies, BOOTSTRAP, scope);
       if (own_.missing.length > 0) return stop([problemText(BOOTSTRAP_SETTING, `it lacks ${groupNames(own_.missing)} on this account or the email domain's zone`), NEXT_PROMPT].join("\n"));
-      if (boot.expiresOn === undefined) {
+      // A protected bootstrap token (in the live pass, the owner's own standing in for it) is never deleted (DEC-0589).
+      const bootProtected = isProtected(boot.id);
+      if (boot.expiresOn === undefined && !bootProtected) {
         warn(`WARNING: ${BOOTSTRAP_SETTING} has no expiry. Setup deletes it at the end of a successful run; if setup stops before that, delete it yourself in the dashboard (Manage account, Account API tokens, ${TOKEN_NAMES.bootstrap}), or make it with a TTL of 7 days or less next time.`);
       }
 
@@ -593,27 +600,32 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       if (check.updated === true) changed = true;
 
       // The bootstrap token deletes itself: its own ID, from its own verify call, never another.
-      selfDeleteArmed = true;
-      const deleted = await bootApi("DELETE", `/accounts/${accountId}/tokens/${boot.id}`);
-      selfDeleteArmed = false;
-      if (!succeeded(deleted)) {
-        return stop(
-          `The bootstrap token could not delete itself (${describeFailure(deleted)}). Delete it in the dashboard (Manage account, Account API tokens, ${TOKEN_NAMES.bootstrap}), then remove ${BOOTSTRAP_SETTING}.`,
-        );
-      }
-      changed = true;
-      say("the bootstrap token deleted itself");
-      try {
-        if (commentOutBootstrap(dir)) say(`commented out ${BOOTSTRAP_SETTING} in ${ENV_CLOUDFLARE_FILE}`);
-      } catch (error) {
-        warn(`could not comment out ${BOOTSTRAP_SETTING} in ${ENV_CLOUDFLARE_FILE} (${messageOf(error)}); the token is deleted, so remove the line yourself`);
-      }
-      if (settings.sources.CLOUDFLARE_BOOTSTRAP_TOKEN === "environment") {
-        say(
-          cloudSession
-            ? `You can now remove ${BOOTSTRAP_SETTING} from the cloud environment's settings (environment menu, Edit, Environment variables). The token is already deleted: until you remove it, later runs note that it is no longer valid and go on.`
-            : `You can now remove ${BOOTSTRAP_SETTING} from the environment. The token is already deleted: until you remove it, later runs note that it is no longer valid and go on.`,
-        );
+      // A protected one does not: no DELETE is sent (the guard would refuse it) and its line stays.
+      if (bootProtected) {
+        say(`note: the bootstrap token is protected, so setup did not delete it; ${BOOTSTRAP_SETTING} is kept as it is`);
+      } else {
+        selfDeleteArmed = true;
+        const deleted = await bootApi("DELETE", `/accounts/${accountId}/tokens/${boot.id}`);
+        selfDeleteArmed = false;
+        if (!succeeded(deleted)) {
+          return stop(
+            `The bootstrap token could not delete itself (${describeFailure(deleted)}). Delete it in the dashboard (Manage account, Account API tokens, ${TOKEN_NAMES.bootstrap}), then remove ${BOOTSTRAP_SETTING}.`,
+          );
+        }
+        changed = true;
+        say("the bootstrap token deleted itself");
+        try {
+          if (commentOutBootstrap(dir)) say(`commented out ${BOOTSTRAP_SETTING} in ${ENV_CLOUDFLARE_FILE}`);
+        } catch (error) {
+          warn(`could not comment out ${BOOTSTRAP_SETTING} in ${ENV_CLOUDFLARE_FILE} (${messageOf(error)}); the token is deleted, so remove the line yourself`);
+        }
+        if (settings.sources.CLOUDFLARE_BOOTSTRAP_TOKEN === "environment") {
+          say(
+            cloudSession
+              ? `You can now remove ${BOOTSTRAP_SETTING} from the cloud environment's settings (environment menu, Edit, Environment variables). The token is already deleted: until you remove it, later runs note that it is no longer valid and go on.`
+              : `You can now remove ${BOOTSTRAP_SETTING} from the environment. The token is already deleted: until you remove it, later runs note that it is no longer valid and go on.`,
+          );
+        }
       }
     }
 
@@ -672,7 +684,7 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       if (!c.zoneCovered && someZoneGrant) return { remake: `it is scoped to other zones, not the email domain's zone (${zone.name}); make it again from its link, keeping that zone included` };
       if (c.denied.length > 0) return { remake: `a deny policy takes away ${groupNames(c.denied)}, which an update cannot override; make it again from its link` };
       if (c.missing.length === 0) return { state: `has every permission of list version ${String(PERMISSIONS_VERSION)}` };
-      if (protectedIds.has(everyday.id)) return { remake: `it lacks ${groupNames(c.missing)}, and its ID is protected, so setup did not change it` };
+      if (isProtected(everyday.id)) return { remake: `it lacks ${groupNames(c.missing)}, and its ID is protected, so setup did not change it` };
       const put = await bootApi("PUT", `/accounts/${accountId}/tokens/${everyday.id}`, inPlaceUpdateBody(details, c.missing, scope));
       if (!succeeded(put)) throw new Error(`adding ${groupNames(c.missing)} to ${EVERYDAY_SETTING} failed (${describeFailure(put)}); the bootstrap token was kept, so run setup again`);
       say(`added ${groupNames(c.missing)} to ${EVERYDAY_SETTING} in place (its value is unchanged)`);

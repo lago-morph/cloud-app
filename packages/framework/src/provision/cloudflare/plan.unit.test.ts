@@ -3,7 +3,7 @@
  * DEC-0546), with a stubbed `GET /accounts/<a>/subscriptions` and the fake D1 HTTP API.
  */
 import { describe, expect, it } from "vitest";
-import type { CloudflareApi } from "./api.js";
+import { CloudflareRequestsStopped, type CloudflareApi } from "./api.js";
 import { openFakeD1Api } from "./d1/fake-d1-api.js";
 import { d1DatabaseOperations } from "./d1/operations.js";
 import { databaseLimitText, planFromSubscriptions, PLAN_SETTING_ENV, workersPlanReader } from "./plan.js";
@@ -47,6 +47,11 @@ describe("Workers plan (DEC-0546)", () => {
     expect(await workersPlanReader(subscriptionsApi(new Error("reset")), ACCOUNT, { [PLAN_SETTING_ENV]: "free" })()).toEqual({ plan: "free", source: "setting" });
     // Cloudflare's answer wins over the setting.
     expect(await workersPlanReader(subscriptionsApi(ok([])), ACCOUNT, { [PLAN_SETTING_ENV]: "paid" })()).toEqual({ plan: "free", source: "api" });
+  });
+
+  it("a request layer's stop (a budget used up, a 429) is rethrown, never read as no answer (DEC-0619)", async () => {
+    const stop = new CloudflareRequestsStopped("live pass stopped: HTTP 429 on GET (rate limited)");
+    await expect(workersPlanReader(subscriptionsApi(stop), ACCOUNT, { [PLAN_SETTING_ENV]: "paid" })()).rejects.toBe(stop);
   });
 
   it("the limit text names the plan's PAR-219 value, or both when the plan is unknown", () => {

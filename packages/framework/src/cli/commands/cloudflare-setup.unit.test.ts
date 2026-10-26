@@ -558,14 +558,26 @@ describe("cloudflare-setup: the everyday token checked with the bootstrap token 
 });
 
 describe("cloudflare-setup: the token write guard (DEC-0589)", () => {
-  it("a protected bootstrap ID is never deleted: no DELETE is sent, and the run fails", async () => {
-    const world = await setUpWorld();
-    world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
-    const { status, io } = await run(world, project({ env: bothTokens() }), { protectedTokenIds: ["boot-id"] });
-    expect(status).toBe(1);
-    expect(io.err).toContain("setup refused to delete an API token: its ID is protected");
-    expect(world.requests.filter((r) => / DELETE /.test(r))).toEqual([]);
-    expect(world.token("boot-id").deleted).toBe(false);
+  it("a protected bootstrap ID is never deleted: the self-delete is skipped (no DELETE sent), its line is kept, the run finishes normally (DEC-0589)", async () => {
+    for (const how of ["option", "environment"] as const) {
+      const world = await setUpWorld();
+      world.addToken("bootstrap", BOOT_VALUE, "boot-id");
+      const dir = project({ env: bothTokens() });
+      const { status, io, reached } = await run(world, dir, how === "option" ? { protectedTokenIds: ["boot-id"] } : { env: { PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS: "x, BOOT-ID" } });
+      expect(io.err, how).toBe("");
+      expect(status, how).toBe(0);
+      expect(io.out).toContain("note: the bootstrap token is protected, so setup did not delete it");
+      expect(io.out).not.toContain("deleted itself");
+      expect(io.out).not.toContain("commented out");
+      expect(world.requests.filter((r) => / DELETE /.test(r))).toEqual([]);
+      expect(world.token("boot-id").deleted).toBe(false);
+      // The token still exists, so its line stays as it was.
+      expect(readEnvFile(dir).startsWith(`CLOUDFLARE_BOOTSTRAP_TOKEN=${BOOT_VALUE}\n`)).toBe(true);
+      // No expiry, but no warning to delete it either: setup never deletes a protected token.
+      expect(io.err).not.toContain("no expiry");
+      expect(io.out).toContain("Next step: deploy a test stage");
+      expect(reached).toHaveLength(3);
+    }
   });
 
   it("a protected everyday ID is never updated, also when it lacks permissions; the environment variable protects too", async () => {
@@ -813,6 +825,51 @@ describe("cloudflare-setup: local setup, git and the network (plan §4.3 steps 0
     expect(io.err).toContain("cloudflare-setup failed: the pass budget is used");
     expect(io.out).not.toContain("cannot reach");
     expect(reached).toEqual([]);
+  });
+
+  it("a stop of the request layer while the setup record or the plan is read ends the run with the stop, never as unreadable setup or a bootstrap request (DEC-0619)", async () => {
+    /** The world's API, stopped from the first request `from` matches on: that one and every later one reject. */
+    const stoppingFrom = (world: SetupWorld, from: (method: string, path: string) => boolean) => {
+      let stopped = false;
+      return (value: string) => {
+        const api = world.apiFor(value);
+        return async (method: Parameters<typeof api>[0], path: string, body?: unknown) => {
+          if (stopped || from(method, path)) {
+            stopped = true;
+            throw new CloudflareRequestsStopped("live pass stopped: HTTP 429 on GET (rate limited)");
+          }
+          return api(method, path, body);
+        };
+      };
+    };
+    const runStopped = async (world: SetupWorld, env: string, from: (method: string, path: string) => boolean) => {
+      const io = captureIo(project({ env }));
+      runs.push({ io, world });
+      const reached: string[] = [];
+      const status = await cloudflareSetupCommand({ env: {}, apiFor: stoppingFrom(world, from), reach: async (url) => void reached.push(url), localSetup: fakeLocalSetup, now: () => NOW })([], io);
+      return { status, io, reached };
+    };
+    const plainly = ({ status, io, reached }: Awaited<ReturnType<typeof runStopped>>) => {
+      expect(status).toBe(1);
+      expect(io.err).toContain("cloudflare-setup failed: live pass stopped: HTTP 429 on GET (rate limited)");
+      expect(io.out).not.toContain("could not be read");
+      expect(io.out).not.toContain("This needs the bootstrap token");
+      expect(io.out).not.toContain(BOOT_LINK);
+      expect(reached).toEqual([]);
+    };
+
+    // The setup record's read (checkAccountSetup, with the everyday token).
+    plainly(await runStopped(await setUpWorld(), everydayOnly(), (_m, path) => path.includes("/objects/")));
+    // The zone lookup inside checkAccountSetup's email steps.
+    const world = await setUpWorld();
+    plainly(await runStopped(world, everydayOnly(), (_m, path) => path.startsWith("/zones") && world.requests.some((r) => r.includes("/objects/"))));
+    // The plan read (the bootstrap token's Billing Read): not taken as "not checked".
+    const withBoot = await setUpWorld();
+    withBoot.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
+    const planStop = await runStopped(withBoot, bothTokens(), (_m, path) => path.endsWith("/subscriptions"));
+    plainly(planStop);
+    expect(planStop.io.out).not.toContain("not checked");
+    expect(withBoot.writes()).toEqual([]);
   });
 
   it("a failure whose message holds the account ID or a token is printed with them hidden (the redaction backstop)", async () => {
