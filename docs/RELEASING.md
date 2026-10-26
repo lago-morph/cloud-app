@@ -18,7 +18,7 @@ What is released, together and at one version (`v<version>` tag):
    git commit -m "Install CI and release workflows"
    git push
    ```
-1. **npm account and org.** Sign up at https://www.npmjs.com/signup and turn on two-factor authentication (Account → Two-Factor Authentication). Then create the free organization `lago-morph`: avatar menu → **Add Organization** → name `lago-morph` → **Unlimited public packages** (free). The scope `@lago-morph` belongs to the user or organization of that name. If your npm user name is itself `lago-morph`, skip the organization.
+1. **npm account.** Use the npm user account `lago-morph`, with two-factor authentication turned on (Account → Two-Factor Authentication). No organization is needed: the scope `@lago-morph` belongs to that user, so both packages publish under it.
 2. **First publish, by hand** (npm can configure a trusted publisher only for a package that already exists). On a clean checkout of `main` at the commit you will tag, with Node 22.22.0:
    ```sh
    npm ci
