@@ -6,7 +6,7 @@
 import { UsageError } from "./args.js";
 import { describeFailure } from "./failure.js";
 import { EXIT, type CliIo, type Command } from "./io.js";
-import { buildBinding, cloud, devBinding, generateMigrationBinding, mailBinding, resetLocalBinding, secretsBinding, verifyBinding } from "./wiring.js";
+import { buildBinding, cloud, devBinding, generateMigrationBinding, mailBinding, resetLocalBinding, secretsBinding, upgradeBinding, verifyBinding, versionCheckBinding } from "./wiring.js";
 
 export { EXIT, type CliIo, type Command } from "./io.js";
 
@@ -48,6 +48,8 @@ const COMMANDS: Readonly<Record<string, Entry>> = {
   "reset-local": { summary: "clear local state (local D1, R2, .logs/ and .mail/)", run: resetLocalBinding },
   mail: { summary: "mail last --to <address> [--target <t>]: print the latest framework email sent to an address", run: mailBinding },
   admins: { summary: "admins grant <email> | revoke <email> | list --target <t> --stage <s> [--confirm-production <s>]: the admin role", run: adminsBinding },
+  "version-check": { summary: "compare the app's framework, its skill copies and npm's latest release; changes nothing", run: versionCheckBinding },
+  upgrade: { summary: "upgrade [<version>]: move the app to a framework release (default: latest), refresh its skill copy and verify", run: upgradeBinding },
 };
 
 export const COMMAND_NAMES: readonly string[] = Object.keys(COMMANDS);

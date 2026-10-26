@@ -63,7 +63,8 @@
     "bin",
     "dist",
     "!dist/**/*.test-support.*",
-    "migrations"
+    "migrations",
+    "skill"
   ],
   "publishConfig": {
     "access": "public"
@@ -71,7 +72,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
-    "prepack": "npm run build",
+    "prepack": "npm run build && node scripts/bundle-skill.mjs",
+    "postpack": "node scripts/bundle-skill.mjs --clean",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
   },
   "dependencies": {

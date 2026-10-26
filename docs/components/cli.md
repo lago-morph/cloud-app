@@ -7,7 +7,7 @@ Contracts: the command table below.
 ## 1. Requirements
 
 #### CLI-REQ-001 — Commands
-Origin: provenance-unclear · Derives from: SYS-REQ-018, SYS-REQ-022, SYS-REQ-023, SYS-REQ-025, SYS-REQ-027 · Decision: DEC-0512, DEC-0513, DEC-0514, DEC-0523, DEC-0544 (owner: `stop`, `start`, `deploy --start`)
+Origin: provenance-unclear · Derives from: SYS-REQ-018, SYS-REQ-022, SYS-REQ-023, SYS-REQ-025, SYS-REQ-027 · Decision: DEC-0512, DEC-0513, DEC-0514, DEC-0523, DEC-0544 (owner: `stop`, `start`, `deploy --start`), DEC-0594, DEC-0595, DEC-0597
 
 The CLI MUST provide these commands as the framework package's own binary, invoked as `npx <package> <command>` (for example `npx <package> verify`). Apps also expose them as npm scripts of the same name.
 
@@ -28,6 +28,8 @@ The CLI MUST provide these commands as the framework package's own binary, invok
 | `mail last --to <address> [--target <t>]` | Print the latest framework email sent to an address: locally from `.mail/`, on Cloudflare from the mail sink (MAIL). |
 | `admins grant <email> --target <t> --stage <s> [--confirm-production <s>]`, `admins revoke <email> …`, `admins list …` | Grant, revoke or list the `admin` role of accounts on a stage, by email address, written directly in the stage's database (CLI-REQ-005). |
 | `reset-local` | Clear local state. |
+| `version-check` | Compare the app's installed framework, its committed skill copy, the cloud setup script's skill copy and npm's latest release, and print what to do; changes nothing (DEC-0594). |
+| `upgrade [<version>]` | Move the app to a framework release (default: the latest): pins, `npm install`, the committed skill copy, `verify`, whether Cloudflare setup needs re-running, and the pinned setup script (DEC-0595). |
 
 `certify-auth` (the guided Google certification) is retired with GOOGLE (DEC-0513); `check-login` replaces it (DEC-0512).
 

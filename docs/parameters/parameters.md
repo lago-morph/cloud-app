@@ -2,7 +2,7 @@
 
 Tunable values used by the framework — limits, sizes, timeouts, defaults, and dependency version pins — are recorded here and nowhere else. Design documents and contracts refer to values by `PAR-…` ID. A value is added only when a component design or contract actually uses it; spec-level requirements and decisions do not reference concrete values (DEC-0057).
 
-IDs are never reused. IDs 010–013, 020–022, 030–033, 040, 050–053, 061–066, and 080 belonged to entries removed by DEC-0057, 211 to an entry removed by DEC-0076, and 240 to an entry removed by DEC-0077; all stay retired. 115 was never assigned; it stays unused so that no reader takes it for a retired pin.
+IDs are never reused. IDs 010–013, 020–022, 030–033, 040, 050–053, 061–066, and 080 belonged to entries removed by DEC-0057, 211 to an entry removed by DEC-0076, and 240 to an entry removed by DEC-0077, and 370 to an entry removed by DEC-0594; all stay retired. 115 was never assigned; it stays unused so that no reader takes it for a retired pin.
 
 Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 
@@ -134,6 +134,7 @@ Deferred to a later release (DEC-0508): these parameters belong to the AWS targe
 | PAR-070 | Maximum size of the skill's top-level router document | 8,000 UTF-8 bytes | ai-proposed | |
 | PAR-071 | Maximum size of each capability reference document | 12,000 UTF-8 bytes | ai-proposed | |
 | PAR-072 | Maximum size of each complete example | 20,000 UTF-8 bytes | ai-proposed | |
+| PAR-371 | Time limit of each `version-check` network lookup | 5 seconds | ai-proposed | The npm registry's latest version and the release tag's CHANGELOG (DEC-0594). A lookup that fails or runs out of time skips the npm row quietly. |
 
 ## Testing
 
