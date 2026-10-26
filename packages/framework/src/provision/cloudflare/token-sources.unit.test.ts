@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -6,6 +6,7 @@ import {
   BOOTSTRAP_DELETED_LINE,
   cloudflareEnvironment,
   commentOutBootstrap,
+  mergeCloudflareSettings,
   ENV_CLOUDFLARE_FILE,
   ENV_CLOUDFLARE_TEMPLATE,
   fillInSettings,
@@ -199,6 +200,31 @@ describe(".env.cloudflare and the environment (plan-setup-wizard §4.2; DEC-0570
     expect(settings.values).toEqual({ CLOUDFLARE_API_TOKEN: FILE_TOKEN });
     expect(settings.sources).toEqual({ CLOUDFLARE_API_TOKEN: "file" });
     expect(settings.notices).toEqual([]);
+  });
+
+  it("a whitespace-only environment value is left out of the merged environment, also when the file has none", () => {
+    const merged = cloudflareEnvironment(dir, { CLOUDFLARE_API_TOKEN: "   ", CLOUDFLARE_ACCOUNT_ID: " ", PATH: "/bin" });
+    expect(merged.CLOUDFLARE_API_TOKEN).toBeUndefined();
+    expect(merged.CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
+    expect(merged.PATH).toBe("/bin");
+    expect(mergeCloudflareSettings({ CLOUDFLARE_EMAIL_DOMAIN: "\t" }, readCloudflareSettings(dir, {})).CLOUDFLARE_EMAIL_DOMAIN).toBeUndefined();
+  });
+
+  it.runIf(isPosix)("a .env.cloudflare that is a symbolic link is written through to its target, which stays at mode 600; the link stays a link", () => {
+    const shared = join(dir, "shared");
+    mkdirSync(shared);
+    const target = join(shared, "cloudflare.env");
+    writeFileSync(target, `CLOUDFLARE_BOOTSTRAP_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_API_TOKEN=x\n`);
+    chmodSync(target, 0o644);
+    symlinkSync(target, file());
+    expect(commentOutBootstrap(dir)).toBe(true);
+    expect(lstatSync(file()).isSymbolicLink()).toBe(true);
+    expect(readFileSync(target, "utf8")).toBe(`${BOOTSTRAP_DELETED_LINE}\nCLOUDFLARE_API_TOKEN=x\n`);
+    expect(statSync(target).mode & 0o777).toBe(0o600);
+    expect(fillInSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "example.test" })).toEqual(["CLOUDFLARE_EMAIL_DOMAIN"]);
+    expect(lstatSync(file()).isSymbolicLink()).toBe(true);
+    expect(readFileSync(target, "utf8")).toContain("CLOUDFLARE_EMAIL_DOMAIN=example.test\n");
+    expect(readdirSync(shared)).toEqual(["cloudflare.env"]);
   });
 
   it("comments out a bootstrap line the parser cannot read, so no value stays in the file", () => {

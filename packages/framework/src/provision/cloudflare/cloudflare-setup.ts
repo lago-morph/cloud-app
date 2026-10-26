@@ -194,25 +194,38 @@ function redactor(): { add(value: string | undefined): void; redact(text: string
   };
 }
 
-const TOKEN_PATH = /^\/(?:accounts\/[^/]+|user)\/tokens\/([^/?]+)$/;
+/** An API token's own path, `/accounts/<a>/tokens/<id>` or `/user/tokens/<id>`, with any sub-path (such as `/value`, the roll). */
+const TOKEN_PATH = /^\/(?:accounts\/[^/]+|user)\/tokens\/([^/]+)(\/.*)?$/;
+/** Paths under `tokens/` that are not a token's ID. */
+const NOT_TOKEN_IDS = new Set(["verify", "permission_groups"]);
 
 /**
- * The token write guard (DEC-0589): every PUT or DELETE of an API token through `api` is checked
- * before it is sent. Refused: any write of a protected ID; a DELETE of the everyday token; a DELETE
- * of the bootstrap token outside its self-delete; a PUT of anything but the everyday token.
+ * The token write guard (DEC-0589): every request through `api` other than a GET that names an API
+ * token's ID is checked before it is sent. The path is read as Cloudflare would: without its query,
+ * with doubled and trailing slashes collapsed and the ID decoded. Refused: any such request on a
+ * protected ID; any method but PUT and DELETE, and any sub-path (the value roll); a DELETE of the
+ * everyday token; a DELETE of the bootstrap token outside its self-delete; a PUT of anything but
+ * the everyday token. Creating a token (`POST …/tokens`, the signing step) names no ID.
  */
 export function guardTokenWrites(
   api: CloudflareApi,
   rules: { readonly protectedIds: ReadonlySet<string>; readonly everydayId?: string; readonly bootstrapId?: string; readonly selfDeleteArmed: () => boolean },
 ): CloudflareApi {
   return async (method, path, body) => {
-    const m = TOKEN_PATH.exec(path);
-    const id = m?.[1];
-    if (id !== undefined && id !== "verify" && id !== "permission_groups" && (method === "PUT" || method === "DELETE")) {
+    const clean = (path.split(/[?#]/)[0] ?? "").replace(/\/{2,}/g, "/").replace(/(.)\/$/, "$1");
+    const m = TOKEN_PATH.exec(clean);
+    let id: string | undefined;
+    try {
+      id = m?.[1] === undefined ? undefined : decodeURIComponent(m[1]);
+    } catch {
+      id = m?.[1];
+    }
+    if (method !== "GET" && id !== undefined && !NOT_TOKEN_IDS.has(id)) {
       const refuse = (why: string) => {
-        throw new Error(`setup refused to ${method === "PUT" ? "update" : "delete"} an API token: ${why}`);
+        throw new Error(`setup refused to ${method === "DELETE" ? "delete" : "update"} an API token: ${why}`);
       };
       if (rules.protectedIds.has(id)) refuse("its ID is protected");
+      if ((method !== "PUT" && method !== "DELETE") || m?.[2] !== undefined) refuse("setup only deletes the bootstrap token and updates the everyday token's permissions");
       if (method === "DELETE" && id === rules.everydayId) refuse("it is the everyday token");
       if (method === "DELETE" && id === rules.bootstrapId && !rules.selfDeleteArmed()) refuse("the bootstrap token is deleted only by its own last step");
       if (method === "PUT" && (id !== rules.everydayId || id === rules.bootstrapId)) refuse("only the everyday token is updated in place");
@@ -361,11 +374,15 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     }
     const protectedIds = new Set([...(deps.protectedTokenIds ?? []), ...(deps.env[PROTECTED_TOKEN_IDS_ENV] ?? "").split(",").map((s) => s.trim()).filter((s) => s !== "")]);
     const problems: { slot: Slot; text: string }[] = [];
+    // A bootstrap token Cloudflare no longer accepts (setup deleted it; the cloud environment still
+    // holds it) matters only when the run needs one (DEC-0588): then it is named with its link.
+    let unusableBootstrap: string | undefined;
     const identifyIn = async (slot: Slot, value: string | undefined): Promise<Token | undefined> => {
       if (value === undefined) return undefined;
       const found = await identify(slot, value, deps.apiFor(value), configuredAccount);
       if ("problem" in found) {
-        problems.push({ slot, text: found.problem });
+        if (slot === BOOTSTRAP_SETTING) unusableBootstrap = found.problem;
+        else problems.push({ slot, text: found.problem });
         return undefined;
       }
       for (const a of found.token.accounts) hidden.add(a.id);
@@ -387,11 +404,12 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       boot = undefined;
     }
 
-    // 3. No everyday token (only a bootstrap token).
+    // 3. No everyday token (only a bootstrap token): its link, the template and where it goes.
     if (everydayValue === undefined) {
       const lines = [`${EVERYDAY_SETTING} is not set. Setup needs the everyday token too.\n`, linkBlock("everyday")];
       for (const p of problems) lines.push(problemText(p.slot, p.text));
-      lines.push(WHERE_IT_GOES, NEXT_PROMPT);
+      if (unusableBootstrap !== undefined) lines.push(problemText(BOOTSTRAP_SETTING, unusableBootstrap));
+      lines.push(`Fill in this template:\n${ENV_CLOUDFLARE_TEMPLATE}`, WHERE_IT_GOES, NEXT_PROMPT);
       return stop(lines.join("\n"));
     }
     if (problems.length > 0 || everyday === undefined) return stop([...problems.map((p) => problemText(p.slot, p.text)), NEXT_PROMPT].join("\n"));
@@ -428,6 +446,15 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       return stop([problemText(BOOTSTRAP_SETTING, `it belongs to the account "${theirs}", not "${account.name}", which ${EVERYDAY_SETTING} uses; make it on that account`), NEXT_PROMPT].join("\n"));
     }
     say(`account: ${account.name}`);
+
+    // 4 (cont.). The plan, before the email domain is asked for: read with Billing Read (the bootstrap token's); a refused read is not checked.
+    const plan = await workersPlanReader(bootApi ?? everydayApi, accountId, deps.env)();
+    if (plan.plan === "free") {
+      return stop(
+        `The account "${account.name}" is on the Workers Free plan. Sign-in by email (Better Auth with Cloudflare Email Sending) needs Workers Paid: upgrade it in the dashboard (Workers & Pages, Plans), then run setup again.\n${NEXT_PROMPT}`,
+      );
+    }
+    const planText = plan.plan === "paid" ? "Workers Paid" : 'not checked (reading it needs "Billing Read", which only the bootstrap token has)';
 
     // 5. The email domain.
     const zoneApi = bootApi ?? everydayApi;
@@ -466,15 +493,6 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     const failedProbe = probe.filter((r) => !r.ok);
     const probeText = failedProbe.map((r) => `"${r.group.name}" (HTTP ${String(r.status)})`).join(", ");
 
-    // 4 (cont.). The plan: read with Billing Read (the bootstrap token's); a refused read is not checked.
-    const plan = await workersPlanReader(bootApi ?? everydayApi, accountId, deps.env)();
-    if (plan.plan === "free") {
-      return stop(
-        `The account "${account.name}" is on the Workers Free plan. Sign-in by email (Better Auth with Cloudflare Email Sending) needs Workers Paid: upgrade it in the dashboard (Workers & Pages, Plans), then run setup again.\n${NEXT_PROMPT}`,
-      );
-    }
-    const planText = plan.plan === "paid" ? "Workers Paid" : 'not checked (reading it needs "Billing Read", which only the bootstrap token has)';
-
     let changed = false;
     let everydayState = `passed the quick check (one read per permission of list version ${String(PERMISSIONS_VERSION)})`;
     let setupState: string;
@@ -497,7 +515,7 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
         return stop(
           [
             `This needs the bootstrap token once:\n${reasons.map((r) => `  - ${r}`).join("\n")}\n`,
-            linkBlock("bootstrap"),
+            unusableBootstrap === undefined ? linkBlock("bootstrap") : problemText(BOOTSTRAP_SETTING, unusableBootstrap),
             `Put it in ${BOOTSTRAP_SETTING}.`,
             WHERE_IT_GOES,
             NEXT_PROMPT,
@@ -505,6 +523,10 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
         );
       }
       setupState = `current (setup version ${String(ACCOUNT_SETUP_VERSION)})`;
+      if (unusableBootstrap !== undefined) {
+        const where = settings.sources.CLOUDFLARE_BOOTSTRAP_TOKEN === "file" ? ENV_CLOUDFLARE_FILE : cloudSession ? "the cloud environment's settings (environment menu, Edit, Environment variables)" : "the environment";
+        warn(`note: ${BOOTSTRAP_SETTING} is no longer a valid token (setup deletes it when it is done). Nothing needs it now: remove it from ${where}.`);
+      }
     } else {
       // 7. With the bootstrap token: its own permissions first.
       const own = await bootApi("GET", `/accounts/${accountId}/tokens/${boot.id}`);
@@ -561,8 +583,8 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       if (settings.sources.CLOUDFLARE_BOOTSTRAP_TOKEN === "environment") {
         say(
           cloudSession
-            ? `You can now remove ${BOOTSTRAP_SETTING} from the cloud environment's settings (environment menu, Edit, Environment variables). The token is already deleted, so leaving it does no harm.`
-            : `You can now remove ${BOOTSTRAP_SETTING} from the environment. The token is already deleted, so leaving it does no harm.`,
+            ? `You can now remove ${BOOTSTRAP_SETTING} from the cloud environment's settings (environment menu, Edit, Environment variables). The token is already deleted: until you remove it, later runs note that it is no longer valid and go on.`
+            : `You can now remove ${BOOTSTRAP_SETTING} from the environment. The token is already deleted: until you remove it, later runs note that it is no longer valid and go on.`,
         );
       }
     }

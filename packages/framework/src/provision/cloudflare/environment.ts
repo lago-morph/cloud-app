@@ -14,9 +14,9 @@ export type Environment = Readonly<Record<string, string | undefined>>;
 
 export const CREDENTIAL_NAMES = ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"] as const;
 
-/** Names of the credential variables that are unset or empty. */
+/** Names of the credential variables that are unset, empty or only whitespace. */
 export function missingCredentials(env: Environment): string[] {
-  return CREDENTIAL_NAMES.filter((name) => (env[name] ?? "") === "");
+  return CREDENTIAL_NAMES.filter((name) => (env[name] ?? "").trim() === "");
 }
 
 /** The environment SST runs with: the caller's, plus DEC-0107's SST settings. */
