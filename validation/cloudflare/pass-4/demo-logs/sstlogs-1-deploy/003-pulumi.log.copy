@@ -1,0 +1,20 @@
+Updating (test-z8ey6q3j123mpoe):
+@ updating....
+
+@ updating.....
+ +  pulumi:pulumi:Stack demo-test-z8ey6q3j123mpoe creating (0s) 
+@ updating......
+ +  sst:cloudflare:Bucket Files creating (0s) 
+ +  cloudflare:index:R2Bucket FilesBucket creating (0s) 
+@ updating....
+ +  cloudflare:index:R2Bucket FilesBucket created (1s) 
+ +  sst:sst:LinkRef FilesLinkRef creating (0s) 
+ +  pulumi:pulumi:Stack demo-test-z8ey6q3j123mpoe created (4s) 
+Outputs:
+    _protect: false
+
+Resources:
+    + 4 created
+
+Duration: 7s
+

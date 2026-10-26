@@ -1,0 +1,1 @@
+2026-10-25T23:05:12Z guard replaced: limit 1900 -> 1975 (hard cap 2000)

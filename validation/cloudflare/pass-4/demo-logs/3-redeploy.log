@@ -1,0 +1,6 @@
+start 2026-10-25T23:29:13Z deploy --target cloudflare --stage test-z8ey6q3j123mpoe
+(node:28409) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+deployed demo stage test-z8ey6q3j123mpoe to cloudflare; database demo-test-z8ey6q3j123mpoe-db-1
+public origin: https://demo-test-z8ey6q3j123mpoe.<SUBDOMAIN>.workers.dev
+exit 0 2026-10-25T23:30:11Z

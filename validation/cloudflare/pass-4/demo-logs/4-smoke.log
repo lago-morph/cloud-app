@@ -1,0 +1,19 @@
+start 2026-10-25T23:30:22Z smoke --target cloudflare --stage test-z8ey6q3j123mpoe
+(node:28744) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+smoke: running tests/smoke/**/*.test.ts against https://demo-test-z8ey6q3j123mpoe.<SUBDOMAIN>.workers.dev (target cloudflare, stage test-z8ey6q3j123mpoe)
+(node:28782) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:28782) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  passed  the app is healthy and serves its configuration (DEMO-REQ-006)
+  passed  the account's ID is the one /api/auth/me reports (DEMO-REQ-009)
+  passed  posts: drafts are private, only admins publish, anyone reads published posts newest first (DEMO-REQ-001, -002, -008)
+  passed  photos: a 20 MB JPEG round-trips, the maximum holds, deleting removes rows and files (DEMO-REQ-003)
+  passed  the banner set by an admin reaches anonymous visitors; users cannot set it (DEMO-REQ-004)
+  passed  the posts-per-page choice survives a new login (DEMO-REQ-005)
+  passed  a share link shows a draft to an anonymous visitor; an altered link is refused (DEMO-REQ-007)
+smoke: 7 passed, 0 failed
+smoke: log for today: R2 bucket prototype-logs, keys under demo/test-z8ey6q3j123mpoe/2026/10/25/
+smoke: evidence: validation/cloudflare/3yv6g7d85p5zgln.json
+exit 0 2026-10-25T23:30:49Z
