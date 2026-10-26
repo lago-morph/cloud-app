@@ -7,6 +7,7 @@
 // Its output is redacted (every value of the secrets file, the account name, the email domain,
 // any 32-hex ID and any <x>.<sub>.workers.dev host) before it is printed or saved to <out>/<label>.log.
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -34,7 +35,12 @@ env.LIVE_COUNT_FILE = countFile;
 const preload = pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "count-fetch.mjs")).href;
 env.NODE_OPTIONS = `${env.NODE_OPTIONS ?? ""} --import ${preload}`.trim();
 
-const child = spawn("npm", ["run", ...npmArgs], { cwd: appDir, env, stdio: ["ignore", "pipe", "pipe"] });
+// LIVE_RANDOM_STDIN=1 (`secrets set`): a random value on standard input, redacted like the rest.
+const stdinValue = process.env.LIVE_RANDOM_STDIN === "1" ? randomBytes(24).toString("hex") : undefined;
+if (stdinValue !== undefined) values.unshift(stdinValue);
+delete env.LIVE_RANDOM_STDIN;
+const child = spawn("npm", ["run", ...npmArgs], { cwd: appDir, env, stdio: [stdinValue === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
+if (stdinValue !== undefined) child.stdin.end(`${stdinValue}\n`);
 let text = "";
 child.stdout.on("data", (d) => (text += d));
 child.stderr.on("data", (d) => (text += d));

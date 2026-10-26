@@ -5,7 +5,7 @@
 import { launch } from "../../../../tests/compliance/harness/launch.mjs";
 
 const entry = process.argv[2];
-if (!["live-pass.ts", "network-probe.ts", "cleanup.ts"].includes(entry)) throw new Error("usage: run-live.mjs live-pass.ts|network-probe.ts|cleanup.ts");
+if (!["live-pass.ts", "network-probe.ts", "d1-usage.ts", "cleanup.ts"].includes(entry)) throw new Error("usage: run-live.mjs live-pass.ts|network-probe.ts|d1-usage.ts|cleanup.ts");
 try {
   await launch(`ai/implementation/spikes/live-wizard/${entry}`);
 } catch (error) {
