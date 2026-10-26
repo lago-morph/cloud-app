@@ -6,7 +6,7 @@
 import { UsageError } from "./args.js";
 import { describeFailure } from "./failure.js";
 import { EXIT, type CliIo, type Command } from "./io.js";
-import { buildBinding, cloud, devBinding, generateMigrationBinding, lazy, mailBinding, resetLocalBinding, secretsBinding, verifyBinding } from "./wiring.js";
+import { buildBinding, cloud, cloudflareSetupBinding, devBinding, generateMigrationBinding, mailBinding, resetLocalBinding, secretsBinding, upgradeBinding, verifyBinding, versionCheckBinding } from "./wiring.js";
 
 export { EXIT, type CliIo, type Command } from "./io.js";
 
@@ -31,11 +31,6 @@ const setupAccountBinding: Command = cloud("setup-account", async (env) => (awai
 const checkLoginBinding: Command = cloud("check-login", async (env) => (await import("./commands/check-login.js")).checkLoginBinding(env));
 /** `admins` (CLI-REQ-005): the local D1, or the D1 HTTP API on Cloudflare. */
 const adminsBinding: Command = cloud("admins", async (env) => (await import("./commands/admins.js")).adminsBinding(env));
-/** `version-check` and `upgrade` (plan-setup-wizard §4.8a; DEC-0594, DEC-0595). */
-const versionCheckBinding: Command = lazy(async () => (await import("./commands/version-check.js")).versionCheckBinding());
-const upgradeBinding: Command = lazy(async () => (await import("./commands/upgrade.js")).upgradeBinding());
-/** `cloudflare-setup` (plan-setup-wizard §4.3; DEC-0584): reads `.env.cloudflare` itself, bootstrap token included, after the local setup. */
-const cloudflareSetupBinding: Command = lazy(async () => (await import("./commands/cloudflare-setup.js")).cloudflareSetupBinding());
 
 const COMMANDS: Readonly<Record<string, Entry>> = {
   dev: { summary: "run the app locally on http://localhost:<port>", run: devBinding },

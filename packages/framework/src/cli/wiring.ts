@@ -8,8 +8,7 @@ import type { CloudflareSettingsOptions } from "./cloudflare-settings.js";
 import type { ProcessEnvironment } from "./commands/smoke-cloud.js";
 import type { Command } from "./io.js";
 
-/** A command loaded when it runs, so one command never loads another's tooling. */
-export const lazy =
+const lazy =
   (load: () => Promise<Command>): Command =>
   async (args, io) =>
     (await load())(args, io);
@@ -88,3 +87,10 @@ export const mailBinding: Command = cloud("mail", async (env) => {
   const { cloudflareSinkReader, mailCommand } = await import("./commands/mail.js");
   return mailCommand({ cloud: cloudflareSinkReader(env) });
 });
+
+/** `version-check` and `upgrade` (plan-setup-wizard §4.8a; DEC-0594, DEC-0595). */
+export const versionCheckBinding: Command = lazy(async () => (await import("./commands/version-check.js")).versionCheckBinding());
+export const upgradeBinding: Command = lazy(async () => (await import("./commands/upgrade.js")).upgradeBinding());
+
+/** `cloudflare-setup` (plan-setup-wizard §4.3; DEC-0584): it has no `--target` and reads `.env.cloudflare` itself, bootstrap token included, after the local setup. */
+export const cloudflareSetupBinding: Command = lazy(async () => (await import("./commands/cloudflare-setup.js")).cloudflareSetupBinding());

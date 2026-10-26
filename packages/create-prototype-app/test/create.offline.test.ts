@@ -53,17 +53,19 @@ describe("npm create, offline, against a packed framework", () => {
 
       // The local setup the starter runs after npm install, from the packed framework.
       const { loadLocalSetup } = (await import(pathToFileURL(join(ext, "package", "lib", "create.mjs")).href)) as {
-        loadLocalSetup(dir: string): Promise<{ runLocalSetup(dir: string): Promise<{ step: string; result: string }[]> } | undefined>;
+        loadLocalSetup(dir: string): Promise<{ runLocalSetup(dir: string, deps: { npmInstall(dir: string): Promise<void> }): Promise<{ step: string; result: string }[]> } | undefined>;
       };
+      // Offline: the dependencies are installed above, so an install attempt fails the test instead of going online.
+      const offline = { npmInstall: () => Promise.reject(new Error("the local setup tried to run npm install")) };
       const setup = await loadLocalSetup(app);
       expect(setup, "the packed framework exports runLocalSetup from ./provision").toBeDefined();
-      const outcomes = (await setup?.runLocalSetup(app)) ?? [];
+      const outcomes = (await setup?.runLocalSetup(app, offline)) ?? [];
       expect(outcomes.slice(0, 2).map((o) => [o.step, o.result])).toEqual([
         ["dependencies", "already"],
         ["local-secrets", "applied"],
       ]);
       expect(readFileSync(join(app, ".dev.vars"), "utf8")).toMatch(/^SECRET_API_KEY=/m);
-      expect((await setup?.runLocalSetup(app))?.[1]?.result).toBe("already");
+      expect((await setup?.runLocalSetup(app, offline))?.[1]?.result).toBe("already");
 
       const built = npm(["run", "build", "--", "--target", "local", "--stage", "local"], app);
       expect(built).toContain("built myapp for target local, stage local");
