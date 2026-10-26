@@ -5456,6 +5456,8 @@ DEC-0540's criterion text counted the 5 consecutive requests from "the first tha
 - **Test change** (test authors): for each clause the test waits, bounded by PAR-310 from the command (or store deletion) returning, for a request that shows the change; then waits until PAR-310 has elapsed since the command returned; then sends 5 requests that must all show it. A request that does not see the new value is reported with its body checked against the old value's hash, so a stale read is told apart from any other failure.
 - PAR-310 (60 s) and SEC-REQ-005 are unchanged.
 
+## Setup wizard, batch 1: the permission list, the deep links and the token checks (2026-10-26)
+
 ### DEC-0563 — One versioned Cloudflare permission list: the everyday token and the dashboard-made bootstrap token
 Origin: owner (plan-setup-wizard §1, §4.1, 2026-10-26) · Status: accepted · Supersedes: DEC-0551's setup token (its everyday set is kept and extended) · Affects: PROV §2 "Credentials", SKILL-REQ-006, `skill/reference/owner-tasks.md` §2–§3, `apps/template/README.md` §2, PAR-331, PAR-332, `provision/cloudflare/permissions.ts`
 
@@ -5702,6 +5704,8 @@ Origin: orchestrator, pending owner review · Status: accepted · Keeps: DEC-053
 - **Choice.** As before: the operator's environment (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`). The harness reads and writes no `.env.cloudflare`; the commands it starts get its environment, which wins over the file. It removes `CLOUDFLARE_BOOTSTRAP_TOKEN` from its child processes, except for SETUP-AC-011's clause, which takes a bootstrap token the owner made for that run. It keeps creating its own restricted test tokens (DEC-0531) and uses one of them as the everyday token whose permission SETUP-AC-011 removes and setup restores. Every `cloudflare-setup` run it starts gets the owner's everyday token ID in PAR-361's setting (DEC-0589). It never deletes or edits a token it did not create; the bootstrap token's self-deletion in that clause applies only to the token the owner handed over for it.
 - **How to reverse.** Let the driver read `.env.cloudflare` through the framework's `cloudflareEnvironment`, and give the bootstrap token to every child process; the owner's tokens would then be exposed to `cloudflare-setup`'s self-deletion and in-place update.
 
+## Setup wizard, fix round: the token write guards judge the sent path (2026-10-26)
+
 ### DEC-0613 — The token write guard judges the path that is sent
 Origin: ai-proposed (review finding on DEC-0589) · Status: accepted · Amends: DEC-0589 · Affects: `src/provision/cloudflare/api.ts` (`sentPath`), `src/provision/cloudflare/cloudflare-setup.ts` (`guardTokenWrites`)
 
@@ -5713,8 +5717,38 @@ Origin: ai-proposed (review finding on DEC-0589) · Status: accepted · Amends: 
 Origin: ai-proposed (review finding on DEC-0587) · Status: accepted · Amends: DEC-0587 · Affects: `src/provision/cloudflare/token-sources.ts`
 
 - A `.env.cloudflare` that is a symbolic link whose target does not exist yet (`existsSync` is false for it) is no longer replaced by a regular file: each write follows the link with `lstat` and `readlink`, one link at a time (a relative link from the folder it is really in, at most 40 links), and writes the target, creating it at mode 600 with the same temporary file and rename in the target's folder. The link stays a link. A target folder that does not exist fails the write.
+- **Which writes create the target.** Only the writes that may create `.env.cloudflare` at all: the template (`writeTemplateIfAbsent`) and the bootstrap comment-out's rewrite of an existing target. `fillInSettings` never creates a missing file (DEC-0587's "No file is created to fill in", SETUP-AC-002), and a dangling link counts as missing: it returns no setting and creates nothing. Through a link to an existing target it rewrites the target (mode 600, the link kept).
 
 ### DEC-0615 — The live pass's guard judges the path that is sent
 Origin: ai-proposed (review finding on the live pass's guarded layer) · Status: accepted · Affects: `ai/implementation/spikes/live-wizard/guarded-api.ts`
 
 - `refusalOf` and `secretsIn` read the path through `sentPath` (DEC-0613) instead of the raw path with its query cut and decoded, and match tokens paths in any case. A protected ID reached by any spelling is refused, and a token create reached by another spelling (`…/tokens/x/..`) still has its name and expiry checked. A non-GET whose URL cannot be parsed is refused.
+
+## Setup wizard, review fixes: no unscoped npx, allow-listed token writes, the network check's stops (2026-10-26)
+
+### DEC-0616 — Commands are run as `npm run <command>` or `npm exec --no -- prototype-framework <command>`, never `npx prototype-framework`
+Origin: ai-proposed (review finding on DEC-0600) · Status: accepted · Amends: DEC-0600 (the first step), SKILL-REQ-003 (hard rule 3's command), SKILL-REQ-007, SKILL-AC-007 · Affects: `skill/SKILL.md`, `skill/reference/*.md`, `skill/templates/FRAMEWORK-ISSUE.md`, `skill/scripts/scaffold`, `QUICKSTART.md`, `packages/framework/README.md`, `packages/create-prototype-app/README.md`, `src/testing/connect.ts`, docs/components/skill.md, `tests/skill/{cloudflare-setup,hard-rules}.test.ts`, `tests/compliance/harness/node-deps.ts`, ai/implementation/plan-setup-wizard.md §4.8a
+
+- **Why.** The framework's binary is `prototype-framework`, but the unscoped npm name `prototype-framework` is not ours. `npx prototype-framework …` runs the app's own binary only when the app is installed; before `npm install` (a fresh cloud session) npx would download and run whatever is published under that name.
+- **Choice.** Every command the skill, the quickstart, the READMEs and the framework's messages give is `npm run <command>` (flags after `--`; the template defines a script for every command), or `npm exec --no -- prototype-framework <command>`, which refuses to install a missing package (`npm exec --no` answers "npx canceled due to missing packages and no YES option" and runs nothing; checked with npm 10.9.4). The first step is `npm run version-check`; when the app is not installed yet (no `node_modules`), it is skipped until `npm install` has run. Hard rule 3 and "Done means" say `npm run verify`. The harness's own `npx` calls in the repository pass `--no`.
+- **Tests.** SKILL-AC-007's test requires one of the two forms as the first step, fails on `npx prototype-framework` (or `npx --yes`) in the router, and requires the skip sentence; a further skill test fails on either in any skill file, the template, `QUICKSTART.md`, the package READMEs and `connect.ts`. SKILL-AC-003's test accepts the two forms for hard rule 3. `npx @lago-morph/prototype-framework …` (the scoped name, CLI-REQ-001's `npx <package>`) is unchanged.
+
+### DEC-0617 — The live pass changes or deletes only the tokens it created
+Origin: ai-proposed (review finding on the live pass's guarded layer) · Status: accepted · Amends: DEC-0615 · Affects: `ai/implementation/spikes/live-wizard/guarded-api.ts`
+
+- **An allow-list.** Besides a token create (name and expiry checked as before), the only non-GET on a tokens path the guard sends is a PUT or DELETE of `…/tokens/<id>` whose ID a create of this pass returned (any token, any spelling of the path). PATCH, any POST but a create, sub-paths (the value roll) and every other ID are refused before sending. A PUT body must keep the `prototype-compliance-wizard-` name and an `expires_on` at most `MAX_TOKEN_LIFETIME_MS` (2 hours) after that token's creation.
+- **Cleanup.** `cleanup` may also delete a listed `prototype-compliance-wizard-*` token left by an earlier pass (never a protected ID); that ID is allowed for its DELETE only.
+- **Consequence.** A bootstrap token the owner made in the dashboard for the pass cannot be deleted by setup's self-delete through this layer (the pass did not create it); the run reports the refusal and the owner deletes it. The plan's fallback, the account's existing dashboard token as bootstrap token, is protected anyway.
+
+### DEC-0618 — `cloudflare-setup`'s guard: a DELETE only of the bootstrap token or of a signing token seen by its name
+Origin: ai-proposed (review finding on DEC-0589) · Status: accepted · Amends: DEC-0589 · Affects: `src/provision/cloudflare/cloudflare-setup.ts` (`guardTokenWrites`), `src/provision/cloudflare/r2-token.ts`, `src/provision/cloudflare/target.ts`
+
+- **Before**, the guard let a DELETE of any ID through that was not protected, the everyday token or the unarmed bootstrap token, while its header said a DELETE was only of the bootstrap token or setup's signing tokens.
+- **Now** an allow-list: a DELETE is sent only for the bootstrap token's own ID in its last step, or for an ID the guard saw as a signing token: named `prototype-r2-signing` in a token list answer (`GET …/tokens`, how the signing step finds the old tokens it replaces) or created under that name through it (the new token the step deletes again when its record cannot be written). A PUT is still only of the everyday token. Protected IDs are refused first, as before. The signing step's rotation keeps working (a unit test replaces an old signing token through a full run).
+- **Redaction** (SETUP-REQ-007): every token ID a token list or create answer names goes to the run's redaction. A failed delete of a signing token names it by its name only (`deleting the R2 API token prototype-r2-signing failed: …`, the legacy per-stage name for `remove`), and the rotation's failure says to delete "the older token named prototype-r2-signing (not the newest one)" instead of printing its ID.
+
+### DEC-0619 — A request layer's stop ends the network check; the live pass's network check counts in its budget
+Origin: ai-proposed (review finding on DEC-0590 and the live pass) · Status: accepted · Affects: `src/provision/cloudflare/api.ts` (`CloudflareRequestsStopped`), `src/provision/cloudflare/cloudflare-setup.ts` (step 8), `ai/implementation/spikes/live-wizard/guarded-api.ts`
+
+- **Framework.** `CloudflareRequestsStopped` is the error a wrapping request layer throws when it will send nothing more (a budget used up, an HTTP 429). Step 8 counted every failure of its subdomain read and of each HEAD as a blocked host, so a stop was reported as a network problem and the remaining HEADs were still sent; it now rethrows a `CloudflareRequestsStopped`, and the run fails with its message. Other failures still count as a blocked host.
+- **Live pass.** `LivePassStopped` extends it, and the pass offers `pass.reach` for `CloudflareSetupDeps.reach`: the framework's `reachWith` (any answer is reachable) inside the pass's budget, refused after a stop, and a 429 answer stops the pass.
