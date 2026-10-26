@@ -5623,6 +5623,7 @@ Origin: ai-proposed (review findings on DEC-0570, DEC-0571, DEC-0577, DEC-0579) 
 - **Other fields kept.** `writeAccountSettings` keeps every other field of the stored object (DEC-0577); a changed email domain drops only the setup record's fields (`setupVersion`, `frameworkVersion`, `appliedAt`, `completedSteps`), which described the old domain, until the setup writes them for the new one. It reads the object before writing.
 - `./provision` exports `PERMISSIONS_VERSION` and `ACCOUNT_SETUP_VERSION`, which `upgrade` reads from a fresh process (DEC-0595).
 - **Token sources** (review of DEC-0570, DEC-0571): a `.env.cloudflare` that is a symbolic link is written through to its target (temporary file and rename in the target's folder, mode 600), so the link stays; an environment value of only whitespace is absent everywhere, also in `missingCredentials` and in the merged environment when the file has no value.
+- **No file is created to fill in** (plan §3.4, SETUP-AC-002): `fillInSettings` fills only an existing `.env.cloudflare`. When every setting is in the environment and no file exists, a run on a set-up account writes nothing and says "already set up"; copying the file to start another project applies only to a project that has one.
 
 ### DEC-0588 — Exit status, the plan check, and when the bootstrap token is kept
 Origin: orchestrator, pending owner review · Status: accepted · Affects: `src/provision/cloudflare/cloudflare-setup.ts`, CLI-REQ-003
