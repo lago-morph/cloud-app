@@ -6,7 +6,7 @@
 import { UsageError } from "./args.js";
 import { describeFailure } from "./failure.js";
 import { EXIT, type CliIo, type Command } from "./io.js";
-import { buildBinding, devBinding, generateMigrationBinding, mailBinding, resetLocalBinding, secretsBinding, verifyBinding } from "./wiring.js";
+import { buildBinding, cloud, devBinding, generateMigrationBinding, mailBinding, resetLocalBinding, secretsBinding, upgradeBinding, verifyBinding, versionCheckBinding } from "./wiring.js";
 
 export { EXIT, type CliIo, type Command } from "./io.js";
 
@@ -15,31 +15,22 @@ export interface Entry {
   readonly run: Command;
 }
 
-/** A command loaded when it runs, so one command never loads another's tooling. */
-const lazy =
-  (load: () => Promise<Command>): Command =>
-  async (args, io) =>
-    (await load())(args, io);
-
 /** `smoke` (C-04; never loads Vitest's Node API for other commands), with the cloud process check (D-05) in front. */
-const smokeBinding: Command = lazy(async () => {
+const smokeBinding: Command = cloud("smoke", async (env) => {
   const [{ smokeBinding: smoke }, { withCloudProcessCheck }] = await Promise.all([import("./commands/smoke.js"), import("./commands/smoke-cloud.js")]);
-  return withCloudProcessCheck(await smoke());
+  return withCloudProcessCheck(await smoke(), env);
 });
 
-/** The cloud commands (D-05). */
-const deployBinding: Command = lazy(async () => (await import("./commands/deploy.js")).deployBinding());
-const removeBinding: Command = lazy(async () => (await import("./commands/remove.js")).removeBinding());
-const stopBinding: Command = lazy(async () => (await import("./commands/stop-start.js")).stopBinding());
-const startBinding: Command = lazy(async () => (await import("./commands/stop-start.js")).startBinding());
-const setupAccountBinding: Command = lazy(async () => (await import("./commands/setup-account.js")).setupAccountBinding());
+/** The cloud commands (D-05), each bound through `cloud` (`.env.cloudflare`, DEC-0570). */
+const deployBinding: Command = cloud("deploy", async (env) => (await import("./commands/deploy.js")).deployBinding(env));
+const removeBinding: Command = cloud("remove", async (env) => (await import("./commands/remove.js")).removeBinding(env));
+const stopBinding: Command = cloud("stop", async (env) => (await import("./commands/stop-start.js")).stopBinding(env));
+const startBinding: Command = cloud("start", async (env) => (await import("./commands/stop-start.js")).startBinding(env));
+const setupAccountBinding: Command = cloud("setup-account", async (env) => (await import("./commands/setup-account.js")).setupAccountBinding(env));
 /** `check-login` (PWD §2): the real login provider on a production stage, with the mail sink. */
-const checkLoginBinding: Command = lazy(async () => (await import("./commands/check-login.js")).checkLoginBinding());
+const checkLoginBinding: Command = cloud("check-login", async (env) => (await import("./commands/check-login.js")).checkLoginBinding(env));
 /** `admins` (CLI-REQ-005): the local D1, or the D1 HTTP API on Cloudflare. */
-const adminsBinding: Command = lazy(async () => (await import("./commands/admins.js")).adminsBinding());
-/** `version-check` and `upgrade` (plan-setup-wizard §4.8a; DEC-0594, DEC-0595). */
-const versionCheckBinding: Command = lazy(async () => (await import("./commands/version-check.js")).versionCheckBinding());
-const upgradeBinding: Command = lazy(async () => (await import("./commands/upgrade.js")).upgradeBinding());
+const adminsBinding: Command = cloud("admins", async (env) => (await import("./commands/admins.js")).adminsBinding(env));
 
 const COMMANDS: Readonly<Record<string, Entry>> = {
   dev: { summary: "run the app locally on http://localhost:<port>", run: devBinding },

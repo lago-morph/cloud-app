@@ -5,6 +5,10 @@
  * owner machine alike; the sandbox proxy no longer injects one (DEC-0420). SST additionally needs
  * the account as `CLOUDFLARE_DEFAULT_ACCOUNT_ID` and `NODE_USE_ENV_PROXY=1` (its own Node
  * providers call the API with `fetch`). Wrangler is not used by provisioning.
+ *
+ * The CLI hands every Cloudflare command the process environment merged with the project's
+ * `.env.cloudflare` (`cloudflareEnvironment` in token-sources.ts, the environment winning;
+ * DEC-0570), so the functions here see both sources.
  */
 export type Environment = Readonly<Record<string, string | undefined>>;
 

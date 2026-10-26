@@ -11,8 +11,10 @@
  * - the account's R2 signing credential `prototype-r2-signing` and its record in `sst-state`
  *   (`r2-token.ts`, DEC-0550), which every stage's upload and download tickets are signed with;
  *   it is denied on every account bucket above, the backup bucket included.
+ * Each is one account step (`accountSteps`, DEC-0578): a read-only inspection and its creation.
  * Used by `setupAccount` (create when absent) and by the deploy preflight (inspect only),
- * through the per-target operations `inspectAccount` and `createSharedResources`.
+ * through the per-target operations `inspectAccount` and `createSharedResources`, and by the
+ * stepwise setup of `setup-steps.ts`.
  *
  * Bucket ownership (DEC-0270): R2 bucket names are scoped to an account, so a bucket is
  * read through this account's API path. Found → owned; Cloudflare's "not found" (HTTP 404)
@@ -28,7 +30,7 @@
 import { randomBytes } from "node:crypto";
 import type { SharedResource } from "../core/operations.js";
 import { describeFailure, resultOf, succeeded, type CloudflareApi } from "./api.js";
-import { BACKUP_BUCKET, BACKUP_BUCKET_RESOURCE, BACKUP_LIFECYCLE_RESOURCE, inspectBackupResources, setBackupLifecycle } from "./backup.js";
+import { BACKUP_BUCKET, BACKUP_LIFECYCLE_RESOURCE, hasBackupLifecycle, setBackupLifecycle } from "./backup.js";
 import { STATE_BUCKET } from "./names.js";
 import { createAccountSigningCredential, SIGNING_RESOURCE, signingCredentialState } from "./r2-token.js";
 
@@ -107,18 +109,80 @@ export async function accountSubdomain(api: CloudflareApi, accountId: string): P
   return subdomain;
 }
 
-/** The account's shared resources on Cloudflare and their state. Sends only reads. */
-export async function inspectSharedResources(api: CloudflareApi, accountId: string): Promise<SharedResource[]> {
+/**
+ * The account steps of the setup (DEC-0578; `setup-steps.ts` adds the email steps after them): one
+ * per shared resource, in the order `setup-account` creates them. The signing credential's record
+ * lives in the state home, so it comes after the buckets.
+ */
+export const ACCOUNT_STEP_IDS = ["log-bucket", "state-bucket", "backup-bucket", "backup-lifecycle", "subdomain", "signing-record"] as const;
+export type AccountStepId = (typeof ACCOUNT_STEP_IDS)[number];
+
+export interface AccountStep {
+  readonly id: AccountStepId;
+  /** The shared resource's name as printed to the owner. */
+  readonly resource: string;
+  /** Reads only; `earlier` holds the states of the steps before it in the same inspection. */
+  inspect(api: CloudflareApi, accountId: string, earlier: ReadonlyMap<AccountStepId, SharedResource["state"]>): Promise<SharedResource["state"]>;
+  /** Makes the absent resource exist (a bucket created meanwhile is not an error). */
+  create(api: CloudflareApi, accountId: string, options: SharedResourceOptions, note: (message: string) => void): Promise<void>;
+}
+
+const bucketStep = (id: AccountStepId, bucket: string): AccountStep => ({
+  id,
+  resource: `R2 bucket ${bucket}`,
+  inspect: async (api, accountId) => (await inspectBucket(api, accountId, bucket)).state,
+  create: (api, accountId) => createBucket(api, accountId, bucket),
+});
+
+/** The account steps, built on each call: `backup.ts` imports this module, so its names are read only once both are loaded. */
+export function accountSteps(): readonly AccountStep[] {
   return [
-    await inspectBucket(api, accountId, LOG_BUCKET),
-    await inspectBucket(api, accountId, STATE_BUCKET),
-    ...(await inspectBackupResources(api, accountId)),
-    { name: SUBDOMAIN_RESOURCE, state: (await readSubdomain(api, accountId)) === undefined ? "absent" : "owned" },
-    { name: SIGNING_RESOURCE, state: await signingCredentialState(api, accountId) },
+    bucketStep("log-bucket", LOG_BUCKET),
+    bucketStep("state-bucket", STATE_BUCKET),
+    bucketStep("backup-bucket", BACKUP_BUCKET),
+    {
+      id: "backup-lifecycle",
+      resource: BACKUP_LIFECYCLE_RESOURCE,
+      // Only a bucket of this account can hold the rule; it is not read otherwise.
+      inspect: async (api, accountId, earlier) => (earlier.get("backup-bucket") === "owned" && (await hasBackupLifecycle(api, accountId)) ? "owned" : "absent"),
+      create: (api, accountId) => setBackupLifecycle(api, accountId),
+    },
+    {
+      id: "subdomain",
+      resource: SUBDOMAIN_RESOURCE,
+      inspect: async (api, accountId) => ((await readSubdomain(api, accountId)) === undefined ? "absent" : "owned"),
+      create: (api, accountId, options) => registerSubdomain(api, accountId, options),
+    },
+    {
+      id: "signing-record",
+      resource: SIGNING_RESOURCE,
+      inspect: (api, accountId) => signingCredentialState(api, accountId),
+      async create(api, accountId, _options, note) {
+        const { replaced } = await createAccountSigningCredential(api, accountId);
+        if (replaced.length > 0) {
+          note(
+            `replaced the ${SIGNING_RESOURCE}; every deployed stage keeps the old key until it is redeployed: run deploy --target cloudflare --stage <stage> for each ` +
+              "deployed stage now (until then its file uploads and downloads fail)",
+          );
+        }
+      },
+    },
   ];
 }
 
-/** Creates the given absent shared resources. The core calls it only when none is foreign. */
+/** The account's shared resources on Cloudflare and their state, one per account step. Sends only reads. */
+export async function inspectSharedResources(api: CloudflareApi, accountId: string): Promise<SharedResource[]> {
+  const states = new Map<AccountStepId, SharedResource["state"]>();
+  const out: SharedResource[] = [];
+  for (const step of accountSteps()) {
+    const state = await step.inspect(api, accountId, states);
+    states.set(step.id, state);
+    out.push({ name: step.resource, state });
+  }
+  return out;
+}
+
+/** Creates the given absent shared resources through their account steps. The core calls it only when none is foreign. */
 export async function createSharedResources(
   api: CloudflareApi,
   accountId: string,
@@ -126,23 +190,12 @@ export async function createSharedResources(
   options: SharedResourceOptions = {},
   note: (message: string) => void = () => undefined,
 ): Promise<void> {
+  const steps = accountSteps();
   // The signing credential's record lives in the state home, so it comes after the buckets.
   const ordered = [...absent].sort((a, b) => Number(a.name === SIGNING_RESOURCE) - Number(b.name === SIGNING_RESOURCE));
   for (const resource of ordered) {
-    if (resource.name === LOG_BUCKET_RESOURCE) await createBucket(api, accountId, LOG_BUCKET);
-    else if (resource.name === STATE_HOME_RESOURCE) await createBucket(api, accountId, STATE_BUCKET);
-    else if (resource.name === BACKUP_BUCKET_RESOURCE) await createBucket(api, accountId, BACKUP_BUCKET);
-    else if (resource.name === BACKUP_LIFECYCLE_RESOURCE) await setBackupLifecycle(api, accountId);
-    else if (resource.name === SUBDOMAIN_RESOURCE) await registerSubdomain(api, accountId, options);
-    else if (resource.name === SIGNING_RESOURCE) {
-      const { replaced } = await createAccountSigningCredential(api, accountId);
-      if (replaced.length > 0) {
-        note(
-          `replaced the ${SIGNING_RESOURCE}; every deployed stage keeps the old key until it is redeployed: run deploy --target cloudflare --stage <stage> for each ` +
-            "deployed stage now (until then its file uploads and downloads fail)",
-        );
-      }
-    }
-    else throw new Error(`unknown Cloudflare shared resource ${resource.name}`);
+    const step = steps.find((s) => s.resource === resource.name);
+    if (!step) throw new Error(`unknown Cloudflare shared resource ${resource.name}`);
+    await step.create(api, accountId, options, note);
   }
 }
