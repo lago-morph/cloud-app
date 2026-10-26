@@ -173,6 +173,25 @@ export class FakeCloud {
     return reply;
   };
 
+  /**
+   * The same account through a token with only the everyday permissions (plan-setup-wizard §4.1:
+   * Workers Scripts Write, Workers R2 Storage Write, D1 Write, Email Sending Read; Zone Read, Zone
+   * Analytics Read, Email Routing Rules Read). Refused with 403, as live: every API token request
+   * but `tokens/verify`, the zone's DNS records ("DNS Read"), the Email Routing settings and DNS
+   * endpoints (not covered by "Email Routing Rules Read", assumed), and every zone write.
+   */
+  readonly everydayApi: CloudflareApi = async (method, path, body) => {
+    const p = new URL(`https://api${path}`).pathname;
+    const refused =
+      (p.startsWith(`${A}/tokens`) && p !== `${A}/tokens/verify`) ||
+      (p.startsWith("/zones/") && (method !== "GET" || /\/dns_records$/.test(p) || /\/email\/routing(\/dns)?$/.test(p)));
+    if (refused) {
+      this.requests.push(`${method} ${path}`);
+      return err(403, 10000, "Authentication error");
+    }
+    return this.api(method, path, body);
+  };
+
   private handle(method: string, path: string, body: unknown): ApiReply {
     const url = new URL(`https://api${path}`);
     const p = url.pathname;
