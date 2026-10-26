@@ -7,7 +7,8 @@
  * - the template's committed files are each the app definition (`src/app.ts`), code
  *   (`src/**`, `index.html`, `tests/**`, generated `migrations/**`), configuration values
  *   (`config/**`), or package/tool metadata every npm app has (`package.json`,
- *   `tsconfig.json`, `vitest.config.ts`, `.gitignore`, `README.md`); none is infrastructure as
+ *   `tsconfig.json`, `vitest.config.ts`, `.gitignore`, `README.md`, and the Claude Code settings
+ *   `.claude/settings.json`, DEC-0599); none is infrastructure as
  *   code (SST, Pulumi, wrangler, Terraform, CDK, SAM, Serverless) and no file or dependency
  *   names a provisioning tool;
  * - a scratch copy of exactly those files deploys to a new `test-<random>` stage (setting the
@@ -37,6 +38,7 @@ const ALLOWED: readonly RegExp[] = [
   /^migrations\/.+\.(?:sql|json)$/,
   /^config\/(?:local\.json|[a-z0-9]+\/[a-z0-9-]+\.json)$/,
   /^(?:package\.json|tsconfig\.json|vitest\.config\.ts|\.gitignore|README\.md)$/,
+  /^\.claude\/settings\.json$/,
 ];
 
 const IAC_FILE = /(?:^|\/)(?:sst\.config\.[a-z]+|wrangler\.(?:toml|json|jsonc)|Pulumi(?:\.[A-Za-z0-9-]+)?\.ya?ml|pulumi\.[a-z]+|[^/]+\.tf|cdk\.json|serverless\.(?:ya?ml|ts|js)|template\.ya?ml|samconfig\.toml|\.sst\/.*|infra\/.*)$/i;
