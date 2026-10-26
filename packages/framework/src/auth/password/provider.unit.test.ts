@@ -111,9 +111,14 @@ function tokenOf(message: MailInput | undefined): string {
   return decodeURIComponent(match[2]);
 }
 
-/** The verification token with its signature changed. */
+/**
+ * The verification token with its signature changed. The first signature character holds six
+ * whole bits of the HMAC's first byte, so changing it always changes the signed bytes; changing
+ * the last one need not (it carries two padding bits that decoding ignores).
+ */
 function tampered(token: string): string {
-  return `${token.slice(0, -2)}xx`;
+  const at = token.lastIndexOf(".") + 1;
+  return `${token.slice(0, at)}${token[at] === "A" ? "B" : "A"}${token.slice(at + 1)}`;
 }
 
 async function failure(promise: Promise<unknown>): Promise<string> {
