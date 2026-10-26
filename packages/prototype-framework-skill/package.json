@@ -1,0 +1,32 @@
+{
+  "name": "@lago-morph/prototype-framework-skill",
+  "version": "0.1.0",
+  "description": "The Claude Code skill for @lago-morph/prototype-framework, at the same version as the framework",
+  "keywords": [
+    "claude-code",
+    "skill",
+    "prototype-framework",
+    "cloudflare"
+  ],
+  "license": "MIT",
+  "author": "Lagomorph Labs",
+  "homepage": "https://github.com/lago-morph/cloud-app/tree/main/packages/prototype-framework-skill#readme",
+  "bugs": {
+    "url": "https://github.com/lago-morph/cloud-app/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lago-morph/cloud-app.git",
+    "directory": "packages/prototype-framework-skill"
+  },
+  "files": [
+    "skill"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepack": "node scripts/bundle.mjs",
+    "postpack": "node scripts/bundle.mjs --clean"
+  }
+}
