@@ -45,7 +45,7 @@ Results:
 - End every paginated order with the `id` column (`orderBy(desc(notes.createdAt), desc(notes.id))`) so the order is total and identical on every target.
 - `count`, `countDistinct`, `sum`, `avg` return JS numbers; every aggregate except the counts returns null on empty input.
 - A write without `.returning()` resolves to nothing. To learn which rows a write changed, use `.returning({ id: t.id })` and check its length.
-- A result larger than 256 KiB (PAR-215, text bytes plus 8 bytes per other value) fails with `SQL.RESULT_TOO_LARGE` on every target: always `limit` lists and select only the columns you need.
+- A `select` result larger than 256 KiB (PAR-215, text bytes plus 8 bytes per other value) fails with `SQL.RESULT_TOO_LARGE` on every target: always `limit` lists and select only the columns you need. A write's `returning` rows are never refused for their size, because the write has already been saved; ask `returning` only for the columns you need, such as `id`.
 - Split long `inArray` lists and multi-row inserts into chunks of at most 100 bound parameters (PAR-216) per statement; local D1 enforces this, so `verify` catches it.
 - A uniqueness or reference violation is 409 `SQL.CONFLICT`. An unreachable database (45 s budget, PAR-210) is 503 `SQL.UNAVAILABLE`. Let these propagate; never throw `SQL.*` yourself.
 

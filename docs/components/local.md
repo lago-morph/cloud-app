@@ -12,7 +12,7 @@ Origin: provenance-unclear · Derives from: SYS-REQ-022
 Running, testing, and verifying an app locally MUST need no cloud account, cloud credentials, or network access to cloud services.
 
 #### LOCAL-REQ-002 — Local resources
-Origin: ai-proposed · Derives from: SYS-REQ-022
+Origin: ai-proposed · Derives from: SYS-REQ-022 · Decision: DEC-0518
 
 Local development MUST provide every capability through local emulations:
 - local D1 for SQL and KV;
@@ -20,9 +20,10 @@ Local development MUST provide every capability through local emulations:
 - `.dev.vars` for secrets;
 - `config/local.json` for configuration;
 - `.logs/` for the log;
-- the authentication mock.
+- `.mail/` for the framework's email, captured and never sent (MAIL);
+- the authentication mock, beside the password provider (AUTH §2).
 
-Local state persists between runs in a git-ignored directory, and the CLI can reset it.
+Local state, including `.logs/` and `.mail/`, persists between runs in git-ignored directories, and the CLI can reset it.
 
 #### LOCAL-REQ-003 — Postgres-dialect check
 Origin: provenance-unclear · Derives from: SYS-REQ-011
@@ -36,18 +37,18 @@ Local URLs MUST use the hostname `localhost`. Local dev servers MUST listen on t
 
 ## 2. Design
 
-`dev` (CLI) starts Vite with a proxy for `/api`, then Wrangler (PAR-101) with the generated local entry point; each binds a loopback port itself and `dev` reads the real port back (DEC-0417). It applies pending migrations, generates missing development-only secrets, and captures log lines into `.logs/`. When stopped, it stops both processes. Local state lives in `.wrangler/` (Wrangler's own) and `.logs/`. The Postgres harness is PGlite (PAR-107), used by the test runner in-process. The dialect is fixed for each test-runner process, so `verify` runs the suite once per dialect.
+`dev` (CLI) starts Vite with a proxy for `/api`, then Wrangler (PAR-101) with the generated local entry point; each binds a loopback port itself and `dev` reads the real port back (DEC-0417). It applies pending migrations, generates missing development-only secrets, captures log lines into `.logs/`, and captures the mail sender's marked lines into `.mail/<timestamp>-<id>.json` (MAIL §2). When stopped, it stops both processes. Local state lives in `.wrangler/` (Wrangler's own) and `.logs/`. The Postgres harness is PGlite (PAR-107), used by the test runner in-process. The dialect is fixed for each test-runner process, so `verify` runs the suite once per dialect.
 
 The local target uses the Cloudflare adapters wherever possible (DEC-0039), with these local-only differences:
-- the mock in place of a real provider;
+- the mock beside the password provider, whose mail is captured (MAIL);
 - same-origin file transfers (FILES);
 - log capture through the CLI (LOG).
 
 **Build output.** `build --target <t> --stage <s>` (`src/build/`) loads `src/app.ts` (its default export, or the export `app`), checks the declared secret names, fixes the deployment identity, resolves the stage's values file and writes everything under `.framework/<target>/`, replacing what was there: `config.mjs` (the embedded resolved configuration), `entry.mjs` (the generated entry point, importing the app module, `config.mjs` and `<package>/targets/<target>`), and `worker.js` (the esbuild bundle of the entry). The local target also gets `wrangler.jsonc` for `dev`: `main: "worker.js"`, local D1 bound as `DB`, local R2 as `FILES` (DEC-0188, DEC-0190). Only a Cloudflare test-stage entry imports the authentication mock; production entries do not, and framework modules are bundled as side-effect free, so the mock module is not in their bundles (DEC-0189).
 
-**Worker runtimes.** Both Workers (`createLocalWorker`, `createCloudflareWorker`) run the same stage runtime (`src/targets/cloudflare/stage.ts`) over the Worker `env`: `DB`, `FILES`, the variable `FRAMEWORK_PUBLIC_ORIGIN` (the public origin: set by `dev` locally and by deploy on Cloudflare; missing is `CORE.MISCONFIGURED` on first use), and `SECRET_<NAME>` values. The local Worker adds the mock, local tickets signed with `frameworkLocalTicketKey` and the transfer route, and prints log entries as marked lines. The health route checks one SQL read, every declared app secret, and the framework secrets the target needs (session key; locally also the ticket key; on production stages also the Google client secret).
+**Worker runtimes.** Both Workers (`createLocalWorker`, `createCloudflareWorker`) run the same stage runtime (`src/targets/cloudflare/stage.ts`) over the Worker `env`: `DB`, `FILES`, the variable `FRAMEWORK_PUBLIC_ORIGIN` (the public origin: set by `dev` locally and by deploy on Cloudflare; missing is `CORE.MISCONFIGURED` on first use), and `SECRET_<NAME>` values. The local Worker adds the mock, local tickets signed with `frameworkLocalTicketKey` and the transfer route, and prints log entries as marked lines. The health route checks one SQL read, every declared app secret, and the framework secrets the target needs (session key and `frameworkAuthSecret`; locally also the ticket key).
 
-**Test apps.** `createTestApp` runs the same stage runtime in the test process. Each call is one build: it starts local D1 and R2 through `getPlatformProxy` with nothing persisted (on the Postgres dialect, SQL uses a fresh PGlite database instead), applies the framework migrations and then the app's — `<cwd>/migrations/<dialect>/` when present, otherwise a history generated once per process from the table definitions (DEC-0192) — and generates fresh session and ticket keys. Its public origin is `http://localhost:8787`; it keeps cookies only from `loginWithStub` (DEC-0193).
+**Test apps.** `createTestApp` runs the same stage runtime in the test process. Each call is one build: it starts local D1 and R2 through `getPlatformProxy` with nothing persisted (on the Postgres dialect, SQL uses a fresh PGlite database instead), applies the framework migrations and then the app's — `<cwd>/migrations/<dialect>/` when present, otherwise a history generated once per process from the table definitions (DEC-0192) — and generates fresh session, auth and ticket keys. Requests without `CF-Connecting-IP` get `127.0.0.1`, so the password provider's rate limits apply per test client (DEC-0516). Its public origin is `http://localhost:8787`; it keeps cookies only from `loginWithStub` (DEC-0193).
 
 ## 3. Uses
 

@@ -1,5 +1,7 @@
 # Cloudflare passes 2–5 — 2026-10-24, 03:55–04:14 UTC
 
+**Archived 2026-10-25** to branch `archive/implement-local-cloudflare` (same paths; `ai/ARCHIVE.md`, then `ARCHIVE-INDEX.md` there): this pass's records `cwcrlz8fxgo3ud4`, `5tr1c8w0x1b9lai`, `2nl855v5sscoqls` and `0ljocvikeb16ebm` (`../<runId>.json` and `raw/`); this folder's logs stay here.
+
 Written by the orchestrator from the runner's report (subagents may not write report files). Raw evidence in `logs/` (redacted; scan of 89 files found no token, account ID, subdomain or apiKey value; two SHA-256 digests of test secret values replaced). Run stage R `test-9mfkg261apxm7s2`, removed at the end.
 
 ## Usage

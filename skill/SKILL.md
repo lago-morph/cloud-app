@@ -43,7 +43,7 @@ Read this page, then only the references your task needs (task map below).
 | Test (in-process, time-dependent, smoke) | [testing.md](reference/testing.md) |
 | Deploy, run the smoke test on a cloud, remove a stage | [deploying.md](reference/deploying.md) |
 | Diagnose a failing request or deploy; a `verify` diagnostic | [troubleshooting.md](reference/troubleshooting.md), and the reference the diagnostic names |
-| Steps the owner performs (account setup, secrets, Google, admin and user IDs, deploy and remove, logs) | [owner-tasks.md](reference/owner-tasks.md) |
+| Steps the owner performs (account setup and email domain, secrets, sign-up and sign-in, admins, deploy and remove, logs) | [owner-tasks.md](reference/owner-tasks.md) |
 
 Every `verify` diagnostic ends with `(read skill/reference/<file>.md)`; that file has a "Check rules that send you here" section for the rule.
 
@@ -55,7 +55,7 @@ Every `verify` diagnostic ends with `(read skill/reference/<file>.md)`; that fil
 - [files.md](reference/files.md): tickets, the safe upload pattern, downloads.
 - [secrets.md](reference/secrets.md): declaring, reading and setting secrets; HMAC signing.
 - [configuration.md](reference/configuration.md): config keys and per-stage values files.
-- [current-user.md](reference/current-user.md): levels, admin and users lists, login, login tests.
+- [current-user.md](reference/current-user.md): levels, the admin role, login, login tests.
 - [log.md](reference/log.md): writing entries and where they go.
 - [local-development.md](reference/local-development.md): scaffolding, `dev`, local state.
 - [testing.md](reference/testing.md): `createTestApp`, fake timers, the smoke test.

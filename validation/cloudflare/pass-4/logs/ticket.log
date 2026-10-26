@@ -1,0 +1,7 @@
+2026-10-25T21:40:02.556Z record tokenId is the listed prototype-r2-signing token: true; legacy token listed: true
+2026-10-25T21:40:14.666Z signed in a verified sink user on prodcheck
+2026-10-25T21:40:14.849Z upload ticket: signed with the account credential: true; with the legacy token: false
+2026-10-25T21:40:15.409Z upload through the ticket -> 200
+2026-10-25T21:40:15.541Z download ticket: signed with the account credential: true; with the legacy token: false
+2026-10-25T21:40:15.787Z download through the ticket -> 200; bytes identical: true
+2026-10-25T21:40:16.541Z delete the file through the app -> 204

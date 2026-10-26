@@ -2,7 +2,7 @@
 
 Read this when your app needs a non-secret setting that can differ per stage (a title, a page size, a feature switch, a list of allowed values), when you add a stage's values file, or when a `verify` diagnostic names this file (`no-env-access`).
 
-For secret values read [secrets.md](secrets.md); for the admin and users lists read [current-user.md](current-user.md).
+For secret values read [secrets.md](secrets.md); for admins (a role, not configuration) read [current-user.md](current-user.md).
 
 ## Declaring keys
 
@@ -32,12 +32,12 @@ Each file has exactly two members:
 ```json
 {
   "values": { "greeting": "Hello from production" },
-  "framework": { "admins": [], "google": { "clientId": "<the Google client ID>" } }
+  "framework": { "email": { "senderName": "Notes" } }
 }
 ```
 
 - `values` holds values for your declared keys; keys with a default may be left out. A key you did not declare, a missing value for a key without a default, or a wrong type fails the build with `CORE.MISCONFIGURED`, naming the file and every bad field.
-- `framework` may hold `admins` and `users` (lists of user IDs, see [current-user.md](current-user.md)) and `google` (`clientId`, required for a production deploy; set up by the owner, see [owner-tasks.md](owner-tasks.md)).
+- `framework` holds only `email` (only `senderName`, the display name of the framework's sign-up and reset mail; optional, default the app name). It holds no address or domain: the sender address comes from the account's email domain, which the owner sets up once ([owner-tasks.md](owner-tasks.md)).
 - A production stage reads only its own file and never falls back to `test.json`, so create `config/<target>/<stage>.json` before its first deploy.
 - Never put a secret in these files: there is no place for one.
 
@@ -47,7 +47,7 @@ App code reads configuration only through `c.var.config`. Never read `process.en
 
 ## In tests
 
-`createTestApp(app, { config: { greeting: "Hi there" } })` overrides declared values; an undeclared key makes it throw. The reserved key `framework` takes `{ admins?, users? }`, for example to test the users list with the stub login provider ([current-user.md](current-user.md)).
+`createTestApp(app, { config: { greeting: "Hi there" } })` overrides declared values; an undeclared key makes it throw. The reserved key `framework` takes only `email`; `admins` or `users` make it throw, as the build does. Test roles with `grantRole` ([current-user.md](current-user.md)).
 
 ## Check rules that send you here
 

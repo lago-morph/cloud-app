@@ -12,6 +12,8 @@
  *   else prints `https://reference-<s>.example.workers.dev`. A file `fail-next-deploy` in the
  *   state directory makes the next deploy exit 1 with an unrelated message (and is removed).
  * - `remove … --stage <s>`: deletes the stage's state; exit 1 when `fail-remove` exists.
+ * - Any command whose `CLOUDFLARE_API_TOKEN` equals `$FAKE_CLI_REFUSED_TOKEN`: exit 1 with the
+ *   CLI's Cloudflare API 401 failure (`HTTP 401: Authentication error (code 10000)`).
  */
 import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -35,6 +37,12 @@ function option(name) {
 }
 
 function main(stdin) {
+  // `$FAKE_CLI_REFUSED_TOKEN`: a call whose CLOUDFLARE_API_TOKEN is this value fails as the CLI does on an API 401.
+  const refusedToken = process.env.FAKE_CLI_REFUSED_TOKEN ?? "";
+  if (refusedToken !== "" && process.env.CLOUDFLARE_API_TOKEN === refusedToken) {
+    process.stderr.write(`${args[0]} failed: listing Worker scripts failed: HTTP 401: Authentication error (code 10000)\n`);
+    return 1;
+  }
   const stage = option("--stage") ?? "local";
   const file = join(stateDir, `${stage}.json`);
   const state = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : { worker: false, secrets: [] };

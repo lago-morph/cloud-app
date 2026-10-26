@@ -2,7 +2,7 @@
  * `createTestApp` (testing.d.ts; core.md §2 "Testing"): the app in the test process over fresh
  * local D1 and R2 (Wrangler's getPlatformProxy, DEC-0105) — this process runs the SQLite
  * dialect — with migrations applied, the authentication mock or the stub provider, the
- * `unavailable` option, `logs()`, `as`, `loginWithStub` and `dispose`.
+ * `unavailable` option, `setUnavailable`, `logs()`, `as`, `loginWithStub` and `dispose`.
  */
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -29,6 +29,10 @@ const app = defineApp({
     });
     api.get("/kv", async (c) => c.json({ value: await c.var.kv.get("k") }));
     api.get("/files", async (c) => c.json(await c.var.files.head("x")));
+    api.put("/files", async (c) => {
+      await c.var.files.put("x", new Uint8Array([1, 2, 3]));
+      return c.json({ ok: true });
+    });
     api.get("/secret", async (c) => c.json({ value: await c.var.secrets.get("apiKey") }));
     api.get("/me", (c) => c.json(c.var.user));
     api.get("/log", (c) => {
@@ -131,6 +135,39 @@ describe("createTestApp", { timeout: 60_000 }, () => {
     expect(await code(await t.request("/api/kv"))).toBe("KV.UNAVAILABLE");
   });
 
+  it("setUnavailable flips a capability mid-test: a stored file, then a failing files operation, then back (DEC-0537)", async () => {
+    const t = await open();
+    expect((await t.request("/api/files", { method: "PUT" })).status).toBe(200);
+    expect(await (await t.request("/api/files")).json()).toMatchObject({ name: "x", size: 3 });
+    t.setUnavailable(["files"]);
+    expect(await code(await t.request("/api/files"))).toBe("FILES.UNAVAILABLE");
+    // Shared with apps made by as(); other capabilities still work.
+    expect(await code(await t.as(mockUsers.user("u2")).request("/api/files"))).toBe("FILES.UNAVAILABLE");
+    expect((await t.request("/api/notes", { method: "POST" })).status).toBe(200);
+    t.setUnavailable([]);
+    expect(await (await t.request("/api/files")).json()).toMatchObject({ name: "x", size: 3 });
+  });
+
+  for (const [capability, path, expected] of [
+    ["sql", "/api/notes", "SQL.UNAVAILABLE"],
+    ["kv", "/api/kv", "KV.UNAVAILABLE"],
+    ["secrets", "/api/secret", "SEC.UNAVAILABLE"],
+  ] as const) {
+    it(`setUnavailable(["${capability}"]) makes it fail with ${expected} from the next request, and replaces the option's set`, async () => {
+      const t = await open({ ...base, secrets: { apiKey: "abc" }, unavailable: ["files"] });
+      t.setUnavailable([capability]);
+      expect(await code(await t.request(path, { method: capability === "sql" ? "POST" : "GET" }))).toBe(expected);
+      expect((await t.request("/api/files")).status).toBe(200);
+    });
+  }
+
+  it("setUnavailable rejects an unknown capability and a disposed app", async () => {
+    const t = await open();
+    expect(() => t.setUnavailable(["mail" as "files"])).toThrow(/unknown capability "mail"/);
+    await t.dispose();
+    expect(() => t.setUnavailable([])).toThrow(/disposed/);
+  });
+
   it("sends the user option's identity, and as() returns an app sending another identity over the same storage", async () => {
     const t = await open({ ...base, user: mockUsers.user("u1") });
     expect(await (await t.request("/api/me")).json()).toEqual({ level: "user", id: "u1", displayName: null });
@@ -159,16 +196,82 @@ describe("createTestApp", { timeout: 60_000 }, () => {
     }
   });
 
-  it("loginWithStub completes a stub login and keeps the session; framework.admins comes from config", async () => {
-    const t = await open({ stubLoginProvider: true, config: { title: "t", framework: { admins: [] } } });
+  it(tag("AUTH-AC-003", "loginWithStub keeps the session; grantRole and revokeRole change the level on the next request"), async () => {
+    const t = await open({ ...base, stubLoginProvider: true });
     await t.loginWithStub("person-1", { displayName: "P" });
     const me = (await (await t.request("/api/auth/me")).json()) as { level: string; id: string; displayName: string };
     expect(me.level).toBe("user");
     expect(me.id).toMatch(/^u_[A-Z2-7]{26}$/i);
     expect(me.displayName).toBe("P");
-    const admin = await open({ stubLoginProvider: true, config: { title: "t", framework: { admins: [me.id] } } });
-    await admin.loginWithStub("person-1");
-    expect(((await (await admin.request("/api/auth/me")).json()) as { level: string }).level).toBe("admin");
+    await t.grantRole(me.id, "admin");
+    expect(((await (await t.request("/api/auth/me")).json()) as { level: string }).level).toBe("admin");
+    await t.grantRole(me.id, "admin"); // already held: no change
+    expect(((await (await t.request("/api/auth/me")).json()) as { level: string }).level).toBe("admin");
+    await t.revokeRole(me.id, "admin");
+    expect(((await (await t.request("/api/auth/me")).json()) as { level: string }).level).toBe("user");
+    await t.revokeRole(me.id, "admin"); // not held: no change
+    await expect(t.grantRole("u_NOBODY", "admin")).rejects.toThrow(/no account has the user ID/);
+  });
+
+  it("grantRole and revokeRole throw with the authentication mock", async () => {
+    const t = await open();
+    await expect(t.grantRole("mock-user", "admin")).rejects.toThrow(/needs a real login provider/);
+    await expect(t.revokeRole("mock-user", "admin")).rejects.toThrow(/needs a real login provider/);
+  });
+
+  it("a framework section with admins or users makes createTestApp throw, as the build does (DEC-0525)", async () => {
+    for (const framework of [{ admins: [] }, { users: ["u_X"] }]) {
+      await expect(createTestApp(app, { config: { title: "t", framework } })).rejects.toThrow(/unknown field "framework\.(admins|users)"/);
+    }
+  });
+
+  it(tag("AUTH-AC-003", "with the password provider, grantRole and revokeRole change the signed-in account's level on its next request"), async () => {
+    const t = await open({ ...base, passwordLoginProvider: true, secrets: { apiKey: "k" } });
+    const post = (path: string, body: unknown) =>
+      t.request(`/api/auth/password/${path}`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(body) });
+    const email = "role@example.test";
+    const password = "correct horse battery staple";
+    expect((await post("sign-up", { email, password, displayName: "Role" })).status).toBeLessThan(300);
+    let message = await t.mail.lastTo(email);
+    for (let i = 0; message === undefined && i < 50; i++) {
+      await new Promise((r) => setTimeout(r, 20));
+      message = await t.mail.lastTo(email);
+    }
+    const token = /[?&]token=([^&\s"<]+)/.exec(message?.text ?? "")?.[1] ?? "";
+    expect(token).not.toBe("");
+    expect((await post("verify", { token: decodeURIComponent(token) })).status).toBeLessThan(300);
+    const signIn = await post("sign-in", { email, password });
+    expect(signIn.status).toBeLessThan(300);
+    const pair = signIn.headers.getSetCookie().map((line) => line.split(";")[0] ?? "").find((p) => p.startsWith("session_local=") && p !== "session_local=");
+    expect(pair).toBeDefined();
+    const cookie = { headers: { cookie: pair ?? "" } };
+    const level = async () => ((await (await t.request("/api/auth/me", cookie)).json()) as { level: string; id: string });
+    const me = await level();
+    expect(me.level).toBe("user");
+    await t.grantRole(me.id, "admin");
+    expect((await level()).level).toBe("admin");
+    await t.revokeRole(me.id, "admin");
+    expect((await level()).level).toBe("user");
+  });
+
+  it("keeps only the loginWithStub session (local.md, DEC-0193): a password sign-in's cookie is not sent on later requests", async () => {
+    const t = await open({ ...base, passwordLoginProvider: true, secrets: { apiKey: "k" } });
+    const post = (path: string, body: unknown) =>
+      t.request(`/api/auth/password/${path}`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(body) });
+    const email = "kept@example.test";
+    const password = "correct horse battery staple";
+    await post("sign-up", { email, password, displayName: "Kept" });
+    let message = await t.mail.lastTo(email);
+    for (let i = 0; message === undefined && i < 50; i++) {
+      await new Promise((r) => setTimeout(r, 20));
+      message = await t.mail.lastTo(email);
+    }
+    const token = /[?&]token=([^&\s"<]+)/.exec(message?.text ?? "")?.[1] ?? "";
+    await post("verify", { token: decodeURIComponent(token) });
+    const signIn = await post("sign-in", { email, password });
+    expect(signIn.status).toBeLessThan(300);
+    expect(signIn.headers.getSetCookie().some((line) => line.startsWith("session_local=") && !line.startsWith("session_local=;"))).toBe(true);
+    expect(await (await t.request("/api/auth/me")).json()).toEqual({ level: "anonymous" });
   });
 
   it("loginWithStub with a stub failure leaves no session", async () => {
@@ -184,6 +287,19 @@ describe("createTestApp", { timeout: 60_000 }, () => {
     const stub = await open({ ...base, stubLoginProvider: true });
     const none = await stub.request("/api/auth/mock-login", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
     expect(none.status).toBe(404);
+  });
+
+  it("passwordLoginProvider installs the password provider instead of the mock, with an empty outbox and its secret", async () => {
+    const t = await open({ ...base, passwordLoginProvider: true, secrets: { apiKey: "k" } });
+    expect(() => t.as(mockUsers.user())).toThrow(/password login provider/);
+    const none = await t.request("/api/auth/mock-login", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    expect(none.status).toBe(404);
+    expect(await t.mail.all()).toEqual([]);
+    expect(await t.mail.lastTo("nobody@example.test")).toBeUndefined();
+    // The health check finds frameworkAuthSecret.
+    expect((await t.request("/api/__framework/health")).status).toBe(204);
+    await expect(createTestApp(app, { ...base, passwordLoginProvider: true, stubLoginProvider: true })).rejects.toThrow(/cannot be combined/);
+    await expect(createTestApp(app, { ...base, passwordLoginProvider: true, user: mockUsers.user() })).rejects.toThrow(/cannot be combined/);
   });
 
   it("refuses URLs on any other origin or protocol before the app sees them (root cause F-02 entry 2 revised)", async () => {

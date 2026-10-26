@@ -1,0 +1,12 @@
+Updating (test-wkj70sooa7z9xav):
+
+@ updating..........
+    pulumi:pulumi:Stack reference-test-wkj70sooa7z9xav  
+Outputs:
+    _protect: false
+
+Resources:
+    8 unchanged
+
+Duration: 7s
+

@@ -9,13 +9,16 @@
  *    configuration module (DEC-0063);
  * 4. generate the target entry point: it imports the app module, the configuration module and
  *    `<package>/targets/<target>`; only a test-stage Cloudflare entry imports the
- *    authentication mock (production bundles contain none);
- * 5. bundle the entry for Workers (esbuild);
+ *    authentication mock and the mail capture with its test-mail route (production bundles
+ *    contain none);
+ * 5. bundle the entry for Workers (esbuild) and inspect it: no Node.js module other than
+ *    `node:crypto` and `node:async_hooks`, and no provider SDK by module path or marker string
+ *    (CF-REQ-003, DEC-0554, `inspect.ts`);
  * 6. locally, write the `wrangler.jsonc` `dev` runs (local D1 `DB`, local R2 `FILES`).
- * Everything goes under `<app>/.framework/<target>/`, which is replaced on every build.
+ * Everything goes under `<app>/.framework/<target>/`, which is replaced on every build except `stages/`, the deploy records (DEC-0529).
  * Node only.
  */
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import { createDeployment, type Deployment, type Target } from "../core/identity.js";
 import { nodeFileReader, resolveStageConfig } from "../config/files.js";
@@ -25,12 +28,21 @@ import { checkSecretDeclarations } from "../secrets/names.js";
 import { BINDINGS } from "../targets/cloudflare/bindings.js";
 import { APP_ENTRY, BUILD_DIR, loadAppModule } from "./load.js";
 import { bundleWorker } from "./bundle.js";
+import { ALLOWED_NODE_MODULES, disallowedNodeModules, providerSdksIn } from "./inspect.js";
+import { FrameworkError } from "../core/errors.js";
 
 /** The framework's package name, as generated entry points import it. */
 export const PACKAGE_NAME = "@lago-morph/prototype-framework";
 
 /** Workers compatibility date written for local `dev` (the Wrangler pin's runtime supports it). */
 export const COMPATIBILITY_DATE = "2026-10-01";
+
+/**
+ * Workers compatibility flags of every Worker the framework builds (local `dev` and cloud
+ * stages): `nodejs_compat`, set explicitly although Node APIs are on at this date, for the
+ * password provider's `node:crypto` and `node:async_hooks` (CF-REQ-003, DEC-0516, RESULT.md S1).
+ */
+export const COMPATIBILITY_FLAGS: readonly string[] = Object.freeze(["nodejs_compat"]);
 
 export interface BuildOptions {
   /** The app directory (holding `src/app.ts`, `config/`). */
@@ -82,8 +94,8 @@ export function entrySource(options: {
     lines.push(`import { createLocalWorker } from ${JSON.stringify(options.runtimeImport)};`, "export default createLocalWorker(app, config);");
   } else if (options.deployment.isTestStage) {
     lines.push(
-      `import { createAuthMock, createCloudflareWorker } from ${JSON.stringify(options.runtimeImport)};`,
-      "export default createCloudflareWorker(app, config, { mock: createAuthMock });",
+      `import { createAuthMock, createCloudflareWorker, createTestMailCapture } from ${JSON.stringify(options.runtimeImport)};`,
+      "export default createCloudflareWorker(app, config, { mock: createAuthMock, testMail: createTestMailCapture });",
     );
   } else {
     lines.push(`import { createCloudflareWorker } from ${JSON.stringify(options.runtimeImport)};`, "export default createCloudflareWorker(app, config);");
@@ -99,12 +111,28 @@ export function localWranglerConfig(deployment: Deployment): string {
       name,
       main: "worker.js",
       compatibility_date: COMPATIBILITY_DATE,
+      compatibility_flags: [...COMPATIBILITY_FLAGS],
       d1_databases: [{ binding: BINDINGS.database, database_name: name, database_id: "00000000-0000-0000-0000-000000000000" }],
       r2_buckets: [{ binding: BINDINGS.files, bucket_name: name }],
     },
     null,
     2,
   )}\n`;
+}
+
+/**
+ * The per-stage deploy records `deploy` writes beside the build output (`.framework/<target>/stages/<stage>.json`,
+ * cli.md §2, DEC-0272). They outlive any build: `smoke` and `check-login` read a stage's record
+ * after other stages of the same app were built or deployed.
+ */
+const STAGE_RECORDS_DIR = "stages"; // as `deployRecordPath` (cli/commands/smoke.ts)
+
+/** Removes the previous build output in `outDir`, keeping the stages' deploy records. */
+function clearBuildOutput(outDir: string): void {
+  if (!existsSync(outDir)) return;
+  for (const name of readdirSync(outDir)) {
+    if (name !== STAGE_RECORDS_DIR) rmSync(join(outDir, name), { recursive: true, force: true });
+  }
 }
 
 export async function buildApp(options: BuildOptions): Promise<BuildResult> {
@@ -116,7 +144,7 @@ export async function buildApp(options: BuildOptions): Promise<BuildResult> {
   const resolved = resolveStageConfig(deployment, { config: definition.config, secrets: definition.secrets }, nodeFileReader(appDir));
 
   const outDir = join(appDir, BUILD_DIR, options.target);
-  rmSync(outDir, { recursive: true, force: true });
+  clearBuildOutput(outDir);
   mkdirSync(outDir, { recursive: true });
   const configModule = join(outDir, "config.mjs");
   writeFileSync(configModule, generateConfigModule(resolved));
@@ -133,6 +161,20 @@ export async function buildApp(options: BuildOptions): Promise<BuildResult> {
   );
   const bundle = join(outDir, "worker.js");
   const { modules } = await bundleWorker(entry, bundle);
+  const disallowed = disallowedNodeModules(readFileSync(bundle, "utf8"));
+  if (disallowed.length > 0) {
+    throw new FrameworkError(
+      "CORE.MISCONFIGURED",
+      `the Worker bundle references Node.js modules a Worker may not use: ${disallowed.join(", ")}; only ${ALLOWED_NODE_MODULES.join(" and ")} are allowed (CF-REQ-003)`,
+    );
+  }
+  const sdks = providerSdksIn(readFileSync(bundle, "utf8"), modules);
+  if (sdks.length > 0) {
+    throw new FrameworkError(
+      "CORE.MISCONFIGURED",
+      `the Worker bundle contains a provider SDK: ${sdks.join(", ")}; app code uses the framework's APIs, and a package that brings in a provider SDK cannot be used (CF-REQ-003, DEC-0554)`,
+    );
+  }
   let wranglerConfig: string | undefined;
   if (options.target === "local") {
     wranglerConfig = join(outDir, "wrangler.jsonc");

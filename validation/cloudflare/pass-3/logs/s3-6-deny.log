@@ -1,0 +1,5 @@
+2026-10-25T19:17:28.740Z signing record: deniedBuckets ["prototype-logs","sst-state","prototype-mailsink","prototype-backups"]
+2026-10-25T19:17:29.111Z S3 GET /prototype-backups?list-type=2&max-keys=1 -> 403 AccessDenied
+2026-10-25T19:17:29.183Z S3 GET /prototype-logs?list-type=2&max-keys=1 -> 403 AccessDenied
+2026-10-25T19:17:29.287Z S3 GET /reference-prodcheck-files?list-type=2&max-keys=1 -> 200 -
+2026-10-25T19:17:29.369Z S3 PUT /prototype-backups/pass3-deny-probe.txt -> 403 AccessDenied

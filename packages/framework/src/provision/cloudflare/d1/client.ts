@@ -53,6 +53,11 @@ export interface D1Client {
   delete(uuid: string): Promise<void>;
   /** Runs the statements as one atomic request; returns each statement's rows. */
   batch(uuid: string, statements: readonly D1Statement[]): Promise<D1Row[][]>;
+  /**
+   * One request to the database's export or import endpoint (`POST …/database/<uuid>/export`,
+   * `…/import`; DEC-0545); returns the answer's `result`. Same outcome rule as the others.
+   */
+  dumpAction(what: string, uuid: string, endpoint: "export" | "import", body: unknown): Promise<unknown>;
 }
 
 const PER_PAGE = 100;
@@ -107,6 +112,9 @@ export function d1Client(api: CloudflareApi, accountId: string): D1Client {
       const b = await call("D1 query", "POST", `${base}/${uuid}/query`, { batch: statements.map((s) => (s.params ? { sql: s.sql, params: s.params } : { sql: s.sql })) });
       const result = Array.isArray(b.result) ? (b.result as { results?: unknown }[]) : [];
       return result.map((r) => (Array.isArray(r.results) ? (r.results as D1Row[]) : []));
+    },
+    async dumpAction(what, uuid, endpoint, body) {
+      return (await call(what, "POST", `${base}/${uuid}/${endpoint}`, body)).result;
     },
   };
 }

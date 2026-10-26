@@ -9,7 +9,7 @@ import type { HealthOutcome } from "../core/operations.js";
 import { runRemove } from "../core/remove.js";
 import { runSetupAccount } from "../core/setup-account.js";
 import { unwiredDatabases } from "./databases.js";
-import { ACCOUNT, FakeCloud, FakeDatabases } from "./fake-cloud.test-support.js";
+import { ACCOUNT, FAKE_SIGNING, FakeCloud, FakeDatabases, FULL_POLICIES } from "./fake-cloud.test-support.js";
 import { createCloudflareTarget, type CloudflareTargetOptions } from "./target.js";
 
 const stage = { app: "notes", stage: "test-abc" };
@@ -57,31 +57,228 @@ describe("Cloudflare preflight (PROV-REQ-002 step 1)", () => {
     expect(cloud.requests).toEqual([]);
   });
 
-  it("an unusable token is named; a usable token without the token permission names that permission", async () => {
+  it("an unusable token is named; a usable token needs no permission on API tokens (DEC-0550, DEC-0551)", async () => {
     const a = setup();
     a.cloud.override.set(`GET /accounts/${ACCOUNT}/tokens/verify`, { status: 401, body: { success: false, errors: [{ code: 1000, message: "Invalid API Token" }] } });
     expect(await a.target.preflight(stage)).toEqual(["CLOUDFLARE_API_TOKEN is not usable: HTTP 401: Invalid API Token (code 1000)"]);
 
     const b = setup();
-    b.cloud.override.set(`GET /accounts/${ACCOUNT}/tokens/permission_groups`, { status: 403, body: { success: false, errors: [{ code: 9109, message: "Unauthorized" }] } });
-    const problems = await b.target.preflight(stage);
-    expect(problems).toHaveLength(1);
-    expect(problems[0]).toMatch(/permission to create R2 API tokens/);
-    expect(b.cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
+    const refused = { status: 403, body: { success: false, errors: [{ code: 9109, message: "Unauthorized to access requested resource" }] } };
+    b.cloud.override.set(`GET /accounts/${ACCOUNT}/tokens/permission_groups`, refused);
+    b.cloud.override.set(`GET /accounts/${ACCOUNT}/tokens?per_page=50&page=1`, refused);
+    expect(await b.target.preflight(stage)).toEqual([]);
+    expect(b.cloud.requests).toEqual([`GET /accounts/${ACCOUNT}/tokens/verify`]);
+  });
 
-    expect(await setup().target.preflight(stage)).toEqual([]);
+  it("[PROV-AC-002] unit part: deploy with the everyday token's permissions (no Account API Tokens at all) deploys a stage; without the account's signing credential it stops at step 1, naming it and setup-account", async () => {
+    const { cloud, target } = setup();
+    const refused = { status: 403, body: { success: false, errors: [{ code: 9109, message: "Unauthorized to access requested resource" }] } };
+    cloud.override.set(`GET /accounts/${ACCOUNT}/tokens/permission_groups`, refused);
+    cloud.override.set(`GET /accounts/${ACCOUNT}/tokens?per_page=50&page=1`, refused);
+    cloud.override.set(`POST /accounts/${ACCOUNT}/tokens`, refused);
+    const io = captureIo();
+    expect((await runDeploy(target, request(), io)).status).toBe(0);
+    expect(io.err).toBe("");
+    const secrets = cloud.workers.get("notes-test-abc")!.secrets;
+    expect(secrets.get("SECRET_FRAMEWORK_R2_ACCESS_KEY_ID")).toBe(FAKE_SIGNING.accessKeyId);
+    expect(secrets.get("SECRET_FRAMEWORK_R2_SECRET_ACCESS_KEY")).toBe(FAKE_SIGNING.secretAccessKey);
+    expect((await target.listStageResources(stage)).resources.map((r) => r.kind)).not.toContain("R2 API token");
+
+    const b = setup();
+    b.cloud.buckets.get("sst-state")!.delete("framework/r2-signing.json");
+    const io2 = captureIo();
+    const result = await runDeploy(b.target, request(), io2);
+    expect(result.failure?.step).toBe("preflight");
+    expect(io2.err).toMatch(/R2 signing credential prototype-r2-signing.*run setup-account --target cloudflare first/);
+    expect(b.cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
+    expect(io2.err).not.toContain(FAKE_SIGNING.secretAccessKey);
+
+    // Both re-run requirements (batch B's backup bucket, batch C's signing record, or a record whose
+    // token predates the backup bucket's deny entry): one preflight message naming each, pointing to setup-account.
+    const c = setup();
+    c.cloud.buckets.delete("prototype-backups");
+    c.cloud.objectBodies.set("sst-state/framework/r2-signing.json", { tokenId: "tok0", accessKeyId: "tok0", secretAccessKey: "5".repeat(64), deniedBuckets: ["prototype-logs", "sst-state", "prototype-mailsink"] });
+    const io3 = captureIo();
+    expect((await runDeploy(c.target, request(), io3)).failure?.step).toBe("preflight");
+    const lines = io3.err.split("\n").filter((l) => l.includes("setup-account"));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/R2 bucket prototype-backups.*R2 signing credential prototype-r2-signing.*run setup-account --target cloudflare first/);
+    expect(c.cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
   });
 });
 
 describe("setup-account on Cloudflare (PROV-REQ-004)", () => {
-  it("[PROV-AC-004] unit part: creates the log bucket, the state home and the subdomain once; a second run changes nothing", async () => {
+  it("[PROV-AC-004] [MAIL-AC-007] unit part: creates the shared resources and the email setup once; a second run changes nothing", async () => {
     const { cloud, target } = setup();
     cloud.buckets.clear();
     cloud.subdomain = undefined;
-    expect(await runSetupAccount(target, captureIo())).toEqual({ status: 0, created: ["R2 bucket prototype-logs", "R2 bucket sst-state", "workers.dev subdomain"] });
+    expect(await runSetupAccount(target, captureIo(), { emailDomain: "example.test" })).toEqual({
+      status: 0,
+      created: [
+        "R2 bucket prototype-logs",
+        "R2 bucket sst-state",
+        "R2 bucket prototype-backups",
+        "lifecycle rule of R2 bucket prototype-backups (PAR-311)",
+        "workers.dev subdomain",
+        "R2 signing credential prototype-r2-signing",
+        "Email Sending entry example.test",
+        "R2 bucket prototype-mailsink",
+        "lifecycle rule of R2 bucket prototype-mailsink (PAR-241)",
+        "Worker prototype-mailsink",
+        "Email Routing on t.example.test",
+        "Email Routing subaddressing",
+        "routing rule sink@t.example.test → Worker prototype-mailsink",
+      ],
+      recorded: "example.test",
+    });
+    expect(cloud.objectBodies.get("sst-state/framework/account.json")).toEqual({ emailDomain: "example.test" });
+    // DEC-0552: a random pf- subdomain; DEC-0550: one account signing token and its record.
+    expect(cloud.subdomain).toMatch(/^pf-[a-z0-9]{12}$/);
+    expect(cloud.subdomain).not.toContain(ACCOUNT.slice(0, 6));
+    expect([...cloud.tokens.values()].map((t) => t.name)).toEqual(["prototype-r2-signing"]);
+    expect(Object.keys(cloud.objectBodies.get("sst-state/framework/r2-signing.json") as object).sort()).toEqual(["accessKeyId", "deniedBuckets", "secretAccessKey", "tokenId"]);
     cloud.requests.length = 0;
+    // The record now names the domain, so --email-domain may be left out; the same domain changes nothing either.
     expect(await runSetupAccount(target, captureIo())).toEqual({ status: 0, created: [] });
+    expect(await runSetupAccount(target, captureIo(), { emailDomain: "example.test" })).toEqual({ status: 0, created: [] });
     expect(cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
+  });
+
+  it("[PROV-AC-004] unit part: without --email-domain and with no recorded domain it stops before creating anything", async () => {
+    const { cloud, target } = setup();
+    cloud.buckets.clear();
+    const io = captureIo();
+    expect(await runSetupAccount(target, io)).toEqual({ status: 1, created: [] });
+    expect(io.err).toContain("--email-domain <domain>");
+    expect(cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
+    expect(cloud.buckets.size).toBe(0);
+  });
+
+  it("the account settings record is framework/account.json in sst-state, written only on a change, and read by deploy", async () => {
+    const { cloud, target } = setup();
+    expect(await target.readAccountSettings()).toEqual({});
+    await runSetupAccount(target, captureIo(), { emailDomain: "one.example" });
+    const io = captureIo();
+    // The new domain is onboarded and routed; the sink's bucket and Worker are shared and already there.
+    expect(await runSetupAccount(target, io, { emailDomain: "two.example" })).toEqual({
+      status: 0,
+      created: ["Email Sending entry two.example", "Email Routing on t.two.example", "Email Routing subaddressing", "routing rule sink@t.two.example → Worker prototype-mailsink"],
+      recorded: "two.example",
+    });
+    expect(cloud.zones.get("one.example")!.sending.map((e) => e.name)).toEqual(["one.example"]);
+    expect(io.out).toContain("the previous email domain one.example keeps its email setup");
+    expect(cloud.requests.filter((r) => r.startsWith("PUT ") && r.includes("/objects/"))).toEqual([
+      `PUT /accounts/${ACCOUNT}/r2/buckets/sst-state/objects/framework%2Faccount.json`,
+      `PUT /accounts/${ACCOUNT}/r2/buckets/sst-state/objects/framework%2Faccount.json`,
+    ]);
+    expect(await target.readAccountSettings()).toEqual({ emailDomain: "two.example" });
+    // The record is a shared account object, never one of a stage's SST state objects.
+    await runDeploy(target, request(), captureIo());
+    expect((await target.listStageResources(stage)).resources.map((r) => r.id)).not.toContain("framework/account.json");
+  });
+
+  it("[PROV-AC-004] unit part: a token lacking an email permission is named and nothing is changed", async () => {
+    const { cloud, target } = setup();
+    cloud.buckets.clear();
+    cloud.tokenPolicies = [];
+    const io = captureIo();
+    expect(await runSetupAccount(target, io, { emailDomain: "example.test" })).toEqual({ status: 1, created: [] });
+    expect(io.err).toContain('the Cloudflare API token lacks the permission "Email Sending Write" (account; DEC-0515)');
+    expect(io.err).toContain('lacks the permission "Zone Settings Write" (zone example.test; DEC-0515)');
+    expect(io.err).toContain("nothing was changed");
+    expect(cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
+    expect(cloud.buckets.size).toBe(0);
+  });
+
+  it("[MAIL-AC-007] unit part: removing a stage leaves the mail sink's Worker, bucket, routing and sending entry", async () => {
+    const { cloud, target } = setup();
+    await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
+    cloud.putObject("prototype-mailsink", "sink+a@t.example.test/20261025T100000000Z-x.eml", "Subject: x\n\nbody");
+    expect((await runDeploy(target, request(), captureIo())).status).toBe(0);
+    expect((await runRemove(target, stage, captureIo())).status).toBe(0);
+    expect(cloud.workers.has("prototype-mailsink")).toBe(true);
+    expect(cloud.buckets.get("prototype-mailsink")!.size).toBe(1);
+    const zone = cloud.zones.get("example.test")!;
+    expect([...zone.routedSubdomains]).toEqual(["t.example.test"]);
+    expect(zone.sending).toHaveLength(1);
+    expect(cloud.requests.filter((r) => r.startsWith("DELETE ") && r.includes("prototype-mailsink"))).toEqual([]);
+  });
+
+  it("a stage whose fixed names are the mail sink's is refused by deploy, the stage listing and removal", async () => {
+    const { cloud, target } = setup();
+    const clash = { app: "prototype", stage: "mailsink" };
+    cloud.workers.set("prototype-mailsink", { secrets: new Map(), enabled: true, previews: false, bindings: [] });
+    const io = captureIo();
+    expect((await runDeploy(target, request(clash), io)).status).toBe(1);
+    expect(io.err).toMatch(/Worker name prototype-mailsink, which is an account resource/);
+    await expect(target.listStageResources(clash)).rejects.toThrow(/account resource/);
+    await expect(target.removeStage(clash)).rejects.toThrow(/account resource/);
+    expect(cloud.workers.has("prototype-mailsink")).toBe(true);
+  });
+
+  it("an invalid stored record is reported, naming the record and how to rewrite it", async () => {
+    const { cloud, target } = setup();
+    cloud.buckets.get("sst-state")!.add("framework/account.json");
+    cloud.objectBodies.set("sst-state/framework/account.json", { emailDomain: "Not A Domain" });
+    await expect(target.readAccountSettings()).rejects.toThrow(/framework\/account\.json.*setup-account --target cloudflare --email-domain/);
+  });
+
+  it("an invalid --email-domain is refused before anything is read or changed", async () => {
+    const { cloud, target } = setup();
+    const io = captureIo();
+    expect((await runSetupAccount(target, io, { emailDomain: "no_such domain" })).status).toBe(1);
+    expect(io.err).toContain("is not a domain name");
+    expect(cloud.requests).toEqual([]);
+  });
+
+  it("the email setup runs through its seam on every setup-account, after the record", async () => {
+    const calls: string[] = [];
+    const { target } = setup({
+      email: {
+        setupProblems: async () => [],
+        setUp: async (domain) => (calls.push(`setUp ${domain}`), calls.length === 1 ? ["Email Routing on t.example.test"] : []),
+        productionPrerequisites: async () => [],
+      },
+    });
+    const first = await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
+    expect(first.created).toContain("Email Routing on t.example.test");
+    expect((await runSetupAccount(target, captureIo())).created).toEqual([]);
+    expect(calls).toEqual(["setUp example.test", "setUp example.test"]);
+  });
+});
+
+describe("a production stage's mail settings on Cloudflare (MAIL-AC-004, CF §2)", () => {
+  const prod = { app: "notes", stage: "prod" };
+
+  it("the preflight requires the account's email domain and the email prerequisites of the seam", async () => {
+    const missing: string[] = ["the Email Sending entry of example.test is not verified"];
+    const { cloud, target } = setup({ email: { setupProblems: async () => [], setUp: async () => [], productionPrerequisites: async () => missing } });
+    const io = captureIo();
+    expect((await runDeploy(target, request(prod), io)).status).toBe(1);
+    expect(io.err).toContain("the account settings record names no email domain");
+    await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
+    const io2 = captureIo();
+    expect((await runDeploy(target, request(prod), io2)).status).toBe(1);
+    expect(io2.err).toContain("the Email Sending entry of example.test is not verified");
+    expect(cloud.sstRuns).toEqual([]);
+  });
+
+  it("deploys the EMAIL send_email binding restricted to no-reply@<emailDomain>, FRAMEWORK_MAIL_FROM and nodejs_compat; a test stage binds no EMAIL", async () => {
+    const { cloud, target } = setup();
+    await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
+    const io = captureIo();
+    expect((await runDeploy(target, request(prod), io)).status).toBe(0);
+    expect(io.out).toContain("sender address: no-reply@example.test");
+    const worker = cloud.workers.get("notes-prod")!;
+    expect(worker.bindings).toContainEqual({ type: "send_email", name: "EMAIL", allowedSenderAddresses: ["no-reply@example.test"] });
+    const program = cloud.programs.at(-1)!;
+    expect(program).toContain('"FRAMEWORK_MAIL_FROM": "no-reply@example.test"');
+    expect(program).toMatch(/"compatibilityFlags": \[\s*"nodejs_compat"\s*\]/);
+
+    expect((await runDeploy(target, request(), captureIo())).status).toBe(0);
+    const testWorker = cloud.workers.get("notes-test-abc")!;
+    expect(testWorker.bindings.some((b) => b.type === "send_email" || b.name === "EMAIL")).toBe(false);
+    expect(cloud.programs.at(-1)).toContain('"FRAMEWORK_MAIL_FROM": "no-reply@example.test"');
   });
 });
 
@@ -102,10 +299,19 @@ describe("deploy on Cloudflare (PROV-REQ-002 steps 3, 5, 6, 7)", () => {
     expect(databases.calls).toContain("create notes-test-abc-db-1");
     const worker = cloud.workers.get("notes-test-abc")!;
     expect(worker.bindings).toContainEqual({ type: "d1", name: "DB", id: "uuid-1" });
-    expect([...worker.secrets.keys()].sort()).toEqual(["SECRET_FRAMEWORK_R2_ACCESS_KEY_ID", "SECRET_FRAMEWORK_R2_SECRET_ACCESS_KEY", "SECRET_FRAMEWORK_SESSION_KEY"]);
+    expect([...worker.secrets.keys()].sort()).toEqual([
+      "SECRET_FRAMEWORK_AUTH_SECRET",
+      "SECRET_FRAMEWORK_R2_ACCESS_KEY_ID",
+      "SECRET_FRAMEWORK_R2_SECRET_ACCESS_KEY",
+      "SECRET_FRAMEWORK_SESSION_KEY",
+    ]);
     expect(worker.secrets.get("SECRET_FRAMEWORK_SESSION_KEY")).toBe("generated-session-key");
-    expect(worker.secrets.get("SECRET_FRAMEWORK_R2_ACCESS_KEY_ID")).toBe("tok1");
-    expect([...cloud.tokens.values()].map((t) => t.name)).toEqual(["notes-test-abc-files-signing"]);
+    expect(worker.secrets.get("SECRET_FRAMEWORK_AUTH_SECRET")).toBe("generated-session-key");
+    expect(worker.secrets.get("SECRET_FRAMEWORK_R2_ACCESS_KEY_ID")).toBe(FAKE_SIGNING.accessKeyId);
+    expect(worker.secrets.get("SECRET_FRAMEWORK_R2_SECRET_ACCESS_KEY")).toBe(FAKE_SIGNING.secretAccessKey);
+    // DEC-0550: deploy creates no API token; the stages share the account's signing credential.
+    expect([...cloud.tokens.values()].map((t) => t.name)).toEqual(["prototype-r2-signing"]);
+    expect(cloud.requests.filter((r) => r.includes("/tokens") && !r.startsWith("GET "))).toEqual([]);
     expect({ enabled: worker.enabled, previews: worker.previews }).toEqual({ enabled: true, previews: false });
     expect(preflights).toEqual([{ origin: "https://notes-test-abc.example.workers.dev", bucket: "notes-test-abc-files" }]);
     expect(cloud.programs.at(-1)).not.toMatch(/"SECRET_/);
@@ -130,16 +336,53 @@ describe("deploy on Cloudflare (PROV-REQ-002 steps 3, 5, 6, 7)", () => {
     await runDeploy(target, request(), captureIo());
     await runDeploy(target, request(), captureIo());
     expect(cloud.tokens.size).toBe(1);
-    expect(cloud.workers.get("notes-test-abc")!.secrets.get("SECRET_FRAMEWORK_SESSION_KEY")).toBe("key-1");
+    const secrets = cloud.workers.get("notes-test-abc")!.secrets;
+    expect(secrets.get("SECRET_FRAMEWORK_SESSION_KEY")).toBe("key-1");
+    // frameworkAuthSecret: generated once per stage like the session key, its own 32 random bytes (PAR-253).
+    expect(secrets.get("SECRET_FRAMEWORK_AUTH_SECRET")).toBe("key-2");
+    expect(n).toBe(2);
   });
 
-  it("a token left without its secrets (an interrupted deploy) is deleted and replaced, since its value is shown only once", async () => {
+  it("the default generated keys are 32 random bytes in base64url, distinct for the session key and the auth secret", async () => {
+    const { cloud, options } = setup();
+    const { randomKey: _fixed, ...withDefaultKeys } = options;
+    const target = createCloudflareTarget(withDefaultKeys);
+    expect((await runDeploy(target, request(), captureIo())).status).toBe(0);
+    const secrets = cloud.workers.get("notes-test-abc")!.secrets;
+    const session = secrets.get("SECRET_FRAMEWORK_SESSION_KEY") ?? "";
+    const auth = secrets.get("SECRET_FRAMEWORK_AUTH_SECRET") ?? "";
+    for (const key of [session, auth]) {
+      expect(key).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(Buffer.from(key, "base64url")).toHaveLength(32);
+    }
+    expect(auth).not.toBe(session);
+  });
+
+  it("every deploy writes the account's current signing credential into the stage's secrets, so a replaced credential or a legacy stage switches over (DEC-0550)", async () => {
     const { cloud, target } = setup();
     await runDeploy(target, request(), captureIo());
-    cloud.workers.get("notes-test-abc")!.secrets.delete("SECRET_FRAMEWORK_R2_SECRET_ACCESS_KEY");
+    cloud.workers.get("notes-test-abc")!.secrets.set("SECRET_FRAMEWORK_R2_ACCESS_KEY_ID", "legacy-stage-token");
+    cloud.objectBodies.set("sst-state/framework/r2-signing.json", { ...FAKE_SIGNING, tokenId: "tok7", accessKeyId: "tok7", secretAccessKey: "7".repeat(64) });
     await runDeploy(target, request(), captureIo());
-    expect([...cloud.tokens.keys()]).toEqual(["tok2"]);
-    expect(cloud.workers.get("notes-test-abc")!.secrets.get("SECRET_FRAMEWORK_R2_ACCESS_KEY_ID")).toBe("tok2");
+    const secrets = cloud.workers.get("notes-test-abc")!.secrets;
+    expect(secrets.get("SECRET_FRAMEWORK_R2_ACCESS_KEY_ID")).toBe("tok7");
+    expect(secrets.get("SECRET_FRAMEWORK_R2_SECRET_ACCESS_KEY")).toBe("7".repeat(64));
+  });
+
+  it("[PROV-AC-004] unit part: setup-account without Account API Tokens Write, while the signing credential is absent, names that permission and changes nothing (DEC-0551)", async () => {
+    const { cloud, target } = setup();
+    cloud.buckets.clear();
+    cloud.tokens.clear();
+    cloud.tokenPolicies = FULL_POLICIES.map((p) => ({ ...p, permission_groups: p.permission_groups.filter((g) => g.name !== "Account API Tokens Write").concat(p.id === "p1" ? [{ id: "r", name: "Account API Tokens Read" }] : []) }));
+    const io = captureIo();
+    expect(await runSetupAccount(target, io, { emailDomain: "example.test" })).toEqual({ status: 1, created: [] });
+    expect(io.err).toMatch(/lacks the permission "Account API Tokens Write" \(account\), which creating the R2 signing credential prototype-r2-signing needs/);
+    expect(cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
+    expect(cloud.buckets.size).toBe(0);
+    // With the credential in place, the setup token's token permission is no longer needed.
+    const b = setup();
+    b.cloud.tokenPolicies = cloud.tokenPolicies;
+    expect((await runSetupAccount(b.target, captureIo(), { emailDomain: "example.test" })).status).toBe(0);
   });
 
   it("deploying code without the built Worker fails naming what is missing", async () => {
@@ -219,15 +462,17 @@ describe("deploy on Cloudflare (PROV-REQ-002 steps 3, 5, 6, 7)", () => {
 });
 
 describe("listStageResources and remove on Cloudflare (PROV-REQ-003; DEC-0084, DEC-0263)", () => {
-  it("lists the Worker, the bucket, the R2 API token and the SST state objects by exact identifier, and every listed database", async () => {
-    const { target } = setup();
+  it("lists the Worker, the bucket, a legacy R2 API token and the SST state objects by exact identifier, and every listed database", async () => {
+    const { cloud, target } = setup();
     await runDeploy(target, request(), captureIo());
     await runDeploy(target, request(other), captureIo());
+    // A stage deployed before DEC-0550 still has its own token.
+    cloud.tokens.set("legacy1", { name: "notes-test-abc-files-signing", resources: {} });
     const listed = await target.listStageResources(stage);
     expect(listed.resources).toEqual([
       { kind: "Worker", id: "notes-test-abc" },
       { kind: "R2 bucket", id: "notes-test-abc-files" },
-      { kind: "R2 API token", id: "tok1" },
+      { kind: "R2 API token", id: "legacy1" },
       { kind: "SST state object", id: "app/notes/test-abc" },
       { kind: "SST state object", id: "passphrase/notes/test-abc" },
       ...listed.resources.filter((r) => r.kind === "SST state object" && r.id.startsWith("update/notes/test-abc/")),
@@ -241,14 +486,16 @@ describe("listStageResources and remove on Cloudflare (PROV-REQ-003; DEC-0084, D
     const { cloud, target, databases } = setup();
     await runDeploy(target, request(), captureIo());
     await runDeploy(target, request(other), captureIo());
+    cloud.tokens.set("legacy1", { name: "notes-test-abc-files-signing", resources: {} });
+    cloud.tokens.set("legacy2", { name: "notes-test-xyz-files-signing", resources: {} });
     cloud.buckets.get("notes-test-abc-files")!.add("uploads/a.png");
     cloud.buckets.get("prototype-logs")!.add("notes/test-abc/2026/10/20/x.json");
     const io = captureIo();
     expect(await runRemove(target, stage, io)).toEqual({ status: 0, leftovers: [] });
     expect(cloud.workers.has("notes-test-abc")).toBe(false);
     expect(cloud.buckets.has("notes-test-abc-files")).toBe(false);
-    expect([...cloud.tokens.values()].map((t) => t.name)).toEqual(["notes-test-xyz-files-signing"]);
-    expect([...cloud.buckets.get("sst-state")!].every((k) => k.includes("/test-xyz"))).toBe(true);
+    expect([...cloud.tokens.values()].map((t) => t.name).sort()).toEqual(["notes-test-xyz-files-signing", "prototype-r2-signing"]);
+    expect([...cloud.buckets.get("sst-state")!].every((k) => k.includes("/test-xyz") || k.startsWith("framework/"))).toBe(true);
     expect(cloud.buckets.get("prototype-logs")!.size).toBe(1);
     expect(cloud.workers.has("notes-test-xyz")).toBe(true);
     expect([...databases.dbs.values()].map((d) => d.name)).toEqual(["notes-test-xyz-db-1"]);
@@ -268,7 +515,7 @@ describe("listStageResources and remove on Cloudflare (PROV-REQ-003; DEC-0084, D
     expect(await runRemove(target, stage, io)).toEqual({ status: 0, leftovers: [] });
     expect(io.err).toBe("");
     expect(cloud.sstRuns.some((r) => r.startsWith("remove"))).toBe(false);
-    expect([...state]).toEqual(["app/notes/test-abcd"]);
+    expect([...state].filter((k) => !k.startsWith("framework/"))).toEqual(["app/notes/test-abcd"]);
   });
 
   it("R3: when the state listing fails, sst remove still runs and the failure is reported", async () => {

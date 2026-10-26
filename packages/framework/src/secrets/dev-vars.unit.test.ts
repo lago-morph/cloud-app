@@ -30,25 +30,29 @@ function wranglerRead(text: string): Record<string, string> {
 const dummy = (label: string) => `${label}-${crypto.randomUUID()}`;
 
 describe("generating missing development-only framework secrets (secrets.md §2 Local)", () => {
-  it("adds the session key and the local ticket key, each from at least PAR-253 (32) random bytes", () => {
+  it("adds the session key, the auth secret and the local ticket key, each from at least PAR-253 (32) random bytes", () => {
     const { text, added } = addMissingDevSecrets("");
-    expect([...added].sort()).toEqual(["SECRET_FRAMEWORK_LOCAL_TICKET_KEY", "SECRET_FRAMEWORK_SESSION_KEY"]);
+    expect([...added].sort()).toEqual(["SECRET_FRAMEWORK_AUTH_SECRET", "SECRET_FRAMEWORK_LOCAL_TICKET_KEY", "SECRET_FRAMEWORK_SESSION_KEY"]);
     const read = wranglerRead(text);
     const session = read.SECRET_FRAMEWORK_SESSION_KEY!;
+    const auth = read.SECRET_FRAMEWORK_AUTH_SECRET!;
     const ticket = read.SECRET_FRAMEWORK_LOCAL_TICKET_KEY!;
-    expect(session).toMatch(/^[A-Za-z0-9_-]{43,}$/);
-    expect(ticket).toMatch(/^[A-Za-z0-9_-]{43,}$/);
-    expect(session).not.toBe(ticket);
+    for (const key of [session, auth, ticket]) {
+      expect(key).toMatch(/^[A-Za-z0-9_-]{43,}$/);
+      expect(Buffer.from(key, "base64url").length).toBeGreaterThanOrEqual(32);
+    }
+    expect(new Set([session, auth, ticket]).size).toBe(3);
     expect(addMissingDevSecrets("").text).not.toBe(text);
   });
 
   it("never overwrites an existing value and changes nothing when all are present", () => {
     const session = dummy("s");
+    const auth = dummy("a");
     const ticket = dummy("t");
-    const before = `SECRET_API_KEY=a\nSECRET_FRAMEWORK_SESSION_KEY=${session}\nSECRET_FRAMEWORK_LOCAL_TICKET_KEY='${ticket}'\n`;
+    const before = `SECRET_API_KEY=a\nSECRET_FRAMEWORK_SESSION_KEY=${session}\nSECRET_FRAMEWORK_AUTH_SECRET=${auth}\nSECRET_FRAMEWORK_LOCAL_TICKET_KEY='${ticket}'\n`;
     expect(addMissingDevSecrets(before)).toEqual({ text: before, added: [] });
     const partial = addMissingDevSecrets(`SECRET_FRAMEWORK_SESSION_KEY=${session}\n`);
-    expect(partial.added).toEqual(["SECRET_FRAMEWORK_LOCAL_TICKET_KEY"]);
+    expect(partial.added).toEqual(["SECRET_FRAMEWORK_AUTH_SECRET", "SECRET_FRAMEWORK_LOCAL_TICKET_KEY"]);
     expect(wranglerRead(partial.text).SECRET_FRAMEWORK_SESSION_KEY).toBe(session);
   });
 

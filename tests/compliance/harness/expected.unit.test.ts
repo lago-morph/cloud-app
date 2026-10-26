@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isDeferred, parseWhere, readCatalogue, RELEASE_TARGETS, type CatalogueEntry } from "./catalogue.js";
-import { CLAUSE_RULES, checkRules, expectedCriteria, GOOGLE_MOCKED, PHASE_RULES, UNIT_LEVEL, type ClauseRule, type NotRunRule } from "./expected.js";
+import { CLAUSE_RULES, checkRules, expectedCriteria, PASSWORD_PENDING, NO_REDIRECT_PROVIDER, PHASE_RULES, type ClauseRule, type NotRunRule } from "./expected.js";
 
 const docs = new URL("../../../docs/", import.meta.url).pathname;
 
@@ -30,13 +30,13 @@ describe("[COMPL-AC-001] per-target expected criteria", () => {
 
   it("applies whole and part not-run rules with their detail, and the target-wide rule", () => {
     const rules: NotRunRule[] = [
-      { id: "B-AC-001", targets: ["cloudflare"], mode: "automated", part: "production part", detail: GOOGLE_MOCKED },
-      { id: "D-AC-001", targets: ["cloudflare"], mode: "automated", detail: GOOGLE_MOCKED },
+      { id: "B-AC-001", targets: ["cloudflare"], mode: "automated", part: "production part", detail: PASSWORD_PENDING },
+      { id: "D-AC-001", targets: ["cloudflare"], mode: "automated", detail: PASSWORD_PENDING },
       { id: "*", targets: ["aws"], mode: "automated", detail: "a target-wide rule" },
     ];
     expect(expectedCriteria(catalogue, "cloudflare", "automated", rules)).toEqual([
-      { id: "B-AC-001", run: true, parts: [""], notRunParts: [{ part: "production part", detail: GOOGLE_MOCKED }] },
-      { id: "D-AC-001", run: false, notRun: GOOGLE_MOCKED, parts: [""], notRunParts: [] },
+      { id: "B-AC-001", run: true, parts: [""], notRunParts: [{ part: "production part", detail: PASSWORD_PENDING }] },
+      { id: "D-AC-001", run: false, notRun: PASSWORD_PENDING, parts: [""], notRunParts: [] },
     ]);
     expect(expectedCriteria(catalogue, "aws", "automated", rules).map((e) => [e.id, e.run, e.notRun])).toEqual([
       ["B-AC-001", false, "a target-wide rule"],
@@ -71,25 +71,43 @@ describe("[COMPL-AC-001] this phase's not-run rules (plan §8) against the docum
     expect(checkRules(real, CLAUSE_RULES)).toEqual([]);
   });
 
-  it("records the Google-mocked items on Cloudflare as not-run with the prompt's detail", () => {
+  // DEC-0513, DEC-0520: Google is retired; the cloud items that need the password provider were not-run until it landed.
+  it("runs the password and mail criteria on Cloudflare now that their cloud tests exist (T2, T3); the rest stay not-run with their detail, and no retired Google criterion", () => {
     const cf = new Map(expectedCriteria(real, "cloudflare", "automated").map((e) => [e.id, e]));
-    for (const id of ["GOOGLE-AC-001", "AUTH-AC-011", "COMPL-AC-005", "E2E-006", "CLI-AC-001"]) {
-      expect(cf.get(id)?.notRun, id).toBe("Google login mocked for this phase");
+    // plan-auth.md T2/T3: tagged cloud tests exist for these, so they run with no not-run rule.
+    for (const id of ["AUTH-AC-009", "AUTH-AC-014", "COMPL-AC-005", "PWD-AC-008", "MAIL-AC-006", "E2E-006", "E2E-007", "CLI-AC-007"]) {
+      expect(cf.get(id), id).toEqual({ id, run: true, parts: [""], notRunParts: [] });
     }
-    expect(cf.get("AUTH-AC-009")?.run).toBe(true);
-    expect(cf.get("AUTH-AC-009")?.notRunParts).toEqual([{ part: "cloud production part", detail: "Google login mocked for this phase" }]);
+    // CLI-AC-001's cloud part (the whole command table from the template on a cloud) has no cloud test yet.
+    expect(cf.get("CLI-AC-001")?.notRun).toBe("password login provider not implemented yet (DEC-0509)");
+    // Item I-G: check-login runs on prodcheck in every cloud run (the driver, prodcheck.ts), so its criteria run.
+    for (const id of ["PWD-AC-009", "AUTH-AC-011", "E2E-008"]) expect(cf.get(id), id).toEqual({ id, run: true, parts: [""], notRunParts: [] });
     expect(cf.get("KV-AC-001")).toEqual({ id: "KV-AC-001", run: true, parts: [""], notRunParts: [] });
     const cfm = new Map(expectedCriteria(real, "cloudflare", "milestone").map((e) => [e.id, e]));
-    for (const id of ["GOOGLE-AC-005", "SKILL-AC-006", "E2E-007", "E2E-008", "AUTH-AC-005"]) {
-      expect(cfm.get(id)?.notRun, id).toBe("Google login mocked for this phase");
-    }
+    expect(cfm.get("SKILL-AC-006")?.notRun).toBe("password login provider not implemented yet (DEC-0509)");
+    expect(cfm.get("MAIL-AC-007"), "MAIL-AC-007 has its milestone test (T2)").toEqual({ id: "MAIL-AC-007", run: true, parts: [""], notRunParts: [] });
     expect(cfm.get("PROV-AC-003")?.run).toBe(true);
+    // DEC-0532: the fresh-account clause needs a second Cloudflare account; the owner deferred it. The rest of PROV-AC-004 runs.
+    expect(cfm.get("PROV-AC-004")).toEqual({
+      id: "PROV-AC-004",
+      run: true,
+      parts: [""],
+      notRunParts: [{ part: "fresh-account clause: deploying without setup-account fails with a clear message", detail: "deferred: needs a second Cloudflare account (owner, 2026-10-25)" }],
+    });
+    // DEC-0526: E2E-007's cloud part and AUTH-AC-005's admin part left the milestone list.
+    for (const id of ["E2E-008", "E2E-007", "AUTH-AC-005"]) expect(cfm.has(id), id).toBe(false);
+    for (const target of ["local", "cloudflare"] as const) {
+      for (const mode of ["automated", "milestone"] as const) {
+        expect(expectedCriteria(real, target, mode).filter((e) => e.id.startsWith("GOOGLE-AC-")), `${target} ${mode}`).toEqual([]);
+      }
+    }
   });
 
   // Root cause 2026-10-24-pass1c-E2E-004-AUTH-AC-005-no-cloud-test (Review, change 3): the contract part runs on
   // Cloudflare except the successful-callback response, which needs a real login provider (DEC-0171).
-  it("runs AUTH-AC-005's contract part on Cloudflare with its successful-callback response not-run, and all of it on local", () => {
-    const part = { part: "contract part: successful callback (needs a real login provider)", detail: "Google login mocked for this phase" };
+  // DEC-0526: its admin-role part is automated on prodcheck, and runs since its test exists (auth/admin-role.test.ts).
+  it("runs AUTH-AC-005 on Cloudflare with only its successful-callback response not-run, and all of it on local", () => {
+    const part = { part: "contract part: successful callback (needs a redirect login provider)", detail: NO_REDIRECT_PROVIDER };
     const cf = new Map(expectedCriteria(real, "cloudflare", "automated").map((e) => [e.id, e]));
     expect(cf.get("AUTH-AC-005")).toEqual({ id: "AUTH-AC-005", run: true, parts: [""], notRunParts: [part] });
     const local = new Map(expectedCriteria(real, "local", "automated").map((e) => [e.id, e]));
@@ -125,7 +143,7 @@ describe("[COMPL-AC-001] this phase's not-run rules (plan §8) against the docum
     }
     const local = expectedCriteria(real, "local", "automated");
     expect(local.every((e) => e.run)).toBe(true);
-    expect(local.map((e) => e.id)).toContain("GOOGLE-AC-001");
+    expect(local.map((e) => e.id)).toContain("PWD-AC-001");
     expect(local.map((e) => e.id)).not.toContain("HTTP-AC-004");
   });
 });

@@ -1,8 +1,6 @@
 {
   "values": {},
   "framework": {
-    "admins": [],
-    "users": [],
-    "google": { "clientId": "REPLACE-WITH-THE-GOOGLE-CLIENT-ID" }
+    "email": { "senderName": "Demo" }
   }
 }

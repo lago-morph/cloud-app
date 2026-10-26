@@ -9,6 +9,7 @@ import { ESLint } from "eslint";
 import ts from "typescript";
 import { checkAppLintConfig } from "./app-config.js";
 import { portabilityConfig } from "./config.js";
+import { checkDependencyTree } from "./dependencies.js";
 import { referenceFor } from "./references.js";
 
 export interface CheckDiagnostic {
@@ -76,10 +77,12 @@ function toPosix(path: string): string {
 
 /**
  * Lints every app file with the shipped configuration (never with the app's lint configuration),
- * and reports an app lint configuration that disables or weakens a framework rule.
+ * reports an app lint configuration that disables or weakens a framework rule, and reports an app
+ * dependency whose installed tree contains a platform SDK or database driver (DEC-0554). `warn`
+ * receives what could not be checked (no npm lockfile), which is not a diagnostic.
  */
-export async function runPortabilityRules(appDir: string): Promise<CheckDiagnostic[]> {
-  return sortDiagnostics([...(await lintAppFiles(appDir)), ...(await checkAppLintConfig(appDir))]);
+export async function runPortabilityRules(appDir: string, warn?: (message: string) => void): Promise<CheckDiagnostic[]> {
+  return sortDiagnostics([...(await lintAppFiles(appDir)), ...(await checkAppLintConfig(appDir)), ...checkDependencyTree(appDir, warn)]);
 }
 
 async function lintAppFiles(appDir: string): Promise<CheckDiagnostic[]> {

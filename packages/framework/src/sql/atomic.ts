@@ -8,7 +8,7 @@
  * anything executes; otherwise the call rejects with `CORE.INTERNAL`.
  */
 import { FrameworkError } from "../core/errors.js";
-import { adapterOf, checkResultSize, normalizeResult, targetOf, writeHandle, type Adapter, type DrizzleDb } from "./handle.js";
+import { adapterOf, normalizeResult, targetOf, writeHandle, type Adapter, type DrizzleDb } from "./handle.js";
 import type { AtomicResults, PortableDb, WriteStep } from "./types.js";
 import { withValueRules } from "./write-rules.js";
 
@@ -55,6 +55,7 @@ export async function atomic<const Steps extends readonly WriteStep[]>(db: Porta
       for (const write of writes) out.push(normalizeResult(await write.execute()));
       return out;
     });
-  });
-  return checkResultSize(results) as AtomicResults<Steps>;
+  }, { write: true });
+  // Every step is a write that has committed: its RETURNING rows are returned in full (DEC-0542).
+  return results as AtomicResults<Steps>;
 }

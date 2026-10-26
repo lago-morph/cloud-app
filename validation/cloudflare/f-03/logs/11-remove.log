@@ -1,6 +1,0 @@
-start 2026-10-24T06:06:58Z
-(node:7853) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
-(Use `node --trace-warnings ...` to show where the warning was created)
-deleted database demo-test-s6jca41ew34ahz3-db-1
-removed stage test-s6jca41ew34ahz3 of demo from cloudflare; its log entries stay in the shared log bucket
-exit 0 2026-10-24T06:07:38Z

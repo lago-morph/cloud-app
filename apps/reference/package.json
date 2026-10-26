@@ -11,10 +11,14 @@
     "deploy": "prototype-framework deploy",
     "smoke": "prototype-framework smoke",
     "remove": "prototype-framework remove",
+    "stop": "prototype-framework stop",
+    "start": "prototype-framework start",
     "secrets": "prototype-framework secrets",
     "setup-account": "prototype-framework setup-account",
-    "certify-auth": "prototype-framework certify-auth",
-    "reset-local": "prototype-framework reset-local"
+    "check-login": "prototype-framework check-login",
+    "reset-local": "prototype-framework reset-local",
+    "mail": "prototype-framework mail",
+    "admins": "prototype-framework admins"
   },
   "dependencies": {
     "@lago-morph/prototype-framework": "0.1.0",

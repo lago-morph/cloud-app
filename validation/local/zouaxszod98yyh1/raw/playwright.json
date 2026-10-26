@@ -1,0 +1,338 @@
+{
+  "config": {
+    "argv": [
+      "/opt/node22/bin/node",
+      "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/node_modules/.bin/playwright",
+      "test",
+      "--project",
+      "integration",
+      "--project",
+      "e2e",
+      "--grep",
+      "\\[(?:DEMO-AC-008|E2E-011|E2E-014|MIG-AC-003)\\]",
+      "--reporter=json",
+      "--pass-with-no-tests"
+    ],
+    "configFile": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/playwright.config.ts",
+    "rootDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 2
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "integration",
+        "name": "integration",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4",
+        "testIgnore": [],
+        "testMatch": [
+          "packages/framework/test/integration/**/*.spec.ts",
+          "tests/compliance/criteria/**/*.spec.ts"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "e2e",
+        "name": "e2e",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/tests/compliance/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "filteredProjects": [
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "name": "integration",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4",
+        "snapshotDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4",
+        "testIgnore": [],
+        "testMatch": [
+          "packages/framework/test/integration/**/*.spec.ts",
+          "tests/compliance/criteria/**/*.spec.ts"
+        ],
+        "timeout": 30000,
+        "use": {
+          "browserName": "chromium"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "integration"
+      },
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "name": "e2e",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/tests/compliance/e2e",
+        "snapshotDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/tests/compliance/e2e",
+        "testIgnore": [],
+        "testMatch": "**/*.spec.ts",
+        "timeout": 30000,
+        "use": {
+          "browserName": "chromium"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "e2e"
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "default",
+    "updateSourceMethod": "patch",
+    "version": "1.64.1",
+    "workers": 2,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "tests/compliance/e2e/demo-criteria.spec.ts",
+      "file": "tests/compliance/e2e/demo-criteria.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[DEMO-AC-008] publishing a post and deleting it through the page each produce an info entry of the demo, written during that request, in the target's log",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 360000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 13262,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-26T01:19:29.560Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "7dfa15f81d16dda24a6d-29307314ebfef747ba30",
+          "file": "tests/compliance/e2e/demo-criteria.spec.ts",
+          "line": 599,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/E2E-011.spec.ts",
+      "file": "tests/compliance/e2e/E2E-011.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[E2E-011] app and framework entries are stored under the app and stage with timestamps, and the plain-Error request's entry is found by its requestId",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 188,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-26T01:19:29.791Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1c2b7b7a65e2d8a56742-c8094429b40efbbaa6fc",
+          "file": "tests/compliance/e2e/E2E-011.spec.ts",
+          "line": 136,
+          "column": 1
+        },
+        {
+          "title": "[E2E-011] local part: with an injected failing log writer the app still works",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 1811,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-26T01:19:30.055Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1c2b7b7a65e2d8a56742-e2cf4358090b7d16e183",
+          "file": "tests/compliance/e2e/E2E-011.spec.ts",
+          "line": 165,
+          "column": 3
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/E2E-014.spec.ts",
+      "file": "tests/compliance/e2e/E2E-014.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[E2E-014] the stage reports exactly its committed configuration values",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 36,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-26T01:19:32.374Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8e17ea21a5abb3204ca2-32b90b129c3c99f2f84a",
+          "file": "tests/compliance/e2e/E2E-014.spec.ts",
+          "line": 69,
+          "column": 1
+        },
+        {
+          "title": "[E2E-014] local part: a configuration change takes effect only after the rebuild, and a secret set with the CLI appears nowhere scanned",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 900000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 28587,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-26T01:19:32.446Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8e17ea21a5abb3204ca2-a83838e52aff4d88fe9d",
+          "file": "tests/compliance/e2e/E2E-014.spec.ts",
+          "line": 115,
+          "column": 3
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-26T01:19:18.589Z",
+    "duration": 42571.011,
+    "expected": 5,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

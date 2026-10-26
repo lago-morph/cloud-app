@@ -6,7 +6,7 @@
 import { UsageError } from "./args.js";
 import { describeFailure } from "./failure.js";
 import { EXIT, type CliIo, type Command } from "./io.js";
-import { buildBinding, devBinding, generateMigrationBinding, resetLocalBinding, secretsBinding, verifyBinding } from "./wiring.js";
+import { buildBinding, devBinding, generateMigrationBinding, mailBinding, resetLocalBinding, secretsBinding, verifyBinding } from "./wiring.js";
 
 export { EXIT, type CliIo, type Command } from "./io.js";
 
@@ -30,21 +30,30 @@ const smokeBinding: Command = lazy(async () => {
 /** The cloud commands (D-05). */
 const deployBinding: Command = lazy(async () => (await import("./commands/deploy.js")).deployBinding());
 const removeBinding: Command = lazy(async () => (await import("./commands/remove.js")).removeBinding());
+const stopBinding: Command = lazy(async () => (await import("./commands/stop-start.js")).stopBinding());
+const startBinding: Command = lazy(async () => (await import("./commands/stop-start.js")).startBinding());
 const setupAccountBinding: Command = lazy(async () => (await import("./commands/setup-account.js")).setupAccountBinding());
-const certifyAuthBinding: Command = lazy(async () => (await import("./commands/certify-auth.js")).certifyAuthBinding());
+/** `check-login` (PWD §2): the real login provider on a production stage, with the mail sink. */
+const checkLoginBinding: Command = lazy(async () => (await import("./commands/check-login.js")).checkLoginBinding());
+/** `admins` (CLI-REQ-005): the local D1, or the D1 HTTP API on Cloudflare. */
+const adminsBinding: Command = lazy(async () => (await import("./commands/admins.js")).adminsBinding());
 
 const COMMANDS: Readonly<Record<string, Entry>> = {
   dev: { summary: "run the app locally on http://localhost:<port>", run: devBinding },
   verify: { summary: "the pre-completion verification (offline)", run: verifyBinding },
   "generate-migration": { summary: "generate-migration [--name <slug>]: the next migration pair from the table definitions", run: generateMigrationBinding },
   build: { summary: "build --target <t> --stage <s>: build a deployment without deploying it", run: buildBinding },
-  deploy: { summary: "deploy --target <t> --stage <s>: deploy a stage", run: deployBinding },
+  deploy: { summary: "deploy --target <t> --stage <s> [--start]: deploy a stage (a stopped stage stays stopped unless --start)", run: deployBinding },
   smoke: { summary: "smoke --target <t> --stage <s>: run the app's smoke tests against a stage", run: smokeBinding },
-  remove: { summary: "remove --target <t> --stage <s> [--confirm-production <s>]: remove a stage", run: removeBinding },
+  remove: { summary: "remove --target <t> --stage <s> [--confirm-production <s>]: remove a stage (a production stage is backed up first)", run: removeBinding },
+  stop: { summary: "stop --target <t> --stage <s>: stop a stage; deploy leaves it stopped", run: stopBinding },
+  start: { summary: "start --target <t> --stage <s>: start a stopped stage", run: startBinding },
   secrets: { summary: "secrets set <name> --target <t> --stage <s>: set a secret from standard input", run: secretsBinding },
   "setup-account": { summary: "setup-account --target <t>: one-time account setup", run: setupAccountBinding },
-  "certify-auth": { summary: "certify-auth --target <t> --stage <s>: guided login-provider certification", run: certifyAuthBinding },
-  "reset-local": { summary: "clear local state (local D1, R2 and .logs/)", run: resetLocalBinding },
+  "check-login": { summary: "check-login --target <t> --stage <s>: automated real-login check on a production stage", run: checkLoginBinding },
+  "reset-local": { summary: "clear local state (local D1, R2, .logs/ and .mail/)", run: resetLocalBinding },
+  mail: { summary: "mail last --to <address> [--target <t>]: print the latest framework email sent to an address", run: mailBinding },
+  admins: { summary: "admins grant <email> | revoke <email> | list --target <t> --stage <s> [--confirm-production <s>]: the admin role", run: adminsBinding },
 };
 
 export const COMMAND_NAMES: readonly string[] = Object.keys(COMMANDS);

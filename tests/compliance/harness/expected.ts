@@ -9,7 +9,21 @@ import type { CatalogueEntry, Target } from "./catalogue.js";
 
 export type RunMode = "automated" | "milestone";
 
-export const GOOGLE_MOCKED = "Google login mocked for this phase";
+/**
+ * The not-run reason for criteria that need the password login provider on a cloud stage until
+ * implementation items I-B…I-G land and the test authors tag tests (DEC-0509, DEC-0520). It
+ * replaces the Google-mocked reason: Google is retired (DEC-0513).
+ */
+export const PASSWORD_PENDING = "password login provider not implemented yet (DEC-0509)";
+
+/** AUTH-AC-005's successful-callback response needs a redirect login provider, which no cloud stage has (DEC-0513). */
+export const NO_REDIRECT_PROVIDER = "no redirect login provider on a cloud stage (DEC-0513)";
+
+/**
+ * Clauses that need a second Cloudflare account, deferred by the owner (2026-10-25: "Defer the
+ * tests that require another account"; DEC-0532).
+ */
+export const SECOND_ACCOUNT_DEFERRED = "deferred: needs a second Cloudflare account (owner, 2026-10-25)";
 
 export interface NotRunRule {
   /** A criterion or scenario ID, or "*" for every one on the rule's targets. */
@@ -57,22 +71,23 @@ export interface ClauseRule {
 /** Release 1's cloud targets (DEC-0508: AWS is deferred to a later release). */
 const CLOUD: readonly Target[] = ["cloudflare"];
 
-/** This phase's not-run rules (plan §8.1, §8.2). §8.3's outstanding milestone items follow from them. */
+/**
+ * This phase's not-run rules (plan §8.1, §8.2; plan-auth.md, DEC-0520, DEC-0526). PWD-AC-009,
+ * AUTH-AC-011 and E2E-008 have none since item I-G: the driver runs `check-login` on `prodcheck`
+ * (prodcheck.ts). The password-pending rules of the criteria that items T2 and T3 tagged cloud
+ * tests for are gone (plan-auth.md): AUTH-AC-005's admin-role part, AUTH-AC-009's production
+ * part, AUTH-AC-014, COMPL-AC-005, PWD-AC-008, MAIL-AC-006, MAIL-AC-007, E2E-006, E2E-007 and
+ * CLI-AC-007. PROV-AC-004's fresh-account clause is deferred (plan §8.4, DEC-0532). §8.3's
+ * outstanding milestone items follow from the rest. Local criteria get no
+ * rule: a new local criterion without a test is reported untested.
+ */
 export const PHASE_RULES: readonly NotRunRule[] = [
-  { id: "GOOGLE-AC-001", targets: CLOUD, mode: "automated", detail: GOOGLE_MOCKED },
-  { id: "GOOGLE-AC-005", targets: CLOUD, mode: "milestone", detail: GOOGLE_MOCKED },
-  { id: "AUTH-AC-005", targets: CLOUD, mode: "milestone", detail: GOOGLE_MOCKED },
-  // Added for the evaluator to confirm (plan §8.1; fix-auth005): a test stage has no real login provider (DEC-0171),
-  // so the successful-callback response first exists on prodcheck with Google, like AUTH-AC-009's cloud production part.
-  { id: "AUTH-AC-005", targets: CLOUD, mode: "automated", part: "contract part: successful callback (needs a real login provider)", detail: GOOGLE_MOCKED },
-  { id: "AUTH-AC-009", targets: CLOUD, mode: "automated", part: "cloud production part", detail: GOOGLE_MOCKED },
-  { id: "AUTH-AC-011", targets: CLOUD, mode: "automated", detail: GOOGLE_MOCKED },
-  { id: "COMPL-AC-005", targets: CLOUD, mode: "automated", detail: GOOGLE_MOCKED },
-  { id: "SKILL-AC-006", targets: CLOUD, mode: "milestone", detail: GOOGLE_MOCKED },
-  { id: "E2E-006", targets: CLOUD, mode: "automated", detail: GOOGLE_MOCKED },
-  { id: "E2E-007", targets: CLOUD, mode: "milestone", detail: GOOGLE_MOCKED },
-  { id: "E2E-008", targets: CLOUD, mode: "milestone", detail: GOOGLE_MOCKED },
-  { id: "CLI-AC-001", targets: CLOUD, mode: "automated", detail: GOOGLE_MOCKED },
+  // fix-auth005, revised by DEC-0513: the successful-callback response needs a redirect provider; cloud stages have none.
+  { id: "AUTH-AC-005", targets: CLOUD, mode: "automated", part: "contract part: successful callback (needs a redirect login provider)", detail: NO_REDIRECT_PROVIDER },
+  { id: "SKILL-AC-006", targets: CLOUD, mode: "milestone", detail: PASSWORD_PENDING },
+  { id: "CLI-AC-001", targets: CLOUD, mode: "automated", detail: PASSWORD_PENDING },
+  // DEC-0532: "Deploying without it fails with a clear message" needs an account on which setup-account never ran.
+  { id: "PROV-AC-004", targets: CLOUD, mode: "milestone", part: "fresh-account clause: deploying without setup-account fails with a clear message", detail: SECOND_ACCOUNT_DEFERRED },
 ];
 
 /**
@@ -90,7 +105,7 @@ export const CLAUSE_RULES: readonly ClauseRule[] = [];
  * unit test's outcome only into the unit-level IDs its title carries. Every other ID is
  * evidenced by the integration and E2E layers only.
  */
-export const UNIT_LEVEL: readonly string[] = ["CLI-AC-003", "COMPL-AC-002", "COMPL-AC-006", "COMPL-AC-007", "GOOGLE-AC-002", "PROV-AC-007"];
+export const UNIT_LEVEL: readonly string[] = ["CLI-AC-003", "COMPL-AC-002", "COMPL-AC-006", "COMPL-AC-007", "PROV-AC-007"];
 
 function ruleMatches(rule: NotRunRule, id: string, target: Target, mode: RunMode): boolean {
   return (rule.id === "*" || rule.id === id) && rule.targets.includes(target) && (rule.mode === "any" || rule.mode === mode);

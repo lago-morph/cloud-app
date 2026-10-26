@@ -34,7 +34,7 @@ Only these, and nothing else in the repository about how the framework works:
 | DEMO-REQ-010 Everywhere | one source; `tests/smoke/smoke.test.ts` | smoke |
 | DEMO-REQ-011 Users list | `config/cloudflare/prod.json` sets `framework.users` | `tests/config.test.ts`, "users list" (stub login provider) |
 
-`config/cloudflare/prod.json` comes from `skill/templates/production-stage.json`; the owner fills in the Google client ID and the admin and user IDs before a production deploy.
+`config/cloudflare/prod.json` comes from `skill/templates/production-stage.json`; it holds the sender name only; admins get the `admin` role with `admins grant` after they sign up (DEC-0521, DEC-0523).
 
 ## Checks
 
@@ -57,4 +57,4 @@ None found: everything the spec needed was covered by the skill and the template
 
 - DEMO-AC-005 "survives logout and login" is exercised as a fresh session for the same user ID (`t.as(mockUsers.user(id))`), because testing.md says disposing an in-process test app disposes all of them, so an explicit logout mid-test is not available in-process.
 - DEMO-AC-006 (rebuild with a changed title) is tested through `createTestApp`'s `config` override of `siteTitle`, which is what the values file feeds at build time.
-- DEMO-AC-011's "every committed production values file" is checked by importing `config/cloudflare/prod.json` in `tests/config.test.ts`; a future production file must be added to that test.
+- DEMO-AC-011 (only listed people can post) is retired with DEMO-REQ-011 (DEC-0522): every signed-up user can post.

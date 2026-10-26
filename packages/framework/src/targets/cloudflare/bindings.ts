@@ -25,6 +25,10 @@ export const BINDINGS = Object.freeze({
   /** Cloudflare only: the account ID and stage bucket name the R2 transfer tickets address (D-02, D-05). */
   r2AccountId: "FRAMEWORK_R2_ACCOUNT_ID",
   filesBucket: "FRAMEWORK_FILES_BUCKET",
+  /** Cloudflare production stages only: the Email Service binding (`send_email`, MAIL-REQ-002). */
+  email: "EMAIL",
+  /** Cloudflare only: the sender address `no-reply@<emailDomain>` from the account settings record (MAIL §2). */
+  mailFrom: "FRAMEWORK_MAIL_FROM",
 } as const);
 
 function binding(env: Env, name: string, what: string): unknown {
@@ -35,9 +39,14 @@ function binding(env: Env, name: string, what: string): unknown {
   return value;
 }
 
+/** The D1 binding itself (the password provider's database, password.md §2). */
+export function workerD1(env: Env): AnyD1Database {
+  return binding(env, BINDINGS.database, "D1") as AnyD1Database;
+}
+
 /** The app's SQL handle (with the request's log) and KV's own handle, over the D1 binding. */
 export function workerSql(env: Env, log: LogService): { readonly sql: PortableDb; readonly kv: PortableDb } {
-  const db = binding(env, BINDINGS.database, "D1") as AnyD1Database;
+  const db = workerD1(env);
   return { sql: sqliteDb(db, { log }), kv: sqliteDb(db) };
 }
 

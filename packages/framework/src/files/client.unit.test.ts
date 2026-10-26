@@ -171,7 +171,34 @@ describe("uploadFile (FILES-REQ-003, FILES-REQ-006)", () => {
   it("anything that is not an upload ticket fails with FILES.TRANSFER_FAILED before sending", async () => {
     vi.stubGlobal("XMLHttpRequest", FakeXhr);
     const error = await failure(uploadFile({ url: "/x", expiresAt: 1 } as unknown as UploadTicket, new Blob(["x"])));
-    expect({ code: error.code, status: error.status }).toEqual({ code: "FILES.TRANSFER_FAILED", status: null });
+    expect({ code: error.code, status: error.status, message: error.message }).toEqual({
+      code: "FILES.TRANSFER_FAILED",
+      status: null,
+      message: "rejected before sending: not an upload ticket",
+    });
     expect(FakeXhr.sent).toHaveLength(0);
+  });
+
+  it("[FILES-AC-003] an expired ticket fails as expired before sending, without contacting storage and with no status (DEC-0534)", async () => {
+    vi.stubGlobal("XMLHttpRequest", FakeXhr);
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-10-25T10:00:00Z") });
+    try {
+      const ticket = { url: "/t/upload", method: "PUT", headers: { "Content-Type": "image/png" }, expiresAt: Date.now() + 1000 } as unknown as UploadTicket;
+      // Valid until the last millisecond before expiresAt.
+      vi.setSystemTime(Date.now() + 999);
+      await uploadFile(ticket, new Blob(["x"], { type: "image/png" }));
+      expect(FakeXhr.sent).toHaveLength(1);
+      vi.setSystemTime(Date.now() + 1);
+      const error = await failure(uploadFile(ticket, new Blob(["x"], { type: "image/png" })));
+      expect({ code: error.code, status: error.status, message: error.message, requestId: error.requestId }).toEqual({
+        code: "FILES.TRANSFER_FAILED",
+        status: null,
+        message: "rejected before sending: ticket expired",
+        requestId: null,
+      });
+      expect(FakeXhr.sent).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

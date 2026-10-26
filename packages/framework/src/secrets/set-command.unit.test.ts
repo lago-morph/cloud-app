@@ -40,7 +40,11 @@ describe("reading the secret value from standard input", () => {
 describe("which names `secrets set` accepts", () => {
   it("accepts a declared app secret and a framework-internal secret", () => {
     expect(() => checkSettableName("apiKey", ["apiKey"])).not.toThrow();
-    expect(() => checkSettableName("frameworkGoogleClientSecret", ["apiKey"])).not.toThrow();
+    expect(() => checkSettableName("frameworkAuthSecret", ["apiKey"])).not.toThrow();
+  });
+
+  it("refuses the retired Google client secret (DEC-0513)", () => {
+    expect(failure(() => checkSettableName("frameworkGoogleClientSecret", ["apiKey"]))).toBeInstanceOf(SecretsSetUsageError);
   });
 
   it("refuses any other name without repeating it, listing the names it accepts", () => {
@@ -49,7 +53,8 @@ describe("which names `secrets set` accepts", () => {
     expect(error).toBeInstanceOf(SecretsSetUsageError);
     expect(error!.message).not.toContain(typo);
     expect(error!.message).toContain("apiKey");
-    expect(error!.message).toContain("frameworkGoogleClientSecret");
+    expect(error!.message).toContain("frameworkAuthSecret");
+    expect(error!.message).not.toContain("frameworkGoogleClientSecret");
   });
 });
 

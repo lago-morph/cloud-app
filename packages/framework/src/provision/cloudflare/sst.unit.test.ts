@@ -11,7 +11,8 @@ const code = {
   bundle: "/app/.framework/cloudflare/worker.js",
   assetsDirectory: "/app/dist/client",
   compatibilityDate: "2026-10-01",
-  compatibilityFlags: ["nodejs_compat"],
+  // Not a WorkerCode field (the flags come from the Worker settings); kept to show it is ignored.
+  compatibilityFlags: ["something_else"],
   variables: { FRAMEWORK_DEPLOYMENT: "notes/test-abc" },
   logBucketBinding: "LOGS",
 };
@@ -86,6 +87,46 @@ describe("the SST app built from the app definition (PROV-REQ-001; cloudflare.md
     await noClient.config.run();
     expect(noClient.components[1]!.args.assets).toBeUndefined();
     expect(() => sstProgram({ stage, worker: { ...worker, publicOrigin: "https://notes-test-abc.example.workers.dev/path" } })).toThrow(/public origin/);
+  });
+
+  it("[CF-AC-003] the Worker carries the compatibility flag nodejs_compat from the Worker settings, whatever the built code says", async () => {
+    const { compatibilityFlags: _flags, ...withoutFlags } = code;
+    for (const c of [code, withoutFlags]) {
+      const { config, components } = evaluate(sstProgram({ stage, worker: { ...worker, code: c } }));
+      await config.run();
+      expect(components[1]!.transformed.compatibilityFlags).toEqual(["nodejs_compat"]);
+    }
+  });
+
+  it("[MAIL-AC-004] a production stage binds EMAIL as a send_email binding allowed to send only as no-reply@<emailDomain>, with FRAMEWORK_MAIL_FROM", async () => {
+    const prodStage = { app: "notes", stage: "prod" };
+    const prodWorker = { ...worker, publicOrigin: "https://notes-prod.example.workers.dev", emailDomain: "example.test" };
+    const { config, components } = evaluate(sstProgram({ stage: prodStage, worker: prodWorker }));
+    await config.run();
+    const w = components[1]!;
+    expect(w.transformed.bindings).toEqual([
+      { type: "plain_text", name: "SST_RESOURCE_App", text: "{}" },
+      { type: "d1", name: "DB", id: "d1-uuid" },
+      { type: "r2_bucket", name: "FILES", bucketName: "notes-prod-files" },
+      { type: "r2_bucket", name: "LOGS", bucketName: "prototype-logs" },
+      { type: "send_email", name: "EMAIL", allowedSenderAddresses: ["no-reply@example.test"] },
+    ]);
+    expect(w.args.environment).toEqual({
+      FRAMEWORK_DEPLOYMENT: "notes/test-abc",
+      FRAMEWORK_PUBLIC_ORIGIN: "https://notes-prod.example.workers.dev",
+      FRAMEWORK_MAIL_FROM: "no-reply@example.test",
+    });
+    expect(() => sstProgram({ stage: prodStage, worker: { ...prodWorker, emailDomain: undefined as never } })).toThrow(/email domain/);
+  });
+
+  it("[MAIL-AC-004] a test stage binds no EMAIL; with a recorded domain it still gets FRAMEWORK_MAIL_FROM", async () => {
+    for (const w of [worker, { ...worker, emailDomain: "example.test" }]) {
+      const { config, components } = evaluate(sstProgram({ stage, worker: w }));
+      await config.run();
+      const bindings = components[1]!.transformed.bindings as { type: string; name: string }[];
+      expect(bindings.filter((b) => b.type === "send_email" || b.name === "EMAIL")).toEqual([]);
+      expect("FRAMEWORK_MAIL_FROM" in (components[1]!.args.environment as object)).toBe("emailDomain" in w);
+    }
   });
 
   it("without a Worker (step 3 of a first deploy; remove) declares only the long-lived bucket", async () => {

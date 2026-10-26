@@ -1,0 +1,7 @@
+(node:3471) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3484) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+deploy failed at step 5 (code): required secrets are not set: apiKey
+  stage state: code deployed; the app is stopped
+  next action: set them with secrets set --target cloudflare --stage test-02yo2n87eya5fp5 <name> (value on standard input), then run deploy again

@@ -46,12 +46,12 @@ describe("secrets set --target cloudflare (SEC-REQ-003, SEC-REQ-004, CLI-REQ-004
     expect(h.fake.calls).toEqual([]);
   });
 
-  it("a framework-internal secret can be set (frameworkGoogleClientSecret for a production stage)", async () => {
+  it("a framework-internal secret can be set (frameworkAuthSecret on a production stage)", async () => {
     const h = harness();
     h.fake.stageState({ app: "notes", stage: "prod" }).secrets = new Set();
     const io = captureIo("/a", ["s3cr3t"]);
-    expect(await secretsCommand(h.deps)(["set", "frameworkGoogleClientSecret", "--target", "cloudflare", "--stage", "prod"], io)).toBe(0);
-    expect(h.fake.calls).toEqual(["setSecret notes/prod frameworkGoogleClientSecret"]);
+    expect(await secretsCommand(h.deps)(["set", "frameworkAuthSecret", "--target", "cloudflare", "--stage", "prod"], io)).toBe(0);
+    expect(h.fake.calls).toEqual(["setSecret notes/prod frameworkAuthSecret"]);
   });
 
   it("a failure of the cloud store exits 1 with its message (the stage has no Worker yet)", async () => {

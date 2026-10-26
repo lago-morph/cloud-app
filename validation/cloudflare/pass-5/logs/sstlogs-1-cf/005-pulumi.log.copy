@@ -1,0 +1,20 @@
+Updating (test-qsyokeqbxq2nush):
+@ updating....
+
+@ updating.....
+ +  pulumi:pulumi:Stack reference-test-qsyokeqbxq2nush creating (0s) 
+@ updating......
+ +  sst:cloudflare:Bucket Files creating (0s) 
+@ updating....
+ +  cloudflare:index:R2Bucket FilesBucket creating (0s) 
+ +  cloudflare:index:R2Bucket FilesBucket created (0.80s) 
+ +  sst:sst:LinkRef FilesLinkRef creating (0s) 
+ +  pulumi:pulumi:Stack reference-test-qsyokeqbxq2nush created (4s) 
+Outputs:
+    _protect: false
+
+Resources:
+    + 4 created
+
+Duration: 7s
+

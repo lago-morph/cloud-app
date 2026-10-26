@@ -11,8 +11,9 @@ export const CLOUD_WAITS = {
   /** PAR-270: the longest one response may take. */
   requestMs: 55_000,
   /**
-   * DEC-0092: a Worker secret set or deleted reaches requests once the new Worker version it
-   * rolls out serves them, a few seconds later; this bound is twice the route toggle's.
+   * PAR-310 (DEC-0092, DEC-0540): a Worker secret set or deleted reaches requests once the new
+   * Worker version it rolls out serves them, a few seconds later; this bound is twice the route
+   * toggle's.
    */
   secretRolloutMs: 60_000,
 } as const;

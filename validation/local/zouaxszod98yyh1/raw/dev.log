@@ -1,0 +1,42 @@
+dev: built reference for the local target
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+dev: migrations up to date
+[wrangler] [33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+[wrangler]  ⛅️ wrangler 4.149.0 (update available 4.152.0)
+[wrangler] ───────────────────────────────────────────────
+[wrangler] Using secrets defined in .dev.vars
+[wrangler] Your Worker has access to the following bindings:
+[wrangler] Binding                                                      Resource                  Mode
+[wrangler] env.DB (reference-local)                                     D1 Database               local
+[wrangler] env.FILES (reference-local)                                  R2 Bucket                 local
+[wrangler] env.SECRET_API_KEY ("(hidden)")                              Environment Variable      local
+[wrangler] env.SECRET_FRAMEWORK_SESSION_KEY ("(hidden)")                Environment Variable      local
+[wrangler] env.SECRET_FRAMEWORK_AUTH_SECRET ("(hidden)")                Environment Variable      local
+[wrangler] env.SECRET_FRAMEWORK_LOCAL_TICKET_KEY ("(hidden)")           Environment Variable      local
+[wrangler] env.FRAMEWORK_PUBLIC_ORIGIN ("(hidden)")                     Environment Variable      local
+[wrangler] Wrangler detected this dev session is running in an AI agent.
+[wrangler] The Local Explorer API is available at http://127.0.0.1:34425/cdn-cgi/local/explorer/api
+[wrangler] Useful routes:
+[wrangler]   GET http://127.0.0.1:34425/cdn-cgi/local/explorer/api/local/workers - local Workers and bindings
+[wrangler]   POST http://127.0.0.1:34425/cdn-cgi/local/explorer/api/local/scheduled?worker=<name> - invoke a Worker's scheduled handler; cron is required (see the OpenAPI schema for the full request)
+[wrangler]   GET http://127.0.0.1:34425/cdn-cgi/local/explorer/api/storage/kv/namespaces - KV namespaces
+[wrangler]   GET http://127.0.0.1:34425/cdn-cgi/local/explorer/api/d1/database - D1 databases
+[wrangler]   GET http://127.0.0.1:34425/cdn-cgi/local/explorer/api/r2/buckets - R2 buckets
+[wrangler]   GET http://127.0.0.1:34425/cdn-cgi/local/explorer/api/workers/durable_objects/namespaces - Durable Object namespaces
+[wrangler]   GET http://127.0.0.1:34425/cdn-cgi/local/explorer/api/workflows - Workflows
+[wrangler]   POST http://127.0.0.1:34425/cdn-cgi/local/explorer/api/local/observability/query - run a read-only SQL query (SELECT/WITH only) over captured request traces and console logs. Tables: spans, logs (read attributes via json(attributes)). Example:
+[wrangler]     curl -X POST http://127.0.0.1:34425/cdn-cgi/local/explorer/api/local/observability/query -H 'Content-Type: application/json' -d '{"sql":"SELECT service, name, outcome, duration_ms FROM spans WHERE parent_id IS NULL LIMIT 20"}'
+[wrangler]   POST http://127.0.0.1:34425/cdn-cgi/local/explorer/api/local/observability/clear - clear all captured traces and logs
+[wrangler] If the routes above don't cover what you need, fetch the full OpenAPI schema (large - use only as a last resort):
+[wrangler]   GET http://127.0.0.1:34425/cdn-cgi/local/explorer/api - OpenAPI schema
+
+  reference is running at http://localhost:43057/  (client and /api; Ctrl-C stops)
+
+[wrangler] ⎔ Starting local server...
+[wrangler] [wrangler:info] Ready on http://127.0.0.1:34425
+[wrangler] [wrangler:info] POST /api/ref/log 200 OK (28ms)
+[wrangler] [wrangler:info] GET /api/ref/throw-plain 500 Internal Server Error (8ms)
+[wrangler] [wrangler:info] GET /api/ref/config 200 OK (11ms)
+dev: stopped

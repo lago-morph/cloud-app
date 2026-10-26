@@ -1,5 +1,7 @@
 # GOOGLE — Google login provider
 
+**Status: retired (DEC-0513, owner, 2026-10-25).** Google is dropped from release 1; the real login provider is email and password ([password.md](password.md), PWD). This document is kept for the record. Its requirements are retired with pointers to their replacements, its criteria are listed under "Retired criteria" in §4 and are no longer in any criteria table, and the code (`src/google/`, `certify-auth`) is preserved on the branch `google`. Nothing here is binding.
+
 The Google implementation of AUTH's login-provider interface, and its guided certification. Nothing outside this component knows Google or OpenID Connect (OIDC) is involved.
 
 Contracts: [internal/login-provider.d.ts](../contracts/ts/internal/login-provider.d.ts), [stage-config.schema.json](../contracts/schemas/stage-config.schema.json) (`framework.google`), [evidence.schema.json](../contracts/schemas/evidence.schema.json).
@@ -8,11 +10,13 @@ Contracts: [internal/login-provider.d.ts](../contracts/ts/internal/login-provide
 
 #### GOOGLE-REQ-001 — Server-side login flow
 Origin: provenance-unclear · Derives from: SYS-REQ-019
+Status: retired (DEC-0513) · Replaced by: PWD-REQ-003
 
 The adapter MUST use Google's OIDC authorization-code flow with PKCE, a random state, and a nonce. The token exchange MUST happen on the server using the client secret.
 
 #### GOOGLE-REQ-002 — Validation
 Origin: provenance-unclear · Derives from: SYS-REQ-017, SYS-REQ-019
+Status: retired (DEC-0513) · Replaced by: PWD-REQ-001, PWD-REQ-003
 
 The adapter MUST accept an ID token only if all of the following hold:
 - its signature verifies against Google's published keys;
@@ -25,11 +29,13 @@ The adapter MUST NOT fetch URLs taken from the token itself.
 
 #### GOOGLE-REQ-003 — Minimal scope
 Origin: ai-proposed · Derives from: SYS-REQ-017
+Status: retired (DEC-0513) · Replaced by: PWD-REQ-005
 
 The adapter MUST request only the `openid` and `profile` scopes. No email is requested, because none is used.
 
 #### GOOGLE-REQ-004 — Setup instructions
 Origin: provenance-unclear · Derives from: SYS-REQ-019, SYS-REQ-023
+Status: retired (DEC-0513) · Replaced by: MAIL-REQ-003, SKILL-REQ-006
 
 The framework MUST document how to:
 - create a Google OAuth web client;
@@ -39,6 +45,7 @@ The framework MUST document how to:
 
 #### GOOGLE-REQ-005 — Guided certification
 Origin: owner · Derives from: SYS-REQ-027
+Status: retired (DEC-0512, DEC-0513) · Replaced by: PWD-AC-009 (`check-login`, SYS-REQ-027 as amended)
 
 The CLI MUST provide a guided manual certification against a production deployment that records an evidence record. It is required only after major framework restructuring or a substantive change to this adapter (DEC-0021).
 
@@ -69,15 +76,17 @@ AUTH (provider interface, transaction state), CFG (client ID, public origin), SE
 
 ## 4. Acceptance criteria
 
-| ID | Criterion | Verifies | Where |
+Retired criteria (DEC-0513). They are kept here for the record, outside any criteria table, so the compliance catalogue no longer reads them. Until implementation item I-G removes `src/google/`, tests still tagged with them are listed by the traceability report as tags naming no defined criterion.
+
+| Retired ID | Former criterion | Former Where | Replaced by |
 | --- | --- | --- | --- |
-| GOOGLE-AC-001 | The certification step-1 check finds a PKCE challenge, state, and nonce in the login redirect. A local test with `fetch` stubbed shows the token request is made from the server with the client secret and the PKCE verifier. | GOOGLE-REQ-001 | Local, cloud |
-| GOOGLE-AC-002 | Unit tests feeding the validator hand-built tokens reject a wrong signature, wrong issuer, wrong audience, expired token, future issued-at time beyond PAR-252, and wrong nonce. | GOOGLE-REQ-002 | Local |
-| GOOGLE-AC-003 | The authorization request's scope is exactly `openid profile`. | GOOGLE-REQ-003 | Local |
-| GOOGLE-AC-005 | Certification runs end to end on each cloud's `prodcheck` stage, set up by following the setup instructions, and writes a valid evidence record. | GOOGLE-REQ-004, GOOGLE-REQ-005 | Cloud (manual, milestone) |
+| GOOGLE-AC-001 | The certification step-1 check finds a PKCE challenge, state, and nonce in the login redirect. A local test with `fetch` stubbed shows the token request is made from the server with the client secret and the PKCE verifier. | Local, cloud | PWD-AC-001, PWD-AC-003 |
+| GOOGLE-AC-002 | Unit tests feeding the validator hand-built tokens reject a wrong signature, wrong issuer, wrong audience, expired token, future issued-at time beyond PAR-252, and wrong nonce. | Local | PWD-AC-001, PWD-AC-004 |
+| GOOGLE-AC-003 | The authorization request's scope is exactly `openid profile`. | Local | PWD-AC-005 |
+| GOOGLE-AC-005 | Certification runs end to end on each cloud's `prodcheck` stage, set up by following the setup instructions, and writes a valid evidence record. | Cloud (manual, milestone) | PWD-AC-009 |
 
 ## 5. Portability note
 
 Another provider, such as GitHub, is a sibling adapter behind the same interface, whatever protocol it uses; this one does not change. Google is independent of the cloud target.
 
-Retired IDs: GOOGLE-AC-004 (DEC-0077).
+Retired IDs: GOOGLE-AC-004 (DEC-0077); GOOGLE-REQ-001 to GOOGLE-REQ-005, GOOGLE-AC-001, GOOGLE-AC-002, GOOGLE-AC-003 and GOOGLE-AC-005 (DEC-0513).

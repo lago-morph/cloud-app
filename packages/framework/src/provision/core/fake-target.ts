@@ -10,6 +10,8 @@ import type { MigrationDatabase } from "../../mig/apply.js";
 import type { Migration } from "../../mig/history.js";
 import type { Dialect } from "../../sql/dialect.js";
 import type {
+  BackupListing,
+  AccountSettings,
   DeployedCode,
   DeployInput,
   HealthOutcome,
@@ -17,7 +19,9 @@ import type {
   MigrationCheckInput,
   SharedResource,
   Stage,
+  StageBackup,
   StageDatabase,
+  StageRecord,
   StageResource,
   StageResources,
   TargetOperations,
@@ -38,19 +42,27 @@ interface FakeStage {
   secrets: Set<string> | null;
   code: { database: string } | null;
   running: boolean;
+  /** The fake time of the last `startApp`. */
+  startedAt?: number;
+  /** The stage record's `stopped` (DEC-0544); absent means not stopped. */
+  stopped?: boolean;
 }
 
 export interface FakeTargetOptions {
   readonly sharedResources?: Readonly<Record<string, SharedResource["state"]>>;
   readonly databases?: readonly { readonly name: string; readonly records?: readonly string[]; readonly rows?: number }[];
   readonly dialect?: Dialect;
+  /** The account settings record; default `{ emailDomain: "example.test" }` (a reserved name). */
+  readonly accountSettings?: AccountSettings;
 }
 
 const key = (s: Stage) => `${s.app}/${s.stage}`;
+const fakeOrigin = (s: Stage) => `https://${s.app}-${s.stage}.fake.example`;
 
 export class FakeTarget implements TargetOperations {
   readonly target = "fake";
   readonly dialect: Dialect;
+  readonly appResourceKind = "runtime";
   /** Every operation call, in order, as `<operation> <detail>`. */
   readonly calls: string[] = [];
   readonly shared = new Map<string, SharedResource["state"]>();
@@ -58,19 +70,40 @@ export class FakeTarget implements TargetOperations {
   readonly stages = new Map<string, FakeStage>();
   /** Returned by `preflight`. */
   missingPrerequisites: string[] = [];
+  /** The account settings record (`readAccountSettings` / `writeAccountSettings`). */
+  accountSettings: AccountSettings;
+  /** Returned by `emailPrerequisites`. */
+  missingEmailPrerequisites: string[] = [];
+  /** Returned by `emailSetupProblems`. */
+  missingEmailSetup: string[] = [];
+  /** Returned by the next `setUpEmail` (then emptied: a second run finds everything in place). */
+  emailToCreate: string[] = [];
+  /** The `emailDomain` of each `deployInfrastructure` and `deployCode` input, in order. */
+  readonly deployedEmailDomains: (string | undefined)[] = [];
   /** Returned by `checkHealth`. */
   health: HealthOutcome = { ok: true };
+  /** After `startApp`, the route answers 404 for this long (fake time), like a just-started Cloudflare route (DEC-0090). */
+  answerDelayMs = 0;
+  /** The fake clock in ms, advanced only by `checkHealth`'s one-second retries. */
+  clock = 0;
+  /** The fake time of each health try (`checkHealth` tries once a second for up to 30 s, like step 7 on Cloudflare). */
+  readonly healthTries: number[] = [];
   /** Migration IDs whose application throws (and is not recorded). */
   readonly failingMigrations = new Map<string, Error>();
   /** Thrown by `checkMigratedDatabase`. */
   checkFailure: Error | undefined;
   /** Resources `removeStage` cannot delete (they stay listed). */
   readonly undeletable = new Set<string>();
+  /** Every backup `backupStage` wrote: the stage and the databases it held (DEC-0543). */
+  readonly backups: { stage: string; databases: string[] }[] = [];
+  /** The method `copyDatabase` reports (DEC-0545). */
+  copyMethod: string | undefined = "fake copy";
   private readonly failures = new Map<OperationName, { error: Error; times: number }>();
   private nextId = 1;
 
   constructor(options: FakeTargetOptions = {}) {
     this.dialect = options.dialect ?? "sqlite";
+    this.accountSettings = options.accountSettings ?? { emailDomain: "example.test" };
     const shared: Readonly<Record<string, SharedResource["state"]>> = options.sharedResources ?? { "log bucket": "owned" };
     for (const [name, state] of Object.entries(shared)) this.shared.set(name, state);
     for (const db of options.databases ?? []) {
@@ -94,7 +127,7 @@ export class FakeTarget implements TargetOperations {
   stageState(stage: Stage): FakeStage {
     let s = this.stages.get(key(stage));
     if (!s) {
-      s = { resources: [], secrets: null, code: null, running: false };
+      s = { resources: [], secrets: null, code: null, running: false, stopped: false };
       this.stages.set(key(stage), s);
     }
     return s;
@@ -140,7 +173,8 @@ export class FakeTarget implements TargetOperations {
     return [...this.shared].map(([name, state]) => ({ name, state }));
   }
 
-  async createSharedResources(absent: readonly SharedResource[]): Promise<void> {
+  async createSharedResources(absent: readonly SharedResource[], note?: (message: string) => void): Promise<void> {
+    void note;
     this.enter("createSharedResources", absent.map((r) => r.name).join(","));
     for (const r of absent) {
       if (this.shared.get(r.name) === "foreign") throw new Error(`${r.name} belongs to another account`);
@@ -148,20 +182,49 @@ export class FakeTarget implements TargetOperations {
     }
   }
 
+  async readAccountSettings(): Promise<AccountSettings> {
+    this.enter("readAccountSettings");
+    return { ...this.accountSettings };
+  }
+
+  async writeAccountSettings(settings: AccountSettings): Promise<void> {
+    this.enter("writeAccountSettings", settings.emailDomain ?? "");
+    this.accountSettings = { ...settings };
+  }
+
+  async setUpEmail(emailDomain: string): Promise<readonly string[]> {
+    this.enter("setUpEmail", emailDomain);
+    const created = this.emailToCreate;
+    this.emailToCreate = [];
+    return created;
+  }
+
+  async emailSetupProblems(emailDomain: string): Promise<readonly string[]> {
+    this.enter("emailSetupProblems", emailDomain);
+    return [...this.missingEmailSetup];
+  }
+
+  async emailPrerequisites(stage: Stage, emailDomain: string): Promise<readonly string[]> {
+    this.enter("emailPrerequisites", `${key(stage)} ${emailDomain}`);
+    return [...this.missingEmailPrerequisites];
+  }
+
   async deployInfrastructure(input: DeployInput): Promise<void> {
     this.enter("deployInfrastructure", key(input.stage));
+    this.deployedEmailDomains.push(input.emailDomain);
     const s = this.stageState(input.stage);
     if (!s.resources.some((r) => r.kind === "bucket")) s.resources.push({ kind: "bucket", id: `${key(input.stage)}/bucket` });
   }
 
   async deployCode(input: DeployInput & { readonly database: StageDatabase }): Promise<DeployedCode> {
     this.enter("deployCode", `${key(input.stage)} ${input.database.name}`);
+    this.deployedEmailDomains.push(input.emailDomain);
     this.db(input.database);
     const s = this.stageState(input.stage);
     if (!s.resources.some((r) => r.kind === "runtime")) s.resources.push({ kind: "runtime", id: `${key(input.stage)}/runtime` });
     s.secrets ??= new Set();
     s.code = { database: input.database.name };
-    return { publicOrigin: `https://${input.stage.app}-${input.stage.stage}.fake.example` };
+    return { publicOrigin: fakeOrigin(input.stage) };
   }
 
   async setSecret(stage: Stage, name: string, value: string): Promise<void> {
@@ -185,7 +248,39 @@ export class FakeTarget implements TargetOperations {
 
   async startApp(stage: Stage): Promise<void> {
     this.enter("startApp", key(stage));
-    this.stageState(stage).running = true;
+    const s = this.stageState(stage);
+    s.running = true;
+    s.startedAt = this.clock;
+  }
+
+  async readStageRecord(stage: Stage): Promise<StageRecord> {
+    this.enter("readStageRecord", key(stage));
+    return { stopped: this.stages.get(key(stage))?.stopped ?? false };
+  }
+
+  async writeStageRecord(stage: Stage, record: StageRecord): Promise<void> {
+    this.enter("writeStageRecord", `${key(stage)} ${record.stopped ? "stopped" : "running"}`);
+    this.stageState(stage).stopped = record.stopped;
+  }
+
+  async backupStage(stage: Stage, databases: readonly StageDatabase[]): Promise<StageBackup> {
+    this.enter("backupStage", `${key(stage)} ${databases.map((d) => d.name).join(",")}`);
+    this.backups.push({ stage: key(stage), databases: databases.map((d) => d.name) });
+    const n = this.backups.filter((b) => b.stage === key(stage)).length;
+    const location = `fake backups/${key(stage)}/${n}/`;
+    return { location, items: [...databases.map((d) => `database ${d.name}`), "files"], listing: { location, stamp: String(n).padStart(4, "0"), complete: true, databases: databases.length, files: 0 } };
+  }
+
+  async waitForInFlight(stage: Stage): Promise<string> {
+    this.enter("waitForInFlight", key(stage));
+    return "no requests to wait for";
+  }
+
+  async listStageBackups(stage: Stage): Promise<readonly BackupListing[]> {
+    this.enter("listStageBackups", key(stage));
+    return this.backups
+      .filter((b) => b.stage === key(stage))
+      .map((b, i) => ({ location: `fake backups/${key(stage)}/${i + 1}/`, stamp: String(i + 1).padStart(4, "0"), complete: true, databases: b.databases.length, files: 0 }));
   }
 
   async createDatabase(stage: Stage, name: string): Promise<StageDatabase> {
@@ -197,14 +292,14 @@ export class FakeTarget implements TargetOperations {
     return { name, number: Number(name.slice(name.lastIndexOf("-") + 1)), id: db.id };
   }
 
-  async copyDatabase(stage: Stage, from: StageDatabase, name: string): Promise<StageDatabase> {
+  async copyDatabase(stage: Stage, from: StageDatabase, name: string): Promise<StageDatabase & { readonly method?: string }> {
     this.enter("copyDatabase", `${from.name} ${name}`);
     void stage;
     const source = this.db(from);
     if (this.databases.has(name)) throw new Error(`database ${name} already exists`);
     const db: FakeDatabase = { id: this.id(), records: new Set(source.records), rows: source.rows };
     this.databases.set(name, db);
-    return { name, number: Number(name.slice(name.lastIndexOf("-") + 1)), id: db.id };
+    return { name, number: Number(name.slice(name.lastIndexOf("-") + 1)), id: db.id, ...(this.copyMethod === undefined ? {} : { method: this.copyMethod }) };
   }
 
   async dropDatabase(stage: Stage, database: StageDatabase): Promise<void> {
@@ -231,10 +326,17 @@ export class FakeTarget implements TargetOperations {
     if (this.checkFailure) throw this.checkFailure;
   }
 
-  async checkHealth(stage: Stage, deployed: DeployedCode): Promise<HealthOutcome> {
-    this.enter("checkHealth", deployed.publicOrigin);
-    if (this.health.ok && !this.answering(stage)) return { ok: false, message: "the stage does not answer", status: 404 };
-    return this.health;
+  async checkHealth(stage: Stage, deployed?: DeployedCode): Promise<HealthOutcome> {
+    this.enter("checkHealth", deployed?.publicOrigin ?? fakeOrigin(stage));
+    const deadline = this.clock + 30_000;
+    for (;;) {
+      this.healthTries.push(this.clock);
+      const s = this.stageState(stage);
+      const warming = s.startedAt !== undefined && this.clock - s.startedAt < this.answerDelayMs;
+      const outcome: HealthOutcome = this.health.ok && (!this.answering(stage) || warming) ? { ok: false, message: "the stage does not answer", status: 404 } : this.health;
+      if (outcome.ok || this.clock >= deadline) return outcome;
+      this.clock += 1000;
+    }
   }
 
   async listStageResources(stage: Stage): Promise<StageResources> {
@@ -250,6 +352,7 @@ export class FakeTarget implements TargetOperations {
     s.code = null;
     s.running = false;
     s.secrets = null;
+    s.stopped = false;
     if (s.resources.length > 0) throw new Error(`could not delete ${s.resources.map((r) => r.id).join(", ")}`);
   }
 }

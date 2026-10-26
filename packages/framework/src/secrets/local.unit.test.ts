@@ -37,7 +37,8 @@ describe("[SEC-AC-003] local setSecret writes SECRET_<NAME> into the app's .dev.
 describe("dev: generating missing development-only framework secrets into .dev.vars", () => {
   it("creates them when absent and leaves existing values unchanged on the next run", async () => {
     const first = await ensureDevSecrets(dir);
-    expect([...first].sort()).toEqual(["frameworkLocalTicketKey", "frameworkSessionKey"]);
+    expect([...first].sort()).toEqual(["frameworkAuthSecret", "frameworkLocalTicketKey", "frameworkSessionKey"]);
+    expect(readDevVars(await devVars())).toHaveProperty("SECRET_FRAMEWORK_AUTH_SECRET");
     const text = await devVars();
     expect(await ensureDevSecrets(dir)).toEqual([]);
     expect(await devVars()).toBe(text);

@@ -101,3 +101,23 @@ describe("[CHECK-AC-001] allowed-imports", () => {
     });
   }
 });
+
+describe("[CHECK-AC-001] allowed-imports: npm aliases", () => {
+  it("an import of an npm alias (\"s3\": \"npm:@aws-sdk/client-s3@…\") is judged by the package it installs", async () => {
+    const app = await createCheckApp({
+      "package.json": `${JSON.stringify({ name: "notes", type: "module", dependencies: { s3: "npm:@aws-sdk/client-s3@^3.700.0", pg2: "npm:pg", nice: "npm:hono@4.13.13" } }, null, 2)}\n`,
+      "src/server/alias.ts": `import { S3Client } from "s3";\nexport const s = S3Client;\n`,
+      "src/server/alias-sub.ts": `import * as p from "pg2/lib/client";\nexport const x = p;\n`,
+      "src/server/alias-ok.ts": `import { Hono } from "nice";\nexport const h = Hono;\n`,
+    });
+    try {
+      const diagnostics = await app.lint();
+      const of = (file: string) => forFile(diagnostics, file).filter((d) => d.rule === "prototype-framework/allowed-imports");
+      expect(of("src/server/alias.ts").map((d) => d.message)).toEqual([expect.stringMatching(/"s3".*npm alias of "@aws-sdk\/client-s3".*platform SDK or database driver/)]);
+      expect(of("src/server/alias-sub.ts").map((d) => d.message)).toEqual([expect.stringMatching(/npm alias of "pg"/)]);
+      expect(of("src/server/alias-ok.ts")).toEqual([]);
+    } finally {
+      await app.dispose();
+    }
+  }, 120_000);
+});

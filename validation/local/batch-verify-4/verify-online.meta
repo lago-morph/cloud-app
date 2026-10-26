@@ -1,5 +1,0 @@
-uptime before:  00:49:54 up 22:16,  0 user,  load average: 0.60, 1.78, 1.93
-command: npm run verify
-exit: 0
-duration_s: 358
-uptime after:  00:55:52 up 22:22,  0 user,  load average: 3.54, 3.39, 2.67

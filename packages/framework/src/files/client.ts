@@ -19,8 +19,9 @@ function transferFailed(message: string, status: number | null = null): ApiError
 
 /**
  * Uploads a file using a ticket obtained from the app's API, as one `PUT` (DEC-0062). No size
- * limit is imposed by the framework. Always sends the ticket's content type; a Blob whose
- * non-empty `type` differs is rejected before sending.
+ * limit is imposed by the framework. A ticket whose `expiresAt` has passed (by the browser's
+ * clock) is rejected before sending, without contacting storage (DEC-0534). Always sends the
+ * ticket's content type; a Blob whose non-empty `type` differs is rejected before sending.
  */
 export async function uploadFile(
   ticket: UploadTicket,
@@ -29,6 +30,9 @@ export async function uploadFile(
 ): Promise<void> {
   const data = readUploadTicket(ticket);
   if (data === undefined) throw transferFailed("rejected before sending: not an upload ticket");
+  // DEC-0534: on Cloudflare storage's refusal of an expired ticket is unreadable cross-origin
+  // (DEC-0101), so the helper refuses it itself, on every target, with no storage status.
+  if (Date.now() >= data.expiresAt) throw transferFailed("rejected before sending: ticket expired");
   const contentType = data.headers["Content-Type"] ?? "";
   if (file.type !== "" && file.type.toLowerCase() !== contentType.toLowerCase()) {
     throw transferFailed("content type does not match ticket");
@@ -53,7 +57,10 @@ export async function uploadFile(
   });
 }
 
-/** A URL usable in `<img src>` or links, valid for the ticket's lifetime. */
+/**
+ * A URL usable in `<img src>` or links, valid for the ticket's lifetime. It sends nothing, so it
+ * does not check the expiry (DEC-0534): storage refuses an expired URL when it is used.
+ */
 export function downloadUrl(ticket: DownloadTicket): string {
   const data = readDownloadTicket(ticket);
   if (data === undefined) throw transferFailed("rejected before sending: not a download ticket");

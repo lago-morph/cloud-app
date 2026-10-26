@@ -19,10 +19,23 @@ function problemOf(text: string): string | undefined {
   return undefined;
 }
 
-/** Returns `name` unchanged, or throws FILES.INVALID_NAME. The names `.` and `..` are invalid on every target (DEC-0505). */
+/**
+ * Returns `name` unchanged, or throws FILES.INVALID_NAME, on every target. The name `.` is invalid
+ * (DEC-0505), and so is any name with a `/`-separated segment that is exactly `..` (`..`, `../x`,
+ * `a/../b`, `a/..`), because it looks like the parent-directory shortcut (DEC-0533). Names that
+ * merely contain dots (`notes..txt`, `...`, `.hidden`, `a/.b`) and `.` segments (`./x`, `a/.`) stay valid.
+ */
 export function checkName(name: string): string {
   const problem =
-    typeof name !== "string" ? "is not a string" : name === "" ? "is empty" : name === "." || name === ".." ? `is ${JSON.stringify(name)}` : problemOf(name);
+    typeof name !== "string"
+      ? "is not a string"
+      : name === ""
+        ? "is empty"
+        : name === "."
+          ? `is "."`
+          : name.split("/").includes("..")
+            ? `has a ".." segment (a /-separated part that is exactly "..")`
+            : problemOf(name);
   if (problem !== undefined) throw new FrameworkError("FILES.INVALID_NAME", `the file name ${problem}`);
   return name;
 }

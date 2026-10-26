@@ -27,6 +27,6 @@ export function workerTicketIssuer(env: Env, frameworkSecret: (name: FrameworkSe
   const issuer = () => createWorkerTicketIssuer({ accountId: variable(env, BINDINGS.r2AccountId), bucket: variable(env, BINDINGS.filesBucket) }, frameworkSecret);
   return {
     upload: async (name, contentType) => issuer().upload(name, contentType),
-    download: async (name) => issuer().download(name),
+    download: async (name, contentType) => issuer().download(name, contentType),
   };
 }

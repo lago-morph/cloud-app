@@ -1,0 +1,12 @@
+name = "spike-ba-s1-s3"
+main = "src/worker-min.js"
+compatibility_date = "2026-10-01"
+compatibility_flags = []
+
+[vars]
+PUBLIC_ORIGIN = "http://localhost:8787"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "spike-ba"
+database_id = "00000000-0000-0000-0000-000000000000"

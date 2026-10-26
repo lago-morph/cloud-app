@@ -21,12 +21,12 @@ describe("command dispatch (CLI-REQ-001, CLI-REQ-003)", () => {
 
   it("registers every CLI-REQ-001 command", () => {
     expect([...COMMAND_NAMES].sort()).toEqual(
-      ["build", "certify-auth", "deploy", "dev", "generate-migration", "remove", "reset-local", "secrets", "setup-account", "smoke", "verify"].sort(),
+      ["admins", "build", "check-login", "deploy", "dev", "generate-migration", "mail", "remove", "reset-local", "secrets", "setup-account", "smoke", "start", "stop", "verify"].sort(),
     );
   });
 
   it("the cloud commands (D-05) are bound to their implementations, not the not-yet stub", async () => {
-    for (const name of ["deploy", "remove", "setup-account", "certify-auth"]) {
+    for (const name of ["deploy", "remove", "stop", "start", "setup-account", "check-login"]) {
       const io = captureIo();
       expect(await runCommand([name, "--target", "nowhere"], io), name).toBe(2);
       expect(io.err, name).not.toMatch(/not available yet/);

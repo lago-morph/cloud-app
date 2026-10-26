@@ -57,19 +57,22 @@ Origin: ai-proposed · Derives from: SYS-REQ-018, SYS-REQ-030
 
 The app has login and logout controls and an account page that shows the logged-in user's user ID, with a button to copy it, so the owner can add it to the admin list.
 
+Amendment (Origin: ai-proposed · Decision: DEC-0526): there is no admin list (DEC-0521). The account page and its copy button stay, so a person can quote their ID to the owner. The owner grants `admin` by email with the `admins` command (CLI-REQ-005).
+
 #### DEMO-REQ-010 — Everywhere, unchanged
 Origin: owner-approved · Derives from: SYS-REQ-001, SYS-REQ-030
 
 The same source runs locally and on both clouds. The app includes a smoke test that exercises each requirement above against a deployed test stage.
 
 #### DEMO-REQ-011 — Only listed people can post
-Origin: owner · Derives from: SYS-REQ-017, SYS-REQ-030 · Decision: DEC-0080
+Origin: owner · Derives from: SYS-REQ-017, SYS-REQ-030 · Decision: DEC-0080 (superseded)
+Status: retired (DEC-0522) · Replaced by: none
 
-The demo's production stages configure a users list (`framework.users`), so only the people on it, and admins, can create posts. Anyone else who logs in is treated as an anonymous visitor.
+The owner decided that anyone who signs up is a user, and configuration no longer holds a users list. On the demo, every signed-up user can post, as DEMO-REQ-002 says for level `user`.
 
 ## 2. Acceptance criteria
 
-The smoke test (DEMO-REQ-010) covers each criterion on a deployed stage, except: DEMO-AC-006, which needs a rebuild, DEMO-AC-011, which needs the stub login provider, the failure clause of DEMO-AC-003, and the expiry clause of DEMO-AC-007 (with the test runner's fake timers) are verified by local tests; DEMO-AC-008 on cloud is verified by the compliance driver.
+The smoke test (DEMO-REQ-010) covers each criterion on a deployed stage, except: DEMO-AC-006, which needs a rebuild, the failure clause of DEMO-AC-003 (a local test stores the photos, then calls `t.setUnavailable(["files"])` before deleting the post, DEC-0537), and the expiry clause of DEMO-AC-007 (with the test runner's fake timers) are verified by local tests; DEMO-AC-008 on cloud is verified by the compliance driver.
 
 | ID | Criterion | Verifies | Where |
 | --- | --- | --- | --- |
@@ -83,4 +86,9 @@ The smoke test (DEMO-REQ-010) covers each criterion on a deployed stage, except:
 | DEMO-AC-008 | Publish and delete actions produce `info` entries in the target's log. | DEMO-REQ-008 | Local, cloud |
 | DEMO-AC-009 | The account page shows the same ID as `/api/auth/me`, and the copy button copies it. | DEMO-REQ-009 | Local, cloud |
 | DEMO-AC-010 | The smoke test passes on local, Cloudflare, and AWS from one commit with no source changes. (AWS: deferred, branch `aws`.) | DEMO-REQ-010 | Local, cloud |
-| DEMO-AC-011 | Every committed production values file of the demo sets `framework.users`. In a local test with the stub login provider, a login on the list can create a draft, and a login on neither list is refused with 401 and sees only published posts. | DEMO-REQ-011 | Local |
+
+Retired criterion (DEC-0522), kept here for the record outside the criteria table, so the compliance catalogue no longer reads it:
+
+| Retired ID | Former criterion | Former Where | Replaced by |
+| --- | --- | --- | --- |
+| DEMO-AC-011 | Every committed production values file of the demo sets `framework.users`. In a local test with the stub login provider, a login on the list can create a draft, and a login on neither list is refused with 401 and sees only published posts. | Local | none (DEMO-AC-002 covers level `user`) |

@@ -2,24 +2,38 @@
  * The Cloudflare `TargetOperations` (PROV §2 "Per-target operations"; cloudflare.md "Deploy
  * mechanics"; DEC-0267). It owns every Cloudflare call; the target-neutral core sequences them.
  *
- * - `preflight`: the credential variables by name, the token's usability, and the permission
- *   to create R2 API tokens. Reads only.
+ * - `preflight`: the credential variables by name and the token's usability. Reads only. It needs
+ *   no permission on API tokens: the stages' R2 signing credential is an account resource that
+ *   `setup-account` creates (DEC-0550), checked by `inspectAccount` like the other shared resources.
  * - `inspectAccount` / `createSharedResources`: `account.ts`.
+ * - `readAccountSettings` / `writeAccountSettings`: the account settings record
+ *   `framework/account.json` in `sst-state` (`account-settings.ts`, DEC-0514).
+ * - `emailSetupProblems` / `setUpEmail` / `emailPrerequisites`: `email.ts` (Email Sending, the
+ *   mail sink's bucket, Worker and Email Routing on `t.<emailDomain>`, the permission check).
+ * - The mail sink (`prototype-mailsink`) is an account resource: a stage whose fixed names would
+ *   be an account resource's is refused by deploy, the stage listing and removal (`names.ts`).
  * - `deployInfrastructure` (step 3): the stage bucket only, then the bucket's CORS policy for
  *   the stage's public origin (FILES' policy, DEC-0099). With a database, the program declares
  *   the Worker and the run is `sst deploy --target Files`; without one (a first deploy), the
  *   program is bucket-only and the run is untargeted, refused when the Worker exists.
  *   SST resolves `--target` only in the stage's state (root cause 2026-10-23-pass1).
  * - `deployCode` (step 5): a full `sst deploy` with the current database as an input, then the
- *   framework-internal secrets the CLI creates: the session key (generated when absent) and the
- *   stage's R2 signing token as S3 credentials (created when absent; a token whose secrets are
- *   missing is replaced, since its value is shown only once).
+ *   framework-internal secrets the CLI creates: the session key and the password provider's
+ *   secret `frameworkAuthSecret` (each generated when absent, PAR-253), and the account's R2
+ *   signing credential as S3 credentials, copied from its record on every deploy (DEC-0550).
  * - `setSecret`, `listSetSecrets`, `stopApp`, `startApp`: `worker.ts`.
+ * - `readStageRecord`, `writeStageRecord`: the stage record in `sst-state` (`stage-record.ts`,
+ *   DEC-0544); `removeStage` deletes it with the stage's state objects.
+ * - `backupStage`, `listStageBackups`: the production `remove`'s backup into `prototype-backups` (`backup.ts`,
+ *   DEC-0543), through `bytes` and the databases' `exportDatabase`.
  * - Databases: D-04's operations through `databases.ts`.
  * - `checkHealth`: `health.ts` with FILES' storage preflight.
- * - `listStageResources`: the Worker, the bucket, the token and the SST state objects, each by
- *   its exact identifier, plus every D1 database.
- * - `removeStage`: every step attempted: empty the bucket, delete the token, `sst remove` (skipped
+ * - `listStageResources`: the Worker, the bucket, a legacy per-stage signing token (when the
+ *   credential may list tokens) and the SST state objects, each by its exact identifier, plus
+ *   every D1 database.
+ * - `emailSetupProblems` also names "Account API Tokens Write" when the account's signing
+ *   credential is absent, since `setup-account` then creates it (DEC-0551).
+ * - `removeStage`: every step attempted: empty the bucket, delete a legacy token, `sst remove` (skipped
  *   when `sst-state` has no `app/<app>/<stage>`; its leftover `app/` object deleted after), then
  *   delete the Worker and the bucket by exact name if they are still there (e.g. when SST's
  *   removal failed or its state was lost), then the stage's SST state objects (DEC-0084).
@@ -30,14 +44,18 @@ import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import { FRAMEWORK_SECRETS } from "../../secrets/names.js";
 import type { DeployedCode, DeployInput, HealthOutcome, Stage, StageDatabase, StageResource, StageResources, TargetOperations } from "../core/operations.js";
-import { accountSubdomain, createSharedResources, inspectSharedResources } from "./account.js";
-import { describeFailure, succeeded, type CloudflareApi } from "./api.js";
+import { accountSubdomain, createSharedResources, inspectSharedResources, type SharedResourceOptions } from "./account.js";
+import { readAccountSettings, writeAccountSettings } from "./account-settings.js";
+import { createCloudflareEmailSetup, type CloudflareEmailSetup } from "./email.js";
+import { describeFailure, succeeded, type CloudflareApi, type CloudflareBytesApi } from "./api.js";
+import { backupStage, IN_FLIGHT_DRAIN_MS, listStageBackups } from "./backup.js";
+import { readStageRecord, writeStageRecord } from "./stage-record.js";
 import type { CloudflareDatabases } from "./databases.js";
 import { missingCredentials, type Environment } from "./environment.js";
 import { checkStageHealth } from "./health.js";
-import { filesBucketName, isStageStateObject, publicOrigin, STATE_BUCKET, workerName } from "./names.js";
+import { accountResourceClash, filesBucketName, isStageStateObject, publicOrigin, STATE_BUCKET, workerName } from "./names.js";
 import { deleteObjects, listObjectKeys } from "./objects.js";
-import { createSigningToken, deleteSigningToken, findSigningToken, tokenCreationProblems } from "./r2-token.js";
+import { deleteSigningToken, findLegacySigningToken, readSigningCredentials, SIGNING_RESOURCE, signingCredentialState, tokenWriteProblems } from "./r2-token.js";
 import { INFRASTRUCTURE_COMPONENT, processSstExec, runSst, writeSstApp, type SstExec, type WorkerCode } from "./sst.js";
 import { listSetSecrets, setRoute, setSecret } from "./worker.js";
 
@@ -51,6 +69,8 @@ export interface CloudflareFilesProvisioning {
 
 export interface CloudflareTargetOptions {
   readonly api: CloudflareApi;
+  /** Object bytes through the R2 object endpoints (the production `remove`'s backup, DEC-0543); without it a production stage cannot be removed. */
+  readonly bytes?: CloudflareBytesApi;
   /** `CLOUDFLARE_ACCOUNT_ID`. */
   readonly accountId: string;
   /** The process environment (credential check by name; SST's environment). */
@@ -65,8 +85,12 @@ export interface CloudflareTargetOptions {
   readonly sst?: SstExec;
   /** For the health check (needs `NODE_USE_ENV_PROXY=1` in the sandbox). */
   readonly fetch?: typeof fetch;
-  /** A new session signing key (PAR-253: 32 random bytes, base64url). */
+  /** A new generated framework key: the session key or the auth secret (PAR-253: 32 random bytes, base64url). */
   readonly randomKey?: () => string;
+  /** The email setup's Cloudflare calls; default `createCloudflareEmailSetup` over `api`. */
+  readonly email?: CloudflareEmailSetup;
+  /** The subdomain `setup-account` registers on an account without one (default random, DEC-0552). */
+  readonly newSubdomain?: SharedResourceOptions["newSubdomain"];
   readonly healthTimeoutMs?: number;
   readonly now?: () => number;
   readonly sleep?: (ms: number) => Promise<void>;
@@ -80,8 +104,12 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
   const sst = options.sst ?? processSstExec();
   const dir = sstAppDir(options.appDir);
   const randomKey = options.randomKey ?? (() => randomBytes(32).toString("base64url"));
+  const email =
+    options.email ??
+    createCloudflareEmailSetup({ api, accountId, ...(options.now === undefined ? {} : { now: options.now }), ...(options.sleep === undefined ? {} : { sleep: options.sleep }) });
   const origin = async (stage: Stage) => publicOrigin(stage, await accountSubdomain(api, accountId));
   const sstRun = (stage: Stage) => ({ dir, env: options.env, stage });
+  const mail = (input: DeployInput) => (input.emailDomain === undefined ? {} : { emailDomain: input.emailDomain });
 
   async function exists(path: string, what: string): Promise<boolean> {
     const r = await api("GET", path);
@@ -94,13 +122,21 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
 
   async function ensureFrameworkSecrets(stage: Stage): Promise<void> {
     const set = (await listSetSecrets(api, accountId, stage)) ?? new Set<string>();
-    if (!set.has(FRAMEWORK_SECRETS.sessionKey)) await setSecret(api, accountId, stage, FRAMEWORK_SECRETS.sessionKey, randomKey());
-    if (set.has(FRAMEWORK_SECRETS.r2AccessKeyId) && set.has(FRAMEWORK_SECRETS.r2SecretAccessKey)) return;
-    const existing = await findSigningToken(api, accountId, stage);
-    if (existing) await deleteSigningToken(api, accountId, existing.id);
-    const credentials = await createSigningToken(api, accountId, stage);
+    for (const name of [FRAMEWORK_SECRETS.sessionKey, FRAMEWORK_SECRETS.authSecret]) {
+      if (!set.has(name)) await setSecret(api, accountId, stage, name, randomKey());
+    }
+    // Written on every deploy, so a stage with a legacy per-stage token, or one deployed before the
+    // credential was replaced, signs with the account's current credential (DEC-0550).
+    const credentials = await readSigningCredentials(api, accountId);
+    if (!credentials) throw new Error(`the account's ${SIGNING_RESOURCE} is missing; run setup-account --target cloudflare with the setup token (DEC-0551)`);
     await setSecret(api, accountId, stage, FRAMEWORK_SECRETS.r2AccessKeyId, credentials.accessKeyId);
     await setSecret(api, accountId, stage, FRAMEWORK_SECRETS.r2SecretAccessKey, credentials.secretAccessKey);
+  }
+
+  /** Refuses a stage whose fixed names are an account resource's (`names.ts`), before any request. */
+  function refuseAccountResourceClash(stage: Stage): void {
+    const clash = accountResourceClash(stage);
+    if (clash !== undefined) throw new Error(clash);
   }
 
   async function stateObjects(stage: Stage): Promise<string[]> {
@@ -110,17 +146,29 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
   return {
     target: "cloudflare",
     dialect: "sqlite",
+    appResourceKind: "Worker",
 
-    async preflight() {
+    async preflight(stage) {
+      const clash = accountResourceClash(stage);
+      if (clash !== undefined) return [clash];
       const missing = missingCredentials(options.env);
       if (missing.length > 0) return missing;
       const verify = await api("GET", `/accounts/${accountId}/tokens/verify`);
       if (!succeeded(verify)) return [`CLOUDFLARE_API_TOKEN is not usable: ${describeFailure(verify)}`];
-      return tokenCreationProblems(api, accountId);
+      return [];
     },
 
     inspectAccount: () => inspectSharedResources(api, accountId),
-    createSharedResources: (absent) => createSharedResources(api, accountId, absent),
+    createSharedResources: (absent, note) => createSharedResources(api, accountId, absent, options.newSubdomain === undefined ? {} : { newSubdomain: options.newSubdomain }, note),
+    readAccountSettings: () => readAccountSettings(api, accountId),
+    writeAccountSettings: (settings) => writeAccountSettings(api, accountId, settings),
+    async emailSetupProblems(emailDomain) {
+      const problems = [...(await email.setupProblems(emailDomain))];
+      if ((await signingCredentialState(api, accountId)) === "absent") problems.push(...(await tokenWriteProblems(api, accountId)));
+      return problems;
+    },
+    setUpEmail: (emailDomain) => email.setUp(emailDomain),
+    emailPrerequisites: (_stage, emailDomain) => email.productionPrerequisites(emailDomain),
 
     async deployInfrastructure(input: DeployInput) {
       // SST 4.17.2 resolves `--target` only in the stage's previous state (run.go:348-360), so
@@ -129,6 +177,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       // database the program is bucket-only and the run is untargeted, which reconciles the
       // whole stage stack and would delete a Worker in state (root cause 2026-10-23-pass1, R1/R2).
       const { database } = input;
+      refuseAccountResourceClash(input.stage);
       if (database && !options.code) throw new Error("no built Worker code; build --target cloudflare must run before deploy (step 3 of a stage with a database declares its Worker)");
       if (!database && (await exists(`${workerPath(input.stage)}/settings`, `Worker ${workerName(input.stage)}`))) {
         throw new Error(
@@ -137,7 +186,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       }
       const stageOrigin = await origin(input.stage);
       if (database && options.code) {
-        writeSstApp(dir, { stage: input.stage, worker: { publicOrigin: stageOrigin, database, code: options.code } });
+        writeSstApp(dir, { stage: input.stage, worker: { publicOrigin: stageOrigin, database, code: options.code, ...mail(input) } });
         await runSst(sst, sstRun(input.stage), "deploy", { target: INFRASTRUCTURE_COMPONENT });
       } else {
         writeSstApp(dir, { stage: input.stage });
@@ -149,8 +198,9 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
 
     async deployCode(input: DeployInput & { readonly database: StageDatabase }): Promise<DeployedCode> {
       if (!options.code) throw new Error("no built Worker code; build --target cloudflare must run before deploy");
+      refuseAccountResourceClash(input.stage);
       const stageOrigin = await origin(input.stage);
-      writeSstApp(dir, { stage: input.stage, worker: { publicOrigin: stageOrigin, database: input.database, code: options.code } });
+      writeSstApp(dir, { stage: input.stage, worker: { publicOrigin: stageOrigin, database: input.database, code: options.code, ...mail(input) } });
       await runSst(sst, sstRun(input.stage), "deploy");
       await ensureFrameworkSecrets(input.stage);
       return { publicOrigin: stageOrigin };
@@ -160,6 +210,30 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
     listSetSecrets: (stage) => listSetSecrets(api, accountId, stage),
     stopApp: (stage) => setRoute(api, accountId, stage, false),
     startApp: (stage) => setRoute(api, accountId, stage, true),
+    readStageRecord: (stage) => readStageRecord(api, accountId, stage),
+    writeStageRecord: (stage, record) => writeStageRecord(api, accountId, stage, record),
+
+    async backupStage(stage, stageDatabases) {
+      refuseAccountResourceClash(stage);
+      if (!options.bytes) throw new Error("no byte transfer for R2 objects is configured, so the stage's files cannot be backed up");
+      return backupStage(
+        { api, bytes: options.bytes, accountId, exportDatabase: (d) => databases.exportDatabase(d), ...(options.now === undefined ? {} : { now: options.now }) },
+        stage,
+        stageDatabases,
+      );
+    },
+
+    async waitForInFlight() {
+      // A request the route took before it was turned off may still be writing: wait PAR-315 for it.
+      await (options.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms))))(IN_FLIGHT_DRAIN_MS);
+      return `waited ${IN_FLIGHT_DRAIN_MS / 1000} s (PAR-315) for requests in flight`;
+    },
+
+    async listStageBackups(stage) {
+      refuseAccountResourceClash(stage);
+      if (!options.bytes) throw new Error("no byte transfer for R2 objects is configured, so the stage's backups cannot be read");
+      return listStageBackups({ api, bytes: options.bytes, accountId }, stage);
+    },
 
     createDatabase: (stage, name) => databases.createDatabase(stage, name),
     copyDatabase: (stage, from, name) => databases.copyDatabase(stage, from, name),
@@ -167,10 +241,10 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
     migrationDatabase: (database) => databases.migrationDatabase(database),
     checkMigratedDatabase: (input) => databases.checkMigratedDatabase(input),
 
-    checkHealth: (stage, deployed) =>
+    checkHealth: async (stage, deployed) =>
       checkStageHealth({
         fetch: options.fetch ?? fetch,
-        publicOrigin: deployed.publicOrigin,
+        publicOrigin: deployed?.publicOrigin ?? (await origin(stage)),
         storagePreflight: (o) => options.files.storagePreflight({ accountId, bucket: filesBucketName(stage), origin: o }),
         ...(options.healthTimeoutMs === undefined ? {} : { timeoutMs: options.healthTimeoutMs }),
         ...(options.now === undefined ? {} : { now: options.now }),
@@ -178,16 +252,18 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       }),
 
     async listStageResources(stage): Promise<StageResources> {
+      refuseAccountResourceClash(stage);
       const resources: StageResource[] = [];
       if (await exists(`${workerPath(stage)}/settings`, `Worker ${workerName(stage)}`)) resources.push({ kind: "Worker", id: workerName(stage) });
       if (await exists(bucketPath(stage), `R2 bucket ${filesBucketName(stage)}`)) resources.push({ kind: "R2 bucket", id: filesBucketName(stage) });
-      const token = await findSigningToken(api, accountId, stage);
+      const token = await findLegacySigningToken(api, accountId, stage);
       if (token) resources.push({ kind: "R2 API token", id: token.id });
-      for (const key of await stateObjects(stage)) resources.push({ kind: "SST state object", id: key });
+      for (const key of await stateObjects(stage)) resources.push({ kind: key.startsWith("framework/") ? "stage record" : "SST state object", id: key });
       return { resources, databases: await databases.listDatabases() };
     },
 
     async removeStage(stage) {
+      refuseAccountResourceClash(stage);
       const failures: string[] = [];
       const attempt = async (run: () => Promise<void>) => {
         try {
@@ -199,7 +275,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       const bucket = filesBucketName(stage);
       await attempt(async () => deleteObjects(api, accountId, bucket, await listObjectKeys(api, accountId, bucket)));
       await attempt(async () => {
-        const token = await findSigningToken(api, accountId, stage);
+        const token = await findLegacySigningToken(api, accountId, stage);
         if (token) await deleteSigningToken(api, accountId, token.id);
       });
       await attempt(async () => {

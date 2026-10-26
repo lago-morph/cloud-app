@@ -7,8 +7,10 @@
  * (`./testing`); never part of a cloud bundle (CORE-REQ-006).
  */
 import { FrameworkError } from "../core/errors.js";
-import type { LoginProvider, ProviderIdentity } from "./login-provider.js";
+import type { AccountStatus, LoginProvider, ProviderIdentity } from "./login-provider.js";
+import { withRole, withoutRole, type Role } from "./roles.js";
 import { base64urlEncode } from "./signing.js";
+import { deriveUserId } from "./user-id.js";
 
 /** The stub's provider name, part of the user-ID derivation (DEC-0227). */
 export const STUB_PROVIDER_ID = "stub";
@@ -45,8 +47,20 @@ export function stubCallbackUrl(redirectUrl: string, login: StubLogin): string {
   return url.toString();
 }
 
-export function createStubLoginProvider(): LoginProvider {
+/**
+ * The stub with its in-memory accounts (auth.md §2 "Stub provider", DEC-0525): one per subject
+ * that has logged in, verified and with no roles. `changeRole` is what `TestApp.grantRole` and
+ * `revokeRole` write.
+ */
+export interface StubLoginProvider extends LoginProvider {
+  accountStatus(subject: string): Promise<AccountStatus | null>;
+  /** Adds or removes `role` on the account whose user ID is `userId`; false when there is none. */
+  changeRole(userId: string, role: Role, change: "grant" | "revoke"): Promise<boolean>;
+}
+
+export function createStubLoginProvider(): StubLoginProvider {
   const usedCodes = new Set<string>();
+  const accounts = new Map<string, { roles: string[] }>();
   return Object.freeze({
     id: STUB_PROVIDER_ID,
     async beginLogin(ctx) {
@@ -62,7 +76,21 @@ export function createStubLoginProvider(): LoginProvider {
       if (query.has("error") || code === null) throw failed("provider refused");
       if (query.has("replay") || usedCodes.has(code)) throw failed("token exchange rejected (HTTP 400, code already used)");
       usedCodes.add(code);
-      return { subject: query.get("subject") ?? STUB_DEFAULT_SUBJECT, displayName: query.get("name") };
+      const subject = query.get("subject") ?? STUB_DEFAULT_SUBJECT;
+      if (!accounts.has(subject)) accounts.set(subject, { roles: [] });
+      return { subject, displayName: query.get("name") };
     },
-  } satisfies LoginProvider);
+    async accountStatus(subject: string): Promise<AccountStatus | null> {
+      const account = accounts.get(subject);
+      return account === undefined ? null : { verified: true, roles: [...account.roles] };
+    },
+    async changeRole(userId: string, role: Role, change: "grant" | "revoke"): Promise<boolean> {
+      for (const [subject, account] of accounts) {
+        if ((await deriveUserId(STUB_PROVIDER_ID, subject)) !== userId) continue;
+        account.roles = change === "grant" ? withRole(account.roles, role) : withoutRole(account.roles, role);
+        return true;
+      }
+      return false;
+    },
+  } satisfies StubLoginProvider);
 }

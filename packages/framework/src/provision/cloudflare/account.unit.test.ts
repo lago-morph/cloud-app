@@ -4,7 +4,9 @@ import { runDeploy } from "../core/deploy.js";
 import { FakeTarget } from "../core/fake-target.js";
 import type { SharedResource } from "../core/operations.js";
 import { runSetupAccount } from "../core/setup-account.js";
-import { accountSubdomain, createSharedResources, inspectSharedResources, LOG_BUCKET, LOG_BUCKET_RESOURCE, STATE_HOME_RESOURCE, SUBDOMAIN_RESOURCE, type CloudflareApi } from "./account.js";
+import { accountSubdomain, createSharedResources, inspectSharedResources, LOG_BUCKET, LOG_BUCKET_RESOURCE, randomSubdomain, STATE_HOME_RESOURCE, SUBDOMAIN_RESOURCE, type CloudflareApi } from "./account.js";
+import { BACKUP_BUCKET_RESOURCE, BACKUP_LIFECYCLE_RESOURCE, BACKUP_LIFECYCLE_RULE } from "./backup.js";
+import { SIGNING_RECORD_KEY, SIGNING_RESOURCE } from "./r2-token.js";
 
 const ACCOUNT = "0123456789abcdef0123456789abcdef";
 
@@ -27,11 +29,20 @@ function stubApi(replies: Record<string, Reply>): CloudflareApi & { requests: st
 const BUCKET_PATH = `/accounts/${ACCOUNT}/r2/buckets/${LOG_BUCKET}`;
 const STATE_PATH = `/accounts/${ACCOUNT}/r2/buckets/sst-state`;
 const SUBDOMAIN_PATH = `/accounts/${ACCOUNT}/workers/subdomain`;
-/** The state home and the subdomain present: the replies the log-bucket tests do not vary. */
-const OTHERS_PRESENT: Record<string, Reply> = { [`GET ${STATE_PATH}`]: ok({ name: "sst-state" }), [`GET ${SUBDOMAIN_PATH}`]: ok({ subdomain: "example" }) };
+const SIGNING_PATH = `/accounts/${ACCOUNT}/r2/buckets/sst-state/objects/${encodeURIComponent(SIGNING_RECORD_KEY)}`;
+/** A valid signing record (DEC-0550). */
+const SIGNING_RECORD: Reply = { status: 200, body: { tokenId: "tok1", accessKeyId: "tok1", secretAccessKey: "a".repeat(64), deniedBuckets: ["prototype-logs", "sst-state", "prototype-mailsink", "prototype-backups"] } };
+const BACKUP_PATH = `/accounts/${ACCOUNT}/r2/buckets/prototype-backups`;
+/** The backup bucket with its PAR-311 rule (DEC-0543). */
+const BACKUP_PRESENT: Record<string, Reply> = { [`GET ${BACKUP_PATH}`]: ok({ name: "prototype-backups" }), [`GET ${BACKUP_PATH}/lifecycle`]: ok({ rules: [BACKUP_LIFECYCLE_RULE] }) };
+/** The state home, the backup bucket, the subdomain and the signing record present: the replies the log-bucket tests do not vary. */
+const OTHERS_PRESENT: Record<string, Reply> = { [`GET ${STATE_PATH}`]: ok({ name: "sst-state" }), ...BACKUP_PRESENT, [`GET ${SUBDOMAIN_PATH}`]: ok({ subdomain: "example" }), [`GET ${SIGNING_PATH}`]: SIGNING_RECORD };
 const OTHERS_OWNED: SharedResource[] = [
   { name: STATE_HOME_RESOURCE, state: "owned" },
+  { name: BACKUP_BUCKET_RESOURCE, state: "owned" },
+  { name: BACKUP_LIFECYCLE_RESOURCE, state: "owned" },
   { name: SUBDOMAIN_RESOURCE, state: "owned" },
+  { name: SIGNING_RESOURCE, state: "owned" },
 ];
 
 describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
@@ -102,9 +113,27 @@ describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
   function targetOver(api: CloudflareApi): FakeTarget {
     const t = new FakeTarget();
     t.inspectAccount = async (): Promise<readonly SharedResource[]> => inspectSharedResources(api, ACCOUNT);
-    t.createSharedResources = (absent) => createSharedResources(api, ACCOUNT, absent);
+    t.createSharedResources = (absent, note) => createSharedResources(api, ACCOUNT, absent, {}, note);
     return t;
   }
+
+  it("setup-account replacing the account's signing token says every deployed stage must be redeployed to pick up the new key", async () => {
+    const TOKENS = `/accounts/${ACCOUNT}/tokens`;
+    const api = stubApi({
+      [`GET ${BUCKET_PATH}`]: ok({ name: LOG_BUCKET }),
+      ...OTHERS_PRESENT,
+      [`GET ${SIGNING_PATH}`]: err(404, 10007, "The specified key does not exist."),
+      [`GET ${TOKENS}?per_page=50&page=1`]: { status: 200, body: { success: true, errors: [], messages: [], result: [{ id: "old", name: "prototype-r2-signing" }], result_info: { page: 1, total_pages: 1 } } },
+      [`GET ${TOKENS}/permission_groups`]: ok([{ id: "g1", name: "Workers R2 Storage Bucket Item Write", scopes: ["com.cloudflare.edge.r2.bucket"] }]),
+      [`POST ${TOKENS}`]: ok({ id: "tok2", name: "prototype-r2-signing", status: "active", value: "v" }),
+      [`PUT ${SIGNING_PATH}`]: ok({}),
+      [`DELETE ${TOKENS}/old`]: ok({ id: "old" }),
+    });
+    const io = captureIo();
+    expect((await runSetupAccount(targetOver(api), io)).status).toBe(0);
+    expect(api.requests.findIndex((r) => r.startsWith(`DELETE ${TOKENS}/old`))).toBeGreaterThan(api.requests.findIndex((r) => r.startsWith(`PUT ${SIGNING_PATH}`)));
+    expect(io.out).toMatch(/replaced the R2 signing credential prototype-r2-signing; every deployed stage keeps the old key until it is redeployed: run deploy --target cloudflare --stage <stage> for each/);
+  });
 
   it("[PROV-AC-007] with the stubbed response showing the shared log bucket belongs to another account, setup-account and deploy stop with a message naming the bucket and change nothing", async () => {
     const api = stubApi({ [`GET ${BUCKET_PATH}`]: err(403, 10002, "Unauthorized to access requested resource"), ...OTHERS_PRESENT });
@@ -122,7 +151,7 @@ describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
     expect(deployIo.err).toMatch(/another account/);
 
     expect(api.requests.every((r) => r.startsWith("GET "))).toBe(true);
-    expect(t.calls.filter((c) => !/^(preflight|listSetSecrets)\b/.test(c))).toEqual([]);
+    expect(t.calls.filter((c) => !/^(preflight|listSetSecrets|readAccountSettings|readStageRecord)\b/.test(c))).toEqual([]);
   });
 
   it("setup-account creates the bucket once; a second run sends no change", async () => {
@@ -130,7 +159,9 @@ describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
     const requests: string[] = [];
     const api: CloudflareApi = async (method, path) => {
       requests.push(`${method} ${path}`);
+      if (path === SIGNING_PATH) return SIGNING_RECORD;
       if (path === STATE_PATH || path === SUBDOMAIN_PATH) return path === STATE_PATH ? ok({ name: "sst-state" }) : ok({ subdomain: "example" });
+      if (BACKUP_PRESENT[`${method} ${path}`]) return BACKUP_PRESENT[`${method} ${path}`]!;
       if (method === "GET") return exists ? ok({ name: LOG_BUCKET }) : err(404, 10006, "The specified bucket does not exist.");
       exists = true;
       return ok({ name: LOG_BUCKET });
@@ -139,11 +170,11 @@ describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
     expect(await runSetupAccount(t, captureIo())).toEqual({ status: 0, created: [LOG_BUCKET_RESOURCE] });
     requests.length = 0;
     expect(await runSetupAccount(t, captureIo())).toEqual({ status: 0, created: [] });
-    expect(requests).toEqual([`GET ${BUCKET_PATH}`, `GET ${STATE_PATH}`, `GET ${SUBDOMAIN_PATH}`]);
+    expect(requests).toEqual([`GET ${BUCKET_PATH}`, `GET ${STATE_PATH}`, `GET ${BACKUP_PATH}`, `GET ${BACKUP_PATH}/lifecycle`, `GET ${SUBDOMAIN_PATH}`, `GET ${SIGNING_PATH}`]);
   });
 
   it("the state home sst-state is a shared bucket read the same way: owned, absent, foreign (DEC-0084, DEC-0270)", async () => {
-    const replies = (state: Reply) => ({ [`GET ${BUCKET_PATH}`]: ok({ name: LOG_BUCKET }), [`GET ${STATE_PATH}`]: state, [`GET ${SUBDOMAIN_PATH}`]: ok({ subdomain: "example" }) });
+    const replies = (state: Reply) => ({ [`GET ${BUCKET_PATH}`]: ok({ name: LOG_BUCKET }), [`GET ${STATE_PATH}`]: state, ...BACKUP_PRESENT, [`GET ${SUBDOMAIN_PATH}`]: ok({ subdomain: "example" }), [`GET ${SIGNING_PATH}`]: SIGNING_RECORD });
     const stateOf = async (r: Reply) => (await inspectSharedResources(stubApi(replies(r)), ACCOUNT)).find((x) => x.name === STATE_HOME_RESOURCE)?.state;
     expect(STATE_HOME_RESOURCE).toBe("R2 bucket sst-state");
     expect(await stateOf(ok({ name: "sst-state" }))).toBe("owned");
@@ -152,7 +183,7 @@ describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
   });
 
   it("the workers.dev subdomain is an account setting: set → owned, none → absent; it is never foreign (DEC-0086)", async () => {
-    const replies = (sub: Reply) => ({ [`GET ${BUCKET_PATH}`]: ok({ name: LOG_BUCKET }), [`GET ${STATE_PATH}`]: ok({ name: "sst-state" }), [`GET ${SUBDOMAIN_PATH}`]: sub });
+    const replies = (sub: Reply) => ({ [`GET ${BUCKET_PATH}`]: ok({ name: LOG_BUCKET }), [`GET ${STATE_PATH}`]: ok({ name: "sst-state" }), ...BACKUP_PRESENT, [`GET ${SUBDOMAIN_PATH}`]: sub, [`GET ${SIGNING_PATH}`]: SIGNING_RECORD });
     const stateOf = async (r: Reply) => (await inspectSharedResources(stubApi(replies(r)), ACCOUNT)).find((x) => x.name === SUBDOMAIN_RESOURCE)?.state;
     expect(SUBDOMAIN_RESOURCE).toBe("workers.dev subdomain");
     expect(await stateOf(ok({ subdomain: "example" }))).toBe("owned");
@@ -161,23 +192,89 @@ describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
     await expect(stateOf(err(403, 10000, "Authentication error"))).rejects.toThrow(/workers\.dev subdomain.*HTTP 403/);
   });
 
-  it("setup-account creates the absent state home and registers a subdomain derived from the account ID", async () => {
+  it("setup-account creates the absent state home and registers a random pf- subdomain, never one derived from the account ID (DEC-0552)", async () => {
     const api = stubApi({
       [`POST /accounts/${ACCOUNT}/r2/buckets`]: ok({ name: "sst-state" }),
-      [`PUT ${SUBDOMAIN_PATH}`]: ok({ subdomain: "pf-0123456789ab" }),
+      [`PUT ${SUBDOMAIN_PATH}`]: ok({ subdomain: "pf-k3x9q0m2v7ab" }),
+    });
+    await createSharedResources(
+      api,
+      ACCOUNT,
+      [
+        { name: SUBDOMAIN_RESOURCE, state: "absent" },
+        { name: STATE_HOME_RESOURCE, state: "absent" },
+      ],
+      { newSubdomain: () => "pf-k3x9q0m2v7ab" },
+    );
+    expect(api.requests).toEqual([`PUT ${SUBDOMAIN_PATH} {"subdomain":"pf-k3x9q0m2v7ab"}`, `POST /accounts/${ACCOUNT}/r2/buckets {"name":"sst-state"}`]);
+    const names = new Set(Array.from({ length: 20 }, () => randomSubdomain()));
+    expect(names.size).toBe(20);
+    for (const name of names) {
+      expect(name).toMatch(/^pf-[a-z0-9]{12}$/);
+      expect(ACCOUNT.includes(name.slice(3, 9))).toBe(false);
+    }
+    // Byte 251 is the last kept value (251 % 36 = 35, "9"); bytes 252–255 are dropped.
+    expect(randomSubdomain(() => new Uint8Array([255, 252, ...Array.from({ length: 22 }, () => 251)]))).toBe("pf-999999999999");
+  });
+
+  it("the backup bucket prototype-backups and its PAR-311 lifecycle rule are shared resources; setup-account creates both, keeping other rules (DEC-0543)", async () => {
+    const base = { [`GET ${BUCKET_PATH}`]: ok({ name: LOG_BUCKET }), [`GET ${STATE_PATH}`]: ok({ name: "sst-state" }), [`GET ${SUBDOMAIN_PATH}`]: ok({ subdomain: "example" }), [`GET ${SIGNING_PATH}`]: SIGNING_RECORD };
+    const absent = await inspectSharedResources(stubApi({ ...base, [`GET ${BACKUP_PATH}`]: err(404, 10006, "The specified bucket does not exist.") }), ACCOUNT);
+    expect(absent.filter((r) => r.name.includes("prototype-backups"))).toEqual([
+      { name: BACKUP_BUCKET_RESOURCE, state: "absent" },
+      { name: BACKUP_LIFECYCLE_RESOURCE, state: "absent" },
+    ]);
+    const noRule = await inspectSharedResources(stubApi({ ...base, [`GET ${BACKUP_PATH}`]: ok({ name: "prototype-backups" }), [`GET ${BACKUP_PATH}/lifecycle`]: ok({ rules: [] }) }), ACCOUNT);
+    expect(noRule.find((r) => r.name === BACKUP_LIFECYCLE_RESOURCE)?.state).toBe("absent");
+
+    const other = { id: "owner-rule", enabled: true, conditions: { prefix: "x/" }, deleteObjectsTransition: { condition: { type: "Age", maxAge: 60 } } };
+    const api = stubApi({
+      [`POST /accounts/${ACCOUNT}/r2/buckets`]: ok({ name: "prototype-backups" }),
+      [`GET ${BACKUP_PATH}/lifecycle`]: ok({ rules: [other] }),
+      [`PUT ${BACKUP_PATH}/lifecycle`]: ok(null),
     });
     await createSharedResources(api, ACCOUNT, [
-      { name: STATE_HOME_RESOURCE, state: "absent" },
-      { name: SUBDOMAIN_RESOURCE, state: "absent" },
+      { name: BACKUP_BUCKET_RESOURCE, state: "absent" },
+      { name: BACKUP_LIFECYCLE_RESOURCE, state: "absent" },
     ]);
-    expect(api.requests).toEqual([`POST /accounts/${ACCOUNT}/r2/buckets {"name":"sst-state"}`, `PUT ${SUBDOMAIN_PATH} {"subdomain":"pf-0123456789ab"}`]);
+    expect(api.requests).toEqual([
+      `POST /accounts/${ACCOUNT}/r2/buckets {"name":"prototype-backups"}`,
+      `GET ${BACKUP_PATH}/lifecycle`,
+      `PUT ${BACKUP_PATH}/lifecycle ${JSON.stringify({ rules: [other, BACKUP_LIFECYCLE_RULE] })}`,
+    ]);
+    expect(BACKUP_LIFECYCLE_RULE.deleteObjectsTransition.condition.maxAge).toBe(30 * 86_400);
   });
 
   it("a subdomain registration that is refused names the subdomain and tells the owner how to register one", async () => {
     const api = stubApi({ [`PUT ${SUBDOMAIN_PATH}`]: err(409, 10032, "subdomain unavailable") });
-    await expect(createSharedResources(api, ACCOUNT, [{ name: SUBDOMAIN_RESOURCE, state: "absent" }])).rejects.toThrow(
-      /registering the workers\.dev subdomain pf-0123456789ab failed: HTTP 409.*register one in the Cloudflare dashboard/,
+    await expect(createSharedResources(api, ACCOUNT, [{ name: SUBDOMAIN_RESOURCE, state: "absent" }], { newSubdomain: () => "pf-k3x9q0m2v7ab" })).rejects.toThrow(
+      /registering the workers\.dev subdomain pf-k3x9q0m2v7ab failed: HTTP 409.*register one in the Cloudflare dashboard/,
     );
+  });
+
+  it("the account's R2 signing credential is a shared resource: its record present → owned, absent → absent; it is created after the buckets (DEC-0550)", async () => {
+    const replies = (record: Reply) => ({ [`GET ${BUCKET_PATH}`]: ok({ name: LOG_BUCKET }), [`GET ${STATE_PATH}`]: ok({ name: "sst-state" }), ...BACKUP_PRESENT, [`GET ${SUBDOMAIN_PATH}`]: ok({ subdomain: "example" }), [`GET ${SIGNING_PATH}`]: record });
+    const stateOf = async (r: Reply) => (await inspectSharedResources(stubApi(replies(r)), ACCOUNT)).find((x) => x.name === SIGNING_RESOURCE)?.state;
+    expect(SIGNING_RESOURCE).toBe("R2 signing credential prototype-r2-signing");
+    expect(await stateOf(SIGNING_RECORD)).toBe("owned");
+    expect(await stateOf(err(404, 10007, "The specified key does not exist."))).toBe("absent");
+    // A record whose token predates the backup bucket's deny entry reads as absent, so setup-account replaces it.
+    const body = SIGNING_RECORD.body as Record<string, unknown>;
+    expect(await stateOf({ status: 200, body: { ...body, deniedBuckets: ["prototype-logs", "sst-state", "prototype-mailsink"] } })).toBe("absent");
+    expect(await stateOf({ status: 200, body: { tokenId: "tok1", accessKeyId: "tok1", secretAccessKey: "a".repeat(64) } })).toBe("absent");
+    const api = stubApi({
+      [`POST /accounts/${ACCOUNT}/r2/buckets`]: ok({ name: "sst-state" }),
+      [`GET /accounts/${ACCOUNT}/tokens?per_page=50&page=1`]: ok([]),
+      [`GET /accounts/${ACCOUNT}/tokens/permission_groups`]: ok([{ id: "g1", name: "Workers R2 Storage Bucket Item Write" }]),
+      [`POST /accounts/${ACCOUNT}/tokens`]: ok({ id: "tok9", value: "v" }),
+      [`PUT ${SIGNING_PATH}`]: ok({}),
+    });
+    await createSharedResources(api, ACCOUNT, [
+      { name: SIGNING_RESOURCE, state: "absent" },
+      { name: STATE_HOME_RESOURCE, state: "absent" },
+    ]);
+    expect(api.requests[0]).toBe(`POST /accounts/${ACCOUNT}/r2/buckets {"name":"sst-state"}`);
+    expect(api.requests.at(-1)?.startsWith(`PUT ${SIGNING_PATH}`)).toBe(true);
   });
 
   it("the account subdomain is read from Cloudflare each time (recorded there, not on the owner's machine)", async () => {

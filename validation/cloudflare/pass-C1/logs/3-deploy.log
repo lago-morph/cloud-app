@@ -1,6 +1,0 @@
-start 2026-10-24T06:38:01Z
-(node:5140) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
-(Use `node --trace-warnings ...` to show where the warning was created)
-deployed reference stage test-aufdf24vgdoqnph to cloudflare; database reference-test-aufdf24vgdoqnph-db-1
-public origin: https://reference-test-aufdf24vgdoqnph.<SUBDOMAIN>.workers.dev
-exit 0 2026-10-24T06:38:58Z

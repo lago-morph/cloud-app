@@ -1,0 +1,7 @@
+start 2026-10-25T23:27:19Z deploy --target cloudflare --stage test-z8ey6q3j123mpoe
+(node:27923) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+deploy failed at step 5 (code): required secrets are not set: shareKey
+  stage state: code deployed; the app is stopped
+  next action: set them with secrets set --target cloudflare --stage test-z8ey6q3j123mpoe <name> (value on standard input), then run deploy again
+exit 1 2026-10-25T23:28:30Z

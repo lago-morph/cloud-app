@@ -49,8 +49,10 @@ export interface TransferProgress {
 
 /**
  * Uploads a file using a ticket obtained from the app's API. No size limit is imposed by the
- * framework. Always sends the ticket's content type; a Blob whose non-empty `type` differs is
- * rejected before sending.
+ * framework. An expired ticket (its expiry time reached by the browser's clock) is rejected
+ * before sending, with `FILES.TRANSFER_FAILED`, status null and `rejected before sending: ticket
+ * expired` (FILES-REQ-006). Always sends the ticket's content type; a Blob whose non-empty `type`
+ * differs is rejected before sending.
  */
 export declare function uploadFile(
   ticket: UploadTicket,
@@ -58,5 +60,8 @@ export declare function uploadFile(
   options?: { readonly onProgress?: (p: TransferProgress) => void },
 ): Promise<void>;
 
-/** A URL usable in `<img src>` or links, valid for the ticket's lifetime. */
+/**
+ * A URL usable in `<img src>` or links, valid for the ticket's lifetime. PNG, JPEG, GIF and WebP
+ * files open in the browser (`inline`); every other type is saved as a download (FILES §2).
+ */
 export declare function downloadUrl(ticket: DownloadTicket): string;

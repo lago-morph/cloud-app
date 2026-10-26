@@ -168,7 +168,8 @@ describe("CFG-AC-006 unknown fields", () => {
   const cases: [string, string, string][] = [
     ["top-level field", JSON.stringify({ values: { greeting: "x" }, framework: {}, bt1Password: "hunter2" }), "bt1Password"],
     ["framework field", JSON.stringify({ values: { greeting: "x" }, framework: { bt1ClientSecret: "s" } }), "bt1ClientSecret"],
-    ["google field", JSON.stringify({ values: { greeting: "x" }, framework: { google: { clientId: "bt1-fake-client-id", bt1Secret: "s" } } }), "bt1Secret"],
+    // framework.google left the schema (DEC-0513); framework.email holds only senderName (MAIL-AC-005).
+    ["email field", JSON.stringify({ values: { greeting: "x" }, framework: { email: { senderName: "Notes", bt1Secret: "s" } } }), "bt1Secret"],
   ];
   for (const [label, file, field] of cases) {
     it(tag("CFG-AC-006", `a values file containing an unknown ${label} is rejected by schema validation`), async () => {

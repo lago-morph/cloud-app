@@ -12,6 +12,10 @@
  *   run's raw output shows its API request count.
  */
 import { CLOUD_WAITS, prerequisiteMissing, USER_AGENT } from "../../harness/index.js";
+import { guardFetch, MAIN_TOKEN_PURPOSE } from "../../harness/token-guard.js";
+
+/** `fetch` that stops calls with `CLOUDFLARE_API_TOKEN` once the API answered it 401 in this process (token-guard.ts). */
+const guarded = (): typeof fetch => guardFetch(fetch, process.env.CLOUDFLARE_API_TOKEN, MAIN_TOKEN_PURPOSE);
 
 export const API_BASE = "https://api.cloudflare.com/client/v4";
 
@@ -61,7 +65,7 @@ export function authHeader(env: Readonly<Record<string, string | undefined>> = p
 /** One Cloudflare API call. `path` is relative to `/client/v4` and starts with `/`. */
 export async function cfApi<T>(method: string, path: string, body?: unknown): Promise<CfResponse<T>> {
   count();
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await guarded()(`${API_BASE}${path}`, {
     method,
     headers: { "user-agent": USER_AGENT, accept: "application/json", ...(body === undefined ? {} : { "content-type": "application/json" }), ...authHeader() },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -73,6 +77,13 @@ export async function cfApi<T>(method: string, path: string, body?: unknown): Pr
   } catch {
     return { status: response.status, body: undefined };
   }
+}
+
+/** One GET whose answer is not a JSON envelope (for example a Worker script download): its status and body text. */
+export async function cfRawGet(path: string): Promise<{ readonly status: number; readonly text: string }> {
+  count();
+  const response = await guarded()(`${API_BASE}${path}`, { headers: { "user-agent": USER_AGENT, ...authHeader() }, signal: AbortSignal.timeout(CLOUD_WAITS.requestMs) });
+  return { status: response.status, text: await response.text() };
 }
 
 /** Short description of a failed call, without any credential (Cloudflare error bodies hold none). */

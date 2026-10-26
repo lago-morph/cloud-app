@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filesBucketName, isStageStateObject, publicOrigin, signingTokenName, STATE_BUCKET, workerName } from "./names.js";
+import { filesBucketName, isStageStateObject, publicOrigin, legacySigningTokenName, STATE_BUCKET, workerName } from "./names.js";
 
 const stage = { app: "notes", stage: "test-abc" };
 
@@ -7,7 +7,7 @@ describe("Cloudflare stage resource names (PROV §2 'Stage resources'; CF-REQ-00
   it("[CF-AC-002] names every stage resource after the app and the stage, so two stages never share one", () => {
     expect(workerName(stage)).toBe("notes-test-abc");
     expect(filesBucketName(stage)).toBe("notes-test-abc-files");
-    expect(signingTokenName(stage)).toBe("notes-test-abc-files-signing");
+    expect(legacySigningTokenName(stage)).toBe("notes-test-abc-files-signing");
     const other = { app: "notes", stage: "test-abd" };
     expect(new Set([workerName(stage), workerName(other), filesBucketName(stage), filesBucketName(other)]).size).toBe(4);
   });

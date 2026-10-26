@@ -16,7 +16,7 @@ function tooLarge(): FrameworkError {
  * The request body as text, refused with `HTTP.PAYLOAD_TOO_LARGE` when `Content-Length` or the
  * bytes actually streamed exceed PAR-200; reading stops at the first byte over the limit.
  */
-async function readLimitedText(request: Request): Promise<string> {
+export async function readLimitedText(request: Request): Promise<string> {
   const declared = Number(request.headers.get("Content-Length") ?? "0");
   if (declared > MAX_JSON_BODY_BYTES) throw tooLarge();
   if (request.body === null) return "";

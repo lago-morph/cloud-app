@@ -1,0 +1,12 @@
+Updating (test-wxnforn019mo5ic):
+
+@ updating........
+    pulumi:pulumi:Stack reference-test-wxnforn019mo5ic  
+Outputs:
+    _protect: false
+
+Resources:
+    8 unchanged
+
+Duration: 5s
+

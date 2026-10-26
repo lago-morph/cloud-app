@@ -1,0 +1,7 @@
+start 2026-10-25T19:15:48Z setup-account --target cloudflare
+(node:1891) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+already present: R2 bucket prototype-logs, R2 bucket sst-state, R2 bucket prototype-backups, lifecycle rule of R2 bucket prototype-backups (PAR-311), workers.dev subdomain, R2 signing credential prototype-r2-signing
+email domain: shareplay.com (unchanged)
+setup-account (cloudflare): nothing changed
+exit 0 2026-10-25T19:15:56Z

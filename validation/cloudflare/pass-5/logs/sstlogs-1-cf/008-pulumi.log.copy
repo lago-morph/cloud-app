@@ -1,0 +1,23 @@
+Updating (test-qsyokeqbxq2nush):
+
+@ updating.......
+ +  sst:cloudflare:Worker Worker creating (0s) 
+@ updating....
+ +  cloudflare:index:WorkersScript WorkerScript creating (0s) 
+@ updating.........
+ +  cloudflare:index:WorkersScript WorkerScript created (6s) 
+@ updating....
+ +  pulumi-nodejs:dynamic:Resource WorkerUrl.sst.cloudflare.WorkerUrl creating (0s) 
+@ updating.......
+ +  pulumi-nodejs:dynamic:Resource WorkerUrl.sst.cloudflare.WorkerUrl created (3s) 
+ +  sst:sst:LinkRef WorkerLinkRef creating (0s) 
+    pulumi:pulumi:Stack reference-test-qsyokeqbxq2nush  
+Outputs:
+    _protect: false
+
+Resources:
+    + 4 created
+    4 unchanged
+
+Duration: 16s
+

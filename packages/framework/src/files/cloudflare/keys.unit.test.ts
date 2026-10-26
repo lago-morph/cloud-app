@@ -114,7 +114,7 @@ describe("Cloudflare stored keys (DEC-0430)", () => {
     expect(fake.objects.has(n1024)).toBe(false);
   });
 
-  it.each(["x/../y", "a/.", "./x", "../y"])("the dot-segment name %j is stored with the ending and listed back unchanged", async (name) => {
+  it.each(["x/./y", "a/.", "./x", "a/..b"])("the dot-segment name %j is stored with the ending and listed back unchanged", async (name) => {
     const fake = fakeStore({ order: "r2" });
     const files = createFilesService({ store: cloudflareFilesStore(fake), tickets: noTickets });
     await files.put(name, new Uint8Array([1]));

@@ -4,12 +4,15 @@
  * `listStageResources` through the Cloudflare API and the state home (CF-AC-002, PROV-AC-003,
  * COMPL-AC-004, E2E-012).
  *
- * Which resources (cloudflare.md "Deploy mechanics", PROV §2 "Removal", DEC-0084, DEC-0100):
+ * Which resources (cloudflare.md "Deploy mechanics", PROV §2 "Removal", DEC-0084, DEC-0100,
+ * DEC-0544, DEC-0550):
  * - D1 databases by PROV-REQ-002's exact pattern `^<app>-<stage>-db-(\d+)$`;
- * - the stage's Worker (its secrets and `workers.dev` route belong to it), R2 bucket and R2 API
- *   token, matched by name;
+ * - the stage's Worker (its secrets and `workers.dev` route belong to it) and R2 bucket, matched
+ *   by name; a legacy per-stage R2 API token `<app>-<stage>-files-signing` of a stage deployed
+ *   before DEC-0550 (stages deployed since have none: they share the account's credential);
  * - the stage's provisioning state objects in the state home bucket `sst-state` (DEC-0084:
- *   `remove` deletes them itself because `sst remove` leaves them).
+ *   `remove` deletes them itself because `sst remove` leaves them), the stage record
+ *   `framework/<app>/<stage>/stage.json` (DEC-0544) among them.
  * Log entries are not stage resources: they stay after removal by design (PROV-AC-003).
  *
  * Matching by name (assumption, DEC-0359…DEC-0366, decision log Item: D-T): physical names are what
@@ -24,9 +27,13 @@
  * read or written.
  */
 import { createHash } from "node:crypto";
+import { isCriterionProductionStage } from "../../harness/criterion-stages.js";
 import { prerequisiteMissing } from "../../harness/index.js";
+import { accountTokens, MAIL_SINK, signingAndBackupState } from "./account.js";
 import { accountId, cfApi, cfList, cfOk, failure } from "./api.js";
-import { bucketExists, LOG_BUCKET, listKeys, STATE_BUCKET } from "./r2.js";
+import { BACKUP_BUCKET, bucketExists, LOG_BUCKET, listKeys, STATE_BUCKET } from "./r2.js";
+
+export { accountTokens, MAIL_SINK } from "./account.js";
 
 export interface StageRef {
   readonly app: string;
@@ -101,10 +108,14 @@ export async function accountBuckets(): Promise<string[]> {
   throw new Error("listing R2 buckets: more than 10 pages; the hook does not list further");
 }
 
-/** Every account API token (ID and name), bounded. */
-export async function accountTokens(): Promise<{ id: string; name: string }[]> {
-  const tokens = await cfList<{ id: string; name?: string }>("listing account API tokens", `/accounts/${accountId()}/tokens`, 50);
-  return tokens.map((t) => ({ id: t.id, name: t.name ?? "" }));
+/** The stage's fixed bucket name on Cloudflare (DEC-0331). */
+export function stageBucketName(s: StageRef): string {
+  return `${s.app}-${s.stage}-files`;
+}
+
+/** The stage record's key in the state home (PROV §2 "Stage record", DEC-0544). */
+export function stageRecordKey(s: StageRef): string {
+  return `framework/${s.app}/${s.stage}/stage.json`;
 }
 
 /** Keys of the state home that belong to the stage (a path part equal to the stage name, and the app name). */
@@ -136,23 +147,46 @@ export function leftoverStrings(d: StageResourceDetails): string[] {
   ];
 }
 
-/** DEC-0279 hook: every resource of PROV's removal list still present for the stage. */
-export async function listStageResources(input: { readonly target: string; readonly app: string; readonly stage: string }): Promise<string[]> {
+/**
+ * DEC-0279 hook: every resource of PROV's removal list still present for the stage. Test stages
+ * only, unless `production` names a production stage a criterion created itself (never
+ * `prodcheck`, which no criterion removes).
+ */
+export async function listStageResources(input: { readonly target: string; readonly app: string; readonly stage: string; readonly production?: boolean }): Promise<string[]> {
   if (input.target !== "cloudflare") return prerequisiteMissing(`no stage-resource probe for target ${input.target} (AWS deferred to a later release, DEC-0508)`);
-  if (!input.stage.startsWith("test-")) throw new Error(`the stage-resource probe handles test stages only, not ${input.stage}`);
+  if (input.stage === "prodcheck") throw new Error("the stage-resource probe never handles prodcheck");
+  if (!input.stage.startsWith("test-") && !(input.production === true && isCriterionProductionStage(input.stage))) throw new Error(`the stage-resource probe handles test stages and criterion production stages only (DEC-0560), not ${input.stage}`);
   return leftoverStrings(await stageResourceDetails(input));
 }
 
 /**
- * The account-level shared resources (PROV-REQ-004, DEC-0084, DEC-0086): whether the shared log
- * bucket and the state home exist, and a SHA-256 of the account's `workers.dev` subdomain (the
- * subdomain is personal and never printed, DEC-0086). 3 Cloudflare API requests.
+ * The account-level shared resources (PROV-REQ-004, DEC-0084, DEC-0086, DEC-0543, DEC-0550):
+ * whether the shared log bucket and the state home exist, and a SHA-256 of the account's
+ * `workers.dev` subdomain (never printed, DEC-0086), whether the mail sink's bucket and Worker
+ * `prototype-mailsink` exist (MAIL-REQ-005: stage removal never touches them), whether the
+ * backup bucket `prototype-backups` exists with its lifecycle rules (PAR-311), and the account's
+ * R2 signing credential: a digest of the signing record and the IDs of the `prototype-r2-signing`
+ * tokens. 9 Cloudflare API requests (more for large token listings).
  */
-export async function sharedResources(): Promise<{ logBucket: boolean; stateHome: boolean; subdomainSha256: string }> {
+export async function sharedResources(): Promise<{
+  logBucket: boolean;
+  stateHome: boolean;
+  subdomainSha256: string;
+  mailSinkBucket: boolean;
+  mailSinkWorker: boolean;
+  backupBucket: boolean;
+  backupBucketLifecycle: unknown;
+  signingRecordSha256: string | null;
+  signingTokenIds: string[];
+}> {
   const sub = await cfOk<{ subdomain?: string }>("reading the account's workers.dev subdomain", "GET", `/accounts/${accountId()}/workers/subdomain`);
   return {
     logBucket: await bucketExists(LOG_BUCKET),
     stateHome: await bucketExists(STATE_BUCKET),
     subdomainSha256: createHash("sha256").update(sub.subdomain ?? "").digest("hex"),
+    mailSinkBucket: await bucketExists(MAIL_SINK),
+    mailSinkWorker: (await accountWorkers()).includes(MAIL_SINK),
+    backupBucket: await bucketExists(BACKUP_BUCKET),
+    ...(await signingAndBackupState()),
   };
 }

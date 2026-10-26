@@ -21,7 +21,7 @@ import { assembleStage, type StageOptions } from "./stage.js";
 const deployment = createDeployment({ app: "stageapp", stage: "local", target: "local" });
 
 function resolved(overrides: Partial<ResolvedConfig> = {}): ResolvedConfig {
-  return { deployment, values: {}, admins: [], secrets: [], ...overrides };
+  return { deployment, values: {}, secrets: [], ...overrides };
 }
 
 const opened: PGlite[] = [];

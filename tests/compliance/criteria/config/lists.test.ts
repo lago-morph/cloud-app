@@ -1,113 +1,105 @@
 /**
- * CFG-AC-005: admin list and users list (docs/components/config.md §4).
- * - Locally, with the stub login provider (only available in-process: auth.md "Stub provider"),
- *   each `createTestApp` call is one build (testing.d.ts): adding a user's ID to
- *   `framework.admins` makes them admin only in the next build, removing it reverts; adding
- *   `framework.users` without the user's ID makes them anonymous only in the next build.
- * - On every target: the run's deployment carries exactly its committed `framework.admins` and
- *   `framework.users`. With the authentication mock the level is chosen by the test (AUTH-REQ-009),
- *   so a deployed stage cannot show its lists through a login; the deployment's resolved
- *   configuration is read instead (decisions C-T1).
+ * CFG-AC-005 (docs/components/config.md §4; CFG-REQ-005 as amended, DEC-0521, DEC-0522,
+ * DEC-0526): "A build of a values file holding `framework.admins` (even an empty list) fails with
+ * `CORE.MISCONFIGURED`, naming the file and the unknown field `framework.admins`; likewise for
+ * `framework.users`. `createTestApp` with `config: { framework: { admins: [] } }` or
+ * `{ users: [] }` throws. The stage configuration schema's `framework` properties are exactly
+ * `email`. The committed values files of the template, the reference app and the demo, and
+ * `skill/templates/production-stage.json`, hold neither field."
+ *
+ * The build is the framework's own build pipeline (`buildApp`, what `build` runs; cli.md §2),
+ * loaded from the built package, run on a scratch copy of the reference app whose committed
+ * `config/local.json` is edited there, so the thrown error's code can be read (the CLI prints only
+ * the message). Rewritten for the amended criterion: the admin and users lists are removed.
  */
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { tag } from "../../harness/index.js";
-import { resolvedConfigFor } from "../core/support/build.js";
-import { referenceTestApp, jsonOf, type TestApp } from "../core/support/in-process.js";
-import { committedValuesFile, isLocal, readStageValues, REFERENCE_DIR, runDeployment, uniqueValue } from "../core/support/repo.js";
+import { referenceTestApp } from "../core/support/in-process.js";
+import { requireBuiltFramework, scratchCopy } from "../core/support/processes.js";
+import { DOCS, FRAMEWORK_DIR, isLocal, REFERENCE_DIR, REPO_ROOT } from "../core/support/repo.js";
 
-interface Me {
-  readonly level: string;
-  readonly id?: string;
-  readonly unlistedId?: string;
+type BuildApp = (options: { readonly appDir: string; readonly target: "local"; readonly stage: string }) => Promise<unknown>;
+
+async function buildApp(): Promise<BuildApp> {
+  requireBuiltFramework();
+  return ((await import(pathToFileURL(join(FRAMEWORK_DIR, "dist", "build", "build.js")).href)) as { buildApp: BuildApp }).buildApp;
 }
 
-async function me(app: TestApp): Promise<Me> {
-  const r = await app.request("/api/auth/me");
-  expect(r.status, "/api/auth/me").toBe(200);
-  return (await jsonOf(r)) as Me;
+/** Every `*.json` under an app's `config/`. */
+function valuesFiles(appDir: string): string[] {
+  const out: string[] = [];
+  const walk = (dir: string): void => {
+    for (const name of readdirSync(dir)) {
+      const full = join(dir, name);
+      if (statSync(full).isDirectory()) walk(full);
+      else if (name.endsWith(".json")) out.push(full);
+    }
+  };
+  walk(join(appDir, "config"));
+  return out;
 }
 
-async function userRouteStatus(app: TestApp): Promise<number> {
-  return (await app.request("/api/levels/user")).status;
-}
-
-async function build(framework: Record<string, unknown>, subject: string): Promise<TestApp> {
-  const app = await referenceTestApp({ stubLoginProvider: true, secrets: { apiKey: "c-t1-in-process-value" }, config: { framework } });
-  await app.loginWithStub(subject, { displayName: "CFG-AC-005 user" });
-  return app;
-}
-
-describe("CFG: admin list and users list", () => {
-  it(
-    tag("CFG-AC-005", "the run's deployment carries exactly its committed framework.admins and framework.users"),
-    async () => {
-      const run = runDeployment();
-      const committed = readStageValues(committedValuesFile(REFERENCE_DIR, run.target, run.stage)).framework ?? {};
-      const { config, source } = await resolvedConfigFor(REFERENCE_DIR, run.target, run.stage);
-      expect([...(config.admins ?? [])], `${source}: admins`).toEqual([...(committed.admins ?? [])]);
-      expect(config.users === undefined ? undefined : [...config.users], `${source}: users (absent when the file has none)`).toEqual(committed.users === undefined ? undefined : [...committed.users]);
-    },
-    300_000,
-  );
-
-  if (isLocal()) {
+if (isLocal()) {
+  describe("CFG: no admin or users list in configuration", () => {
     it(
-      tag("CFG-AC-005", "locally with the stub login provider, an ID added to framework.admins is admin only after the next build, and removing it reverts"),
+      tag("CFG-AC-005", "a build of a values file holding framework.admins or framework.users (even an empty list) fails with CORE.MISCONFIGURED naming the file and the unknown field"),
       async () => {
-        const subject = uniqueValue("cfg-ac-005-subject-");
-        const apps: TestApp[] = [];
+        const build = await buildApp();
+        const copy = await scratchCopy(REFERENCE_DIR, "cfg-ac-005");
         try {
-          const first = await build({}, subject);
-          apps.push(first);
-          const id = (await me(first)).id ?? "";
-          expect(await me(first)).toMatchObject({ level: "user", id });
-
-          const withAdmin = await build({ admins: [id] }, subject);
-          apps.push(withAdmin);
-          expect(await me(withAdmin), "the build with the ID in framework.admins").toMatchObject({ level: "admin", id });
-          expect(await me(first), "the earlier build is unchanged").toMatchObject({ level: "user", id });
-
-          const removed = await build({}, subject);
-          apps.push(removed);
-          expect(await me(removed), "the build after removing the ID").toMatchObject({ level: "user", id });
-          expect(await me(withAdmin), "the build with the ID keeps it until replaced").toMatchObject({ level: "admin", id });
+          const original = JSON.parse(await copy.read("config/local.json")) as { values?: unknown; framework?: Record<string, unknown> };
+          for (const [field, value] of [
+            ["admins", []],
+            ["admins", ["u_AAAAAAAAAAAAAAAAAAAAAAAAAA"]],
+            ["users", []],
+            ["users", ["u_AAAAAAAAAAAAAAAAAAAAAAAAAA"]],
+          ] as const) {
+            await copy.write("config/local.json", JSON.stringify({ ...original, framework: { ...(original.framework ?? {}), [field]: value } }, null, 2));
+            const error = (await build({ appDir: copy.dir, target: "local", stage: "local" }).then(
+              () => undefined,
+              (e: unknown) => e,
+            )) as { code?: unknown; message?: unknown } | undefined;
+            const what = `framework.${field} = ${JSON.stringify(value)}`;
+            expect(error, `${what}: the build fails`).toBeDefined();
+            expect(error?.code, `${what}: the error code`).toBe("CORE.MISCONFIGURED");
+            expect(String(error?.message), `${what}: names the file`).toContain("local.json");
+            expect(String(error?.message), `${what}: names the unknown field`).toContain(`framework.${field}`);
+            expect(String(error?.message), `${what}: as an unknown field`).toMatch(/unknown|unrecognized/i);
+          }
+          await copy.write("config/local.json", JSON.stringify(original, null, 2));
+          await expect(build({ appDir: copy.dir, target: "local", stage: "local" }), "the unedited file builds").resolves.toBeDefined();
         } finally {
-          for (const app of apps) await app.dispose();
+          await copy.remove();
         }
       },
-      300_000,
+      900_000,
     );
 
-    it(
-      tag("CFG-AC-005", "locally with the stub login provider, framework.users without the user's ID makes that user anonymous only after the next build"),
-      async () => {
-        const subject = uniqueValue("cfg-ac-005-listed-");
-        const apps: TestApp[] = [];
-        try {
-          const first = await build({}, subject);
-          apps.push(first);
-          const id = (await me(first)).id ?? "";
-          expect(await userRouteStatus(first)).toBe(200);
+    it(tag("CFG-AC-005", "createTestApp with config.framework.admins or config.framework.users throws"), async () => {
+      for (const framework of [{ admins: [] }, { users: [] }]) {
+        await expect(referenceTestApp({ secrets: { apiKey: "cfg-ac-005-in-process-value" }, config: { framework } as never }), JSON.stringify(framework)).rejects.toThrow();
+      }
+    });
 
-          const other = await build({}, uniqueValue("cfg-ac-005-other-"));
-          apps.push(other);
-          const otherId = (await me(other)).id ?? "";
-          expect(otherId).not.toBe(id);
+    it(tag("CFG-AC-005", "the stage configuration schema's framework properties are exactly email"), () => {
+      const schema = JSON.parse(readFileSync(join(DOCS, "contracts", "schemas", "stage-config.schema.json"), "utf8")) as { properties?: { framework?: { properties?: Record<string, unknown> } } };
+      expect(Object.keys(schema.properties?.framework?.properties ?? {})).toEqual(["email"]);
+    });
 
-          const listed = await build({ users: [otherId] }, subject);
-          apps.push(listed);
-          expect(await me(listed), "the build whose framework.users lacks the ID").toMatchObject({ level: "anonymous", unlistedId: id });
-          expect(await userRouteStatus(listed), "a user route treats them as anonymous").toBe(401);
-          expect(await userRouteStatus(first), "the earlier build is unchanged").toBe(200);
-
-          const unlisted = await build({}, subject);
-          apps.push(unlisted);
-          expect(await me(unlisted), "the build without framework.users").toMatchObject({ level: "user", id });
-        } finally {
-          for (const app of apps) await app.dispose();
-        }
-      },
-      300_000,
-    );
-  }
-});
+    it(tag("CFG-AC-005", "the committed values files of the template, the reference app and the demo, and skill/templates/production-stage.json, hold neither framework.admins nor framework.users"), () => {
+      const files = [
+        ...["template", "reference", "demo"].flatMap((app) => valuesFiles(join(REPO_ROOT, "apps", app))),
+        join(REPO_ROOT, "skill", "templates", "production-stage.json"),
+      ];
+      expect(files.length).toBeGreaterThan(4);
+      const holding = files.filter((file) => {
+        const framework = (JSON.parse(readFileSync(file, "utf8")) as { framework?: Record<string, unknown> }).framework ?? {};
+        return "admins" in framework || "users" in framework;
+      });
+      expect(holding.map((f) => relative(REPO_ROOT, f))).toEqual([]);
+    });
+  });
+}

@@ -134,14 +134,19 @@ describe("[COMPL-AC-002] the real documents", () => {
   it("define every component criterion and scenario once", () => {
     const ids = catalogue.map((e) => e.id);
     expect(ids.filter((id) => id.startsWith("E2E-"))).toHaveLength(16);
-    expect(ids.filter((id) => /-AC-/.test(id)).length).toBe(124);
-    expect(ids).toContain("DEMO-AC-011");
+    // 124, less the four retired GOOGLE criteria, plus AUTH-AC-013/014, PWD-AC-001…009 and MAIL-AC-001…007 (DEC-0513);
+    // then less the retired DEMO-AC-011, plus AUTH-AC-015, PWD-AC-010, CLI-AC-006 and CLI-AC-007 (DEC-0522, DEC-0526).
+    expect(ids.filter((id) => /-AC-/.test(id)).length).toBe(141);
+    expect(ids.filter((id) => id.startsWith("GOOGLE-AC-"))).toEqual([]);
+    expect(ids).not.toContain("DEMO-AC-011");
+    for (const id of ["AUTH-AC-015", "PWD-AC-010", "CLI-AC-006", "CLI-AC-007"]) expect(ids).toContain(id);
   });
 
-  it("parse E2E-016's review part and AUTH-AC-005's admin-list part", () => {
+  it("parse E2E-016's review part; AUTH-AC-005 and E2E-007 have no milestone part (DEC-0526)", () => {
     const byId = new Map(catalogue.map((e) => [e.id, e.applies]));
     expect(byId.get("E2E-016")).toEqual({ local: { automated: true, milestone: ["review"] } });
-    expect(byId.get("AUTH-AC-005")?.cloudflare).toEqual({ automated: true, milestone: ["admin-list part"] });
+    expect(byId.get("AUTH-AC-005")?.cloudflare).toEqual({ automated: true, milestone: [] });
+    expect(byId.get("E2E-007")?.cloudflare).toEqual({ automated: true, milestone: [] });
     expect(byId.get("CF-AC-001")).toEqual({ cloudflare: { automated: true, milestone: [] } });
   });
 });

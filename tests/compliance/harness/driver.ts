@@ -9,8 +9,17 @@
  * uses one test stage for the whole run. Release 1 targets local and Cloudflare; the AWS usage
  * caps and region step are on branch `aws` (DEC-0508).
  *
+ * Cloud account (DEC-0530, DEC-0531): at the start of a cloud run the driver reads the account's
+ * plan and D1 budget and creates the restricted test tokens the selected clauses need
+ * (`DriverDeps.cloudAccount`, test-tokens.ts); at the end it deletes them, also after a failure,
+ * and reports every `prototype-compliance-*` token still listed as a leftover.
+ *
  * A run against fakes (overridden not-run rules, or stage operations that say they are fakes) is
  * marked `dryRun` in its record, which no report counts (G-EV F3).
+ *
+ * Production checks (COMPL-REQ-005, prodcheck.ts): on an automated cloud run that selects a
+ * criterion with a part on `prodcheck`, the driver redeploys `prodcheck` before the test layers
+ * (never removing it), and runs `check-login` on it after them, folding its record's results in.
  */
 import {
   DirtyTreeError,
@@ -29,9 +38,23 @@ import { NOT_SELECTED, type CatalogueEntry, type ReleaseTarget as Target } from 
 import { childEnv } from "./env.js";
 import { expectedCriteria, PHASE_RULES, type ExpectedEntry, type NotRunRule } from "./expected.js";
 import { assertTestStage } from "./leftovers.js";
+import { CHECK_LOGIN_IDS, checkLoginOutcomes, PRODCHECK_IDS, PRODCHECK_STAGE } from "./prodcheck.js";
 import { grepPattern, parsePlaywrightJson, parseVitestJson } from "./reports.js";
 import { criterionResults, type TestOutcome } from "./results.js";
 import { idsFor, runnerSelection, scopeTests } from "./selection.js";
+import { d1Budget, describeBudget, RUN_PLAN_ENV, type D1Plan } from "./d1-budget.js";
+import { RESTRICTED_TOKENS, staleTestTokens, type CloudAccountOps, type CreatedToken } from "./test-tokens.js";
+
+/** The start of every record command the driver writes (`npm run compliance -- <argv>`). */
+const DRIVER_COMMAND_PREFIX = "npm run compliance --";
+
+/** True when an evidence record's command is one the compliance driver writes (not, for example, `check-login`'s). */
+export function isDriverCommand(command: string | undefined): boolean {
+  return command !== undefined && (command === DRIVER_COMMAND_PREFIX || command.startsWith(`${DRIVER_COMMAND_PREFIX} `));
+}
+
+/** How evidence and the driver's output show a self-created test token's value (DEC-0531). */
+export const TEST_TOKEN_REPLACEMENT = "<test-token>";
 
 export interface RunCall {
   readonly command: string;
@@ -82,6 +105,20 @@ export interface CloudStageOps {
   remove(stage: string): Promise<string>;
   /** The stage's resources that still exist, by exact identifier (PROV `listStageResources`). */
   listStageResources(stage: string): Promise<readonly string[]>;
+  /**
+   * The account's criterion production stages (reserved prefixes, DEC-0560; `criterion-stages.ts`
+   * `classifyCriterionStages`): `stale` are marked by a test and older than PAR-286, which the
+   * driver removes at the start and the end of every cloud run like `test-` stages; `unmarked`
+   * have the reserved shape but no marker (never removed, only warned about). Absent: none.
+   */
+  criterionStages?(): Promise<{ readonly stale: readonly string[]; readonly unmarked: readonly string[] }>;
+  /** Deletes a criterion production stage's marker after its removal left nothing (DEC-0560). */
+  forgetCriterionStage?(stage: string): Promise<void>;
+  /**
+   * `check-login --target <cloud> --stage <stage>` (PWD §2): its status, output and the evidence
+   * record it wrote, if any. Absent: the run records the check-login IDs as failed.
+   */
+  checkLogin?(stage: string): Promise<{ readonly status: number; readonly output: string; readonly record?: EvidenceRecord }>;
   /** Set when these operations are fakes (G-RUN's dry run): what is faked. The record is then marked `dryRun`. */
   readonly dryRun?: string;
 }
@@ -106,6 +143,12 @@ export interface DriverDeps {
   run(call: RunCall): Promise<{ readonly status: number; readonly output: string }>;
   startLocal(): Promise<LocalSession>;
   cloud(target: Target): CloudStageOps;
+  /**
+   * The cloud account's reads and the self-created test tokens (d1-budget.ts, test-tokens.ts;
+   * DEC-0530, DEC-0531). Absent: no plan is read (the tests apply the setting or the Free
+   * budget), no test token is created and no token leftover check runs.
+   */
+  cloudAccount?(target: Target): CloudAccountOps | undefined;
   readonly pendingStages: PendingStages;
   /** The not-run rules; default `PHASE_RULES`. Tests pass others (a run against fakes). */
   readonly notRunRules?: readonly NotRunRule[];
@@ -232,7 +275,111 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
     }
   };
 
+  /**
+   * DEC-0560: criterion production stages are cleaned like `test-` stages, but only those a test
+   * marked and whose marker is stale (older than PAR-286), so a concurrent run's live stage is
+   * never touched. Each is removed (`--confirm-production`, by the target's `remove`); its
+   * leftovers are recorded, and when none remain its marker is deleted. A stage of the reserved
+   * shape without a marker (an owner's) is only warned about. A listing that fails is a leftover entry.
+   */
+  const removeCriterionStages = async (ops: CloudStageOps, when: "start" | "end"): Promise<void> => {
+    if (ops.criterionStages === undefined) return;
+    let found: { readonly stale: readonly string[]; readonly unmarked: readonly string[] };
+    try {
+      found = await ops.criterionStages();
+    } catch (error) {
+      leftovers.push(`criterion production stage check failed: ${firstLine(error)}`);
+      return;
+    }
+    for (const name of found.unmarked) log(`compliance: warning: ${name} has the shape of a criterion production stage but no marker; it is not removed (DEC-0560)`);
+    for (const name of found.stale) {
+      log(`compliance: removing the stale criterion production stage ${name} (${when} of run)`);
+      const before = leftovers.length;
+      await removeStage(ops, name);
+      if (leftovers.length !== before || ops.forgetCriterionStage === undefined) continue;
+      try {
+        await ops.forgetCriterionStage(name);
+      } catch (error) {
+        leftovers.push(`${name}: its criterion stage marker could not be deleted: ${firstLine(error)}`);
+      }
+    }
+  };
+
+  /**
+   * COMPL-REQ-005: `prodcheck` is redeployed (a production stage: never removed, no pending
+   * entry). Its first deploy stops on the reference app's unset `apiKey`, which is then set to a
+   * fresh value (on standard input, redacted) before the second deploy. Resolves to the problem, or undefined.
+   */
+  const redeployProdcheck = async (cloudOps: CloudStageOps): Promise<string | undefined> => {
+    try {
+      try {
+        raw["prodcheck-deploy.log"] = (await cloudOps.deploy(PRODCHECK_STAGE)).output;
+        return undefined;
+      } catch (error) {
+        if (!(error instanceof SecretsNotSetError) || cloudOps.setSecret === undefined) throw error;
+        raw["prodcheck-deploy.log"] = error.output;
+      }
+      const value = deps.newTestSecret();
+      redactions.push({ value, replacement: TEST_SECRET.replacement });
+      raw["prodcheck-secrets-set.log"] = await (cloudOps.setSecret as NonNullable<CloudStageOps["setSecret"]>)(PRODCHECK_STAGE, TEST_SECRET.name, value);
+      raw["prodcheck-redeploy.log"] = (await cloudOps.deploy(PRODCHECK_STAGE)).output;
+      return undefined;
+    } catch (error) {
+      raw["prodcheck-deploy-error.log"] = `${error instanceof Error ? error.message : String(error)}\n`;
+      return `redeploying ${PRODCHECK_STAGE} failed: ${firstLine(error)}`;
+    }
+  };
+  const prodcheckRun = isCloud && !args.selfTest && !args.milestone && toRun.some((id) => PRODCHECK_IDS.includes(id));
+  const checkLoginRun = prodcheckRun ? toRun.filter((id) => CHECK_LOGIN_IDS.includes(id)) : [];
+  let prodcheckProblem: string | undefined;
+
   let ops: CloudStageOps | undefined;
+  let account: CloudAccountOps | undefined;
+  let runPlan: D1Plan | undefined;
+  const createdTokens: CreatedToken[] = [];
+  /** The self-created test tokens' variables for the test processes (values in memory only). */
+  const tokenEnv: Record<string, string> = {};
+  /**
+   * DEC-0530/DEC-0531 at the start of a cloud run: read the plan's D1 budget, delete test tokens an
+   * interrupted earlier run left, and create each restricted token a selected clause needs and
+   * the operator did not supply. A token's value goes only into `tokenEnv` and the redactions.
+   */
+  const prepareAccount = async (acc: CloudAccountOps): Promise<void> => {
+    const reading = await acc.d1Plan();
+    runPlan = reading.plan;
+    const budget = d1Budget(reading.plan);
+    raw["d1-budget.json"] = `${JSON.stringify({ ...reading, budget }, null, 2)}\n`;
+    log(`compliance: ${describeBudget(budget)} (plan from ${reading.source}: ${reading.detail})`);
+    // Only tokens an interrupted earlier run left (compliance.md §4): another run's tokens younger
+    // than PAR-286 may be in use (a nested or concurrent run), and the current run's are its own.
+    for (const old of staleTestTokens(await acc.testTokens(), runId, deps.now())) {
+      await acc.deleteToken(old.id);
+      log(`compliance: deleted the test token ${old.name} an earlier run left`);
+    }
+    for (const spec of RESTRICTED_TOKENS) {
+      if (!toRun.includes(spec.criterion) || (process.env[spec.env] ?? "") !== "") continue;
+      const token = await acc.createRestrictedToken(spec, runId);
+      createdTokens.push(token);
+      redactions.push({ value: token.value, replacement: TEST_TOKEN_REPLACEMENT });
+      tokenEnv[spec.env] = token.value;
+      log(`compliance: created the test token ${token.name} (lacks ${spec.omitted}) for ${spec.criterion}`);
+    }
+  };
+  /** Deletes this run's test tokens, then reports every `prototype-compliance-*` token still listed as a leftover. */
+  const cleanUpTokens = async (acc: CloudAccountOps): Promise<void> => {
+    for (const token of createdTokens) {
+      try {
+        await acc.deleteToken(token.id);
+      } catch (error) {
+        log(`compliance: deleting the test token ${token.name} failed: ${firstLine(error)}`);
+      }
+    }
+    try {
+      leftovers.push(...(await acc.testTokens()).map((t) => `API token ${t.name}`));
+    } catch (error) {
+      leftovers.push(`test token check failed: ${firstLine(error)}`);
+    }
+  };
   if (toRun.length > 0) {
     let local: LocalSession | undefined;
     let deployed = false;
@@ -252,8 +399,12 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
       }
       if (isCloud) {
         ops = deps.cloud(args.target);
+        if (!args.selfTest) account = deps.cloudAccount?.(args.target);
+        if (account !== undefined) await prepareAccount(account);
         // An interrupted earlier run left these stages: remove them first (COMPL-REQ-004).
         for (const old of deps.pendingStages.list(args.target)) await removeStage(ops, old);
+        // Criterion production stages an interrupted test left (DEC-0560).
+        await removeCriterionStages(ops, "start");
         if (baseUrl === undefined) {
           stage ??= testStageName(runId);
           deps.pendingStages.add(args.target, stage);
@@ -261,6 +412,13 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
           baseUrl = await deployWithTestSecret(ops, stage);
         }
         if (baseUrl !== undefined) redactions.push(...subdomainRedaction(baseUrl));
+        if (prodcheckRun) {
+          prodcheckProblem = await redeployProdcheck(ops);
+          if (prodcheckProblem !== undefined) {
+            log(`compliance: ${prodcheckProblem} (raw/prodcheck-deploy-error.log)`);
+            exitStatus ||= 1;
+          }
+        }
       } else if (!args.selfTest && baseUrl === undefined) {
         local = await deps.startLocal();
         baseUrl = local.baseUrl;
@@ -269,11 +427,15 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
       const env = childEnv(process.env, {
         target: args.target,
         runId,
+        mode: args.milestone ? "milestone" : "automated",
         ...(stage === undefined ? {} : { stage }),
         ...(baseUrl === undefined ? {} : { baseUrl }),
         ...(testSecret === undefined ? {} : { testSecret }),
       });
-      const hide = testSecret === undefined ? {} : { redact: [testSecret] };
+      if (runPlan !== undefined) env[RUN_PLAN_ENV] = runPlan;
+      Object.assign(env, tokenEnv);
+      const hidden = [...(testSecret === undefined ? [] : [testSecret]), ...createdTokens.map((t) => t.value)];
+      const hide = hidden.length === 0 ? {} : { redact: hidden };
       const tmp = deps.tempDir();
       for (const selection of runnerSelection({ target: args.target, selfTest: args.selfTest })) {
         const ids = idsFor(selection, toRun);
@@ -299,6 +461,22 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
         runErrors.push(...parsed.errors);
         exitStatus ||= result.status;
       }
+      // check-login last (prodcheck.ts): its sign-in burst rate-limits this client for PAR-258's window.
+      if (checkLoginRun.length > 0 && ops !== undefined) {
+        if (prodcheckProblem !== undefined) outcomes.push(...checkLoginOutcomes(checkLoginRun, { problem: `not checked: ${prodcheckProblem}` }));
+        else if (ops.checkLogin === undefined) outcomes.push(...checkLoginOutcomes(checkLoginRun, { problem: `the ${args.target} stage operations cannot run check-login` }));
+        else {
+          try {
+            const result = await ops.checkLogin(PRODCHECK_STAGE);
+            raw["check-login.log"] = result.output;
+            outcomes.push(...checkLoginOutcomes(checkLoginRun, result));
+            exitStatus ||= result.status;
+          } catch (error) {
+            outcomes.push(...checkLoginOutcomes(checkLoginRun, { problem: `check-login could not run: ${firstLine(error)}` }));
+            exitStatus ||= 1;
+          }
+        }
+      }
     } catch (error) {
       const reason = `not run: setting up the target failed: ${firstLine(error)}`;
       log(`compliance: ${reason}`);
@@ -316,6 +494,9 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
         }
       }
       if (ops !== undefined && deployed && stage !== undefined) await removeStage(ops, stage);
+      if (ops !== undefined) await removeCriterionStages(ops, "end");
+      // Also after a failed run: the run's test tokens go, and none may remain (DEC-0531).
+      if (account !== undefined) await cleanUpTokens(account);
     }
   }
   // A stage that could not be removed, or a leftover check that could not run, is a partial failure (CLI-REQ-003).
@@ -324,7 +505,7 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
 
   const results: EvidenceResult[] = criterionResults({ target: args.target, expected, outcomes, blocked });
   // G-EV F3: a run against fakes says so in its record; the reports never count it, wherever it is stored.
-  const fakes = [...(deps.notRunRules !== undefined && deps.notRunRules !== PHASE_RULES ? ["not-run rules overridden (DriverDeps.notRunRules)"] : []), ...(ops?.dryRun === undefined ? [] : [ops.dryRun])];
+  const fakes = [...(deps.notRunRules !== undefined && deps.notRunRules !== PHASE_RULES ? ["not-run rules overridden (DriverDeps.notRunRules)"] : []), ...(ops?.dryRun === undefined ? [] : [ops.dryRun]), ...(account?.dryRun === undefined ? [] : [account.dryRun])];
   const dryRun = fakes.length === 0 ? undefined : fakes.join("; ");
   if (dryRun !== undefined) log(`compliance: dry run (${dryRun}): this record is not evidence`);
   const record: EvidenceRecord = {
@@ -332,7 +513,7 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
     commit,
     target: args.target,
     ...(stage === undefined ? {} : { stage }),
-    command: `npm run compliance -- ${argv.join(" ")}`.trimEnd(),
+    command: `${DRIVER_COMMAND_PREFIX} ${argv.join(" ")}`.trimEnd(),
     startedAt,
     finishedAt: deps.now().toISOString(),
     exitStatus,

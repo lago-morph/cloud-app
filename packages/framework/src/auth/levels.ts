@@ -1,25 +1,18 @@
 /**
- * Access level of a validated (real-provider) login, evaluated on every request
- * (AUTH-REQ-003, DEC-0080): admin exactly when the ID is in `framework.admins`; when
- * `framework.users` is present, an ID on neither list is anonymous, and its ID is kept only for
- * `/api/auth/me` (`unlistedId`, AUTH-REQ-005).
+ * Access level of a valid real-provider session, from the account's current state (AUTH-REQ-003,
+ * auth.md §2 "Levels", DEC-0521, DEC-0522, DEC-0524). There is no admin or users list:
+ * - no account (`null`), or an unverified one: `anonymous` (an unverified account is never a user);
+ * - a verified account: `user`, or `admin` when its roles contain `admin`.
+ * Unknown role names are ignored.
  */
+import type { AccountStatus } from "./login-provider.js";
 import type { CurrentUser } from "./public.js";
+import { ADMIN_ROLE } from "./roles.js";
 
-export interface AccessLists {
-  readonly admins: readonly string[];
-  /** Present exactly when the stage configures `framework.users`. */
-  readonly users?: readonly string[];
-}
+const ANONYMOUS: CurrentUser = Object.freeze({ level: "anonymous" });
 
-export interface Evaluated {
-  readonly user: CurrentUser;
-  /** Set only for a validated login that `framework.users` makes anonymous. */
-  readonly unlistedId?: string;
-}
-
-export function evaluateLogin(login: { readonly id: string; readonly displayName: string | null }, lists: AccessLists): Evaluated {
-  if (lists.admins.includes(login.id)) return { user: { level: "admin", id: login.id, displayName: login.displayName } };
-  if (lists.users !== undefined && !lists.users.includes(login.id)) return { user: { level: "anonymous" }, unlistedId: login.id };
-  return { user: { level: "user", id: login.id, displayName: login.displayName } };
+export function levelFromAccount(login: { readonly id: string; readonly displayName: string | null }, status: AccountStatus | null): CurrentUser {
+  if (status === null || status.verified !== true) return ANONYMOUS;
+  const level = status.roles.includes(ADMIN_ROLE) ? "admin" : "user";
+  return { level, id: login.id, displayName: login.displayName };
 }

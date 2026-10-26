@@ -1,8 +1,0 @@
-# uptime before: 2026-10-24T19:36:04Z  19:36:04 up 37 min,  0 user,  load average: 1.39, 2.44, 1.91
-$ npm run build -w packages/framework
-
-> @lago-morph/prototype-framework@0.1.0 build
-> tsc -p tsconfig.build.json
-
-# exit code: 0
-# uptime after: 2026-10-24T19:36:10Z  19:36:10 up 37 min,  0 user,  load average: 1.52, 2.45, 1.91

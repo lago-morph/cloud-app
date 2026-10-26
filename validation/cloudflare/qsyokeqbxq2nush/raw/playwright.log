@@ -1,0 +1,37 @@
+(node:15303) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:15316) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+(node:15316) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:15316) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+
+Running 3 tests using 2 workers
+
+(node:15347) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+(node:15353) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/3] [e2e] › tests/compliance/e2e/E2E-014.spec.ts:69:1 › [E2E-014] the stage reports exactly its committed configuration values
+[2/3] [e2e] › tests/compliance/e2e/E2E-014.spec.ts:77:3 › [E2E-014] cloud part: a secret set with the CLI appears nowhere in the repository, build outputs, deployed browser assets or logs
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+
+(node:15347) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[3/3] [e2e] › tests/compliance/e2e/E2E-011.spec.ts:136:1 › [E2E-011] app and framework entries are stored under the app and stage with timestamps, and the plain-Error request's entry is found by its requestId
+[d-t2] cloudflare api requests in this process: 3
+
+[d-t2] cloudflare api requests in this process: 3
+
+  3 passed (1.2m)

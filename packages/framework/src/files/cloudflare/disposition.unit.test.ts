@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { downloadDisposition } from "./disposition.js";
+import { downloadDisposition, inlineImageType } from "./disposition.js";
 
-describe("download Content-Disposition (DEC-0313, FILES-REQ-003)", () => {
+describe("download Content-Disposition (DEC-0313, DEC-0535, FILES-REQ-003)", () => {
   it("names the file with filename*=UTF-8'' and serves it as an attachment", () => {
+    expect(downloadDisposition("report.pdf", "application/pdf")).toBe("attachment; filename*=UTF-8''report.pdf");
     expect(downloadDisposition("report.pdf")).toBe("attachment; filename*=UTF-8''report.pdf");
   });
 
@@ -14,7 +15,20 @@ describe("download Content-Disposition (DEC-0313, FILES-REQ-003)", () => {
     expect(downloadDisposition("!#$&+-.^_`|~")).toBe("attachment; filename*=UTF-8''!#$&+-.^_`|~");
   });
 
-  it.each(["p.png", "p.jpg", "p.gif", "p.webp", "p.avif", "p.bmp", "p.svg", "p.html", "p"])("%j, a raster image or not, is an attachment (DEC-0414)", (name) => {
-    expect(downloadDisposition(name)).toBe(`attachment; filename*=UTF-8''${name}`);
+  it.each(["image/png", "image/jpeg", "image/gif", "image/webp", "IMAGE/PNG", "image/jpeg; charset=binary"])("%j is served inline, keeping the real filename (DEC-0535)", (type) => {
+    expect(downloadDisposition("photos/ä b.png", type)).toBe("inline; filename*=UTF-8''photos%2F%C3%A4%20b.png");
+  });
+
+  it.each(["image/svg+xml", "text/html", "application/xhtml+xml", "image/avif", "image/bmp", "image/x-icon", "image/pngx", "text/plain", "application/octet-stream", ""])(
+    "%j stays an attachment (DEC-0535)",
+    (type) => {
+      expect(downloadDisposition("p.png", type)).toBe("attachment; filename*=UTF-8''p.png");
+    },
+  );
+
+  it("the inline type is the essence of the stored type, lowercased", () => {
+    expect(inlineImageType(" Image/WebP ; q=1")).toBe("image/webp");
+    expect(inlineImageType("image/svg+xml")).toBeUndefined();
+    expect(inlineImageType(undefined)).toBeUndefined();
   });
 });

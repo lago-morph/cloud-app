@@ -1,0 +1,222 @@
+{
+  "config": {
+    "argv": [
+      "/opt/node22/bin/node",
+      "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/node_modules/.bin/playwright",
+      "test",
+      "tests/compliance/",
+      "--project",
+      "integration",
+      "--project",
+      "e2e",
+      "--grep",
+      "\\[(?:DEMO-AC-008)\\]",
+      "--reporter=json",
+      "--pass-with-no-tests"
+    ],
+    "configFile": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/playwright.config.ts",
+    "rootDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "integration",
+        "name": "integration",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4",
+        "testIgnore": [],
+        "testMatch": [
+          "packages/framework/test/integration/**/*.spec.ts",
+          "tests/compliance/criteria/**/*.spec.ts"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "e2e",
+        "name": "e2e",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/tests/compliance/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "filteredProjects": [
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "integration",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4",
+        "snapshotDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4",
+        "testIgnore": [],
+        "testMatch": [
+          "packages/framework/test/integration/**/*.spec.ts",
+          "tests/compliance/criteria/**/*.spec.ts"
+        ],
+        "timeout": 30000,
+        "use": {
+          "browserName": "chromium"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "integration"
+      },
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "e2e",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/tests/compliance/e2e",
+        "snapshotDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/tests/compliance/e2e",
+        "testIgnore": [],
+        "testMatch": "**/*.spec.ts",
+        "timeout": 30000,
+        "use": {
+          "browserName": "chromium"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "e2e"
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "default",
+    "updateSourceMethod": "patch",
+    "version": "1.64.1",
+    "workers": 2,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "tests/compliance/e2e/demo-criteria.spec.ts",
+      "file": "tests/compliance/e2e/demo-criteria.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[DEMO-AC-008] publishing a post and deleting it through the page each produce an info entry of the demo, written during that request, in the target's log",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 360000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 133411,
+                  "error": {
+                    "message": "Error: Error: the log holds an info entry for the publish and one for the delete\n\nthe log holds an info entry for the publish and one for the delete\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\nCall Log:\n- Timeout 120000ms exceeded while waiting on the predicate\nentries since the publish:\n2026-10-25T23:36:32.559Z info posts: post 0e3d68ac-8818-4275-abe2-411fac270d1f published by demo-ac008-admin-98389d15\n2026-10-25T23:36:38.671Z info posts: post 0e3d68ac-8818-4275-abe2-411fac270d1f deleted",
+                    "stack": "Error: Error: the log holds an info entry for the publish and one for the delete\n\nthe log holds an info entry for the publish and one for the delete\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\nCall Log:\n- Timeout 120000ms exceeded while waiting on the predicate\nentries since the publish:\n2026-10-25T23:36:32.559Z info posts: post 0e3d68ac-8818-4275-abe2-411fac270d1f published by demo-ac008-admin-98389d15\n2026-10-25T23:36:38.671Z info posts: post 0e3d68ac-8818-4275-abe2-411fac270d1f deleted\n    at /home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/tests/compliance/e2e/demo-criteria.spec.ts:633:15\n    at /home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/tests/compliance/e2e/demo-criteria.spec.ts:622:5",
+                    "location": {
+                      "file": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/tests/compliance/e2e/demo-criteria.spec.ts",
+                      "column": 15,
+                      "line": 633
+                    },
+                    "snippet": "  631 |       .catch((error: unknown) => {\n  632 |         const recent = entries.filter((e) => new Date(e.time) >= publishFrom).map((e) => `${e.time} ${e.severity} ${e.component}: ${e.message}`);\n> 633 |         throw new Error(`${String(error)}\\nentries since the publish:\\n${recent.join(\"\\n\")}`);\n      |               ^\n  634 |       });\n  635 |   } finally {\n  636 |     if (created) await deleteAsAdmin(admin, admin.page.url());"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/tests/compliance/e2e/demo-criteria.spec.ts",
+                        "column": 15,
+                        "line": 633
+                      },
+                      "message": "Error: Error: the log holds an info entry for the publish and one for the delete\n\nthe log holds an info entry for the publish and one for the delete\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\nCall Log:\n- Timeout 120000ms exceeded while waiting on the predicate\nentries since the publish:\n2026-10-25T23:36:32.559Z info posts: post 0e3d68ac-8818-4275-abe2-411fac270d1f published by demo-ac008-admin-98389d15\n2026-10-25T23:36:38.671Z info posts: post 0e3d68ac-8818-4275-abe2-411fac270d1f deleted\n\n  631 |       .catch((error: unknown) => {\n  632 |         const recent = entries.filter((e) => new Date(e.time) >= publishFrom).map((e) => `${e.time} ${e.severity} ${e.component}: ${e.message}`);\n> 633 |         throw new Error(`${String(error)}\\nentries since the publish:\\n${recent.join(\"\\n\")}`);\n      |               ^\n  634 |       });\n  635 |   } finally {\n  636 |     if (created) await deleteAsAdmin(admin, admin.page.url());\n    at /home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/tests/compliance/e2e/demo-criteria.spec.ts:633:15\n    at /home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/tests/compliance/e2e/demo-criteria.spec.ts:622:5"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-25T23:36:19.855Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/test-results/demo-criteria--DEMO-AC-008-144de-request-in-the-target-s-log-e2e/error-context.md"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/test-results/demo-criteria--DEMO-AC-008-144de-request-in-the-target-s-log-e2e/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/tests/compliance/e2e/demo-criteria.spec.ts",
+                    "column": 15,
+                    "line": 633
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "7dfa15f81d16dda24a6d-29307314ebfef747ba30",
+          "file": "tests/compliance/e2e/demo-criteria.spec.ts",
+          "line": 598,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-25T23:36:08.578Z",
+    "duration": 145045.772,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

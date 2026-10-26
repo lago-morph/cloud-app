@@ -1,19 +1,21 @@
 /**
- * `deploy --target <t> --stage <s>` (CLI-REQ-001; PROV-REQ-002; D-05).
+ * `deploy --target <t> --stage <s> [--start]` (CLI-REQ-001; PROV-REQ-002; D-05).
  *
- * 1. Options: a cloud target (local has `dev`) and a stage; the runner-only abort point comes
+ * 1. Options: a cloud target (local has `dev`), a stage and the flag `--start`, which starts a
+ *    stage that `stop` stopped (without it a stopped stage stays stopped, DEC-0544); the runner-only abort point comes
  *    from the environment variable `PROTOTYPE_FRAMEWORK_ABORT_AT` (`after-copy` | `after-code`,
  *    DEC-0269), which only the compliance runner sets, so it never appears among the owner's
  *    options.
  * 2. The process must be able to reach the cloud (`NODE_USE_ENV_PROXY=1` behind a proxy).
  * 3. `prepare`: build the deployment (`build --target <t> --stage <s>`, plus the client's static
  *    assets) and read what the core needs from the app: the migration histories, the declared
- *    secrets, the stage's Google client ID. Only local files are written.
+ *    secrets. Only local files are written.
  * 4. The target-neutral PROV core (`runDeploy`, steps 1–7) on the target's operations
  *    (`targetOperations`: one factory per cloud target, `operations.ts`). It never
  *    creates the account's shared resources: only `setup-account` does (PROV-REQ-004).
- * 5. On success: record the stage's public origin for `smoke` (`recordDeployOutput`, DEC-0272)
- *    and, for a production stage, print the Google callback URL to register (GOOGLE-REQ-004).
+ * 5. On success: record the stage's public origin for `smoke` (`recordDeployOutput`, DEC-0272).
+ *    The core prints a production stage's sign-in page and sender address (provisioning.md §2
+ *    "Publishing the result"); nothing is registered with a login provider (DEC-0513).
  * Exit 0 only when every step passed (CLI-REQ-003).
  */
 import { existsSync } from "node:fs";
@@ -46,8 +48,6 @@ export interface PreparedDeploy {
   readonly migrations: Histories;
   /** The app's declared secret names. */
   readonly requiredSecrets: readonly string[];
-  /** The stage's `framework.google.clientId`, if configured. */
-  readonly googleClientId?: string;
   /** The built code, handed to the target's operations as is. */
   readonly code: unknown;
 }
@@ -68,7 +68,8 @@ function abortPoint(env: ProcessEnvironment): AbortPoint | undefined {
 
 export function deployCommand(deps: DeployDeps): Command {
   return async (args, io) => {
-    const { target, stage } = parseCloudTargetStage("deploy", args);
+    const start = args.includes("--start");
+    const { target, stage } = parseCloudTargetStage("deploy", args.filter((a) => a !== "--start"));
     const abortAt = abortPoint(deps.env);
     const refused = refuseUnreachableCloud("deploy", deps.env, io);
     if (refused !== undefined) return refused;
@@ -88,15 +89,14 @@ export function deployCommand(deps: DeployDeps): Command {
         stage: { app: prepared.app, stage },
         migrations: prepared.migrations,
         requiredSecrets: prepared.requiredSecrets,
-        ...(prepared.googleClientId === undefined ? {} : { googleClientId: prepared.googleClientId }),
         ...(abortAt === undefined ? {} : { abortAt }),
+        ...(start ? { start: true } : {}),
       },
       io,
     );
     if (result.status !== EXIT.ok || result.publicOrigin === undefined) return EXIT.failed;
 
     deps.recordDeployOutput(io.cwd, target, stage, result.publicOrigin);
-    if (!stage.startsWith("test-")) io.stdout(`Google callback URL to register: ${result.publicOrigin}/api/auth/callback\n`);
     return EXIT.ok;
   };
 }
@@ -138,7 +138,6 @@ export function prepareDeploy(deps: PrepareDeps): DeployDeps["prepare"] {
         app: readHistory(join(appDir, "migrations"), "sqlite", "app"),
       },
       requiredSecrets: built.resolved.secrets.map((s) => s.name),
-      ...(built.resolved.google === undefined ? {} : { googleClientId: built.resolved.google.clientId }),
       code,
     };
   };

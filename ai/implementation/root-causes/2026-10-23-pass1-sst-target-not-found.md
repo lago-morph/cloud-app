@@ -1,5 +1,7 @@
 # Root cause: pass 1. SST 4.17.2 resolves `--target <name>` only against the resources in the stage's previous deployment state, so step 3's `sst deploy --target Files` can never succeed on a stage's first deploy. The fake SST in the unit tests accepted every `--target`, and no spike ever ran `--target`.
 
+**Archived 2026-10-25** to branch `archive/implement-local-cloudflare` (same paths; `ai/ARCHIVE.md`, then `ARCHIVE-INDEX.md` there): the pass 1 evidence `validation/cloudflare/pass-1/` cited below.
+
 Author: diagnosing subagent (prompt §8). I did not write the code under diagnosis, and I did not run pass 1. This is a diagnosis only. No framework code or test was changed, and no Cloudflare call was made. All reproduction was local (SST `home: "local"`, no provider).
 
 Base: branch `claude/implement-local-cloudflare-diag-pass1`, from `origin/claude/implement-local-cloudflare` `6755922`. Evidence: `validation/cloudflare/pass-1/logs/deploy-1.log`, `deploy-1.sst-run1.sst.log`, `deploy-1.generated-sst.config.ts`, `inventory-sst-state-objects.json`.

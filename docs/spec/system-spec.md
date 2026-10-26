@@ -10,6 +10,8 @@ The framework lets AI agents build small web applications — a browser client p
 
 Release scope (informative; DEC-0508, owner, 2026-10-24): the first release targets local and Cloudflare. The AWS target is deferred to a later release; its design and code are kept on the branch `aws`, and everything in these documents about it is marked "deferred (branch `aws`)".
 
+Login in release 1 (informative; DEC-0509, DEC-0513, owner): the real login provider is email and password, run in the app's own deployment, with verification emails. Google sign-in is dropped from release 1; its design is kept retired in `docs/components/google.md` and its code on the branch `google`.
+
 The applications are prototypes and personal tools: low criticality, low volume, a few simultaneous users. The framework's value is portability and safety for AI-written code, not performance or scale.
 
 ## 2. Terms
@@ -125,15 +127,24 @@ Origin: owner · Decision: DEC-0014
 
 Every request MUST be classified as anonymous, logged-in user, or admin. App code sees only that level, a stable opaque user ID, and an optional display name. App code MUST NOT see email addresses, provider identities, protocol details, or tokens; all authentication handling, including validation, happens behind the abstraction. A user ID is stable for a person and login provider; signing in through a different provider yields a different user ID.
 
-#### SYS-REQ-018 — Admins by configuration
-Origin: owner · Decision: DEC-0015
+#### SYS-REQ-018 — Admins (by role, amended; formerly by configuration)
+Origin: owner · Decision: DEC-0015 (superseded), DEC-0521, DEC-0522
 
 Admins MUST be designated in configuration by user ID. The framework MUST provide documented steps by which a user can see their own user ID so it can be copied into configuration.
 
+Amendment (Origin: owner · Decision: DEC-0521, DEC-0522; the operator command, its confirmation and the next-request rule: ai-proposed, DEC-0523, DEC-0524): admins are no longer designated in configuration. The text above is replaced by the following:
+- Admins MUST be designated by the role `admin`, stored with the person's account in the stage's own database. The only role defined is `admin`; a new account has no roles, and there is no "user" role.
+- Any account whose email address is verified MUST be level `user`, and an admin is a user whose roles include `admin`. An account whose address is not verified MUST NOT be `user` or `admin`.
+- A change of roles MUST take effect on the person's next request, with no new login and no deploy.
+- The framework MUST provide an operator command that grants, revokes and lists the `admin` role by email address on any stage. On a production stage the command MUST require an explicit confirmation.
+- Configuration MUST NOT hold admin or user lists.
+
 #### SYS-REQ-019 — Login provider
-Origin: owner · Decision: DEC-0016
+Origin: owner · Decision: DEC-0016, DEC-0509, DEC-0513
 
 Google MUST be supported as a real login provider. App code MUST NOT be able to tell which provider or protocol is in use, and additional providers (for example GitHub) MUST be addable behind the abstraction without app changes.
+
+Amendment for release 1 (Origin: owner · Decision: DEC-0509, DEC-0511, DEC-0513): in release 1 the real login provider MUST be email and password, run by the framework itself in the app's deployment, with each email address verified before its first login. Google is not supported in release 1 (its code is kept on the branch `google`). The rest of this requirement is unchanged: app code MUST NOT be able to tell which provider is in use, and further providers MUST be addable behind the abstraction without app changes.
 
 #### SYS-REQ-020 — Mockable authentication
 Origin: owner · Decision: DEC-0017, DEC-0052
@@ -168,16 +179,20 @@ Origin: owner-approved · Decision: DEC-0033, DEC-0053
 The framework MUST provide one scripted, deterministic command that an app must pass before work on it is considered done. The command runs, locally and with no network or cloud dependency: (1) type checking, (2) the portability rules, (3) the migration checker, and (4) the app's automated tests.
 
 #### SYS-REQ-026 — Compliance on every target
-Origin: owner-approved · Decision: DEC-0020, DEC-0508
+Origin: owner-approved · Decision: DEC-0020, DEC-0508, DEC-0512
 
 A single compliance suite MUST verify each capability's contract identically on all three targets. The framework is considered working only when the suite passes on all three targets and the provider certification (SYS-REQ-027) is current.
 
 Amendment for release 1 (Origin: owner · Decision: DEC-0508): release 1 targets local and Cloudflare, so in release 1 "all three targets" reads "local and Cloudflare". The framework is considered working for release 1 when the suite passes on local and Cloudflare and the provider certification is current. AWS is a later release: AWS criteria are deferred (branch `aws`), and the release report (COMPL-REQ-006) does not count them as missing.
 
+Amendment for release 1 (Origin: owner · Decision: DEC-0512): "the provider certification (SYS-REQ-027) is current" reads "the provider check (SYS-REQ-027 as amended) passed for that commit".
+
 #### SYS-REQ-027 — Provider certification
-Origin: owner · Decision: DEC-0021
+Origin: owner · Decision: DEC-0021, DEC-0512
 
 Each real login provider adapter MUST be certified by a guided manual test using a dedicated test account. Re-certification is required only after major restructuring of the framework or a substantive change to that adapter. All automated verification, including on cloud test stages, uses the authentication mock (SYS-REQ-020); the real provider is verified only by this certification.
+
+Amendment for release 1 (Origin: owner · Decision: DEC-0512): the guided manual certification is replaced by an automated provider check. The real login provider MUST be verified by an automated check, needing no manual step, on a production deployment with real email delivery, and that check MUST run on every compliance run on each cloud. Automated verification on cloud test stages still uses the authentication mock (SYS-REQ-020) for access levels; the provider's own behaviour is also verified locally and on test stages without real email delivery.
 
 #### SYS-REQ-028 — Evidence before claims
 Origin: provenance-unclear · Decision: DEC-0034

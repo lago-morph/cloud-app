@@ -40,7 +40,12 @@ export interface FilesStore {
 /** Creates the browser's transfer permissions; one per target (local route, signed storage URLs). */
 export interface TicketIssuer {
   upload(name: string, contentType: string): Promise<unknown>;
-  download(name: string): Promise<unknown>;
+  /**
+   * `contentType` is the stored file's content type, so an issuer can serve the common raster
+   * image types `inline` (DEC-0535); without it a download is an `attachment`. An issuer that serves
+   * the stored type itself (the local route) may ignore it.
+   */
+  download(name: string, contentType?: string): Promise<unknown>;
 }
 
 export interface FilesServiceOptions {
@@ -146,8 +151,9 @@ export function createFilesService(options: FilesServiceOptions): FilesService {
     },
     async createDownloadTicket(name) {
       checkName(name);
-      if ((await store.head(name)) === null) throw new FrameworkError("FILES.NOT_FOUND", `no file named ${JSON.stringify(name)}`);
-      return (await options.tickets.download(name)) as DownloadTicket;
+      const stored = await store.head(name);
+      if (stored === null) throw new FrameworkError("FILES.NOT_FOUND", `no file named ${JSON.stringify(name)}`);
+      return (await options.tickets.download(name, infoOf(stored).contentType)) as DownloadTicket;
     },
   };
 }

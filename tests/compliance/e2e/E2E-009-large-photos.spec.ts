@@ -122,7 +122,8 @@ test(tag("E2E-009", "upload a 20 MB and a 100 MB photo from a real browser, view
     const photos = [writeBmp(dir, "photo-20mb.bmp", 2048, 20 * MB, 20), writeBmp(dir, "photo-100mb.bmp", 4096, 100 * MB, 100)];
 
     // Log in through the authentication mock, then use the app's page.
-    const login = await page.request.post("/api/auth/mock-login", { data: { level: "user", id: userId } });
+    // AUTH-REQ-007 (DEC-0516): every POST under /api/auth/ carries Origin equal to the public origin.
+    const login = await page.request.post("/api/auth/mock-login", { data: { level: "user", id: userId }, headers: { origin: appOrigin } });
     expect(login.status()).toBe(204);
     await page.goto("/");
     await expect(page.getByTestId("files")).toBeVisible();

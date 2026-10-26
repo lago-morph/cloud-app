@@ -1,0 +1,29 @@
+== 0-before
+D1 today: groups 16 rowsRead 5084 rowsWritten 1794
+D1 databases: 1 ['reference-prodcheck-db-1']
+sst-state objects: 15 ['app/reference/prodcheck', 'eventlog/reference/prodcheck', 'framework/account.json', 'passphrase/reference/prodcheck', 'snapshot/reference/prodcheck', 'update/reference/prodcheck']
+mailsink objects: 1 truncated: None errors: []
+workers: ['prototype-mailsink', 'reference-prodcheck']
+buckets: ['prototype-logs', 'prototype-mailsink', 'reference-prodcheck-files', 'sst-state']
+== 1-mid
+D1 today: groups 28 rowsRead 8624 rowsWritten 2855
+D1 databases: 2 ['reference-test-wxnforn019mo5ic-db-1', 'reference-prodcheck-db-1']
+sst-state objects: 35 ['app/reference/prodcheck', 'app/reference/test-wxnforn019mo5ic', 'eventlog/reference/prodcheck', 'eventlog/reference/test-wxnforn019mo5ic', 'framework/account.json', 'passphrase/reference/prodcheck', 'passphrase/reference/test-wxnforn019mo5ic', 'snapshot/reference/prodcheck', 'snapshot/reference/test-wxnforn019mo5ic', 'update/reference/prodcheck', 'update/reference/test-wxnforn019mo5ic']
+mailsink objects: 2 truncated: None errors: []
+== 2-after-full
+D1 today: groups 30 rowsRead 9779 rowsWritten 3415
+D1 databases: 1 ['reference-prodcheck-db-1']
+sst-state objects: 21 ['app/reference/prodcheck', 'eventlog/reference/prodcheck', 'framework/account.json', 'passphrase/reference/prodcheck', 'snapshot/reference/prodcheck', 'update/reference/prodcheck']
+mailsink objects: 4 truncated: None errors: []
+workers: ['prototype-mailsink', 'reference-prodcheck']
+buckets: ['prototype-logs', 'prototype-mailsink', 'reference-prodcheck-files', 'sst-state']
+== 4-final
+D1 today: groups 32 rowsRead 10032 rowsWritten 3600
+D1 databases: 1 ['reference-prodcheck-db-1']
+sst-state objects: 21 ['app/reference/prodcheck', 'eventlog/reference/prodcheck', 'framework/account.json', 'passphrase/reference/prodcheck', 'snapshot/reference/prodcheck', 'update/reference/prodcheck']
+mailsink objects: 5 truncated: None errors: []
+workers: ['prototype-mailsink', 'reference-prodcheck']
+buckets: ['prototype-logs', 'prototype-mailsink', 'reference-prodcheck-files', 'sst-state']
+== pass deltas (4-final minus 0-before; GraphQL day totals include the earlier pass today)
+D1 rows written 1806 (full run 1621, milestone 185), rows read 4948 (full run 4695, milestone 253); at most 2 databases seen at once
+mailsink objects 1 -> 5 (4 delivered: 3 during the full run, 1 during the milestone run)

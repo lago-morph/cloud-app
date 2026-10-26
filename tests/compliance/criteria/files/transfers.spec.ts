@@ -3,7 +3,9 @@
  * the run's target: `dev` locally (B-EV flag F6: not a test harness), the test stage on a cloud.
  * docs/components/files.md FILES-REQ-003, FILES-REQ-004, FILES-REQ-006; client.d.ts.
  *
- * - FILES-AC-003, except its expired-ticket clause (expired-ticket.spec.ts, which waits PAR-233);
+ * - FILES-AC-003, except its expired-ticket clause (expired-ticket.spec.ts), its download
+ *   disposition clause and the "rejected before sending" class of FILES-REQ-006
+ *   (downloads.spec.ts);
  * - FILES-AC-004, browser part (an unrelated origin);
  * - FILES-AC-006, browser part (an interrupted transfer; Where: Local).
  *

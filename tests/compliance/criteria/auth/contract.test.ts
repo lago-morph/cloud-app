@@ -1,15 +1,17 @@
 /**
- * AUTH-AC-005 contract part (docs/components/auth.md AUTH-REQ-005): "`/api/auth/*` responses
- * validate against the HTTP contract" (docs/contracts/http/framework.openapi.yaml). Where:
- * Local, cloud; the admin-list part is a cloud milestone item (not-run in this phase).
+ * AUTH-AC-005 contract part (docs/components/auth.md AUTH-REQ-005 as amended): "`/api/auth/*`
+ * responses validate against the HTTP contract, and no `/api/auth/me` response has an
+ * `unlistedId`" (docs/contracts/http/framework.openapi.yaml). Where: Local, cloud. The admin-role
+ * part runs on `prodcheck` (admin-role.test.ts).
  *
  * Over HTTP against the run's target (`dev`, or the test stage), target-neutral through
- * `client()`. A test stage has the mock and no real login provider (DEC-0171), so the
- * successful-callback response (302 to `returnTo` with a session cookie) does not exist there:
- * on cloud it is a not-run part (tests/compliance/harness/expected.ts, Google login mocked for
- * this phase), and locally it is covered in-process by the framework's AUTH suite
- * (packages/framework/test/integration/auth/routes-contract.test.ts, stub provider).
- * Root cause 2026-10-24-pass1c-E2E-004-AUTH-AC-005-no-cloud-test; decision draft fix-auth005.
+ * `client()`. Every stage installs the password provider, so `GET /api/auth/login` always
+ * redirects to the framework's sign-in page (auth.md §2 "Credential login", DEC-0516, superseding
+ * DEC-0171's default-user login); the authentication mock works only through
+ * `/api/auth/mock-login`. The successful-callback response (302 to `returnTo` with a session
+ * cookie) needs a redirect provider, which only the in-process stub is: on cloud it is a not-run
+ * part (tests/compliance/harness/expected.ts, DEC-0513), and locally it is covered in-process by
+ * the framework's AUTH suite (stub provider).
  */
 import { describe, expect, it } from "vitest";
 import { client, tag } from "../../harness/index.js";
@@ -42,13 +44,15 @@ function expectCurrentUser(res: HttpResponse): unknown {
 }
 
 describe("AUTH-AC-005 /api/auth/* against the HTTP contract, on the target", () => {
-  it(tag("AUTH-AC-005", "contract part: GET /api/auth/me is 200, Cache-Control no-store, CurrentUser schema at every level"), async () => {
+  it(tag("AUTH-AC-005", "contract part: GET /api/auth/me is 200, Cache-Control no-store, CurrentUser schema at every level, and never has an unlistedId"), async () => {
     const anon = client();
     expect(expectCurrentUser(anon.expectStatus(await anon.get("/api/auth/me"), 200))).toStrictEqual({ level: "anonymous" });
     for (const level of ["user", "admin"] as const) {
       const id = `fix-auth005-me-${level}`;
       const c = await client().as(level, { id, displayName: null });
-      expect(expectCurrentUser(c.expectStatus(await c.get("/api/auth/me"), 200))).toStrictEqual({ level, id, displayName: null });
+      const body = expectCurrentUser(c.expectStatus(await c.get("/api/auth/me"), 200));
+      expect(body).toStrictEqual({ level, id, displayName: null });
+      expect(body, "no unlistedId (DEC-0522)").not.toHaveProperty("unlistedId");
     }
   });
 
@@ -64,15 +68,24 @@ describe("AUTH-AC-005 /api/auth/* against the HTTP contract, on the target", () 
     }
   });
 
-  it(tag("AUTH-AC-005", "contract part: GET /api/auth/login redirects (302) to the sanitised returnTo on a stage without a real provider"), async () => {
-    const c = client();
-    const res = c.expectStatus(await c.get("/api/auth/login?returnTo=%2Fafter"), [302, 303]);
-    // A test stage and local `dev` have the mock and no real provider: login sets the mock's
-    // default session and redirects to the sanitised returnTo (DEC-0171).
-    const location = locationOf(c, res);
-    expect(location.origin).toBe(c.baseUrl);
-    expect(`${location.pathname}${location.search}`).toBe("/after");
-    expect(res.headers.get("cache-control")).toBe("no-store");
+  it(tag("AUTH-AC-005", "contract part: GET /api/auth/login redirects (302) to the framework's sign-in page on the public origin with the sanitised returnTo, and logs nobody in"), async () => {
+    for (const [returnTo, expected] of [
+      ["/after", "/after"],
+      ["//evil.example", "/"],
+      ["https://evil.example/x", "/"],
+    ] as const) {
+      const c = client();
+      const res = c.expectStatus(await c.get(`/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`), 302);
+      const location = locationOf(c, res);
+      expect(location.origin, `returnTo ${returnTo}: the redirect stays on the public origin`).toBe(c.baseUrl);
+      expect(location.pathname, `returnTo ${returnTo}: the framework's sign-in page`).toBe("/api/auth/sign-in");
+      expect(location.searchParams.get("returnTo") ?? "/", `returnTo ${returnTo}: carried sanitised`).toBe(expected);
+      // The mock is reached only through mock-login (DEC-0516): login sets no session.
+      expect(setCookies(res.headers).filter((k) => k.name === sessionCookieName() && !clears(k)), "no session cookie").toEqual([]);
+      expect(c.expectStatus(await c.get("/api/auth/me"), 200).json()).toStrictEqual({ level: "anonymous" });
+      const page = c.expectStatus(await c.get(`${location.pathname}${location.search}`), 200);
+      expect(page.headers.get("content-type") ?? "", "the sign-in page is HTML").toMatch(/^text\/html/);
+    }
   });
 
   it(tag("AUTH-AC-005", "contract part: GET /api/auth/callback without a transaction is 302 to / with authError=login_failed and creates no session"), async () => {

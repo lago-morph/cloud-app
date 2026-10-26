@@ -4,9 +4,9 @@ Every file below is copied unchanged from the framework's app template (`apps/te
 
 What it shows:
 
-- `routes/files.ts`: the safe upload pattern. The server builds every storage name itself (`uploads/<userId>/<newId()>`) and issues the upload ticket with an explicit content type. A finalize route calls `head`, deletes an upload that is missing, too large or of a type it does not accept, and only then inserts the `uploads` row. Listings and download tickets come from those rows, filtered by the user's ID, never from file names.
+- `routes/files.ts`: the safe upload pattern. The server builds every storage name itself (`uploads/<userId>/<newId()>`) and issues the upload ticket with an explicit content type. A finalize route calls `head`, refuses an upload that is missing, deletes one of a type it does not accept, and only then inserts the `uploads` row. It sets no size cap of its own: uploads are limited only by storage's single-upload maximum (PAR-234, about 5 GB). Listings and download tickets come from those rows, filtered by the user's ID, never from file names.
 - `pages/files.ts`: the browser asks for a ticket, calls `uploadFile` with progress, calls the finalize route, and opens `downloadUrl(ticket)`; it asks for a fresh download ticket on every click.
-- The tests that drive it, including the oversized and wrong-type uploads, are in `tests/app.test.ts` ([tests.md](tests.md)). The `uploads` table is in `schema.ts` ([notes-sql.md](notes-sql.md)).
+- The tests that drive it, including the wrong-type and the over-10-MiB uploads, are in `tests/app.test.ts` ([tests.md](tests.md)). The `uploads` table is in `schema.ts` ([notes-sql.md](notes-sql.md)).
 
 ## `apps/template/src/server/routes/files.ts`
 
@@ -18,7 +18,7 @@ import type { FileList, StoredFile } from "../../shared/types";
 import type { Env } from "../env";
 import { uploads } from "../schema";
 
-const MAX_BYTES = 10 * 1024 * 1024;
+/** No size cap: uploads are limited only by storage's single-upload maximum (PAR-234). */
 const ACCEPTED_TYPES: readonly string[] = ["text/plain", "application/pdf", "image/png", "image/jpeg"];
 
 const uploadRequest = z.object({ contentType: z.string().min(1).max(100) });
@@ -56,9 +56,9 @@ export function fileRoutes(api: Hono<Env>): void {
     const { id, name } = c.req.valid("json");
     const file = await c.var.files.head(storageName(c.var.user.id, id));
     if (file === null) throw new FrameworkError("HTTP.NOT_FOUND", "no such upload");
-    if (file.size > MAX_BYTES || !ACCEPTED_TYPES.includes(file.contentType)) {
+    if (!ACCEPTED_TYPES.includes(file.contentType)) {
       await c.var.files.delete(file.name);
-      throw new FrameworkError("HTTP.CONFLICT", `files must be at most ${MAX_BYTES} bytes and one of: ${ACCEPTED_TYPES.join(", ")}`);
+      throw new FrameworkError("HTTP.CONFLICT", `files must be one of: ${ACCEPTED_TYPES.join(", ")}`);
     }
     const row: StoredFile = { id, name, size: file.size, contentType: file.contentType };
     await c.var.sql.insert(uploads).values({ ...row, ownerId: c.var.user.id, createdAt: now() });

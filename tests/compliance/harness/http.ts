@@ -42,6 +42,12 @@ export interface ClientOptions {
   readonly fetch?: typeof fetch;
   readonly userAgent?: string;
   readonly timeoutMs?: number;
+  /**
+   * Keep a cookie jar (default true). False for a caller that keeps its own cookies and sends
+   * them in `headers.cookie` (pwd/support.ts `httpBrowser`): the client then neither remembers
+   * `Set-Cookie` nor replaces that header.
+   */
+  readonly keepCookies?: boolean;
 }
 
 export class HttpCheckError extends Error {
@@ -88,7 +94,10 @@ export function createClient(options: ClientOptions): ComplianceClient {
   const doFetch = options.fetch ?? fetch;
   const jar = new Map<string, string>();
 
+  const keepCookies = options.keepCookies ?? true;
+
   function remember(headers: Headers): void {
+    if (!keepCookies) return;
     for (const cookie of headers.getSetCookie()) {
       const [pair = "", ...attributes] = cookie.split(";");
       const eq = pair.indexOf("=");
@@ -109,7 +118,7 @@ export function createClient(options: ClientOptions): ComplianceClient {
       headers.set("user-agent", options.userAgent ?? USER_AGENT);
       const originHeader = opts.origin ?? (SAFE.has(upper) ? false : origin);
       if (originHeader !== false) headers.set("origin", originHeader);
-      if (jar.size > 0) headers.set("cookie", [...jar].map(([k, v]) => `${k}=${v}`).join("; "));
+      if (keepCookies && jar.size > 0) headers.set("cookie", [...jar].map(([k, v]) => `${k}=${v}`).join("; "));
       let body: string | Uint8Array<ArrayBuffer> | undefined = opts.body;
       if (opts.json !== undefined) {
         body = JSON.stringify(opts.json);

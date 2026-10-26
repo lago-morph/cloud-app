@@ -33,7 +33,7 @@ const app = defineApp({
 });
 
 function resolved(stage: string): ResolvedConfig {
-  return { deployment: createDeployment({ app: "cfunit", stage, target: "cloudflare" }), values: {}, admins: [], secrets: [{ name: "apiKey", location: "SECRET_API_KEY" }] };
+  return { deployment: createDeployment({ app: "cfunit", stage, target: "cloudflare" }), values: {}, secrets: [{ name: "apiKey", location: "SECRET_API_KEY" }] };
 }
 
 interface R2Like {

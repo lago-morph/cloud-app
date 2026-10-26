@@ -1,10 +1,10 @@
 # Owner tasks
 
-Read this when the app's owner must do something only a person can do: set up the Cloudflare account and token, set secrets, set up the Google login client, add admin or user IDs, or keep costs down. Give the owner these steps as written. The owner does not read code.
+Read this when the app's owner (or an agent acting for them) must do something outside the code: set up the Cloudflare account, its token and its email domain, set secrets, create a production stage, sign up and sign in, make someone an admin, or keep costs down. Give the owner these steps as written. The owner does not read code.
 
-Commands run in a terminal, in the app's directory, on macOS or Linux with Node 22.22.0. Replace `<…>` parts. Never paste a secret value into a command line, a file in the repository, or a chat.
+Commands run in a terminal, in the app's directory, on macOS or Linux with Node 22.22.0. Replace `<…>` parts; `<domain>` is the account's email domain. Never paste a secret value into a command line, a file in the repository, or a chat.
 
-**Status in this phase.** The local steps are verified. Every Cloudflare step is **not yet verified on Cloudflare in this phase**: the framework's cloud commands have run only against a simulated Cloudflare. The Google steps have never been run, because Google login is mocked in this phase. If a step fails, follow [troubleshooting.md](troubleshooting.md).
+**Status in this phase.** The local steps are verified. The Cloudflare steps have run against a simulated Cloudflare, and the email setup once against the real account; treat the rest as **not yet verified on Cloudflare**. If a step fails, follow [troubleshooting.md](troubleshooting.md).
 
 ## 1. Before anything else (once per checkout)
 
@@ -18,25 +18,22 @@ cd apps/template
 
 An app made with the scaffolder already has the built framework. There, run `npm install` once in the app's directory.
 
-Some steps need the app's name in `APP` and the stage's name in `STAGE`. Set them once in each new terminal (`<stage>` is for example `test-abc` or `prod`):
+Set the stage's name in `STAGE` once in each new terminal (`<stage>` is for example `test-abc` or `prod`):
 
 ```sh
-APP=$(npm run --silent build -- --target local --stage local | sed -n 's/^built \([^ ]*\) for .*/\1/p'); echo "$APP"
 STAGE='<stage>'
 ```
 
-## 2. Cloudflare account and API token (once)
+## 2. Cloudflare account and API tokens (once)
 
-1. Sign up or log in at https://dash.cloudflare.com.
-2. Copy your **Account ID**. Open Account home, choose your account, and copy the Account ID shown on its overview page. The dashboard menu names in this page are **not yet verified**.
-3. Create an **account API token**. Go to Manage Account → Account API Tokens → Create Token → Create Custom Token (not yet verified). Give it a name, such as `prototype-framework`. Add these **Account** permissions:
-   - Workers Scripts: Edit (the stage Workers, their secrets, the `workers.dev` address);
-   - Workers R2 Storage: Edit (the log bucket, the deploy-state bucket, each stage's file bucket);
-   - D1: Edit (each stage's database);
-   - Account API Tokens: Edit (each stage gets its own file-signing token).
+1. Sign up or log in at https://dash.cloudflare.com. The email domain must be a zone on this account, with Cloudflare DNS active (Websites → Add a site). Its mail need not be on Cloudflare: the framework uses the subdomain `t.<domain>` for test mail.
+2. Copy your **Account ID** from the account's overview page (menu names here are not yet verified).
+3. Create two **account API tokens**: Manage Account → Account API Tokens → Create Token → Create Custom Token. Account resources: this account only; zone resources: the email domain's zone. Copy each token when shown; Cloudflare shows it only once.
+   - **Everyday token** `prototype-framework`, for every command but `setup-account`, including `stop`, `start` and the backup a production `remove` writes. Account: Workers Scripts Edit, Workers R2 Storage Edit, D1 Edit, Email Sending Read. Zone: Zone Read, Analytics Read. It cannot create tokens. It needs no Billing permission: if Cloudflare refuses a new database because the account has too many, the message names both plans' limits (put `PROTOTYPE_FRAMEWORK_CLOUDFLARE_PLAN=free` or `=paid` in front of the command to name yours).
+   - **Setup token** `prototype-framework-setup`, for `setup-account` only (§3), used rarely. Account: Workers Scripts Edit, Workers R2 Storage Edit, Account API Tokens Edit, Email Sending Edit, Email Routing Addresses Edit. Zone: Email Routing Rules Edit, DNS Edit, Zone Settings Edit, Zone Read. Store it apart from the everyday token.
 
-   Under Account Resources, include only your account. Create the token and copy it now; Cloudflare shows it only once. This list is the framework's reading of the calls it makes. It is **not yet verified on Cloudflare in this phase**. If `deploy` names a missing permission, add it to the token.
-4. In each new terminal where you deploy, set both values. The `read` command keeps the token out of your shell history. Paste the token when it waits, then press Enter.
+   A command names any permission its token lacks.
+4. In each new terminal, set both values; paste the everyday token when `read` waits, then press Enter (`read` keeps it out of your shell history):
    ```sh
    export CLOUDFLARE_ACCOUNT_ID='<your Account ID>'
    read -rs CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN
@@ -46,19 +43,23 @@ STAGE='<stage>'
    curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/tokens/verify"
    ```
 
-## 3. One-time account setup
+If a command says it needs `NODE_USE_ENV_PROXY=1`, you are behind an HTTPS proxy: put `NODE_USE_ENV_PROXY=1 ` in front of that command.
+
+## 3. One-time account setup, with the email domain
+
+Paste the **setup token** into `read -rs CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN` (§2), run, then set the everyday token again the same way:
 
 ```sh
-npm run setup-account -- --target cloudflare
+npm run setup-account -- --target cloudflare --email-domain <domain>
 ```
 
-This creates the shared resources once per account: the log bucket `prototype-logs`, the deploy-state bucket `sst-state`, and the account's `workers.dev` address. Running it again changes nothing. `deploy` never creates these resources. If they are missing, `deploy` stops and tells you to run this command. Not yet verified on Cloudflare in this phase.
+This creates the shared resources once per account, including the file-signing credential every stage uses: the log bucket `prototype-logs`, the deploy-state bucket `sst-state`, the backup bucket `prototype-backups` (a removed production stage's data, kept 30 days), the `workers.dev` address, sending from `no-reply@<domain>`, and the test mailbox: mail to `sink+<tag>@t.<domain>` is stored for a day, so an agent can read it. When it creates the mailbox rule it waits about a minute, so the first test mail does not arrive before the rule. Running it again changes nothing. To change the domain later, run it with the new `--email-domain`. `deploy` never creates these resources; if they are missing, it tells you to run this command. An account set up before the backup bucket or the file-signing credential existed needs this command once more, with the setup token: `deploy` then names what is missing and tells you to run it. When that run replaces the file-signing credential, it says so: then redeploy every deployed stage (`npm run deploy -- --target cloudflare --stage <stage>`, with the everyday token), because each one keeps the old key, and its file uploads and downloads fail, until its next deploy.
 
 ## 4. Secrets
 
-A secret is read from standard input. Run the command, paste the value, press Enter, then press Ctrl-D. The app declares its secret names in `src/server/env.ts`; the template declares `apiKey`.
+A secret is read from standard input. Run the command, paste the value, press Enter, then press Ctrl-D. The app declares its secret names in `src/server/env.ts`; the template declares `apiKey`. The framework generates its own keys.
 
-- **Local** (needed before the template's admin secret page works; `npm run dev` creates only the framework's own development keys):
+- **Local** (needed before the template's admin page works):
   ```sh
   npm run secrets -- set apiKey --target local --stage local
   ```
@@ -67,66 +68,83 @@ A secret is read from standard input. Run the command, paste the value, press En
   ```sh
   npm run secrets -- set apiKey --target cloudflare --stage "$STAGE"
   ```
-  Not yet verified on Cloudflare in this phase.
 
-## 5. Google login client (production stages only)
+## 5. A production stage
 
-Test stages and local development use a built-in mock login and need none of this. These steps are **not yet verified on Cloudflare in this phase**; no Google client exists yet.
+Every stage not named `test-…` is a production stage, for example `prod`. It needs its own committed values file, copied from the skill's `templates/production-stage.json` (it holds no admins and no login settings). In this repository, from the template's directory:
 
-1. With `APP` and `STAGE` set (§1), print your `workers.dev` subdomain and the stage's callback URL:
-   ```sh
-   SUB=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);if(!r.success){console.error(JSON.stringify(r.errors));process.exit(1)}console.log(r.result.subdomain)})'); echo "$SUB"
-   echo "https://$APP-$STAGE.$SUB.workers.dev/api/auth/callback"
-   ```
-2. Open https://console.cloud.google.com, then create or choose a project.
-3. Go to Google Auth Platform (older consoles call it "OAuth consent screen"). Set an app name and a support email. Choose the **External** audience. While the app is in **Testing**, only the Google accounts you add as test users can log in. The framework asks only for `openid` and `profile`.
-4. Go to Clients (or APIs & Services → Credentials), then Create client (or Create credentials → OAuth client ID). Choose the application type **Web application**. Under **Authorized redirect URIs**, add the callback URL from step 1. Add one URL per production stage. Create the client.
-5. Create the stage's values file `config/cloudflare/$STAGE.json` with the **Client ID**, which is not a secret. Paste the Client ID into the first line, then run all the lines. `build` checks the file; it must print `built …`. Then the file is committed. (Run this only once per stage: it replaces the file, and with it any admins and users.)
-   ```sh
-   CLIENT_ID='<paste the Client ID>'
-   mkdir -p config/cloudflare
-   node -e 'require("fs").writeFileSync(process.argv[1],JSON.stringify({values:{},framework:{google:{clientId:process.argv[2]},admins:[]}},null,2)+"\n")' "config/cloudflare/$STAGE.json" "$CLIENT_ID"
-   npm run build -- --target cloudflare --stage "$STAGE"
-   git add "config/cloudflare/$STAGE.json"
-   git commit -m "Add the values file of stage $STAGE"
-   ```
-   `"values"` may also set the app's configuration keys; ask the app's developer which.
-6. After the stage's first deploy, set the **Client secret** as a secret, never in a file:
-   ```sh
-   npm run secrets -- set frameworkGoogleClientSecret --target cloudflare --stage "$STAGE"
-   ```
-7. Run `npm run deploy -- --target cloudflare --stage "$STAGE"` again. It prints `Google callback URL to register: …`, which must match step 4 exactly.
+```sh
+STAGE=prod
+mkdir -p config/cloudflare
+cp ../../skill/templates/production-stage.json "config/cloudflare/$STAGE.json"
+```
 
-## 6. Admins and allowed users
+Replace `REPLACE-WITH-THE-SENDER-NAME` with the display name of the sign-up and reset mail (or delete the `email` entry to use the app's name). `"values"` may set the app's configuration keys; ask the developer which. Then check, commit and deploy, setting the secrets the first deploy names ([deploying.md](deploying.md)):
 
-These steps work only on a production stage, which uses Google. Every person's user ID is shown at `/api/auth/me`.
+```sh
+npm run build -- --target cloudflare --stage "$STAGE"
+git add "config/cloudflare/$STAGE.json" && git commit -m "Add the values file of stage $STAGE"
+npm run deploy -- --target cloudflare --stage "$STAGE"
+```
 
-1. The person opens the stage's address (the one `deploy` printed, `https://<app>-<stage>.<subdomain>.workers.dev`), logs in, then opens that address followed by `/api/auth/me`.
-2. They copy the value of `"id"`. If they are shown `"level":"anonymous"` with an `"unlistedId"`, they copy that value instead. It looks like `u_` followed by 26 letters and digits. They send it to the owner.
-3. The owner adds it to `config/cloudflare/$STAGE.json`, with `STAGE` set (§1). Set `LIST=admins` to make the person an admin, or `LIST=users` to let a known person in. While `"users"` is present, anyone on neither list is anonymous. Without `"users"`, any Google account that logs in counts as a user. Admins need not also be in `"users"`. Paste the ID into the first line, then run both lines; the last command prints the file:
-   ```sh
-   ID='<user ID>'; LIST=admins; OP=add
-   node -e 'const fs=require("fs"),[f,op,list,id]=process.argv.slice(1),c=JSON.parse(fs.readFileSync(f,"utf8")),l=(c.framework[list]??[]).filter(x=>x!==id);c.framework[list]=op==="add"?[...l,id]:l;fs.writeFileSync(f,JSON.stringify(c,null,2)+"\n")' "config/cloudflare/$STAGE.json" "$OP" "$LIST" "$ID" && cat "config/cloudflare/$STAGE.json"
-   ```
-   To take access away, run the same two lines with `OP=remove`.
-4. Check the file, commit it, then deploy again:
-   ```sh
-   npm run build -- --target cloudflare --stage "$STAGE"
-   git add "config/cloudflare/$STAGE.json"
-   git commit -m "Update admins and users"
-   npm run deploy -- --target cloudflare --stage "$STAGE"
-   ```
+The deploy prints the stage's address, its sign-in page and the sender address.
 
-## 7. Cost
+## 6. Signing up and signing in
 
-- Stopped or idle stages cost nothing for compute, but storage remains: the stage's D1 database and R2 file bucket, the shared `prototype-logs` bucket, and the `sst-state` bucket. Log entries are never deleted automatically.
+**Anyone who signs up and verifies their address is a user.** No list decides who may log in.
+
+1. Open the stage's sign-in page (`<stage address>/api/auth/sign-in`; locally the app's login button). Choose "Create an account", and enter an email address, a password of 12 to 128 characters, and a display name.
+2. Open the link in the "Confirm your email address" mail, and press the button.
+3. Sign in. `<stage address>/api/auth/me` now shows `"level":"user"`.
+
+Reading the mail without a mailbox (an agent, or local development):
+
+- **Locally** the mail is not sent; it is written to `.mail/`. Read the latest message to an address:
+  ```sh
+  npm run mail -- last --to '<address>'
+  ```
+- **On Cloudflare**, sign up with a test address `sink+<tag>@t.<domain>` (`<tag>`: lowercase letters, digits, hyphens), then read it:
+  ```sh
+  npm run mail -- last --to 'sink+<tag>@t.<domain>' --target cloudflare
+  ```
+- Without a browser, post the link's token (the value after `token=`) instead of pressing the button:
+  ```sh
+  curl -sS -X POST '<stage address>/api/auth/password/verify' -H 'Origin: <stage address>' -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"token":"<token>"}'
+  ```
+
+A forgotten password: "Forgot your password?" on the sign-in page mails a reset link, valid for one hour. "Send a new confirmation link" there mails a new verification link.
+
+## 7. Admins
+
+Admins hold the `admin` role in the stage's own database. Granting or revoking it needs no file edit, no commit and no deploy: it applies from the person's next request. The person must have signed up and verified their address on that stage first (§6).
+
+- **Grant** (on a production stage, repeat its name with `--confirm-production`):
+  ```sh
+  npm run admins -- grant '<address>' --target cloudflare --stage "$STAGE" --confirm-production "$STAGE"
+  ```
+- **Revoke:** the same with `revoke`. The person is a user again.
+- **List** the stage's admins:
+  ```sh
+  npm run admins -- list --target cloudflare --stage "$STAGE" --confirm-production "$STAGE"
+  ```
+- On a test stage, leave out `--confirm-production`. Locally, use `--target local` (no `--stage`); it works whether or not `npm run dev` runs.
+
+It prints the account's user ID (as `/api/auth/me` shows it) and its roles, never a password or token. An address with no verified account is refused and nothing changes.
+
+## 8. Checking the real login (optional)
+
+`npm run check-login -- --target cloudflare --stage "$STAGE"` signs up a fresh test address on a production stage, reads the real mail, verifies, signs in, grants and revokes `admin`, resets the password and checks the sign-in rate limit. It needs no input, prints no address or password, and writes an evidence record under `validation/`. It leaves one test account (with no role) on the stage.
+
+## 9. Cost
+
+- Stopped or idle stages cost nothing for compute, but storage remains: the stage's D1 database and R2 file bucket, the shared `prototype-logs` bucket, and the `sst-state` bucket. Log entries are never deleted automatically. Test mail in the sink is deleted after a day.
 - On Cloudflare's free plan, D1 allows about **100,000 rows written per day** per account. The limit for reads is larger. When a limit is used up, database requests fail until it resets at 00:00 UTC.
 - Keep test stages small: a few rows of data, one test stage at a time, and `remove` it right after use. An account holds at most **10 D1 databases**, and a deploy that changes the schema briefly uses two per stage.
 - See [deploying.md](deploying.md) for deploy, stop/start and remove.
 
 ## Examples
 
-- [examples/configuration.md](../examples/configuration.md): the template's committed values files (`config/<target>/<stage>.json`), the files that also hold `framework.admins` and `framework.users`.
+- [examples/configuration.md](../examples/configuration.md): the template's committed values files (`config/<target>/<stage>.json`), which hold the app's values and `framework.email`, and no admins.
 
 ## Stopping condition
 

@@ -4,7 +4,7 @@ import type { FileList, StoredFile } from "../../shared/types";
 import type { Env } from "../env";
 import { uploads } from "../schema";
 
-const MAX_BYTES = 10 * 1024 * 1024;
+/** No size cap: uploads are limited only by storage's single-upload maximum (PAR-234). */
 const ACCEPTED_TYPES: readonly string[] = ["text/plain", "application/pdf", "image/png", "image/jpeg"];
 
 const uploadRequest = z.object({ contentType: z.string().min(1).max(100) });
@@ -42,9 +42,9 @@ export function fileRoutes(api: Hono<Env>): void {
     const { id, name } = c.req.valid("json");
     const file = await c.var.files.head(storageName(c.var.user.id, id));
     if (file === null) throw new FrameworkError("HTTP.NOT_FOUND", "no such upload");
-    if (file.size > MAX_BYTES || !ACCEPTED_TYPES.includes(file.contentType)) {
+    if (!ACCEPTED_TYPES.includes(file.contentType)) {
       await c.var.files.delete(file.name);
-      throw new FrameworkError("HTTP.CONFLICT", `files must be at most ${MAX_BYTES} bytes and one of: ${ACCEPTED_TYPES.join(", ")}`);
+      throw new FrameworkError("HTTP.CONFLICT", `files must be one of: ${ACCEPTED_TYPES.join(", ")}`);
     }
     const row: StoredFile = { id, name, size: file.size, contentType: file.contentType };
     await c.var.sql.insert(uploads).values({ ...row, ownerId: c.var.user.id, createdAt: now() });

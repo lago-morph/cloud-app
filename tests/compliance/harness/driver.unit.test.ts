@@ -1,12 +1,16 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { dirname, join } from "node:path";
+import { describe, expect, it, vi } from "vitest";
+import { addForeignToken, FAKE_ACCOUNT, fakeCfApi, type FakeCfApi } from "./fake-cf-api.test-support.js";
+import { cloudflareAccountOps, NO_EMAIL_PERMISSION_ENV, NO_R2_TOKEN_PERMISSION_ENV } from "./test-tokens.js";
 import { validateEvidence, writeEvidence, type EvidenceRecord, type GitState, type WriteEvidenceInput } from "../../../packages/framework/src/evidence/public.js";
 import { parseArgs } from "./args.js";
 import { NOT_SELECTED, parseWhere, type CatalogueEntry } from "./catalogue.js";
-import { runCompliance, SecretsNotSetError, SKIP_NOTES_REPORTER, type CloudStageOps, type DriverDeps, type RunCall } from "./driver.js";
+import { isDriverCommand, runCompliance, SecretsNotSetError, SKIP_NOTES_REPORTER, type CloudStageOps, type DriverDeps, type RunCall } from "./driver.js";
 import type { NotRunRule } from "./expected.js";
+import { buildApp } from "../../../packages/framework/src/build/public.js";
+import { readDeployedOrigin, recordDeployOutput } from "../../../packages/framework/src/cli/commands/smoke.js";
 
 const entry = (id: string, where: string, source = "components/x.md"): CatalogueEntry => ({ id, where, source, applies: parseWhere(where, source) });
 const CATALOGUE = [entry("KV-AC-001", "Local, cloud"), entry("KV-AC-002", "Local, cloud"), entry("CLI-AC-002", "Local"), entry("CLI-AC-001", "Local, cloud"), entry("PROV-AC-003", "Cloud (milestone)")];
@@ -116,6 +120,10 @@ describe("[COMPL-AC-003] compliance driver records", () => {
     expect(vitest?.env.NODE_USE_ENV_PROXY).toBeUndefined();
     const record = recordOf(h);
     expect(record).toMatchObject({ runId: "abcdefghij12345", commit: "c0ffee", target: "local", command: "npm run compliance -- --target local", exitStatus: 1 });
+    // COMPL-AC-004's naming check selects the driver's records by this form (test-stages.test.ts).
+    expect(isDriverCommand(record.command), "the driver's record is recognised as the driver's").toBe(true);
+    expect(isDriverCommand("check-login --target cloudflare --stage prodcheck")).toBe(false);
+    expect(isDriverCommand(undefined)).toBe(false);
     expect(record.stage).toBeUndefined();
     expect(record.results).toEqual([
       { id: "CLI-AC-001", status: "not-run", detail: "no test tagged [CLI-AC-001] ran on local" },
@@ -167,7 +175,7 @@ describe("[COMPL-AC-003] compliance driver records", () => {
     expect(h.calls).toEqual([]);
     expect(h.events).toEqual([]);
     expect(recordOf(h).results).toEqual([
-      { id: "CLI-AC-001", status: "not-run", detail: "Google login mocked for this phase" },
+      { id: "CLI-AC-001", status: "not-run", detail: "password login provider not implemented yet (DEC-0509)" },
       { id: "KV-AC-001", status: "blocked", detail: reason },
       { id: "KV-AC-002", status: "blocked", detail: reason },
     ]);
@@ -290,7 +298,7 @@ describe("[COMPL-AC-004] cloud runs use a disposable test stage", () => {
     const record = recordOf(h);
     expect(record.stage).toBe("test-abcdefghij12345");
     expect(record.leftovers).toEqual([]);
-    expect(record.results.find((r) => r.id === "CLI-AC-001")).toEqual({ id: "CLI-AC-001", status: "not-run", detail: "Google login mocked for this phase" });
+    expect(record.results.find((r) => r.id === "CLI-AC-001")).toEqual({ id: "CLI-AC-001", status: "not-run", detail: "password login provider not implemented yet (DEC-0509)" });
     expect(h.written[0]?.redactions).toContainEqual({ value: "owner-sub", replacement: "<account-subdomain>" });
   });
 
@@ -319,7 +327,43 @@ describe("[COMPL-AC-004] cloud runs use a disposable test stage", () => {
     await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], h.deps);
     expect(h.events.filter((e) => e.includes("prodcheck"))).toEqual([]);
     expect(recordOf(h).leftovers).toEqual([]);
-    expect(h.logs.join("\n")).toMatch(/prodcheck.*test stages only/);
+    expect(h.logs.join("\n")).toMatch(/prodcheck.*handles test stages/);
+  });
+
+  it("removes only stale marked criterion production stages (DEC-0560), deletes their markers, and warns about unmarked ones", async () => {
+    // p003…: stale marker, deployed. p004…: stale marker, its removal leaves a bucket. Fresh-marked and unmarked stages are not in `stale`.
+    const stale = new Set(["p003abcdefghij", "p004klmnopqrst"]);
+    const forgotten: string[] = [];
+    const h = harness({
+      cloud: {
+        criterionStages: () => Promise.resolve({ stale: [...stale], unmarked: ["p003ownerstage1"] }),
+        forgetCriterionStage: (s) => (forgotten.push(s), stale.delete(s), Promise.resolve()),
+        listStageResources: (s) => Promise.resolve(s === "p004klmnopqrst" ? ["R2 bucket reference-p004klmnopqrst-files"] : []),
+      },
+    });
+    const result = await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], h.deps);
+    expect(h.events.filter((e) => /^remove /.test(e))).toEqual(["remove p003abcdefghij", "remove p004klmnopqrst", "remove test-abcdefghij12345", "remove p004klmnopqrst"]);
+    expect(forgotten, "markers deleted only after a removal that left nothing").toEqual(["p003abcdefghij"]);
+    expect(recordOf(h).leftovers).toEqual(["p004klmnopqrst: R2 bucket reference-p004klmnopqrst-files", "p004klmnopqrst: R2 bucket reference-p004klmnopqrst-files"]);
+    expect(h.events.some((e) => e.includes("p003ownerstage1")), "an unmarked stage is never removed").toBe(false);
+    expect(h.logs.join("\n")).toContain("warning: p003ownerstage1 has the shape of a criterion production stage but no marker; it is not removed");
+    expect(h.logs.join("\n")).toContain("removing the stale criterion production stage p003abcdefghij (start of run)");
+    expect(result.exitStatus).toBe(1);
+  });
+
+  it("a criterion production stage listing that fails is a leftover entry (DEC-0560)", async () => {
+    const h = harness({ cloud: { criterionStages: () => Promise.reject(new Error("HTTP 403")) } });
+    await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], h.deps);
+    expect(recordOf(h).leftovers).toEqual(["criterion production stage check failed: HTTP 403", "criterion production stage check failed: HTTP 403"]);
+  });
+
+  it("passes the run's tier to the tests (COMPLIANCE_RUN_MODE, DEC-0560)", async () => {
+    const h = harness();
+    await runCompliance(parseArgs(["--target", "local", "--only", "KV-AC-001"]), [], h.deps);
+    expect(h.calls.find((c) => c.args[0] === "vitest")?.env.COMPLIANCE_RUN_MODE).toBe("automated");
+    const m = harness();
+    await runCompliance(parseArgs(["--target", "local", "--milestone"]), [], m.deps);
+    expect(m.calls.filter((c) => c.args[0] === "vitest").every((c) => c.env.COMPLIANCE_RUN_MODE === "milestone")).toBe(true);
   });
 
   it("a leftover check that cannot run is recorded, never read as no leftovers", async () => {
@@ -582,5 +626,298 @@ describe("[CLI-AC-003] compliance runner exit status under injected failures", (
       expect(result.exitStatus).not.toBe(0);
       expect(recordOf(h).exitStatus).toBe(result.exitStatus);
     }
+  });
+});
+
+// COMPL-REQ-005 as amended (DEC-0512): on a cloud run the driver redeploys prodcheck before the
+// test layers and runs check-login on it after them, folding its record's results in (prodcheck.ts).
+describe("[COMPL-AC-005] the production checks on prodcheck", () => {
+  const catalogue = [entry("KV-AC-001", "Local, cloud"), entry("PWD-AC-009", "Cloud"), entry("AUTH-AC-011", "Cloud"), entry("E2E-008", "Cloud")];
+  const checkLoginRecord = (results: EvidenceRecord["results"]): EvidenceRecord => ({
+    runId: "cl1",
+    commit: "c0ffee",
+    target: "cloudflare",
+    stage: "prodcheck",
+    command: "check-login --target cloudflare --stage prodcheck",
+    startedAt: "2026-10-20T10:00:00.000Z",
+    finishedAt: "2026-10-20T10:01:00.000Z",
+    exitStatus: results.every((r) => r.status === "passed") ? 0 : 1,
+    results,
+    versions: {},
+  });
+
+  it("redeploys prodcheck after the run stage and before the tests, runs check-login after them, and records its results; prodcheck is never removed", async () => {
+    const events: string[] = [];
+    const h = harness({
+      catalogue,
+      cloud: {
+        deploy: (stage) => (events.push(`deploy ${stage}`), Promise.resolve({ baseUrl: `https://reference-${stage}.owner-sub.workers.dev`, output: `deployed ${stage}` })),
+        remove: (stage) => (events.push(`remove ${stage}`), Promise.resolve("removed")),
+        checkLogin: (stage) => (
+          events.push(`check-login ${stage}`),
+          Promise.resolve({ status: 0, output: "check-login passed", record: checkLoginRecord([{ id: "PWD-AC-009", status: "passed" }, { id: "AUTH-AC-011", status: "passed" }, { id: "E2E-008", status: "passed" }]) })
+        ),
+      },
+    });
+    const run = h.deps.run;
+    const deps: DriverDeps = { ...h.deps, run: (c) => (events.push(`run ${c.args[0] ?? c.command}`), run(c)) };
+    const result = await runCompliance(parseArgs(["--target", "cloudflare"]), [], deps);
+    expect(events.filter((e) => !e.startsWith("run run"))).toEqual([
+      "deploy test-abcdefghij12345",
+      "deploy test-abcdefghij12345",
+      "deploy prodcheck",
+      "run vitest",
+      "run playwright",
+      "check-login prodcheck",
+      "remove test-abcdefghij12345",
+    ]);
+    expect(result.exitStatus).toBe(0);
+    const results = recordOf(h).results;
+    for (const id of ["PWD-AC-009", "AUTH-AC-011", "E2E-008"]) expect(results.filter((r) => r.id === id), id).toEqual([{ id, status: "passed" }]);
+    expect(h.written[0]?.raw?.["prodcheck-deploy.log"]).toBe("deployed prodcheck");
+    expect(h.written[0]?.raw?.["check-login.log"]).toBe("check-login passed");
+    expect(h.events).not.toContain("pending+ prodcheck");
+  });
+
+  it("a failed step is failed with check-login's detail, a check it did not reach is not-run, and the run exits non-zero", async () => {
+    const h = harness({
+      catalogue,
+      cloud: {
+        checkLogin: () =>
+          Promise.resolve({
+            status: 1,
+            output: "check-login failed",
+            record: checkLoginRecord([
+              { id: "PWD-AC-009", status: "failed", detail: "step 1: sign-up with a forged host: expected 200, got status 500" },
+              { id: "AUTH-AC-011", status: "not-run", detail: "check-login stopped before its checks" },
+              { id: "E2E-008", status: "failed", detail: "step 1: sign-up with a forged host: expected 200, got status 500" },
+            ]),
+          }),
+      },
+    });
+    const result = await runCompliance(parseArgs(["--target", "cloudflare"]), [], h.deps);
+    expect(result.exitStatus).toBe(1);
+    const byId = (id: string) => recordOf(h).results.filter((r) => r.id === id);
+    expect(byId("PWD-AC-009")).toEqual([{ id: "PWD-AC-009", status: "failed", detail: expect.stringMatching(/check-login failed: step 1: sign-up with a forged host.*\(record cl1\)/) }]);
+    expect(byId("AUTH-AC-011")).toEqual([{ id: "AUTH-AC-011", status: "not-run", detail: "check-login stopped before its checks" }]);
+  });
+
+  it("when prodcheck cannot be redeployed, check-login is not run and its criteria are failed naming why; the first deploy's unset apiKey is set first", async () => {
+    const events: string[] = [];
+    let prodDeploys = 0;
+    const h = harness({
+      catalogue,
+      cloud: {
+        deploy: (stage) => {
+          events.push(`deploy ${stage}`);
+          if (stage !== "prodcheck") return Promise.resolve({ baseUrl: "https://reference-test.owner-sub.workers.dev", output: "ok" });
+          prodDeploys += 1;
+          return prodDeploys === 1 ? Promise.reject(new SecretsNotSetError("required secrets are not set: apiKey", "first prodcheck output")) : Promise.reject(new Error("deploy --target cloudflare --stage prodcheck failed with status 1"));
+        },
+        setSecret: (stage, name) => (events.push(`secret ${name} ${stage}`), Promise.resolve("set")),
+        checkLogin: () => (events.push("check-login"), Promise.resolve({ status: 0, output: "" })),
+      },
+    });
+    const result = await runCompliance(parseArgs(["--target", "cloudflare"]), [], h.deps);
+    expect(events).toEqual(["deploy test-abcdefghij12345", "secret apiKey test-abcdefghij12345", "deploy test-abcdefghij12345", "deploy prodcheck", "secret apiKey prodcheck", "deploy prodcheck"]);
+    expect(result.exitStatus).toBe(1);
+    for (const id of ["PWD-AC-009", "AUTH-AC-011", "E2E-008"]) {
+      expect(recordOf(h).results.filter((r) => r.id === id), id).toEqual([{ id, status: "failed", detail: expect.stringContaining("not checked: redeploying prodcheck failed: deploy --target cloudflare --stage prodcheck failed with status 1") }]);
+    }
+    expect(h.written[0]?.redactions).toContainEqual({ value: SECRET, replacement: "<test-secret>" });
+  });
+
+  // The live run k9cc5zjcbm5mrkc: check-login found no recorded deploy output for prodcheck although
+  // the driver had just redeployed it. Each `deploy` builds the app first, and the build cleared
+  // `.framework/<target>/`, where every stage's deploy output is recorded (cli.md §2). These fake
+  // stage operations do what the CLI's deploy and check-login do to that directory, with the real
+  // build: a deploy builds (stopping on the unset secret the first time) and then records its origin.
+  it("check-login finds prodcheck's recorded deploy output after the test layers deployed other stages of the app", async () => {
+    const src = join(dirname(dirname(dirname(dirname(new URL(import.meta.url).pathname)))), "packages", "framework", "src");
+    const appDir = mkdtempSync(join(tmpdir(), "driver-prodcheck-"));
+    const files: Record<string, string> = {
+      "src/app.ts": `import { defineApp } from ${JSON.stringify(join(src, "index.ts"))};\nexport default defineApp({ name: "reference", config: {}, secrets: ["apiKey"], tables: {}, routes: () => undefined });\n`,
+      "config/cloudflare/test.json": JSON.stringify({ values: {}, framework: {} }),
+      "config/cloudflare/prodcheck.json": JSON.stringify({ values: {}, framework: {} }),
+    };
+    for (const [path, text] of Object.entries(files)) (mkdirSync(dirname(join(appDir, path)), { recursive: true }), writeFileSync(join(appDir, path), text));
+    const secrets = new Set<string>();
+    const deploy = async (stage: string): Promise<{ baseUrl: string; output: string }> => {
+      await buildApp({ appDir, target: "cloudflare", stage, runtimeImport: join(src, "targets", "cloudflare", "public.ts") });
+      if (!secrets.has(stage)) throw new SecretsNotSetError("required secrets are not set: apiKey", "stopped at step 5");
+      const baseUrl = `https://reference-${stage}.owner-sub.workers.dev`;
+      recordDeployOutput(appDir, "cloudflare", stage, baseUrl);
+      return { baseUrl, output: `deployed ${stage}` };
+    };
+    const ok = checkLoginRecord([{ id: "PWD-AC-009", status: "passed" }, { id: "AUTH-AC-011", status: "passed" }, { id: "E2E-008", status: "passed" }]);
+    try {
+      const h = harness({
+        catalogue,
+        cloud: {
+          deploy,
+          setSecret: (stage) => (secrets.add(stage), Promise.resolve("set")),
+          checkLogin: (stage) =>
+            Promise.resolve(
+              readDeployedOrigin(appDir, "cloudflare", stage) === undefined
+                ? { status: 1, output: `check-login: no recorded deploy output for stage ${stage} on cloudflare` }
+                : { status: 0, output: "check-login passed", record: ok },
+            ),
+        },
+      });
+      const run = h.deps.run;
+      // A test layer deploys a stage of its own from the same app directory (as the cloud tests do).
+      const deps: DriverDeps = { ...h.deps, run: async (c) => (c.args[0] === "vitest" ? (secrets.add("test-layer1"), await deploy("test-layer1")) : undefined, run(c)) };
+      const result = await runCompliance(parseArgs(["--target", "cloudflare"]), [], deps);
+      for (const id of ["PWD-AC-009", "AUTH-AC-011", "E2E-008"]) expect(recordOf(h).results.filter((r) => r.id === id), id).toEqual([{ id, status: "passed" }]);
+      expect(result.exitStatus).toBe(0);
+      expect(readDeployedOrigin(appDir, "cloudflare", "test-abcdefghij12345"), "the run stage's record outlives prodcheck's deploy (COMPL-AC-005 orders the two)").toBeDefined();
+    } finally {
+      rmSync(appDir, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  it("local runs, milestone runs and runs selecting no prodcheck criterion never touch prodcheck", async () => {
+    for (const argv of [["--target", "local"], ["--target", "cloudflare", "--milestone"], ["--target", "cloudflare", "--only", "KV-AC-001"]]) {
+      const events: string[] = [];
+      const h = harness({
+        catalogue: [...catalogue, entry("PROV-AC-003", "Cloud (milestone)")],
+        cloud: { deploy: (stage) => (events.push(`deploy ${stage}`), Promise.resolve({ baseUrl: "https://reference-test.owner-sub.workers.dev", output: "ok" })), checkLogin: () => (events.push("check-login"), Promise.resolve({ status: 0, output: "" })) },
+      });
+      await runCompliance(parseArgs(argv), argv, h.deps);
+      expect(events.filter((e) => e.includes("prodcheck") || e === "check-login"), argv.join(" ")).toEqual([]);
+    }
+  });
+});
+
+describe("[COMPL-AC-003] the cloud account at the start and end of a run: D1 plan and self-created test tokens (DEC-0530, DEC-0531, DEC-0532)", () => {
+  const TOKEN_CATALOGUE = [entry("KV-AC-001", "Local, cloud"), entry("PROV-AC-002", "Cloud"), entry("PROV-AC-004", "Cloud (milestone)")];
+  const withAccount = (h: Harness, api: FakeCfApi, dryRun?: string): DriverDeps => ({
+    ...h.deps,
+    cloudAccount: () => cloudflareAccountOps({ call: api.call, accountId: FAKE_ACCOUNT, env: {}, now: () => new Date("2026-10-25T10:00:00Z"), ...(dryRun === undefined ? {} : { dryRun }) }),
+  });
+  const posts = (api: FakeCfApi) => api.requests.filter((r) => r.method === "POST");
+
+  it("reads the plan once, creates PROV-AC-002's token, hands it and the plan to the tests only, redacts it, and deletes it at the end", async () => {
+    const api = fakeCfApi();
+    let seen: string | undefined;
+    const h = harness({ catalogue: TOKEN_CATALOGUE, vitest: vitestReport([{ title: "[PROV-AC-002] restricted", status: "passed" }]) });
+    const run = h.deps.run;
+    const deps: DriverDeps = { ...withAccount(h, api), run: (c) => (c.args[0] === "vitest" && (seen = c.env[NO_R2_TOKEN_PERMISSION_ENV]), run(c)) };
+    const result = await runCompliance(parseArgs(["--target", "cloudflare"]), [], deps);
+    expect(result.exitStatus).toBe(0);
+    expect(api.requests.filter((r) => r.path.endsWith("/subscriptions"))).toHaveLength(1);
+    expect(posts(api).map((r) => (r.body as { name: string }).name)).toEqual(["prototype-compliance-abcdefghij12345-no-r2-token"]);
+    expect(seen).toMatch(/^fake-value-tok1-/);
+    const vitest = h.calls.find((c) => c.args[0] === "vitest");
+    expect(vitest?.env.COMPLIANCE_D1_PLAN).toBe("paid");
+    expect(vitest?.redact).toContain(seen);
+    expect(h.calls.filter((c) => c.command === "npm").every((c) => c.env[NO_R2_TOKEN_PERMISSION_ENV] === undefined)).toBe(true);
+    expect(h.written[0]?.redactions).toContainEqual({ value: seen, replacement: "<test-token>" });
+    expect(h.logs.join("\n")).toContain("Workers Paid D1 budget (PAR-285)");
+    expect(h.logs.join("\n")).toContain("created the test token prototype-compliance-abcdefghij12345-no-r2-token (lacks Account API Tokens (Read and Write)) for PROV-AC-002");
+    expect(h.logs.join("\n")).not.toContain(seen ?? "-");
+    expect(JSON.parse(h.written[0]?.raw?.["d1-budget.json"] ?? "{}")).toMatchObject({ plan: "paid", source: "api", budget: { maxDatabases: 20 } });
+    expect(api.tokens.size).toBe(0);
+    expect(recordOf(h).leftovers).toEqual([]);
+    expect(recordOf(h)).not.toHaveProperty("dryRun");
+  });
+
+  it("creates no token when the run selects no clause that needs one, or the operator supplied the variable", async () => {
+    const api = fakeCfApi();
+    const h = harness({ catalogue: TOKEN_CATALOGUE });
+    await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], withAccount(h, api));
+    expect(posts(api)).toEqual([]);
+    expect(h.calls.find((c) => c.args[0] === "vitest")?.env.COMPLIANCE_D1_PLAN).toBe("paid");
+
+    vi.stubEnv(NO_R2_TOKEN_PERMISSION_ENV, "operator-supplied-not-a-credential");
+    try {
+      const api2 = fakeCfApi();
+      const h2 = harness({ catalogue: TOKEN_CATALOGUE });
+      await runCompliance(parseArgs(["--target", "cloudflare"]), [], withAccount(h2, api2));
+      expect(posts(api2)).toEqual([]);
+      expect(h2.calls.find((c) => c.args[0] === "vitest")?.env[NO_R2_TOKEN_PERMISSION_ENV]).toBe("operator-supplied-not-a-credential");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("deletes the token also when the run failed, and first deletes test tokens an earlier run left, but no other token", async () => {
+    const api = fakeCfApi();
+    // Created 7 h before the run (its 6 h expiry passed an hour ago): an interrupted earlier run left it.
+    addForeignToken(api, "prototype-compliance-old000000000001-no-email", { issued_on: "2026-10-20T03:00:00Z", expires_on: "2026-10-20T09:00:00Z" });
+    addForeignToken(api, "owner-main-token");
+    const h = harness({ catalogue: TOKEN_CATALOGUE, cloud: { deploy: () => Promise.reject(new Error("deploy failed at step 3")) } });
+    const result = await runCompliance(parseArgs(["--target", "cloudflare"]), [], withAccount(h, api));
+    expect(result.exitStatus).toBe(1);
+    expect(posts(api)).toHaveLength(1);
+    expect([...api.tokens.values()].map((t) => t.name)).toEqual(["owner-main-token"]);
+    expect(h.logs.join("\n")).toContain("deleted the test token prototype-compliance-old000000000001-no-email an earlier run left");
+    expect(recordOf(h).leftovers).toEqual([]);
+  });
+
+  it("at the start deletes only other runs' test tokens older than PAR-286: a live other run's token and the current run's tokens are kept (compliance.md §4)", async () => {
+    // The driver's clock is 2026-10-20T10:00Z; a test token expires PAR-286 (6 h) after it is created.
+    const api = fakeCfApi();
+    addForeignToken(api, "prototype-compliance-live00000000001-no-r2-token", { issued_on: "2026-10-20T09:00:00Z", expires_on: "2026-10-20T15:00:00Z" });
+    addForeignToken(api, "prototype-compliance-live00000000002-no-email", { expires_on: "2026-10-20T15:59:00Z" });
+    addForeignToken(api, "prototype-compliance-stale0000000001-no-email", { issued_on: "2026-10-20T03:59:00Z", expires_on: "2026-10-20T09:59:00Z" });
+    addForeignToken(api, "prototype-compliance-stale0000000002-no-email", { issued_on: "2026-10-20T03:00:00Z" });
+    addForeignToken(api, "prototype-compliance-abcdefghij12345-no-email", { issued_on: "2026-10-19T00:00:00Z", expires_on: "2026-10-19T06:00:00Z" });
+    addForeignToken(api, "prototype-compliance-unknown00000001-no-email");
+    const h = harness({ catalogue: TOKEN_CATALOGUE });
+    await runCompliance(parseArgs(["--target", "cloudflare", "--only", "KV-AC-001"]), [], withAccount(h, api));
+    const deleted = api.requests.filter((r) => r.method === "DELETE").map((r) => r.path.slice(r.path.lastIndexOf("/") + 1));
+    expect(deleted.sort()).toEqual(["foreign-prototype-compliance-stale0000000001-no-email", "foreign-prototype-compliance-stale0000000002-no-email"]);
+    expect([...api.tokens.values()].map((t) => t.name).sort()).toEqual([
+      "prototype-compliance-abcdefghij12345-no-email",
+      "prototype-compliance-live00000000001-no-r2-token",
+      "prototype-compliance-live00000000002-no-email",
+      "prototype-compliance-unknown00000001-no-email",
+    ]);
+  });
+
+  it("a test token that could not be deleted is a leftover, and so is a token check that cannot run", async () => {
+    const api = fakeCfApi();
+    api.failing.add(`DELETE /accounts/${FAKE_ACCOUNT}/tokens/tok1`);
+    const h = harness({ catalogue: TOKEN_CATALOGUE });
+    const result = await runCompliance(parseArgs(["--target", "cloudflare"]), [], withAccount(h, api));
+    expect(recordOf(h).leftovers).toEqual(["API token prototype-compliance-abcdefghij12345-no-r2-token"]);
+    expect(result.exitStatus).toBe(1);
+
+    const api2 = fakeCfApi();
+    const h2 = harness({ catalogue: TOKEN_CATALOGUE });
+    const deps = withAccount(h2, api2);
+    const run = deps.run;
+    await runCompliance(parseArgs(["--target", "cloudflare"]), [], { ...deps, run: (c) => (c.args[0] === "vitest" && api2.failing.add(`GET /accounts/${FAKE_ACCOUNT}/tokens?`), run(c)) });
+    expect(recordOf(h2).leftovers).toEqual(["test token check failed: listing the account's API tokens failed: HTTP 500 (10000 internal error)"]);
+  });
+
+  it("milestone: creates PROV-AC-004's tokens and records the fresh-account clause as deferred", async () => {
+    const api = fakeCfApi({ subscriptions: 403 });
+    const h = harness({ catalogue: TOKEN_CATALOGUE, vitest: vitestReport([{ title: "[PROV-AC-004] twice", status: "passed" }]) });
+    await runCompliance(parseArgs(["--target", "cloudflare", "--milestone"]), [], withAccount(h, api));
+    expect(posts(api).map((r) => (r.body as { name: string }).name)).toEqual([
+      "prototype-compliance-abcdefghij12345-no-email",
+      "prototype-compliance-abcdefghij12345-no-tokens-write",
+      "prototype-compliance-abcdefghij12345-no-sending-read",
+    ]);
+    expect(h.calls.find((c) => c.args[0] === "vitest")?.env[NO_EMAIL_PERMISSION_ENV]).toMatch(/^fake-value-/);
+    expect(h.calls.find((c) => c.args[0] === "vitest")?.env.COMPLIANCE_D1_PLAN).toBe("free");
+    expect(recordOf(h).results).toEqual([
+      { id: "PROV-AC-004", status: "passed" },
+      { id: "PROV-AC-004", status: "not-run", detail: "fresh-account clause: deploying without setup-account fails with a clear message: deferred: needs a second Cloudflare account (owner, 2026-10-25)" },
+    ]);
+    expect(api.tokens.size).toBe(0);
+  });
+
+  it("fake account operations mark the record as a dry run; without account operations nothing is read or created", async () => {
+    const api = fakeCfApi();
+    const h = harness({ catalogue: TOKEN_CATALOGUE });
+    await runCompliance(parseArgs(["--target", "cloudflare"]), [], withAccount(h, api, "fake Cloudflare account API"));
+    expect(recordOf(h).dryRun).toBe("fake Cloudflare account API");
+    const plain = harness({ catalogue: TOKEN_CATALOGUE });
+    await runCompliance(parseArgs(["--target", "cloudflare"]), [], plain.deps);
+    expect(plain.calls.find((c) => c.args[0] === "vitest")?.env.COMPLIANCE_D1_PLAN).toBeUndefined();
+    expect(plain.written[0]?.raw?.["d1-budget.json"]).toBeUndefined();
   });
 });

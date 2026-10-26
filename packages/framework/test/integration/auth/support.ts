@@ -84,14 +84,6 @@ export async function disposeAll(): Promise<void> {
   await Promise.all(apps.map((a) => a.dispose()));
 }
 
-/**
- * Stage values for the `framework` section, passed through `createTestApp`'s `config` option
- * under the reserved key `framework` (B-T3 decision 1). A new `createTestApp` is a rebuild.
- */
-export function frameworkConfig(lists: { admins?: string[]; users?: string[] }): Record<string, unknown> {
-  return { framework: lists };
-}
-
 /** User ID derivation of auth.md §2 (DEC-0067): `u_` + first 26 base32 chars of SHA-256. */
 export function deriveUserId(providerId: string, subject: string): string {
   const digest = createHash("sha256").update(`${providerId}:${subject}`, "utf8").digest();

@@ -1,0 +1,22 @@
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+(node:19526) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 5 tests using 2 workers
+
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+
+[1/5] [e2e] › tests/compliance/e2e/demo-criteria.spec.ts:599:1 › [DEMO-AC-008] publishing a post and deleting it through the page each produce an info entry of the demo, written during that request, in the target's log
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+
+[2/5] [e2e] › tests/compliance/e2e/E2E-011.spec.ts:136:1 › [E2E-011] app and framework entries are stored under the app and stage with timestamps, and the plain-Error request's entry is found by its requestId
+[3/5] [e2e] › tests/compliance/e2e/E2E-011.spec.ts:165:3 › [E2E-011] local part: with an injected failing log writer the app still works
+[4/5] [e2e] › tests/compliance/e2e/E2E-014.spec.ts:69:1 › [E2E-014] the stage reports exactly its committed configuration values
+[5/5] [e2e] › tests/compliance/e2e/E2E-014.spec.ts:115:3 › [E2E-014] local part: a configuration change takes effect only after the rebuild, and a secret set with the CLI appears nowhere scanned
+  5 passed (42.6s)

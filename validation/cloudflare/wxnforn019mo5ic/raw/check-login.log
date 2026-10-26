@@ -1,0 +1,14 @@
+(node:19406) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:19422) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+check-login: run g8np1sdqoq1yvgz on prodcheck
+step 1 passed: sign-up of a fresh sink address answered check-email
+step 2 passed: sign-in before verification was refused with 403 AUTH.NOT_VERIFIED and sent no mail
+step 3 passed: the verification mail arrived with its links on the public origin; a bogus token was refused; the mailed token verified
+step 4 passed: sign-in works and /api/auth/me shows user with a well-formed ID
+step 5 passed: admins grant made the next request admin, and admins revoke made it user again
+step 6 passed: log out, forgot, the reset mail and the reset to a new password work
+step 7 passed: the old password fails and the new one works
+step 8 passed: a burst of wrong-password sign-ins got 429 AUTH.RATE_LIMITED
+check-login passed: every step passed. Evidence: /home/user/cloud-app/.claude/worktrees/agent-a75eb85e57267a6f7/validation/cloudflare/g8np1sdqoq1yvgz.json

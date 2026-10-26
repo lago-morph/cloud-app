@@ -6,7 +6,9 @@ import { ACCOUNT, FakeCloud } from "../../../packages/framework/src/provision/cl
 import { stageLeftovers } from "./leftovers.js";
 import { cloudflareOperations } from "../../../packages/framework/src/cli/commands/deploy.js";
 import { FakeTarget } from "../../../packages/framework/src/provision/core/fake-target.js";
-import { cliStageOps, deployOrigin, devOrigin, generateTestSecret, pendingStageStore, readVersions, runProcess, secretsNotSet, stageResourceOperations, type OperationsFactory } from "./node-deps.js";
+import { cliStageOps, cloudAccount, deployOrigin, devOrigin, generateTestSecret, pendingStageStore, readVersions, runProcess, secretsNotSet, stageResourceOperations, type OperationsFactory } from "./node-deps.js";
+import type { RunCall } from "./driver.js";
+import { SIGN_UP_SLOT_MARGIN_MS, signUpLedger, withSignUpSlot, type BudgetDeps } from "./sign-up-budget.js";
 
 const repo = new URL("../../../", import.meta.url).pathname;
 let dir: string | undefined;
@@ -190,7 +192,7 @@ describe("[COMPL-AC-004] leftovers through listStageResources (fake target)", ()
 
   it("refuses non-test stages", async () => {
     const { factory } = fakeCloudflare();
-    await expect(cliStageOps(repo, "cloudflare", { operations: factory, env: CF_ENV }).listStageResources("prodcheck")).rejects.toThrow(/test stages only/);
+    await expect(cliStageOps(repo, "cloudflare", { operations: factory, env: CF_ENV }).listStageResources("prodcheck")).rejects.toThrow(/handles test stages/);
   });
 
   // G-EV F3 (DEC-0504): fakes mark the record.
@@ -202,5 +204,96 @@ describe("[COMPL-AC-004] leftovers through listStageResources (fake target)", ()
     expect(cliStageOps(repo, "cloudflare", { run }).dryRun).toBe("fake framework CLI runner");
     expect(cliStageOps(repo, "cloudflare").dryRun).toBeUndefined();
     expect(cliStageOps(repo, "cloudflare", { env: CF_ENV })).not.toHaveProperty("dryRun");
+  });
+});
+
+describe("check-login's sign-up within prodcheck's PAR-259 budget (sign-up-budget.ts)", () => {
+  /** A fake clock whose sleep advances it, and a fresh directory for the ledger. */
+  function budget(): BudgetDeps & { slept: number[] } {
+    const d = mkdtempSync(join(tmpdir(), "node-deps-budget-"));
+    dir = d;
+    const clock = { now: 5_000_000 };
+    const slept: number[] = [];
+    return { dir: d, slept, now: () => clock.now, sleep: (ms) => ((clock.now += ms), slept.push(ms), Promise.resolve()), log: () => undefined };
+  }
+  const fakeRun =
+    (calls: string[]) =>
+    (call: RunCall): Promise<{ status: number; output: string }> => (calls.push(call.args.join(" ")), Promise.resolve({ status: 0, output: "check-login: done" }));
+
+  it("takes one slot of <target>/prodcheck per check-login, after the tests' sign-ups there", async () => {
+    const b = budget();
+    const calls: string[] = [];
+    // The tests' two sign-ups on prodcheck (AUTH-AC-005's admin-role part, MAIL-AC-007).
+    await withSignUpSlot("cloudflare/prodcheck", { max: 3, windowS: 300 }, () => Promise.resolve(), b);
+    await withSignUpSlot("cloudflare/prodcheck", { max: 3, windowS: 300 }, () => Promise.resolve(), b);
+    const ops = cliStageOps(repo, "cloudflare", { run: fakeRun(calls), signUpBudget: b });
+    await ops.checkLogin?.("prodcheck");
+    expect(calls).toEqual(["prototype-framework check-login --target cloudflare --stage prodcheck"]);
+    expect(b.slept, "three sign-ups fit PAR-259").toEqual([]);
+    expect(signUpLedger("cloudflare/prodcheck", b)).toHaveLength(3);
+    // A fourth (another check-login, a retry, the next run) waits out the oldest's window.
+    await ops.checkLogin?.("prodcheck");
+    expect(b.slept.reduce((a, n) => a + n, 0)).toBe(300_000 + SIGN_UP_SLOT_MARGIN_MS);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("uses no budget on a fake runner (it sends no sign-up)", async () => {
+    const calls: string[] = [];
+    await cliStageOps(repo, "cloudflare", { run: fakeRun(calls) }).checkLogin?.("prodcheck");
+    expect(calls).toHaveLength(1);
+  });
+});
+
+describe("criterion production stages on Cloudflare (DEC-0560)", () => {
+  const ok = (result: unknown) => ({ status: 200, body: { success: true, result } });
+
+  it("are listed from the account's Worker, database and bucket names; only stale marked ones are swept; removal is --confirm-production", async () => {
+    const asked: string[] = [];
+    const cfCall = (method: string, path: string) => {
+      asked.push(`${method} ${path}`);
+      if (path.endsWith("/workers/scripts")) return Promise.resolve(ok([{ id: "reference-p003abcdefghij" }, { id: "reference-prodcheck" }, { id: "prototype-mailsink" }, { id: "reference-p003ownerstage" }]));
+      if (path.includes("/d1/database")) return Promise.resolve(ok([{ name: "reference-p004klmnopqrst-db-1" }, { name: "reference-test-x-db-1" }]));
+      return Promise.resolve(ok({ buckets: [{ name: "reference-p003abcdefghij-files" }] }));
+    };
+    const old = new Date(Date.now() - 7 * 3_600_000).toISOString();
+    const markers = new Map([
+      ["p003abcdefghij", JSON.stringify({ stage: "p003abcdefghij", runId: "r1", createdAt: old })],
+      ["p004klmnopqrst", JSON.stringify({ stage: "p004klmnopqrst", runId: "r2", createdAt: new Date().toISOString() })],
+      ["p004zzzzzzzzzz", JSON.stringify({ stage: "p004zzzzzzzzzz", runId: "r3", createdAt: old })],
+    ]);
+    const removed: string[] = [];
+    const store = { list: () => Promise.resolve(markers), remove: (st: string) => (removed.push(st), Promise.resolve()) };
+    const calls: string[] = [];
+    const run = (call: RunCall): Promise<{ status: number; output: string }> => (calls.push(call.args.join(" ")), Promise.resolve({ status: 0, output: "removed" }));
+    const ops = cliStageOps(repo, "cloudflare", { run, cfCall, markers: store, env: { CLOUDFLARE_ACCOUNT_ID: "a1" } });
+    // p004klmnopqrst is another run's live stage (fresh marker); p003ownerstage has no marker; p004zzzzzzzzzz is a stale marker without resources.
+    expect(await ops.criterionStages?.()).toEqual({ stale: ["p003abcdefghij", "p004zzzzzzzzzz"], unmarked: ["p003ownerstage"] });
+    expect(asked).toEqual(["GET /accounts/a1/workers/scripts", "GET /accounts/a1/d1/database?per_page=100&page=1", "GET /accounts/a1/r2/buckets?per_page=1000"]);
+    await ops.forgetCriterionStage?.("p003abcdefghij");
+    expect(removed).toEqual(["p003abcdefghij"]);
+    await ops.remove("p003abcdefghij");
+    await ops.remove("test-abc");
+    expect(calls).toEqual(["prototype-framework remove --target cloudflare --stage p003abcdefghij --confirm-production p003abcdefghij", "prototype-framework remove --target cloudflare --stage test-abc"]);
+  });
+
+  it("a refused listing rejects (the driver records it as a leftover entry)", async () => {
+    const store = { list: () => Promise.resolve(new Map<string, string>()), remove: () => Promise.resolve() };
+    const ops = cliStageOps(repo, "cloudflare", { run: () => Promise.resolve({ status: 0, output: "" }), cfCall: () => Promise.resolve({ status: 403, body: { success: false } }), markers: store, env: { CLOUDFLARE_ACCOUNT_ID: "a1" } });
+    await expect(ops.criterionStages?.()).rejects.toThrow("listing Worker scripts for the criterion production stages failed: HTTP 403");
+  });
+});
+
+describe("the Cloudflare account operations (DEC-0530, DEC-0531)", () => {
+  it("exist on Cloudflare with an account ID, and send the main token as a bearer token to the account's paths", async () => {
+    expect(cloudAccount("local", { CLOUDFLARE_ACCOUNT_ID: "a1" })).toBeUndefined();
+    expect(cloudAccount("cloudflare", {})).toBeUndefined();
+    const seen: { url: string; auth: string | undefined }[] = [];
+    const fakeFetch = ((url: string, init?: RequestInit) => {
+      seen.push({ url, auth: (init?.headers as Record<string, string> | undefined)?.authorization });
+      return Promise.resolve(new Response(JSON.stringify({ success: true, result: [] }), { status: 200 }));
+    }) as typeof fetch;
+    const ops = cloudAccount("cloudflare", { CLOUDFLARE_ACCOUNT_ID: "a1", CLOUDFLARE_API_TOKEN: "fake-main-token-not-a-credential" }, fakeFetch);
+    expect(await ops?.d1Plan()).toMatchObject({ plan: "free", source: "api" });
+    expect(seen).toEqual([{ url: "https://api.cloudflare.com/client/v4/accounts/a1/subscriptions", auth: "Bearer fake-main-token-not-a-credential" }]);
   });
 });

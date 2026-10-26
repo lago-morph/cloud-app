@@ -58,7 +58,7 @@ SQL, MIG (framework table migrations).
 | ID | Criterion | Verifies | Where |
 | --- | --- | --- | --- |
 | KV-AC-001 | Put, overwrite, get, missing-key get, delete, and repeated delete behave as specified; list returns exactly the keys that literally match the prefix, including keys containing `%`, `_`, and mixed case. | KV-REQ-001 | Local, cloud |
-| KV-AC-002 | Empty, oversized, and malformed keys and values are rejected with the specified codes; a key of exactly PAR-220 bytes and a value of exactly PAR-223 bytes are accepted. | KV-REQ-002 | Local, cloud |
+| KV-AC-002 | Empty keys, oversized keys and values, and malformed keys and values are rejected with the specified codes; an empty value is accepted and read back as `""` (DEC-0538); a key of exactly PAR-220 bytes and a value of exactly PAR-223 bytes are accepted. | KV-REQ-002 | Local, cloud |
 | KV-AC-003 | Listing 2.5 pages of keys returns each key once; a cursor used with a different prefix is rejected. | KV-REQ-003 | Local, cloud |
 | KV-AC-004 | The KV suite produces identical results on local D1, PGlite, Cloudflare, and AWS. (AWS: deferred, branch `aws`.) | KV-REQ-004 | Local, cloud |
 | KV-AC-005 | Locally, with the database unreachable, KV operations fail with `KV.UNAVAILABLE`. On every target, a maximum page of maximum-size entries lists successfully. | KV-REQ-005 | Local, cloud |

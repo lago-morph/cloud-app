@@ -42,7 +42,9 @@ describe("Cloudflare upload tickets (DEC-0098, DEC-0160, FILES-REQ-003)", () => 
     expect(url.searchParams.get("X-Amz-Signature")).toBe(expectedSignature(ticket?.url ?? "", "PUT", { "Content-Type": "text/plain" }, credentials.secretAccessKey));
   });
 
-  it.each(["x/../y", "../up.txt", "./dot", "a/.", "a/b/.."])(
+  // `..` segments are invalid names (DEC-0533, rejected by checkName before any issuer); they stay
+  // here because the issuer's encoding is a second guard behind checkName.
+  it.each(["./dot", "a/.", "a/./b", "x/../y", "../up.txt", "a/b/.."])(
     "FILES-REQ-002: %j is never resolved as a path: its slashes are sent as %2F so no dot segment collapses",
     async (name) => {
       const ticket = readUploadTicket(await issuer().upload(name, "text/plain"));
@@ -118,15 +120,24 @@ describe("Cloudflare download tickets (DEC-0098, DEC-0160, DEC-0313)", () => {
   });
 
   it("a dot-segment name is sent with %2F and the ending; the saved file keeps the plain name (DEC-0328)", async () => {
-    const ticket = readDownloadTicket(await issuer().download("x/../y"));
+    const ticket = readDownloadTicket(await issuer().download("x/./y"));
     const url = new URL(ticket?.url ?? "");
-    expect(url.pathname).toBe("/app-test-x-files/x%2F..%2Fy%01");
-    expect(url.searchParams.get("response-content-disposition")).toBe("attachment; filename*=UTF-8''x%2F..%2Fy");
+    expect(url.pathname).toBe("/app-test-x-files/x%2F.%2Fy%01");
+    expect(url.searchParams.get("response-content-disposition")).toBe("attachment; filename*=UTF-8''x%2F.%2Fy");
     expect(url.searchParams.get("X-Amz-Signature")).toBe(expectedSignature(ticket?.url ?? "", "GET", {}, credentials.secretAccessKey));
   });
 
-  it("a raster image is named as an attachment, like every other download (DEC-0414)", async () => {
-    const image = new URL(readDownloadTicket(await issuer().download("p.png"))?.url ?? "");
-    expect(image.searchParams.get("response-content-disposition")).toBe("attachment; filename*=UTF-8''p.png");
+  it.each(["image/png", "image/jpeg", "image/gif", "image/webp"])("a %s download is inline, served as exactly that type, both signed (DEC-0535)", async (type) => {
+    const ticket = readDownloadTicket(await issuer().download("photos/p 1.img", type.toUpperCase()));
+    const url = new URL(ticket?.url ?? "");
+    expect(url.searchParams.get("response-content-disposition")).toBe("inline; filename*=UTF-8''photos%2Fp%201.img");
+    expect(url.searchParams.get("response-content-type")).toBe(type);
+    expect(url.searchParams.get("X-Amz-Signature")).toBe(expectedSignature(ticket?.url ?? "", "GET", {}, credentials.secretAccessKey));
+  });
+
+  it.each([undefined, "image/svg+xml", "text/html", "image/bmp", "application/octet-stream"])("a download of type %j is an attachment with no content-type override (DEC-0535)", async (type) => {
+    const url = new URL(readDownloadTicket(await issuer().download("p.png", type))?.url ?? "");
+    expect(url.searchParams.get("response-content-disposition")).toBe("attachment; filename*=UTF-8''p.png");
+    expect(url.searchParams.has("response-content-type")).toBe(false);
   });
 });

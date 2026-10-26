@@ -69,29 +69,33 @@ Where: Cloud
 
 Redeploy the `prodcheck` stage (COMPL §2) on each cloud.
 
-Pass: `/api/auth/mock-login` returns 404, the deployed bundle contains no mock code, and `/api/auth/login` redirects to Google with the configured client.
+Pass: `/api/auth/mock-login` and `/api/__framework/test-mail` return 404, the deployed bundle contains no mock or mail-capture code, and `/api/auth/login` redirects to the framework's sign-in page on the stage's public origin (DEC-0513).
 
 #### E2E-007 — Becoming an admin
-Verifies: SYS-REQ-016, SYS-REQ-018
-Where: Local; cloud (milestone)
+Verifies: SYS-REQ-018
+Where: Local, cloud
 
-Follow only the documented steps:
-1. Log in to a stage.
-2. Copy the user ID from the account page.
-3. Add it to the admin list in configuration.
-4. Redeploy.
+Follow only the documented steps (DEC-0521, DEC-0523, DEC-0526):
+1. Sign up and sign in to a stage: sign up, read the verification mail with `mail last`, verify, and sign in. Check that `/api/auth/me` shows level `user`, and that an admin-only reference route answers 403 `AUTH.FORBIDDEN`.
+2. Grant the role: `admins grant <address> --target <t> --stage <s>`, adding `--confirm-production <s>` on a production stage.
+3. Send the next request with the same session: no new login, no deploy.
+4. Revoke the role with `admins revoke`, and send one more request.
 
-Locally this runs as an in-process test (`createTestApp` with the stub login provider), not through `dev`, because `dev` uses the mock, which ignores the admin list; the redeploy is a rebuild. On each cloud it runs on the `prodcheck` stage during certification (E2E-008). There, the admin-list change is a committed change to `config/<target>/prodcheck.json`, made before the redeploy, and the evidence is recorded against that commit.
+Locally this runs through `dev` and the reference app's local D1, with `--target local`. On each cloud it runs on the `prodcheck` stage, with a sink address `sink+<run ID>@t.<domain>` (DEC-0527), the mail read from the sink, and `--confirm-production prodcheck`. It is automated on every cloud run, with no owner step and no commit.
 
-Pass: the user is admin after the redeploy and not before.
+Pass:
+- the user is `user` before the grant;
+- `admin` (the admin-only route answers 200) on the first request after it;
+- `user` again on the first request after the revoke;
+- the account has no role stored afterwards.
 
-#### E2E-008 — Real login provider certification (guided, manual)
+#### E2E-008 — Real login provider check (automated)
 Verifies: SYS-REQ-019, SYS-REQ-027
-Where: Cloud (manual, milestone)
+Where: Cloud
 
-On the `prodcheck` stage of each cloud, run `certify-auth` with the owner's dedicated Google test account.
+On the `prodcheck` stage of each cloud, after it is redeployed, run `check-login` (PWD §2): sign-up with real email delivery to the mail sink, refusal before verification, verification, sign-in, password reset, and the sign-in rate limit, all over HTTP (DEC-0512).
 
-Pass: certification records `passed`. Repeated only when SYS-REQ-027 requires it.
+Pass: `check-login` exits 0 and its evidence record shows every step passed. Runs on every cloud compliance run.
 
 #### E2E-009 — Large photos
 Verifies: SYS-REQ-008, SYS-REQ-014
@@ -164,7 +168,7 @@ Pass: the result of the last attempt meets every demo acceptance criterion. Ever
 Verifies: SYS-REQ-002, SYS-REQ-003, SYS-REQ-005, SYS-REQ-007
 Where: Local; review: milestone
 
-An automated scan of every app-facing contract (`docs/contracts/ts/` excluding `internal/`, and `framework.openapi.yaml`) finds no provider or protocol terms. The scan uses case-sensitive whole-word matching over identifiers, string literals, and comments. Its term list is kept in one file: S3, R2, D1, Aurora, Lambda, Worker, Cloudflare, AWS, Google, OIDC, OAuth, ID token, access token, issuer. A review, a milestone checklist item, then confirms three things:
+An automated scan of every app-facing contract (`docs/contracts/ts/` excluding `internal/`, and `framework.openapi.yaml`) finds no provider or protocol terms. The scan uses case-sensitive whole-word matching over identifiers, string literals, and comments. Its term list is kept in one file: S3, R2, D1, Aurora, Lambda, Worker, Cloudflare, AWS, Google, OIDC, OAuth, ID token, access token, issuer, Better Auth, scrypt, Email Service. A review, a milestone checklist item, then confirms three things:
 - each component document has a portability note;
 - no capability contract references another capability's adapter;
 - no design adds features beyond its requirements.

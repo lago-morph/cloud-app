@@ -9,6 +9,8 @@ import { D1_AVAILABLE_ENV, D1_STOP_DETAIL, MAX_D1_DATABASES } from "../../_cloud
 import { installCloudFakes, lockHeld, otherStageDatabases, type CloudFakes } from "../../_fakes/cloud-fakes.js";
 import { REFERENCE_DIR } from "../../core/support/repo.js";
 import { holdStages, runCli, takeStageRoom, withCloudStage, type CloudStage } from "./stage.js";
+import { NO_R2_TOKEN_PERMISSION_ENV } from "../../../harness/test-tokens.js";
+import { resetRefusedTokens } from "../../../harness/token-guard.js";
 
 vi.mock("../../core/support/repo.js", async (importOriginal) => {
   const { FAKE_CLI, fakeFrameworkDir } = await import("../../_fakes/cloud-fakes.js");
@@ -101,5 +103,37 @@ describe("withCloudStage: a removal made by another actor (R3a–R3c)", () => {
       stage.removedElsewhere(r, [`worker reference-${stage.stage}`]);
     });
     expect(removes()).toBe(2);
+  });
+});
+
+describe("withCloudStage after the Cloudflare API refused the stage's token with 401 (pass 3, PROV-AC-002)", () => {
+  const PROV_TOKEN = "fake-prov-ac-002-token-not-a-credential";
+  afterEach(() => {
+    resetRefusedTokens();
+  });
+
+  it("runs no further CLI call with the token, not even the cleanup's remove, and reports the token's purpose, never its value", async () => {
+    vi.stubEnv(NO_R2_TOKEN_PERMISSION_ENV, PROV_TOKEN);
+    vi.stubEnv("FAKE_CLI_REFUSED_TOKEN", PROV_TOKEN);
+    const errors: string[] = [];
+    const write = vi.spyOn(process.stderr, "write").mockImplementation((chunk: string | Uint8Array) => (errors.push(String(chunk)), true));
+    try {
+      await withCloudStage({ ...OPTIONS, env: { CLOUDFLARE_API_TOKEN: PROV_TOKEN } }, async (stage) => {
+        const first = await stage.deploy();
+        expect(first.status).toBe(1);
+        expect(first.output).toContain("HTTP 401: Authentication error");
+        expect(first.output).toContain("PROV-AC-002");
+        const again = await stage.deploy();
+        expect(again.status).toBe(1);
+        expect(again.output).toContain(NO_R2_TOKEN_PERMISSION_ENV);
+      });
+    } finally {
+      write.mockRestore();
+    }
+    expect(fakes.commands(), "CLI calls that ran").toEqual(["deploy"]);
+    expect(removes(), "the cleanup's remove with the refused token").toBe(0);
+    const report = errors.join("");
+    expect(report).toContain("PROV-AC-002");
+    expect(report).not.toContain(PROV_TOKEN);
   });
 });

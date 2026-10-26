@@ -1,0 +1,13 @@
+Updating (test-qsyokeqbxq2nush):
+@ updating....
+
+@ updating.........
+    pulumi:pulumi:Stack reference-test-qsyokeqbxq2nush  
+Outputs:
+    _protect: false
+
+Resources:
+    8 unchanged
+
+Duration: 7s
+

@@ -25,11 +25,13 @@ Each **capability** component (SQL, KV, FILES, …) owns its portable contract a
 | [`MIG`](../components/migrations.md) | Migrations | Applying schema changes to deployed apps while preserving their data. |
 | [`KV`](../components/kv.md) | Key-value | The KV capability. |
 | [`FILES`](../components/files.md) | Files | The files capability, including the browser helper for uploading and downloading files. |
-| [`CFG`](../components/config.md) | Configuration | Config declaration, per-stage values, secret names and locations, the admin and users lists. |
+| [`CFG`](../components/config.md) | Configuration | Config declaration, per-stage values, secret names and locations. |
 | [`SEC`](../components/secrets.md) | Secrets | The secrets capability. |
 | [`LOG`](../components/log.md) | Log | The write-only log capability and the shared per-account log bucket. |
 | [`AUTH`](../components/auth.md) | Current user | Access levels, user identity, login and logout, the login-provider interface, and the authentication mock. |
-| [`GOOGLE`](../components/google.md) | Google login provider | The Google implementation of the AUTH provider interface; certified separately (SYS-REQ-027). |
+| [`PWD`](../components/password.md) | Email and password login provider | Release 1's real login provider: sign-up, email verification, sign-in, password reset and abuse limits, behind AUTH's credential-provider interface (DEC-0509); checked on a production deployment by `check-login` (SYS-REQ-027). |
+| [`MAIL`](../components/mail.md) | Outgoing email | The framework's own email: the sender per kind of stage, local and test capture, the single email-domain setting, and the account-level mail sink (DEC-0511, DEC-0514). Framework-internal. |
+| [`GOOGLE`](../components/google.md) | Google login provider | Retired (DEC-0513): not in release 1; the document is kept for the record and the code is on the branch `google`. |
 
 ### Targets
 
@@ -63,14 +65,15 @@ Every app-facing component depends on CORE; that dependency is not repeated belo
 | FILES | HTTP | Browser uploads and downloads are authorized through the app's API (SYS-REQ-008, SYS-REQ-014). |
 | MIG | SQL | Migrations change the SQL schema (SYS-REQ-012). |
 | SEC | CFG | Configuration holds secret names and locations (SYS-REQ-016). |
-| AUTH | HTTP, CFG | Login and logout are HTTP routes; admins are listed in configuration (SYS-REQ-018). |
-| GOOGLE | AUTH | Implements AUTH's provider interface (SYS-REQ-019). |
+| AUTH | HTTP, CFG | Login and logout are HTTP routes; a session's level comes from the account's role, read through the login provider's interface (SYS-REQ-018). |
+| PWD | AUTH, MAIL | Implements AUTH's credential-provider interface and sends its email through MAIL; its account table holds the `admin` role (SYS-REQ-018, SYS-REQ-019). |
+| MAIL | LOG, CFG | Send failures are logged; the sender's display name is configuration (SYS-REQ-016, SYS-REQ-021). |
 | LOCAL, CF, AWS | All capability components | Each target provides every capability (SYS-REQ-001). (AWS: deferred, branch `aws`.) |
-| PROV | CFG, SEC, MIG, LOG, CF, AWS, HTTP, AUTH | Deployment supplies configuration and secret locations, applies migrations, and sets up the shared log bucket (SYS-REQ-012, SYS-REQ-021, SYS-REQ-023); it calls the HTTP health route and checks the login provider's settings (PROV-REQ-002). |
+| PROV | CFG, SEC, MIG, LOG, CF, AWS, HTTP, AUTH, MAIL | Deployment supplies configuration and secret locations, applies migrations, and sets up the shared log bucket (SYS-REQ-012, SYS-REQ-021, SYS-REQ-023); it calls the HTTP health route and checks the login provider's prerequisites (PROV-REQ-002); account setup creates the email setup and mail sink (PROV-REQ-004, MAIL-REQ-005). |
 | CHECK | SQL, MIG | Enforces SQL portability and checks migrations (SYS-REQ-011, SYS-REQ-025). |
-| CLI | LOCAL, CHECK, PROV, MIG, SEC, GOOGLE, CORE, COMPL | Local development, the verification command, deploy and remove, migration generation, setting secrets, certification (SYS-REQ-022, SYS-REQ-025, SYS-REQ-027); `smoke` uses CORE's `./testing` and writes COMPL evidence (CLI-REQ-001). |
+| CLI | LOCAL, CHECK, PROV, MIG, SEC, PWD, MAIL, CORE, COMPL | Local development, the verification command, deploy and remove, migration generation, setting secrets, the real-provider check `check-login`, reading mail with `mail`, and granting the admin role with `admins` (SYS-REQ-018, SYS-REQ-022, SYS-REQ-025, SYS-REQ-027); `smoke` uses CORE's `./testing` and writes COMPL evidence (CLI-REQ-001). |
 | COMPL | All capability and target components | Verifies every contract on every target (SYS-REQ-026). |
-| SKILL | CORE, CLI, CFG, PROV, GOOGLE | Guides use of the public exports and the verification command, and documents the owner's configuration, deployment, and login-client tasks (SYS-REQ-018, SYS-REQ-029). |
+| SKILL | CORE, CLI, CFG, PROV, PWD | Guides use of the public exports and the verification command, and documents the owner's configuration, deployment, email-domain and sign-up tasks (SYS-REQ-018, SYS-REQ-029). |
 | DEMO | SKILL | Built using the skill (DEC-0054). |
 
 The order in which components are implemented belongs to the implementation plan, not to this document (DEC-0055).

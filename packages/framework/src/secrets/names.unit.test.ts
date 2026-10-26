@@ -4,10 +4,10 @@ import { DEV_GENERATED_SECRETS, LOCAL_FRAMEWORK_SECRETS, LOCAL_TICKET_KEY } from
 import { checkSecretDeclarations, FRAMEWORK_SECRETS, isReservedSecretName } from "./names.js";
 
 describe("framework-internal secret names (secrets.md §2, DEC-0064)", () => {
-  it("names the session key, Google client secret and R2 credentials; the local ticket key is in a local-only module", () => {
+  it("names the session key, the auth secret and R2 credentials; the local ticket key is in a local-only module", () => {
     expect(FRAMEWORK_SECRETS).toEqual({
       sessionKey: "frameworkSessionKey",
-      googleClientSecret: "frameworkGoogleClientSecret",
+      authSecret: "frameworkAuthSecret",
       r2AccessKeyId: "frameworkR2AccessKeyId",
       r2SecretAccessKey: "frameworkR2SecretAccessKey",
     });
@@ -21,8 +21,13 @@ describe("framework-internal secret names (secrets.md §2, DEC-0064)", () => {
     expect(isReservedSecretName("apiKey")).toBe(false);
   });
 
-  it("the Google client secret is stored at SECRET_FRAMEWORK_GOOGLE_CLIENT_SECRET (as GOOGLE expects)", () => {
-    expect(secretLocation("local", FRAMEWORK_SECRETS.googleClientSecret)).toBe("SECRET_FRAMEWORK_GOOGLE_CLIENT_SECRET");
+  it("the auth secret is stored at SECRET_FRAMEWORK_AUTH_SECRET on both targets (DEC-0509)", () => {
+    expect(secretLocation("local", FRAMEWORK_SECRETS.authSecret)).toBe("SECRET_FRAMEWORK_AUTH_SECRET");
+    expect(secretLocation("cloudflare", FRAMEWORK_SECRETS.authSecret)).toBe("SECRET_FRAMEWORK_AUTH_SECRET");
+  });
+
+  it("the Google client secret is retired (DEC-0513)", () => {
+    expect(Object.values(FRAMEWORK_SECRETS)).not.toContain("frameworkGoogleClientSecret");
   });
 
   it("an app declaration of lowerCamelCase names outside the reserved prefix passes", () => {
@@ -44,7 +49,7 @@ describe("framework-internal secret names (secrets.md §2, DEC-0064)", () => {
     expect(message).toContain(`secret "apiKey" is declared more than once`);
   });
 
-  it("only the session key and the local ticket key are generated for development", () => {
-    expect([...DEV_GENERATED_SECRETS].sort()).toEqual(["frameworkLocalTicketKey", "frameworkSessionKey"]);
+  it("only the session key, the auth secret and the local ticket key are generated for development", () => {
+    expect([...DEV_GENERATED_SECRETS].sort()).toEqual(["frameworkAuthSecret", "frameworkLocalTicketKey", "frameworkSessionKey"]);
   });
 });

@@ -2,7 +2,10 @@
  * Cloudflare target runtime (`./targets/cloudflare` subpath; importable by generated entry
  * points only, CORE-REQ-005). The generated entry passes the app definition and the embedded
  * resolved configuration; test-stage entries also pass `createAuthMock`, production entries
- * do not import it, so production bundles contain no mock (CORE-REQ-006, PROV-REQ-005).
+ * do not import it, so production bundles contain no mock (CORE-REQ-006, PROV-REQ-005). The
+ * same holds for the test stages' mail capture and its `GET /api/__framework/test-mail` route
+ * (`createTestMailCapture`, MAIL-REQ-002); production stages send through the Email Service
+ * binding `EMAIL` from `FRAMEWORK_MAIL_FROM` instead.
  *
  * Log entries go to the account's shared log bucket through the `LOGS` binding, each write
  * handed to the request's `waitUntil` (LOG-REQ-004). Transfer tickets are SigV4-signed R2 URLs
@@ -16,7 +19,9 @@ import type { DefinedApp } from "../../core/public.js";
 import type { ConfigDeclaration } from "../../config/public.js";
 import type { ResolvedConfig } from "../../config/resolve.js";
 import type { AuthMock, AuthMockOptions } from "../../auth/mock.js";
-import { createGoogleLoginProvider } from "../../google/provider.js";
+import type { TestMailCapture } from "../../mail/test-stage.js";
+import { workerEmailSender } from "../../mail/cloudflare.js";
+import { mailSenderName } from "../../mail/config.js";
 import { workerOutputSink } from "../../log/local.js";
 import { r2LogSink } from "../../log/cloudflare/sink.js";
 import { envSecretReader } from "../../secrets/service.js";
@@ -25,13 +30,17 @@ import { workerLogBucket, workerPublicOrigin, workerSecretValues, workerSql, wor
 import { cloudflareFilesStore } from "../../files/cloudflare/keys.js";
 import { assembleStage } from "../stage.js";
 import { workerTicketIssuer } from "./tickets.js";
+import { workerCredentialProvider } from "./password.js";
 
 export { createAuthMock } from "../../auth/mock.js";
+export { createTestMailCapture } from "../../mail/test-stage.js";
 export type { WorkerHandler } from "./bindings.js";
 
 export interface CloudflareWorkerOptions {
   /** Test stages only: the authentication mock's factory (`createAuthMock`). */
   readonly mock?: (options?: AuthMockOptions) => AuthMock;
+  /** Test stages only: the mail capture's factory (`createTestMailCapture`). */
+  readonly testMail?: () => TestMailCapture;
 }
 
 export function createCloudflareWorker<C extends ConfigDeclaration, S extends string>(
@@ -39,10 +48,10 @@ export function createCloudflareWorker<C extends ConfigDeclaration, S extends st
   resolved: ResolvedConfig,
   options: CloudflareWorkerOptions = {},
 ): WorkerHandler {
-  const { deployment } = resolved;
-  const production = !deployment.isTestStage;
-  const required: FrameworkSecretName[] = [FRAMEWORK_SECRETS.sessionKey];
-  if (production) required.push(FRAMEWORK_SECRETS.googleClientSecret);
+  // Every stage's CLI generates both keys (deploy step 5); the health check requires them (PROV-REQ-002 step 7).
+  const required: FrameworkSecretName[] = [FRAMEWORK_SECRETS.sessionKey, FRAMEWORK_SECRETS.authSecret];
+  const senderName = mailSenderName(resolved);
+  const capture = options.testMail?.();
   const hono = assembleStage(app, {
     resolved,
     sink: workerOutputSink(),
@@ -55,9 +64,12 @@ export function createCloudflareWorker<C extends ConfigDeclaration, S extends st
     readFrameworkSecret: (env) => envSecretReader(env, "cloudflare"),
     secretValues: (c) => workerSecretValues(c.env),
     requiredFrameworkSecrets: required,
-    // Production stages log in with Google; a test stage uses the mock unless it configures Google.
-    ...(production || resolved.google !== undefined ? { provider: createGoogleLoginProvider() } : {}),
+    // The real provider on every stage (DEC-0516): PWD over the stage's D1, mailing through `mail` below.
+    credentialProvider: workerCredentialProvider,
     ...(options.mock === undefined ? {} : { mock: options.mock() }),
+    // A test stage captures its mail (and serves the test-mail route); only production sends.
+    mail: (c: RuntimeContext) => (capture === undefined ? workerEmailSender(c.env, senderName) : capture.sender(c, senderName)),
+    ...(capture === undefined ? {} : { routes: capture.routes }),
   });
   return { fetch: (request, env, ctx) => hono.fetch(request, env, ctx as never) };
 }

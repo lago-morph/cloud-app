@@ -11,7 +11,7 @@ import type { PortableDb } from "./types.js";
 import { withValueRules } from "./write-rules.js";
 
 /** Options of a handle: forced outage, PAR-210 budget, and the log for `SQL.UNAVAILABLE` (guard.ts). */
-export type SqlAdapterOptions = Omit<GuardOptions, "unreachable">;
+export type SqlAdapterOptions = Omit<GuardOptions, "unreachable" | "connection">;
 
 /** The app-facing handle over a D1 binding (local D1 under Wrangler, or Cloudflare D1). */
 export function sqliteDb(binding: AnyD1Database, options: SqlAdapterOptions = {}): PortableDb {

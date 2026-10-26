@@ -4,8 +4,11 @@
  *   automated record for that commit (any other result, or no record, is a problem); and
  * - every milestone item's latest milestone record exists, passed, and is not invalidated by an
  *   entry in `validation/invalidations.md` dated at or after it (never by elapsed time).
- * It also lists the commits that touched GOOGLE or login-provider interface files since the
- * last GOOGLE certification (GOOGLE-AC-005). It records; the evaluator judges.
+ * It also lists the commits that touched PWD, MAIL or login-provider interface files since the
+ * last passing `check-login` record (PWD-AC-009; COMPL-REQ-006 as amended, DEC-0512, DEC-0513):
+ * the newest record, of any target and tier and not a dry run, whose PWD-AC-009 entries all
+ * passed (`check-login`'s own record, or a cloud run that folded it in). GOOGLE-AC-005 is retired
+ * and never demanded. It records; the evaluator judges.
  *
  * Release 1 judges local and Cloudflare only (DEC-0508; SYS-REQ-026 as amended): the AWS target,
  * and every criterion that applies only there, is deferred to a later release (branch `aws`), so
@@ -15,9 +18,16 @@ import type { EvidenceRecord } from "../../../packages/framework/src/evidence/pu
 import { DEFERRED, RELEASE_TARGETS, selectedEntries, type CatalogueEntry } from "../harness/catalogue.js";
 import { isDryRun } from "./records.js";
 
-/** GOOGLE and the login-provider interface (auth.md, internal/login-provider.d.ts). */
-export const LOGIN_PROVIDER_PATHS = ["packages/framework/src/google/", "packages/framework/src/auth/login-provider.ts", "docs/contracts/ts/internal/login-provider.d.ts"];
-const CERTIFICATION = "GOOGLE-AC-005";
+/** PWD, MAIL and the login-provider interface (password.md, mail.md, auth.md, internal/login-provider.d.ts). */
+export const LOGIN_PROVIDER_PATHS = [
+  "packages/framework/src/auth/password/",
+  "packages/framework/src/mail/",
+  "packages/framework/src/auth/login-provider.ts",
+  "docs/contracts/ts/internal/login-provider.d.ts",
+  "docs/contracts/http/internal/auth-password.openapi.yaml",
+];
+/** The criterion whose passing record is the reference point (password.md PWD-AC-009, `check-login`). */
+export const LOGIN_CHECK = "PWD-AC-009";
 
 export interface Invalidation {
   /** ISO time from which earlier records are invalid (a date alone means the end of that day). */
@@ -63,7 +73,8 @@ export interface ReleaseReport {
   readonly commit: string;
   readonly works: boolean;
   readonly problems: readonly string[];
-  readonly lastCertification?: { readonly runId: string; readonly commit: string; readonly finishedAt: string };
+  /** The last passing `check-login` record (PWD-AC-009). */
+  readonly lastLoginCheck?: { readonly runId: string; readonly commit: string; readonly finishedAt: string; readonly command: string };
   readonly loginCommits: readonly string[];
 }
 
@@ -85,7 +96,6 @@ export function releaseReport(input: ReleaseInput): ReleaseReport {
   const sorted = newestFirst(input.records.filter((r) => !isDryRun(r)));
   const automated = sorted.filter((r) => !isMilestone(r) && r.commit === input.commit);
   const milestone = sorted.filter(isMilestone);
-  let lastCertification: ReleaseReport["lastCertification"];
 
   for (const entry of input.catalogue) {
     for (const target of RELEASE_TARGETS) {
@@ -109,14 +119,16 @@ export function releaseReport(input: ReleaseInput): ReleaseReport {
         const invalidation = input.invalidations.find((i) => i.ids.includes(entry.id) && Date.parse(i.at) >= Date.parse(record.finishedAt));
         if (!s.passed) problems.push(`${entry.id} on ${target} (milestone): ${s.text} (run ${record.runId})`);
         else if (invalidation !== undefined) problems.push(`${entry.id} on ${target} (milestone): record ${record.runId} of ${record.finishedAt} is invalidated: ${invalidation.label} ${invalidation.reason}`);
-        else if (entry.id === CERTIFICATION && (lastCertification === undefined || record.finishedAt > lastCertification.finishedAt)) {
-          lastCertification = { runId: record.runId, commit: record.commit, finishedAt: record.finishedAt };
-        }
       }
     }
   }
-  const loginCommits = input.loginCommits(lastCertification?.commit);
-  return { commit: input.commit, works: problems.length === 0, problems, ...(lastCertification === undefined ? {} : { lastCertification }), loginCommits };
+  const passing = sorted.find((r) => {
+    const entries = r.results.filter((x) => x.id === LOGIN_CHECK);
+    return entries.length > 0 && entries.every((x) => x.status === "passed");
+  });
+  const lastLoginCheck = passing === undefined ? undefined : { runId: passing.runId, commit: passing.commit, finishedAt: passing.finishedAt, command: passing.command };
+  const loginCommits = input.loginCommits(lastLoginCheck?.commit);
+  return { commit: input.commit, works: problems.length === 0, problems, ...(lastLoginCheck === undefined ? {} : { lastLoginCheck }), loginCommits };
 }
 
 export function renderRelease(report: ReleaseReport): string {
@@ -131,11 +143,11 @@ export function renderRelease(report: ReleaseReport): string {
     "",
     ...(report.problems.length === 0 ? ["Nothing outstanding."] : report.problems.map((p) => `- ${p}`)),
     "",
-    "## Commits touching GOOGLE or login-provider interface files since the last certification",
+    "## Commits touching PWD, MAIL or login-provider interface files since the last passing check-login record",
     "",
-    report.lastCertification === undefined
-      ? "No certification recorded: all commits since the start of history are listed."
-      : `Last certification: ${CERTIFICATION} run ${report.lastCertification.runId} at commit ${report.lastCertification.commit} (${report.lastCertification.finishedAt}).`,
+    report.lastLoginCheck === undefined
+      ? `No passing check-login record (${LOGIN_CHECK}): all commits since the start of history are listed.`
+      : `Last passing check-login record: ${LOGIN_CHECK} in run ${report.lastLoginCheck.runId} (\`${report.lastLoginCheck.command}\`) at commit ${report.lastLoginCheck.commit} (${report.lastLoginCheck.finishedAt}).`,
     "",
     ...(report.loginCommits.length === 0 ? ["None."] : report.loginCommits.map((c) => `- ${c}`)),
   ];

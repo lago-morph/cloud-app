@@ -42,7 +42,8 @@ export interface TestRun {
 
 export interface VerifyDeps {
   typeCheck(appDir: string): Promise<readonly Diagnostic[]>;
-  portabilityRules(appDir: string): Promise<readonly Diagnostic[]>;
+  /** `warn`: what the rules could not check (printed, not a problem). */
+  portabilityRules(appDir: string, warn: (message: string) => void): Promise<readonly Diagnostic[]>;
   migrationChecker(appDir: string): Promise<readonly Diagnostic[]>;
   zodVersion(appDir: string): Promise<{ readonly expected: string; readonly installed: string | undefined }>;
   runTests(appDir: string, dialect: Dialect): Promise<TestRun>;
@@ -113,7 +114,7 @@ export function verifyCommand(deps: VerifyDeps): Command {
       io.stdout(`verify: ${label}: ${diagnostics.length === 0 ? "passed" : `${String(diagnostics.length)} problem${diagnostics.length === 1 ? "" : "s"}`}\n`);
     };
     await staticStep("type checking", () => deps.typeCheck(dir));
-    await staticStep("portability rules", () => deps.portabilityRules(dir));
+    await staticStep("portability rules", () => deps.portabilityRules(dir, (message) => io.stdout(`verify: warning: ${message}\n`)));
     await staticStep("migration checker", () => deps.migrationChecker(dir));
 
     io.stdout("verify: zod version\n");

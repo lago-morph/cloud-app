@@ -1,0 +1,27 @@
+Destroying (test-02yo2n87eya5fp5):
+@ destroying....
+
+@ destroying....
+ -  sst:sst:LinkRef WorkerLinkRef deleting (0s) 
+ -  pulumi-nodejs:dynamic:Resource WorkerUrl.sst.cloudflare.WorkerUrl deleting (0s) 
+ -  sst:sst:LinkRef FilesLinkRef deleting (0s) 
+ -  pulumi-nodejs:dynamic:Resource WorkerUrl.sst.cloudflare.WorkerUrl deleted (0.02s) 
+ -  cloudflare:index:R2Bucket FilesBucket deleting (0s) 
+ -  cloudflare:index:WorkersScript WorkerScript deleting (0s) 
+@ destroying....
+ -  cloudflare:index:WorkersScript WorkerScript deleted (0.72s) 
+ -  cloudflare:index:R2Bucket FilesBucket deleted (0.79s) 
+ -  sst:cloudflare:Bucket Files deleting (0s) 
+ -  sst:cloudflare:Worker Worker deleting (0s) 
+ -  pulumi:pulumi:Stack reference-test-02yo2n87eya5fp5 deleting (0s) 
+ -  pulumi:pulumi:Stack reference-test-02yo2n87eya5fp5 deleted (0.00s) 
+Outputs:
+  - _protect: false
+
+Resources:
+    - 8 deleted
+
+Duration: 3s
+
+The resources in the stack have been deleted, but the history and configuration associated with the stack are still maintained. 
+If you want to remove the stack completely, run `pulumi stack rm test-02yo2n87eya5fp5`.

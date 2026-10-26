@@ -14,6 +14,7 @@ import { unstable_startWorker } from "wrangler";
 import { tag } from "../../../../tests/support/tags.js";
 import { FrameworkError } from "../core/errors.js";
 import { buildApp, loadApp, type BuildOptions } from "./public.js";
+import { readDeployedOrigin, recordDeployOutput } from "../cli/commands/smoke.js";
 
 const SRC = dirname(dirname(fileURLToPath(import.meta.url)));
 const runtimeImport = (target: string) => join(SRC, "targets", target, "public.ts");
@@ -80,6 +81,21 @@ describe("loadApp", () => {
 });
 
 describe("buildApp --target cloudflare", () => {
+  // cli.md §2: `deploy` records each stage's origin in `.framework/<target>/stages/<stage>.json` for
+  // `smoke` and `check-login`. A later build of the app (another stage's deploy) must keep them:
+  // the compliance driver deploys the run stage, then prodcheck, then runs the tests (which deploy
+  // further stages from the same app directory), then check-login on prodcheck.
+  it("a build keeps the recorded deploy outputs of every stage under .framework/<target>/stages/", async () => {
+    const dir = fixture({ "config/cloudflare/prodcheck.json": JSON.stringify({ values: { greeting: "p" }, framework: {} }) });
+    await buildApp(options(dir, "cloudflare", "test-run1"));
+    recordDeployOutput(dir, "cloudflare", "test-run1", "https://reference-test-run1.sub.workers.dev");
+    await buildApp(options(dir, "cloudflare", "prodcheck"));
+    recordDeployOutput(dir, "cloudflare", "prodcheck", "https://reference-prodcheck.sub.workers.dev");
+    await buildApp(options(dir, "cloudflare", "test-other"));
+    expect(readDeployedOrigin(dir, "cloudflare", "test-run1")).toBe("https://reference-test-run1.sub.workers.dev");
+    expect(readDeployedOrigin(dir, "cloudflare", "prodcheck")).toBe("https://reference-prodcheck.sub.workers.dev");
+  });
+
   it(tag("PROV-AC-005", "build part: a test-<id> stage reads config/cloudflare/test.json and includes the mock"), async () => {
     const dir = fixture({});
     const result = await buildApp(options(dir, "cloudflare", "test-b16"));
@@ -100,6 +116,29 @@ describe("buildApp --target cloudflare", () => {
     expect(bundle).not.toContain("marker-cf-test-json");
     expect(bundle).not.toContain("mock-login");
     expect(result.modules.some((m) => m.endsWith("auth/mock.ts"))).toBe(false);
+  });
+
+  // MAIL §2: the test stages' mail capture and its route are imported only by test-stage entries.
+  const TEST_MAIL_ROUTE = /__framework\/test-mail/;
+  const CAPTURE_MODULE = /mail\/test-stage\.ts$/;
+
+  for (const stage of ["prod", "prodcheck", "mytest-1"]) {
+    it(`a production stage (${stage}) bundles no test-mail capture or route, but the Email Service sender`, async () => {
+      const dir = fixture({ [`config/cloudflare/${stage}.json`]: JSON.stringify({ values: { greeting: `marker-${stage}` }, framework: {} }) });
+      const result = await buildApp(options(dir, "cloudflare", stage));
+      const bundle = readFileSync(result.bundle, "utf8");
+      expect(bundle).not.toMatch(TEST_MAIL_ROUTE);
+      expect(result.modules.some((m) => CAPTURE_MODULE.test(m))).toBe(false);
+      expect(result.modules.some((m) => /mail\/cloudflare\.ts$/.test(m))).toBe(true);
+      expect(bundle).toContain("FRAMEWORK_MAIL_FROM");
+    });
+  }
+
+  it("a test-<id> stage bundles the test-mail capture and its route", async () => {
+    const dir = fixture({});
+    const result = await buildApp(options(dir, "cloudflare", "test-b16"));
+    expect(readFileSync(result.bundle, "utf8")).toMatch(TEST_MAIL_ROUTE);
+    expect(result.modules.some((m) => CAPTURE_MODULE.test(m))).toBe(true);
   });
 
   it(tag("CFG-AC-002", "build part: a production stage without its own values file fails naming the file, even with test.json present"), async () => {
@@ -141,6 +180,20 @@ describe("buildApp --target cloudflare", () => {
     expect(bundle).not.toMatch(/(?:from\s*|import\(\s*|require\(\s*)["'](?:node:)?(?:fs|fs\/promises|child_process|worker_threads|url|path|os)["']/);
   });
 
+  it(tag("CF-AC-003", "build part: node:crypto and node:async_hooks stay external; any other Node.js module fails the build naming it"), async () => {
+    const allowed = fixture({
+      "src/server/greet.ts":
+        'import { createHash } from "node:crypto";\nimport { AsyncLocalStorage } from "node:async_hooks";\nconst als = new AsyncLocalStorage();\nexport function greet(g: string): string { return als.run(1, () => `${g}!${createHash("sha256").update(g).digest("hex").length}`); }\n',
+    });
+    const result = await buildApp(options(allowed, "cloudflare", "prod"));
+    const bundle = readFileSync(result.bundle, "utf8");
+    expect(bundle).toMatch(/from\s*"node:crypto"/);
+    expect(bundle).toMatch(/from\s*"node:async_hooks"/);
+
+    const disallowed = fixture({ "src/server/greet.ts": 'import { sep } from "node:path";\nexport function greet(g: string): string { return g + sep; }\n' });
+    await expect(buildApp(options(disallowed, "cloudflare", "prod"))).rejects.toThrow(/node:path/);
+  });
+
   it(tag("CFG-AC-004", "build part: the embedded resolved configuration lists each declared secret with its location"), async () => {
     const dir = fixture({});
     const result = await buildApp(options(dir, "cloudflare", "test-b16"));
@@ -159,6 +212,8 @@ describe("buildApp --target local", () => {
     expect(config.main).toBe("worker.js");
     expect(config.d1_databases[0]?.binding).toBe("DB");
     expect(config.r2_buckets[0]?.binding).toBe("FILES");
+    expect((config as unknown as { compatibility_flags: string[] }).compatibility_flags).toEqual(["nodejs_compat"]);
+    expect(config).not.toHaveProperty("send_email");
     const bundle = readFileSync(result.bundle, "utf8");
     expect(bundle).toContain("marker-local-json");
     expect(bundle).toContain("__framework/files");

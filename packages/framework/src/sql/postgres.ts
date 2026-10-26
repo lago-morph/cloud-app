@@ -17,9 +17,72 @@ export type { SqlAdapterOptions } from "./d1.js";
 /** PGlite's error for a closed instance: the database cannot be reached (`SQL.UNAVAILABLE`). */
 const PGLITE_UNREACHABLE: readonly RegExp[] = [/PGlite is closed/i];
 
+/**
+ * PGlite has one connection, which it takes in turn, and must start first. Every handle's
+ * operations over one client take it in turn here (one queue per client: a test app's SQL and KV
+ * handles share it), so the guard can bound the wait for it (and for the start) by PAR-210:
+ * getting it is the handoff to the driver (DEC-0557). Released when the operation settles.
+ */
+const TURNS = new WeakMap<PGlite, () => Promise<() => void>>();
+
+function connectionTurns(client: PGlite): () => Promise<() => void> {
+  let turns = TURNS.get(client);
+  if (turns === undefined) {
+    turns = newTurns(client);
+    TURNS.set(client, turns);
+  }
+  return turns;
+}
+
+function newTurns(client: PGlite): () => Promise<() => void> {
+  let tail: Promise<void> = Promise.resolve();
+  return async () => {
+    let release!: () => void;
+    const previous = tail;
+    tail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      await client.waitReady;
+    } catch (error) {
+      release();
+      throw error;
+    }
+    return release;
+  };
+}
+
+/**
+ * `client` for another user of the same PGlite instance (the test app's auth database): its
+ * `query`, `exec` and `transaction` take the same connection turns as every handle's operations,
+ * so a guarded operation waiting behind them is bounded by PAR-210 (DEC-0557). Their own wait is
+ * not timed.
+ */
+export function queuedClient(client: PGlite): PGlite {
+  const turns = connectionTurns(client);
+  return new Proxy(client, {
+    get(target, property) {
+      const value: unknown = Reflect.get(target, property, target);
+      if (typeof value !== "function") return value;
+      if (property === "query" || property === "exec" || property === "transaction") {
+        return async (...args: unknown[]) => {
+          const release = await turns();
+          try {
+            return await (value as (...a: unknown[]) => Promise<unknown>).apply(target, args);
+          } finally {
+            release();
+          }
+        };
+      }
+      return (value as (...a: unknown[]) => unknown).bind(target);
+    },
+  });
+}
+
 /** The app-facing handle over a PGlite harness instance (see openPostgres). */
 export function postgresDb(client: PGlite, options: SqlAdapterOptions = {}): PortableDb {
-  const guard = createGuard({ ...options, unreachable: PGLITE_UNREACHABLE });
+  const guard = createGuard({ ...options, unreachable: PGLITE_UNREACHABLE, connection: connectionTurns(client) });
   return portableHandle({ dialect: "postgres", db: withValueRules(drizzlePglite(client)) as unknown as DrizzleDb, guard });
 }
 
