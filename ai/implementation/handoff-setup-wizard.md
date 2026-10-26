@@ -24,3 +24,6 @@ Number ranges: b1 DEC-0563–0569/PAR-331–339; b2 DEC-0570–0576/PAR-340–34
 10. A symlinked .env.cloudflare becomes a regular file on rewrite.
 11. missingCredentials counts a whitespace-only env value as present.
 12. provision/public.ts doesn't re-export PERMISSIONS_VERSION/ACCOUNT_SETUP_VERSION, so upgrade step 4 prints "unknown".
+
+## Verify in this sandbox
+Run in a clean clone under the scratch area. The sandbox's Chromium is build 1243 while Playwright 1.64.1 wants 1248: make a dir of symlinks to /opt/pw-browsers/* plus `chromium_headless_shell-1248 -> chromium_headless_shell-1243` and `chromium-1248 -> chromium-1243`, and run with `PLAYWRIGHT_BROWSERS_PATH=<that dir> npm run verify`. Wave-1 main (b851020): verify passed with the shim (the only failure without it was tests/skill/example-pages.test.ts, "Executable doesn't exist").
