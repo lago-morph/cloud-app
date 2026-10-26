@@ -173,6 +173,25 @@ export class FakeCloud {
     return reply;
   };
 
+  /**
+   * The same account through a token with only the everyday permissions (plan-setup-wizard §4.1:
+   * Workers Scripts Write, Workers R2 Storage Write, D1 Write, Email Sending Read; Zone Read, Zone
+   * Analytics Read, Email Routing Rules Read). Refused with 403, as live: every API token request
+   * but `tokens/verify`, the zone's DNS records ("DNS Read"), the Email Routing settings and DNS
+   * endpoints (not covered by "Email Routing Rules Read", assumed), and every zone write.
+   */
+  readonly everydayApi: CloudflareApi = async (method, path, body) => {
+    const p = new URL(`https://api${path}`).pathname;
+    const refused =
+      (p.startsWith(`${A}/tokens`) && p !== `${A}/tokens/verify`) ||
+      (p.startsWith("/zones/") && (method !== "GET" || /\/dns_records$/.test(p) || /\/email\/routing(\/dns)?$/.test(p)));
+    if (refused) {
+      this.requests.push(`${method} ${path}`);
+      return err(403, 10000, "Authentication error");
+    }
+    return this.api(method, path, body);
+  };
+
   private handle(method: string, path: string, body: unknown): ApiReply {
     const url = new URL(`https://api${path}`);
     const p = url.pathname;
@@ -201,6 +220,10 @@ export class FakeCloud {
     let m = /^\/accounts\/[^/]+\/tokens\/([^/]+)$/.exec(p);
     if (m && method === "DELETE") return this.tokens.delete(m[1]!) ? ok({ id: m[1] }) : err(404, 1003, "not found");
 
+    // The everyday token's quick-check reads (permissions.ts `probeEveryday`).
+    if (p === `${A}/workers/scripts` && method === "GET") return ok([...this.workers.keys()].map((id) => ({ id })));
+    if (p === `${A}/r2/buckets` && method === "GET") return ok({ buckets: [...this.buckets.keys()].map((name) => ({ name })) });
+    if (p === `${A}/d1/database` && method === "GET") return ok([], { result_info: { page: 1, per_page: 1, count: 0, total_count: 0 } });
     if (p === `${A}/workers/subdomain`) {
       if (method === "PUT") {
         this.subdomain = String(b.subdomain);
@@ -320,6 +343,11 @@ export class FakeCloud {
       const name = url.searchParams.get("name");
       const zone = name === null ? undefined : this.zones.get(name);
       return ok(zone ? [{ id: zone.id, name: zone.name, status: zone.status, account: { id: ACCOUNT } }] : [], { result_info: { page: 1, total_pages: 1 } });
+    }
+    const one = /^\/zones\/([^/]+)$/.exec(p);
+    if (one && method === "GET") {
+      const z = this.zoneById(one[1]!);
+      return z ? ok({ id: z.id, name: z.name, status: z.status, account: { id: ACCOUNT } }) : err(404, 1001, "zone not found");
     }
     const dns = /^\/zones\/([^/]+)\/dns_records$/.exec(p);
     if (dns && method === "GET") {

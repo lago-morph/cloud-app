@@ -2,7 +2,7 @@
 
 Tunable values used by the framework — limits, sizes, timeouts, defaults, and dependency version pins — are recorded here and nowhere else. Design documents and contracts refer to values by `PAR-…` ID. A value is added only when a component design or contract actually uses it; spec-level requirements and decisions do not reference concrete values (DEC-0057).
 
-IDs are never reused. IDs 010–013, 020–022, 030–033, 040, 050–053, 061–066, and 080 belonged to entries removed by DEC-0057, 211 to an entry removed by DEC-0076, and 240 to an entry removed by DEC-0077; all stay retired. 115 was never assigned; it stays unused so that no reader takes it for a retired pin.
+IDs are never reused. IDs 010–013, 020–022, 030–033, 040, 050–053, 061–066, and 080 belonged to entries removed by DEC-0057, 211 to an entry removed by DEC-0076, and 240 to an entry removed by DEC-0077, and 370 to an entry removed by DEC-0594; all stay retired. 115 was never assigned; it stays unused so that no reader takes it for a retired pin.
 
 Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 
@@ -93,6 +93,12 @@ The owner approved these values on 2026-10-25 ("Approve recommended values", DEC
 | ID | Parameter | Value | Category | Notes |
 | --- | --- | --- | --- | --- |
 | PAR-311 | Retention of a production stage's backup in `prototype-backups` | 30 days | owner | The bucket's lifecycle rule `framework-backups-retention` deletes every object this long after it was written (DEC-0543). Set by `setup-account`. |
+| PAR-331 | Version of the Cloudflare permission list (`PERMISSIONS_VERSION`) | 1 | ai-proposed | `provision/cloudflare/permissions.ts` (DEC-0563). Raised by a release whose everyday or bootstrap token needs a permission the previous list lacked; setup then upgrades the everyday token in place. Release 1 of the setup wizard starts at 1. |
+| PAR-332 | Version of the account setup this release expects (`ACCOUNT_SETUP_VERSION`) | 1 | ai-proposed | `provision/cloudflare/permissions.ts` (DEC-0563); compared with the account setup record's `setupVersion` (plan-setup-wizard §4.4). Raised by a release that needs more account setup. |
+| PAR-340 | The Cloudflare settings file | `.env.cloudflare` in the project root (the app directory) | owner | Read after the environment by every Cloudflare command; holds `CLOUDFLARE_BOOTSTRAP_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_EMAIL_DOMAIN` and `CLOUDFLARE_ACCOUNT_ID` (DEC-0570, plan-setup-wizard §4.2). |
+| PAR-341 | Mode of `.env.cloudflare` after every write | `600` (owner read and write only) | ai-proposed | Set by every framework write, also on an existing file with a wider mode (DEC-0571). Has no effect on Windows. |
+| PAR-342 | The bootstrap token's line after use | `# CLOUDFLARE_BOOTSTRAP_TOKEN=deleted by setup process` | owner | Replaces the `CLOUDFLARE_BOOTSTRAP_TOKEN=` line once the token has deleted itself (DEC-0571, plan-setup-wizard §4.2). |
+| PAR-343 | The `.gitignore` marker that keeps setup from adding `.env.cloudflare` | `# keep-env-cloudflare-tracked` (a whole line of the project's `.gitignore`) | ai-proposed | Plan-setup-wizard §4.3 step 1; the warnings still print (DEC-0572). |
 
 ## Secrets
 
@@ -128,6 +134,7 @@ Deferred to a later release (DEC-0508): these parameters belong to the AWS targe
 | PAR-070 | Maximum size of the skill's top-level router document | 8,000 UTF-8 bytes | ai-proposed | |
 | PAR-071 | Maximum size of each capability reference document | 12,000 UTF-8 bytes | ai-proposed | |
 | PAR-072 | Maximum size of each complete example | 20,000 UTF-8 bytes | ai-proposed | |
+| PAR-371 | Time limit of each `version-check` network lookup | 5 seconds | ai-proposed | The npm registry's latest version and the release tag's CHANGELOG (DEC-0594). A lookup that fails or runs out of time skips the npm row quietly. |
 
 ## Testing
 

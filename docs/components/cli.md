@@ -7,7 +7,7 @@ Contracts: the command table below.
 ## 1. Requirements
 
 #### CLI-REQ-001 — Commands
-Origin: provenance-unclear · Derives from: SYS-REQ-018, SYS-REQ-022, SYS-REQ-023, SYS-REQ-025, SYS-REQ-027 · Decision: DEC-0512, DEC-0513, DEC-0514, DEC-0523, DEC-0544 (owner: `stop`, `start`, `deploy --start`)
+Origin: provenance-unclear · Derives from: SYS-REQ-018, SYS-REQ-022, SYS-REQ-023, SYS-REQ-025, SYS-REQ-027 · Decision: DEC-0512, DEC-0513, DEC-0514, DEC-0523, DEC-0544 (owner: `stop`, `start`, `deploy --start`), DEC-0594, DEC-0595, DEC-0597
 
 The CLI MUST provide these commands as the framework package's own binary, invoked as `npx <package> <command>` (for example `npx <package> verify`). Apps also expose them as npm scripts of the same name.
 
@@ -28,6 +28,8 @@ The CLI MUST provide these commands as the framework package's own binary, invok
 | `mail last --to <address> [--target <t>]` | Print the latest framework email sent to an address: locally from `.mail/`, on Cloudflare from the mail sink (MAIL). |
 | `admins grant <email> --target <t> --stage <s> [--confirm-production <s>]`, `admins revoke <email> …`, `admins list …` | Grant, revoke or list the `admin` role of accounts on a stage, by email address, written directly in the stage's database (CLI-REQ-005). |
 | `reset-local` | Clear local state. |
+| `version-check` | Compare the app's installed framework, its committed skill copy, the cloud setup script's skill copy and npm's latest release, and print what to do; changes nothing (DEC-0594). |
+| `upgrade [<version>]` | Move the app to a framework release (default: the latest): pins, `npm install`, the committed skill copy, `verify`, whether Cloudflare setup needs re-running, and the pinned setup script (DEC-0595). |
 
 `certify-auth` (the guided Google certification) is retired with GOOGLE (DEC-0513); `check-login` replaces it (DEC-0512).
 
@@ -109,7 +111,7 @@ Anything else is refused before any request is sent. `smoke` first checks that t
 - `smoke --target aws` prints the S3 log bucket `prototype-logs-<account-id>` with the day's LOG-REQ-004 prefix `<app>/<stage>/<yyyy>/<mm>/<dd>/`, and the Lambda's CloudWatch log group `/aws/lambda/<app>-<stage>-http`. The account ID is redacted in the evidence record; if it cannot be read, `<account-id>` is printed with the reason. Deferred (branch `aws`).
 - `check-login --target cloudflare --stage <s>` runs PWD's check (PWD §2, steps 1–7) on a production stage: base URL from the recorded deploy output, email domain from the account settings record (DEC-0514), mail from the sink. It needs no input, prints no address, password or token, and writes one evidence record (subdomain redacted). Test stages and target `local` are refused before any request.
 - `mail last --to <address> [--target local|cloudflare]` prints the latest message to that address as JSON: locally (the default) from the app's `.mail/`; on Cloudflare from the mail sink, for an address under `t.<emailDomain>` only. It exits 1 when there is none.
-- `setup-account --target cloudflare [--email-domain <domain>]`: `--email-domain` is required while the account settings record has no `emailDomain`, and otherwise changes it (MAIL §2). The flag is refused with any other target (exit 2).
+- `setup-account --target cloudflare [--email-domain <domain>]`: `--email-domain` is required while the account settings record has no `emailDomain`, and otherwise changes it (MAIL §2). The flag is refused with any other target (exit 2). It runs on the account setup's named steps and writes the setup record last (provisioning.md §2 "Account settings record"; DEC-0577, DEC-0578); its options, output and exit statuses are unchanged.
 - `admins grant|revoke <email> | list --target <t> --stage <s>` (DEC-0523, CLI-REQ-005). The address is matched as BA stores it, trimmed and lowercased.
   - **Locally** (`--target local`; `--stage` may be left out and can only be `local`), it opens the app's persisted local D1 under `.wrangler/state` through `getPlatformProxy`, as `dev` does. It works whether or not `dev` is running.
   - **On Cloudflare**, it finds the stage's current database by the anchored pattern (MIG §2) and sends `/query` requests through the D1 HTTP API with the deploy token. It refuses a stage with no database, and one with more than one (a schema-changing deploy is in progress or was interrupted). It makes the same HTTPS proxy check as the other cloud commands.
