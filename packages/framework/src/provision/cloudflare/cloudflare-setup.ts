@@ -217,11 +217,12 @@ const TOKENS_LIST_PATH = /^\/(?:accounts\/[^/]+|user)\/tokens\/?$/i;
  * URL cannot be parsed. Creating a token (`POST …/tokens`, the signing step) names no ID. The
  * signing step's rotation finds its old tokens by name (`GET …/tokens`) and may delete the token it
  * just created when its record cannot be written, so the guard learns the IDs of tokens named
- * `SIGNING_TOKEN_NAME` from the token lists and creates that pass through it.
+ * `SIGNING_TOKEN_NAME` from the token lists and creates that pass through it. Every token ID those
+ * answers name goes to `onTokenId` (the run's redaction, SETUP-REQ-007).
  */
 export function guardTokenWrites(
   api: CloudflareApi,
-  rules: { readonly protectedIds: ReadonlySet<string>; readonly everydayId?: string; readonly bootstrapId?: string; readonly selfDeleteArmed: () => boolean },
+  rules: { readonly protectedIds: ReadonlySet<string>; readonly everydayId?: string; readonly bootstrapId?: string; readonly selfDeleteArmed: () => boolean; readonly onTokenId?: (id: string) => void },
 ): CloudflareApi {
   const protectedIds = new Set([...rules.protectedIds].map((id) => id.toLowerCase()));
   const everydayId = rules.everydayId?.toLowerCase();
@@ -229,7 +230,9 @@ export function guardTokenWrites(
   const signingIds = new Set<string>();
   const learnSigning = (item: unknown) => {
     const { id, name } = (item ?? {}) as { id?: unknown; name?: unknown };
-    if (typeof id === "string" && id !== "" && name === SIGNING_TOKEN_NAME) signingIds.add(id.toLowerCase());
+    if (typeof id !== "string" || id === "") return;
+    rules.onTokenId?.(id);
+    if (name === SIGNING_TOKEN_NAME) signingIds.add(id.toLowerCase());
   };
   return async (method, path, body) => {
     if (method !== "GET") {
@@ -253,7 +256,7 @@ export function guardTokenWrites(
     if ((method === "GET" || method === "POST") && succeeded(reply) && TOKENS_LIST_PATH.test(sentPath(path) ?? "")) {
       const result = (reply.body as { result?: unknown } | null)?.result;
       if (Array.isArray(result)) result.forEach(learnSigning);
-      else if (method === "POST" && (body as { name?: unknown } | undefined)?.name === SIGNING_TOKEN_NAME) learnSigning({ ...(result as object), name: SIGNING_TOKEN_NAME });
+      else if (method === "POST" && typeof result === "object" && result !== null) learnSigning({ ...result, name: (body as { name?: unknown } | undefined)?.name });
     }
     return reply;
   };
@@ -440,7 +443,7 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     if (problems.length > 0 || everyday === undefined) return stop([...problems.map((p) => problemText(p.slot, p.text)), NEXT_PROMPT].join("\n"));
 
     let selfDeleteArmed = false;
-    const guard = (api: CloudflareApi) => guardTokenWrites(api, { protectedIds, everydayId: everyday.id, ...(boot === undefined ? {} : { bootstrapId: boot.id }), selfDeleteArmed: () => selfDeleteArmed });
+    const guard = (api: CloudflareApi) => guardTokenWrites(api, { protectedIds, everydayId: everyday.id, ...(boot === undefined ? {} : { bootstrapId: boot.id }), selfDeleteArmed: () => selfDeleteArmed, onTokenId: (id) => hidden.add(id) });
     const everydayApi = guard(everyday.api);
     const bootApi = boot === undefined ? undefined : guard(boot.api);
 

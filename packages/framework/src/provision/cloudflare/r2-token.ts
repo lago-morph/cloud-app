@@ -99,10 +99,11 @@ async function listTokens(api: CloudflareApi, accountId: string, options: { read
   }
 }
 
-export async function deleteSigningToken(api: CloudflareApi, accountId: string, id: string): Promise<void> {
+/** Deletes a signing token by ID; a failure names it by `name` only, never the ID (SETUP-REQ-007). */
+export async function deleteSigningToken(api: CloudflareApi, accountId: string, id: string, name: string = SIGNING_TOKEN_NAME): Promise<void> {
   const r = await api("DELETE", `${tokensPath(accountId)}/${id}`);
   if (succeeded(r) || r.status === 404) return;
-  throw new Error(`deleting R2 API token ${id} failed: ${describeFailure(r)}`);
+  throw new Error(`deleting the R2 API token ${name} failed: ${describeFailure(r)}`);
 }
 
 /** Validates a stored record; throws naming the record (never a value) when it is not one. */
@@ -165,7 +166,7 @@ export async function createAccountSigningCredential(api: CloudflareApi, account
     } catch (error) {
       throw new Error(
         `the new ${SIGNING_RESOURCE} and its record are in place, but ${error instanceof Error ? error.message : String(error)}; ` +
-          `delete the old token ${t.id} named ${SIGNING_TOKEN_NAME} in the Cloudflare dashboard after redeploying every deployed stage`,
+          `delete the older token named ${SIGNING_TOKEN_NAME} (not the newest one) in the Cloudflare dashboard after redeploying every deployed stage`,
       );
     }
     replaced.push(t.id);

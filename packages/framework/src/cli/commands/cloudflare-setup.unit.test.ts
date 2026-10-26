@@ -284,6 +284,25 @@ describe("cloudflare-setup: a fresh account with both tokens (plan §4.3 steps 4
     expect(world.cloud().tokens.has("unrelated-id")).toBe(true);
   });
 
+  it("a failed delete of an old signing token prints no token ID, only its name (SETUP-REQ-007)", async () => {
+    const OLD = "0ld5ign000000000000000000000000b";
+    const world = freshWorld();
+    world.addToken("everyday", EVERYDAY_VALUE, "everyday-id");
+    world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
+    world.cloud().tokens.set(OLD, { name: "prototype-r2-signing", resources: {} });
+    const io = captureIo(project({ env: bothTokens() }));
+    runs.push({ io, world });
+    const apiFor = (value: string) => {
+      const api = world.apiFor(value);
+      return async (method: Parameters<typeof api>[0], path: string, body?: unknown) =>
+        method === "DELETE" && path.endsWith(`/tokens/${OLD}`) ? { status: 403, body: { success: false, errors: [{ code: 9109, message: "Unauthorized" }], result: null } } : api(method, path, body);
+    };
+    const status = await cloudflareSetupCommand({ env: {}, apiFor, reach: async () => {}, localSetup: fakeLocalSetup, stepOptions: { newSubdomain: () => SUB, email: { sleep: async () => {} } }, now: () => NOW })([], io);
+    expect(status).toBe(1);
+    expect(io.out + io.err).toContain("deleting the R2 API token prototype-r2-signing failed");
+    expect(io.out + io.err).not.toContain(OLD);
+  });
+
   it("the same cloud environment run twice: the second run finds the bootstrap token deleted, notes it, asks for nothing, exit 0", async () => {
     const world = await setUpWorld();
     world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
@@ -613,6 +632,23 @@ describe("cloudflare-setup: the token write guard (DEC-0589)", () => {
     }
     await expect(api("PUT", "/accounts/a/tokens/old-sign", {})).rejects.toThrow(/setup refused to update/);
     expect(sent).toEqual(["GET /accounts/a/tokens?per_page=50&page=1", "POST /accounts/a/tokens", "DELETE /accounts/a/tokens/OLD-SIGN", "DELETE /accounts/a/tokens/new-sign"]);
+  });
+
+  it("guardTokenWrites hands every token ID a token list or create answer names to the run's redaction (SETUP-REQ-007)", async () => {
+    const seen: string[] = [];
+    const replies: Record<string, unknown> = {
+      "GET /accounts/a/tokens?per_page=50&page=1": { success: true, result: [{ id: "old-sign", name: "prototype-r2-signing" }, { id: "other", name: "someone-else" }] },
+      "POST /accounts/a/tokens": { success: true, result: { id: "new-sign", value: "v" } },
+    };
+    const api = guardTokenWrites(async (method, path) => ({ status: 200, body: replies[`${method} ${path}`] ?? { success: true, result: [{ id: "not-a-token" }] } }), {
+      protectedIds: new Set(),
+      selfDeleteArmed: () => false,
+      onTokenId: (id) => seen.push(id),
+    });
+    await api("GET", "/accounts/a/tokens?per_page=50&page=1");
+    await api("POST", "/accounts/a/tokens", { name: "prototype-r2-signing" });
+    await api("GET", "/accounts/a/workers/scripts");
+    expect(seen).toEqual(["old-sign", "other", "new-sign"]);
   });
 
   it("guardTokenWrites cannot be bypassed by a query string, a trailing or doubled slash, an encoded ID, a sub-path (the value roll) or another method", async () => {
