@@ -93,6 +93,10 @@ The owner approved these values on 2026-10-25 ("Approve recommended values", DEC
 | ID | Parameter | Value | Category | Notes |
 | --- | --- | --- | --- | --- |
 | PAR-311 | Retention of a production stage's backup in `prototype-backups` | 30 days | owner | The bucket's lifecycle rule `framework-backups-retention` deletes every object this long after it was written (DEC-0543). Set by `setup-account`. |
+| PAR-340 | The Cloudflare settings file | `.env.cloudflare` in the project root (the app directory) | owner | Read after the environment by every Cloudflare command; holds `CLOUDFLARE_BOOTSTRAP_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_EMAIL_DOMAIN` and `CLOUDFLARE_ACCOUNT_ID` (DEC-0570, plan-setup-wizard §4.2). |
+| PAR-341 | Mode of `.env.cloudflare` after every write | `600` (owner read and write only) | ai-proposed | Set by every framework write, also on an existing file with a wider mode (DEC-0571). Has no effect on Windows. |
+| PAR-342 | The bootstrap token's line after use | `# CLOUDFLARE_BOOTSTRAP_TOKEN=deleted by setup process` | owner | Replaces the `CLOUDFLARE_BOOTSTRAP_TOKEN=` line once the token has deleted itself (DEC-0571, plan-setup-wizard §4.2). |
+| PAR-343 | The `.gitignore` marker that keeps setup from adding `.env.cloudflare` | `# keep-env-cloudflare-tracked` (a whole line of the project's `.gitignore`) | ai-proposed | Plan-setup-wizard §4.3 step 1; the warnings still print (DEC-0572). |
 
 ## Secrets
 

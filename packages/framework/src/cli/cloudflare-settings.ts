@@ -5,6 +5,8 @@
  * variables by hand. Before the command runs, its notices (a setting that differs between the two
  * sources, by name) and the file's git warnings (not ignored, tracked) are printed to standard
  * error, on every run. They never fail the command. A command on another target reads no file.
+ * The file's bootstrap token is left out (DEC-0574): these commands work with the everyday token,
+ * and a token they do not use does not reach their tools' processes (SST).
  */
 import { commandGitSafetyWarnings, inspectGitSafety } from "../provision/cloudflare/git-safety.js";
 import { mergeCloudflareSettings, readCloudflareSettings } from "../provision/cloudflare/token-sources.js";
@@ -25,13 +27,14 @@ export function printGitSafetyWarnings(command: string, dir: string, io: Pick<Cl
 
 /**
  * The environment a Cloudflare command runs with, after printing the sources' notices and the
- * file's git warnings to `io`. The git check runs when the file exists or git tracks it.
+ * file's warnings to `io` (only when the file exists or is tracked, inside a repository).
  */
 export function commandCloudflareEnvironment(command: string, env: ProcessEnvironment, io: Pick<CliIo, "cwd" | "stderr">): ProcessEnvironment {
   const settings = readCloudflareSettings(io.cwd, env);
   for (const notice of settings.notices) io.stderr(`${command}: note: ${notice}\n`);
   printGitSafetyWarnings(command, io.cwd, io);
-  return mergeCloudflareSettings(env, settings);
+  const everyday = Object.fromEntries(Object.entries(settings.values).filter(([name]) => name !== "CLOUDFLARE_BOOTSTRAP_TOKEN"));
+  return mergeCloudflareSettings(env, { ...settings, values: everyday });
 }
 
 /**
