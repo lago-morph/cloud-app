@@ -201,6 +201,10 @@ export class FakeCloud {
     let m = /^\/accounts\/[^/]+\/tokens\/([^/]+)$/.exec(p);
     if (m && method === "DELETE") return this.tokens.delete(m[1]!) ? ok({ id: m[1] }) : err(404, 1003, "not found");
 
+    // The everyday token's quick-check reads (permissions.ts `probeEveryday`).
+    if (p === `${A}/workers/scripts` && method === "GET") return ok([...this.workers.keys()].map((id) => ({ id })));
+    if (p === `${A}/r2/buckets` && method === "GET") return ok({ buckets: [...this.buckets.keys()].map((name) => ({ name })) });
+    if (p === `${A}/d1/database` && method === "GET") return ok([], { result_info: { page: 1, per_page: 1, count: 0, total_count: 0 } });
     if (p === `${A}/workers/subdomain`) {
       if (method === "PUT") {
         this.subdomain = String(b.subdomain);
@@ -320,6 +324,11 @@ export class FakeCloud {
       const name = url.searchParams.get("name");
       const zone = name === null ? undefined : this.zones.get(name);
       return ok(zone ? [{ id: zone.id, name: zone.name, status: zone.status, account: { id: ACCOUNT } }] : [], { result_info: { page: 1, total_pages: 1 } });
+    }
+    const one = /^\/zones\/([^/]+)$/.exec(p);
+    if (one && method === "GET") {
+      const z = this.zoneById(one[1]!);
+      return z ? ok({ id: z.id, name: z.name, status: z.status, account: { id: ACCOUNT } }) : err(404, 1001, "zone not found");
     }
     const dns = /^\/zones\/([^/]+)\/dns_records$/.exec(p);
     if (dns && method === "GET") {
