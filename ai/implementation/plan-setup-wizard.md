@@ -50,8 +50,9 @@ Owner check of the 12-group bootstrap link (2026-10-26):
 - **Scope:** the page puts every group in one policy for the entire account, so zone permissions cover *all* the account's zones. The link can't narrow this. It's accepted for both tokens: the bootstrap token is short-lived, and the everyday token's zone permissions are read-only. Setup checks that the email domain is covered.
 - **Expiry:** chosen on the page (No expiration, 7 days, 30 days, 90 days, 1 year, Custom), defaulting to none. The instructions say to pick 7 days or less for the bootstrap token, and setup warns when it has no expiry.
 
+Owner check of the 7-group everyday link (2026-10-26): all groups arrived ticked. The 3 zone groups (Zone Read, Zone Analytics Read, Email Routing Rules Read) were ticked, and the account summary listed Workers Scripts Write, Workers R2 Storage Write, D1 Write "+1 more" (Email Sending Read). It has the same entire-account scope as the bootstrap link.
+
 Not yet verified:
-- **The everyday link (7 groups):** same mechanism; expected to behave the same.
 
 ## 3. User flows
 
@@ -237,7 +238,7 @@ The docs don't say whether such a skill is loaded. The owner tests it by adding 
   5. a bad-paste message.
   
   These need a dashboard-made bootstrap token: the API can't create one (§2). So that run needs the owner to supply one, or else uses the account's existing dashboard token, read-only except for its own temporary tokens.
-- **Owner checks, once each:** the 7-group everyday link (§2), and the setup-script skill load (§4.8).
+- **Owner check, once:** the setup-script skill load (§4.8).
 
 ## 7. Work breakdown
 1. **Permission list and deep links** (§4.1): code, generated tables, unit tests.
