@@ -136,7 +136,8 @@ describe("[COMPL-AC-002] the real documents", () => {
     expect(ids.filter((id) => id.startsWith("E2E-"))).toHaveLength(16);
     // 124, less the four retired GOOGLE criteria, plus AUTH-AC-013/014, PWD-AC-001…009 and MAIL-AC-001…007 (DEC-0513);
     // then less the retired DEMO-AC-011, plus AUTH-AC-015, PWD-AC-010, CLI-AC-006 and CLI-AC-007 (DEC-0522, DEC-0526).
-    expect(ids.filter((id) => /-AC-/.test(id)).length).toBe(141);
+    // Then plus SETUP-AC-001…011, CLI-AC-008, SKILL-AC-007 and SKILL-AC-008 (DEC-0603).
+    expect(ids.filter((id) => /-AC-/.test(id)).length).toBe(155);
     expect(ids.filter((id) => id.startsWith("GOOGLE-AC-"))).toEqual([]);
     expect(ids).not.toContain("DEMO-AC-011");
     for (const id of ["AUTH-AC-015", "PWD-AC-010", "CLI-AC-006", "CLI-AC-007"]) expect(ids).toContain(id);

@@ -14,6 +14,7 @@ Reference material:
 
 - [decisions/decision-log.md](decisions/decision-log.md) — every recorded decision and its origin.
 - [parameters/parameters.md](parameters/parameters.md) — every limit, timeout, default, and version pin.
+- [../QUICKSTART.md](../QUICKSTART.md) — the user's one page: a local app in one line, Cloudflare in one command ([components/setup.md](components/setup.md)).
 - [RELEASING.md](RELEASING.md) — publishing the npm packages and the Claude Code plugin, and the owner's one-time steps.
 
 ## Status
