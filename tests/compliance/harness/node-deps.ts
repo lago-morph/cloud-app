@@ -130,7 +130,7 @@ const DEV_STOP_MS = 20_000;
 
 /** Starts `dev` for the reference app and resolves once it prints its origin (bounded). */
 function startReferenceDev(repoRoot: string): Promise<LocalSession> {
-  const child = spawn("npx", ["--no", "prototype-framework", "dev"], { cwd: join(repoRoot, "apps", "reference"), env: process.env, stdio: ["ignore", "pipe", "pipe"], detached: true });
+  const child = spawn("npx", ["prototype-framework", "dev"], { cwd: join(repoRoot, "apps", "reference"), env: process.env, stdio: ["ignore", "pipe", "pipe"], detached: true });
   let output = "";
   let exited: number | null | undefined;
   child.stdout.on("data", (c: Buffer) => (output += c.toString("utf8")));
@@ -225,7 +225,7 @@ export function cliStageOps(
     guardCliCall(process.env.CLOUDFLARE_API_TOKEN, MAIN_TOKEN_PURPOSE, `prototype-framework ${args.slice(0, 1).join(" ")}`, () =>
       runner({
         command: "npx",
-        args: ["--no", "prototype-framework", ...args],
+        args: ["prototype-framework", ...args],
         cwd: join(repoRoot, "apps", "reference"),
         env: { ...(process.env as Record<string, string>), NODE_USE_ENV_PROXY: "1" },
         ...(input === undefined ? {} : { input, redact: [input] }),

@@ -40,7 +40,7 @@ describe("connectTestStage (testing.d.ts; CLI-AC-005 local part)", () => {
   });
 
   it("rejects outside a smoke run, saying how to start one", async () => {
-    expect(() => readSmokeConnection({})).toThrow(/only in a test run started by `smoke`.*smoke --target/);
+    expect(() => readSmokeConnection({})).toThrow(/only in a test run started by `smoke`.*npm run smoke -- --target/);
     const saved = process.env[SMOKE_CONNECTION_ENV];
     delete process.env[SMOKE_CONNECTION_ENV];
     try {

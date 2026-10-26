@@ -65,7 +65,7 @@ The command is the framework CLI's `cloudflare-setup` (CLI-REQ-001), run as `npm
 
 The everyday token reads the record through R2 and checks with its own permissions that the buckets, the signing record, email sending and the test mailbox's routing rule exist. A second project on the same account (a copied `.env.cloudflare`) therefore needs no bootstrap token. A future release that needs a permission an existing bootstrap token lacks asks for a new one from the new link; the everyday token is still upgraded in place.
 
-The implementation is `packages/framework/src/provision/cloudflare/cloudflare-setup.ts`, bound in `src/cli/commands/cloudflare-setup.ts`; its decisions are DEC-0584…DEC-0590. Every token `PUT` or `DELETE` passes a guard (DEC-0589), and every printed line passes a redaction of the run's token values, account ID, zone ID, token IDs and subdomain (DEC-0590). This document states the outcomes the criteria check.
+The implementation is `packages/framework/src/provision/cloudflare/cloudflare-setup.ts`, bound in `src/cli/commands/cloudflare-setup.ts`; its decisions are DEC-0584…DEC-0590. Every token `PUT` or `DELETE` passes a guard, an allow-list (DEC-0589, DEC-0618), and every printed line passes a redaction of the run's token values, account ID, zone ID, token IDs and subdomain (DEC-0590). This document states the outcomes the criteria check.
 
 ## 3. Uses
 
