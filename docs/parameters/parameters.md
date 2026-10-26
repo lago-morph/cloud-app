@@ -93,6 +93,8 @@ The owner approved these values on 2026-10-25 ("Approve recommended values", DEC
 | ID | Parameter | Value | Category | Notes |
 | --- | --- | --- | --- | --- |
 | PAR-311 | Retention of a production stage's backup in `prototype-backups` | 30 days | owner | The bucket's lifecycle rule `framework-backups-retention` deletes every object this long after it was written (DEC-0543). Set by `setup-account`. |
+| PAR-331 | Version of the Cloudflare permission list (`PERMISSIONS_VERSION`) | 1 | ai-proposed | `provision/cloudflare/permissions.ts` (DEC-0563). Raised by a release whose everyday or bootstrap token needs a permission the previous list lacked; setup then upgrades the everyday token in place. Release 1 of the setup wizard starts at 1. |
+| PAR-332 | Version of the account setup this release expects (`ACCOUNT_SETUP_VERSION`) | 1 | ai-proposed | `provision/cloudflare/permissions.ts` (DEC-0563); compared with the account setup record's `setupVersion` (plan-setup-wizard §4.4). Raised by a release that needs more account setup. |
 
 ## Secrets
 
