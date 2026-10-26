@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { readDevVars } from "../../secrets/dev-vars.js";
-import { describeLocalSetup, ensureEnvCloudflareIgnoredMinimal, KEEP_TRACKED_MARKER, runLocalSetup, type LocalSetupDeps } from "./local-setup.js";
+import { ensureEnvCloudflareIgnored } from "../cloudflare/git-safety.js";
+import { describeLocalSetup, KEEP_TRACKED_MARKER, runLocalSetup, type LocalSetupDeps } from "./local-setup.js";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -112,7 +113,7 @@ describe("runLocalSetup (plan-setup-wizard §3.1, §4.3 step 0)", () => {
 
   it("an already-ignored .env.cloudflare (any pattern) is left alone", async () => {
     const dir = project({ ".gitignore": ".env*\n" });
-    expect(await ensureEnvCloudflareIgnoredMinimal(dir)).toBe("already");
+    expect(ensureEnvCloudflareIgnored(dir)).toBe("already");
     expect(readFileSync(join(dir, ".gitignore"), "utf8")).toBe(".env*\n");
   });
 
@@ -132,7 +133,7 @@ describe("runLocalSetup (plan-setup-wizard §3.1, §4.3 step 0)", () => {
     expect(r[2]?.message).toContain("spawn git ENOENT");
   });
 
-  it("uses an injected ensureIgnored (batch 4 rewires it to the shared git-safety helper)", async () => {
+  it("uses an injected ensureIgnored (the default is git-safety's ensureEnvCloudflareIgnored)", async () => {
     const dir = project();
     const seen: string[] = [];
     const r = await runLocalSetup(dir, fakes({ ensureIgnored: (d) => (seen.push(d), "added") }));

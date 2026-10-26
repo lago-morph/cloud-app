@@ -6,7 +6,7 @@
 import { UsageError } from "./args.js";
 import { describeFailure } from "./failure.js";
 import { EXIT, type CliIo, type Command } from "./io.js";
-import { buildBinding, cloud, devBinding, generateMigrationBinding, mailBinding, resetLocalBinding, secretsBinding, upgradeBinding, verifyBinding, versionCheckBinding } from "./wiring.js";
+import { buildBinding, cloud, cloudflareSetupBinding, devBinding, generateMigrationBinding, mailBinding, resetLocalBinding, secretsBinding, upgradeBinding, verifyBinding, versionCheckBinding } from "./wiring.js";
 
 export { EXIT, type CliIo, type Command } from "./io.js";
 
@@ -44,6 +44,7 @@ const COMMANDS: Readonly<Record<string, Entry>> = {
   start: { summary: "start --target <t> --stage <s>: start a stopped stage", run: startBinding },
   secrets: { summary: "secrets set <name> --target <t> --stage <s>: set a secret from standard input", run: secretsBinding },
   "setup-account": { summary: "setup-account --target <t>: one-time account setup", run: setupAccountBinding },
+  "cloudflare-setup": { summary: "cloudflare-setup [--email-domain <d>] [--switch-account]: the re-runnable Cloudflare setup (tokens, account, email domain)", run: cloudflareSetupBinding },
   "check-login": { summary: "check-login --target <t> --stage <s>: automated real-login check on a production stage", run: checkLoginBinding },
   "reset-local": { summary: "clear local state (local D1, R2, .logs/ and .mail/)", run: resetLocalBinding },
   mail: { summary: "mail last --to <address> [--target <t>]: print the latest framework email sent to an address", run: mailBinding },

@@ -6,7 +6,8 @@
  * How (read only): `GET /accounts/<a>/tokens/verify` gives the token's own ID, and
  * `GET /accounts/<a>/tokens/<id>` its policies (the setup token has "Account API Tokens Write",
  * which grants the read; DEC-0551). Each policy names permission groups and resources:
- * - account scope: `com.cloudflare.api.account.<account>` (or `…account.*`);
+ * - account scope: `com.cloudflare.api.account.<account>` (or `…account.*`) with the value `"*"`
+ *   (the key holding zones grants only on those zones);
  * - zone scope: `com.cloudflare.api.account.zone.<zone>` or `…zone.*`, at the top level or nested
  *   under the account key (`{ "com.cloudflare.api.account.<a>": { "com.cloudflare.api.account.zone.*": "*" } }`),
  *   or the account key with the value `"*"`.
@@ -58,7 +59,8 @@ export function policyCovers(resources: unknown, scope: "account" | "zone", acco
   if (typeof resources !== "object" || resources === null) return false;
   const top = resources as Record<string, unknown>;
   const accountKeys = [`${ACCOUNT_PREFIX}${accountId}`, `${ACCOUNT_PREFIX}*`];
-  if (scope === "account") return accountKeys.some((k) => k in top);
+  // An account group needs the whole account (`"*"`); an account key holding zones grants only on those zones (DEC-0586).
+  if (scope === "account") return accountKeys.some((k) => top[k] === "*");
   if (coversZone(top, zoneId)) return true;
   return accountKeys.some((k) => {
     const nested = top[k];

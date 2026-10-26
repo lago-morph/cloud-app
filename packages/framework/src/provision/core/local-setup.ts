@@ -6,11 +6,13 @@
  * set. Git problems warn and never fail (owner, 2026-10-26). No output names a secret's value.
  * Node only.
  */
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { appendFile, chmod, readFile, writeFile } from "node:fs/promises";
+import { chmod, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { secretLocation } from "../../config/secret-locations.js";
+import { ensureEnvCloudflareIgnored, KEEP_TRACKED_MARKER } from "../cloudflare/git-safety.js";
+import { ENV_CLOUDFLARE_FILE } from "../cloudflare/token-sources.js";
 import { DEV_SECRET_BYTES, readDevVars, setDevVar } from "../../secrets/dev-vars.js";
 import { DEV_GENERATED_SECRETS } from "../../secrets/local-names.js";
 
@@ -27,7 +29,7 @@ export type EnsureIgnoredResult = "added" | "already" | "kept-tracked-marker" | 
 export interface LocalSetupDeps {
   /** Installs the project's dependencies (default: `npm install` in `dir`, output shown). */
   npmInstall(dir: string): Promise<void>;
-  /** Lists `.env.cloudflare` in `.gitignore` unless the marker line says not to (default: `ensureEnvCloudflareIgnoredMinimal`). */
+  /** Lists `.env.cloudflare` in `.gitignore` unless the marker line says not to (default: git-safety's `ensureEnvCloudflareIgnored`, DEC-0572). */
   ensureIgnored(dir: string): Promise<EnsureIgnoredResult> | EnsureIgnoredResult;
   /** Secure random bytes (default: `crypto.getRandomValues`). */
   random(size: number): Uint8Array;
@@ -35,10 +37,7 @@ export interface LocalSetupDeps {
   declaredSecrets(dir: string): Promise<readonly string[]>;
 }
 
-/** The file `cloudflare-setup` reads tokens from (plan §4.2); never committed. */
-export const ENV_CLOUDFLARE_FILE = ".env.cloudflare";
-/** A line in `.gitignore` that says the owner tracks `.env.cloudflare` on purpose (plan §4.3 step 1). */
-export const KEEP_TRACKED_MARKER = "# keep-env-cloudflare-tracked";
+export { ENV_CLOUDFLARE_FILE, KEEP_TRACKED_MARKER };
 /** The local secret store (SEC-REQ-003). */
 const DEV_VARS_FILE = ".dev.vars";
 
@@ -61,28 +60,6 @@ async function npmInstall(dir: string): Promise<void> {
     child.on("error", fail);
     child.on("exit", (code) => (code === 0 ? done() : fail(new Error(`npm install exited with status ${code ?? "unknown"}`))));
   });
-}
-
-/** Runs git in `dir`; undefined when git is missing or cannot run. */
-function git(dir: string, args: readonly string[]): { status: number | null } | undefined {
-  const r = spawnSync("git", args, { cwd: dir, stdio: "ignore" });
-  return r.error === undefined ? { status: r.status } : undefined;
-}
-
-/**
- * A minimal `.env.cloudflare` git-ignore step: "not-a-repo" when `dir` is not in a git work tree
- * (or git is missing); "already" when git ignores the file; "kept-tracked-marker" when
- * `.gitignore` has the marker line; otherwise the line is appended to `.gitignore` ("added").
- */
-export async function ensureEnvCloudflareIgnoredMinimal(dir: string): Promise<EnsureIgnoredResult> {
-  if (git(dir, ["rev-parse", "--is-inside-work-tree"])?.status !== 0) return "not-a-repo";
-  if (git(dir, ["check-ignore", "-q", "--no-index", ENV_CLOUDFLARE_FILE])?.status === 0) return "already";
-  const file = join(dir, ".gitignore");
-  const text = existsSync(file) ? await readFile(file, "utf8") : "";
-  if (text.split(/\r?\n/).some((l) => l.trim() === KEEP_TRACKED_MARKER)) return "kept-tracked-marker";
-  const separator = text === "" || text.endsWith("\n") ? "" : "\n";
-  await appendFile(file, `${separator}\n# Cloudflare tokens (cloudflare-setup); never commit\n${ENV_CLOUDFLARE_FILE}\n`);
-  return "added";
 }
 
 async function declaredSecrets(dir: string): Promise<readonly string[]> {
@@ -165,7 +142,7 @@ async function gitignore(dir: string, deps: LocalSetupDeps): Promise<LocalSetupO
 export async function runLocalSetup(projectDir: string, deps: Partial<LocalSetupDeps> = {}): Promise<LocalSetupOutcome[]> {
   const all: LocalSetupDeps = {
     npmInstall,
-    ensureIgnored: ensureEnvCloudflareIgnoredMinimal,
+    ensureIgnored: ensureEnvCloudflareIgnored,
     random: (size) => crypto.getRandomValues(new Uint8Array(size)),
     declaredSecrets,
     ...deps,

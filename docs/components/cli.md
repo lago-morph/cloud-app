@@ -7,7 +7,7 @@ Contracts: the command table below.
 ## 1. Requirements
 
 #### CLI-REQ-001 — Commands
-Origin: provenance-unclear · Derives from: SYS-REQ-018, SYS-REQ-022, SYS-REQ-023, SYS-REQ-025, SYS-REQ-027 · Decision: DEC-0512, DEC-0513, DEC-0514, DEC-0523, DEC-0544 (owner: `stop`, `start`, `deploy --start`), DEC-0594, DEC-0595, DEC-0597
+Origin: provenance-unclear · Derives from: SYS-REQ-018, SYS-REQ-022, SYS-REQ-023, SYS-REQ-025, SYS-REQ-027 · Decision: DEC-0512, DEC-0513, DEC-0514, DEC-0523, DEC-0544 (owner: `stop`, `start`, `deploy --start`), DEC-0584, DEC-0594, DEC-0595, DEC-0597
 
 The CLI MUST provide these commands as the framework package's own binary, invoked as `npx <package> <command>` (for example `npx <package> verify`). Apps also expose them as npm scripts of the same name.
 
@@ -24,6 +24,7 @@ The CLI MUST provide these commands as the framework package's own binary, invok
 | `start --target <t> --stage <s>` | Start a stopped stage. |
 | `secrets set <name> --target <t> --stage <s>` | Set a secret from standard input (SEC). |
 | `setup-account --target <t> [--region <r>] [--email-domain <domain>]` | One-time creation of the account's shared resources and settings (PROV-REQ-004); `--region` chooses the AWS account's region (PROV-REQ-006); `--email-domain` records the Cloudflare account's email domain (MAIL-REQ-003). `--region` and the AWS target: deferred, branch `aws`; release 1's `setup-account` takes `--target` and, on Cloudflare, `--email-domain`. |
+| `cloudflare-setup [--email-domain <domain>] [--switch-account]` | The re-runnable Cloudflare setup: the local setup first, then the tokens (from pre-filled dashboard links), the account, the email domain and the account setup, doing only what is missing; prints what the user must do next (DEC-0584). |
 | `check-login --target <t> --stage <s>` | Automated real-login-provider check on a production stage, with real email delivery (PWD §2). |
 | `mail last --to <address> [--target <t>]` | Print the latest framework email sent to an address: locally from `.mail/`, on Cloudflare from the mail sink (MAIL). |
 | `admins grant <email> --target <t> --stage <s> [--confirm-production <s>]`, `admins revoke <email> …`, `admins list …` | Grant, revoke or list the `admin` role of accounts on a stage, by email address, written directly in the stage's database (CLI-REQ-005). |
