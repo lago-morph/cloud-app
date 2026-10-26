@@ -40,14 +40,15 @@ What is released, together and at one version (`v<version>` tag):
 ## Every release
 
 1. Set the same version in `packages/framework/package.json`, `packages/create-prototype-app/package.json`, `packages/prototype-framework-skill/package.json`, the `@lago-morph/prototype-framework` pin in `apps/template/package.json`, and `skill/.claude-plugin/plugin.json`; run `npm install` to update `package-lock.json`.
-2. In `CHANGELOG.md`, write the section and date it: `## [<version>] - YYYY-MM-DD`.
-3. Check, merge to `main`, and tag:
+2. **Cloudflare permissions and account setup.** If the release needs a Cloudflare permission the previous one did not, add it to `EVERYDAY` or `BOOTSTRAP` in `packages/framework/src/provision/cloudflare/permissions.ts` and raise `PERMISSIONS_VERSION` (PAR-331): `cloudflare-setup` then asks for the bootstrap token once and adds the permission to each user's everyday token in place. If it adds an account setup step or changes what one creates, raise `ACCOUNT_SETUP_VERSION` (PAR-332): setup then runs the missing steps once. Each is raised whenever a release needs more, and never lowered. Then regenerate the docs' permission tables (`npm run build -w packages/framework && node scripts/permission-tables.mjs`; a unit test fails until you do) and say in the CHANGELOG section that users must run `npm run cloudflare-setup` again.
+3. In `CHANGELOG.md`, write the section and date it: `## [<version>] - YYYY-MM-DD`.
+4. Check, merge to `main`, and tag:
    ```sh
    node scripts/release-check.mjs v<version>
    git tag v<version>
    git push origin v<version>
    ```
    A version with a pre-release part (`v0.2.0-rc.1`) is published under the npm dist-tag `next` and marked as a GitHub pre-release.
-4. Watch the **Release** workflow in the Actions tab. Check https://www.npmjs.com/package/@lago-morph/prototype-framework shows the version with a provenance badge.
+5. Watch the **Release** workflow in the Actions tab. Check https://www.npmjs.com/package/@lago-morph/prototype-framework shows the version with a provenance badge.
 
 For 0.1.0, step 1 is already done; date its `CHANGELOG.md` section, do the one-time owner steps above, then tag `v0.1.0`.

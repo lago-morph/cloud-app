@@ -7,7 +7,7 @@ Contracts: the command table below.
 ## 1. Requirements
 
 #### CLI-REQ-001 — Commands
-Origin: provenance-unclear · Derives from: SYS-REQ-018, SYS-REQ-022, SYS-REQ-023, SYS-REQ-025, SYS-REQ-027 · Decision: DEC-0512, DEC-0513, DEC-0514, DEC-0523, DEC-0544 (owner: `stop`, `start`, `deploy --start`), DEC-0594, DEC-0595, DEC-0597
+Origin: provenance-unclear · Derives from: SYS-REQ-018, SYS-REQ-022, SYS-REQ-023, SYS-REQ-025, SYS-REQ-027 · Decision: DEC-0512, DEC-0513, DEC-0514, DEC-0523, DEC-0544 (owner: `stop`, `start`, `deploy --start`), DEC-0594, DEC-0595, DEC-0597, DEC-0603 (owner, plan-setup-wizard §4.3: `cloudflare-setup`)
 
 The CLI MUST provide these commands as the framework package's own binary, invoked as `npx <package> <command>` (for example `npx <package> verify`). Apps also expose them as npm scripts of the same name.
 
@@ -24,6 +24,7 @@ The CLI MUST provide these commands as the framework package's own binary, invok
 | `start --target <t> --stage <s>` | Start a stopped stage. |
 | `secrets set <name> --target <t> --stage <s>` | Set a secret from standard input (SEC). |
 | `setup-account --target <t> [--region <r>] [--email-domain <domain>]` | One-time creation of the account's shared resources and settings (PROV-REQ-004); `--region` chooses the AWS account's region (PROV-REQ-006); `--email-domain` records the Cloudflare account's email domain (MAIL-REQ-003). `--region` and the AWS target: deferred, branch `aws`; release 1's `setup-account` takes `--target` and, on Cloudflare, `--email-domain`. |
+| `cloudflare-setup` | The re-runnable Cloudflare setup (SETUP): finds the tokens, checks them, the account and the email domain, runs the missing account setup through `setup-account`'s steps with the bootstrap token, upgrades the everyday token in place and deletes the bootstrap token; prints only what the user must do next. `setup-account` stays for scripts and advanced users. |
 | `check-login --target <t> --stage <s>` | Automated real-login-provider check on a production stage, with real email delivery (PWD §2). |
 | `mail last --to <address> [--target <t>]` | Print the latest framework email sent to an address: locally from `.mail/`, on Cloudflare from the mail sink (MAIL). |
 | `admins grant <email> --target <t> --stage <s> [--confirm-production <s>]`, `admins revoke <email> …`, `admins list …` | Grant, revoke or list the `admin` role of accounts on a stage, by email address, written directly in the stage's database (CLI-REQ-005). |
@@ -63,6 +64,11 @@ Origin: ai-proposed · Derives from: SYS-REQ-015, SYS-REQ-018 · Decision: DEC-0
 - refuse, changing nothing, an address with no account and an account whose address is not verified;
 - make a grant or revoke effect the person's level from their next request (AUTH-REQ-003), with no deploy;
 - never print a password, a password hash, a session or verification token, or a credential.
+
+#### CLI-REQ-006 — Git-ignore warnings, never failures
+Origin: owner · Derives from: SYS-REQ-015 · Decision: DEC-0572, DEC-0598
+
+Every command that reads `.env.cloudflare`, and `verify`, MUST print a prominent warning on every run when `.env.cloudflare` exists but is not ignored by git, and when it is tracked; the tracked warning MUST say that the tokens are in the repository's history and how to replace them. The warnings MUST NOT change any command's exit status, and an error while checking MUST NOT fail the command.
 
 ## 2. Design
 
@@ -111,6 +117,8 @@ Anything else is refused before any request is sent. `smoke` first checks that t
 - `smoke --target aws` prints the S3 log bucket `prototype-logs-<account-id>` with the day's LOG-REQ-004 prefix `<app>/<stage>/<yyyy>/<mm>/<dd>/`, and the Lambda's CloudWatch log group `/aws/lambda/<app>-<stage>-http`. The account ID is redacted in the evidence record; if it cannot be read, `<account-id>` is printed with the reason. Deferred (branch `aws`).
 - `check-login --target cloudflare --stage <s>` runs PWD's check (PWD §2, steps 1–7) on a production stage: base URL from the recorded deploy output, email domain from the account settings record (DEC-0514), mail from the sink. It needs no input, prints no address, password or token, and writes one evidence record (subdomain redacted). Test stages and target `local` are refused before any request.
 - `mail last --to <address> [--target local|cloudflare]` prints the latest message to that address as JSON: locally (the default) from the app's `.mail/`; on Cloudflare from the mail sink, for an address under `t.<emailDomain>` only. It exits 1 when there is none.
+- **Cloudflare settings** (DEC-0570, DEC-0574). Every command with `--target cloudflare` takes `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL_DOMAIN` and `CLOUDFLARE_BOOTSTRAP_TOKEN` from the environment first, then from `.env.cloudflare` in the app's folder (PAR-340), with a note naming any setting set differently in both (never a value); only `cloudflare-setup` gets the file's bootstrap token. Each prints CLI-REQ-006's warnings to standard error before it runs; `verify` prints them before its first step and again before its verdict. Outside a git repository the commands print nothing about git (the not-a-repository warning is `cloudflare-setup`'s).
+- `cloudflare-setup` (SETUP; plan-setup-wizard §4.3) takes no options. It runs the local setup when missing, prints the git warnings (and adds the `.gitignore` line, DEC-0572), and then the steps of setup.md §2, stopping with the exact link or command whenever the user must act. It calls `setup-account`'s steps (cloudflare.md `setupAccount`) with the bootstrap token and never prints a token value (SETUP-REQ-007, CLI-REQ-004).
 - `setup-account --target cloudflare [--email-domain <domain>]`: `--email-domain` is required while the account settings record has no `emailDomain`, and otherwise changes it (MAIL §2). The flag is refused with any other target (exit 2). It runs on the account setup's named steps and writes the setup record last (provisioning.md §2 "Account settings record"; DEC-0577, DEC-0578); its options, output and exit statuses are unchanged.
 - `admins grant|revoke <email> | list --target <t> --stage <s>` (DEC-0523, CLI-REQ-005). The address is matched as BA stores it, trimmed and lowercased.
   - **Locally** (`--target local`; `--stage` may be left out and can only be `local`), it opens the app's persisted local D1 under `.wrangler/state` through `getPlatformProxy`, as `dev` does. It works whether or not `dev` is running.
@@ -132,13 +140,14 @@ LOCAL, CHECK, PROV, MIG (the stage's current database, for `admins`), SEC, PWD (
 
 | ID | Criterion | Verifies | Where |
 | --- | --- | --- | --- |
-| CLI-AC-001 | Each command in the table runs from the template app via `npx <package> <command>` and via its npm script. | CLI-REQ-001 | Local, cloud |
+| CLI-AC-001 | Each command in the table, `version-check`, `upgrade` and `cloudflare-setup` included, runs from the template app via `npx <package> <command>` and via its npm script. | CLI-REQ-001 | Local, cloud |
 | CLI-AC-002 | `verify` passes on the template; it fails on a type error, a portability violation, a mismatched migration, a failing test, a Postgres-only failure, and a project with zero tests. Two consecutive runs give identical results with networking disabled. | CLI-REQ-002 | Local |
 | CLI-AC-003 | Injected failures in `deploy`, `remove` and the compliance runner, including a failure during cleanup, yield non-zero exit statuses that reflect the original failure. | CLI-REQ-003 | Local |
 | CLI-AC-004 | A scan of the output of every command in a full test run finds no test secret values. | CLI-REQ-004 | Local, cloud |
 | CLI-AC-005 | `smoke` runs the template's `tests/smoke/**` against the running `dev` server and against a deployed test stage, writes an evidence record, and prints the stage's log location for the day. | CLI-REQ-001 | Local, cloud |
 | CLI-AC-006 | Against the reference app's local D1 (`--target local`): after a sign-up and verification through `dev`, `admins grant <address>` exits 0 and prints the account's user ID, which equals `/api/auth/me`'s `id`. The next request with the person's existing session shows `admin`, with no new login and no restart. `admins list` shows the address with `admin`. `admins revoke <address>` makes the next request `user`, and the `role` column is NULL afterwards. A second grant, and a revoke of a non-admin, change nothing and exit 0. An unknown address and an unverified account each exit 1 and change nothing. The output of every run, scanned with the test passwords, the stored password hash and every verification token and session cookie of the test, contains none of them. | CLI-REQ-005 | Local |
 | CLI-AC-007 | On a Cloudflare test stage, after sign-up, verification through the test-mail route and sign-in, `admins grant <address> --target cloudflare --stage <test stage>` gives `admin` on the next request, and `admins revoke` gives `user` again, both through the D1 HTTP API. `admins grant <address> --target cloudflare --stage prodcheck` without `--confirm-production prodcheck`, or with another name, exits 2 and sends no request to the D1 API (a recorded fetch shows none); `admins list` likewise. The output of every run contains no password, hash, token or API credential. | CLI-REQ-005 | Cloud |
+| CLI-AC-008 | In a git repository holding `.env.cloudflare`: with the file not ignored, and again with it tracked (and listed in `.gitignore`), `deploy --target cloudflare` (against the fake Cloudflare API) and `verify` each print the matching warning, set off by rule lines, on every run; the tracked warning names `git rm --cached .env.cloudflare`. Each exit status equals that of the same run with the file ignored and untracked. Outside a git repository, and when the git check itself fails, they print no git warning and their exit status is unchanged. | CLI-REQ-006 | Local |
 
 ## 5. Portability note
 

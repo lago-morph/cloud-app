@@ -60,6 +60,18 @@ Amendment (Origin: ai-proposed · Decision: DEC-0551): the token instructions de
 
 Amendment (Origin: owner · Decision: DEC-0521, DEC-0522, DEC-0523): "finding one's user ID and adding it to the admin list, or to the optional users list" is replaced by granting and revoking the `admin` role with `admins grant|revoke <email> --target <t> --stage <s>`, with `--confirm-production <s>` on a production stage, and listing admins with `admins list`. No step may tell anyone to copy a user ID into configuration, or to edit `framework.admins` or `framework.users`. The instructions MUST say that anyone who signs up and verifies their address is a user.
 
+Amendment (Origin: owner, plan-setup-wizard §4.7 · Decision: DEC-0563, DEC-0601; supersedes DEC-0551's amendment above): the Cloudflare steps are built around two pre-filled dashboard links and one command. The instructions MUST give `npm run cloudflare-setup` as the one setup step; describe the everyday token (`prototype-framework`, for every command) and the bootstrap token (`prototype-framework-bootstrap`, made in the dashboard, used once and deleted by setup); say where the values go in a cloud session and on the command line; and say what to do on each of the setup command's stop messages. A permission list they show MUST be generated from the framework's permission list (DEC-0602).
+
+#### SKILL-REQ-007 — Trigger phrases and first step
+Origin: owner · Derives from: SYS-REQ-029 · Decision: DEC-0594, DEC-0600
+
+The router's description MUST list the trigger phrases "set up Cloudflare", "continue prototype setup" and "continue setup", and the `/prototype-framework …` invocation. The router MUST make `npx <package> version-check` the first step of every session, relaying its suggestions (the newer-npm-release one once per session), and MUST have a "Cloudflare setup" section that, on those phrases, runs `npm run cloudflare-setup` and relays its output as is.
+
+#### SKILL-REQ-008 — The agent stays away from the token values
+Origin: owner · Derives from: SYS-REQ-015 · Decision: DEC-0598, DEC-0599
+
+The router MUST tell app agents never to open, print or search `.env.cloudflare` and never to echo the token variables, using the CLI instead. It MUST tell them to run `git check-ignore -q .env.cloudflare` and `git ls-files --error-unmatch .env.cloudflare` when a session starts work on the app and before every commit or push, to remind the user each time the file is not ignored or is tracked, and never to refuse to commit because of it. The template MUST carry a committed `.claude/settings.json` whose permission rules deny reading `.env.cloudflare`.
+
 ## 2. Design
 
 **Layout.** `skill/SKILL.md`, `skill/reference/`, `skill/examples/`, `skill/templates/`, `skill/scripts/scaffold`.
@@ -92,10 +104,12 @@ Specific content the references carry:
 
 **Implementation** (E-01, decisions DEC-0367…DEC-0372 in the [decision log](../decisions/decision-log.md)):
 - References are the thirteen files named in `packages/framework/src/check/references.ts`. Each starts with its title and then a paragraph beginning "Read this when", links to at least one example, and ends with a section "Stopping condition" beginning "Stop reading when".
-- `SKILL.md` carries YAML front matter (`name`, `description`), the hard rules as a numbered list, the task map as a table, and links to every reference, example and template.
+- `SKILL.md` carries YAML front matter (`name`, `description`), the first step (`version-check`), the hard rules as a numbered list, the "Cloudflare setup" section (SKILL-REQ-007, SKILL-REQ-008), the task map as a table, and links to every reference, example and template; the task map is the router's one list of references (DEC-0600).
 - Each example is a Markdown file of whole source files copied unchanged from `apps/template` or `apps/reference`. Each copied file is a fenced block directly preceded by `<!-- example-source: <repo path> -->`. The code is type-checked and tested where it lives, by each app's `verify`; a test can compare every block with its source byte for byte, and reject any source under `apps/demo/`.
 - `skill/templates/` holds the files an app agent copies and fills in: `FRAMEWORK-ISSUE.md` (the entry fields of SKILL-REQ-003) and `production-stage.json` (a schema-valid production values file). The app itself is scaffolded from `apps/template`.
 - The template carries the finalize route (`src/server/routes/files.ts`, with an `uploads` table) and the HMAC helper (`src/server/signing.ts`, with `tests/signing.test.ts`); `files-tickets.md` and `secrets.md` in `skill/examples/` copy them, and the references point there (E-03).
+
+**The template's Claude Code settings** (DEC-0599). `apps/template/.claude/settings.json`, copied into every new app, denies `Read(.env.cloudflare)` and `Edit(.env.cloudflare)`, which also cover Claude Code's file tools and the file commands it recognizes in Bash (`cat`, `head`, `tail`, `sed`), plus `grep`, `rg`, `awk`, `less`, `more`, `source` and `.` naming the file and an `echo` or `printenv` of the token variables. Claude Code applies these rules on a best-effort basis: they do not reach a program that opens the file itself, so the skill's rule stays the first defence.
 
 **The template** (`apps/template/`) is the smallest app that uses every capability once, with tests. It is the starting point the scaffolder copies. It depends on an exact framework version, not a range. Its `src/server/env.ts` exports `config`, `secrets` and `type Env = AppEnv<typeof config, (typeof secrets)[number]>`; route modules take `Hono<Env>`. Its README lists what stays billable while idle (Aurora storage, the credentials secret, shared resources, leftover test stages) and how to remove each, and notes that on AWS public routes that read the database keep Aurora awake.
 
@@ -113,6 +127,8 @@ CORE (export list), CHECK, CLI, and the contracts of every capability.
 | SKILL-AC-004 | CI type-checks and runs every example and the template. No example file is derived from `apps/demo/`. | SKILL-REQ-004 | Local |
 | SKILL-AC-005 | Scaffolding into a directory with existing files stops without changing them. | SKILL-REQ-005 | Local |
 | SKILL-AC-006 | Following only the documented owner steps, an AI-agent tester does the following. They set up an account, including the email domain. They deploy a production stage from `skill/templates/production-stage.json`, with no admin or users list. They sign up with a sink address `sink+<tag>@t.<domain>` (DEC-0527), read the verification mail with `mail last --target cloudflare`, verify and sign in, and are `user`. With `admins grant … --confirm-production <s>` they become `admin` on the next request, with no commit or redeploy. With `admins revoke` they are `user` again. Then they remove the stage. No step needs the owner or a browser, and no step edits a values file to change a level. | SKILL-REQ-006 | Cloud (milestone) |
+| SKILL-AC-007 | The router's front matter description contains "set up Cloudflare", "continue prototype setup", "continue setup" and `/prototype-framework`; the router names `npx <package> version-check` as the first step of a session, with its newer-npm-release suggestion once per session; and its "Cloudflare setup" section runs `npm run cloudflare-setup` on those phrases and says to relay its output as is. | SKILL-REQ-007 | Local |
+| SKILL-AC-008 | The router says never to open, print or search `.env.cloudflare` and never to echo `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_BOOTSTRAP_TOKEN`; it gives both git commands, when to run them (a session starting work on the app, before every commit or push), to remind the user when either finds a problem, and never to refuse a commit. The template's `.claude/settings.json` parses as JSON and its `permissions.deny` holds `Read(.env.cloudflare)`, and an app made with the starter has the same file. | SKILL-REQ-008 | Local |
 
 ## 5. Portability note
 
