@@ -481,5 +481,5 @@ export async function createStage(options: StageOptions): Promise<StageUnderTest
   const t = target().target;
   if (t === "local") return localStage(options.secrets);
   if (t === "cloudflare") return cloudflareStage(options.secrets);
-  return prerequisiteMissing("AWS phase not started");
+  return prerequisiteMissing("AWS deferred to a later release, DEC-0508");
 }

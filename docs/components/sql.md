@@ -56,7 +56,7 @@ A uniqueness or reference violation MUST surface as `SQL.CONFLICT`. A database t
 
 There is no JSON column type; structured data is stored as text (DEC-0060). `.default()` takes a static value checked against the same rule.
 
-On Postgres, code-point text ordering comes from the database's C collation: every database is created with C collation and copies inherit it (MIG §2, AWS), so no per-column `COLLATE` is needed, including for `__framework_kv`. The local PGlite database is created with `LC_COLLATE 'C'` and `LC_CTYPE 'C'`: PGlite's default database orders by code point but folds non-ASCII in `lower()` (DEC-0106).
+On Postgres, code-point text ordering comes from the database's C collation: every database is created with C collation and copies inherit it (MIG §2, AWS), so no per-column `COLLATE` is needed, including for `__framework_kv`. The local PGlite database is created with `LC_COLLATE 'C'` and `LC_CTYPE 'C'`: PGlite's default database orders by code point but folds non-ASCII in `lower()` (DEC-0106). (The AWS part: deferred, branch `aws`.)
 
 ### 2.2 Implementation
 
@@ -68,7 +68,7 @@ Drizzle ORM (PAR-102) provides the query builder for both dialects (DEC-0038). T
 
 **Handles.** `PortableDb` and `WriteDb` are restricted at run time too: plain objects exposing only their contract members (`select`, `selectDistinct`, `insert`, `update`, `delete`, `$with`, `with`; `WriteDb` only the three writes), so raw execution, `batch`, `transaction` and `db.query` are absent. Every builder made through a handle is wrapped: awaiting it or calling `execute()` runs the query through the adapter's guard (failure mapping and budget below), turns a write result without rows into `undefined`, and checks the result size (DEC-0137).
 
-**`atomic`.** On D1, the steps are built once and submitted as one batch. On the Data API, the framework opens a transaction, invokes each step factory against the transaction's handle, awaits the writes in order, and commits, rolling back on error. Builders captured from the ordinary handle are never awaited inside the transaction, because they would run outside it (an earlier observation, DEC-0050; verify early). So, on every target, `atomic` first checks that each step's write was built on the handle passed to it, and otherwise rejects with `CORE.INTERNAL` before executing anything. Locally, PGlite follows the Data API path: inside the transaction all steps are built first, checked, then executed in order. A builder made on a step's handle cannot be executed by app code (awaiting it rejects with `CORE.INTERNAL`), so an `async` step cannot run its write early. A handle not made by the framework is `CORE.INTERNAL`; empty input resolves to `[]` without touching the database (DEC-0138).
+**`atomic`.** On D1, the steps are built once and submitted as one batch. On the Data API, the framework opens a transaction, invokes each step factory against the transaction's handle, awaits the writes in order, and commits, rolling back on error. Builders captured from the ordinary handle are never awaited inside the transaction, because they would run outside it (an earlier observation, DEC-0050; verify early). So, on every target, `atomic` first checks that each step's write was built on the handle passed to it, and otherwise rejects with `CORE.INTERNAL` before executing anything. Locally, PGlite follows the Data API path: inside the transaction all steps are built first, checked, then executed in order. A builder made on a step's handle cannot be executed by app code (awaiting it rejects with `CORE.INTERNAL`), so an `async` step cannot run its write early. A handle not made by the framework is `CORE.INTERNAL`; empty input resolves to `[]` without touching the database (DEC-0138). (The Data API part: deferred, branch `aws`.)
 
 **Writes.** Drivers return different result shapes for writes without `returning`; the framework discards them, so such writes resolve to `void` everywhere.
 
@@ -153,7 +153,9 @@ The local D1 database runs under Wrangler. App tests can also run against PGlite
 ### Cloudflare
 D1 through its Worker binding.
 
-### AWS
+### AWS — deferred (branch `aws`)
+
+Deferred to a later release (DEC-0508): this section describes the AWS target, which is not part of release 1. Its code is on the branch `aws`.
 Aurora Serverless v2 PostgreSQL through the RDS Data API (DEC-0037), from Lambdas outside any VPC. The Data API requires the database credentials to be held in AWS Secrets Manager. Provisioning creates that one framework-internal secret there; app secrets still use SSM SecureString (DEC-0012, DEC-0061). The Data API's "database resuming" error is retried with exponential backoff and jitter until PAR-210 is exhausted, then surfaced as `SQL.UNAVAILABLE`. The retry loop takes its clock and its error source as inputs, so it is tested locally with an injected error. Aurora capacity and pause settings are PAR-212 and PAR-213. Data API responses are limited to PAR-214, which is why the portable result limit PAR-215 exists.
 
 ## 3. Uses
@@ -166,10 +168,10 @@ CFG (cluster and credentials-secret identifiers on AWS, supplied by provisioning
 | --- | --- | --- | --- |
 | SQL-AC-001 | A schema using every column type and option creates identical logical schemas on SQLite and Postgres, with lowerCamelCase keys mapped to snake_case SQL names; schemas with each unsupported feature or invalid name, and tables with no or two `id()` columns, are rejected. | SQL-REQ-001 | Local |
 | SQL-AC-002 | The portability rules reject a fixture for each excluded query feature, including `max(boolean)` and `sum(text)`, and accept realistic fixtures using every supported one, including the §2.3 example. | SQL-REQ-002 | Local |
-| SQL-AC-003 | One query suite covering every supported feature returns identical results on local D1, PGlite, Cloudflare D1, and the Data API. It includes NULL ordering, accented and mixed-case text, `containsText` edge cases (empty needle, `%`, `_`, `\`, NULL), empty-input aggregates, `min` / `max` result types, and writes with and without `returning` (without it, the write resolves to `undefined`; `.returning({ id })` lists exactly the affected rows). | SQL-REQ-003, SQL-REQ-004 | Local, cloud |
+| SQL-AC-003 | One query suite covering every supported feature returns identical results on local D1, PGlite, Cloudflare D1, and the Data API. It includes NULL ordering, accented and mixed-case text, `containsText` edge cases (empty needle, `%`, `_`, `\`, NULL), empty-input aggregates, `min` / `max` result types, and writes with and without `returning` (without it, the write resolves to `undefined`; `.returning({ id })` lists exactly the affected rows). (Data API: deferred, branch `aws`.) | SQL-REQ-003, SQL-REQ-004 | Local, cloud |
 | SQL-AC-004 | Boundary values for each column type (for example 2147483647 and 2147483648 for `integer`, unpaired surrogates for `text`) are accepted or rejected identically on every target. | SQL-REQ-004 | Local, cloud |
 | SQL-AC-005 | An `atomic` call whose last step violates a constraint leaves no rows from earlier steps, on every target. An `atomic` call with a step whose write was built on the outer handle is rejected before any step executes, on every target. | SQL-REQ-005 | Local, cloud |
-| SQL-AC-006 | A duplicate unique value yields `SQL.CONFLICT`; a query whose result exceeds PAR-215 yields `SQL.RESULT_TOO_LARGE` on every target. Locally and deterministically, with a "database resuming" error injected into the Data API adapter on every attempt, the retry loop gives up at PAR-210 and returns `SQL.UNAVAILABLE`. | SQL-REQ-006 | Local, cloud |
+| SQL-AC-006 | A duplicate unique value yields `SQL.CONFLICT`; a query whose result exceeds PAR-215 yields `SQL.RESULT_TOO_LARGE` on every target. Locally and deterministically, with a "database resuming" error injected into the Data API adapter on every attempt, the retry loop gives up at PAR-210 and returns `SQL.UNAVAILABLE`. (Data API retry-loop clause: deferred, branch `aws`.) | SQL-REQ-006 | Local, cloud |
 
 ## 5. Portability note
 

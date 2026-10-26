@@ -16,7 +16,7 @@
  * - Locally only: the same requests with an injected failing log writer (`createTestApp`
  *   `logWriter: "failing"`) still succeed.
  * - "Using only commands copied from the skill's troubleshooting reference" is re-checked by
- *   E-RUN once the skill exists (plan §6); the AWS deny case is not run (AWS phase not started).
+ *   E-RUN once the skill exists (plan §6); the AWS deny case is deferred with the AWS target (DEC-0508, branch `aws`).
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";

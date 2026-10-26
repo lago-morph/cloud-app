@@ -63,25 +63,25 @@ describe("test-runner reports into outcomes", () => {
     expect(parsed.errors).toEqual(["Error: config broke"]);
   });
 
-  // G-T2 report: AWS-AC-005 skips with its not-run reason as the note; the reason must reach the outcome.
+  // DEC-0500: a test that skips with its not-run reason as the note; the reason must reach the outcome.
   it("keeps a skipped test's note: Vitest's from meta.skipNote (skip-notes reporter), Playwright's from its skip annotation", () => {
     const vitest = {
       testResults: [
         {
-          name: "/repo/tests/compliance/criteria/aws/paused-cluster.test.ts",
+          name: "/repo/tests/compliance/criteria/kv/skipped.test.ts",
           status: "passed",
           assertionResults: [
-            { ancestorTitles: [], title: "[AWS-AC-005] paused", status: "skipped", failureMessages: [], meta: { [SKIP_NOTE_META]: "not-run: the cluster did not pause within 15 minutes" } },
-            { ancestorTitles: [], title: "[AWS-AC-005] plain skip", status: "skipped", failureMessages: [], meta: {} },
-            { ancestorTitles: [], title: "[AWS-AC-005] blank note", status: "skipped", failureMessages: [], meta: { [SKIP_NOTE_META]: "  " } },
+            { ancestorTitles: [], title: "[KV-AC-005] paused", status: "skipped", failureMessages: [], meta: { [SKIP_NOTE_META]: "not-run: the cluster did not pause within 15 minutes" } },
+            { ancestorTitles: [], title: "[KV-AC-005] plain skip", status: "skipped", failureMessages: [], meta: {} },
+            { ancestorTitles: [], title: "[KV-AC-005] blank note", status: "skipped", failureMessages: [], meta: { [SKIP_NOTE_META]: "  " } },
           ],
         },
       ],
     };
     expect(parseVitestJson(JSON.stringify(vitest), "/repo").outcomes).toEqual([
-      { title: "[AWS-AC-005] paused", file: "tests/compliance/criteria/aws/paused-cluster.test.ts", status: "skipped", note: "not-run: the cluster did not pause within 15 minutes" },
-      { title: "[AWS-AC-005] plain skip", file: "tests/compliance/criteria/aws/paused-cluster.test.ts", status: "skipped" },
-      { title: "[AWS-AC-005] blank note", file: "tests/compliance/criteria/aws/paused-cluster.test.ts", status: "skipped" },
+      { title: "[KV-AC-005] paused", file: "tests/compliance/criteria/kv/skipped.test.ts", status: "skipped", note: "not-run: the cluster did not pause within 15 minutes" },
+      { title: "[KV-AC-005] plain skip", file: "tests/compliance/criteria/kv/skipped.test.ts", status: "skipped" },
+      { title: "[KV-AC-005] blank note", file: "tests/compliance/criteria/kv/skipped.test.ts", status: "skipped" },
     ]);
     const playwright = {
       suites: [

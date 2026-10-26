@@ -6,12 +6,8 @@
  * Cloud usage (plan "Cloud usage limits"): the driver selects only the tests tagged with an
  * expected ID (`-t` / `--grep`), runs each selected test layer once (selection.ts: on local
  * also the unit layer, for the unit-level IDs only), generates no data, and on a cloud target
- * uses one test stage for the whole run. On AWS it also checks the stage's AWS names, holds at most
- * three Aurora clusters at once and counts the test hooks' AWS API calls against the run's cap
- * (aws-usage.ts; plan-aws.md G-T4). Before anything is deployed it reads the account's region, as
- * deploy does (the log bucket's location, DEC-0075, DEC-0476), and gives it to every test process
- * as `AWS_REGION` and `AWS_DEFAULT_REGION`; with no region to be found it stops on a missing
- * prerequisite (G-EV F4).
+ * uses one test stage for the whole run. Release 1 targets local and Cloudflare; the AWS usage
+ * caps and region step are on branch `aws` (DEC-0508).
  *
  * A run against fakes (overridden not-run rules, or stage operations that say they are fakes) is
  * marked `dryRun` in its record, which no report counts (G-EV F3).
@@ -29,12 +25,10 @@ import {
   redact,
 } from "../../../packages/framework/src/evidence/public.js";
 import { ALL, type ComplianceArgs } from "./args.js";
-import { NOT_SELECTED, type CatalogueEntry, type Target } from "./catalogue.js";
-import { PrerequisiteMissingError } from "./blocked.js";
-import { assertAwsStageName, assertClusterRoom, awsCallsInOutput, awsRunCallCap, MAX_AWS_CALLS_ENV, TEST_STAGE_CLUSTER } from "./aws-usage.js";
+import { NOT_SELECTED, type CatalogueEntry, type ReleaseTarget as Target } from "./catalogue.js";
 import { childEnv } from "./env.js";
 import { expectedCriteria, PHASE_RULES, type ExpectedEntry, type NotRunRule } from "./expected.js";
-import { assertTestStage, REFERENCE_APP } from "./leftovers.js";
+import { assertTestStage } from "./leftovers.js";
 import { grepPattern, parsePlaywrightJson, parseVitestJson } from "./reports.js";
 import { criterionResults, type TestOutcome } from "./results.js";
 import { idsFor, runnerSelection, scopeTests } from "./selection.js";
@@ -88,14 +82,8 @@ export interface CloudStageOps {
   remove(stage: string): Promise<string>;
   /** The stage's resources that still exist, by exact identifier (PROV `listStageResources`). */
   listStageResources(stage: string): Promise<readonly string[]>;
-  /** AWS: the account's test-stage Aurora clusters in `region`, by identifier (the three-at-once cap; required to deploy on AWS). */
-  testStageClusters?(region: string): Promise<readonly string[]>;
-  /** AWS: the account's region as the framework reads it (the log bucket's location, DEC-0476). */
-  region?(): Promise<string>;
   /** Set when these operations are fakes (G-RUN's dry run): what is faked. The record is then marked `dryRun`. */
   readonly dryRun?: string;
-  /** AWS: the AWS API calls the driver's own process made through the counted hooks. */
-  apiCalls?(): number;
 }
 
 export interface PendingStages {
@@ -119,7 +107,7 @@ export interface DriverDeps {
   startLocal(): Promise<LocalSession>;
   cloud(target: Target): CloudStageOps;
   readonly pendingStages: PendingStages;
-  /** The not-run rules; default `PHASE_RULES`. Tests and the `--target aws` wiring dry run against fakes (G-RUN) pass others. */
+  /** The not-run rules; default `PHASE_RULES`. Tests pass others (a run against fakes). */
   readonly notRunRules?: readonly NotRunRule[];
   writeEvidence(input: WriteEvidenceInput): EvidencePaths;
   log(line: string): void;
@@ -157,31 +145,6 @@ function expandBlocked(given: ReadonlyMap<string, string>, expected: readonly Ex
   return out;
 }
 
-const AWS_REGION_NAME = /^[a-z]{2}(-[a-z]+)+-\d{1,2}$/;
-
-/**
- * The region the AWS test hooks get (G-EV F4): the account's region from the stage operations, as
- * deploy reads it; operations that cannot read it fall back to `AWS_REGION`, then
- * `AWS_DEFAULT_REGION`. Rejects with a `PrerequisiteMissingError` when there is none.
- */
-async function awsTestRegion(ops: CloudStageOps, env: Readonly<Record<string, string | undefined>>, log: (line: string) => void): Promise<string> {
-  const missing = (why: string): PrerequisiteMissingError =>
-    new PrerequisiteMissingError(`the AWS account's region ${why}; the AWS test hooks need it as AWS_REGION. Run setup-account --target aws, or set AWS_REGION to the account's region`);
-  const given = [env.AWS_REGION, env.AWS_DEFAULT_REGION].find((r) => r !== undefined && r !== "");
-  let region: string | undefined;
-  if (ops.region !== undefined) {
-    try {
-      region = await ops.region();
-    } catch (error) {
-      throw missing(`could not be read: ${firstLine(error)}`);
-    }
-    if (given !== undefined && given !== region) log(`compliance: note: AWS_REGION=${given} is not the account's region ${region}; the tests use ${region}`);
-  } else region = given;
-  if (region === undefined || region === "") throw missing("is unknown (the stage operations cannot read it and neither AWS_REGION nor AWS_DEFAULT_REGION is set)");
-  if (!AWS_REGION_NAME.test(region)) throw missing(`is not an AWS region name: ${region}`);
-  return region;
-}
-
 function subdomainRedaction(baseUrl: string): Redaction[] {
   const match = /^https:\/\/[^./]+\.([^./]+)\.workers\.dev(?:[/:]|$)/.exec(baseUrl);
   return match?.[1] === undefined ? [] : [{ value: match[1], replacement: "<account-subdomain>" }];
@@ -213,20 +176,6 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
   let testSecret: string | undefined;
   // Nothing the driver prints carries a redacted value (the test secret, the account subdomain).
   const log = (line: string): void => deps.log(redact(line, redactions));
-  const isAws = args.target === "aws";
-  const awsCap = isAws ? awsRunCallCap(process.env) : 0;
-  const awsUsage: string[] = [];
-  let awsTestCalls = 0;
-
-  /** AWS, before the run stage is deployed: valid AWS names, and room for one more Aurora cluster (aws-usage.ts). */
-  const checkAwsStage = async (ops: CloudStageOps, name: string, region: string): Promise<void> => {
-    assertAwsStageName(REFERENCE_APP, name);
-    if (ops.testStageClusters === undefined) throw new Error("the aws stage operations cannot count the account's Aurora clusters (needed for the three-at-once cap)");
-    const clusters = (await ops.testStageClusters(region)).filter((c) => TEST_STAGE_CLUSTER.test(c));
-    awsUsage.push(`test-stage Aurora clusters before deploying ${name}: ${String(clusters.length)}${clusters.length > 0 ? ` (${clusters.join(", ")})` : ""}`);
-    assertClusterRoom(clusters, 1, `deploying ${name}`);
-  };
-
   /**
    * DEC-0277 on the run stage: deploy; set `apiKey` to a fresh value through `secrets set` (the
    * value on standard input, kept in memory only); deploy again, so the stage serves with it
@@ -284,7 +233,6 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
   };
 
   let ops: CloudStageOps | undefined;
-  let awsRegion: string | undefined;
   if (toRun.length > 0) {
     let local: LocalSession | undefined;
     let deployed = false;
@@ -304,16 +252,10 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
       }
       if (isCloud) {
         ops = deps.cloud(args.target);
-        // AWS: the account's region first, so a run that cannot give it to the test hooks stops before deploying (G-EV F4).
-        if (isAws) {
-          awsRegion = await awsTestRegion(ops, process.env, log);
-          awsUsage.push(`account region: ${awsRegion} (AWS_REGION and AWS_DEFAULT_REGION of the test runs)`);
-        }
         // An interrupted earlier run left these stages: remove them first (COMPL-REQ-004).
         for (const old of deps.pendingStages.list(args.target)) await removeStage(ops, old);
         if (baseUrl === undefined) {
           stage ??= testStageName(runId);
-          if (awsRegion !== undefined) await checkAwsStage(ops, stage, awsRegion);
           deps.pendingStages.add(args.target, stage);
           deployed = true;
           baseUrl = await deployWithTestSecret(ops, stage);
@@ -336,14 +278,6 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
       for (const selection of runnerSelection({ target: args.target, selfTest: args.selfTest })) {
         const ids = idsFor(selection, toRun);
         if (ids.length === 0) continue;
-        // AWS: each test run gets only what is left of the run's API-call budget; none left, no further run.
-        const left = awsCap - awsTestCalls;
-        if (isAws && left <= 0) {
-          runErrors.push(`${selection.label}: not run: the run's AWS API-call cap (${String(awsCap)}) is used up`);
-          exitStatus ||= 1;
-          continue;
-        }
-        const runEnv = isAws ? { ...env, [MAX_AWS_CALLS_ENV]: String(left), ...(awsRegion === undefined ? {} : { AWS_REGION: awsRegion, AWS_DEFAULT_REGION: awsRegion }) } : env;
         const pattern = grepPattern(ids);
         const jsonPath = `${tmp}/${selection.label}.json`;
         const result =
@@ -352,16 +286,11 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
                 command: "npx",
                 args: [...selection.args, "-t", pattern, "--passWithNoTests", "--reporter=default", `--reporter=${SKIP_NOTES_REPORTER}`, "--reporter=json", `--outputFile.json=${jsonPath}`],
                 cwd: deps.repoRoot,
-                env: runEnv,
+                env,
                 ...hide,
               })
-            : await deps.run({ command: "npx", args: [...selection.args, "--grep", pattern, "--reporter=json", "--pass-with-no-tests"], cwd: deps.repoRoot, env: { ...runEnv, PLAYWRIGHT_JSON_OUTPUT_NAME: jsonPath }, ...hide });
+            : await deps.run({ command: "npx", args: [...selection.args, "--grep", pattern, "--reporter=json", "--pass-with-no-tests"], cwd: deps.repoRoot, env: { ...env, PLAYWRIGHT_JSON_OUTPUT_NAME: jsonPath }, ...hide });
         raw[`${selection.label}.log`] = result.output;
-        if (isAws) {
-          const used = awsCallsInOutput(result.output);
-          awsTestCalls += used;
-          awsUsage.push(`${selection.label}: ${String(used)} AWS API call(s) by the test hooks`);
-        }
         const text = deps.readFile(jsonPath) ?? "";
         raw[`${selection.label}.json`] = text;
         const parsed = selection.runner === "vitest" ? parseVitestJson(text, deps.repoRoot) : parsePlaywrightJson(text, "");
@@ -391,17 +320,6 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
   }
   // A stage that could not be removed, or a leftover check that could not run, is a partial failure (CLI-REQ-003).
   if (leftovers.length > 0) exitStatus ||= 1;
-  if (isAws) {
-    const own = ops?.apiCalls?.() ?? 0;
-    const total = awsTestCalls + own;
-    awsUsage.push(`driver process: ${String(own)} AWS API call(s) by the hooks`, `total: ${String(total)} of the run's cap ${String(awsCap)} (framework CLI calls not included)`);
-    raw["aws-usage.log"] = `${awsUsage.join("\n")}\n`;
-    log(`compliance: aws api calls by the test hooks: ${String(total)} (cap ${String(awsCap)})`);
-    if (total > awsCap) {
-      log(`compliance: the run passed its AWS API-call cap (${String(total)} > ${String(awsCap)}; raw/aws-usage.log)`);
-      exitStatus ||= 1;
-    }
-  }
   if (runErrors.length > 0) raw["run-errors.log"] = `${runErrors.join("\n")}\n`;
 
   const results: EvidenceResult[] = criterionResults({ target: args.target, expected, outcomes, blocked });

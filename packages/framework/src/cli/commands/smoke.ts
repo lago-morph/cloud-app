@@ -15,15 +15,7 @@
  *    `connectTestStage()` reads (`src/testing/connect.ts`).
  * 5. One result per test (`smoke: <file> > <name>`) and per file-level failure; the record goes to
  *    `validation/<target>/<runId>.json` in the repository holding the app, with the account's
- *    `workers.dev` subdomain redacted (DEC-0086), and on AWS the account ID.
- *
- * The log location (G-11 on AWS): locally `.logs/<day>.log`; on Cloudflare the R2 bucket
- * `prototype-logs` and the LOG-REQ-004 prefix `<app>/<stage>/<yyyy>/<mm>/<dd>/`; on AWS the S3
- * bucket `prototype-logs-<account-id>` (in the account's region) with the same prefix, plus the
- * HTTP Lambda's CloudWatch log group `/aws/lambda/<app>-<stage>-http`, where the Lambda
- * runtime's own output goes. The account ID and region come from STS and the log bucket's
- * location; when they cannot be read, the location is printed with `<account-id>` and the reason,
- * and the run goes on (the log location never decides the result).
+ *    `workers.dev` subdomain redacted (DEC-0086).
  * Exit 0 only when at least one test ran, every test passed, nothing failed outside a test, and
  * the record was written.
  */
@@ -67,8 +59,6 @@ export interface SmokeDeps {
   newRunId(): string;
   now(): Date;
   versions(): Record<string, string>;
-  /** AWS only: the account ID and region holding the stage's logs (STS and the log bucket's location). */
-  awsLogAccount?(appDir: string): Promise<{ readonly accountId: string; readonly region: string }>;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -150,38 +140,10 @@ function parseSmokeOptions(args: readonly string[]): { target: Target; stage: st
 
 const utcDay = (d: Date) => ({ y: String(d.getUTCFullYear()), m: String(d.getUTCMonth() + 1).padStart(2, "0"), d: String(d.getUTCDate()).padStart(2, "0") });
 
-interface LogLocation {
-  readonly text: string;
-  readonly redactions: readonly Redaction[];
-}
-
-/** The stage's log location on AWS (LOG-REQ-004 prefix in the account's log bucket, and the Lambda's log group). */
-async function awsLogLocation(deps: SmokeDeps, appDir: string, app: string, stage: string, day: string): Promise<LogLocation> {
-  const [{ logBucketName }, { functionName, logPrefix }] = await Promise.all([import("../../provision/aws/account.js"), import("../../provision/aws/names.js")]);
-  const prefix = `${logPrefix({ app, stage })}${day}/`;
-  const logGroup = `/aws/lambda/${functionName({ app, stage })}`;
-  try {
-    if (deps.awsLogAccount === undefined) throw new Error("no AWS account reader");
-    const { accountId, region } = await deps.awsLogAccount(appDir);
-    const bucket = logBucketName(accountId);
-    return {
-      text: `S3 bucket ${bucket} (${region}), keys under ${prefix} (s3://${bucket}/${prefix}); Lambda output: CloudWatch log group ${logGroup} (${region})`,
-      redactions: accountId === "" ? [] : [{ value: accountId, replacement: "<account-id>" }],
-    };
-  } catch (error) {
-    return {
-      text: `S3 bucket ${logBucketName("<account-id>")}, keys under ${prefix}; Lambda output: CloudWatch log group ${logGroup} (the account ID and region could not be read: ${describeFailure(error)})`,
-      redactions: [],
-    };
-  }
-}
-
-async function logLocation(deps: SmokeDeps, appDir: string, target: Target, stage: string, at: Date): Promise<LogLocation> {
+function logLocation(target: Target, app: string, stage: string, at: Date): string {
   const { y, m, d } = utcDay(at);
-  if (target === "local") return { text: `.logs/${y}-${m}-${d}.log (in the app directory)`, redactions: [] };
-  const app = await deps.appName(appDir);
-  if (target === "aws") return awsLogLocation(deps, appDir, app, stage, `${y}/${m}/${d}`);
-  return { text: `R2 bucket ${LOG_BUCKET}, keys under ${app}/${stage}/${y}/${m}/${d}/`, redactions: [] };
+  if (target === "local") return `.logs/${y}-${m}-${d}.log (in the app directory)`;
+  return `R2 bucket ${LOG_BUCKET}, keys under ${app}/${stage}/${y}/${m}/${d}/`;
 }
 
 /** DEC-0086: the account's `workers.dev` subdomain is personal; it never goes into evidence. */
@@ -240,7 +202,7 @@ export function smokeCommand(deps: SmokeDeps): Command {
       if (baseUrl === undefined) return fail(`no recorded deploy output for stage ${stage} on ${target}: deploy it first with \`npm run deploy -- --target ${target} --stage ${stage}\``);
     }
 
-    const location = await logLocation(deps, appDir, target, stage, deps.now());
+    const location = logLocation(target, target === "local" ? "" : await deps.appName(appDir), stage, deps.now());
     const startedAt = deps.now();
     let log = "";
     const out = (text: string) => {
@@ -273,7 +235,7 @@ export function smokeCommand(deps: SmokeDeps): Command {
     const skipped = run.tests.length - passed - failed;
     if (run.tests.length === 0 && run.fileErrors.length === 0 && run.error === undefined) err(`smoke: no smoke test ran (${SMOKE_GLOB})\n`);
     out(`smoke: ${String(passed)} passed, ${String(failed)} failed${skipped > 0 ? `, ${String(skipped)} skipped` : ""}\n`);
-    out(`smoke: log for today: ${location.text}\n`);
+    out(`smoke: log for today: ${location}\n`);
 
     const ok = passed > 0 && failed === 0 && skipped === 0 && run.fileErrors.length === 0 && run.error === undefined;
     const exitStatus = ok ? EXIT.ok : EXIT.failed;
@@ -294,7 +256,7 @@ export function smokeCommand(deps: SmokeDeps): Command {
           versions: deps.versions(),
         },
         raw: { "smoke.log": log, "tests.json": `${JSON.stringify(run, null, 2)}\n` },
-        redactions: [...subdomainRedactions(baseUrl), ...location.redactions],
+        redactions: subdomainRedactions(baseUrl),
       });
       io.stdout(`smoke: evidence: ${relative(repo.root, paths.recordPath).split("\\").join("/")}\n`);
     } catch (error) {
@@ -355,16 +317,6 @@ async function runSmokeTests(appDir: string, connection: SmokeConnection): Promi
   }
 }
 
-/**
- * The account ID and region of the AWS logs: G-07's account operations with the CLI's AWS child
- * environment (proxy-aware SDK clients); STS `GetCallerIdentity` and the log bucket's location.
- */
-async function awsLogAccount(): Promise<{ readonly accountId: string; readonly region: string }> {
-  const [{ awsAccount }, { awsChildEnvironment }] = await Promise.all([import("../../provision/aws/account.js"), import("./aws-operations.js")]);
-  const account = awsAccount({ env: awsChildEnvironment(process.env) });
-  return { accountId: await account.accountId(), region: await account.region() };
-}
-
 /** `smoke` bound to the real recorded origins, app loader, git, Vitest and evidence writer. */
 export async function smokeBinding(): Promise<Command> {
   const [{ loadApp }, evidence] = await Promise.all([import("../../build/load.js"), import("../../evidence/public.js")]);
@@ -381,6 +333,5 @@ export async function smokeBinding(): Promise<Command> {
     newRunId: () => evidence.newRunId(),
     now: () => new Date(),
     versions,
-    awsLogAccount,
   });
 }

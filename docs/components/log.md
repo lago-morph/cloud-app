@@ -49,10 +49,12 @@ Worker code cannot write files directly under workerd. Entries are therefore pri
 ### Cloudflare
 An R2 binding to the shared log bucket, named `LOGS` on the stage Worker. Each entry is one object (`application/json`) at the LOG-REQ-004 key, whose `<id>` is the request ID or, for an entry without one, a random UUID. Each write is scheduled with the request's `waitUntil` so it does not delay the response, and a failed write is dropped. Without a `LOGS` binding (a misconfigured Worker), entries are printed as the marked Worker output lines of the local runtime instead, and requests are unaffected (DEC-0323; code in `src/log/cloudflare/`).
 
-### AWS
+### AWS — deferred (branch `aws`)
+
+Deferred to a later release (DEC-0508): this section describes the AWS target, which is not part of release 1. Its code is on the branch `aws`.
 An S3 `PutObject` to the shared log bucket using the Lambda role, which may only put objects there. A frozen Lambda would lose pending writes, so the runtime waits up to PAR-260 for them before completing a response.
 
-The shared bucket is named `prototype-logs-<account-id>` on AWS (in the account's region) and `prototype-logs` on Cloudflare. It is created by the CLI's one-time account setup (PROV; per-target operations: PROV §2).
+The shared bucket is named `prototype-logs-<account-id>` on AWS (in the account's region) and `prototype-logs` on Cloudflare. It is created by the CLI's one-time account setup (PROV; per-target operations: PROV §2). (The AWS bucket: deferred, branch `aws`.)
 
 ## 3. Uses
 
@@ -62,7 +64,7 @@ CORE (deployment identity, request ID), PROV (account setup, write permission).
 
 | ID | Criterion | Verifies | Where |
 | --- | --- | --- | --- |
-| LOG-AC-001 | Locally, with an injected log writer that fails and one that never completes, a request that writes log entries still succeeds, and its response time grows by no more than PAR-260. On AWS, with a deny on the stage role's `PutObject` to the log bucket, such a request still succeeds; on Cloudflare only the local case applies. The shared bucket itself is never altered. | LOG-REQ-001 | Local, cloud |
+| LOG-AC-001 | Locally, with an injected log writer that fails and one that never completes, a request that writes log entries still succeeds, and its response time grows by no more than PAR-260. On AWS, with a deny on the stage role's `PutObject` to the log bucket, such a request still succeeds; on Cloudflare only the local case applies. The shared bucket itself is never altered. (AWS clause: deferred, branch `aws`.) | LOG-REQ-001 | Local, cloud |
 | LOG-AC-002 | Stored entries validate against the schema and carry the request ID from the matching error response. | LOG-REQ-002 | Local, cloud |
 | LOG-AC-003 | After `dev`, entries written by the app appear in `.logs/` as JSON lines; `.logs/` is ignored by git. | LOG-REQ-003 | Local |
 | LOG-AC-004 | Entries appear under the specified key layout: an entry written during a request has that request's ID and its severity in its key, and one written outside a request has a random final part. After a stage is removed, the bucket and other stages' entries remain. | LOG-REQ-004 | Cloud |

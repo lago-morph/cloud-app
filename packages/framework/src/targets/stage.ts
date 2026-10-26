@@ -1,5 +1,5 @@
 /**
- * The stage runtime shared by every target runtime (local `dev`, Cloudflare and the AWS Lambda)
+ * The stage runtime shared by every target runtime (local `dev` and Cloudflare; the AWS Lambda on branch `aws`, DEC-0508)
  * and `createTestApp` (core.md §2 "Runtime assembly", "Services per request"; local.md §2: the
  * local target uses the Cloudflare adapters wherever possible). It wires every component's
  * runtime parts into CORE's assembler: LOG's request writer, HTTP's error/not-found handlers

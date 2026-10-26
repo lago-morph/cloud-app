@@ -47,12 +47,12 @@ Layout (DEC-0142): each new pair is `<dialect>/<nnnn>_<slug>.sql` with the same 
 **Record.** `__framework_migrations(id, dialect, checksum, applied_at)` in each database. `id` is `<history>/<base name>` (`framework/0000_framework_tables`, `app/0001_schema`), `dialect` is `sqlite` or `postgres`, `checksum` the file's SHA-256 hex, `applied_at` epoch milliseconds (DEC-0142). The table is created by the first framework migration; a database without it has no migrations. A migration is pending when its `id` is not in the record; framework migrations are applied before app migrations, each history in file order.
 
 **Schema-changing cloud deploy.** PROV-REQ-002 step 4 runs steps 1–5; its steps 5 and 6 perform step 6. Steps 1–2 use `stopApp` and `copyDatabase` (per-target operations: PROV §2).
-1. **Stop the app.** On Cloudflare, turn off the stage Worker's public address (its `workers.dev` route). The Worker is never deleted; its secrets and bindings survive. On AWS, set the HTTP Lambda's concurrency to zero.
-2. **Copy.** Create a new database (a new D1 database on Cloudflare, or a new database inside the stage's existing Aurora cluster on AWS) as a copy of the current one: on AWS the target's native whole-database copy, on Cloudflare the fallback copy (below).
-3. **Migrate.** Apply the pending migrations to the new database. On Cloudflare each migration file is applied as one batch (below). On AWS nothing is live, so a migration's statements need not be atomic. On failure, see **Failure** below.
+1. **Stop the app.** On Cloudflare, turn off the stage Worker's public address (its `workers.dev` route). The Worker is never deleted; its secrets and bindings survive. On AWS, set the HTTP Lambda's concurrency to zero. (On AWS: deferred, branch `aws`.)
+2. **Copy.** Create a new database (a new D1 database on Cloudflare, or a new database inside the stage's existing Aurora cluster on AWS) as a copy of the current one: on AWS the target's native whole-database copy, on Cloudflare the fallback copy (below). (On AWS: deferred, branch `aws`.)
+3. **Migrate.** Apply the pending migrations to the new database. On Cloudflare each migration file is applied as one batch (below). On AWS nothing is live, so a migration's statements need not be atomic. On failure, see **Failure** below. (On AWS: deferred, branch `aws`.)
 4. **Check.** Every table that was not explicitly dropped has the same row count as before, references are intact, values in added columns satisfy their column rule (SQL §2.1), and the record lists every migration. On failure, see **Failure** below.
 5. **Delete** the old database.
-6. **Deploy** the new version, bound to the new database, then explicitly restart the app (PROV-REQ-002 steps 5 and 6): on Cloudflare the CLI turns the `workers.dev` route back on; on AWS it removes the zero concurrency. The CLI does not rely on the provisioning tool to undo the stop.
+6. **Deploy** the new version, bound to the new database, then explicitly restart the app (PROV-REQ-002 steps 5 and 6): on Cloudflare the CLI turns the `workers.dev` route back on; on AWS it removes the zero concurrency. The CLI does not rely on the provisioning tool to undo the stop. (On AWS: deferred, branch `aws`.)
 
 **Failure.** If a migration (step 3) or the check (step 4) fails, the CLI deletes the new database, leaves the old database unchanged, restarts the previous version against it with `startApp`, and exits with failure status (MIG-REQ-003). The previous version's code and bindings were not changed, so restarting it needs no redeploy.
 
@@ -83,7 +83,9 @@ If any request of the copy fails, the CLI deletes the new database and the deplo
 
 *Delete.* `DELETE …/d1/database/<uuid>`; a database already gone (HTTP 404) counts as deleted.
 
-### AWS
+### AWS — deferred (branch `aws`)
+
+Deferred to a later release (DEC-0508): this section describes the AWS target, which is not part of release 1. Its code is on the branch `aws`.
 Copying and migrating use the Data API from the CLI. Deployment first waits for the cluster to resume (PAR-210). Creating, copying and dropping run connected to the `postgres` database, outside any transaction, with every database name quoted:
 - The first database is created with `CREATE DATABASE "<name>" TEMPLATE template0 LC_COLLATE 'C' LC_CTYPE 'C'`, so it and every copy use C ordering (SQL §2.1).
 - A copy is `CREATE DATABASE "<new>" TEMPLATE "<old>"`. It requires that nothing else is connected to the old database, which holds while the app is stopped. Early spike: confirm that the Data API leaves no pooled connection to the old database open.

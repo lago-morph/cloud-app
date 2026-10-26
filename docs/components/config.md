@@ -63,7 +63,9 @@ The build-time result (`ResolvedConfig`, framework-internal) holds the deploymen
 ### Cloudflare
 Embedded module plus Worker variables.
 
-### AWS
+### AWS — deferred (branch `aws`)
+
+Deferred to a later release (DEC-0508): this section describes the AWS target, which is not part of release 1. Its code is on the branch `aws`.
 Embedded module plus Lambda environment variables. Provisioning-derived values are small identifiers, well within Lambda's environment size limit.
 
 ## 3. Uses

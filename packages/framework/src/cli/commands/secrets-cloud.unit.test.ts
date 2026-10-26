@@ -73,16 +73,3 @@ describe("secrets set --target cloudflare (SEC-REQ-003, SEC-REQ-004, CLI-REQ-004
     expect(p.fake.calls).toEqual([]);
   });
 });
-
-describe("secrets set --target aws (SEC-REQ-003)", () => {
-  it("names the stage's SSM SecureString parameter /<app>/<stage>/secrets/<name>, never the value", async () => {
-    const h = harness();
-    const value = `v-${crypto.randomUUID()}`;
-    const io = captureIo("/apps/notes", [`${value}\n`]);
-    expect(await secretsCommand(h.deps)(["set", "apiKey", "--target", "aws", "--stage", "test-abc"], io)).toBe(0);
-    expect(h.events).toEqual(["operations aws"]);
-    expect(h.fake.calls).toEqual(["setSecret notes/test-abc apiKey"]);
-    expect(io.out).toContain("/notes/test-abc/secrets/apiKey (an SSM SecureString parameter of stage test-abc)");
-    expect(io.out + io.err).not.toContain(value);
-  });
-});

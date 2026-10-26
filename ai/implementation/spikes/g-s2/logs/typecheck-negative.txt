@@ -1,4 +1,0 @@
-out/negative.sst.config.ts(12,7): error TS2322: Type '"55 secs"' is not assignable to type 'Input<`${number} second` | `${number} seconds` | `${number} minute` | `${number} minutes`> | undefined'.
-out/negative.sst.config.ts(13,7): error TS2322: Type 'number' is not assignable to type 'Input<any[]> | undefined'.
-out/negative.sst.config.ts(14,56): error TS2322: Type '"60 minutes"' is not assignable to type 'Input<`${number} second` | `${number} seconds`> | undefined'.
-out/negative.sst.config.ts(17,7): error TS2820: Type '"postgresql"' is not assignable to type 'Input<"postgres" | "mysql">'. Did you mean '"postgres"'?

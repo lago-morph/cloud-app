@@ -25,7 +25,7 @@ Verifies: SYS-REQ-001, SYS-REQ-023, SYS-REQ-030
 Where: Local, cloud
 
 From one commit:
-1. Deploy the demo to a Cloudflare test stage and an AWS test stage.
+1. Deploy the demo to a Cloudflare test stage and an AWS test stage. (The AWS stage: deferred, branch `aws`.)
 2. Run the demo smoke test on each (`smoke`), and locally.
 
 Pass: all three smoke runs pass, and no source file differs between them.
@@ -51,7 +51,7 @@ Pass: `verify` fails on each, naming the rule and the skill reference to read, e
 Verifies: SYS-REQ-009, SYS-REQ-011, SYS-REQ-013, SYS-REQ-014, SYS-REQ-015, SYS-REQ-016, SYS-REQ-026, SYS-REQ-028
 Where: Local, cloud
 
-Run the full compliance suite on local, Cloudflare, and AWS for one commit.
+Run the full compliance suite on local, Cloudflare, and AWS for one commit. (Release 1: local and Cloudflare; AWS is deferred (branch `aws`, DEC-0508).)
 
 Pass: every applicable acceptance criterion passes on every target, and each target has a valid evidence record.
 

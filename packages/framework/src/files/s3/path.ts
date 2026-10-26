@@ -1,11 +1,12 @@
 /**
  * The URL path of an object key on an S3 endpoint (R2's S3-compatible endpoint and AWS S3),
- * shared by the Cloudflare tickets and the AWS store and tickets (DEC-0328).
+ * shared by the Cloudflare tickets and the AWS store and tickets (branch `aws`, DEC-0508) (DEC-0328).
  *
  * Each `/`-separated segment is RFC 3986-encoded (the form A-07 verified). URL parsers (aws4fetch,
  * `fetch`, browsers) resolve `.` and `..` segments, even percent-encoded, so a name with one is
  * sent with every `/` as `%2F`; storage decodes the path back to the same key. A name that is only
- * `.` or `..` cannot be put in any path-style or virtual-hosted URL (FILES.INVALID_NAME). Both
+ * `.` or `..` cannot be put in any path-style or virtual-hosted URL (FILES.INVALID_NAME; FILES-REQ-002
+ * makes such names invalid everywhere, DEC-0505, so this is a second guard). Both
  * rules test the *name*, so a target that stores another key for it (Cloudflare's U+0001 ending,
  * DEC-0430) behaves the same. Workers- and browser-compatible.
  */

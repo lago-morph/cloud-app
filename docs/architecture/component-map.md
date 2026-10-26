@@ -4,7 +4,7 @@ This document defines the framework's components, what each is responsible for, 
 
 ## 1. Organization
 
-Each **capability** component (SQL, KV, FILES, …) owns its portable contract and its adapters, one per target. Each **target** component (LOCAL, CF, AWS) owns that runtime's entry points and platform constraints. Adding a target therefore means a new target component plus a new adapter in each capability, without changing app-facing capability contracts (SYS-REQ-003). It does change the few places that enumerate targets: the `./targets/<target>` subpaths (CORE-REQ-005), the `target` enumerations in the log-entry and evidence schemas, the SEC-REQ-003 storage table, and the targets COMPL-REQ-001 runs on.
+Each **capability** component (SQL, KV, FILES, …) owns its portable contract and its adapters, one per target. Each **target** component (LOCAL, CF, AWS) owns that runtime's entry points and platform constraints. Adding a target therefore means a new target component plus a new adapter in each capability, without changing app-facing capability contracts (SYS-REQ-003). It does change the few places that enumerate targets: the `./targets/<target>` subpaths (CORE-REQ-005), the `target` enumerations in the log-entry and evidence schemas, the SEC-REQ-003 storage table, and the targets COMPL-REQ-001 runs on. Release 1 has the LOCAL and CF targets; AWS is deferred (branch `aws`, DEC-0508).
 
 **Containment rule:** components interact only through each other's published contracts.
 
@@ -37,7 +37,7 @@ Each **capability** component (SQL, KV, FILES, …) owns its portable contract a
 | --- | --- | --- |
 | [`LOCAL`](../components/local.md) | Local target | Running apps locally, including the local authentication mode. |
 | [`CF`](../components/cloudflare.md) | Cloudflare target | Running apps on Cloudflare. |
-| [`AWS`](../components/aws.md) | AWS target | Running apps on AWS. |
+| [`AWS`](../components/aws.md) | AWS target | Running apps on AWS. Deferred to a later release — deferred (branch `aws`). |
 
 ### Tooling and delivery
 
@@ -65,7 +65,7 @@ Every app-facing component depends on CORE; that dependency is not repeated belo
 | SEC | CFG | Configuration holds secret names and locations (SYS-REQ-016). |
 | AUTH | HTTP, CFG | Login and logout are HTTP routes; admins are listed in configuration (SYS-REQ-018). |
 | GOOGLE | AUTH | Implements AUTH's provider interface (SYS-REQ-019). |
-| LOCAL, CF, AWS | All capability components | Each target provides every capability (SYS-REQ-001). |
+| LOCAL, CF, AWS | All capability components | Each target provides every capability (SYS-REQ-001). (AWS: deferred, branch `aws`.) |
 | PROV | CFG, SEC, MIG, LOG, CF, AWS, HTTP, AUTH | Deployment supplies configuration and secret locations, applies migrations, and sets up the shared log bucket (SYS-REQ-012, SYS-REQ-021, SYS-REQ-023); it calls the HTTP health route and checks the login provider's settings (PROV-REQ-002). |
 | CHECK | SQL, MIG | Enforces SQL portability and checks migrations (SYS-REQ-011, SYS-REQ-025). |
 | CLI | LOCAL, CHECK, PROV, MIG, SEC, GOOGLE, CORE, COMPL | Local development, the verification command, deploy and remove, migration generation, setting secrets, certification (SYS-REQ-022, SYS-REQ-025, SYS-REQ-027); `smoke` uses CORE's `./testing` and writes COMPL evidence (CLI-REQ-001). |

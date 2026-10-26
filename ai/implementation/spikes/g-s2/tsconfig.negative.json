@@ -1,4 +1,0 @@
-{
-  "extends": "./tsconfig.typecheck.json",
-  "files": ["out/negative.sst.config.ts"]
-}

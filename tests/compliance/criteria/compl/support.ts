@@ -25,8 +25,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = resolve(here, "../../../..");
 export const DOCS = join(REPO_ROOT, "docs");
 
+/** Every target the documents' Where texts name. */
 export type Target = "local" | "cloudflare" | "aws";
 export const TARGETS: readonly Target[] = ["local", "cloudflare", "aws"];
+/** The targets release 1 runs (DEC-0508): `npm run compliance` refuses `--target aws`, deferred to a later release. */
+export const RELEASE_TARGETS: readonly Target[] = ["local", "cloudflare"];
 
 /** Bound for one nested `npm run compliance` (bundling the CLI, and in a self-test one Vitest run). */
 export const NESTED_RUN_MS = 240_000;

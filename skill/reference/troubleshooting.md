@@ -62,19 +62,6 @@ aws s3 cp "s3://prototype-logs/$KEY" - --endpoint-url "https://$CLOUDFLARE_ACCOU
 
 Not yet verified on Cloudflare in this phase.
 
-### AWS (not yet verified on AWS)
-
-Entries are objects in the S3 bucket `prototype-logs-<account-id>`, under the same key. `smoke` prints the bucket and today's prefix. With the AWS credentials set ([owner-tasks.md](owner-tasks.md) §2a):
-
-```sh
-STAGE='<stage>'; DAY=$(date -u +%Y/%m/%d)
-BUCKET="prototype-logs-$(aws sts get-caller-identity --query Account --output text)"
-aws s3 ls "s3://$BUCKET/$APP/$STAGE/$DAY/"
-KEY='<paste the key here>'; aws s3 cp "s3://$BUCKET/$KEY" -
-```
-
-When there is no entry, watch the Lambda function's own output: `aws logs tail "/aws/lambda/$APP-$STAGE-http" --follow`
-
 ### When there is no log entry
 
 - An entry is written after the response is sent. Wait a few seconds and list again.
@@ -97,7 +84,7 @@ Each code's meaning, HTTP status and whether it is retryable are in the framewor
 | `CORE.MISCONFIGURED` | Invalid configuration or wiring, for example a production stage without `framework.google.clientId` | Fix `config/<target>/<stage>.json`, then deploy again. |
 | `SEC.MISSING` | A declared secret has no value in this stage | Set it (see [owner-tasks.md](owner-tasks.md) §4). On Cloudflare, the next request sees it (not yet verified). |
 | `SEC.UNDECLARED`, `CFG.UNDECLARED_KEY` | The code reads a name that `src/server/env.ts` does not declare | Declare it, or fix the name. |
-| `SQL.UNAVAILABLE`, `KV.UNAVAILABLE`, `FILES.UNAVAILABLE`, `SEC.UNAVAILABLE` | Storage was not reachable in time. On Cloudflare's free plan, the D1 daily limit may be used up. On AWS, the paused database may not have resumed in 45 s | Retry later. Check D1 usage in the dashboard. |
+| `SQL.UNAVAILABLE`, `KV.UNAVAILABLE`, `FILES.UNAVAILABLE`, `SEC.UNAVAILABLE` | Storage was not reachable in time. On Cloudflare's free plan, the D1 daily limit may be used up | Retry later. Check D1 usage in the dashboard. |
 | `SQL.RESULT_TOO_LARGE` | A query returns too much | Paginate the query. |
 | `AUTH.UNAUTHENTICATED` / `AUTH.FORBIDDEN` | Not logged in / not admin or not allowed | See §3 and the admin steps in [owner-tasks.md](owner-tasks.md) §6. |
 | `AUTH.REQUEST_FORGERY` | A POST/PUT/PATCH/DELETE with a session came from another origin | Use the stage's own URL, not a copy behind another host. |
@@ -124,7 +111,6 @@ These steps are for production stages, which use Google. They are **not yet veri
 `deploy` prints the failed step, the stage's state and the next action. Follow the next action. Common messages:
 
 - `run setup-account … first`: the account's shared resources are missing. See [owner-tasks.md](owner-tasks.md) §3.
-- `missing AWS credentials: …` or a region refused by `setup-account`: see [owner-tasks.md](owner-tasks.md) §2a and §3.
 - A missing `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID`, or "the permission to create R2 API tokens": see [owner-tasks.md](owner-tasks.md) §2.
 - `NODE_USE_ENV_PROXY`: you are behind an HTTPS proxy. Put `NODE_USE_ENV_PROXY=1 ` in front of the command.
 - `required secrets are not set: …`: this happens on the first deploy of a stage. Set each named secret with `--target cloudflare`, then run `deploy` again.

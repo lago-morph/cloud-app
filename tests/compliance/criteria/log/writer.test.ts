@@ -2,7 +2,7 @@
  * LOG-AC-001: with an injected log writer that fails and one that never completes, a request that
  * writes log entries still succeeds, and its response time grows by no more than PAR-260
  * (docs/components/log.md §4). The criterion's case is the local one ("on Cloudflare only the
- * local case applies"; the AWS deny case belongs to the AWS phase), so it runs in-process with
+ * local case applies"; the AWS deny case is deferred with the AWS target (DEC-0508, branch `aws`)), so it runs in-process with
  * `createTestApp`'s `logWriter` option on every target this criterion runs on. The shared bucket is
  * never touched by this test.
  */

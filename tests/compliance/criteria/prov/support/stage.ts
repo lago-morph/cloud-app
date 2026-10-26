@@ -200,9 +200,7 @@ export async function takeStageRoom(databases: number, what: string): Promise<()
   requireCloudD1(target().target);
   const release = await acquireLock("further-stage", 60 * 60_000);
   try {
-    // AWS: one Aurora cluster per stage, at most three at once (plan-aws.md G-T4); Cloudflare: the D1 database cap.
-    if (target().target === "aws") await (await import("../../_cloud/aws/usage.js")).requireClusterRoom(1, what);
-    else await requireDatabaseRoom(databases, what);
+    await requireDatabaseRoom(databases, what);
   } catch (error) {
     await release();
     throw error;

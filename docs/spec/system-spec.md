@@ -8,6 +8,8 @@ Read [CONVENTIONS.md](../CONVENTIONS.md) first: only identified requirements (`S
 
 The framework lets AI agents build small web applications — a browser client plus a server API — whose single source runs locally and deploys to both Cloudflare and AWS. Application code sees a small set of capabilities (SQL, key-value storage, files, secrets, configuration, the current user, logging) and never sees which cloud it runs on.
 
+Release scope (informative; DEC-0508, owner, 2026-10-24): the first release targets local and Cloudflare. The AWS target is deferred to a later release; its design and code are kept on the branch `aws`, and everything in these documents about it is marked "deferred (branch `aws`)".
+
 The applications are prototypes and personal tools: low criticality, low volume, a few simultaneous users. The framework's value is portability and safety for AI-written code, not performance or scale.
 
 ## 2. Terms
@@ -16,7 +18,7 @@ The applications are prototypes and personal tools: low criticality, low volume,
 | --- | --- |
 | Owner | The person directing this project. The owner does not write or read code. |
 | App | An application built on the framework. |
-| Target | A place an app runs: `local`, `cloudflare`, or `aws`. |
+| Target | A place an app runs: `local`, `cloudflare`, or `aws` (`aws` deferred to a later release, DEC-0508). |
 | Stage | One named deployment of an app on a cloud target (for example `dev`, `test-1234`), with its own resources and configuration values. |
 | Test stage | A stage explicitly marked as being for automated testing. |
 | Production deployment | Any stage that is not a test stage. |
@@ -29,9 +31,11 @@ The applications are prototypes and personal tools: low criticality, low volume,
 ### 3.1 Portability and neutrality
 
 #### SYS-REQ-001 — One source, every target
-Origin: owner · Decision: DEC-0001
+Origin: owner · Decision: DEC-0001, DEC-0508
 
 The same app source MUST run locally, on Cloudflare, and on AWS without modification. Both cloud targets are mandatory for every app.
+
+Amendment for release 1 (Origin: owner · Decision: DEC-0508): release 1 targets local and Cloudflare. In release 1, "every target" means local and Cloudflare, and Cloudflare is the one mandatory cloud target. AWS is a later release; this requirement's AWS clause is deferred (branch `aws`) and binds again when that release starts.
 
 Note (informative): this is source portability. Each target has its own data; nothing is replicated, migrated, or failed over between targets.
 
@@ -39,6 +43,8 @@ Note (informative): this is source portability. Each target has its own data; no
 Origin: owner · Decision: DEC-0001
 
 Framework abstractions MUST NOT be shaped around one provider's services or conventions. In particular, using an emulated Cloudflare environment for local development MUST NOT make the abstractions Cloudflare-centric.
+
+Note (informative; DEC-0508): with one cloud target in release 1 this requirement is unchanged. It is what lets the deferred AWS target return without reshaping the abstractions.
 
 #### SYS-REQ-003 — Contained change
 Origin: owner · Decision: DEC-0003
@@ -162,9 +168,11 @@ Origin: owner-approved · Decision: DEC-0033, DEC-0053
 The framework MUST provide one scripted, deterministic command that an app must pass before work on it is considered done. The command runs, locally and with no network or cloud dependency: (1) type checking, (2) the portability rules, (3) the migration checker, and (4) the app's automated tests.
 
 #### SYS-REQ-026 — Compliance on every target
-Origin: owner-approved · Decision: DEC-0020
+Origin: owner-approved · Decision: DEC-0020, DEC-0508
 
 A single compliance suite MUST verify each capability's contract identically on all three targets. The framework is considered working only when the suite passes on all three targets and the provider certification (SYS-REQ-027) is current.
+
+Amendment for release 1 (Origin: owner · Decision: DEC-0508): release 1 targets local and Cloudflare, so in release 1 "all three targets" reads "local and Cloudflare". The framework is considered working for release 1 when the suite passes on local and Cloudflare and the provider certification is current. AWS is a later release: AWS criteria are deferred (branch `aws`), and the release report (COMPL-REQ-006) does not count them as missing.
 
 #### SYS-REQ-027 — Provider certification
 Origin: owner · Decision: DEC-0021

@@ -19,7 +19,6 @@ const allPassed = (commit: string): EvidenceRecord[] => (
   [
   rec("local", commit, [{ id: "KV-AC-001", status: "passed" }]),
   rec("cloudflare", commit, [{ id: "KV-AC-001", status: "passed" }]),
-  rec("aws", commit, [{ id: "KV-AC-001", status: "passed" }]),
   rec("cloudflare", "c0", [{ id: "GOOGLE-AC-005", status: "passed" }], { milestone: true, finishedAt: "2026-10-19T09:00:00Z" }),
   ]
 );
@@ -35,10 +34,10 @@ describe("[COMPL-AC-006] release report", () => {
   });
 
   it("a commit with one not-run automated criterion is not working", () => {
-    const records = allPassed("c1").map((r) => (r.target === "aws" ? { ...r, results: [{ id: "KV-AC-001", status: "not-run" as const, detail: "AWS phase not started" }] } : r));
+    const records = allPassed("c1").map((r) => (r.target === "cloudflare" && !r.command.includes("--milestone") ? { ...r, results: [{ id: "KV-AC-001", status: "not-run" as const, detail: "D1 unavailable" }] } : r));
     const report = releaseReport({ commit: "c1", catalogue, records, invalidations: [], loginCommits: noLoginCommits });
     expect(report.works).toBe(false);
-    expect(report.problems).toEqual(["KV-AC-001 on aws: not-run: AWS phase not started (run r3)"]);
+    expect(report.problems).toEqual(["KV-AC-001 on cloudflare: not-run: D1 unavailable (run r2)"]);
     expect(renderRelease(report)).toMatch(/: not working$/m);
   });
 
@@ -50,7 +49,7 @@ describe("[COMPL-AC-006] release report", () => {
 
   it("the latest record decides; milestone runs are not automated evidence", () => {
     const records = [...allPassed("c1"), rec("local", "c1", [{ id: "KV-AC-001", status: "failed", detail: "boom" }])];
-    expect(releaseReport({ commit: "c1", catalogue, records, invalidations: [], loginCommits: noLoginCommits }).problems).toEqual(["KV-AC-001 on local: failed: boom (run r5)"]);
+    expect(releaseReport({ commit: "c1", catalogue, records, invalidations: [], loginCommits: noLoginCommits }).problems).toEqual(["KV-AC-001 on local: failed: boom (run r4)"]);
   });
 
   it("a newer milestone record that did not select an ID does not decide it", () => {
@@ -60,7 +59,7 @@ describe("[COMPL-AC-006] release report", () => {
     ];
     const report = releaseReport({ commit: "c1", catalogue, records, invalidations: [], loginCommits: noLoginCommits });
     expect(report.problems).toEqual([]);
-    expect(report.lastCertification?.runId).toBe("r4");
+    expect(report.lastCertification?.runId).toBe("r3");
   });
 
   it("a newer automated record that did not select an ID does not shadow the record that ran it", () => {
@@ -72,14 +71,14 @@ describe("[COMPL-AC-006] release report", () => {
 
   it("only the exact not-selected entry is skipped; any other not-run detail still decides", () => {
     const records = [...allPassed("c1"), rec("local", "c1", [{ id: "KV-AC-001", status: "not-run", detail: "not selected for this run (--only) extra" }])];
-    expect(releaseReport({ commit: "c1", catalogue, records, invalidations: [], loginCommits: noLoginCommits }).problems).toEqual(["KV-AC-001 on local: not-run: not selected for this run (--only) extra (run r5)"]);
+    expect(releaseReport({ commit: "c1", catalogue, records, invalidations: [], loginCommits: noLoginCommits }).problems).toEqual(["KV-AC-001 on local: not-run: not selected for this run (--only) extra (run r4)"]);
   });
 
   it("a certification invalidated by a recorded entry makes the commit not working", () => {
     const invalidations = parseInvalidations("# Invalidations\n\n- 2026-10-19 | GOOGLE-AC-005, E2E-008 | login-provider interface changed\n");
     const report = releaseReport({ commit: "c1", catalogue, records: allPassed("c1"), invalidations, loginCommits: noLoginCommits });
     expect(report.works).toBe(false);
-    expect(report.problems).toEqual(["GOOGLE-AC-005 on cloudflare (milestone): record r4 of 2026-10-19T09:00:00Z is invalidated: 2026-10-19 login-provider interface changed"]);
+    expect(report.problems).toEqual(["GOOGLE-AC-005 on cloudflare (milestone): record r3 of 2026-10-19T09:00:00Z is invalidated: 2026-10-19 login-provider interface changed"]);
   });
 
   it("an invalidation dated before the record does not invalidate it; a missing milestone record does", () => {
@@ -109,14 +108,28 @@ describe("[COMPL-AC-006] release report", () => {
 
   // G-EV F3: a record marked as a dry run is never counted, even when it is the newest and all passed.
   it("never counts a record marked as a dry run", () => {
-    const records = allPassed("c1").map((r) => (r.target === "aws" ? { ...r, dryRun: "fake stage operations (OperationsFactory)" } : r));
+    const records = allPassed("c1").map((r) => (r.target === "cloudflare" && !r.command.includes("--milestone") ? { ...r, dryRun: "fake stage operations (OperationsFactory)" } : r));
     const report = releaseReport({ commit: "c1", catalogue, records, invalidations: [], loginCommits: noLoginCommits });
     expect(report.works).toBe(false);
-    expect(report.problems).toEqual(["KV-AC-001 on aws: no record for commit c1"]);
+    expect(report.problems).toEqual(["KV-AC-001 on cloudflare: no record for commit c1"]);
     const certified = allPassed("c1").map((r) => (r.command.includes("--milestone") ? { ...r, dryRun: "not-run rules overridden (DriverDeps.notRunRules)" } : r));
     const milestone = releaseReport({ commit: "c1", catalogue, records: certified, invalidations: [], loginCommits: noLoginCommits });
     expect(milestone.problems).toEqual(["GOOGLE-AC-005 on cloudflare (milestone): no record"]);
     expect(milestone.lastCertification).toBeUndefined();
+  });
+
+  // DEC-0508: release 1 judges local and Cloudflare; the AWS target and AWS-only criteria are deferred.
+  it("never demands an AWS criterion or an AWS record: no AWS line appears, and the commit works without them", () => {
+    const withAws = [...catalogue, entry("AWS-AC-001", "Cloud", "components/aws.md"), entry("AWS-AC-007", "Cloud (milestone)", "components/aws.md")];
+    const report = releaseReport({ commit: "c1", catalogue: withAws, records: allPassed("c1"), invalidations: [], loginCommits: noLoginCommits });
+    expect(report.problems).toEqual([]);
+    expect(report.works).toBe(true);
+    const text = renderRelease(report);
+    expect(text).not.toMatch(/AWS-AC-|on aws/);
+    expect(text).toContain("Targets judged: local, cloudflare. The AWS target is deferred to a later release (DEC-0508, branch `aws`).");
+    // An AWS record, even a failing one, decides nothing.
+    const failingAws = [...allPassed("c1"), rec("aws", "c1", [{ id: "KV-AC-001", status: "failed", detail: "boom" }, { id: "AWS-AC-001", status: "failed", detail: "boom" }])];
+    expect(releaseReport({ commit: "c1", catalogue: withAws, records: failingAws, invalidations: [], loginCommits: noLoginCommits }).problems).toEqual([]);
   });
 
   it("ignores list lines inside fenced code blocks (the format example)", () => {

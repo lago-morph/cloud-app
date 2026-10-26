@@ -2,7 +2,7 @@
  * Object keys in the account's shared log bucket (LOG-REQ-004):
  * `<app>/<stage>/<yyyy>/<mm>/<dd>/<hhmmss.sss>-<severity>-<id>.json`. The date and time are the
  * entry's UTC time; `<id>` is the entry's request ID, or a random value when it has none (no
- * framework path writes outside a request today, DEC-0314; the rule is kept). Shared by the Cloudflare and AWS sinks. Workers-compatible.
+ * framework path writes outside a request today, DEC-0314; the rule is kept). Shared by the target sinks (Cloudflare; the AWS sink is on branch `aws`, DEC-0508). Workers-compatible.
  */
 import type { LogEntry } from "./entry.js";
 

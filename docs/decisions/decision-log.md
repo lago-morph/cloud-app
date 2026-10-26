@@ -13,7 +13,7 @@ Entries DEC-0001 to DEC-0029 and DEC-0036 to DEC-0050 were recorded on 2026-10-1
 ## Requirements-level decisions
 
 ### DEC-0001 — Both clouds mandatory; framework stays cloud-neutral
-Origin: owner · Status: accepted · Affects: SYS-REQ-001, SYS-REQ-002
+Origin: owner · Status: accepted; for release 1 amended by DEC-0508 (local and Cloudflare; AWS in a later release) · Affects: SYS-REQ-001, SYS-REQ-002
 
 Every app runs locally, on Cloudflare, and on AWS. The purpose is to keep the framework cloud-neutral rather than conforming to Cloudflare's services and conventions, even though local development uses an emulated Cloudflare environment.
 
@@ -126,7 +126,7 @@ Origin: owner · Status: accepted · Affects: SYS-REQ-023, PROV
 The owner needs some provisioning abstraction but does not mind which tool is used, and accepts different infrastructure-as-code tools per platform as long as a common abstraction sits above them. Region and similar settings are configuration, not hard-coded.
 
 ### DEC-0020 — Compliance on all three targets defines "works"
-Origin: owner-approved · Status: accepted · Affects: SYS-REQ-026, COMPL
+Origin: owner-approved · Status: accepted; for release 1 amended by DEC-0508 ("works" means local and Cloudflare) · Affects: SYS-REQ-026, COMPL
 
 ### DEC-0021 — Real-provider certification is a separate, rarely repeated manual test
 Origin: owner · Status: accepted · Affects: SYS-REQ-027, GOOGLE
@@ -3776,6 +3776,8 @@ Item: fix-sec001.
 
 ## Implementation phase: AWS — phase G, offline (2026-10-24)
 
+Deferred (DEC-0508): the AWS target is not part of release 1. The code, tests and evidence of this phase were moved off the release branch to the branch `aws`; the entries below stay for the record. Files they name under `src/targets/aws/`, `src/provision/aws/`, `src/files/aws/`, `src/log/aws/`, `src/sql/data-api*`, `tests/compliance/criteria/{aws,_cloud/aws}/`, `plan-aws.md`, `ai/implementation/spikes/g-s*` and `validation/local/phase-G/` exist only on that branch. Index: `ai/implementation/aws-deferred.md`.
+
 Entries DEC-0432 to DEC-0502 were integrated by G-INT from the drafts of items G-S1, G-S2, G-F1, G-01 … G-11 and G-T4 (plan §10.4; G-T1, G-T2, G-T3 and G-12 wrote no draft). They are numbered in that order. Each entry keeps its draft's wording and status: everything here is `ai-proposed` and was built and checked offline, with no AWS call, so "to be confirmed live" and "unverified live" still hold until phase L. Draft-level notes (open points, fidelity notes, live items) are folded into one entry of their item, with their state at integration.
 
 Parameters (docs/parameters/parameters.md): PAR-111's AWS SDK value recorded; new PAR-120 (`aws-sdk-client-mock`), PAR-121 (`@types/aws-lambda`), PAR-272 (Lambda runtime), PAR-273 (architecture), PAR-274 (memory), PAR-275 (Data API resume backoff), PAR-276 (bundle size bound), PAR-281 (AWS-AC-005 pause wait), PAR-282 (AWS hook API-call cap per compliance run) and PAR-283 (Aurora clusters at once); PAR-271's note extended. Each value was checked against the code that uses it.
@@ -4844,3 +4846,22 @@ Origin: ai-proposed · Status: accepted · Affects: `docs/contracts/schemas/evid
 
 The evidence record gets an optional `dryRun` string, which says what was faked. The driver sets it when `DriverDeps.notRunRules` is not `PHASE_RULES`. It also sets it when the stage operations carry a `dryRun` of their own. `cliStageOps` gives them one when it is built on a fake CLI runner or a fake `OperationsFactory`. `readRecords` lists such a record among the skipped files ("a dry run (…), never evidence"). The release and traceability reports also drop it themselves, so a marked record never counts, wherever it is stored. GD (`validation/local/phase-G/aws-dry-run/…/rx3n81izmc4esca.json`) predates the field. It stays unmarked as committed and must still never be moved under `validation/aws/`.
 Item: G-EV fixes (F4, F3).
+
+### DEC-0505 — The file names `.` and `..` are invalid on every target
+Origin: owner · Status: accepted · Resolves: the DEC-0464 / FILES-AC-002 conflict (plan-aws.md §5.1 Q1) · Affects: FILES-REQ-002, FILES-AC-002, DEC-0328, DEC-0464, `packages/framework/src/files/names.ts`, `packages/framework/test/integration/files/server-operations.cases.ts`, `tests/compliance/criteria/files/server-operations.test.ts`, `skill/reference/files.md`
+
+The owner, 2026-10-24: "File names of . and .. are ridiculous and should never be allowed." FILES-REQ-002 now says a name MUST NOT be exactly `.` or `..`. The shared check (`checkName`, which every FILES operation that takes a name calls before any storage call) rejects both with `FILES.INVALID_NAME` on local, Cloudflare and AWS. Only the whole name is tested. Names that merely contain dots (`...`, `.x`) and names with `.` or `..` as a `/`-separated segment (`a/../b`, `./x`, `../../etc/passwd`) keep their documented behaviour: they are valid and never resolved as paths, since FILES-REQ-002 says names are not paths, so segments are not names. List prefixes are unchanged (a prefix `..` still lists names such as `../up.txt`). DEC-0328's `%2F` rule for dot segments stays. Its ticket refusal, and DEC-0464's refusal in `objectPath`, now act only as a second guard behind `checkName`, so there is no target difference. FILES-AC-002's round-trip case no longer lists `..` (`...` takes its place), and its rejection cases add `.` and `..`. G-T3's aws-precheck suite runs the same cases and now passes.
+
+## Release scope (2026-10-24)
+
+### DEC-0508 — Release 1 is local and Cloudflare; the AWS target is deferred to a later release (branch `aws`)
+Origin: owner · Status: accepted · Amends: DEC-0001, DEC-0020 (for release 1) · Affects: SYS-REQ-001, SYS-REQ-026, COMPL-REQ-001, COMPL-REQ-006, COMPL-AC-001, COMPL-AC-006, CORE-REQ-005, `docs/components/aws.md`, the AWS sections of the component documents, the AWS parameters, `tests/compliance/harness/{catalogue,args,env,expected,driver,node-deps}.ts`, `tests/compliance/tools/{traceability,release}.ts`, `skill/`, `apps/template/README.md`
+
+The owner, 2026-10-24: "Move aws code to a branch". The first release targets local and Cloudflare only. The AWS target follows in a later release.
+
+- **Where the AWS work is.** Everything built for AWS (phase G, offline: DEC-0432…DEC-0504) is kept on the branch `aws` (head `07be83f`), never run live. The index for picking it up again, with the open database question for the owner's test accounts, is `ai/implementation/aws-deferred.md`.
+- **What left the release branch.** The AWS target runtime, provisioning, Data API adapter, S3 file store, log sink and SSM secrets (`src/targets/aws/`, `src/provision/aws/`, `src/sql/data-api*`, `src/files/aws/`, `src/log/aws/`, `src/secrets/aws.ts`); the AWS build path and the Lambda bundle inspection, which only AWS used; the CLI's `--target aws` wiring (`aws-operations.ts`, `setup-account --region`); `"aws"` in the framework's `Target` and the `./targets/aws` export (so DEC-0447 and DEC-0448 no longer hold on this branch, and DEC-0110's subpath table applies again); the AWS criteria tests and cloud hooks, the AWS usage caps and region step of the compliance driver (DEC-0501, DEC-0503), the aws-precheck suites, the `config/aws/` files (DEC-0450); the AWS SDK, `aws-sdk-client-mock`, `@types/aws-lambda` and `@smithy/node-http-handler` dependencies; and the phase G records (`validation/local/phase-G/`, the spikes `g-s1`/`g-s2`, `plan-aws.md`, the `g-*` decision drafts, `G-aws-offline.md`).
+- **What stays, because local or Cloudflare uses it.** The shared S3 signing, URL path and CORS preflight in `src/files/s3/` (DEC-0467), `src/files/disposition.ts` and `src/targets/stage.ts` (DEC-0473), `src/log/keys.ts` (DEC-0458), the per-target operations factory, now registering Cloudflare only (DEC-0493), the `dryRun` evidence marker (DEC-0504), the skip-notes reporter (DEC-0500), the clause-rule kind with no rules (DEC-0499), the root `vitest.config.ts` and the other test-robustness fixes, and the ban on the file names `.` and `..` (DEC-0505).
+- **Requirements.** SYS-REQ-001 and SYS-REQ-026 carry an amendment note for release 1. Every other requirement, criterion, scenario and parameter that names AWS is kept as written and marked "deferred (branch `aws`)" where it stands. `docs/components/aws.md` is marked deferred at its top; its content is kept for the record. A requirement's AWS clause binds again when the AWS release starts.
+- **What the harness and reports judge.** The catalogue still reads every criterion. `npm run compliance` refuses `--target aws`, no not-run rule names AWS, and the AWS clauses of Local criteria (CORE-AC-006's AWS bundle, SQL-AC-006's Data API retry loop) are not required (no clause rules). The traceability report shows results for local and Cloudflare only and lists the AWS-only criteria as deferred, never as untested. The release report (COMPL-AC-006) judges local and Cloudflare only, so no AWS criterion or record is ever listed as missing.
+- **Numbering.** DEC-0506 and DEC-0507 were used on the branch `aws` after it was split off (DEC-0506: at most 8 Lambda functions, PAR-284, budget alarm removed; DEC-0507: region guard under `PROTOTYPE_AWS_SANDBOX=pluralsight`). They are not reused here, and are not recorded on this branch; this entry is DEC-0508 so the two logs never give one number two meanings. Merging the branches brings them in unchanged.

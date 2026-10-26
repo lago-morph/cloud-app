@@ -1,5 +1,0 @@
-test-stage Aurora clusters before deploying test-rx3n81izmc4esca: 0
-vitest: 0 AWS API call(s) by the test hooks
-playwright: 0 AWS API call(s) by the test hooks
-driver process: 0 AWS API call(s) by the hooks
-total: 0 of the run's cap 2000 (framework CLI calls not included)

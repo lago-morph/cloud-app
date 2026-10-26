@@ -9,11 +9,12 @@
  * target (each recorded `blocked` with the operator's reason) without starting `dev`, deploying,
  * or running a test: no cloud call, and no recursion into this suite. That the same list is what
  * a full run executes is what the enclosing run's own record and E2E-004 show. Assumptions:
- * DEC-0321…DEC-0322 (docs/decisions/decision-log.md, Item: C-T5).
+ * DEC-0321…DEC-0322 (docs/decisions/decision-log.md, Item: C-T5). Release 1's targets are local
+ * and Cloudflare (DEC-0508): the AWS target is deferred, so its Where entries are not compared.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { tag } from "../../harness/index.js";
-import { NESTED_RUN_MS, TARGETS, cloneAtHead, contractViolations, milestoneItemsNamed, runCompliance, whereSets, type Clone, type Target } from "./support.js";
+import { NESTED_RUN_MS, RELEASE_TARGETS as TARGETS, cloneAtHead, contractViolations, milestoneItemsNamed, runCompliance, whereSets, type Clone, type Target } from "./support.js";
 
 const REASON = "COMPL-AC-001 list check: nothing executed";
 
@@ -67,7 +68,8 @@ describe("compliance runs per target", () => {
           expect(milestoneOnly.filter((id) => everyAutomated.has(id))).toEqual([]);
         } else {
           // A milestone run lists milestone items only, and together they are COMPL-REQ-006's list.
-          const named = milestoneItemsNamed();
+          // AWS-only milestone items are deferred with the AWS target (DEC-0508).
+          const named = new Set([...milestoneItemsNamed()].filter((id) => TARGETS.some((t) => where.milestone[t].has(id))));
           const union = new Set(TARGETS.flatMap((t) => [...(lists.get(t) ?? [])]));
           expect([...union].sort()).toEqual([...named].sort());
         }

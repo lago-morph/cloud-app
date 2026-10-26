@@ -18,7 +18,7 @@ File content never passes through the API: the browser sends it to storage and f
 | `await files.delete(name)` | Removes it; deleting an absent file succeeds |
 | `await files.list(prefix, { limit?, cursor? })` | `{ items: [{ name, size, contentType }], nextCursor }`, names starting with `prefix` in code point order; 100 per page by default, at most 1,000 |
 
-- Names are opaque text: non-empty, at most 1,024 UTF-8 bytes (PAR-230), no control characters; otherwise 400 `FILES.INVALID_NAME`. A `/` in a name is just a character; nothing is a path.
+- Names are opaque text: non-empty, at most 1,024 UTF-8 bytes (PAR-230), not exactly `.` or `..`, no control characters; otherwise 400 `FILES.INVALID_NAME`. A `/` in a name is just a character; nothing is a path.
 - A list cursor works only with the prefix it came from; otherwise 400 `FILES.INVALID_CURSOR`.
 - Unreachable storage is 503 `FILES.UNAVAILABLE` (logged by the framework).
 - Return the ticket to the browser as JSON (`return c.json({ ticket })`). In app code its contents are not yours to read or build; tests may read it (see Testing).

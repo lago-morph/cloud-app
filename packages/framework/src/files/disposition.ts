@@ -3,7 +3,7 @@
  * with RFC 6266 / RFC 8187 `filename*=UTF-8''…`, always `attachment`, for every content type
  * (DEC-0414, superseding DEC-0313's raster `inline`). Images still display through `<img src>`,
  * which ignores the header. Shared by the local transfer route and the
- * Cloudflare and AWS download tickets (`response-content-disposition`). Workers- and browser-
+ * Cloudflare download tickets (and the AWS ones on branch `aws`, DEC-0508) (`response-content-disposition`). Workers- and browser-
  * compatible; no local-only names (CORE-REQ-006).
  */
 

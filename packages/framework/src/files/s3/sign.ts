@@ -1,6 +1,6 @@
 /**
  * SigV4 signing of S3 requests with aws4fetch (PAR-105, DEC-0098), shared by the Cloudflare
- * tickets (R2's S3-compatible endpoint) and the AWS store and tickets (S3).
+ * tickets (R2's S3-compatible endpoint) and the AWS store and tickets (S3; branch `aws`, DEC-0508).
  *
  * - `presignUrl`: query signing for a browser ticket. Every header passed is signed
  *   (`allHeaders: true`): aws4fetch leaves `Content-Type` unsigned by default, which would let an

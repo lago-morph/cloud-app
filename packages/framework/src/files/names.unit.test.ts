@@ -11,7 +11,7 @@ function codeOf(fn: () => unknown): string | undefined {
 }
 
 describe("[FILES-AC-002] file names (FILES-REQ-002)", () => {
-  it.each(["a", "with space.txt", "100%.bin", "a/b/c", "..", "../../etc/passwd", "naïve.pdf", "文件/照片.jpg", "emoji-😀", "é".repeat(512)])(
+  it.each(["a", "with space.txt", "100%.bin", "a/b/c", "../../etc/passwd", "a/../b", "./x", "a/.", ".x", "x.", "...", ".a.", "naïve.pdf", "文件/照片.jpg", "emoji-😀", "é".repeat(512)])(
     "accepts %# unchanged",
     (name) => {
       expect(checkName(name)).toBe(name);
@@ -29,6 +29,8 @@ describe("[FILES-AC-002] file names (FILES-REQ-002)", () => {
     ["DEL", "a\u007fb"],
     ["a lone high surrogate", "a\ud800b"],
     ["a lone low surrogate", "\udc00"],
+    ["exactly . (owner decision, DEC-0505)", "."],
+    ["exactly .. (owner decision, DEC-0505)", ".."],
   ])("rejects a name that is %s with FILES.INVALID_NAME", (_label, name) => {
     expect(codeOf(() => checkName(name))).toBe("FILES.INVALID_NAME");
   });

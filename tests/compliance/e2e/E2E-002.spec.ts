@@ -13,7 +13,7 @@
  * Cloud part: F-03 deploys the demo to a Cloudflare `test-` stage, runs `smoke --target
  * cloudflare` there and confirms no source difference (plan §7 F-03). This test cannot reach a
  * demo stage, so on a cloud target it reports a missing prerequisite (`blocked`), never a pass.
- * The AWS stage is `not-run` ("AWS phase not started", plan §8.2).
+ * The AWS stage is deferred with the AWS target (DEC-0508, branch `aws`); release 1 does not judge it.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";

@@ -9,8 +9,8 @@ export class UsageError extends Error {
   override readonly name = "UsageError";
 }
 
-/** Every supported target, as `--target` accepts it. */
-export const TARGETS: readonly Target[] = ["local", "cloudflare", "aws"];
+/** Every supported target, as `--target` accepts it (release 1; AWS is deferred, DEC-0508). */
+export const TARGETS: readonly Target[] = ["local", "cloudflare"];
 
 export interface TargetStage {
   readonly target: Target;

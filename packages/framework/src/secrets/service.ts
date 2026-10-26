@@ -1,7 +1,8 @@
 /**
  * The runtime `SecretsService` (SEC-REQ-001, SEC-REQ-005). Workers-compatible (no Node APIs).
  */
-import { secretLocation, type EnvSecretTarget } from "../config/secret-locations.js";
+import type { Target } from "../core/identity.js";
+import { secretLocation } from "../config/secret-locations.js";
 import { FrameworkError } from "../core/errors.js";
 import { logFailure } from "../log/failures.js";
 import type { LogService } from "../log/public.js";
@@ -12,7 +13,7 @@ import type { SecretsService } from "./public.js";
 export type SecretReader = (name: string) => Promise<string | undefined>;
 
 /** Local and Cloudflare: the value is the Worker env binding `SECRET_<NAME>` (SEC-REQ-003). */
-export function envSecretReader(env: Readonly<Record<string, unknown>>, target: EnvSecretTarget): SecretReader {
+export function envSecretReader(env: Readonly<Record<string, unknown>>, target: Target): SecretReader {
   return async (name) => {
     const value = env[secretLocation(target, name)];
     return typeof value === "string" ? value : undefined;

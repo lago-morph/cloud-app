@@ -13,8 +13,8 @@ export const APP_NAME_MAX_LENGTH = 20;
 /** PAR-291: maximum stage name length. */
 export const STAGE_NAME_MAX_LENGTH = 20;
 
-/** Every supported target (CORE-REQ-005: one `./targets/<target>` subpath each). */
-export type Target = "local" | "cloudflare" | "aws";
+/** Every supported target (CORE-REQ-005: one `./targets/<target>` subpath each). Release 1 is local and Cloudflare; AWS is deferred to a later release (DEC-0508, branch `aws`). */
+export type Target = "local" | "cloudflare";
 
 /** The full, framework-internal identity of one deployment. Fixed by the build. */
 export interface Deployment {

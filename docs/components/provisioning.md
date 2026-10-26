@@ -15,7 +15,7 @@ A stage's resources MUST be derived from the app definition alone: the fixed cap
 Origin: provenance-unclear · Derives from: SYS-REQ-012, SYS-REQ-023 · Decision: DEC-0078, DEC-0079
 
 `deploy` MUST perform these steps in order and stop at the first failure, exiting with failure status:
-1. **Preflight.** Check that credentials are present and usable, without printing them, including, on Cloudflare, the permission to create R2 API tokens; that the configuration is valid; that required secrets are set (on a stage's first Cloudflare deploy, once the Worker exists: §2); for production stages, that the login provider's required settings (the client ID) and framework secrets (the client secret) are present; and, on AWS, that the Aurora engine version (PAR-110) is offered in the recorded region with the Data API and the minimum capacity of PAR-212. Report every missing prerequisite by name. Nothing is created before this step passes.
+1. **Preflight.** Check that credentials are present and usable, without printing them, including, on Cloudflare, the permission to create R2 API tokens; that the configuration is valid; that required secrets are set (on a stage's first Cloudflare deploy, once the Worker exists: §2); for production stages, that the login provider's required settings (the client ID) and framework secrets (the client secret) are present; and, on AWS, that the Aurora engine version (PAR-110) is offered in the recorded region with the Data API and the minimum capacity of PAR-212. Report every missing prerequisite by name. Nothing is created before this step passes. (The AWS engine check: deferred, branch `aws`.)
 2. **Find the databases.** List the stage's databases whose names match `^<app>-<stage>-db-(\d+)$` exactly. The lowest-numbered one is current. Delete any higher-numbered one, which an interrupted run left behind, and print what was removed.
 3. **Long-lived infrastructure.** Create or update the stage's long-lived infrastructure only (buckets, database cluster, roles), with no new app code. If the stage has no database, create the first one.
 4. **Migrate.** If migrations are pending, run MIG-REQ-006 steps 1–5.
@@ -35,7 +35,7 @@ Origin: provenance-unclear · Derives from: SYS-REQ-024
 #### PROV-REQ-004 — Account setup
 Origin: owner · Derives from: SYS-REQ-021
 
-`setup-account` MUST create the account's shared resources if they do not exist, and MUST change nothing if they do. On both clouds that is the shared log bucket; on AWS, also one network shared by all stages' databases (DEC-0074). Deployment MUST fail with a clear message if they are missing. A shared resource counts as existing only if this account owns it; otherwise `setup-account` and `deploy` stop with a clear message.
+`setup-account` MUST create the account's shared resources if they do not exist, and MUST change nothing if they do. On both clouds that is the shared log bucket; on AWS, also one network shared by all stages' databases (DEC-0074). Deployment MUST fail with a clear message if they are missing. A shared resource counts as existing only if this account owns it; otherwise `setup-account` and `deploy` stop with a clear message. (The AWS part: deferred, branch `aws`.)
 
 #### PROV-REQ-005 — Test stages
 Origin: owner · Derives from: SYS-REQ-020 · Decision: DEC-0081
@@ -45,17 +45,17 @@ A stage MUST be treated as a test stage exactly when its name starts with `test-
 #### PROV-REQ-006 — Deployment settings are configuration
 Origin: owner · Derives from: SYS-REQ-023
 
-Region and other deployment settings MUST come from configuration or documented defaults, never from hard-coded values. The AWS region is an account setting chosen by `setup-account` (default PAR-060) and used by every stage in that account (DEC-0075).
+Region and other deployment settings MUST come from configuration or documented defaults, never from hard-coded values. The AWS region is an account setting chosen by `setup-account` (default PAR-060) and used by every stage in that account (DEC-0075). (The AWS region: deferred, branch `aws`.)
 
 ## 2. Design
 
-SST (PAR-100) is the provisioning engine on both clouds (DEC-0036). It is driven entirely by framework code in `./provision`, which builds the SST app from the app definition, so apps never see SST. Resource lists per target are in CF-REQ-002 and AWS-REQ-003.
+SST (PAR-100) is the provisioning engine on both clouds (DEC-0036). It is driven entirely by framework code in `./provision`, which builds the SST app from the app definition, so apps never see SST. Resource lists per target are in CF-REQ-002 and AWS-REQ-003. (AWS: deferred, branch `aws`.)
 
 **Credentials.** Cloud credentials come from the environment SST normally uses. The preflight step lists which are missing, by name only.
 
 **Errors** from these tooling commands are reported as messages with a non-zero exit status; they are not part of the runtime error catalogue.
 
-**State home.** Each target's provisioning state, encrypted secrets and lock are kept in that target's own cloud (state home on AWS for AWS stages, on Cloudflare for Cloudflare stages). `setup-account` bootstraps it with the log bucket; it is a shared account resource that stage removal never touches. Account settings live with the shared resources, never only on the owner's machine: on AWS, the region is the log bucket's region. When `setup-account` records an AWS region, it makes the same engine check as the deploy preflight (PAR-110) and stops before creating anything if the region fails it.
+**State home.** Each target's provisioning state, encrypted secrets and lock are kept in that target's own cloud (state home on AWS for AWS stages, on Cloudflare for Cloudflare stages). `setup-account` bootstraps it with the log bucket; it is a shared account resource that stage removal never touches. Account settings live with the shared resources, never only on the owner's machine: on AWS, the region is the log bucket's region. When `setup-account` records an AWS region, it makes the same engine check as the deploy preflight (PAR-110) and stops before creating anything if the region fails it. (The AWS parts: deferred, branch `aws`.)
 
 **Stage resources.** `<app>-<stage>-<purpose>` is a logical name. App names contain no hyphens (PAR-290), so the app part of a name is unambiguous. Physical names are whatever the provisioning tool generates (with a unique suffix where the namespace is global) and are referenced by identifiers from stage state or the resolved configuration. On Cloudflare the names are fixed instead (DEC-0331): the Worker script `<app>-<stage>`, the R2 bucket `<app>-<stage>-files` and the R2 signing token `<app>-<stage>-files-signing`. Workers scripts, R2 buckets and account API tokens are named per account, so these are unique, and every operation finds the stage's resources from the stage name alone, including from a clean machine. IAM statements, `remove` and database deletion use those exact identifiers or the anchored database pattern, never `<app>-<stage>-*` wildcards.
 
@@ -113,7 +113,7 @@ CFG, SEC, MIG, LOG, CF, AWS, CLI.
 | PROV-AC-003 | Removing one of two stages leaves the other stage and the shared resources intact, and leaves no resource, secret, or parameter of the removed stage except its log entries. | PROV-REQ-003 | Cloud (milestone) |
 | PROV-AC-004 | Running `setup-account` twice changes nothing the second time, including in the state home. Deploying without it fails with a clear message. | PROV-REQ-004 | Cloud (milestone) |
 | PROV-AC-005 | A local build check: building a deployment for stages whose names do not start with `test-` (for example `prod`, `prodcheck`, `mytest-1`) never yields a bundle containing the authentication mock or the mock-login route, and these builds read their own committed values file; building one for a stage named `test-<id>` includes the mock and reads `config/<target>/test.json`. | PROV-REQ-005 | Local |
-| PROV-AC-006 | After `setup-account` with a non-default region, stages deploy to that region, including a deploy from a clean machine with no local CLI state. | PROV-REQ-006 | Cloud (milestone) |
+| PROV-AC-006 | After `setup-account` with a non-default region, stages deploy to that region, including a deploy from a clean machine with no local CLI state. (The region part is AWS: deferred, branch `aws`; release 1 checks the clean-machine part on Cloudflare.) | PROV-REQ-006 | Cloud (milestone) |
 | PROV-AC-007 | With the cloud's response stubbed so that an existing shared log bucket belongs to another account, `setup-account` and `deploy` stop with a message naming the bucket and change nothing. | PROV-REQ-004 | Local |
 
 COMPL-AC-007 and COMPL-AC-008 (compliance.md §4) also verify PROV-REQ-002.
