@@ -35,6 +35,13 @@
  *   refusal shows is missing; it does not read the token's own policies, so deploy needs no
  *   permission on API tokens, and the write permissions of DEC-0515 are `setup-account`'s only
  *   (DEC-0553; live, 2026-10-25: without "Email Sending Read" the sending listing answers 403).
+ * - `steps` (DEC-0578): the six parts of `setUp` above as seven email steps of the account setup
+ *   (`EMAIL_STEP_IDS`; the sink bucket and its lifecycle rule are two), each with a read-only
+ *   `inspect` and its `apply`, which is the part's own list-then-change code; `setUp` applies them
+ *   in order. An inspection uses only reads the everyday token can make where the API allows it:
+ *   the Email Routing DNS records (`…/dns_records` needs "DNS Read") and the routing settings
+ *   (subaddressing) may be refused it, and a refused read (HTTP 401 or 403) reads `unreadable`,
+ *   never done or missing (`setup-steps.ts` then takes the setup record's word for it).
  */
 import { createHash } from "node:crypto";
 import { MAIL_SINK_BINDING, MAIL_SINK_COMPATIBILITY_DATE, MAIL_SINK_MODULE, MAIL_SINK_SOURCE } from "../../mail/sink-worker.js";
@@ -51,6 +58,42 @@ export interface CloudflareEmailSetup {
   setUp(emailDomain: string): Promise<readonly string[]>;
   /** Deploy step 1, production stages: the missing email prerequisites by name. Changes nothing. */
   productionPrerequisites(emailDomain: string): Promise<readonly string[]>;
+}
+
+/** The email steps of the account setup, in the order `setUp` applies them (DEC-0578). */
+export const EMAIL_STEP_IDS = ["email-sending", "mailsink-bucket", "mailsink-lifecycle", "mailsink-worker", "test-mailbox-dns", "subaddressing", "test-mailbox-route"] as const;
+export type EmailStepId = (typeof EMAIL_STEP_IDS)[number];
+
+/**
+ * What a step's inspection found: `done`; `missing` (absent or different); `foreign` (a resource of
+ * that name this account does not own); `unreadable` (the token was refused the read). `detail`
+ * says why, for every state but `done`; it never holds a token value or an account ID.
+ */
+export interface StepInspection {
+  readonly state: "done" | "missing" | "foreign" | "unreadable";
+  readonly detail?: string;
+}
+
+export interface EmailStep {
+  readonly id: EmailStepId;
+  /** Reads only. */
+  inspect(emailDomain: string): Promise<StepInspection>;
+  /** Makes the part exist, listing first; returns the names of what it created or changed (empty when it was in place). */
+  apply(emailDomain: string): Promise<readonly string[]>;
+}
+
+/** The email setup with its steps (`createCloudflareEmailSetup`). */
+export interface CloudflareEmailSteps extends CloudflareEmailSetup {
+  readonly steps: readonly EmailStep[];
+}
+
+/** A read the token was refused (HTTP 401 or 403): an inspection reports it as `unreadable`. */
+class RefusedRead extends Error {}
+
+/** The answer's `result`, as `resultOf`; a refusal throws `RefusedRead` with the same message. */
+function readResult<T>(r: ApiReply, what: string): T {
+  if (r.status === 401 || r.status === 403) throw new RefusedRead(`${what} failed: ${describeFailure(r)}`);
+  return resultOf<T>(r, what);
 }
 
 /** What a production deploy reads the Email Sending entry with (DEC-0553); "Email Sending Write" also grants it. */
@@ -172,7 +215,7 @@ export function zoneCandidates(domain: string): string[] {
   return out;
 }
 
-export function createCloudflareEmailSetup(options: EmailSetupOptions): CloudflareEmailSetup {
+export function createCloudflareEmailSetup(options: EmailSetupOptions): CloudflareEmailSteps {
   const { api, accountId } = options;
   const now = options.now ?? Date.now;
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
@@ -265,8 +308,15 @@ export function createCloudflareEmailSetup(options: EmailSetupOptions): Cloudfla
       await createBucket(api, accountId, MAIL_SINK_NAME);
       created.push(EMAIL_RESOURCES.bucket);
     }
+  }
+
+  async function lifecycleRules(): Promise<unknown> {
     const r = await api("GET", `${bucketPath}/lifecycle`);
-    const rules = r.status === 404 ? [] : (resultOf<{ rules?: unknown } | null>(r, `reading the ${EMAIL_RESOURCES.lifecycle}`)?.rules ?? []);
+    return r.status === 404 ? [] : (resultOf<{ rules?: unknown } | null>(r, `reading the ${EMAIL_RESOURCES.lifecycle}`)?.rules ?? []);
+  }
+
+  async function ensureLifecycle(created: string[]): Promise<void> {
+    const rules = await lifecycleRules();
     if (isWantedLifecycle(rules)) return;
     // Other rules (R2's default multipart-abort rule) are kept; only the framework's rule is replaced.
     const others = Array.isArray(rules) ? rules.filter((rule: { id?: unknown }) => rule.id !== MAIL_SINK_LIFECYCLE_RULE_ID) : [];
@@ -276,12 +326,16 @@ export function createCloudflareEmailSetup(options: EmailSetupOptions): Cloudfla
 
   // ---- The sink Worker ----
   const scriptPath = `/accounts/${accountId}/workers/scripts/${MAIL_SINK_NAME}`;
-  async function ensureWorker(created: string[]): Promise<void> {
+  /** Whether the uploaded sink carries the current source's tag (false when there is no sink Worker). */
+  async function workerCurrent(): Promise<boolean> {
     const r = await api("GET", `${scriptPath}/settings`);
-    if (r.status !== 404) {
-      const settings = resultOf<{ tags?: unknown } | null>(r, `reading the ${EMAIL_RESOURCES.worker}`);
-      if (Array.isArray(settings?.tags) && settings.tags.includes(mailSinkTag())) return;
-    }
+    if (r.status === 404) return false;
+    const settings = resultOf<{ tags?: unknown } | null>(r, `reading the ${EMAIL_RESOURCES.worker}`);
+    return Array.isArray(settings?.tags) && settings.tags.includes(mailSinkTag());
+  }
+
+  async function ensureWorker(created: string[]): Promise<void> {
+    if (await workerCurrent()) return;
     const form = new FormData();
     form.set("metadata", new Blob([JSON.stringify(mailSinkMetadata())], { type: "application/json" }), "metadata.json");
     form.set(MAIL_SINK_MODULE, new Blob([MAIL_SINK_SOURCE], { type: "application/javascript+module" }), MAIL_SINK_MODULE);
@@ -301,7 +355,7 @@ export function createCloudflareEmailSetup(options: EmailSetupOptions): Cloudfla
   async function requiredRoutingRecords(zone: Zone, sub: string): Promise<{ records: RoutingDnsRecord[]; errors: string[] }> {
     const r = await api("GET", `${routingPath(zone)}/dns?subdomain=${encodeURIComponent(sub)}`);
     const what = `reading the Email Routing DNS records of ${sub}`;
-    const result = resultOf<unknown>(r, what);
+    const result = readResult<unknown>(r, what);
     const shapeError = () => new Error(`${what}: unexpected answer shape (${describeFailure(r)})`);
     let records: unknown;
     let errors: unknown = null;
@@ -321,7 +375,7 @@ export function createCloudflareEmailSetup(options: EmailSetupOptions): Cloudfla
     const out: RoutingDnsRecord[] = [];
     for (let page = 1; page <= 10; page++) {
       const r = await api("GET", `/zones/${zone.id}/dns_records?name=${encodeURIComponent(name)}&per_page=100&page=${page}`);
-      const batch = resultOf<unknown>(r, `listing the DNS records of ${name}`);
+      const batch = readResult<unknown>(r, `listing the DNS records of ${name}`);
       if (!Array.isArray(batch)) throw new Error(`listing the DNS records of ${name}: unexpected answer shape (${describeFailure(r)})`);
       out.push(...batch.filter(isRoutingDnsRecord));
       const pages = (r.body as { result_info?: { total_pages?: unknown } }).result_info?.total_pages;
@@ -349,9 +403,13 @@ export function createCloudflareEmailSetup(options: EmailSetupOptions): Cloudfla
     await poll(`the Email Routing DNS records of ${sub}`, () => routingGaps(zone, sub), (m) => m.length === 0, (m) => `missing: ${m.join(", ")}`);
   }
 
+  async function subaddressingOn(zone: Zone): Promise<boolean> {
+    const settings = readResult<{ support_subaddress?: unknown }>(await api("GET", routingPath(zone)), `reading the Email Routing settings of zone ${zone.name}`);
+    return settings.support_subaddress === true;
+  }
+
   async function ensureSubaddressing(zone: Zone, created: string[]): Promise<void> {
-    const settings = resultOf<{ support_subaddress?: unknown }>(await api("GET", routingPath(zone)), `reading the Email Routing settings of zone ${zone.name}`);
-    if (settings.support_subaddress === true) return;
+    if (await subaddressingOn(zone)) return;
     resultOf(await api("PATCH", routingPath(zone), { support_subaddress: true }), `turning on Email Routing subaddressing on zone ${zone.name}`);
     created.push(EMAIL_RESOURCES.subaddress);
   }
@@ -405,7 +463,92 @@ export function createCloudflareEmailSetup(options: EmailSetupOptions): Cloudfla
     created.push(EMAIL_RESOURCES.rule(domain));
   }
 
+  const hasSinkRule = async (zone: Zone, domain: string): Promise<boolean> => (await routingRules(zone)).some((rule) => isSinkRule(rule, sinkRouteAddress(domain)));
+
+  // ---- The steps (DEC-0578) ----
+  const done: StepInspection = { state: "done" };
+  const missing = (detail: string): StepInspection => ({ state: "missing", detail });
+  /** An inspection of a part on the domain's zone: missing, naming the problem, when there is no usable zone. */
+  const onZone =
+    (inspect: (zone: Zone, domain: string) => Promise<StepInspection>) =>
+    async (domain: string): Promise<StepInspection> => {
+      const { zone, problem } = await zoneOrProblem(domain);
+      return zone ? inspect(zone, domain) : missing(problem ?? `no zone for ${domain}`);
+    };
+  /** A refused read (HTTP 401/403) is `unreadable`, never a guess. */
+  const refusedIsUnreadable =
+    (inspect: (domain: string) => Promise<StepInspection>) =>
+    async (domain: string): Promise<StepInspection> => {
+      try {
+        return await inspect(domain);
+      } catch (error) {
+        if (error instanceof RefusedRead) return { state: "unreadable", detail: error.message };
+        throw error;
+      }
+    };
+  /** An apply: the part's list-then-change code on a fresh `created` list. */
+  const applying =
+    (ensure: (domain: string, created: string[]) => Promise<void>) =>
+    async (domain: string): Promise<readonly string[]> => {
+      const created: string[] = [];
+      await ensure(domain, created);
+      return created;
+    };
+
+  const steps: readonly EmailStep[] = [
+    {
+      id: "email-sending",
+      inspect: onZone(async (zone, domain) => {
+        const entry = await sendingEntry(zone, domain);
+        if (!entry) return missing(`${domain} is not onboarded for Email Sending`);
+        return entry.enabled === true ? done : missing(`the ${EMAIL_RESOURCES.sending(domain)} is not verified yet`);
+      }),
+      apply: applying(async (domain, created) => ensureSending(await requireZone(domain), domain, created)),
+    },
+    {
+      id: "mailsink-bucket",
+      async inspect() {
+        const { state } = await inspectBucket(api, accountId, MAIL_SINK_NAME);
+        if (state === "foreign") return { state, detail: `${EMAIL_RESOURCES.bucket} already exists but belongs to another account (or this account's credentials cannot read it)` };
+        return state === "owned" ? done : missing(`${EMAIL_RESOURCES.bucket} does not exist`);
+      },
+      apply: applying(async (_domain, created) => ensureBucket(created)),
+    },
+    {
+      id: "mailsink-lifecycle",
+      inspect: async () => ((await inspectBucket(api, accountId, MAIL_SINK_NAME)).state === "owned" && isWantedLifecycle(await lifecycleRules()) ? done : missing(`the ${EMAIL_RESOURCES.lifecycle} is not set`)),
+      apply: applying(async (_domain, created) => ensureLifecycle(created)),
+    },
+    {
+      id: "mailsink-worker",
+      inspect: async () => ((await workerCurrent()) ? done : missing(`the ${EMAIL_RESOURCES.worker} is absent or runs an older source`)),
+      apply: applying(async (_domain, created) => ensureWorker(created)),
+    },
+    {
+      id: "test-mailbox-dns",
+      inspect: refusedIsUnreadable(
+        onZone(async (zone, domain) => {
+          const gaps = await routingGaps(zone, testMailDomain(domain));
+          return gaps.length === 0 ? done : missing(`the ${EMAIL_RESOURCES.routing(domain)} lacks ${gaps.join(", ")}`);
+        }),
+      ),
+      apply: applying(async (domain, created) => ensureRouting(await requireZone(domain), domain, created)),
+    },
+    {
+      id: "subaddressing",
+      inspect: refusedIsUnreadable(onZone(async (zone) => ((await subaddressingOn(zone)) ? done : missing(`${EMAIL_RESOURCES.subaddress} is off on zone ${zone.name}`)))),
+      apply: applying(async (domain, created) => ensureSubaddressing(await requireZone(domain), created)),
+    },
+    {
+      id: "test-mailbox-route",
+      inspect: onZone(async (zone, domain) => ((await hasSinkRule(zone, domain)) ? done : missing(`the ${EMAIL_RESOURCES.rule(domain)} is not an enabled rule`))),
+      apply: applying(async (domain, created) => ensureRule(await requireZone(domain), domain, created)),
+    },
+  ];
+
   return {
+    steps,
+
     async setupProblems(emailDomain) {
       const { zone, problem } = await zoneOrProblem(emailDomain);
       if (!zone) return [problem ?? `no zone for ${emailDomain}`];
@@ -413,14 +556,8 @@ export function createCloudflareEmailSetup(options: EmailSetupOptions): Cloudfla
     },
 
     async setUp(emailDomain) {
-      const zone = await requireZone(emailDomain);
       const created: string[] = [];
-      await ensureSending(zone, emailDomain, created);
-      await ensureBucket(created);
-      await ensureWorker(created);
-      await ensureRouting(zone, emailDomain, created);
-      await ensureSubaddressing(zone, created);
-      await ensureRule(zone, emailDomain, created);
+      for (const step of steps) created.push(...(await step.apply(emailDomain)));
       return created;
     },
 
