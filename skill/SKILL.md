@@ -31,7 +31,7 @@ Read this page, then only the references your task needs (task map below).
 
 ## Cloudflare setup
 
-On "set up Cloudflare", "continue prototype setup" or "continue setup", run `npm run cloudflare-setup` and relay its output as is: links, template and next prompt unchanged. It does only what is missing, so run it again whenever asked. What to do when it stops: [owner-tasks.md](reference/owner-tasks.md) §2.
+On "set up Cloudflare", "continue prototype setup" or "continue setup", run `npm run cloudflare-setup` and relay its output as is: links, template and next prompt unchanged. It does only what is missing, so run it again whenever asked. Exit status 1 with a message is a stop for the user, not a failure to work around. What to do when it stops: [owner-tasks.md](reference/owner-tasks.md) §2.
 
 - **Never open, print or search `.env.cloudflare`**, and never echo `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_BOOTSTRAP_TOKEN`. The CLI reads them itself. Never ask for a token in the chat.
 - **Git checks**, when a session starts work on the app and before every commit or push: `git check-ignore -q .env.cloudflare` and `git ls-files --error-unmatch .env.cloudflare`. Each time the file is not ignored (the first exits non-zero) or is tracked (the second exits 0), remind the user and point to [owner-tasks.md](reference/owner-tasks.md) §2. Never refuse to commit because of it.

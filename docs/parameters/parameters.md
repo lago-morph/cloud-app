@@ -99,6 +99,7 @@ The owner approved these values on 2026-10-25 ("Approve recommended values", DEC
 | PAR-341 | Mode of `.env.cloudflare` after every write | `600` (owner read and write only) | ai-proposed | Set by every framework write, also on an existing file with a wider mode (DEC-0571). Has no effect on Windows. |
 | PAR-342 | The bootstrap token's line after use | `# CLOUDFLARE_BOOTSTRAP_TOKEN=deleted by setup process` | owner | Replaces the `CLOUDFLARE_BOOTSTRAP_TOKEN=` line once the token has deleted itself (DEC-0571, plan-setup-wizard §4.2). |
 | PAR-343 | The `.gitignore` marker that keeps setup from adding `.env.cloudflare` | `# keep-env-cloudflare-tracked` (a whole line of the project's `.gitignore`) | ai-proposed | Plan-setup-wizard §4.3 step 1; the warnings still print (DEC-0572). |
+| PAR-380 | Longest expiry the instructions ask the owner to choose for the bootstrap token | 7 days | ai-proposed | Origin: orchestrator, pending owner review (DEC-0601). Plan-setup-wizard §3.2 asks only for "a short expiry"; §2's owner check says the instructions name 7 days or less. The deep link cannot set the expiry (DEC-0564), so it is the owner's choice on the dashboard page; QUICKSTART.md and owner-tasks §2 state it, and setup warns when the token has none (SETUP-REQ-004). |
 
 ## Secrets
 

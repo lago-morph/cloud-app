@@ -174,7 +174,7 @@ npm run admins -- list --target cloudflare --stage "$STAGE" --confirm-production
 Every error response has a `requestId`. A failed login returns to `/?authError=login_failed&requestId=<id>`. Each log entry is a file in the R2 bucket `prototype-logs`, under `template/<stage>/<yyyy>/<mm>/<dd>/`. The date is UTC, and the file name ends in `-<requestId>.json`.
 
 - **Dashboard** (menu names not yet verified)**:** open Storage & databases → R2 → `prototype-logs`, then the folders `template` / `<stage>` / year / month / day. Open the file whose name ends in the request ID.
-- **Command line:** list today's entries of a stage, and keep only the line with the request ID. `APP` must be set (§1 step 2):
+- **Command line, only where both values are in the environment:** these commands need `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` in the shell's environment, for example in a cloud session whose environment settings hold them. With the tokens only in `.env.cloudflare` (§2), the variables are empty and the requests fail: use the dashboard route above. Never `source` or `cat` `.env.cloudflare` to fill them in. List today's entries of a stage, and keep only the line with the request ID. `APP` must be set (§1 step 2):
   ```sh
   STAGE='<stage>'; DAY=$(date -u +%Y/%m/%d)
   curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
@@ -188,7 +188,7 @@ Every error response has a `requestId`. A failed login returns to `/?authError=l
   curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
     "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets/prototype-logs/objects/$(node -p 'encodeURIComponent(process.argv[1])' "$KEY")"
   ```
-- **No entry?** Watch the Worker's output while you repeat the request: `npx wrangler tail "$APP-$STAGE" --format pretty`. More help is in the skill's troubleshooting reference, `skill/reference/troubleshooting.md` in the framework repository.
+- **No entry?** Watch the Worker's output while you repeat the request: `npx wrangler tail "$APP-$STAGE" --format pretty` (it too needs both values in the environment; otherwise open the Worker's logs in the dashboard, Workers & Pages → `template-<stage>` → Logs, menu names not yet verified). More help is in the skill's troubleshooting reference, `skill/reference/troubleshooting.md` in the framework repository.
 
 ## 11. Cost: what stays billable while idle
 

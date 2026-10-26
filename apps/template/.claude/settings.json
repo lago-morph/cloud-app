@@ -13,7 +13,15 @@
       "Bash(. *.env.cloudflare*)",
       "Bash(echo *CLOUDFLARE_API_TOKEN*)",
       "Bash(echo *CLOUDFLARE_BOOTSTRAP_TOKEN*)",
-      "Bash(printenv CLOUDFLARE_*)"
+      "Bash(env)",
+      "Bash(env -0)",
+      "Bash(printenv *)",
+      "Bash(set)",
+      "Bash(export)",
+      "Bash(export -p)",
+      "Bash(declare -p*)",
+      "Bash(declare -x*)",
+      "Bash(* /proc/*environ*)"
     ]
   }
 }

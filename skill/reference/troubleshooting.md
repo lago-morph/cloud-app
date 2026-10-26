@@ -35,7 +35,7 @@ The date and time are UTC. `smoke` prints today's prefix.
 
 **Dashboard (no setup; these menu names are not yet verified).** Open Storage & databases → R2 → `prototype-logs`. Then open the folders `<app>` / `<stage>` / year / month / day. The file name ends in the request ID. Open the file and choose Download to read it.
 
-**Command line, with the API token from [owner-tasks.md](owner-tasks.md) §2.** `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` must be set in the shell. These two `curl` commands are **verified on Cloudflare**: on a real test stage, the list command found a failed request's key and the read command returned its `CORE.INTERNAL` entry (E2E-011, Cloudflare pass 2–5; the framework repository's `validation/cloudflare/pass-2to5/SUMMARY.md` and `logs/5-trouble.log`). List one day's keys:
+**Command line, only where both values are in the environment.** These commands need `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` in the shell's environment, for example in a cloud session whose environment settings hold them. When the tokens are only in `.env.cloudflare` (the usual case, [owner-tasks.md](owner-tasks.md) §2), the variables are empty and the requests fail: use the dashboard route above instead. Never `source`, `cat` or otherwise read `.env.cloudflare` to fill them in. These two `curl` commands are **verified on Cloudflare**: on a real test stage, the list command found a failed request's key and the read command returned its `CORE.INTERNAL` entry (E2E-011, Cloudflare pass 2–5; the framework repository's `validation/cloudflare/pass-2to5/SUMMARY.md` and `logs/5-trouble.log`). List one day's keys:
 
 ```sh
 STAGE='<stage>'; DAY=$(date -u +%Y/%m/%d)
@@ -70,7 +70,7 @@ Not yet verified on Cloudflare in this phase.
   ```sh
   npx wrangler tail "$APP-$STAGE" --format pretty
   ```
-  It needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` set. Not yet verified on Cloudflare in this phase.
+  It needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the shell's environment, as the `curl` commands above do; with the tokens only in `.env.cloudflare`, use the dashboard instead (Workers & Pages → `<app>-<stage>` → Logs, menu names not yet verified). Not yet verified on Cloudflare in this phase.
 - If entries are printed as lines starting `[prototype-framework:log]` in `wrangler tail`, the Worker has no `LOGS` binding. Run `deploy` again.
 - Locally, entries reach `.logs/` only while `npm run dev` runs. In-process tests write no files.
 

@@ -26,11 +26,11 @@ Then run, in the app's folder (in Claude Code, say **"set up Cloudflare"**):
 npm run cloudflare-setup
 ```
 
-It prints two pre-filled dashboard links, one for each token, and a template of four lines. Open each link, choose your account (and, for the bootstrap token, an expiry of 7 days or less), create the token and copy it. Then:
+It prints two pre-filled dashboard links, one for each token, and a template of four lines. Open each link, pick your account if asked, keep the email domain's zone included and, for the bootstrap token, set an end date under TTL 7 days away or sooner (PAR-380); then create the token and copy it. Then:
 - **Command line:** paste the values into `.env.cloudflare` in the app's folder with your editor (or set them in the environment), and run `npm run cloudflare-setup` again.
 - **Cloud session:** paste the four lines into the environment's settings (environment menu → Edit → Environment variables), start a new session, and say **"continue prototype setup"**.
 
-Setup never prints a token value. It does only what is missing: re-run it after a bad paste, after a framework release that needs more permissions, or on another account; it says exactly what to fix. When it is done it deletes the bootstrap token, and the next step is `npm run deploy -- --target cloudflare --stage test-<name>`. For a second app on the same account, copy `.env.cloudflare` into its folder. Every step, and what to do when setup stops: [skill/reference/owner-tasks.md](skill/reference/owner-tasks.md).
+Setup never prints a token value or an account ID, and asks nothing on the keyboard: when it needs you it stops with exit status 1 and says what to do (`--email-domain <domain>` and `--switch-account` answer its two questions). It does only what is missing: re-run it after a bad paste, after a framework release that needs more permissions, or on another account; it says exactly what to fix. When it is done it deletes the bootstrap token, and the next step is `npm run deploy -- --target cloudflare --stage test-first`. For a second app on the same account, copy `.env.cloudflare` into its folder. Every step, and what to do when setup stops: [skill/reference/owner-tasks.md](skill/reference/owner-tasks.md).
 
 What the two links ask for:
 
