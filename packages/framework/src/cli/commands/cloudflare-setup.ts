@@ -9,7 +9,7 @@ import { createCloudflareApi } from "../../provision/cloudflare/api.js";
 import { runCloudflareSetup, type CloudflareSetupDeps } from "../../provision/cloudflare/cloudflare-setup.js";
 import { parseOptions } from "../args.js";
 import type { Command } from "../io.js";
-import { refuseUnreachableCloud, type ProcessEnvironment } from "./smoke-cloud.js";
+import { cloudProcessProblems, type ProcessEnvironment } from "./smoke-cloud.js";
 
 /** PAR-360: how long the network check waits for each host. */
 export const NETWORK_CHECK_TIMEOUT_MS = 10_000;
@@ -24,9 +24,10 @@ export function cloudflareSetupCommand(deps: CloudflareSetupCommandDeps): Comman
       ["email-domain", "switch-account"],
     );
     const emailDomain = options.get("email-domain");
-    const refused = refuseUnreachableCloud("cloudflare-setup", deps.env, io);
-    if (refused !== undefined) return refused;
-    return runCloudflareSetup({ ...deps, projectDir: io.cwd }, { ...(emailDomain === undefined ? {} : { emailDomain }), switchAccount }, io);
+    // The process check (D-05) stops the run only before its first request, so the local setup and the no-token instructions still run.
+    const problems = cloudProcessProblems(deps.env);
+    const unreachable = problems.length === 0 ? {} : { unreachable: problems.join("; ") };
+    return runCloudflareSetup({ ...deps, ...unreachable, projectDir: io.cwd }, { ...(emailDomain === undefined ? {} : { emailDomain }), switchAccount }, io);
   };
 }
 

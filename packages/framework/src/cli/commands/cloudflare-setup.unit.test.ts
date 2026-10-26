@@ -600,6 +600,18 @@ describe("cloudflare-setup: local setup, git and the network (plan §4.3 steps 0
     expect(io.out + io.err).not.toContain("MARKER");
   });
 
+  it("behind a proxy without NODE_USE_ENV_PROXY=1: the local setup and the no-token text still run; with tokens it stops before any request", async () => {
+    const proxied = { HTTPS_PROXY: "http://proxy.invalid:3128" };
+    const world = await setUpWorld();
+    const none = await run(world, project(), { env: proxied });
+    expect(none.status).toBe(1);
+    expect(none.io.out).toContain("Cloudflare setup needs two API tokens");
+    const tokens = await run(world, project({ env: everydayOnly() }), { env: proxied });
+    expect(tokens.status).toBe(1);
+    expect(tokens.io.err).toContain("cloudflare-setup failed: HTTPS_PROXY is set, but this process was not started with NODE_USE_ENV_PROXY=1");
+    expect(world.requests).toEqual([]);
+  });
+
   it("an unexpected argument is a usage error that never echoes it", async () => {
     const world = new SetupWorld();
     await expect(run(world, project(), { args: [EVERYDAY_VALUE] })).rejects.toThrow(/unexpected argument/);

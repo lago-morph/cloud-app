@@ -100,6 +100,8 @@ export interface CloudflareSetupDeps {
   readonly stepOptions?: Omit<SetupStepOptions, "note">;
   readonly frameworkVersion?: string;
   readonly now?: () => Date;
+  /** Why this process cannot reach Cloudflare (`cloudProcessProblems`): checked before the first request, after the steps that need none. */
+  readonly unreachable?: string;
   /** A Claude Code cloud session (default: `CLAUDE_CODE_REMOTE=true` in `env`). */
   readonly cloudSession?: boolean;
 }
@@ -353,6 +355,10 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       return stop(noTokensText());
     }
 
+    if (deps.unreachable !== undefined) {
+      io.stderr(hidden.redact(`${COMMAND} failed: ${deps.unreachable}\n`));
+      return EXIT.failed;
+    }
     const protectedIds = new Set([...(deps.protectedTokenIds ?? []), ...(deps.env[PROTECTED_TOKEN_IDS_ENV] ?? "").split(",").map((s) => s.trim()).filter((s) => s !== "")]);
     const problems: { slot: Slot; text: string }[] = [];
     const identifyIn = async (slot: Slot, value: string | undefined): Promise<Token | undefined> => {
