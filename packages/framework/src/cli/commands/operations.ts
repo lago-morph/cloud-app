@@ -14,6 +14,7 @@ import { fetchTransfer } from "../../provision/cloudflare/d1/native-copy.js";
 import { workersPlanReader } from "../../provision/cloudflare/plan.js";
 import { d1DatabaseOperations } from "../../provision/cloudflare/d1/operations.js";
 import { missingCredentials } from "../../provision/cloudflare/environment.js";
+import { ACCOUNT_SETUP_VERSION } from "../../provision/cloudflare/permissions.js";
 import type { WorkerCode } from "../../provision/cloudflare/sst.js";
 import { createCloudflareTarget } from "../../provision/cloudflare/target.js";
 import type { TargetOperations } from "../../provision/core/operations.js";
@@ -76,6 +77,8 @@ export const cloudflareOperations: OperationsFactory =
         storagePreflight: ({ accountId: account, bucket, origin }) => checkStorageCors({ accountId: account, bucket, publicOrigin: origin, ...withFetch }),
       },
       ...(code === undefined ? {} : { code: code as WorkerCode }),
+      // setup-account records this release's account setup version (DEC-0577, PAR-332).
+      setupVersion: ACCOUNT_SETUP_VERSION,
       ...withFetch,
     });
   };

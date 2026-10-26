@@ -212,6 +212,14 @@ describe("the account setup steps (plan-setup-wizard §4.4, DEC-0578)", () => {
     }
   });
 
+  it("the apply reads every step directly: a refused read stops it before any change, even when the record lists the step", async () => {
+    const cloud = await setUpCloud();
+    const zoneId = cloud.zones.get(DOMAIN)!.id;
+    cloud.override.set(`GET /zones/${zoneId}/email/routing`, { status: 403, body: { success: false, errors: [{ code: 10000, message: "Authentication error" }] } });
+    await expect(applySetupSteps(cloud.api, ACCOUNT, input())).rejects.toThrow(/could not read .*subaddress.*nothing was changed/);
+    expect(writes(cloud)).toEqual([]);
+  });
+
   it("an invalid domain or an unknown step is refused before any request", async () => {
     const cloud = freshCloud();
     await expect(applySetupSteps(cloud.api, ACCOUNT, input({ emailDomain: "Not A Domain" }))).rejects.toThrow(/is not a domain name.*nothing was changed/);

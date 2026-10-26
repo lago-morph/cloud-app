@@ -125,12 +125,17 @@ export interface TokenPolicy {
   readonly id?: string;
   readonly effect: "allow" | "deny";
   readonly resources: Readonly<Record<string, unknown>>;
-  readonly permission_groups: readonly { readonly id: string; readonly name?: string }[];
+  readonly permission_groups: readonly { readonly id: string; readonly name?: string; readonly meta?: unknown }[];
 }
 
 export interface PolicyComparison {
   /** The required groups no `allow` policy grants on their scope, or that a `deny` policy takes away. */
   readonly missing: readonly PermissionGroup[];
+  /**
+   * The part of `missing` that a `deny` policy takes away. An added `allow` cannot beat a deny, so
+   * the in-place update cannot fix these: the token must be made again (DEC-0586).
+   */
+  readonly denied: readonly PermissionGroup[];
   /** The policies name accounts, and none of them is this one (nor `*`). */
   readonly wrongAccount: boolean;
   /**
@@ -144,8 +149,9 @@ export interface PolicyComparison {
 const ACCOUNT_PREFIX = "com.cloudflare.api.account.";
 const ZONE_PREFIX = "com.cloudflare.api.account.zone.";
 
-const grantsGroup = (p: TokenPolicy, want: PermissionGroup): boolean =>
-  [want, ...(SATISFIED_BY[want.id] ?? [])].some((g) => p.permission_groups.some((have) => have.id === g.id || have.name === g.name));
+const listsGroup = (p: TokenPolicy, g: { readonly id: string; readonly name: string }): boolean => p.permission_groups.some((have) => have.id === g.id || have.name === g.name);
+/** The group, or a stronger group that includes it ("Zone Write" for "Zone Read"). */
+const grantsGroup = (p: TokenPolicy, want: PermissionGroup): boolean => [want, ...(SATISFIED_BY[want.id] ?? [])].some((g) => listsGroup(p, g));
 
 /** The account IDs (or `*`) a policy's resources name. */
 const accountsNamed = (p: TokenPolicy): string[] => Object.keys(p.resources).filter((k) => k.startsWith(ACCOUNT_PREFIX) && !k.startsWith(ZONE_PREFIX)).map((k) => k.slice(ACCOUNT_PREFIX.length));
@@ -158,23 +164,24 @@ const accountsNamed = (p: TokenPolicy): string[] => Object.keys(p.resources).fil
  */
 export function comparePolicies(policies: readonly TokenPolicy[], required: readonly PermissionGroup[], scope: { readonly accountId: string; readonly zoneId: string }): PolicyComparison {
   const covers = (p: TokenPolicy, s: PermissionScope) => policyCovers(p.resources, s, scope.accountId, scope.zoneId);
-  const missing = required.filter((want) => {
-    const allowed = policies.some((p) => p.effect === "allow" && grantsGroup(p, want) && covers(p, want.scope));
-    const denied = policies.some((p) => p.effect === "deny" && grantsGroup(p, want) && covers(p, want.scope));
-    return !allowed || denied;
-  });
+  // A deny takes away the group it names, not a weaker one: denying "Zone Write" leaves "Zone Read".
+  const isDenied = (want: PermissionGroup) => policies.some((p) => p.effect === "deny" && listsGroup(p, want) && covers(p, want.scope));
+  const denied = required.filter(isDenied);
+  const missing = required.filter((want) => isDenied(want) || !policies.some((p) => p.effect === "allow" && grantsGroup(p, want) && covers(p, want.scope)));
   const named = policies.filter((p) => p.effect === "allow").flatMap(accountsNamed);
   const wrongAccount = named.length > 0 && !named.some((a) => a === scope.accountId || a === "*");
   const zoneGroups = required.filter((g) => g.scope === "zone");
   const zoneCovered = zoneGroups.length === 0 || policies.some((p) => p.effect === "allow" && zoneGroups.some((g) => grantsGroup(p, g)) && covers(p, "zone"));
-  return { missing, wrongAccount, zoneCovered };
+  return { missing, denied, wrongAccount, zoneCovered };
 }
 
 /**
  * The `policies` of the in-place update (`PUT /accounts/<a>/tokens/<id>`, which keeps the token's
  * value, verified 2026-10-26): every existing policy unchanged (its `id`, effect and resources;
- * its groups by ID), then one `allow` policy for the missing account groups on the account, and
- * one for the missing zone groups on the zone, or on all the account's zones without one.
+ * its groups by ID, with their `meta` when they have one), then one `allow` policy for the missing
+ * account groups on the account, and one for the missing zone groups on the zone, in Cloudflare's
+ * documented top-level form `{ "com.cloudflare.api.account.zone.<zone>": "*" }`, or on all the
+ * account's zones (nested under the account, as the dashboard writes it) without one (DEC-0586).
  */
 export function withMissingPermissions(policies: readonly TokenPolicy[], missing: readonly PermissionGroup[], scope: { readonly accountId: string; readonly zoneId?: string }): TokenPolicy[] {
   const account = `${ACCOUNT_PREFIX}${scope.accountId}`;
@@ -182,14 +189,15 @@ export function withMissingPermissions(policies: readonly TokenPolicy[], missing
     ...(p.id === undefined ? {} : { id: p.id }),
     effect: p.effect,
     resources: p.resources,
-    permission_groups: p.permission_groups.map((g) => ({ id: g.id })),
+    permission_groups: p.permission_groups.map((g) => (g.meta === undefined || g.meta === null ? { id: g.id } : { id: g.id, meta: g.meta })),
   }));
   const ids = (s: PermissionScope) => missing.filter((g) => g.scope === s).map((g) => ({ id: g.id }));
   const accountGroups = ids("account");
   const zoneGroups = ids("zone");
   if (accountGroups.length > 0) kept.push({ effect: "allow", resources: { [account]: "*" }, permission_groups: accountGroups });
   if (zoneGroups.length > 0) {
-    kept.push({ effect: "allow", resources: { [account]: { [`${ZONE_PREFIX}${scope.zoneId ?? "*"}`]: "*" } }, permission_groups: zoneGroups });
+    const resources = scope.zoneId === undefined ? { [account]: { [`${ZONE_PREFIX}*`]: "*" } } : { [`${ZONE_PREFIX}${scope.zoneId}`]: "*" };
+    kept.push({ effect: "allow", resources, permission_groups: zoneGroups });
   }
   return kept;
 }
