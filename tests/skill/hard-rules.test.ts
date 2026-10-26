@@ -6,7 +6,8 @@
  * The rules are SKILL-REQ-003's list. skill.md §2 "Implementation" puts them in the router as a
  * numbered list; this test reads the numbered items of the router's "Hard rules" section and
  * requires each rule (every clause of it) to be stated by some item. `<package>` is the framework
- * package (DEC-0049): its name or its binary name is accepted in `npx <package> verify`.
+ * package (DEC-0049): its name or its binary name is accepted in `npm exec --no -- <package> verify`;
+ * `npm run verify` is accepted too. Both never install from the registry (DEC-0616).
  */
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -15,7 +16,7 @@ import { collapse, numberedItems, read, REPO_ROOT, ROUTER, sections, withoutFron
 
 const pkg = JSON.parse(read(join(REPO_ROOT, "packages", "framework", "package.json"))) as { name: string; bin: Record<string, string> };
 const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
-const PACKAGE_COMMAND = new RegExp(`npx (?:${[pkg.name, ...Object.keys(pkg.bin)].map(esc).join("|")}) verify\\b`);
+const PACKAGE_COMMAND = new RegExp(`(?:npm run verify|npm exec --no -- (?:${[pkg.name, ...Object.keys(pkg.bin)].map(esc).join("|")}) verify)\\b`);
 
 function hardRuleItems(): string[] {
   const section = sections(withoutFrontMatter(read(ROUTER))).find((s) => s.level >= 2 && /\bhard rules?\b/i.test(s.heading));
@@ -33,7 +34,7 @@ const NOT = String.raw`(?:never|not|no|do not|don't|must not|only)`;
 const RULES: readonly Rule[] = [
   { name: "use only the framework's public exports", clauses: [/\bonly\b/i, /\bpublic exports?\b/i] },
   { name: "never insert user text as HTML", clauses: [new RegExp(`\\b${NOT}\\b[^.]*\\binsert\\w*\\b[^.]*\\buser(?:-supplied|-provided)? (?:text|input)\\b[^.]*\\bHTML\\b`, "i")] },
-  { name: "pass `npx <package> verify` before declaring work done", clauses: [new RegExp(`\\bpass\\w*\\b[^.]*${PACKAGE_COMMAND.source}`, "i"), /\bbefore\b[^.]*\b(?:declar\w*|claim\w*|call\w*)\b[^.]*\bdone\b/i] },
+  { name: "pass `npm run verify` before declaring work done", clauses: [new RegExp(`\\bpass\\w*\\b[^.]*${PACKAGE_COMMAND.source}`, "i"), /\bbefore\b[^.]*\b(?:declar\w*|claim\w*|call\w*)\b[^.]*\bdone\b/i] },
   {
     name: "claim an app works on a cloud only after its smoke test passed on a deployed stage there",
     clauses: [/\bclaim\w*\b[^.]*\bworks?\b[^.]*\bcloud\b/i, /\bonly after\b/i, /\bsmoke test\b[^.]*\bpass\w*\b[^.]*\bdeployed\b[^.]*\bstage\b/i],

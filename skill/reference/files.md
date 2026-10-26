@@ -62,4 +62,4 @@ The ticket is the same JSON on every target: `{ url, method?, headers?, expiresA
 
 ## Stopping condition
 
-Stop reading when your server builds every file name itself, authorizes from your records, issues tickets with explicit content types, checks uploads with `head` before making them visible, serves content only through `downloadUrl`, and `npx prototype-framework verify` passes.
+Stop reading when your server builds every file name itself, authorizes from your records, issues tickets with explicit content types, checks uploads with `head` before making them visible, serves content only through `downloadUrl`, and `npm run verify` passes.

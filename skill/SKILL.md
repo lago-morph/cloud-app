@@ -5,9 +5,9 @@ description: Build, test and deploy small web apps on the portable prototype fra
 
 # Building apps on the prototype framework
 
-Apps are small (one or a few users, little data) and run unchanged locally and on Cloudflare. The framework gives each request handler SQL, KV, files, configuration, secrets, a log and the current user; app code never sees which cloud it runs on. Package: `@lago-morph/prototype-framework` (server code), `/client` (browser code), `/testing` (tests). Commands: `npx prototype-framework <command>`, also `npm run <command>`.
+Apps are small (one or a few users, little data) and run unchanged locally and on Cloudflare. The framework gives each request handler SQL, KV, files, configuration, secrets, a log and the current user; app code never sees which cloud it runs on. Package: `@lago-morph/prototype-framework` (server code), `/client` (browser code), `/testing` (tests). Commands: `npm run <command>` (flags after `--`), or `npm exec --no -- prototype-framework <command>`; never plain `npx`, which fetches a stranger's package of that name when the app is not installed.
 
-**First step of every session:** run `npx prototype-framework version-check`. It changes nothing; relay its suggestions as it prints them, and its "newer npm release" one only once per session. Then run the git checks of [Cloudflare setup](#cloudflare-setup).
+**First step of every session:** run `npm run version-check`. It changes nothing; relay its suggestions as it prints them, and its "newer npm release" one only once per session. If the app is not installed yet (no `node_modules`), skip the check until `npm install` has run. Then run the git checks of [Cloudflare setup](#cloudflare-setup).
 
 Read this page, then only the references your task needs (task map below).
 
@@ -15,7 +15,7 @@ Read this page, then only the references your task needs (task map below).
 
 1. **Use only the framework's public exports**: `@lago-morph/prototype-framework` in server code, `/client` in browser code, `/testing` in tests, plus `hono` and `zod`. No platform SDKs, database drivers, Node built-ins or other framework subpaths.
 2. **Never insert user text as HTML.** Build elements and set `textContent`; no `innerHTML` or other raw-HTML sinks.
-3. **Pass `npx prototype-framework verify` before declaring any work done.** Never disable, suppress or weaken a check (`eslint-disable`, `@ts-ignore`, `any`, `as` casts, editing lint configuration).
+3. **Pass `npm run verify` before declaring any work done.** Never disable, suppress or weaken a check (`eslint-disable`, `@ts-ignore`, `any`, `as` casts, editing lint configuration).
 4. **Claim an app works on a cloud only after its smoke test has passed on a deployed stage there** (`smoke --target <t> --stage test-…`). Local success says nothing about a cloud.
 5. **Never change framework version pins**: the exact versions of `@lago-morph/prototype-framework`, `hono`, `zod`, `typescript`, `vite` and `vitest` in the app's `package.json`.
 6. **Never work around the framework.** If you suspect a framework defect (a contract or reference that does not hold, a check that rejects code the references allow, a capability that is missing for the task), add an entry to `FRAMEWORK-ISSUE.md` at the app's root instead of patching, copying or bypassing framework code. Each entry states:
@@ -64,4 +64,4 @@ A new app starts from the template: `npm create @lago-morph/prototype-app@latest
 
 ## Done means
 
-`npx prototype-framework verify` passes; every requirement is implemented and tested; for each cloud you claim, the smoke test passed on a deployed test stage there; and `FRAMEWORK-ISSUE.md` has no open entry blocking a requirement. Cloud runs that could not go ahead are listed as unfinished (`not-run` or `blocked`, hard rule 8), not raised as issues.
+`npm run verify` passes; every requirement is implemented and tested; for each cloud you claim, the smoke test passed on a deployed test stage there; and `FRAMEWORK-ISSUE.md` has no open entry blocking a requirement. Cloud runs that could not go ahead are listed as unfinished (`not-run` or `blocked`, hard rule 8), not raised as issues.

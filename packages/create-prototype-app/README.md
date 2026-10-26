@@ -21,7 +21,7 @@ npm run dev
 
 It asks for no account. If git is missing or a git step fails, it warns and carries on. It ends with what to do next: `cd my-app`, then `npm run dev`, or open the folder in Claude Code and say what to build.
 
-Later, `npm run upgrade` moves the app to a newer framework release and refreshes its skill copy, and `npx prototype-framework version-check` says whether that is worth doing.
+Later, `npm run upgrade` moves the app to a newer framework release and refreshes its skill copy, and `npm run version-check` says whether that is worth doing.
 
 Node.js 22.22.0 is what the framework requires.
 

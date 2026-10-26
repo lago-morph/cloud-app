@@ -3,8 +3,9 @@
  * Where: Local):
  * - SKILL-AC-007: "The router's front matter description contains "set up Cloudflare", "continue
  *   prototype setup", "continue setup" and `/prototype-framework`; the router names
- *   `npx <package> version-check` as the first step of a session, with its newer-npm-release
- *   suggestion once per session; and its "Cloudflare setup" section runs `npm run cloudflare-setup`
+ *   `npm run version-check` (or `npm exec --no -- <package> version-check`) as the first step of a
+ *   session, with its newer-npm-release suggestion once per session, names no
+ *   `npx prototype-framework`, and says to skip the check while the app is not installed; and its "Cloudflare setup" section runs `npm run cloudflare-setup`
  *   on those phrases and says to relay its output as is."
  * - SKILL-AC-008: "The router says never to open, print or search `.env.cloudflare` and never to
  *   echo `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_BOOTSTRAP_TOKEN`; it gives both git commands, when to
@@ -16,6 +17,9 @@
  * Written from the criteria. Each statement must be made in one sentence of the router (prose
  * outside code blocks, emphasis and code ticks removed), so a word in one place and its object in
  * another does not pass. `<package>` is the framework package or its binary name (DEC-0049). The
+ * command must be one that never installs from the registry (DEC-0616): `npm run version-check` or
+ * `npm exec --no -- <package> version-check`. `npx prototype-framework` fails: when the app is not
+ * installed, npx would download and run whatever is published under the unscoped name. The
  * starter's copy is checked here with the starter's own `create` from the repository's template;
  * the packed starter's copy is checked by the offline run (tests/compliance/criteria/setup/
  * starter-offline.test.ts).
@@ -26,14 +30,18 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import { tag } from "../support/tags.js";
-import { read, REPO_ROOT, ROUTER, sections, withoutFrontMatter } from "./support.js";
+import { filesUnder, read, repoPath, REPO_ROOT, ROUTER, sections, SKILL_DIR, withoutFrontMatter } from "./support.js";
 
 /** Whitespace collapsed, emphasis stars and code ticks removed (underscores kept: they are in the variable names). */
 const flat = (text: string): string => text.replace(/[*`]/g, "").replace(/\s+/g, " ").trim();
 
 const pkg = JSON.parse(read(join(REPO_ROOT, "packages", "framework", "package.json"))) as { name: string; bin: Record<string, string> };
 const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
-const VERSION_CHECK = new RegExp(`npx (?:${[pkg.name, ...Object.keys(pkg.bin)].map(esc).join("|")}) version-check\\b`);
+const NAMES = [pkg.name, ...Object.keys(pkg.bin)].map(esc).join("|");
+/** The safe forms (DEC-0616): the app's npm script, or `npm exec --no` (which refuses to install). */
+const VERSION_CHECK = new RegExp(`(?:npm run version-check|npm exec --no -- (?:${NAMES}) version-check)\\b`);
+/** npx of the unscoped binary name, or npx told to install without asking: either may run a stranger's package. */
+const UNSAFE_NPX = /\bnpx\s+(?:prototype-framework\b|-y\b|--yes\b)/;
 const PHRASES = ["set up Cloudflare", "continue prototype setup", "continue setup"] as const;
 const TEMPLATE_SETTINGS = join(REPO_ROOT, "apps", "template", ".claude", "settings.json");
 
@@ -97,9 +105,11 @@ describe("SKILL: Cloudflare setup in the router", () => {
     expect(d).toContain("/prototype-framework");
   });
 
-  it(tag("SKILL-AC-007", "the first step of a session is npx <package> version-check, its newer-npm-release suggestion relayed once per session"), () => {
+  it(tag("SKILL-AC-007", "the first step of a session is npm run version-check, its newer-npm-release suggestion relayed once per session"), () => {
     const raw = flat(routerText());
     expect(raw, "the version-check command").toMatch(VERSION_CHECK);
+    expect(raw, "no npx of the unscoped name (it would install from the registry when the app is not installed)").not.toMatch(UNSAFE_NPX);
+    expect(sentenceWith(all, [/version-check|check/i, /not (?:yet )?installed|npm install|node_modules/i, /skip/i]), "what to do when the app is not installed yet: skip the check").toBeDefined();
     const first = sentenceWith(all, [/first step/i, /session/i, /version-check/]);
     expect(first, "one sentence makes version-check the first step of every session").toBeDefined();
     expect(flat(routerText()).match(new RegExp(`first step[^.]*session[^.]*${VERSION_CHECK.source}|${VERSION_CHECK.source}[^.]*first step`, "i")), "the command in that statement").not.toBeNull();
@@ -132,6 +142,26 @@ describe("SKILL: Cloudflare setup in the router", () => {
     expect(context, "before every commit or push").toMatch(/before every commit or push/i);
     expect(context, "remind the user").toMatch(/remind the user/i);
     expect(sentenceWith(all, [/never refuse/i, /commit/i]), "never refuse to commit").toBeDefined();
+  });
+});
+
+describe("SKILL: no command text installs the framework from the registry (DEC-0616)", () => {
+  it("no skill file, quickstart, template or package README runs npx prototype-framework or npx --yes", () => {
+    const files = [
+      ...filesUnder(SKILL_DIR),
+      ...filesUnder(join(REPO_ROOT, "apps", "template")),
+      join(REPO_ROOT, "QUICKSTART.md"),
+      join(REPO_ROOT, "packages", "framework", "README.md"),
+      join(REPO_ROOT, "packages", "create-prototype-app", "README.md"),
+      join(REPO_ROOT, "packages", "prototype-framework-skill", "README.md"),
+      join(REPO_ROOT, "packages", "framework", "src", "testing", "connect.ts"),
+    ];
+    const found = files.flatMap((f) =>
+      read(f)
+        .split("\n")
+        .flatMap((line, i) => (UNSAFE_NPX.test(line) ? [`${repoPath(f)}:${String(i + 1)}`] : [])),
+    );
+    expect(found).toEqual([]);
   });
 });
 

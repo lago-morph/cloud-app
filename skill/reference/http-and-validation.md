@@ -88,4 +88,4 @@ API responses are never cached (`Cache-Control: no-store`); you need not set cac
 
 ## Stopping condition
 
-Stop reading when your route has a guard (or is deliberately open), validates its input, throws only the four codes above, returns a shared type, has a test, and `npx prototype-framework verify` passes. For storage inside the route, read only the reference for that capability.
+Stop reading when your route has a guard (or is deliberately open), validates its input, throws only the four codes above, returns a shared type, has a test, and `npm run verify` passes. For storage inside the route, read only the reference for that capability.

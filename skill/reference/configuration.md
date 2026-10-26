@@ -59,4 +59,4 @@ App code reads configuration only through `c.var.config`. Never read `process.en
 
 ## Stopping condition
 
-Stop reading when each setting is declared with a type, read through `c.var.config.get`, given values in each stage's committed file (or a default), and `npx prototype-framework verify` passes.
+Stop reading when each setting is declared with a type, read through `c.var.config.get`, given values in each stage's committed file (or a default), and `npm run verify` passes.

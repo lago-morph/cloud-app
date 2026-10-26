@@ -45,7 +45,7 @@ export function readSmokeConnection(env: Readonly<Record<string, string | undefi
   const raw = env[SMOKE_CONNECTION_ENV];
   if (raw === undefined || raw === "") {
     throw new Error(
-      "connectTestStage() works only in a test run started by `smoke`: run `npx prototype-framework smoke --target local` (against the running `dev` server) or `npx prototype-framework smoke --target <t> --stage test-<name>`",
+      "connectTestStage() works only in a test run started by `smoke`: run `npm run smoke -- --target local` (against the running `dev` server) or `npm run smoke -- --target <t> --stage test-<name>`",
     );
   }
   let value: unknown;
