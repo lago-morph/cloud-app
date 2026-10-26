@@ -8,7 +8,8 @@ import type { CloudflareSettingsOptions } from "./cloudflare-settings.js";
 import type { ProcessEnvironment } from "./commands/smoke-cloud.js";
 import type { Command } from "./io.js";
 
-const lazy =
+/** A command loaded when it runs, so one command never loads another's tooling. */
+export const lazy =
   (load: () => Promise<Command>): Command =>
   async (args, io) =>
     (await load())(args, io);

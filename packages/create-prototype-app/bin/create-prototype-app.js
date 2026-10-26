@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // `npm create @lago-morph/prototype-app <dir>` runs this (npm maps @scope/name to
-// @scope/create-name). See README.md for the options.
+// @scope/create-name). See README.md for the options. Asks for no account (plan-setup-wizard §3.1).
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { create } from "../lib/create.mjs";
+import { create, firstCommit, initRepo, loadLocalSetup, nextStep } from "../lib/create.mjs";
 
 const USAGE = `usage: create-prototype-app <dir> [--name <app>] [--framework <spec>] [--no-install] [--no-skill] [--force]
 
@@ -13,7 +13,7 @@ const USAGE = `usage: create-prototype-app <dir> [--name <app>] [--framework <sp
   --name <app>        app name: 1-20 lowercase letters and digits (default: from <dir>)
   --framework <spec>  dependency spec for @lago-morph/prototype-framework
                       (default: this package's version, the matching framework release)
-  --no-install        do not run npm install
+  --no-install        do not run npm install (nor the local setup, which needs it)
   --no-skill          do not copy the Claude Code skill into .claude/skills/
   --force             overwrite files in a non-empty <dir>`;
 
@@ -89,13 +89,34 @@ if (opts.install) {
   }
 }
 
-console.log(`
-Next steps:
-  cd ${rel}${opts.install ? "" : "\n  npm install"}
-  npm run dev        # serve the app locally
-  npm run verify     # check everything before calling a change done
+// Git problems warn and never fail (owner, 2026-10-26).
+const repo = initRepo(result.target);
+if (repo.message !== undefined) (repo.status === "warned" ? console.error : console.log)(repo.message);
 
-The owner's guide (local and Cloudflare) is README.md in the new folder.
-Claude Code: ${result.skill ? "the skill is in .claude/skills/prototype-framework/. Or i" : "i"}nstall it as a plugin:
+// The framework's local setup: local secrets and .env.cloudflare in .gitignore (dependencies are installed above).
+if (opts.install) {
+  const setup = await loadLocalSetup(result.target);
+  if (setup === undefined) {
+    console.error("WARNING: the installed framework has no local setup; set the app's secrets with `npm run secrets -- set <name> --target local --stage local`.");
+  } else {
+    const outcomes = await setup.runLocalSetup(result.target);
+    for (const o of outcomes) {
+      if (o.message !== undefined) (o.result === "warned" ? console.error : console.log)(o.message);
+    }
+  }
+} else {
+  console.log("Skipped npm install and the local setup (--no-install): no local secret values were set.");
+}
+
+if (repo.status === "initialized") {
+  const commit = firstCommit(result.target, `Start ${result.appName} from @lago-morph/create-prototype-app ${self.version}`);
+  if (commit.ok) console.log("Made the first git commit.");
+  else console.error(commit.message);
+}
+
+if (!result.skill) {
+  console.log(`Claude Code: install the skill as a plugin:
   /plugin marketplace add lago-morph/cloud-app
   /plugin install prototype-framework@lago-morph`);
+}
+console.log(`\n${nextStep(rel, { installed: opts.install })}`);

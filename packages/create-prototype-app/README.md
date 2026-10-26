@@ -14,7 +14,14 @@ npm run dev
 2. names the app after the folder: `package.json` `name`, and the app name in `src/app.ts` and `index.html` (1 to 20 lowercase letters and digits; pass `--name` to choose another);
 3. pins `@lago-morph/prototype-framework` at the release that matches this package's version;
 4. copies the Claude Code skill for the framework into `.claude/skills/prototype-framework/`, so Claude Code finds it in the app's folder;
-5. runs `npm install`.
+5. runs `npm install`;
+6. runs `git init` (unless the folder is already inside a git repository);
+7. sets a random local value for each of the app's secrets in `.dev.vars`, and makes sure `.gitignore` lists `.env.cloudflare`;
+8. makes the first commit.
+
+It asks for no account. If git is missing or a git step fails, it warns and carries on. It ends with what to do next: `cd my-app`, then `npm run dev`, or open the folder in Claude Code and say what to build.
+
+Later, `npm run upgrade` moves the app to a newer framework release and refreshes its skill copy, and `npx prototype-framework version-check` says whether that is worth doing.
 
 Node.js 22.22.0 is what the framework requires.
 
@@ -26,7 +33,7 @@ Pass options after `--` with `npm create`, for example `npm create @lago-morph/p
 | --- | --- |
 | `--name <app>` | App name instead of one made from the folder name |
 | `--framework <spec>` | Another dependency spec for the framework, such as a `file:` tarball path |
-| `--no-install` | Skip `npm install` |
+| `--no-install` | Skip `npm install`, and the local secrets that need it |
 | `--no-skill` | Do not copy the skill (install the plugin instead, below) |
 | `--force` | Overwrite files in a folder that is not empty |
 
