@@ -184,7 +184,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       return problems;
     },
     async setUpEmail(emailDomain) {
-      const created = await email.setUp(emailDomain);
+      const created = [...(await email.setUp(emailDomain))];
       // The last step of setup-account: every step is done now, so the setup record is written (DEC-0577).
       // A write is reported with what was created, so a run that only records a new version does not say "nothing changed".
       await writeSetupRecord(

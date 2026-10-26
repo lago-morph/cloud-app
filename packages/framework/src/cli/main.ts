@@ -34,6 +34,8 @@ const adminsBinding: Command = cloud("admins", async (env) => (await import("./c
 /** `version-check` and `upgrade` (plan-setup-wizard §4.8a; DEC-0594, DEC-0595). */
 const versionCheckBinding: Command = lazy(async () => (await import("./commands/version-check.js")).versionCheckBinding());
 const upgradeBinding: Command = lazy(async () => (await import("./commands/upgrade.js")).upgradeBinding());
+/** `cloudflare-setup` (plan-setup-wizard §4.3; DEC-0584): reads `.env.cloudflare` itself, bootstrap token included, after the local setup. */
+const cloudflareSetupBinding: Command = lazy(async () => (await import("./commands/cloudflare-setup.js")).cloudflareSetupBinding());
 
 const COMMANDS: Readonly<Record<string, Entry>> = {
   dev: { summary: "run the app locally on http://localhost:<port>", run: devBinding },
@@ -47,6 +49,7 @@ const COMMANDS: Readonly<Record<string, Entry>> = {
   start: { summary: "start --target <t> --stage <s>: start a stopped stage", run: startBinding },
   secrets: { summary: "secrets set <name> --target <t> --stage <s>: set a secret from standard input", run: secretsBinding },
   "setup-account": { summary: "setup-account --target <t>: one-time account setup", run: setupAccountBinding },
+  "cloudflare-setup": { summary: "cloudflare-setup [--email-domain <d>] [--switch-account]: the re-runnable Cloudflare setup (tokens, account, email domain)", run: cloudflareSetupBinding },
   "check-login": { summary: "check-login --target <t> --stage <s>: automated real-login check on a production stage", run: checkLoginBinding },
   "reset-local": { summary: "clear local state (local D1, R2, .logs/ and .mail/)", run: resetLocalBinding },
   mail: { summary: "mail last --to <address> [--target <t>]: print the latest framework email sent to an address", run: mailBinding },

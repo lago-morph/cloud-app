@@ -226,16 +226,18 @@ const commentedEmpty = (name: string): RegExp => new RegExp(`^\\s*#\\s*${name}\\
  * absent, so copying the file starts the next project (plan §4.2). A value already in the file is
  * never changed. An empty line is filled in place; else the template's commented line is
  * uncommented and filled; else a line is added. Creates the file when absent. Returns the names
- * filled in.
+ * filled in. `replace` names settings whose value in the file is changed when it differs: only the
+ * account switch replaces `CLOUDFLARE_ACCOUNT_ID` (plan §3.4; DEC-0585).
  */
-export function fillInSettings(projectDir: string, values: Partial<Record<FillName, string>>): string[] {
+export function fillInSettings(projectDir: string, values: Partial<Record<FillName, string>>, options: { readonly replace?: readonly FillName[] } = {}): string[] {
   const parsed = readParsed(projectDir) ?? { lines: [], assignments: [], unreadable: [] };
   const current = fileValues(parsed);
   const lines = [...parsed.lines];
   const filled: string[] = [];
   for (const name of ["CLOUDFLARE_EMAIL_DOMAIN", "CLOUDFLARE_ACCOUNT_ID"] as const) {
     const value = values[name]?.trim() ?? "";
-    if (value === "" || (current[name] ?? "") !== "") continue;
+    const have = current[name] ?? "";
+    if (value === "" || have === value || (have !== "" && !(options.replace ?? []).includes(name))) continue;
     if (/[\s#"'\\]/.test(value)) throw new Error(`${name} cannot be written to ${ENV_CLOUDFLARE_FILE}: the value holds a space, quote, backslash or #`);
     const line = `${name}=${value}`;
     const active = parsed.assignments.filter((a) => a.name === name);
