@@ -46,7 +46,7 @@ Owner decisions this plan follows (2026-10-26):
 | A cloud session installs plugins from repo settings | no. Committed `.claude/skills/` are loaded; a setup script can't read environment secrets ([docs](https://code.claude.com/docs/en/cloud-environments.md#what-carries-over-from-your-setup)) |
 
 Not yet verified:
-- **The 13-group bootstrap link:** does it pre-tick every group, the email ones especially?
+- **The 12-group bootstrap link and the 7-group everyday link:** does it pre-tick every group, the email ones especially?
 - **Setup script:** is a skill written to `~/.claude/skills` by a cloud environment setup script loaded? (§4.8)
 
 ## 3. User flows
@@ -102,11 +102,11 @@ One module in the framework (`provision/cloudflare/permissions.ts`) holds:
 
 The deep links, the token checks, the in-place upgrade and the docs' permission tables are all generated from it. It replaces the hand-written lists in README §2 and owner-tasks, and supersedes DEC-0551's two-token split: the setup token becomes the dashboard-made bootstrap token.
 
-- **Everyday** (DEC-0551's set, plus reads so it can check the account setup on its own):
+- **Everyday** (DEC-0551's set, plus Email Routing Rules Read, owner 2026-10-26, so it can check the whole account setup on its own):
   - Account: Workers Scripts Write, Workers R2 Storage Write, D1 Write, Email Sending Read.
-  - Zone: Zone Read, Analytics Read.
+  - Zone: Zone Read, Analytics Read, Email Routing Rules Read.
   - Its R2 access lets it read the setup record (§4.4).
-- **Bootstrap:**
+- **Bootstrap** (12 groups):
   - Account: Workers Scripts Write, Workers R2 Storage Write, Account API Tokens Write, Email Sending Write, Email Routing Addresses Write, Billing Read, D1 Write.
   - Zone: Email Routing Rules Write, DNS Write, Zone Settings Write, Zone Read, Analytics Read.
 
@@ -119,9 +119,11 @@ The deep links, the token checks, the in-place upgrade and the docs' permission 
 
 ### 4.3 `cloudflare-setup`: the state machine
 It reads the current state, then does only what is missing. Each run:
-1. **Git:** if this is not a git repository, warn and continue. Otherwise:
-   - make sure `.env.cloudflare` is listed in `.gitignore`, adding it if needed;
-   - if `git ls-files` shows the file is tracked, stop, explain that the tokens are in the history, and give the steps to replace them.
+0. **Local setup:** if the project's local setup hasn't been done, do it first: dependencies installed, local secrets set, `.env.cloudflare` listed in `.gitignore`. This is the same step as §3.1, and it's idempotent.
+1. **Git:** never blocks (owner 2026-10-26: some users have no remote, or a private one, and accept the risk). Every run prints a prominent warning when any of these holds:
+   - this is not a git repository;
+   - `.env.cloudflare` is not ignored (setup offers to add the line, and adds it unless the user has removed it on purpose, marked by a `# keep-env-cloudflare-tracked` line in `.gitignore`);
+   - the file is tracked (`git ls-files`). Then the warning also says the tokens are in the history and how to replace them.
 2. **Tokens:** find both tokens (§4.2). For each, check:
    - that it's valid (`/accounts/{id}/tokens/verify`);
    - which account it belongs to;
@@ -158,13 +160,13 @@ It reads the current state, then does only what is missing. Each run:
 - the email domain;
 - which steps it completed.
 
-The everyday token reads the record through R2, then spot-checks with its own permissions that the buckets, the signing record and email sending are there. The test mailbox's routing rule isn't checked: that would need a further zone permission, and the record vouches for it.
+The everyday token reads the record through R2, then checks with its own permissions that the buckets, the signing record, email sending and the test mailbox's routing rule are all there.
 
 ### 4.5 Git-ignore safety, checked in three places
-- **The framework CLI:** every command that reads `.env.cloudflare`, and `npm run verify`, fails with a clear message in two cases:
+- **The framework CLI:** every command that reads `.env.cloudflare`, and `npm run verify`, prints a prominent warning, every time, in two cases (never a failure, owner 2026-10-26):
   - the file exists but isn't ignored;
   - the file is tracked.
-- **The skill:** before every commit or push, and when a session starts work on the app, it runs `git check-ignore -q .env.cloudflare` and `git ls-files --error-unmatch .env.cloudflare`.
+- **The skill:** before every commit or push, and when a session starts work on the app, it runs `git check-ignore -q .env.cloudflare` and `git ls-files --error-unmatch .env.cloudflare`. It reminds the user each time either check fails; it doesn't refuse to commit.
 - **Setup itself:** see §4.3 step 1.
 
 ### 4.6 Keeping the agent away from the token values
@@ -219,7 +221,8 @@ The docs don't say whether such a skill is loaded. The owner tests it by adding 
   - the in-place update;
   - self-deletion;
   - the file edits: comment-out, fill-in, mode 600, environment/file precedence;
-  - the git-ignore and tracked-file failures;
+  - the git-ignore and tracked-file warnings (never failures);
+  - local setup run first when missing;
   - that no output ever contains a token value (a fake token with a marker string, searched for in every output).
 - **Integration:** run the starter offline, then `cloudflare-setup` with no tokens, and check the exact printed links and template.
 - **Live, in a milestone pass:**
@@ -230,11 +233,11 @@ The docs don't say whether such a skill is loaded. The owner tests it by adding 
   5. a bad-paste message.
   
   These need a dashboard-made bootstrap token: the API can't create one (§2). So that run needs the owner to supply one, or else uses the account's existing dashboard token, read-only except for its own temporary tokens.
-- **Owner checks, once each:** the 13-group bootstrap link (§2), and the setup-script skill load (§4.8).
+- **Owner checks, once each:** the 12-group bootstrap link and the 7-group everyday link (§2), and the setup-script skill load (§4.8).
 
 ## 7. Work breakdown
 1. **Permission list and deep links** (§4.1): code, generated tables, unit tests.
-2. **Token sources and `.env.cloudflare` handling** (§4.2), plus the git-ignore checks in the CLI and `verify` (§4.5).
+2. **Token sources and `.env.cloudflare` handling** (§4.2), plus the git-ignore warnings in the CLI and `verify` (§4.5).
 3. **Setup record and idempotent setup steps** (§4.4): refactor `setup-account` into steps that are checked first and then applied.
 4. **The `cloudflare-setup` state machine** (§4.3), including the in-place update and self-deletion.
 5. **Starter one-line local start** (§3.1).
