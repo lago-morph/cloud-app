@@ -129,6 +129,7 @@ describe("setup-account on Cloudflare (PROV-REQ-004)", () => {
         "Email Routing on t.example.test",
         "Email Routing subaddressing",
         "routing rule sink@t.example.test → Worker prototype-mailsink",
+        "account setup record (setup version 1)",
       ],
       recorded: "example.test",
     });
@@ -152,6 +153,16 @@ describe("setup-account on Cloudflare (PROV-REQ-004)", () => {
     expect(cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
   });
 
+  it("a release with a raised setup version records it and says so, not \"nothing changed\"", async () => {
+    const { cloud, target } = setup();
+    await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
+    const upgraded = setup({ api: cloud.api, setupVersion: 2 }).target;
+    const io = captureIo();
+    expect(await runSetupAccount(upgraded, io)).toEqual({ status: 0, created: ["account setup record (setup version 2)"] });
+    expect(io.out).not.toContain("nothing changed");
+    expect(io.out).toContain("account setup record (setup version 2)");
+  });
+
   it("[PROV-AC-004] unit part: without --email-domain and with no recorded domain it stops before creating anything", async () => {
     const { cloud, target } = setup();
     cloud.buckets.clear();
@@ -170,7 +181,7 @@ describe("setup-account on Cloudflare (PROV-REQ-004)", () => {
     // The new domain is onboarded and routed; the sink's bucket and Worker are shared and already there.
     expect(await runSetupAccount(target, io, { emailDomain: "two.example" })).toEqual({
       status: 0,
-      created: ["Email Sending entry two.example", "Email Routing on t.two.example", "Email Routing subaddressing", "routing rule sink@t.two.example → Worker prototype-mailsink"],
+      created: ["Email Sending entry two.example", "Email Routing on t.two.example", "Email Routing subaddressing", "routing rule sink@t.two.example → Worker prototype-mailsink", "account setup record (setup version 1)"],
       recorded: "two.example",
     });
     expect(cloud.zones.get("one.example")!.sending.map((e) => e.name)).toEqual(["one.example"]);

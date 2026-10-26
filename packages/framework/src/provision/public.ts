@@ -7,3 +7,5 @@
  * from the new app's installed framework, so the starter and `cloudflare-setup` run the same steps.
  */
 export { describeLocalSetup, runLocalSetup, type LocalSetupDeps, type LocalSetupOutcome, type LocalSetupStep } from "./core/local-setup.js";
+/** The release's permission list and account setup versions (PAR-331, PAR-332): `upgrade` reads them from a fresh process. */
+export { ACCOUNT_SETUP_VERSION, PERMISSIONS_VERSION } from "./cloudflare/permissions.js";

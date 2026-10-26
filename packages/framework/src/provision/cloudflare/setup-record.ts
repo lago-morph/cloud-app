@@ -84,9 +84,16 @@ export interface SetupRecordInput {
  * completed steps and a `setupVersion` at least the input's (`changed` forces the write: the run
  * applied a step). A stored higher `setupVersion` is kept: an older release re-running setup on
  * an account a newer one set up does not make it look out of date to the newer one. Every other
- * field of the stored object is kept. Returns the record now stored.
+ * field of the stored object is kept. Returns the record now stored; `onWrite` is called when it
+ * was written (so `setup-account` does not say "nothing changed" after recording a new version).
  */
-export async function writeSetupRecord(api: CloudflareApi, accountId: string, input: SetupRecordInput, changed: boolean): Promise<AccountSetupRecord> {
+export async function writeSetupRecord(
+  api: CloudflareApi,
+  accountId: string,
+  input: SetupRecordInput,
+  changed: boolean,
+  onWrite: (record: AccountSetupRecord) => void = () => undefined,
+): Promise<AccountSetupRecord> {
   const stored = await readAccountObject(api, accountId);
   const previous = parseSetupRecord(stored);
   const completedSteps = SETUP_STEPS.filter((id) => input.completedSteps.includes(id));
@@ -107,6 +114,7 @@ export async function writeSetupRecord(api: CloudflareApi, accountId: string, in
   const r = await api("PUT", objectPath(accountId), { ...(stored ?? {}), ...record });
   // A 2xx is the end state; the body of the object endpoint's answer is not relied on.
   if (r.status < 200 || r.status >= 300 || (r.body as { success?: unknown } | null)?.success === false) throw new Error(`writing the ${ACCOUNT_SETTINGS_RESOURCE} failed: ${describeFailure(r)}`);
+  onWrite(record);
   return record;
 }
 
