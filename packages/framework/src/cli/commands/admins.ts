@@ -151,7 +151,7 @@ export function adminsCommand(deps: AdminsDeps): Command {
       if (refused !== undefined) return refused;
       const missing = deps.missingCredentials?.() ?? [];
       if (missing.length > 0) {
-        io.stderr(`admins failed: missing Cloudflare credentials: ${missing.join(", ")} (set them in the environment; values are never printed)\n`);
+        io.stderr(`admins failed: missing Cloudflare credentials: ${missing.join(", ")} (set them in the environment or in .env.cloudflare; values are never printed)\n`);
         return EXIT.failed;
       }
     }

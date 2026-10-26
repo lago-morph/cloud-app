@@ -10,6 +10,9 @@ dist/
 .mail/
 .dev.vars
 
+# Cloudflare tokens and account settings (plan-setup-wizard §4.2; never commit)
+.env.cloudflare
+
 # Playwright output
 test-results/
 playwright-report/

@@ -26,7 +26,7 @@ export function cloudflareSinkReader(env: ProcessEnvironment, fetchImpl?: typeof
       import("../../provision/cloudflare/mail-sink.js"),
     ]);
     const missing = missingCredentials(env);
-    if (missing.length > 0) throw new Error(`missing Cloudflare credentials: ${missing.join(", ")} (set them in the environment; values are never printed)`);
+    if (missing.length > 0) throw new Error(`missing Cloudflare credentials: ${missing.join(", ")} (set them in the environment or in .env.cloudflare; values are never printed)`);
     const api = createCloudflareApi({ token: env.CLOUDFLARE_API_TOKEN ?? "", ...(fetchImpl === undefined ? {} : { fetch: fetchImpl }) });
     return readSinkMail(api, env.CLOUDFLARE_ACCOUNT_ID ?? "", address);
   };

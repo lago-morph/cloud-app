@@ -132,4 +132,24 @@ describe("verify (CLI-REQ-002)", () => {
     expect(await verifyCommand(deps({ zodVersion: async () => ({ expected: "4.6.7", installed: undefined }) }))([], io)).toBe(1);
     expect(io.out).toMatch(/zod is not installed/);
   });
+
+  it("prints the .env.cloudflare git warnings first and again before the verdict, and never changes the exit status (DEC-0572)", async () => {
+    const warning = ".env.cloudflare is tracked by git, so the Cloudflare tokens in it are in the repository's history";
+    const banner = `${"=".repeat(78)}\nverify: WARNING: ${warning}\n${"=".repeat(78)}\n`;
+    const passingIo = captureIo();
+    expect(await verifyCommand(deps({ gitSafetyWarnings: () => [warning] }))([], passingIo)).toBe(0);
+    expect(passingIo.out.startsWith(banner)).toBe(true);
+    expect(passingIo.out.endsWith(`${banner}verify passed\n`)).toBe(true);
+
+    const failingIo = captureIo();
+    expect(await verifyCommand(deps({ gitSafetyWarnings: () => [warning], zodVersion: async () => ({ expected: "4.6.7", installed: undefined }) }))([], failingIo)).toBe(1);
+    expect(failingIo.out).toContain(`${banner}verify failed: zod version\n`);
+
+    const throwingIo = captureIo();
+    const throwing = (): never => {
+      throw new Error("git exploded");
+    };
+    expect(await verifyCommand(deps({ gitSafetyWarnings: throwing }))([], throwingIo)).toBe(0);
+    expect(throwingIo.out).not.toContain("WARNING");
+  });
 });
