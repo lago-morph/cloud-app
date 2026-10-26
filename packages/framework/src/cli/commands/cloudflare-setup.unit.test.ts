@@ -259,8 +259,9 @@ describe("cloudflare-setup: a fresh account with both tokens (plan §4.3 steps 4
     expect(world.token("boot-id").deleted).toBe(true);
     expect(world.token("everyday-id").deleted).toBe(false);
     expect(readEnvFile(dir)).toBe(`# CLOUDFLARE_BOOTSTRAP_TOKEN=deleted by setup process\nCLOUDFLARE_API_TOKEN=${EVERYDAY_VALUE}\nCLOUDFLARE_EMAIL_DOMAIN=${DOMAIN}\nCLOUDFLARE_ACCOUNT_ID=${ACCOUNT}\n`);
-    // The network check: the API, the account's R2 host and its workers.dev subdomain.
-    expect(reached).toEqual(["https://api.cloudflare.com/client/v4/", `https://${ACCOUNT}.r2.cloudflarestorage.com/`, `https://${SUB}.workers.dev/`]);
+    // The network check: the API, the account's R2 host and a Worker-style host under its
+    // workers.dev subdomain (the bare subdomain has no DNS record; a script host answers 404).
+    expect(reached).toEqual(["https://api.cloudflare.com/client/v4/", `https://${ACCOUNT}.r2.cloudflarestorage.com/`, `https://prototype-framework-reachability.${SUB}.workers.dev/`]);
 
     // A second run needs nothing: no prompt, nothing to do, no change.
     world.requests.length = 0;
@@ -325,6 +326,18 @@ describe("cloudflare-setup: a fresh account with both tokens (plan §4.3 steps 4
     expect(io.out).toContain("CLOUDFLARE_BOOTSTRAP_TOKEN (the bootstrap token): Cloudflare does not accept it as an API token");
     expect(io.out).toContain(BOOT_LINK);
     expect(io.out).not.toContain(EVERYDAY_LINK);
+  });
+
+  it("a run whose only change is the setup record (a record without the setup version, every step done): says it recorded the version, and is complete", async () => {
+    const world = await setUpWorld();
+    world.cloud().objectBodies.set("sst-state/framework/account.json", { emailDomain: DOMAIN });
+    world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
+    const { status, io } = await run(world, project({ env: bothTokens() }), { protectedTokenIds: [] });
+    expect(status).toBe(0);
+    expect(io.out).toContain(`account setup: every step was already done; recorded setup version ${String(ACCOUNT_SETUP_VERSION)}`);
+    expect(io.out).toContain("Cloudflare setup is complete.");
+    expect(io.out).not.toContain("nothing to do");
+    expect(await readSetupRecord(world.cloud().api, ACCOUNT)).toMatchObject({ setupVersion: ACCOUNT_SETUP_VERSION });
   });
 
   it("warns when the bootstrap token has no expiry", async () => {

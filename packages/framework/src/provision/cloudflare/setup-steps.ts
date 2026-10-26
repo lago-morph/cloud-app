@@ -189,12 +189,13 @@ export interface ApplySetupInput extends SetupStepOptions {
 
 /**
  * Applies the requested steps that are not done, in order, and then writes the setup record
- * (`applied`: the steps it ran). Needs the bootstrap token's permissions for any change; changes
+ * (`applied`: the steps it ran; `written`: whether the record was written, also when only its
+ * version or completed steps changed). Needs the bootstrap token's permissions for any change; changes
  * nothing, and throws naming the cause, when the domain is invalid, a step's read is refused, a
  * requested step's resource belongs to another account, or the token lacks a permission.
  * Idempotent: a second run applies nothing and writes nothing.
  */
-export async function applySetupSteps(api: CloudflareApi, accountId: string, input: ApplySetupInput): Promise<{ readonly applied: readonly SetupStepId[]; readonly record: AccountSetupRecord }> {
+export async function applySetupSteps(api: CloudflareApi, accountId: string, input: ApplySetupInput): Promise<{ readonly applied: readonly SetupStepId[]; readonly record: AccountSetupRecord; readonly written: boolean }> {
   const problem = emailDomainProblem(input.emailDomain);
   if (problem !== undefined) throw new Error(`the email domain ${problem}; nothing was changed`);
   const unknown = input.steps.filter((s) => !(SETUP_STEPS as readonly string[]).includes(s));
@@ -219,12 +220,16 @@ export async function applySetupSteps(api: CloudflareApi, accountId: string, inp
     await i.step.apply(input.emailDomain);
     applied.push(i.step.id);
   }
+  let written = false;
   const completedSteps = inspected.filter((i) => i.done || applied.includes(i.step.id)).map((i) => i.step.id);
   const record = await writeSetupRecord(
     api,
     accountId,
     { emailDomain: input.emailDomain, completedSteps, setupVersion: input.setupVersion, frameworkVersion: input.frameworkVersion, now: input.now },
     applied.length > 0,
+    () => {
+      written = true;
+    },
   );
-  return { applied, record };
+  return { applied, record, written };
 }

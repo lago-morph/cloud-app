@@ -285,4 +285,11 @@ describe("setup-account --target cloudflare on the steps (PROV-REQ-004, DEC-0577
     // The steps' own apply agrees: nothing to do.
     expect((await applySetupSteps(cloud.api, ACCOUNT, input())).applied).toEqual([]);
   });
+
+  it("says whether it wrote the setup record: yes for an old record without the setup fields, no on a second run", async () => {
+    const cloud = await setUpCloud();
+    cloud.objectBodies.set(RECORD, { emailDomain: DOMAIN });
+    expect(await applySetupSteps(cloud.api, ACCOUNT, input())).toMatchObject({ applied: [], written: true });
+    expect(await applySetupSteps(cloud.api, ACCOUNT, input())).toMatchObject({ applied: [], written: false });
+  });
 });
