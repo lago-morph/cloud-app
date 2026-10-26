@@ -23,7 +23,8 @@
  *   `prototype-compliance-wizard-*` token left by an earlier pass.
  * - **A call budget.** At most `PASS_CALL_LIMIT` calls per pass and `WINDOW_CALL_LIMIT` per rolling
  *   `WINDOW_MS`; reaching a limit, or any HTTP 429, stops the pass: that call and every later one
- *   rejects with `LivePassStopped`. A 401 stops further use of that token (the harness's
+ *   rejects with `LivePassStopped`. The network check's HEAD requests (`pass.reach`, for
+ *   `CloudflareSetupDeps.reach`) count in the same budget and are refused after a stop (DEC-0619). A 401 stops further use of that token (the harness's
  *   `guardFetch`, token-guard.ts).
  * - **Redaction.** `redact` removes every token value (the environment's, and each value an answer
  *   carries), the account ID, zone IDs, token IDs and the account's `workers.dev` subdomain (read
@@ -34,10 +35,12 @@
  *   again and prints only names as proof.
  *
  * Injection into the framework: `pass.apiFor` is a `CloudflareSetupDeps.apiFor` (every token's API
- * shares this pass's guards and budget), `pass.protectedTokenIds` is `CloudflareSetupDeps.protectedTokenIds`,
+ * shares this pass's guards and budget), `pass.reach` is `CloudflareSetupDeps.reach`,
+ * `pass.protectedTokenIds` is `CloudflareSetupDeps.protectedTokenIds`,
  * and `pass.redactingIo(io)` wraps the run's `ProvisionIo`.
  */
-import { createCloudflareApi, sentPath, type ApiReply, type CloudflareApi } from "../../../../packages/framework/src/provision/cloudflare/api.js";
+import { NETWORK_CHECK_TIMEOUT_MS } from "../../../../packages/framework/src/cli/commands/cloudflare-setup.js";
+import { CloudflareRequestsStopped, createCloudflareApi, sentPath, type ApiReply, type CloudflareApi } from "../../../../packages/framework/src/provision/cloudflare/api.js";
 import { redact as redactText, type Redaction } from "../../../../packages/framework/src/evidence/writer.js";
 import { listTestTokens } from "../../../../tests/compliance/harness/test-tokens.js";
 import { guardFetch, MAIN_TOKEN_PURPOSE } from "../../../../tests/compliance/harness/token-guard.js";
@@ -58,8 +61,11 @@ export class LivePassRefusal extends Error {
   }
 }
 
-/** The pass stopped (budget reached, or a 429); no further request is sent. */
-export class LivePassStopped extends Error {
+/**
+ * The pass stopped (budget reached, or a 429); no further request is sent. A
+ * `CloudflareRequestsStopped`, so `cloudflare-setup`'s network check rethrows it (DEC-0619).
+ */
+export class LivePassStopped extends CloudflareRequestsStopped {
   constructor(message: string) {
     super(message);
     this.name = "LivePassStopped";
@@ -87,6 +93,8 @@ export interface LivePass {
   readonly protectedTokenIds: readonly string[];
   /** The guarded API with the environment token. */
   readonly api: CloudflareApi;
+  /** The network check's HEAD request (for `CloudflareSetupDeps.reach`), counted in the budget and refused after a stop. */
+  reach(url: string): Promise<void>;
   /** The guarded API with any token (for `CloudflareSetupDeps.apiFor`); its value joins the redactions. */
   apiFor(token: string): CloudflareApi;
   /** The environment token's verify answer: active, and whether it has an expiry. */
@@ -240,6 +248,24 @@ export async function startLivePass(options: LivePassOptions): Promise<LivePass>
     return t;
   };
 
+  /** One request's place in the budget: refuses after a stop and at a limit (which stops the pass); returns its time. */
+  const admit = (method: string): number => {
+    if (stopped !== undefined) throw new LivePassStopped(`live pass stopped earlier (${stopped}); ${method} not sent`);
+    const t = now();
+    while (sent.length > 0 && (sent[0] ?? 0) <= t - windowMs) sent.shift();
+    if (total >= perPass) {
+      stopped = `the pass budget of ${String(perPass)} calls is used`;
+      throw new LivePassStopped(`live pass stopped: ${stopped}`);
+    }
+    if (sent.length >= perWindow) {
+      stopped = `${String(perWindow)} calls in ${String(windowMs / 60_000)} minutes`;
+      throw new LivePassStopped(`live pass stopped: ${stopped}`);
+    }
+    total++;
+    sent.push(t);
+    return t;
+  };
+
   const guarded = (token: string): CloudflareApi => {
     addSecret(token, token === envToken ? "<CLOUDFLARE_API_TOKEN>" : "<token-value>");
     const send = transport(token);
@@ -247,18 +273,7 @@ export async function startLivePass(options: LivePassOptions): Promise<LivePass>
       if (stopped !== undefined) throw new LivePassStopped(`live pass stopped earlier (${stopped}); ${method} not sent`);
       const refusal = refusalOf(method, path, body, protectedIds, now(), owned, deletable);
       if (refusal !== undefined) throw new LivePassRefusal(redact(`live pass guard: ${refusal}`));
-      const t = now();
-      while (sent.length > 0 && (sent[0] ?? 0) <= t - windowMs) sent.shift();
-      if (total >= perPass) {
-        stopped = `the pass budget of ${String(perPass)} calls is used`;
-        throw new LivePassStopped(`live pass stopped: ${stopped}`);
-      }
-      if (sent.length >= perWindow) {
-        stopped = `${String(perWindow)} calls in ${String(windowMs / 60_000)} minutes`;
-        throw new LivePassStopped(`live pass stopped: ${stopped}`);
-      }
-      total++;
-      sent.push(t);
+      const t = admit(method);
       const reply: ApiReply = await send(method, path, body);
       for (const s of secretsIn(path, reply.body)) addSecret(s.value, s.replacement);
       if (method === "POST" && TOKEN_CREATE_PATH.test(pathOnly(path) ?? "") && reply.status >= 200 && reply.status < 300) {
@@ -274,6 +289,16 @@ export async function startLivePass(options: LivePassOptions): Promise<LivePass>
   };
 
   const api = guarded(envToken);
+
+  /** The framework's `reachWith` (any answer is reachable; none rejects), inside the budget; a 429 stops the pass. */
+  const reach = async (url: string): Promise<void> => {
+    admit("HEAD");
+    const reply = await doFetch(url, { method: "HEAD", redirect: "manual", signal: AbortSignal.timeout(NETWORK_CHECK_TIMEOUT_MS) });
+    if (reply.status === 429) {
+      stopped = "HTTP 429 on HEAD";
+      throw new LivePassStopped(`live pass stopped: ${stopped} (rate limited)`);
+    }
+  };
 
   // The environment token's own ID, read before anything else is sent.
   const verify = await api("GET", `/accounts/${accountId}/tokens/verify`);
@@ -297,6 +322,7 @@ export async function startLivePass(options: LivePassOptions): Promise<LivePass>
       return [...protectedIds];
     },
     api,
+    reach,
     apiFor: guarded,
     envTokenStatus,
     redact,

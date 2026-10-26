@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ACCOUNT } from "../../provision/cloudflare/fake-cloud.test-support.js";
+import { CloudflareRequestsStopped } from "../../provision/cloudflare/api.js";
 import { guardTokenWrites, NEXT_PROMPT } from "../../provision/cloudflare/cloudflare-setup.js";
 import { ACCOUNT_SETUP_VERSION, BOOTSTRAP, deepLink, EVERYDAY } from "../../provision/cloudflare/permissions.js";
 import { readSetupRecord, SETUP_STEPS } from "../../provision/cloudflare/setup-record.js";
@@ -740,6 +741,42 @@ describe("cloudflare-setup: local setup, git and the network (plan §4.3 steps 0
     expect(status).toBe(1);
     expect(io.out).toContain("This environment cannot reach the account's workers.dev subdomain (<subdomain>.workers.dev), which deploy needs.");
     expect(io.out).toContain("Network access");
+  });
+
+  it("a stop of the request layer (a budget used up, a 429) during the network check ends the run instead of counting as a blocked host (DEC-0619)", async () => {
+    const world = await setUpWorld();
+    const urls: string[] = [];
+    const stopped = await run(world, project({ env: everydayOnly() }), {
+      reach: async (url) => {
+        urls.push(url);
+        throw new CloudflareRequestsStopped("live pass stopped: HTTP 429 on GET (rate limited)");
+      },
+    });
+    expect(stopped.status).toBe(1);
+    expect(urls).toHaveLength(1);
+    expect(stopped.io.err).toContain("cloudflare-setup failed: live pass stopped: HTTP 429 on GET (rate limited)");
+    expect(stopped.io.out).not.toContain("cannot reach");
+
+    // The same when the network check's subdomain read (an API call; the run's last) is the one stopped.
+    world.requests.length = 0;
+    const reads = (await run(world, project({ env: everydayOnly() }))).status === 0 ? world.requests.filter((r) => r.endsWith("/workers/subdomain")).length : -1;
+    let seen = 0;
+    const apiFor = (value: string) => {
+      const api = world.apiFor(value);
+      return async (method: Parameters<typeof api>[0], path: string, body?: unknown) => {
+        if (path.endsWith("/workers/subdomain") && ++seen === reads) throw new CloudflareRequestsStopped("the pass budget is used");
+        return api(method, path, body);
+      };
+    };
+    world.requests.length = 0;
+    const io = captureIo(project({ env: everydayOnly() }));
+    runs.push({ io, world });
+    const reached: string[] = [];
+    const status = await cloudflareSetupCommand({ env: {}, apiFor, reach: async (url) => void reached.push(url), localSetup: fakeLocalSetup, now: () => NOW })([], io);
+    expect(status).toBe(1);
+    expect(io.err).toContain("cloudflare-setup failed: the pass budget is used");
+    expect(io.out).not.toContain("cannot reach");
+    expect(reached).toEqual([]);
   });
 
   it("a failure whose message holds the account ID or a token is printed with them hidden (the redaction backstop)", async () => {

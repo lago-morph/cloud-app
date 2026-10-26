@@ -1,5 +1,6 @@
 // The live wizard pass's guards (guarded-api.ts), against a fake fetch. No network; fake values only.
 import { describe, expect, it } from "vitest";
+import { CloudflareRequestsStopped } from "../../../../packages/framework/src/provision/cloudflare/api.js";
 import { LivePassRefusal, LivePassStopped, MAX_TOKEN_LIFETIME_MS, refusalOf, startLivePass, WIZARD_TOKEN_PREFIX, type LivePassOptions } from "./guarded-api.js";
 
 const ACCOUNT = "0123456789abcdef0123456789abcdef";
@@ -257,6 +258,43 @@ describe("budget", () => {
     await expect(pass.api("GET", "/zones")).rejects.toBeInstanceOf(LivePassStopped);
     await expect(pass.api("GET", "/zones")).rejects.toThrow(/stopped earlier/);
     expect(fake.sent).toHaveLength(4);
+  });
+});
+
+describe("the network check's requests (reach, DEC-0619)", () => {
+  it("counts each HEAD in the budget and refuses it once the budget is used; the stop is a CloudflareRequestsStopped", async () => {
+    const fake = fakeCloudflare();
+    const { pass } = await start(fake, { limits: { perPass: 4 } });
+    await pass.reach("https://api.cloudflare.com/client/v4/");
+    expect(fake.sent.at(-1)).toMatchObject({ method: "HEAD", auth: null });
+    expect(pass.calls().pass).toBe(3);
+    await pass.api("GET", "/zones");
+    const stopped = pass.reach(`https://${SUBDOMAIN}.workers.dev/`);
+    await expect(stopped).rejects.toBeInstanceOf(LivePassStopped);
+    await expect(stopped).rejects.toBeInstanceOf(CloudflareRequestsStopped);
+    expect(fake.sent).toHaveLength(4);
+  });
+
+  it("sends nothing after a 429 stop, and a 429 answer to a HEAD stops the pass", async () => {
+    const fake = fakeCloudflare({ status429After: 3 });
+    const { pass } = await start(fake);
+    await pass.reach("https://api.cloudflare.com/client/v4/");
+    await expect(pass.reach("https://api.cloudflare.com/client/v4/")).rejects.toThrow(/HTTP 429 on HEAD/);
+    await expect(pass.reach(`https://${ACCOUNT}.r2.cloudflarestorage.com/`)).rejects.toThrow(/stopped earlier/);
+    await expect(pass.api("GET", "/zones")).rejects.toBeInstanceOf(LivePassStopped);
+    expect(fake.sent).toHaveLength(4);
+  });
+
+  it("rejects, like the framework's reach, when the host gives no answer", async () => {
+    const fake = fakeCloudflare();
+    const failing = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      if (String(input).includes(".workers.dev")) throw new TypeError("fetch failed");
+      return fake.fetch(input, init);
+    }) as typeof fetch;
+    const { pass } = await start(fake, { fetch: failing });
+    const err = await pass.reach(`https://${SUBDOMAIN}.workers.dev/`).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(TypeError);
+    expect(pass.stopReason()).toBeUndefined();
   });
 });
 

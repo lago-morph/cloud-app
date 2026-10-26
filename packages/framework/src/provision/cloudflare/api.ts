@@ -21,6 +21,19 @@ export type ApiReply = Awaited<ReturnType<CloudflareApi>>;
 
 export const API_BASE = "https://api.cloudflare.com/client/v4";
 
+/**
+ * Thrown by a request layer wrapped around the API (or around `cloudflare-setup`'s network check)
+ * that will send nothing more: a call budget is used up, or Cloudflare rate-limited the run (HTTP
+ * 429). Code that tolerates a failed request (the network check) rethrows it, so the run ends
+ * instead of sending more or reporting the stop as something else (DEC-0619).
+ */
+export class CloudflareRequestsStopped extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CloudflareRequestsStopped";
+  }
+}
+
 const BASE_PATH = new URL(API_BASE).pathname;
 
 /**

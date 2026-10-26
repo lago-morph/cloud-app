@@ -44,7 +44,7 @@ import { emailDomainProblem } from "../core/account-settings.js";
 import { describeLocalSetup, runLocalSetup, type EnsureIgnoredResult, type LocalSetupDeps, type LocalSetupOutcome } from "../core/local-setup.js";
 import { EXIT, messageOf, type ProvisionIo, type ProvisionStatus } from "../core/output.js";
 import { accountSubdomain } from "./account.js";
-import { describeFailure, sentPath, succeeded, type ApiReply, type CloudflareApi } from "./api.js";
+import { CloudflareRequestsStopped, describeFailure, sentPath, succeeded, type ApiReply, type CloudflareApi } from "./api.js";
 import { zoneCandidates } from "./email.js";
 import type { Environment } from "./environment.js";
 import { ensureEnvCloudflareIgnored, gitSafetyWarnings, inspectGitSafety } from "./git-safety.js";
@@ -94,7 +94,10 @@ export interface CloudflareSetupDeps {
   apiFor(token: string): CloudflareApi;
   /** Step 0 (default `runLocalSetup`, with `ensureIgnored` given). */
   localSetup?(projectDir: string, deps: Pick<LocalSetupDeps, "ensureIgnored">): Promise<readonly LocalSetupOutcome[]>;
-  /** Resolves when an HTTPS request to `url` got any answer; rejects when the host cannot be reached. */
+  /**
+   * Resolves when an HTTPS request to `url` got any answer; rejects when the host cannot be reached.
+   * A `CloudflareRequestsStopped` rejection (a request layer's budget or 429 stop) ends the run.
+   */
   reach(url: string): Promise<void>;
   /** Token IDs never to update or delete (DEC-0589), in addition to `PROTECTED_TOKEN_IDS_ENV`. */
   readonly protectedTokenIds?: readonly string[];
@@ -674,7 +677,11 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     }
   }
 
-  /** Step 8: each host by its kind, never the account ID or the subdomain (DEC-0590). */
+  /**
+   * Step 8: each host by its kind, never the account ID or the subdomain (DEC-0590). A failed read
+   * or request counts as a blocked host, except a request layer's stop (`CloudflareRequestsStopped`,
+   * DEC-0619), which is rethrown: nothing more is sent and the run fails with its message.
+   */
   async function networkProblems(accountId: string, api: CloudflareApi): Promise<string[]> {
     const hosts: { what: string; url: string }[] = [
       { what: "the Cloudflare API (api.cloudflare.com)", url: "https://api.cloudflare.com/client/v4/" },
@@ -684,7 +691,8 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       const subdomain = await accountSubdomain(api, accountId);
       hidden.add(subdomain);
       hosts.push({ what: "the account's workers.dev subdomain (<subdomain>.workers.dev)", url: `https://${subdomain}.workers.dev/` });
-    } catch {
+    } catch (error) {
+      if (error instanceof CloudflareRequestsStopped) throw error;
       hosts.push({ what: "the account's workers.dev subdomain (it could not be read)", url: "" });
     }
     const blocked: string[] = [];
@@ -692,7 +700,8 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       try {
         if (h.url === "") throw new Error("unknown");
         await deps.reach(h.url);
-      } catch {
+      } catch (error) {
+        if (error instanceof CloudflareRequestsStopped) throw error;
         blocked.push(h.what);
       }
     }
