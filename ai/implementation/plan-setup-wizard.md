@@ -45,9 +45,13 @@ Owner decisions this plan follows (2026-10-26):
 | A deep link can set an expiry, account or zone | no: the docs list only `permissionGroupKeys` and `name` for account tokens |
 | A cloud session installs plugins from repo settings | no. Committed `.claude/skills/` are loaded; a setup script can't read environment secrets ([docs](https://code.claude.com/docs/en/cloud-environments.md#what-carries-over-from-your-setup)) |
 
+Owner check of the 12-group bootstrap link (2026-10-26):
+- **All groups arrived ticked,** including the email ones given by ID: the 5 zone groups ticked, and the account summary listing 7.
+- **Scope:** the page puts every group in one policy for the entire account, so zone permissions cover *all* the account's zones. The link can't narrow this. It's accepted for both tokens: the bootstrap token is short-lived, and the everyday token's zone permissions are read-only. Setup checks that the email domain is covered.
+- **Expiry:** chosen on the page (No expiration, 7 days, 30 days, 90 days, 1 year, Custom), defaulting to none. The instructions say to pick 7 days or less for the bootstrap token, and setup warns when it has no expiry.
+
 Not yet verified:
-- **The 12-group bootstrap link and the 7-group everyday link:** does it pre-tick every group, the email ones especially?
-- **Setup script:** is a skill written to `~/.claude/skills` by a cloud environment setup script loaded? (§4.8)
+- **The everyday link (7 groups):** same mechanism; expected to behave the same.
 
 ## 3. User flows
 
@@ -233,7 +237,7 @@ The docs don't say whether such a skill is loaded. The owner tests it by adding 
   5. a bad-paste message.
   
   These need a dashboard-made bootstrap token: the API can't create one (§2). So that run needs the owner to supply one, or else uses the account's existing dashboard token, read-only except for its own temporary tokens.
-- **Owner checks, once each:** the 12-group bootstrap link and the 7-group everyday link (§2), and the setup-script skill load (§4.8).
+- **Owner checks, once each:** the 7-group everyday link (§2), and the setup-script skill load (§4.8).
 
 ## 7. Work breakdown
 1. **Permission list and deep links** (§4.1): code, generated tables, unit tests.
