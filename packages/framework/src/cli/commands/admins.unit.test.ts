@@ -219,7 +219,7 @@ describe("admins on Cloudflare, through the D1 HTTP API (fake)", () => {
       throw new Error("no request expected");
     });
     expect(await command(cloud(["list"]), io)).toBe(1);
-    expect(io.err).toBe("admins failed: missing Cloudflare credentials: CLOUDFLARE_API_TOKEN (set them in the environment; values are never printed)\n");
+    expect(io.err).toBe("admins failed: missing Cloudflare credentials: CLOUDFLARE_API_TOKEN (set them in the environment or in .env.cloudflare; values are never printed)\n");
     const proxied = await run(cloud(["list"]), deps({ env: { HTTPS_PROXY: "http://proxy.invalid:1" } }));
     expect(proxied.status).toBe(1);
     expect(proxied.err).toMatch(/NODE_USE_ENV_PROXY=1/);

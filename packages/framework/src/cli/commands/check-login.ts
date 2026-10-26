@@ -420,7 +420,7 @@ export function checkLoginCommand(deps: CheckLoginDeps): Command {
     const refused = refuseUnreachableCloud("check-login", deps.env, io);
     if (refused !== undefined) return refused;
     const missing = deps.missingCredentials();
-    if (missing.length > 0) return fail(`missing Cloudflare credentials: ${missing.join(", ")} (set them in the environment; values are never printed)`);
+    if (missing.length > 0) return fail(`missing Cloudflare credentials: ${missing.join(", ")} (set them in the environment or in .env.cloudflare; values are never printed)`);
 
     let repo: ReturnType<CheckLoginDeps["repo"]>;
     let commit: string;
