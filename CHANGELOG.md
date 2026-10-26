@@ -8,7 +8,7 @@ All notable changes to the published packages and the Claude Code plugin from th
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [Semantic Versioning](https://semver.org/); before 1.0.0, a minor version may make breaking changes.
 
-## [0.1.0] - unreleased
+## [0.1.0] - 2026-10-26
 
 First public release. Release 1 targets local development and Cloudflare (DEC-0508). AWS is deferred to a later release (branch `aws`).
 
