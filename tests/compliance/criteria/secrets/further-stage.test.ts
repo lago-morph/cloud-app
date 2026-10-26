@@ -32,9 +32,12 @@ const PAR_310_MS = parameterNumber("PAR-310") * 1000;
 /**
  * SEC-AC-005 (DEC-0562) for one change whose command (or store deletion) returned at `since`
  * (`performance.now()`): a request shows the change within PAR-310 of `since`; then, once PAR-310
- * has elapsed since `since`, 5 consecutive requests all show it. A request that does not show the
- * change must answer the stale state (`stale`, the old value's hash): a stale read is reported as
- * one, and any other answer as what it is.
+ * has elapsed since `since`, 5 consecutive requests all show it.
+ * - While waiting, a non-200 that is not the change is retried (a transient answer during the
+ *   rollout), but a 200 whose body is neither the change nor the stale state (`stale`, the old
+ *   value's hash) fails at once.
+ * - Each of the 5 samples must show the change (`changed`, then `check`); one that does not fails,
+ *   reported as a stale read when it answers the old value's hash.
  */
 async function expectChange(o: {
   readonly since: number;
@@ -45,27 +48,30 @@ async function expectChange(o: {
   readonly check?: (r: HttpResponse) => void;
 }): Promise<void> {
   const staleText = JSON.stringify(o.stale);
-  const notStale: string[] = [];
+  let unexpected: string | undefined;
   const left = o.since + PAR_310_MS - performance.now();
   expect(left, "PAR-310 had already elapsed when the wait began").toBeGreaterThan(0);
   await waitFor(
     async () => {
       const r = await o.request();
       if (o.changed(r)) return true;
-      if (!(r.status === 200 && r.text === staleText)) notStale.push(`status ${String(r.status)}: ${r.text.slice(0, 200)}`);
+      if (r.status === 200 && r.text !== staleText) {
+        unexpected = r.text.slice(0, 200);
+        return false; // stop waiting: this answer is a failure, not a delay
+      }
       return undefined;
     },
     { what: `${o.what} within PAR-310 of the change`, timeoutMs: left, intervalMs: 1_000 },
   );
-  expect(notStale, "answers before the change was seen that were neither the change nor the old value's hash").toEqual([]);
+  expect(unexpected, "a 200 before the change was seen whose body is neither the change nor the old value's hash").toBeUndefined();
   // Then wait until PAR-310 has elapsed since the change, and send 5 consecutive requests.
   await delay(Math.max(0, o.since + PAR_310_MS - performance.now()));
   for (let i = 1; i <= CONSECUTIVE; i += 1) {
     const label = `consecutive request ${String(i)} of ${String(CONSECUTIVE)} sent once PAR-310 had elapsed`;
     const r = await o.request();
     if (!o.changed(r)) {
-      expect({ status: r.status, body: r.text }, `${label}: a request that does not show the change answers the old value's hash (stale), not something else`).toEqual({ status: 200, body: staleText });
-      expect.fail(`${label} answered the old value's hash (stale) after PAR-310`);
+      const stale = r.status === 200 && r.text === staleText;
+      expect.fail(stale ? `${label} answered the old value's hash (stale) after PAR-310` : `${label} did not show the change: status ${String(r.status)}, body ${r.text.slice(0, 200)}`);
     }
     o.check?.(r);
   }

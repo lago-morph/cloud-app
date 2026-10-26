@@ -296,7 +296,7 @@ if (!isLocal() && !MILESTONE) {
       expect(failed.status, `the deploy of the failing migration must fail:\n${tail(failed.output)}`).not.toBe(0);
       expect(failed.output, "names the failed step").toMatch(/\bmigrat/i);
       expect(failed.output, "names the migration file").toContain("0001_unique_label");
-      expect(failed.output, "names the stage's state").toMatch(/previous version restarted/i);
+      expect(failed.output, "names the stage's state").toMatch(/previous version restarted;/);
       expect(failed.output, "names the next action").toMatch(/deploy again|next action/i);
       // DEC-0545: a deploy that copies the database says which copy ran.
       expect(failed.output, "names which database copy ran").toMatch(/copied database \S+-db-\d+ into \S+-db-\d+: (?:D1 native export\/import|row-by-row copy \([^)]+\))/);

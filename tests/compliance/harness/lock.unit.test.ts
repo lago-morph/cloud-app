@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { acquireDirLock, inspectLock, lockPath, OWNER_FILE, OWNERLESS_STALE_MS, parseProcStatStartTime, processStartTime, takeOverStale, type LockDeps, type LockOwner, type LockState } from "./lock.js";
+import { acquireDirLock, inspectLock, lockPath, OWNER_FILE, OWNERLESS_STALE_MS, parseProcStatStartTime, processStartedAtMs, processStartTime, STARTED_AFTER_SLACK_MS, takeOverStale, type LockDeps, type LockOwner, type LockState } from "./lock.js";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -145,7 +145,7 @@ describe("acquireDirLock", () => {
   });
 
   it("honours a legacy pid-only lock while that pid runs", async () => {
-    const deps = fakeDeps();
+    const deps = fakeDeps({ startedAtMs: () => Date.now() - 3_600_000 });
     const path = writeLock(deps, "x", null);
     writeFileSync(join(path, "pid"), String(process.pid));
     const old = (Date.now() - OWNERLESS_STALE_MS - 5_000) / 1000;
@@ -153,6 +153,33 @@ describe("acquireDirLock", () => {
     expect(inspectLock(path, deps).state).toBe("live");
     writeFileSync(join(path, "pid"), String(deadPid()));
     expect(inspectLock(path, deps).state).toBe("stale");
+  });
+
+  it("treats a lock as stale when its pid's process started after the lock was written (pid reuse), for legacy and owner.json locks", () => {
+    const mtime = Date.now() - 60_000;
+    const later = fakeDeps({ startedAtMs: () => mtime + STARTED_AFTER_SLACK_MS + 1_000 });
+    const legacy = writeLock(later, "legacy", null);
+    writeFileSync(join(legacy, "pid"), String(process.pid));
+    utimesSync(legacy, mtime / 1000, mtime / 1000);
+    expect(inspectLock(legacy, later)).toMatchObject({ state: "stale", reason: expect.stringMatching(/started after the lock/) });
+    const owned = writeLock(later, "owned", { pid: process.pid, start: processStartTime(process.pid), runId: "r", token: "t" });
+    utimesSync(owned, mtime / 1000, mtime / 1000);
+    expect(inspectLock(owned, later)).toMatchObject({ state: "stale", reason: expect.stringMatching(/started after the lock/) });
+    const unknownStart = writeLock(later, "nostart", { pid: process.pid, start: null, runId: "r", token: "t2" });
+    utimesSync(unknownStart, mtime / 1000, mtime / 1000);
+    expect(inspectLock(unknownStart, later).state).toBe("stale");
+
+    const within = fakeDeps({ startedAtMs: () => mtime + STARTED_AFTER_SLACK_MS - 500 });
+    const ok = writeLock(within, "ok", { pid: process.pid, start: processStartTime(process.pid), runId: "r", token: "t3" });
+    utimesSync(ok, mtime / 1000, mtime / 1000);
+    expect(inspectLock(ok, within).state, "a start within the clock slack is not taken for reuse").toBe("live");
+  });
+
+  it("knows this process's start as wall-clock time", () => {
+    const started = processStartedAtMs(process.pid);
+    expect(started).not.toBeNull();
+    expect(Math.abs((started ?? 0) - (Date.now() - process.uptime() * 1000))).toBeLessThan(STARTED_AFTER_SLACK_MS);
+    expect(processStartedAtMs(deadPid())).toBeNull();
   });
 
   it("is not blocked by a temp directory a crash left before its rename", async () => {
@@ -212,6 +239,26 @@ describe("takeOverStale", () => {
     takeOverStale(path, seen);
     expect(ownerOf(path).token).toBe("t-new");
     expect(readdirSync(deps.dir)).toEqual(["c-t1-x.lock"]);
+  });
+
+  it("never deletes a moved-aside lock that is not the stale one when it cannot be put back; it leaves it aside and logs it", () => {
+    const deps = fakeDeps();
+    const path = writeLock(deps, "x", { pid: deadPid(), start: "1", runId: "old", token: "t-old" });
+    const seen = staleState(path, deps);
+    // A new owner's lock replaces the stale one before the rename ...
+    rmSync(path, { recursive: true });
+    writeLock(deps, "x", { pid: process.pid, start: processStartTime(process.pid), runId: "second", token: "t-second" });
+    const logs: string[] = [];
+    takeOverStale(path, seen, {
+      log: (line) => logs.push(line),
+      // ... and a third waiter creates one after it was moved aside, so it cannot be put back.
+      afterMoveAside: () => void writeLock(deps, "x", { pid: process.pid, start: processStartTime(process.pid), runId: "third", token: "t-third" }),
+    });
+    expect(ownerOf(path).token).toBe("t-third");
+    const aside = readdirSync(deps.dir).filter((n) => n !== "c-t1-x.lock");
+    expect(aside).toHaveLength(1);
+    expect(ownerOf(join(deps.dir, aside[0] ?? "")).token, "the moved lock is kept").toBe("t-second");
+    expect(logs.join("\n")).toMatch(/left aside/);
   });
 
   it("does nothing when another waiter already moved the stale lock", () => {
