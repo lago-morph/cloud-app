@@ -121,15 +121,19 @@ if (isLocal()) {
       copy = await scratchCopy(TEMPLATE_DIR, "cli-ac-001", { git: true });
       packageJsonBefore = await copy.read("package.json");
       unknown = await npxCli(["definitely-not-a-command"], { cwd: copy.dir, timeoutMs: 120_000 });
-      for (const form of FORMS) {
-        for (const command of [...LOCAL_COMMANDS, ...CLOUD_COMMANDS]) {
-          let r: CommandResult;
-          if (command === "dev") r = await runDev(form, copy.dir);
-          else if (command === "smoke") r = await runSmoke(form, copy.dir);
-          else r = await run(form, commandOf(command), ARGS[command] ?? [], copy.dir, command === "secrets" ? `${secret}\n` : undefined);
-          results.set(`${form} ${command}`, r);
-          if (command === "upgrade") packageJsonAfterUpgrade = await copy.read("package.json");
-          await delay(100);
+      // The local commands in both forms first, then the dispatched ones: `cloudflare-setup` adds
+      // `.env.cloudflare` to `.gitignore`, and `smoke` needs a clean tree for its evidence record.
+      for (const group of [LOCAL_COMMANDS, CLOUD_COMMANDS]) {
+        for (const form of FORMS) {
+          for (const command of group) {
+            let r: CommandResult;
+            if (command === "dev") r = await runDev(form, copy.dir);
+            else if (command === "smoke") r = await runSmoke(form, copy.dir);
+            else r = await run(form, commandOf(command), ARGS[command] ?? [], copy.dir, command === "secrets" ? `${secret}\n` : undefined);
+            results.set(`${form} ${command}`, r);
+            if (command === "upgrade") packageJsonAfterUpgrade = await copy.read("package.json");
+            await delay(100);
+          }
         }
       }
     }, 60 * 60_000);
