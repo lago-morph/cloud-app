@@ -16,6 +16,7 @@ export function versions(repo) {
   return [
     ["packages/framework/package.json version", json("packages/framework/package.json").version],
     ["packages/create-prototype-app/package.json version", json("packages/create-prototype-app/package.json").version],
+    ["packages/prototype-framework-skill/package.json version", json("packages/prototype-framework-skill/package.json").version],
     [`apps/template/package.json ${FRAMEWORK} pin`, json("apps/template/package.json").dependencies?.[FRAMEWORK]],
     ["skill/.claude-plugin/plugin.json version", json("skill/.claude-plugin/plugin.json").version],
   ];

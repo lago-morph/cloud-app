@@ -6,9 +6,10 @@ What is released, together and at one version (`v<version>` tag):
 | --- | --- | --- |
 | `@lago-morph/prototype-framework` | npm | dependency of every app |
 | `@lago-morph/create-prototype-app` | npm | `npm create @lago-morph/prototype-app@latest my-app` |
+| `@lago-morph/prototype-framework-skill` | npm | the skill alone, for a cloud environment's setup script (see its README) |
 | Claude Code plugin `prototype-framework` | this repository (`.claude-plugin/marketplace.json`, `skill/`) | `/plugin marketplace add lago-morph/cloud-app`, then `/plugin install prototype-framework@lago-morph` |
 
-`.github/workflows/release.yml` runs on the tag: it verifies, publishes both packages to npm with trusted publishing (OIDC, no npm token stored anywhere) and provenance, and creates the GitHub release from `CHANGELOG.md`. The plugin needs no publishing: Claude Code reads the marketplace from the repository's default branch (`main`). Why it is set up this way: `ai/implementation/decisions/distribution.md`.
+`.github/workflows/release.yml` runs on the tag: it verifies, publishes the three packages to npm with trusted publishing (OIDC, no npm token stored anywhere) and provenance, and creates the GitHub release from `CHANGELOG.md`. The plugin needs no publishing: Claude Code reads the marketplace from the repository's default branch (`main`). Why it is set up this way: `ai/implementation/decisions/distribution.md`.
 
 ## Owner steps, once
 
@@ -18,7 +19,7 @@ What is released, together and at one version (`v<version>` tag):
    git commit -m "Install CI and release workflows"
    git push
    ```
-1. **npm account.** Use the npm user account `lago-morph`, with two-factor authentication turned on (Account → Two-Factor Authentication). No organization is needed: the scope `@lago-morph` belongs to that user, so both packages publish under it.
+1. **npm account.** Use the npm user account `lago-morph`, with two-factor authentication turned on (Account → Two-Factor Authentication). No organization is needed: the scope `@lago-morph` belongs to that user, so all three packages publish under it.
 2. **First publish, by hand** (npm can configure a trusted publisher only for a package that already exists). On a clean checkout of `main` at the commit you will tag, with Node 22.22.0:
    ```sh
    npm ci
@@ -28,16 +29,17 @@ What is released, together and at one version (`v<version>` tag):
    npm publish --workspace packages/create-prototype-app --access public
    ```
    These two versions have no provenance; every later version does. The release workflow skips a version already on npm, so tagging this version afterwards still creates the GitHub release.
-3. **Trusted publisher, for each of the two packages.** On npmjs.com open the package → **Settings** → **Trusted Publisher** → **GitHub Actions**, and enter exactly (case-sensitive): Organization or user `lago-morph`, Repository `cloud-app`, Workflow filename `release.yml`, Environment empty. Under allowed actions, allow **npm publish**. Save. Or, with npm 11.15.0 or later:
+3. **Trusted publisher, for each of the three packages.** On npmjs.com open the package → **Settings** → **Trusted Publisher** → **GitHub Actions**, and enter exactly (case-sensitive): Organization or user `lago-morph`, Repository `cloud-app`, Workflow filename `release.yml`, Environment empty. Under allowed actions, allow **npm publish**. Save. Or, with npm 11.15.0 or later:
    ```sh
    npm trust github @lago-morph/prototype-framework --repo lago-morph/cloud-app --file release.yml --allow-publish
    npm trust github @lago-morph/create-prototype-app --repo lago-morph/cloud-app --file release.yml --allow-publish
+   npm trust github @lago-morph/prototype-framework-skill --repo lago-morph/cloud-app --file release.yml --allow-publish
    ```
    A new trusted publisher must complete a publish within 2 days, or it expires and must be created again; if the next release is later than that, configure it just before tagging. Once a release has published through it, set **Settings → Publishing access** to require two-factor authentication and disallow tokens.
 
 ## Every release
 
-1. Set the same version in `packages/framework/package.json`, `packages/create-prototype-app/package.json`, the `@lago-morph/prototype-framework` pin in `apps/template/package.json`, and `skill/.claude-plugin/plugin.json`; run `npm install` to update `package-lock.json`.
+1. Set the same version in `packages/framework/package.json`, `packages/create-prototype-app/package.json`, `packages/prototype-framework-skill/package.json`, the `@lago-morph/prototype-framework` pin in `apps/template/package.json`, and `skill/.claude-plugin/plugin.json`; run `npm install` to update `package-lock.json`.
 2. In `CHANGELOG.md`, write the section and date it: `## [<version>] - YYYY-MM-DD`.
 3. Check, merge to `main`, and tag:
    ```sh

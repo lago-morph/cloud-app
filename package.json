@@ -9,6 +9,7 @@
   "workspaces": [
     "packages/framework",
     "packages/create-prototype-app",
+    "packages/prototype-framework-skill",
     "apps/template",
     "apps/reference",
     "apps/demo",

@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { changelogSection, check, versions } from "../scripts/release-check.mjs";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
-const FILES = ["packages/framework/package.json", "packages/create-prototype-app/package.json", "apps/template/package.json", "skill/.claude-plugin/plugin.json"];
+const FILES = ["packages/framework/package.json", "packages/create-prototype-app/package.json", "packages/prototype-framework-skill/package.json", "apps/template/package.json", "skill/.claude-plugin/plugin.json"];
 
 /** A copy of the version-bearing files, with CHANGELOG.md set to `changelog`. */
 function fixture(changelog: string): string {
@@ -23,7 +23,7 @@ function fixture(changelog: string): string {
 const fwVersion = (JSON.parse(readFileSync(join(REPO, "packages/framework/package.json"), "utf8")) as { version: string }).version;
 
 describe("release-check", () => {
-  it("the repository's versions all agree (framework, create starter, template pin, plugin)", () => {
+  it("the repository's versions all agree (framework, create starter, skill package, template pin, plugin)", () => {
     expect(new Set(versions(REPO).map(([, v]) => v))).toEqual(new Set([fwVersion]));
   });
 
