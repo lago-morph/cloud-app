@@ -1,0 +1,28 @@
+{
+  "runId": "id6eeg6kjx9wfbi",
+  "commit": "feab5a2ce9819e0f557cc367da6a30a4181a48f2",
+  "target": "cloudflare",
+  "stage": "prodcheck",
+  "command": "check-login --target cloudflare --stage prodcheck",
+  "startedAt": "2026-10-26T01:12:51.439Z",
+  "finishedAt": "2026-10-26T01:13:26.417Z",
+  "exitStatus": 0,
+  "results": [
+    {
+      "id": "PWD-AC-009",
+      "status": "passed"
+    },
+    {
+      "id": "AUTH-AC-011",
+      "status": "passed"
+    },
+    {
+      "id": "E2E-008",
+      "status": "passed"
+    }
+  ],
+  "versions": {
+    "node": "v22.22.0",
+    "@lago-morph/prototype-framework": "0.1.0"
+  }
+}

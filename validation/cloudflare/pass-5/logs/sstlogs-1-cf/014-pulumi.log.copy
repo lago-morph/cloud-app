@@ -1,0 +1,12 @@
+Updating (prodcheck):
+
+@ updating.........
+    pulumi:pulumi:Stack reference-prodcheck  
+Outputs:
+    _protect: false
+
+Resources:
+    8 unchanged
+
+Duration: 6s
+

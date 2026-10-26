@@ -1,0 +1,263 @@
+{
+  "config": {
+    "argv": [
+      "/opt/node22/bin/node",
+      "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/node_modules/.bin/playwright",
+      "test",
+      "tests/compliance/",
+      "--project",
+      "integration",
+      "--project",
+      "e2e",
+      "--grep",
+      "\\[(?:E2E-008|E2E-011|E2E-014|MIG-AC-003|PROV-AC-002|PWD-AC-009|SEC-AC-005)\\]",
+      "--reporter=json",
+      "--pass-with-no-tests"
+    ],
+    "configFile": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/playwright.config.ts",
+    "rootDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 2
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "integration",
+        "name": "integration",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4",
+        "testIgnore": [],
+        "testMatch": [
+          "packages/framework/test/integration/**/*.spec.ts",
+          "tests/compliance/criteria/**/*.spec.ts"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "e2e",
+        "name": "e2e",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/tests/compliance/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "filteredProjects": [
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "name": "integration",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4",
+        "snapshotDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4",
+        "testIgnore": [],
+        "testMatch": [
+          "packages/framework/test/integration/**/*.spec.ts",
+          "tests/compliance/criteria/**/*.spec.ts"
+        ],
+        "timeout": 30000,
+        "use": {
+          "browserName": "chromium"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "integration"
+      },
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "name": "e2e",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/tests/compliance/e2e",
+        "snapshotDir": "/home/user/cloud-app/.claude/worktrees/agent-afb6e5aea64fb07c4/tests/compliance/e2e",
+        "testIgnore": [],
+        "testMatch": "**/*.spec.ts",
+        "timeout": 30000,
+        "use": {
+          "browserName": "chromium"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "e2e"
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "default",
+    "updateSourceMethod": "patch",
+    "version": "1.64.1",
+    "workers": 2,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "tests/compliance/e2e/E2E-011.spec.ts",
+      "file": "tests/compliance/e2e/E2E-011.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[E2E-011] app and framework entries are stored under the app and stage with timestamps, and the plain-Error request's entry is found by its requestId",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8365,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-26T01:11:47.153Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1c2b7b7a65e2d8a56742-c8094429b40efbbaa6fc",
+          "file": "tests/compliance/e2e/E2E-011.spec.ts",
+          "line": 136,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tests/compliance/e2e/E2E-014.spec.ts",
+      "file": "tests/compliance/e2e/E2E-014.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[E2E-014] the stage reports exactly its committed configuration values",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 718,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-26T01:11:44.374Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8e17ea21a5abb3204ca2-32b90b129c3c99f2f84a",
+          "file": "tests/compliance/e2e/E2E-014.spec.ts",
+          "line": 69,
+          "column": 1
+        },
+        {
+          "title": "[E2E-014] cloud part: a secret set with the CLI appears nowhere in the repository, build outputs, deployed browser assets or logs",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 1800000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "e2e",
+              "projectName": "e2e",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 63718,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-26T01:11:45.160Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8e17ea21a5abb3204ca2-2092fe064d140b6c3694",
+          "file": "tests/compliance/e2e/E2E-014.spec.ts",
+          "line": 77,
+          "column": 3
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-26T01:11:35.588Z",
+    "duration": 73367.009,
+    "expected": 3,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

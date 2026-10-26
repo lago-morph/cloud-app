@@ -1,0 +1,75 @@
+{
+  "result": [
+    {
+      "created_on": "2026-10-25T23:28:12.812583Z",
+      "modified_on": "2026-10-25T23:30:09.404244Z",
+      "id": "demo-test-z8ey6q3j123mpoe",
+      "tag": "<HEX32+>",
+      "tags": null,
+      "deployment_id": "",
+      "tail_consumers": null,
+      "logpush": false,
+      "has_assets": true,
+      "has_modules": true,
+      "etag": "<HEX32+>",
+      "handlers": [
+        "fetch"
+      ],
+      "last_deployed_from": "terraform",
+      "compatibility_date": "2026-10-01",
+      "compatibility_flags": [
+        "nodejs_compat"
+      ],
+      "usage_model": "standard",
+      "routes": null
+    },
+    {
+      "created_on": "2026-10-25T03:19:34.950488Z",
+      "modified_on": "2026-10-25T03:19:34.950488Z",
+      "id": "prototype-mailsink",
+      "tag": "<HEX32+>",
+      "tags": [
+        "framework-mailsink-bdbc5f440dd5bdd5"
+      ],
+      "deployment_id": "",
+      "tail_consumers": null,
+      "logpush": false,
+      "has_assets": false,
+      "has_modules": true,
+      "etag": "<HEX32+>",
+      "handlers": [
+        "email"
+      ],
+      "last_deployed_from": "api",
+      "compatibility_date": "2026-10-01",
+      "usage_model": "standard",
+      "routes": null
+    },
+    {
+      "created_on": "2026-10-25T06:43:38.616565Z",
+      "modified_on": "2026-10-26T00:45:17.586458Z",
+      "id": "reference-prodcheck",
+      "tag": "<HEX32+>",
+      "tags": null,
+      "deployment_id": "",
+      "tail_consumers": null,
+      "logpush": false,
+      "has_assets": true,
+      "has_modules": true,
+      "etag": "<HEX32+>",
+      "handlers": [
+        "fetch"
+      ],
+      "last_deployed_from": "terraform",
+      "compatibility_date": "2026-10-01",
+      "compatibility_flags": [
+        "nodejs_compat"
+      ],
+      "usage_model": "standard",
+      "routes": null
+    }
+  ],
+  "success": true,
+  "errors": [],
+  "messages": []
+}
