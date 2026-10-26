@@ -138,11 +138,46 @@ describe("protected token guard", () => {
     await expect(pass.apiFor("another-fake-token")("DELETE", `/accounts/${ACCOUNT}/tokens/${ENV_TOKEN_ID}`)).rejects.toBeInstanceOf(LivePassRefusal);
   });
 
-  it("lets a DELETE and a PUT of another token through", async () => {
-    const fake = fakeCloudflare({ tokens: [{ id: ENV_TOKEN_ID, name: "admin" }, { id: "3".repeat(32), name: `${WIZARD_TOKEN_PREFIX}everyday` }] });
+  it("refuses a PUT or DELETE of a token this pass did not create, even a wizard-named one (DEC-0617)", async () => {
+    const other = "3".repeat(32);
+    const fake = fakeCloudflare({ tokens: [{ id: ENV_TOKEN_ID, name: "admin" }, { id: other, name: `${WIZARD_TOKEN_PREFIX}everyday` }] });
     const { pass } = await start(fake);
-    expect((await pass.api("PUT", `/accounts/${ACCOUNT}/tokens/${"3".repeat(32)}`, { name: `${WIZARD_TOKEN_PREFIX}everyday` })).status).toBe(200);
-    expect((await pass.api("DELETE", `/accounts/${ACCOUNT}/tokens/${"3".repeat(32)}`)).status).toBe(200);
+    const before = fake.sent.length;
+    await expect(pass.api("PUT", `/accounts/${ACCOUNT}/tokens/${other}`, { name: `${WIZARD_TOKEN_PREFIX}everyday`, expires_on: expiry(60_000) })).rejects.toBeInstanceOf(LivePassRefusal);
+    await expect(pass.api("DELETE", `/accounts/${ACCOUNT}/tokens/${other}`)).rejects.toBeInstanceOf(LivePassRefusal);
+    await expect(pass.apiFor("another-fake-token")("DELETE", `/user/tokens/${other}`)).rejects.toBeInstanceOf(LivePassRefusal);
+    expect(fake.sent.length).toBe(before);
+  });
+
+  it("lets a PUT and a DELETE of a token this pass created through; the PUT keeps the name and an expiry within 2 hours of creation", async () => {
+    const fake = fakeCloudflare();
+    const { pass, advance } = await start(fake);
+    const created = await pass.api("POST", `/accounts/${ACCOUNT}/tokens`, { name: `${WIZARD_TOKEN_PREFIX}everyday`, expires_on: expiry(MAX_TOKEN_LIFETIME_MS) });
+    const id = (created.body as { result: { id: string } }).result.id;
+    const path = `/accounts/${ACCOUNT}/tokens/${id}`;
+    advance(60 * 60_000);
+    const keep = { name: `${WIZARD_TOKEN_PREFIX}everyday`, expires_on: expiry(MAX_TOKEN_LIFETIME_MS) };
+    expect((await pass.api("PUT", path, keep)).status).toBe(200);
+    expect((await pass.api("PUT", `/accounts/${ACCOUNT}/tokens/${id.toUpperCase()}`, keep)).status).toBe(200);
+    await expect(pass.api("PUT", path, { ...keep, name: "prototype-framework" })).rejects.toThrow(/name must stay/);
+    await expect(pass.api("PUT", path, { name: keep.name })).rejects.toThrow(/no expires_on/);
+    await expect(pass.api("PUT", path, { ...keep, expires_on: expiry(MAX_TOKEN_LIFETIME_MS + 60_000) })).rejects.toThrow(/within 2 hours of the token's creation/);
+    await expect(pass.api("PATCH", path, keep)).rejects.toBeInstanceOf(LivePassRefusal);
+    await expect(pass.api("PUT", `${path}/value`, {})).rejects.toBeInstanceOf(LivePassRefusal);
+    await expect(pass.api("POST", `${path}/value`, {})).rejects.toBeInstanceOf(LivePassRefusal);
+    expect((await pass.api("DELETE", path)).status).toBe(200);
+  });
+
+  it("refuses every non-GET on a tokens path but a create, a PUT and a DELETE of this pass's token (refusalOf)", () => {
+    const owned = new Map([["9".repeat(32), { createdAtMs: NOW }]]);
+    for (const [method, path] of [
+      ["DELETE", `/accounts/${ACCOUNT}/tokens`],
+      ["PUT", `/accounts/${ACCOUNT}/tokens`],
+      ["POST", `/accounts/${ACCOUNT}/tokens/${"9".repeat(32)}`],
+      ["DELETE", `/accounts/${ACCOUNT}/tokens/${"9".repeat(32)}/value`],
+      ["DELETE", `/accounts/${ACCOUNT}/tokens/${"8".repeat(32)}`],
+    ] as const) expect(refusalOf(method, path, {}, new Set(), NOW, owned), `${method} ${path.replace(ACCOUNT, "<a>")}`).toBeDefined();
+    expect(refusalOf("DELETE", `/user/tokens/${"9".repeat(32)}`, undefined, new Set(), NOW, owned)).toBeUndefined();
   });
 
   it("does not guard GETs or other paths", () => {

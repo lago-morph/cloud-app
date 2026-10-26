@@ -15,6 +15,12 @@
  *   `POST /user/tokens`) must be named `prototype-compliance-wizard-<suffix>` and expire within
  *   `MAX_TOKEN_LIFETIME_MS` (2 hours); otherwise it is refused. The prefix is under the compliance
  *   harness's `prototype-compliance-` (test-tokens.ts), so its leftover check also reports them.
+ * - **Only this pass's tokens are changed or deleted** (an allow-list, DEC-0617). Every other
+ *   non-GET on a tokens path is refused unless it is a PUT or DELETE of `…/tokens/<id>` whose ID a
+ *   create of this pass returned. A PUT body must keep the `prototype-compliance-wizard-` name and an
+ *   `expires_on` at most 2 hours after that token's creation. Sub-paths (the value roll), PATCH and
+ *   any other method are refused. `cleanup` alone may also delete a listed
+ *   `prototype-compliance-wizard-*` token left by an earlier pass.
  * - **A call budget.** At most `PASS_CALL_LIMIT` calls per pass and `WINDOW_CALL_LIMIT` per rolling
  *   `WINDOW_MS`; reaching a limit, or any HTTP 429, stops the pass: that call and every later one
  *   rejects with `LivePassStopped`. A 401 stops further use of that token (the harness's
@@ -24,7 +30,8 @@
  *   once at start, never printed), plus any remaining 32-hex ID and `<x>.<sub>.workers.dev` host as
  *   a backstop. `print` and `redactingIo` pass everything through it.
  * - **Cleanup** (`cleanup`): lists the account's tokens, deletes only `prototype-compliance-wizard-*`
- *   (never a protected ID), lists again and prints only names as proof.
+ *   (never a protected ID; those this pass did not create are allowed for this DELETE only), lists
+ *   again and prints only names as proof.
  *
  * Injection into the framework: `pass.apiFor` is a `CloudflareSetupDeps.apiFor` (every token's API
  * shares this pass's guards and budget), `pass.protectedTokenIds` is `CloudflareSetupDeps.protectedTokenIds`,
@@ -101,6 +108,13 @@ export interface LivePass {
 
 const TOKENS_PATH = /^\/(?:accounts\/[^/]+|user)\/tokens(?:\/|$)/i;
 const TOKEN_CREATE_PATH = /^\/(?:accounts\/[^/]+|user)\/tokens\/?$/i;
+/** `…/tokens/<id>`, nothing after the ID (a trailing slash allowed). */
+const TOKEN_ID_PATH = /^\/(?:accounts\/[^/]+|user)\/tokens\/([^/]+)\/?$/i;
+
+/** A token a create of this pass returned (by ID, lowercase), with when it was created. */
+export interface OwnedToken {
+  readonly createdAtMs: number;
+}
 const HEX32 = /\b[0-9a-f]{32}\b/gi;
 const WORKERS_DEV_HOST = /\b([a-z0-9-]+)\.([a-z0-9-]+)\.workers\.dev\b/gi;
 
@@ -113,9 +127,19 @@ const pathOnly = (path: string): string | undefined => sentPath(path);
 
 /**
  * The guard's verdict on one request, before it is sent: a refusal message, or undefined.
- * `protectedIds` are compared case-insensitively against every segment of a tokens path.
+ * `protectedIds` are compared case-insensitively against every segment of a tokens path. `owned`
+ * holds the tokens this pass created (lowercase IDs); `deletable` IDs may only be deleted (cleanup's
+ * leftovers of earlier passes).
  */
-export function refusalOf(method: string, path: string, body: unknown, protectedIds: ReadonlySet<string>, nowMs: number): string | undefined {
+export function refusalOf(
+  method: string,
+  path: string,
+  body: unknown,
+  protectedIds: ReadonlySet<string>,
+  nowMs: number,
+  owned: ReadonlyMap<string, OwnedToken> = new Map(),
+  deletable: ReadonlySet<string> = new Set(),
+): string | undefined {
   const p = pathOnly(path);
   if (method === "GET") return undefined;
   if (p === undefined) return `${method} refused: its URL cannot be read`;
@@ -128,7 +152,20 @@ export function refusalOf(method: string, path: string, body: unknown, protected
     const expires = typeof b.expires_on === "string" ? Date.parse(b.expires_on) : NaN;
     if (Number.isNaN(expires)) return `token create refused for ${b.name}: no expires_on`;
     if (expires <= nowMs || expires > nowMs + MAX_TOKEN_LIFETIME_MS) return `token create refused for ${b.name}: expires_on must be within 2 hours from now`;
+    return undefined;
   }
+  // Every other write on a tokens path: only a PUT or DELETE of a token this pass created (DEC-0617).
+  const idMatch = TOKEN_ID_PATH.exec(p);
+  const id = idMatch?.[1]?.toLowerCase();
+  if (id === undefined || (method !== "PUT" && method !== "DELETE")) return `${method} on a tokens path refused: only a PUT or DELETE of a token this pass created is allowed`;
+  const mine = owned.get(id);
+  if (method === "DELETE") return mine !== undefined || deletable.has(id) ? undefined : "DELETE refused: the token was not created by this pass";
+  if (mine === undefined) return "PUT refused: the token was not created by this pass";
+  const b = (typeof body === "object" && body !== null ? body : {}) as { name?: unknown; expires_on?: unknown };
+  if (typeof b.name !== "string" || !WIZARD_TOKEN_NAME.test(b.name)) return `token update refused: the name must stay ${WIZARD_TOKEN_PREFIX}<suffix>`;
+  const expires = typeof b.expires_on === "string" ? Date.parse(b.expires_on) : NaN;
+  if (Number.isNaN(expires)) return `token update refused for ${b.name}: no expires_on`;
+  if (expires > mine.createdAtMs + MAX_TOKEN_LIFETIME_MS) return `token update refused for ${b.name}: expires_on must be within 2 hours of the token's creation`;
   return undefined;
 }
 
@@ -186,6 +223,8 @@ export async function startLivePass(options: LivePassOptions): Promise<LivePass>
 
   const protectedIds = new Set((options.protectedTokenIds ?? []).map((id) => id.toLowerCase()));
   for (const id of protectedIds) addSecret(id, "<protected-token-id>");
+  const owned = new Map<string, OwnedToken>();
+  const deletable = new Set<string>();
   let stopped: string | undefined;
   const sent: number[] = [];
   let total = 0;
@@ -206,7 +245,7 @@ export async function startLivePass(options: LivePassOptions): Promise<LivePass>
     const send = transport(token);
     return async (method, path, body) => {
       if (stopped !== undefined) throw new LivePassStopped(`live pass stopped earlier (${stopped}); ${method} not sent`);
-      const refusal = refusalOf(method, path, body, protectedIds, now());
+      const refusal = refusalOf(method, path, body, protectedIds, now(), owned, deletable);
       if (refusal !== undefined) throw new LivePassRefusal(redact(`live pass guard: ${refusal}`));
       const t = now();
       while (sent.length > 0 && (sent[0] ?? 0) <= t - windowMs) sent.shift();
@@ -222,6 +261,10 @@ export async function startLivePass(options: LivePassOptions): Promise<LivePass>
       sent.push(t);
       const reply: ApiReply = await send(method, path, body);
       for (const s of secretsIn(path, reply.body)) addSecret(s.value, s.replacement);
+      if (method === "POST" && TOKEN_CREATE_PATH.test(pathOnly(path) ?? "") && reply.status >= 200 && reply.status < 300) {
+        const createdId = (reply.body as { result?: { id?: unknown } } | null)?.result?.id;
+        if (typeof createdId === "string" && createdId !== "" && !protectedIds.has(createdId.toLowerCase())) owned.set(createdId.toLowerCase(), { createdAtMs: t });
+      }
       if (reply.status === 429) {
         stopped = `HTTP 429 on ${method}`;
         throw new LivePassStopped(`live pass stopped: ${stopped} (rate limited)`);
@@ -271,6 +314,8 @@ export async function startLivePass(options: LivePassOptions): Promise<LivePass>
       const listed = await listTestTokens(cfCall, accountId);
       for (const token of listed) {
         if (!token.name.startsWith(WIZARD_TOKEN_PREFIX) || protectedIds.has(token.id.toLowerCase())) continue;
+        // A leftover of an earlier pass, listed by its wizard name: deletable by this sweep only.
+        deletable.add(token.id.toLowerCase());
         const r = await api("DELETE", `/accounts/${accountId}/tokens/${token.id}`);
         print(`cleanup: deleted ${token.name}: ${r.status >= 200 && r.status < 300 ? "yes" : r.status === 404 ? "already gone" : `no (HTTP ${String(r.status)})`}`);
       }
