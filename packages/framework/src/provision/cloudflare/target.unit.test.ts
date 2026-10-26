@@ -10,6 +10,7 @@ import { runRemove } from "../core/remove.js";
 import { runSetupAccount } from "../core/setup-account.js";
 import { unwiredDatabases } from "./databases.js";
 import { ACCOUNT, FAKE_SIGNING, FakeCloud, FakeDatabases, FULL_POLICIES } from "./fake-cloud.test-support.js";
+import { SETUP_STEPS } from "./setup-record.js";
 import { createCloudflareTarget, type CloudflareTargetOptions } from "./target.js";
 
 const stage = { app: "notes", stage: "test-abc" };
@@ -131,7 +132,14 @@ describe("setup-account on Cloudflare (PROV-REQ-004)", () => {
       ],
       recorded: "example.test",
     });
-    expect(cloud.objectBodies.get("sst-state/framework/account.json")).toEqual({ emailDomain: "example.test" });
+    // The record also holds the setup record's fields, written last (plan-setup-wizard §4.4, DEC-0577).
+    expect(cloud.objectBodies.get("sst-state/framework/account.json")).toEqual({
+      emailDomain: "example.test",
+      setupVersion: 1,
+      frameworkVersion: expect.any(String) as string,
+      appliedAt: expect.any(String) as string,
+      completedSteps: [...SETUP_STEPS],
+    });
     // DEC-0552: a random pf- subdomain; DEC-0550: one account signing token and its record.
     expect(cloud.subdomain).toMatch(/^pf-[a-z0-9]{12}$/);
     expect(cloud.subdomain).not.toContain(ACCOUNT.slice(0, 6));
@@ -167,10 +175,10 @@ describe("setup-account on Cloudflare (PROV-REQ-004)", () => {
     });
     expect(cloud.zones.get("one.example")!.sending.map((e) => e.name)).toEqual(["one.example"]);
     expect(io.out).toContain("the previous email domain one.example keeps its email setup");
-    expect(cloud.requests.filter((r) => r.startsWith("PUT ") && r.includes("/objects/"))).toEqual([
-      `PUT /accounts/${ACCOUNT}/r2/buckets/sst-state/objects/framework%2Faccount.json`,
-      `PUT /accounts/${ACCOUNT}/r2/buckets/sst-state/objects/framework%2Faccount.json`,
-    ]);
+    // Each run with a new domain writes it (dropping the old domain's setup fields), then the setup record last (DEC-0577).
+    expect(cloud.requests.filter((r) => r.startsWith("PUT ") && r.includes("/objects/"))).toEqual(
+      Array.from({ length: 4 }, () => `PUT /accounts/${ACCOUNT}/r2/buckets/sst-state/objects/framework%2Faccount.json`),
+    );
     expect(await target.readAccountSettings()).toEqual({ emailDomain: "two.example" });
     // The record is a shared account object, never one of a stage's SST state objects.
     await runDeploy(target, request(), captureIo());

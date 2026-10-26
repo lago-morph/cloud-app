@@ -29,7 +29,7 @@
  * bytes `PUT` and `GET` of these endpoints are read from Cloudflare's API reference, like the
  * account settings record's (DEC-0334).
  */
-import type { BackupListing, SharedResource, Stage, StageBackup, StageDatabase } from "../core/operations.js";
+import type { BackupListing, Stage, StageBackup, StageDatabase } from "../core/operations.js";
 import { describeFailure, resultOf, type CloudflareApi, type CloudflareBytesApi } from "./api.js";
 import { inspectBucket } from "./account.js";
 import { filesBucketName } from "./names.js";
@@ -75,14 +75,9 @@ async function lifecycleRules(api: CloudflareApi, accountId: string): Promise<un
   return Array.isArray(rules) ? rules : [];
 }
 
-/** The backup bucket and its lifecycle rule as shared resources. Reads only. */
-export async function inspectBackupResources(api: CloudflareApi, accountId: string): Promise<SharedResource[]> {
-  const bucket = await inspectBucket(api, accountId, BACKUP_BUCKET);
-  const rule: SharedResource = {
-    name: BACKUP_LIFECYCLE_RESOURCE,
-    state: bucket.state === "owned" && hasRetentionRule(await lifecycleRules(api, accountId)) ? "owned" : "absent",
-  };
-  return [bucket, rule];
+/** Whether the backup bucket (which must be this account's) has the PAR-311 rule: the account step `backup-lifecycle` (`account.ts`). Reads only. */
+export async function hasBackupLifecycle(api: CloudflareApi, accountId: string): Promise<boolean> {
+  return hasRetentionRule(await lifecycleRules(api, accountId));
 }
 
 /** Sets the backup bucket's lifecycle rule, keeping any other rules. */
