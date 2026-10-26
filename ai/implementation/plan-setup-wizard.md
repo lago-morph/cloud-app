@@ -53,6 +53,7 @@ Owner check of the 12-group bootstrap link (2026-10-26):
 Owner check of the 7-group everyday link (2026-10-26): all groups arrived ticked. The 3 zone groups (Zone Read, Zone Analytics Read, Email Routing Rules Read) were ticked, and the account summary listed Workers Scripts Write, Workers R2 Storage Write, D1 Write "+1 more" (Email Sending Read). It has the same entire-account scope as the bootstrap link.
 
 Not yet verified:
+- **Setup script:** is a skill written to `~/.claude/skills` by a cloud environment setup script loaded? (§4.8)
 
 ## 3. User flows
 
