@@ -196,6 +196,32 @@ export async function loadLocalSetup(appDir) {
   }
 }
 
+/**
+ * Runs the local setup in `appDir` and returns what to print. Never throws: a framework without
+ * it, or a run that throws, is a warning naming how to set the secrets by hand. The app stays
+ * usable either way (`dev` generates the framework's own keys), so the starter carries on to the
+ * first commit and exits 0 (DEC-0596).
+ *
+ * @returns {Promise<{ notes: string[], warnings: string[] }>}
+ */
+export async function localSetupLines(appDir, { load = loadLocalSetup } = {}) {
+  const byHand = "set the app's secrets with `npm run secrets -- set <name> --target local --stage local`.";
+  let setup;
+  try {
+    setup = await load(appDir);
+  } catch {
+    setup = undefined;
+  }
+  if (setup === undefined) return { notes: [], warnings: [`WARNING: the installed framework has no local setup; ${byHand}`] };
+  try {
+    const outcomes = await setup.runLocalSetup(appDir);
+    const said = outcomes.filter((o) => o.message !== undefined);
+    return { notes: said.filter((o) => o.result !== "warned").map((o) => o.message), warnings: said.filter((o) => o.result === "warned").map((o) => o.message) };
+  } catch (error) {
+    return { notes: [], warnings: [`WARNING: the local setup failed (${error instanceof Error ? error.message : String(error)}). Run \`npm run dev\` once, then ${byHand}`] };
+  }
+}
+
 /** The closing line (plan §3.1): what to do next, with the folder as the owner would type it. */
 export function nextStep(rel, { installed = true } = {}) {
   const run = installed ? "`npm run dev`" : "`npm install` and `npm run dev`";

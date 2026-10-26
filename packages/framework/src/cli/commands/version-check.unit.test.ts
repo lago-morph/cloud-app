@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { captureIo } from "../io.test-support.js";
-import { changelogHeadline, versionCheckCommand, type VersionCheckDeps } from "./version-check.js";
+import { changelogHeadline, versionCheckBinding, versionCheckCommand, type VersionCheckDeps } from "./version-check.js";
 import { compareVersions, readSkillCopy, setupScript } from "./versions.js";
 
 const dirs: string[] = [];
@@ -36,17 +36,13 @@ function app(framework: string | undefined, committed?: string): string {
   return dir;
 }
 
-function deps(home: string, latest: string | undefined | Error, over: Partial<VersionCheckDeps> = {}): VersionCheckDeps & { marks: Set<string>; headlines: string[] } {
-  const marks = new Set<string>();
+function deps(home: string, latest: string | undefined | Error, over: Partial<VersionCheckDeps> = {}): VersionCheckDeps & { headlines: string[] } {
   const headlines: string[] = [];
   return {
-    marks,
     headlines,
     home: () => home,
     latestRelease: () => (latest instanceof Error ? Promise.reject(latest) : Promise.resolve(latest)),
     headline: (v) => (headlines.push(v), Promise.resolve("Faster deploys.")),
-    mentioned: (k) => marks.has(k),
-    remember: (k) => void marks.add(k),
     ...over,
   };
 }
@@ -106,15 +102,14 @@ describe("version-check (plan-setup-wizard §4.8a)", () => {
     expect(r.out).toContain("newer than the setup-script skill (a version without a marker (older))");
   });
 
-  it("row 3: npm newer than both is mentioned once per session, with the CHANGELOG headline", async () => {
+  it("row 3: npm newer than both is printed, with the CHANGELOG headline, on every run (stateless; the skill mentions it once per session)", async () => {
     const d = deps(temp(), "0.4.0");
     const dir = app("0.2.0", "0.2.0");
-    const first = await check(dir, d);
-    expect(first.out).toContain("A newer release, 0.4.0, is on npm: Faster deploys. To move this app to it: `npm run upgrade`.");
-    expect(d.headlines).toEqual(["0.4.0"]);
-    const second = await check(dir, d);
-    expect(second.out).not.toContain("0.4.0, is on npm");
-    expect(second.out).toContain("Nothing to do");
+    for (const run of [1, 2]) {
+      const r = await check(dir, d);
+      expect(r.out, `run ${run}`).toContain("A newer release, 0.4.0, is on npm: Faster deploys. To move this app to it: `npm run upgrade`.");
+    }
+    expect(d.headlines).toEqual(["0.4.0", "0.4.0"]);
   });
 
   it("row 3 without a headline, when the CHANGELOG cannot be read", async () => {
@@ -146,6 +141,39 @@ describe("version-check (plan-setup-wizard §4.8a)", () => {
     const before = [...snapshot(dir), ...snapshot(home)];
     await check(dir, deps(home, "0.4.0"));
     expect([...snapshot(dir), ...snapshot(home)]).toEqual(before);
+  });
+
+  it("the real binding writes no file anywhere: not in the app, the home directory or the temp directory", async () => {
+    const home = temp();
+    const tmp = temp();
+    skill(join(home, ".claude", "skills", "prototype-framework"), "0.1.0");
+    const dir = app("0.2.0", "0.2.0");
+    const urls: string[] = [];
+    const fakeFetch = ((input: string | URL | Request) => {
+      const url = String(input instanceof Request ? input.url : input);
+      urls.push(url);
+      const body = url.endsWith("/latest") ? JSON.stringify({ version: "0.4.0" }) : "## [0.4.0] - 2026-11-01\n\nFaster deploys.\n";
+      return Promise.resolve(new Response(body, { status: 200 }));
+    }) as typeof fetch;
+    const saved = { HOME: process.env.HOME, TMPDIR: process.env.TMPDIR, TMP: process.env.TMP, TEMP: process.env.TEMP };
+    Object.assign(process.env, { HOME: home, TMPDIR: tmp, TMP: tmp, TEMP: tmp });
+    try {
+      const before = [...snapshot(dir), ...snapshot(home), ...snapshot(tmp)];
+      for (const run of [1, 2]) {
+        const io = captureIo(dir);
+        const command = await versionCheckBinding({ npm_config_registry: "https://registry.example/" }, fakeFetch);
+        expect(await command([], io)).toBe(0);
+        expect(io.out, `run ${run}`).toContain("A newer release, 0.4.0, is on npm: Faster deploys.");
+      }
+      expect([...snapshot(dir), ...snapshot(home), ...snapshot(tmp)]).toEqual(before);
+      expect(readdirSync(tmp)).toEqual([]);
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+    expect(urls[0]).toBe("https://registry.example/@lago-morph%2Fprototype-framework/latest");
   });
 
   it("takes no options", async () => {

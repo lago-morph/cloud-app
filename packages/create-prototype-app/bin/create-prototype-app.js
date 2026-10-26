@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { create, firstCommit, initRepo, loadLocalSetup, nextStep } from "../lib/create.mjs";
+import { create, firstCommit, initRepo, localSetupLines, nextStep } from "../lib/create.mjs";
 
 const USAGE = `usage: create-prototype-app <dir> [--name <app>] [--framework <spec>] [--no-install] [--no-skill] [--force]
 
@@ -94,16 +94,11 @@ const repo = initRepo(result.target);
 if (repo.message !== undefined) (repo.status === "warned" ? console.error : console.log)(repo.message);
 
 // The framework's local setup: local secrets and .env.cloudflare in .gitignore (dependencies are installed above).
+// Never fails the starter: a failure is a warning, and the first commit and the next step follow (exit 0).
 if (opts.install) {
-  const setup = await loadLocalSetup(result.target);
-  if (setup === undefined) {
-    console.error("WARNING: the installed framework has no local setup; set the app's secrets with `npm run secrets -- set <name> --target local --stage local`.");
-  } else {
-    const outcomes = await setup.runLocalSetup(result.target);
-    for (const o of outcomes) {
-      if (o.message !== undefined) (o.result === "warned" ? console.error : console.log)(o.message);
-    }
-  }
+  const { notes, warnings } = await localSetupLines(result.target);
+  for (const n of notes) console.log(n);
+  for (const w of warnings) console.error(w);
 } else {
   console.log("Skipped npm install and the local setup (--no-install): no local secret values were set.");
 }

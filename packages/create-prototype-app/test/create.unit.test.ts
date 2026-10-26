@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { appNameFrom, copySkill, create, firstCommit, FRAMEWORK_PACKAGE, initRepo, nextStep, packageNameFrom, SKILL_TARGET } from "../lib/create.mjs";
+import { appNameFrom, copySkill, create, firstCommit, FRAMEWORK_PACKAGE, initRepo, localSetupLines, nextStep, packageNameFrom, SKILL_TARGET } from "../lib/create.mjs";
 import { bundle } from "../scripts/bundle.mjs";
 
 const PKG_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -202,6 +202,18 @@ describe("git (never fails the starter)", () => {
     const failed = firstCommit(target, "First", { git: join(root, "no-such-git") });
     expect(failed.ok).toBe(false);
     expect(failed.message).toMatch(/^WARNING: the first commit failed\. Commit yourself: git add -A && git commit/);
+  });
+
+  it("a local setup that throws is a warning: the starter carries on to the first commit and the next step", async () => {
+    const r = await localSetupLines(root, { load: () => Promise.resolve({ runLocalSetup: () => Promise.reject(new Error("esbuild crashed")) }) });
+    expect(r.warnings).toEqual([expect.stringMatching(/^WARNING: the local setup failed \(esbuild crashed\)\. .*npm run secrets -- set <name> --target local --stage local/)]);
+    expect(r.notes).toEqual([]);
+    const missing = await localSetupLines(root, { load: () => Promise.resolve(undefined) });
+    expect(missing.warnings[0]).toMatch(/^WARNING: the installed framework has no local setup/);
+    const ok = await localSetupLines(root, {
+      load: () => Promise.resolve({ runLocalSetup: () => Promise.resolve([{ step: "local-secrets", result: "applied", message: "set apiKey" }, { step: "gitignore", result: "warned", message: "WARNING: x" }, { step: "dependencies", result: "already" }]) }),
+    });
+    expect(ok).toEqual({ notes: ["set apiKey"], warnings: ["WARNING: x"] });
   });
 
   it("leaves a folder inside an existing repository to that repository", () => {
