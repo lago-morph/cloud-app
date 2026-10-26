@@ -1,6 +1,16 @@
 // The live wizard pass's guards (guarded-api.ts), against a fake fetch. No network; fake values only.
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { captureIo } from "../../../../packages/framework/src/cli/io.test-support.js";
 import { CloudflareRequestsStopped } from "../../../../packages/framework/src/provision/cloudflare/api.js";
+import { runCloudflareSetup } from "../../../../packages/framework/src/provision/cloudflare/cloudflare-setup.js";
+import { ACCOUNT_SETUP_VERSION } from "../../../../packages/framework/src/provision/cloudflare/permissions.js";
+import { SETUP_STEPS } from "../../../../packages/framework/src/provision/cloudflare/setup-record.js";
+import { applySetupSteps } from "../../../../packages/framework/src/provision/cloudflare/setup-steps.js";
+import { SetupWorld } from "../../../../packages/framework/src/provision/cloudflare/setup-world.test-support.js";
 import { LivePassRefusal, LivePassStopped, MAX_TOKEN_LIFETIME_MS, refusalOf, startLivePass, WIZARD_TOKEN_PREFIX, type LivePassOptions } from "./guarded-api.js";
 
 const ACCOUNT = "0123456789abcdef0123456789abcdef";
@@ -368,5 +378,70 @@ describe("cleanup", () => {
     expect(await pass.cleanup()).toEqual([]);
     expect(lines.at(-1)).toBe(`cleanup: ${WIZARD_TOKEN_PREFIX}* tokens still listed: none`);
     expect(fake.tokens.map((t) => t.name)).toEqual(["admin"]);
+  });
+});
+
+describe("a whole cloudflare-setup run through the pass, the environment token as the bootstrap token", () => {
+  /** `fetch` onto the framework's fake Cloudflare world: each API request answered as its bearer token would; any HEAD answered. */
+  function worldFetch(world: SetupWorld) {
+    const sent: string[] = [];
+    const fetchFn = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+      const method = init?.method ?? "GET";
+      const path = url.pathname.replace(/^\/client\/v4/, "");
+      sent.push(`${method} ${url.hostname === "api.cloudflare.com" ? path : "<host>"}`);
+      if (method === "HEAD") return new Response(null, { status: 200 });
+      const token = (new Headers(init?.headers).get("authorization") ?? "").replace(/^Bearer /, "");
+      const body: unknown = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+      const reply = await world.apiFor(token)(method as Parameters<ReturnType<SetupWorld["apiFor"]>>[0], `${path}${url.search}`, body);
+      return new Response(JSON.stringify(reply.body), { status: reply.status, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    return { fetch: fetchFn, sent };
+  }
+
+  it("skips the self-delete of the protected token: no DELETE sent, its line kept, exit 0 with the note", async () => {
+    const world = new SetupWorld();
+    const cloud = world.cloud(ACCOUNT);
+    cloud.subdomain = undefined;
+    const email = { sleep: async () => {} };
+    await applySetupSteps(cloud.api, ACCOUNT, { emailDomain: "example.test", steps: SETUP_STEPS, setupVersion: ACCOUNT_SETUP_VERSION, frameworkVersion: "0.0.0-test", now: () => new Date(NOW), newSubdomain: () => SUBDOMAIN, email });
+    world.addToken("bootstrap", ENV_TOKEN, ENV_TOKEN_ID);
+    const everyday = "fake-everyday-token-value-MARKER-00000000";
+    world.addToken("everyday", everyday, "1".repeat(32));
+    const dir = mkdtempSync(join(tmpdir(), "live-wizard-"));
+    try {
+      execFileSync("git", ["init", "-q"], { cwd: dir, stdio: "ignore" });
+      writeFileSync(join(dir, ".gitignore"), ".env.cloudflare\n");
+      writeFileSync(join(dir, ".env.cloudflare"), `CLOUDFLARE_BOOTSTRAP_TOKEN=${ENV_TOKEN}\nCLOUDFLARE_API_TOKEN=${everyday}\nCLOUDFLARE_EMAIL_DOMAIN=example.test\n`);
+      const fake = worldFetch(world);
+      const { pass } = await start({ ...fakeCloudflare(), fetch: fake.fetch });
+      const io = captureIo(dir);
+      const status = await runCloudflareSetup(
+        {
+          projectDir: dir,
+          env: {},
+          apiFor: pass.apiFor,
+          reach: pass.reach,
+          protectedTokenIds: pass.protectedTokenIds,
+          localSetup: async () => [],
+          stepOptions: { newSubdomain: () => SUBDOMAIN, email },
+          frameworkVersion: "0.0.0-test",
+          now: () => new Date(NOW),
+        },
+        {},
+        pass.redactingIo(io),
+      );
+      expect(io.err).toBe("");
+      expect(status).toBe(0);
+      expect(io.out).toContain("note: the bootstrap token is protected, so setup did not delete it");
+      expect(io.out).toContain("Next step: deploy a test stage");
+      expect(fake.sent.filter((s) => s.startsWith("DELETE "))).toEqual([]);
+      expect(world.token(ENV_TOKEN_ID).deleted).toBe(false);
+      expect(readFileSync(join(dir, ".env.cloudflare"), "utf8").startsWith(`CLOUDFLARE_BOOTSTRAP_TOKEN=${ENV_TOKEN}\n`)).toBe(true);
+      expect(pass.stopReason()).toBeUndefined();
+      expect(io.out + io.err).not.toContain("MARKER");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
