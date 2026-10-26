@@ -1,10 +1,8 @@
 # Owner tasks
 
-Read this when the app's owner (or an agent acting for them) must do something outside the code: set up the Cloudflare account, its token and its email domain, set secrets, create a production stage, sign up and sign in, make someone an admin, or keep costs down. Give the owner these steps as written. The owner does not read code.
+Read this when the app's owner (or an agent acting for them) must do something outside the code: set up Cloudflare (its two tokens and the email domain), set secrets, create a production stage, sign up and sign in, make someone an admin, or keep costs down. Give the owner these steps as written. The owner does not read code.
 
 Commands run in a terminal, in the app's directory, on macOS or Linux with Node 22.22.0. Replace `<…>` parts; `<domain>` is the account's email domain. Never paste a secret value into a command line, a file in the repository, or a chat.
-
-**Status in this phase.** The local steps are verified. The Cloudflare steps have run against a simulated Cloudflare, and the email setup once against the real account; treat the rest as **not yet verified on Cloudflare**. If a step fails, follow [troubleshooting.md](troubleshooting.md).
 
 ## 1. Before anything else (once per checkout)
 
@@ -24,36 +22,47 @@ Set the stage's name in `STAGE` once in each new terminal (`<stage>` is for exam
 STAGE='<stage>'
 ```
 
-## 2. Cloudflare account and API tokens (once)
+## 2. Cloudflare: two links and one command
 
-1. Sign up or log in at https://dash.cloudflare.com. The email domain must be a zone on this account, with Cloudflare DNS active (Websites → Add a site). Its mail need not be on Cloudflare: the framework uses the subdomain `t.<domain>` for test mail.
-2. Copy your **Account ID** from the account's overview page (menu names here are not yet verified).
-3. Create two **account API tokens**: Manage Account → Account API Tokens → Create Token → Create Custom Token. Account resources: this account only; zone resources: the email domain's zone. Copy each token when shown; Cloudflare shows it only once.
-   - **Everyday token** `prototype-framework`, for every command but `setup-account`, including `stop`, `start` and the backup a production `remove` writes. Account: Workers Scripts Edit, Workers R2 Storage Edit, D1 Edit, Email Sending Read. Zone: Zone Read, Analytics Read. It cannot create tokens. It needs no Billing permission: if Cloudflare refuses a new database because the account has too many, the message names both plans' limits (put `PROTOTYPE_FRAMEWORK_CLOUDFLARE_PLAN=free` or `=paid` in front of the command to name yours).
-   - **Setup token** `prototype-framework-setup`, for `setup-account` only (§3), used rarely. Account: Workers Scripts Edit, Workers R2 Storage Edit, Account API Tokens Edit, Email Sending Edit, Email Routing Addresses Edit. Zone: Email Routing Rules Edit, DNS Edit, Zone Settings Edit, Zone Read. Store it apart from the everyday token.
+You need a Cloudflare account on the **Workers Paid** plan (sign-in sends email, which needs it), and a **domain on that account with Cloudflare DNS active** (Websites → Add a site). Its mail need not be on Cloudflare: the framework uses the subdomain `t.<domain>` for test mail.
 
-   A command names any permission its token lacks.
-4. In each new terminal, set both values; paste the everyday token when `read` waits, then press Enter (`read` keeps it out of your shell history):
+1. Run the setup. It never prints a token value, and does only what is missing:
    ```sh
-   export CLOUDFLARE_ACCOUNT_ID='<your Account ID>'
-   read -rs CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN
+   npm run cloudflare-setup
    ```
-5. Check the token. The output must contain `"success":true`:
-   ```sh
-   curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/tokens/verify"
-   ```
+   With no tokens yet, it prints two links, a template, where the values go, and the next prompt.
+2. Open each link while logged in to the dashboard. The permissions and name are filled in. Choose your account, and for the bootstrap token an expiry of 7 days or less. Create the token and copy it: Cloudflare shows it only once.
+   - **Everyday token** `prototype-framework` (7 permissions), kept for every command. It cannot create tokens and has no zone write permission.
+   - **Bootstrap token** `prototype-framework-bootstrap` (12 permissions), used once: setup deletes it when done. The API cannot make a token with "Account API Tokens Write", so this one is made in the dashboard.
+
+   Both permission lists are in the framework repository's [QUICKSTART.md](https://github.com/lago-morph/cloud-app/blob/main/QUICKSTART.md). Setup names any permission a token lacks.
+3. Put the values where setup reads them, in the four lines of the template (`CLOUDFLARE_BOOTSTRAP_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_EMAIL_DOMAIN`, and `CLOUDFLARE_ACCOUNT_ID` only if your tokens see more than one account):
+   - **In a Claude Code cloud session:** the environment's settings (environment menu → Edit → Environment variables), then start a new session.
+   - **On your computer:** the file `.env.cloudflare` in the app's folder (setup creates it from the template; git ignores it), opened in your editor; or the environment. The environment wins when both are set.
+4. Run `npm run cloudflare-setup` again (in Claude Code, say **"continue prototype setup"**), until it says everything is set up. On success it deletes the bootstrap token, comments out its line, and fills in an empty account and email domain: copy `.env.cloudflare` into another app's folder to start that one. In a cloud session you may then remove the bootstrap variable.
 
 If a command says it needs `NODE_USE_ENV_PROXY=1`, you are behind an HTTPS proxy: put `NODE_USE_ENV_PROXY=1 ` in front of that command.
 
-## 3. One-time account setup, with the email domain
+**When setup stops**, it says what is missing, with the link or command to use. Do that, then run it again:
 
-Paste the **setup token** into `read -rs CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN` (§2), run, then set the everyday token again the same way:
+| It says | Do this |
+| --- | --- |
+| no everyday token | steps 2–4 |
+| a token is wrong (not a token, invalid, another account or zone) | make it again from the link it prints; replace its line |
+| it sees several accounts | set `CLOUDFLARE_ACCOUNT_ID` to the one it names |
+| the plan is not Workers Paid | change the plan (Workers & Pages → Plans), then run again |
+| no email domain | set `CLOUDFLARE_EMAIL_DOMAIN` to one of the domains it lists, or add a domain to the account |
+| it needs the bootstrap token (first setup, or a release needs more permissions or setup) | make it from the link it prints and set `CLOUDFLARE_BOOTSTRAP_TOKEN`. The everyday token keeps its value: setup adds the permissions to it |
+| the tokens belong to another account than this project's | stages on the old account keep running; remove them first if you want (it offers this), then run again |
+| a host is blocked | allow the host it names in the cloud environment's network settings |
+| `.env.cloudflare` is not ignored by git | setup adds it to `.gitignore`, unless `.gitignore` has the line `# keep-env-cloudflare-tracked` |
+| `.env.cloudflare` is tracked by git | its tokens are in the history: delete both tokens in the dashboard, run `git rm --cached .env.cloudflare` and commit, then run setup for new tokens |
 
-```sh
-npm run setup-account -- --target cloudflare --email-domain <domain>
-```
+The git warnings never stop a command. `npm run setup-account -- --target cloudflare --email-domain <domain>` is the account-setup step on its own, for scripts; `cloudflare-setup` runs it for you.
 
-This creates the shared resources once per account, including the file-signing credential every stage uses: the log bucket `prototype-logs`, the deploy-state bucket `sst-state`, the backup bucket `prototype-backups` (a removed production stage's data, kept 30 days), the `workers.dev` address, sending from `no-reply@<domain>`, and the test mailbox: mail to `sink+<tag>@t.<domain>` is stored for a day, so an agent can read it. When it creates the mailbox rule it waits about a minute, so the first test mail does not arrive before the rule. Running it again changes nothing. To change the domain later, run it with the new `--email-domain`. `deploy` never creates these resources; if they are missing, it tells you to run this command. An account set up before the backup bucket or the file-signing credential existed needs this command once more, with the setup token: `deploy` then names what is missing and tells you to run it. When that run replaces the file-signing credential, it says so: then redeploy every deployed stage (`npm run deploy -- --target cloudflare --stage <stage>`, with the everyday token), because each one keeps the old key, and its file uploads and downloads fail, until its next deploy.
+## 3. What the account setup creates
+
+Setup creates the shared resources once per account, including the file-signing credential every stage uses: the log bucket `prototype-logs`, the deploy-state bucket `sst-state`, the backup bucket `prototype-backups` (a removed production stage's data, kept 30 days), the `workers.dev` address, sending from `no-reply@<domain>`, and the test mailbox: mail to `sink+<tag>@t.<domain>` is stored for a day, so an agent can read it. It records what it did in `framework/account.json` in `sst-state`. When it creates the mailbox rule it waits about a minute. To change the domain, set the new `CLOUDFLARE_EMAIL_DOMAIN` and run it again (it needs the bootstrap token). `deploy` never creates these resources; if they are missing, it says to run the setup. When a run replaces the file-signing credential, it says so: then redeploy every deployed stage (`npm run deploy -- --target cloudflare --stage <stage>`), because each one keeps the old key, and its file uploads and downloads fail, until its next deploy.
 
 ## 4. Secrets
 
@@ -138,7 +147,6 @@ It prints the account's user ID (as `/api/auth/me` shows it) and its roles, neve
 ## 9. Cost
 
 - Stopped or idle stages cost nothing for compute, but storage remains: the stage's D1 database and R2 file bucket, the shared `prototype-logs` bucket, and the `sst-state` bucket. Log entries are never deleted automatically. Test mail in the sink is deleted after a day.
-- On Cloudflare's free plan, D1 allows about **100,000 rows written per day** per account. The limit for reads is larger. When a limit is used up, database requests fail until it resets at 00:00 UTC.
 - Keep test stages small: a few rows of data, one test stage at a time, and `remove` it right after use. An account holds at most **10 D1 databases**, and a deploy that changes the schema briefly uses two per stage.
 - See [deploying.md](deploying.md) for deploy, stop/start and remove.
 

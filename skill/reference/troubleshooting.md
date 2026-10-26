@@ -103,8 +103,8 @@ Every stage signs people in with email and password. A failed attempt writes one
 
 No mail arrives:
 - Locally nothing is sent: read `.mail/` with `npm run mail -- last --to '<address>'`. On a test stage the mail is captured, not sent.
-- On a production stage, look for a `MAIL` entry `mail send failed: <code>` (§1). The sender is `no-reply@<domain>`; if `deploy` or `setup-account` said the domain is not verified for sending, run `npm run setup-account -- --target cloudflare` again.
-- A test address `sink+<tag>@t.<domain>`: read it with `npm run mail -- last --to '<address>' --target cloudflare`. Only `sink+…` addresses reach the test mailbox. Right after `setup-account` created the mailbox rule, a send may be rejected for a minute.
+- On a production stage, look for a `MAIL` entry `mail send failed: <code>` (§1). The sender is `no-reply@<domain>`; if `deploy` or setup said the domain is not verified for sending, run `npm run cloudflare-setup` again.
+- A test address `sink+<tag>@t.<domain>`: read it with `npm run mail -- last --to '<address>' --target cloudflare`. Only `sink+…` addresses reach the test mailbox. Right after setup created the mailbox rule, a send may be rejected for a minute.
 
 Signed in, but not admin: the `admin` role is granted per stage with `admins grant` ([owner-tasks.md](owner-tasks.md) §7); check with `admins list`.
 
@@ -112,8 +112,8 @@ Signed in, but not admin: the `admin` role is granted per stage with `admins gra
 
 `deploy` prints the failed step, the stage's state and the next action. Follow the next action. Common messages:
 
-- `run setup-account … first`: the account's shared resources are missing. See [owner-tasks.md](owner-tasks.md) §3.
-- A missing `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID`, or a missing permission: see [owner-tasks.md](owner-tasks.md) §2. "Account API Tokens Write" is the setup token's, needed only by `setup-account`; "R2 signing credential … missing" means `setup-account` must run with the setup token.
+- `run setup-account … first`: the account's shared resources are missing. Run `npm run cloudflare-setup` ([owner-tasks.md](owner-tasks.md) §2).
+- A missing `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID`, a missing permission, or "R2 signing credential … missing": run `npm run cloudflare-setup`, which says what to fix ([owner-tasks.md](owner-tasks.md) §2). "Account API Tokens Write" is the bootstrap token's only.
 - `NODE_USE_ENV_PROXY`: you are behind an HTTPS proxy. Put `NODE_USE_ENV_PROXY=1 ` in front of the command.
 - `required secrets are not set: …`: this happens on the first deploy of a stage. Set each named secret with `--target cloudflare`, then run `deploy` again.
 - An error about the number of D1 databases: an account holds at most 10, and a schema-changing deploy briefly holds two per stage. Remove unused test stages ([deploying.md](deploying.md)).

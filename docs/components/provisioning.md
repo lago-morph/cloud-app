@@ -49,6 +49,8 @@ Amendment (Origin: owner · Decision: DEC-0511, DEC-0514, DEC-0515): on Cloudfla
 
 Amendment (Origin: ai-proposed · Decision: DEC-0550, DEC-0551): on Cloudflare the shared resources also include the stages' R2 signing credential: the account API token `prototype-r2-signing` and its record `framework/r2-signing.json` in the state home. `setup-account` creates it when absent, after checking that the credentials carry "Account API Tokens Write" and naming that permission if not. It is the only command that needs a permission on API tokens; the owner runs it with the setup token (owner-tasks).
 
+Amendment (Origin: owner, plan-setup-wizard §4.3, §4.4 · Decision: DEC-0563, DEC-0577, DEC-0578): `setup-account` stays, for scripts and advanced users, as the account-setup step that `cloudflare-setup` calls with the bootstrap token (SETUP-REQ-001). It runs as named, idempotent steps, each inspected before it is applied, and writes the account setup record last; DEC-0551's setup token is replaced by the dashboard-made bootstrap token.
+
 #### PROV-REQ-005 — Test stages
 Origin: owner · Derives from: SYS-REQ-020 · Decision: DEC-0081
 
@@ -63,11 +65,42 @@ Region and other deployment settings MUST come from configuration or documented 
 
 SST (PAR-100) is the provisioning engine on both clouds (DEC-0036). It is driven entirely by framework code in `./provision`, which builds the SST app from the app definition, so apps never see SST. Resource lists per target are in CF-REQ-002 and AWS-REQ-003. (AWS: deferred, branch `aws`.)
 
-**Credentials.** Cloud credentials come from the environment SST normally uses. The preflight step lists which are missing, by name only. On Cloudflare the owner keeps two account API tokens (DEC-0551), each in `CLOUDFLARE_API_TOKEN` when used:
-- the **everyday token**, for `deploy`, `remove` (a production stage's backup included), `stop`, `start`, `secrets set`, `check-login`, `admins` and `mail`: account Workers Scripts Write, Workers R2 Storage Write, D1 Write and Email Sending Read; zone Zone Read and Analytics Read (the email domain's zone, or all zones of the account). It has no permission on API tokens;
-- the **setup token**, for `setup-account` only, run rarely: account Workers Scripts Write, Workers R2 Storage Write, Account API Tokens Write, and the email permissions of DEC-0515 (account Email Sending Write and Email Routing Addresses Write; zone Email Routing Rules Write, DNS Write, Zone Settings Write and Zone Read, for the email domain's zone).
+**Credentials.** Cloud credentials come from the environment SST normally uses. The preflight step lists which are missing, by name only.
 
-`smoke` sends no Cloudflare API request and needs no token. DEC-0551 lists the calls behind each permission.
+Amendment (Origin: owner, plan-setup-wizard §4.1, §4.2 · Decision: DEC-0563, DEC-0564, DEC-0570, DEC-0574; supersedes DEC-0551's two lists): on Cloudflare every command reads its settings from the environment first, then from `.env.cloudflare` in the project root (PAR-340), and a value in both that differs is taken from the environment with a note naming the setting; nobody exports them by hand. The owner keeps two account API tokens, both made from pre-filled dashboard links (`deepLink`) and both checked against one versioned list (`provision/cloudflare/permissions.ts`, PAR-331). The tables below are generated from it (`node scripts/permission-tables.mjs`; a unit test fails when they drift, DEC-0602).
+- the **everyday token** `prototype-framework`, in `CLOUDFLARE_API_TOKEN`, for every command: `deploy`, `remove` (a production stage's backup included), `stop`, `start`, `secrets set`, `check-login`, `admins`, `mail`, and the checks of `cloudflare-setup`. It has no permission on API tokens and no zone write permission; its R2 access reads the account setup record. The file's bootstrap token is never passed to these commands (DEC-0574).
+<!-- permission-table: everyday -->
+| Scope | On the dashboard | API name | Permission group ID |
+| --- | --- | --- | --- |
+| Account | Workers Scripts Edit | Workers Scripts Write | `e086da7e2179491d91ee5f35b3ca210a` |
+| Account | Workers R2 Storage Edit | Workers R2 Storage Write | `bf7481a1826f439697cb59a20b22293e` |
+| Account | D1 Edit | D1 Write | `09b2857d1c31407795e75e3fed8617a1` |
+| Account | Email Sending Read | Email Sending Read | `2d5b4b1f6c89487bb7184c2c1dcd3bf1` |
+| Zone | Zone Read | Zone Read | `c8fed203ed3043cba015a93ad1616f1f` |
+| Zone | Analytics Read | Analytics Read | `9c88f9c5bce24ce7af9a958ba9c504db` |
+| Zone | Email Routing Rules Read | Email Routing Rules Read | `1b600d9d8062443e986a973f097e728a` |
+<!-- /permission-table -->
+- the **bootstrap token** `prototype-framework-bootstrap`, in `CLOUDFLARE_BOOTSTRAP_TOKEN`, made in the dashboard because the API cannot create a token that holds "Account API Tokens Write". `cloudflare-setup` uses it only when the account setup is out of date or the everyday token lacks a permission, then the token deletes itself and its line in `.env.cloudflare` is commented out (PAR-342). `setup-account` run on its own takes it in `CLOUDFLARE_API_TOKEN`, as it took DEC-0551's setup token.
+<!-- permission-table: bootstrap -->
+| Scope | On the dashboard | API name | Permission group ID |
+| --- | --- | --- | --- |
+| Account | Workers Scripts Edit | Workers Scripts Write | `e086da7e2179491d91ee5f35b3ca210a` |
+| Account | Workers R2 Storage Edit | Workers R2 Storage Write | `bf7481a1826f439697cb59a20b22293e` |
+| Account | Account API Tokens Edit | Account API Tokens Write | `5bc3f8b21c554832afc660159ab75fa4` |
+| Account | Email Sending Edit | Email Sending Write | `5df633d6b41c42bcaf5b4a62b9d14b64` |
+| Account | Email Routing Addresses Edit | Email Routing Addresses Write | `e4589eb09e63436686cd64252a3aebeb` |
+| Account | Billing Read | Billing Read | `7cf72faf220841aabcfdfab81c43c4f6` |
+| Account | D1 Edit | D1 Write | `09b2857d1c31407795e75e3fed8617a1` |
+| Zone | Email Routing Rules Edit | Email Routing Rules Write | `79b3ec0d10ce4148a8f8bdc0cc5f97f2` |
+| Zone | DNS Edit | DNS Write | `4755a26eedb94da69e1066d98aa820be` |
+| Zone | Zone Settings Edit | Zone Settings Write | `3030687196b94b638145a3953da2b699` |
+| Zone | Zone Read | Zone Read | `c8fed203ed3043cba015a93ad1616f1f` |
+| Zone | Analytics Read | Analytics Read | `9c88f9c5bce24ce7af9a958ba9c504db` |
+<!-- /permission-table -->
+
+`smoke` sends no Cloudflare API request and needs no token. DEC-0551 lists the calls behind each everyday permission; the account setup's steps are in cloudflare.md `setupAccount`.
+
+**Cloudflare setup** (`cloudflare-setup`, plan-setup-wizard §4.3; [setup.md](setup.md)). The re-runnable command that reads the state and does only what is missing: local setup, the git-ignore warnings, both tokens' checks, the account and its plan, the email domain, the setup record, and with the bootstrap token the missing account setup steps (`setup-account`'s, PROV-REQ-004), one check of the everyday token's permissions with an in-place update of any missing ones (`PUT …/tokens/<id>`, which keeps the value, DEC-0565), and the bootstrap token's self-deletion. **Account switch:** when the tokens' account differs from the project's recorded one (`CLOUDFLARE_ACCOUNT_ID`), setup says that stages on the old account keep running and offers to remove them while the old token still works, then sets up the new account as needed and updates `CLOUDFLARE_ACCOUNT_ID`. It never moves a stage between accounts.
 
 **Errors** from these tooling commands are reported as messages with a non-zero exit status; they are not part of the runtime error catalogue.
 
