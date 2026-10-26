@@ -83,6 +83,9 @@ export const NEXT_PROMPT = 'Then say "continue prototype setup" (or run /prototy
 /** The environment variable naming token IDs setup must never update or delete (comma-separated; PAR-361). */
 export const PROTECTED_TOKEN_IDS_ENV = "PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS";
 
+/** A made-up Worker name whose host under the account's `workers.dev` subdomain the network check requests (DEC-0590). */
+export const REACHABILITY_SCRIPT = "prototype-framework-reachability";
+
 /** The first stage to deploy after setup (plan §4.3 step 9). */
 export const FIRST_TEST_STAGE = "test-first";
 
@@ -576,7 +579,7 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       }
 
       // The missing setup steps, then the record (applySetupSteps writes it last).
-      const { applied } = await applySetupSteps(bootApi, accountId, {
+      const { applied, written, record } = await applySetupSteps(bootApi, accountId, {
         emailDomain: domain,
         steps: SETUP_STEPS,
         setupVersion: ACCOUNT_SETUP_VERSION,
@@ -585,10 +588,9 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
         ...deps.stepOptions,
         note: (message) => say(`note: ${message}`),
       });
-      if (applied.length > 0) {
-        changed = true;
-        say(`account setup: applied ${applied.join(", ")}`);
-      } else say("account setup: every step was already done");
+      const recorded = written ? `; recorded setup version ${String(record.setupVersion)}` : "";
+      if (applied.length > 0 || written) changed = true;
+      say(applied.length > 0 ? `account setup: applied ${applied.join(", ")}${recorded}` : `account setup: every step was already done${recorded}`);
       setupState = `current (setup version ${String(ACCOUNT_SETUP_VERSION)})`;
 
       // The everyday token, checked exactly once with the bootstrap token.
@@ -705,7 +707,9 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     try {
       const subdomain = await accountSubdomain(api, accountId);
       hidden.add(subdomain);
-      hosts.push({ what: "the account's workers.dev subdomain (<subdomain>.workers.dev)", url: `https://${subdomain}.workers.dev/` });
+      // The bare subdomain has no DNS record; any Worker-style host under it resolves, and a
+      // script that does not exist answers 404 from Cloudflare, which counts as reachable.
+      hosts.push({ what: "the account's workers.dev subdomain (<subdomain>.workers.dev)", url: `https://${REACHABILITY_SCRIPT}.${subdomain}.workers.dev/` });
     } catch (error) {
       if (error instanceof CloudflareRequestsStopped) throw error;
       hosts.push({ what: "the account's workers.dev subdomain (it could not be read)", url: "" });
