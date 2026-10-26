@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -172,5 +172,53 @@ describe(".env.cloudflare and the environment (plan-setup-wizard §4.2; DEC-0570
       expect(mode()).toBe(0o600);
     }
     expect(read()).toBe(`${BOOTSTRAP_DELETED_LINE}\nCLOUDFLARE_API_TOKEN=\nCLOUDFLARE_EMAIL_DOMAIN=mail.example\nCLOUDFLARE_ACCOUNT_ID=fake-account\n`);
+  });
+
+  it("the template's hint is not part of a value: a hint-only line reads as empty and is filled; a value typed before the hint is the value", () => {
+    const hint = "(only if your tokens see more than one account)";
+    write(`CLOUDFLARE_API_TOKEN=t\nCLOUDFLARE_ACCOUNT_ID=        ${hint}\n`);
+    expect(readCloudflareSettings(dir, {}).values.CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
+    expect(readCloudflareSettings(dir, {}).notices).toEqual([]);
+    expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account" })).toEqual(["CLOUDFLARE_ACCOUNT_ID"]);
+    expect(read()).toBe("CLOUDFLARE_API_TOKEN=t\nCLOUDFLARE_ACCOUNT_ID=fake-account\n");
+
+    write(`CLOUDFLARE_ACCOUNT_ID=typed-account        ${hint}\nCLOUDFLARE_EMAIL_DOMAIN=${hint}\n`);
+    expect(readCloudflareSettings(dir, {}).values).toEqual({ CLOUDFLARE_ACCOUNT_ID: "typed-account" });
+  });
+
+  it("an unquoted value with a space inside is unreadable, named by its line number only", () => {
+    write(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN} ${FILE_TOKEN}\nCLOUDFLARE_ACCOUNT_ID=ok\n`);
+    const settings = readCloudflareSettings(dir, {});
+    expect(settings.values).toEqual({ CLOUDFLARE_ACCOUNT_ID: "ok" });
+    expect(settings.notices).toEqual(["line 1 of .env.cloudflare is not a NAME=value line and was ignored"]);
+  });
+
+  it("an environment value of only whitespace counts as absent", () => {
+    write(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\n`);
+    const settings = readCloudflareSettings(dir, { CLOUDFLARE_API_TOKEN: "  \t", CLOUDFLARE_ACCOUNT_ID: " " });
+    expect(settings.values).toEqual({ CLOUDFLARE_API_TOKEN: FILE_TOKEN });
+    expect(settings.sources).toEqual({ CLOUDFLARE_API_TOKEN: "file" });
+    expect(settings.notices).toEqual([]);
+  });
+
+  it("comments out a bootstrap line the parser cannot read, so no value stays in the file", () => {
+    write(`CLOUDFLARE_BOOTSTRAP_TOKEN="${FILE_TOKEN}\nexport CLOUDFLARE_BOOTSTRAP_TOKEN = ${FILE_TOKEN} ${FILE_TOKEN}\nCLOUDFLARE_API_TOKEN=everyday\n`);
+    expect(commentOutBootstrap(dir)).toBe(true);
+    expect(read()).toBe(`${BOOTSTRAP_DELETED_LINE}\n${BOOTSTRAP_DELETED_LINE}\nCLOUDFLARE_API_TOKEN=everyday\n`);
+    expect(read()).not.toContain(MARKER);
+  });
+
+  it.runIf(isPosix)("a rewrite replaces the file atomically (a new file renamed over it), at mode 600, leaving no temporary file", () => {
+    write("CLOUDFLARE_BOOTSTRAP_TOKEN=b\nCLOUDFLARE_EMAIL_DOMAIN=\n");
+    chmodSync(file(), 0o644);
+    const before = statSync(file()).ino;
+    expect(commentOutBootstrap(dir)).toBe(true);
+    expect(statSync(file()).ino).not.toBe(before);
+    expect(mode()).toBe(0o600);
+    const again = statSync(file()).ino;
+    expect(fillInSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "mail.example" })).toEqual(["CLOUDFLARE_EMAIL_DOMAIN"]);
+    expect(statSync(file()).ino).not.toBe(again);
+    expect(mode()).toBe(0o600);
+    expect(readdirSync(dir)).toEqual([ENV_CLOUDFLARE_FILE]);
   });
 });

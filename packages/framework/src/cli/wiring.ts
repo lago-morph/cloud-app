@@ -4,6 +4,7 @@
  * does not load ESLint, `secrets set` does not load the migration checker).
  */
 import { join } from "node:path";
+import type { CloudflareSettingsOptions } from "./cloudflare-settings.js";
 import type { ProcessEnvironment } from "./commands/smoke-cloud.js";
 import type { Command } from "./io.js";
 
@@ -41,9 +42,10 @@ export const resetLocalBinding: Command = lazy(async () => (await import("./comm
  * bound through it.
  */
 export const cloud =
-  (name: string, load: (env: ProcessEnvironment) => Promise<Command>): Command =>
+  (name: string, load: (env: ProcessEnvironment) => Promise<Command>, options: CloudflareSettingsOptions = {}): Command =>
   async (args, io) =>
-    (await import("./cloudflare-settings.js")).withCloudflareSettings(name, load)(args, io);
+    // `{ withBootstrapToken: true }` opts out of DEC-0574 (the file's bootstrap token too): for `cloudflare-setup` only.
+    (await import("./cloudflare-settings.js")).withCloudflareSettings(name, load, process.env, options)(args, io);
 
 export const secretsBinding: Command = cloud("secrets set", async (env) => {
   const [{ secretsCommand }, { loadApp }, { setLocalSecret }, { cloudSecretsBinding }] = await Promise.all([

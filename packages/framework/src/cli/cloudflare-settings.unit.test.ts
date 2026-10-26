@@ -58,6 +58,13 @@ describe("every Cloudflare command reads the environment and .env.cloudflare (pl
     expect(seen).toEqual([{ CLOUDFLARE_API_TOKEN: "everyday" }, { CLOUDFLARE_BOOTSTRAP_TOKEN: ENV_TOKEN, CLOUDFLARE_API_TOKEN: "everyday" }]);
   });
 
+  it("cloudflare-setup's opt-out: withBootstrapToken passes the file's bootstrap token too", async () => {
+    writeEnvFile(`CLOUDFLARE_BOOTSTRAP_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_API_TOKEN=everyday\n`);
+    const { seen, load } = recording(EXIT.ok);
+    await withCloudflareSettings("cloudflare-setup", load, {}, { withBootstrapToken: true })(["--target", "cloudflare"], captureIo(dir));
+    expect(seen).toEqual([{ CLOUDFLARE_BOOTSTRAP_TOKEN: FILE_TOKEN, CLOUDFLARE_API_TOKEN: "everyday" }]);
+  });
+
   it("another target reads no file and prints nothing extra", async () => {
     writeEnvFile(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\n`);
     const { seen, load } = recording(EXIT.ok);

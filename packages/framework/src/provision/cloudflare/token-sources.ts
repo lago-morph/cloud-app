@@ -5,18 +5,22 @@
  * 2. the file `.env.cloudflare` in the project root (PAR-340), which the framework CLI reads,
  *    creates and edits itself.
  * A setting set (non-empty) in the environment wins. When both hold a value and the values
- * differ, a notice says the environment is used, naming the setting only. Empty values count as
- * absent in either source.
+ * differ, a notice says the environment is used, naming the setting only. Empty values (and, in
+ * the environment, values of only whitespace) count as absent in either source.
  *
  * The file is simple `KEY=VALUE` lines: `#` comments, blank lines, an optional `export ` prefix,
- * optional single or double quotes around the value, and an unquoted value's ` #` comment. Only
+ * optional single or double quotes around the value, and an unquoted value's ` #` comment. An
+ * unquoted value's trailing `(…)` hint, as on the template's account line, is dropped, so a line
+ * with only the hint reads as empty; an unquoted value with a space left inside is unreadable. Only
  * the four names of `SETTING_NAMES` are read; other names are ignored. Nothing here ever prints,
  * logs or returns in a message a value of the file or the environment (DEC-0573): notices name
  * settings and line numbers only.
  *
- * Every write leaves the file readable and writable by its owner only (mode 600, PAR-341).
+ * Every write leaves the file readable and writable by its owner only (mode 600, PAR-341), and
+ * replaces it atomically: a temporary file at that mode in the same directory, renamed over it.
  */
-import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { chmodSync, existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Environment } from "./environment.js";
 
@@ -75,7 +79,9 @@ function parseValue(raw: string): string | undefined {
     return text.slice(1, end);
   }
   const comment = text.search(/\s#/);
-  return (comment < 0 ? text : text.slice(0, comment)).trim();
+  // The template's hint, "(only if …)", is never part of a value (a hint-only line is empty).
+  const value = (comment < 0 ? text : text.slice(0, comment)).trim().replace(/\s*\([^()]*\)$/, "");
+  return /\s/.test(value) ? undefined : value;
 }
 
 interface ParsedFile {
@@ -140,7 +146,7 @@ export function readCloudflareSettings(projectDir: string, env: Environment): Cl
   const values: Partial<Record<SettingName, string>> = {};
   const sources: Partial<Record<SettingName, "environment" | "file">> = {};
   for (const name of SETTING_NAMES) {
-    const fromEnv = env[name] ?? "";
+    const fromEnv = (env[name] ?? "").trim() === "" ? "" : (env[name] ?? "");
     const fromFile = file[name] ?? "";
     if (fromEnv !== "") {
       values[name] = fromEnv;
@@ -166,13 +172,21 @@ export function cloudflareEnvironment(projectDir: string, env: Environment): Env
   return mergeCloudflareSettings(env, readCloudflareSettings(projectDir, env));
 }
 
-/** Writes the file and leaves it at mode 600, also when it existed with a wider mode. */
+/**
+ * Replaces the file atomically at mode 600: the content goes to a new temporary file at that mode
+ * in the same directory, which is renamed over the file, so a reader sees the old or the new file
+ * whole, and a file that had a wider mode never holds the new content.
+ */
 function writeFile(projectDir: string, lines: readonly string[]): void {
   const path = filePath(projectDir);
-  // Narrow an existing file's mode before new content lands in it; a new file is created at 600.
-  if (existsSync(path)) chmodSync(path, ENV_CLOUDFLARE_MODE);
-  writeFileSync(path, lines.length === 0 ? "" : `${lines.join("\n")}\n`, { encoding: "utf8", mode: ENV_CLOUDFLARE_MODE });
-  chmodSync(path, ENV_CLOUDFLARE_MODE);
+  const temporary = join(projectDir, `${ENV_CLOUDFLARE_FILE}.${randomBytes(6).toString("hex")}.tmp`);
+  try {
+    writeFileSync(temporary, lines.length === 0 ? "" : `${lines.join("\n")}\n`, { encoding: "utf8", mode: ENV_CLOUDFLARE_MODE, flag: "wx" });
+    chmodSync(temporary, ENV_CLOUDFLARE_MODE);
+    renameSync(temporary, path);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
 }
 
 /** Writes the template when the file does not exist; true when it wrote it. */
@@ -182,19 +196,24 @@ export function writeTemplateIfAbsent(projectDir: string): boolean {
   return true;
 }
 
+const BOOTSTRAP_LINE = /^\s*(?:export\s+)?CLOUDFLARE_BOOTSTRAP_TOKEN\s*=/;
+
 /**
  * Replaces every active `CLOUDFLARE_BOOTSTRAP_TOKEN=` line with `BOOTSTRAP_DELETED_LINE` (the
- * token has deleted itself). True when a line changed; a missing file or no such line is false.
+ * token has deleted itself), also a line the parser cannot read (an unclosed quote), so no value
+ * stays in the file. True when a line changed; a missing file or no such line is false.
  */
 export function commentOutBootstrap(projectDir: string): boolean {
   const parsed = readParsed(projectDir);
   if (parsed === undefined) return false;
-  const targets = parsed.assignments.filter((a) => a.name === "CLOUDFLARE_BOOTSTRAP_TOKEN");
-  if (targets.length === 0) return false;
-  const lines = [...parsed.lines];
-  for (const a of targets) lines[a.index] = BOOTSTRAP_DELETED_LINE;
-  writeFile(projectDir, lines);
-  return true;
+  let changed = false;
+  const lines = parsed.lines.map((line) => {
+    if (!BOOTSTRAP_LINE.test(line)) return line;
+    changed = true;
+    return BOOTSTRAP_DELETED_LINE;
+  });
+  if (changed) writeFile(projectDir, lines);
+  return changed;
 }
 
 type FillName = "CLOUDFLARE_ACCOUNT_ID" | "CLOUDFLARE_EMAIL_DOMAIN";
