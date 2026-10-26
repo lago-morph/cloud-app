@@ -26,18 +26,24 @@
  *   7. the old password fails, the new one works;
  *   8. a burst of wrong-password sign-ins gets 429 `AUTH.RATE_LIMITED` within PAR-258 + 1 requests.
  *
+ * Every request goes over one dispatcher with one connection per origin (PAR-330,
+ * `one-connection.ts`; DEC-0561), so that the stage sees one client IP even behind an egress
+ * proxy that leaves from several addresses: PAR-258 counts per IP.
+ *
  * One evidence record (`src/evidence`) with results for PWD-AC-009, AUTH-AC-011 and E2E-008;
  * exit 0 only if every step passed. The address, the passwords and the tokens are never printed
  * or recorded (they are also redacted from the record), nor is the account's `workers.dev`
  * subdomain (DEC-0086). Test stages and target `local` are refused before any request: a test
  * stage has the authentication mock and the test-mail route instead (password.md §2).
  */
+import type { Dispatcher } from "undici";
 import type { Target } from "../../core/identity.js";
 import type { EvidencePaths, EvidenceResult, GitState, Redaction, WriteEvidenceInput } from "../../evidence/writer.js";
 import type { MailMessage } from "../../mail/sender.js";
 import { UsageError } from "../args.js";
 import { describeFailure } from "../failure.js";
 import { EXIT, type Command } from "../io.js";
+import { fetchOver } from "../one-connection.js";
 import { checkedStage, parseCloudTargetStage, refuseUnreachableCloud, type ProcessEnvironment } from "./smoke-cloud.js";
 
 /** How long a step waits for a message in the sink, and how often it looks (not a PAR: a bound on Email Routing's delivery). */
@@ -381,6 +387,8 @@ export interface CheckLoginDeps {
   /** The test address for a run ID (`sinkAddress`). */
   address(emailDomain: string, runId: string): string;
   readonly fetch: typeof fetch;
+  /** The one-connection dispatcher (PAR-330) every request to the stage is sent over. */
+  readonly dispatcher: Dispatcher;
   writeEvidence(input: WriteEvidenceInput): EvidencePaths;
   newRunId(): string;
   newPassword(): string;
@@ -449,7 +457,7 @@ export function checkLoginCommand(deps: CheckLoginDeps): Command {
     const outcome = await runLoginCheck(
       { origin, address, password, newPassword },
       {
-        fetch: deps.fetch,
+        fetch: fetchOver(deps.dispatcher, deps.fetch),
         sink: deps.sink,
         changeRole: (action, to) => deps.changeRole(io.cwd, stage, action, to),
         sleep: deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
@@ -511,7 +519,11 @@ export async function checkLoginBinding(env: ProcessEnvironment = process.env, f
       import("../../build/load.js"),
     ]);
   const delivery = await import("../../provision/cloudflare/email-delivery.js");
-  const api = createCloudflareApi({ token: env.CLOUDFLARE_API_TOKEN ?? "", ...(fetchImpl === undefined ? {} : { fetch: fetchImpl }) });
+  const { oneConnectionDispatcher } = await import("../one-connection.js");
+  // One connection for every request check-login sends, the Cloudflare API's too (PAR-330, DEC-0561).
+  const dispatcher = oneConnectionDispatcher(env);
+  const base = fetchImpl ?? globalThis.fetch;
+  const api = createCloudflareApi({ token: env.CLOUDFLARE_API_TOKEN ?? "", fetch: fetchOver(dispatcher, base) });
   const accountId = env.CLOUDFLARE_ACCOUNT_ID ?? "";
   const frameworkVersion = (): string | undefined => {
     try {
@@ -543,7 +555,8 @@ export async function checkLoginBinding(env: ProcessEnvironment = process.env, f
     },
     address: sinkAddress,
     deliveryStatus: async (emailDomain, address, since) => delivery.describeDelivery(await delivery.lastDeliveryEvent(api, accountId, emailDomain, address, since)),
-    fetch: fetchImpl ?? globalThis.fetch,
+    fetch: base,
+    dispatcher,
     writeEvidence: evidence.writeEvidence,
     newRunId: () => evidence.newRunId(),
     newPassword: randomPassword,

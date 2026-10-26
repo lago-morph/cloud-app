@@ -42,6 +42,8 @@ interface FakeStage {
   secrets: Set<string> | null;
   code: { database: string } | null;
   running: boolean;
+  /** The fake time of the last `startApp`. */
+  startedAt?: number;
   /** The stage record's `stopped` (DEC-0544); absent means not stopped. */
   stopped?: boolean;
 }
@@ -55,6 +57,7 @@ export interface FakeTargetOptions {
 }
 
 const key = (s: Stage) => `${s.app}/${s.stage}`;
+const fakeOrigin = (s: Stage) => `https://${s.app}-${s.stage}.fake.example`;
 
 export class FakeTarget implements TargetOperations {
   readonly target = "fake";
@@ -79,6 +82,12 @@ export class FakeTarget implements TargetOperations {
   readonly deployedEmailDomains: (string | undefined)[] = [];
   /** Returned by `checkHealth`. */
   health: HealthOutcome = { ok: true };
+  /** After `startApp`, the route answers 404 for this long (fake time), like a just-started Cloudflare route (DEC-0090). */
+  answerDelayMs = 0;
+  /** The fake clock in ms, advanced only by `checkHealth`'s one-second retries. */
+  clock = 0;
+  /** The fake time of each health try (`checkHealth` tries once a second for up to 30 s, like step 7 on Cloudflare). */
+  readonly healthTries: number[] = [];
   /** Migration IDs whose application throws (and is not recorded). */
   readonly failingMigrations = new Map<string, Error>();
   /** Thrown by `checkMigratedDatabase`. */
@@ -215,7 +224,7 @@ export class FakeTarget implements TargetOperations {
     if (!s.resources.some((r) => r.kind === "runtime")) s.resources.push({ kind: "runtime", id: `${key(input.stage)}/runtime` });
     s.secrets ??= new Set();
     s.code = { database: input.database.name };
-    return { publicOrigin: `https://${input.stage.app}-${input.stage.stage}.fake.example` };
+    return { publicOrigin: fakeOrigin(input.stage) };
   }
 
   async setSecret(stage: Stage, name: string, value: string): Promise<void> {
@@ -239,7 +248,9 @@ export class FakeTarget implements TargetOperations {
 
   async startApp(stage: Stage): Promise<void> {
     this.enter("startApp", key(stage));
-    this.stageState(stage).running = true;
+    const s = this.stageState(stage);
+    s.running = true;
+    s.startedAt = this.clock;
   }
 
   async readStageRecord(stage: Stage): Promise<StageRecord> {
@@ -315,10 +326,17 @@ export class FakeTarget implements TargetOperations {
     if (this.checkFailure) throw this.checkFailure;
   }
 
-  async checkHealth(stage: Stage, deployed: DeployedCode): Promise<HealthOutcome> {
-    this.enter("checkHealth", deployed.publicOrigin);
-    if (this.health.ok && !this.answering(stage)) return { ok: false, message: "the stage does not answer", status: 404 };
-    return this.health;
+  async checkHealth(stage: Stage, deployed?: DeployedCode): Promise<HealthOutcome> {
+    this.enter("checkHealth", deployed?.publicOrigin ?? fakeOrigin(stage));
+    const deadline = this.clock + 30_000;
+    for (;;) {
+      this.healthTries.push(this.clock);
+      const s = this.stageState(stage);
+      const warming = s.startedAt !== undefined && this.clock - s.startedAt < this.answerDelayMs;
+      const outcome: HealthOutcome = this.health.ok && (!this.answering(stage) || warming) ? { ok: false, message: "the stage does not answer", status: 404 } : this.health;
+      if (outcome.ok || this.clock >= deadline) return outcome;
+      this.clock += 1000;
+    }
   }
 
   async listStageResources(stage: Stage): Promise<StageResources> {

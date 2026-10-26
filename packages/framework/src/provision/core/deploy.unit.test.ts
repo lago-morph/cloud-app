@@ -128,13 +128,52 @@ describe("deploy sequence (PROV-REQ-002, MIG-REQ-006)", () => {
     expect(t.databaseNames(stage)).toEqual([db(2)]);
     expect([...(t.databases.get(db(2))?.records ?? [])]).toEqual(ALL);
     expect(t.answering(stage)).toBe(db(2));
-    expect(t.calls.slice(-2)).toEqual([`dropDatabase ${db(3)}`, "startApp notes/test-abc"]);
+    expect(t.calls.slice(-3)).toEqual([`dropDatabase ${db(3)}`, "startApp notes/test-abc", "checkHealth https://notes-test-abc.fake.example"]);
     expect(t.calls.some((c) => c.startsWith("deployCode"))).toBe(false);
     expect(io.err).toMatch(/step 4 \(migrate\)/);
     expect(io.err).toContain("migration file: /app/migrations/sqlite/0001_more.sql");
     expect(io.err).toContain('database error: near "TABEL": syntax error');
     expect(io.err).toContain(`stage state: previous version restarted; database ${db(2)} unchanged`);
     expect(io.err).toMatch(/next action: fix .* and run deploy again/);
+  });
+
+  it("[PROV-AC-002, MIG-AC-003] after a failing migration, the restarted previous version is reported restarted only once it answers healthy", async () => {
+    const t = deployedTarget(2);
+    t.answerDelayMs = 2000; // the restarted route answers 404 for its first 2 s
+    t.failingMigrations.set("app/0001_more", new Error("syntax error"));
+    const io = captureIo();
+    const result = await runDeploy(t, request({ migrations: histories(["app/0000_schema", "app/0001_more"]) }), io);
+    expect(result.status).toBe(1);
+    expect(t.calls.slice(-3)).toEqual([`dropDatabase ${db(3)}`, "startApp notes/test-abc", "checkHealth https://notes-test-abc.fake.example"]);
+    const started = t.stageState(stage).startedAt ?? Number.NaN;
+    expect(t.healthTries.filter((x) => x >= started)).toEqual([started, started + 1000, started + 2000]);
+    expect(io.err).toContain(`stage state: previous version restarted; database ${db(2)} unchanged`);
+    expect(io.err).not.toContain("not answering");
+  });
+
+  it("[PROV-AC-002, MIG-AC-003] a restarted previous version that does not answer within 30 s is reported as not answering, exit 1", async () => {
+    const t = deployedTarget(2);
+    t.answerDelayMs = 60_000;
+    t.failingMigrations.set("app/0001_more", new Error("syntax error"));
+    const io = captureIo();
+    const result = await runDeploy(t, request({ migrations: histories(["app/0000_schema", "app/0001_more"]) }), io);
+    expect(result.status).toBe(1);
+    expect(result.failure?.step).toBe("migrate");
+    expect(t.healthTries.at(-1)! - t.healthTries[0]!).toBe(30_000);
+    expect(io.err).toContain(`stage state: previous version restarted but not answering (status 404); database ${db(2)} unchanged`);
+    expect(io.err).not.toMatch(/previous version restarted;/);
+  });
+
+  it("[provisioning.md §2] a migration that fails after the copy still prints which copy ran, as does the after-copy abort", async () => {
+    const t = deployedTarget(2);
+    t.failingMigrations.set("app/0001_more", new Error("syntax error"));
+    const io = captureIo();
+    expect((await runDeploy(t, request({ migrations: histories(["app/0000_schema", "app/0001_more"]) }), io)).status).toBe(1);
+    expect(io.out).toContain(`copied database ${db(2)} into ${db(3)}: fake copy`);
+    const aborted = deployedTarget(2);
+    const abortIo = captureIo();
+    expect((await runDeploy(aborted, request({ migrations: histories(["app/0000_schema", "app/0001_more"]), abortAt: "after-copy" }), abortIo)).status).toBe(1);
+    expect(abortIo.out).toContain(`copied database ${db(2)} into ${db(3)}: fake copy`);
   });
 
   it("a failing check takes the same failure path", async () => {

@@ -241,10 +241,10 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
     migrationDatabase: (database) => databases.migrationDatabase(database),
     checkMigratedDatabase: (input) => databases.checkMigratedDatabase(input),
 
-    checkHealth: (stage, deployed) =>
+    checkHealth: async (stage, deployed) =>
       checkStageHealth({
         fetch: options.fetch ?? fetch,
-        publicOrigin: deployed.publicOrigin,
+        publicOrigin: deployed?.publicOrigin ?? (await origin(stage)),
         storagePreflight: (o) => options.files.storagePreflight({ accountId, bucket: filesBucketName(stage), origin: o }),
         ...(options.healthTimeoutMs === undefined ? {} : { timeoutMs: options.healthTimeoutMs }),
         ...(options.now === undefined ? {} : { now: options.now }),

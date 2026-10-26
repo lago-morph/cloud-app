@@ -220,8 +220,12 @@ export interface TargetOperations {
   /** The MIG step-4 check; throws with a message naming what failed. */
   checkMigratedDatabase(input: MigrationCheckInput): Promise<void>;
 
-  /** Deploy step 7: health endpoint, plus on a cloud target one CORS preflight to the stage's storage. */
-  checkHealth(stage: Stage, deployed: DeployedCode): Promise<HealthOutcome>;
+  /**
+   * Deploy step 7: health endpoint, plus on a cloud target one CORS preflight to the stage's
+   * storage, retried once a second for up to 30 s. Without `deployed` (the previous version
+   * restarted after a failed migration, DEC-0561), the stage's public origin as the target names it.
+   */
+  checkHealth(stage: Stage, deployed?: DeployedCode): Promise<HealthOutcome>;
 
   /** The stage's resources by exact identifier, and the databases the target lists. */
   listStageResources(stage: Stage): Promise<StageResources>;

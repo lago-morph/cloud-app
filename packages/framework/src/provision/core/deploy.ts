@@ -18,12 +18,14 @@
  * stopped. A failure at or after step 5 (the code deploy itself, the deferred secrets check, the
  * runner's after-code abort) turns the app off again too, and the failure says whether that worked.
  * `start: true` (`deploy --start`) clears the record and starts the app as usual.
- * A database copy's method (native export/import or row by row, DEC-0545) is printed.
+ * A database copy's method (native export/import or row by row, DEC-0545) is printed as soon as the
+ * copy returns, so also when a later migration step fails (DEC-0561). After a failed migration the
+ * previous version is reported restarted only once step 7's health wait finds it answering (DEC-0561).
  */
 import { applyMigrations, MigrationFailedError, type Histories } from "../../mig/apply.js";
 import { senderAddress } from "./account-settings.js";
 import { databaseName, matchStageDatabases, nextDatabaseName } from "./databases.js";
-import type { DeployedCode, Stage, StageDatabase, TargetOperations } from "./operations.js";
+import type { DeployedCode, HealthOutcome, Stage, StageDatabase, TargetOperations } from "./operations.js";
 import { EXIT, errorLine, line, messageOf, type ProvisionIo, type ProvisionStatus } from "./output.js";
 import { foreignResourcesMessage, noEmailDomainMessage } from "./setup-account.js";
 
@@ -99,9 +101,8 @@ export async function runDeploy(ops: TargetOperations, request: DeployRequest, i
       ops.deployInfrastructure({ stage, ...(current ? { database: current } : {}), ...mail }),
     );
 
-    const migrated = current ? await migrate(ops, request, current, keepStopped) : { database: await firstDatabase(ops, request) };
+    const migrated = current ? await migrate(ops, request, current, keepStopped, io) : { database: await firstDatabase(ops, request) };
     const { database } = migrated;
-    if (migrated.copyMethod !== undefined) line(io, `copied database ${current?.name} into ${database.name}: ${migrated.copyMethod}`);
     const copied = migrated.copyMethod === undefined ? {} : { copyMethod: migrated.copyMethod };
 
     let deployed: DeployedCode;
@@ -305,7 +306,13 @@ async function pendingCount(ops: TargetOperations, database: StageDatabase, migr
 }
 
 /** Step 4 on an existing database: MIG-REQ-006 steps 1–5; returns the database the code must use and how it was copied. */
-async function migrate(ops: TargetOperations, request: DeployRequest, current: StageDatabase, keepStopped: boolean): Promise<{ database: StageDatabase; copyMethod?: string }> {
+async function migrate(
+  ops: TargetOperations,
+  request: DeployRequest,
+  current: StageDatabase,
+  keepStopped: boolean,
+  io: ProvisionIo,
+): Promise<{ database: StageDatabase; copyMethod?: string }> {
   const { stage } = request;
   const pending = await step("migrate", `database ${current.name} unchanged; the app was not stopped`, "run deploy again", () =>
     pendingCount(ops, current, request.migrations),
@@ -317,6 +324,8 @@ async function migrate(ops: TargetOperations, request: DeployRequest, current: S
   try {
     await ops.stopApp(stage);
     next = await ops.copyDatabase(stage, current, nextName);
+    // provisioning.md §2: which copy ran, printed also when a later step fails (DEC-0561).
+    if (next.method !== undefined) line(io, `copied database ${current.name} into ${next.name}: ${next.method}`);
     if (request.abortAt === "after-copy") {
       throw abort("after the database copy", `the app is stopped; databases ${current.name} (current) and ${nextName} (copy) exist; the next deploy deletes the copy`);
     }
@@ -331,14 +340,16 @@ async function migrate(ops: TargetOperations, request: DeployRequest, current: S
     return { database: next, ...(next.method === undefined ? {} : { copyMethod: next.method }) };
   } catch (error) {
     if (error instanceof StepFailure) throw error;
-    const cleanupErrors = await restorePrevious(ops, stage, nextName, next, keepStopped);
+    const { errors: cleanupErrors, health } = await restorePrevious(ops, stage, nextName, next, keepStopped);
     const restarted = !cleanupErrors.some((e) => e.startsWith("restarting"));
     const leftBehind = cleanupErrors.some((e) => e.startsWith("deleting new database"));
     const previous = keepStopped
       ? "previous version left stopped, as recorded by stop"
-      : restarted
-        ? "previous version restarted"
-        : "previous version NOT restarted (start it with deploy again)";
+      : !restarted
+        ? "previous version NOT restarted (start it with deploy again)"
+        : health === undefined || health.ok
+          ? "previous version restarted"
+          : `previous version restarted but not answering (${healthSummary(health)})`;
     throw new StepFailure({
       step: "migrate",
       ...(error instanceof CheckFailedError ? { message: `the check of the migrated database failed: ${error.message}` } : migrationFailure(error)),
@@ -353,8 +364,19 @@ async function migrate(ops: TargetOperations, request: DeployRequest, current: S
 
 class CheckFailedError extends Error {}
 
-/** MIG-REQ-003: delete the new database (if it was created), restart the previous version (unless the stage is recorded as stopped). Never throws. */
-async function restorePrevious(ops: TargetOperations, stage: Stage, nextName: string, next: StageDatabase | undefined, keepStopped: boolean): Promise<string[]> {
+/**
+ * MIG-REQ-003: delete the new database (if it was created), restart the previous version (unless
+ * the stage is recorded as stopped) and run step 7's health wait on it, so that "restarted" means
+ * it answers again (PROV-AC-002, MIG-AC-003; DEC-0561). `health` is the wait's outcome, absent
+ * when the app was not (re)started. Never throws.
+ */
+async function restorePrevious(
+  ops: TargetOperations,
+  stage: Stage,
+  nextName: string,
+  next: StageDatabase | undefined,
+  keepStopped: boolean,
+): Promise<{ errors: string[]; health?: HealthOutcome }> {
   const errors: string[] = [];
   try {
     const created = next ?? matchStageDatabases(stage, (await ops.listStageResources(stage)).databases).find((d) => d.name === nextName);
@@ -362,13 +384,28 @@ async function restorePrevious(ops: TargetOperations, stage: Stage, nextName: st
   } catch (error) {
     errors.push(`deleting new database ${nextName}: ${messageOf(error)}`);
   }
-  if (keepStopped) return errors;
+  if (keepStopped) return { errors };
   try {
     await ops.startApp(stage);
   } catch (error) {
     errors.push(`restarting the previous version: ${messageOf(error)}`);
+    return { errors };
   }
-  return errors;
+  let health: HealthOutcome;
+  try {
+    health = await ops.checkHealth(stage);
+  } catch (error) {
+    health = { ok: false, message: messageOf(error) };
+  }
+  return { errors, health };
+}
+
+/** A failed health outcome's status and error code, or its message when it has neither. */
+function healthSummary(outcome: Extract<HealthOutcome, { ok: false }>): string {
+  const details = [outcome.status !== undefined ? `status ${outcome.status}` : undefined, outcome.code !== undefined ? `error code ${outcome.code}` : undefined].filter(
+    (d): d is string => d !== undefined,
+  );
+  return details.length > 0 ? details.join(", ") : outcome.message;
 }
 
 /** provisioning.md §2 "First Cloudflare deploy": the secrets are checked once step 5 created the runtime. */

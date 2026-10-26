@@ -109,6 +109,8 @@ Every endpoint can also answer 403 `AUTH.REQUEST_FORGERY` (AUTH-REQ-007) and 429
 6. the old password fails, the new one works;
 7. a burst of sign-in requests from one client gets 429 `AUTH.RATE_LIMITED` within PAR-258.
 
+check-login sends all its requests over one connection, so that its client IP is one IP (PAR-330, DEC-0561).
+
 It writes one evidence record with results for PWD-AC-009, AUTH-AC-011 and E2E-008, with exit status 0 only if every step passed. The address, password and tokens are never printed or recorded; the record names the run ID only.
 
 ## 3. Uses

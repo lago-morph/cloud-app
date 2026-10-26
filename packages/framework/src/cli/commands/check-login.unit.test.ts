@@ -6,6 +6,7 @@
  * the `admins` code (`changeAdminRole`) on that stage's accounts. Each step's failure is injected
  * and its message checked; no output or record carries the address, a password or a token.
  */
+import { Agent, EnvHttpProxyAgent } from "undici";
 import { describe, expect, it } from "vitest";
 import type { EvidenceRecord, WriteEvidenceInput } from "../../evidence/writer.js";
 import { RATE_LIMITS } from "../../auth/password/options.js";
@@ -18,6 +19,7 @@ import { readAccountSettings } from "../../provision/cloudflare/account-settings
 import { UsageError } from "../args.js";
 import { captureIo } from "../io.test-support.js";
 import { changeAdminRole, type AccountsDatabase } from "./admins.js";
+import { oneConnectionDispatcher } from "../one-connection.js";
 import { checkLoginCommand, FORGED_HOST, NO_MAIL_SETTLE_MS, SIGN_IN_LIMIT, SINK_WAIT_MS, type CheckLoginDeps } from "./check-login.js";
 
 const ORIGIN = "https://reference-prodcheck.owner-sub.workers.dev";
@@ -63,7 +65,7 @@ function fakeStage(cloud: FakeCloud, fault?: Fault) {
   const accounts = new Map<string, Account>();
   const tokens = new Map<string, { kind: "verify" | "reset"; email: string }>();
   const sessions = new Map<string, string>();
-  const seen: { headers: Headers; path: string }[] = [];
+  const seen: { headers: Headers; path: string; dispatcher: unknown }[] = [];
   let signIns = 0;
   let next = 1;
   const json = (status: number, body: unknown, headers: Record<string, string> = {}) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
@@ -77,7 +79,7 @@ function fakeStage(cloud: FakeCloud, fault?: Fault) {
   const fetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const url = new URL(String(input));
     const headers = new Headers(init?.headers);
-    seen.push({ headers, path: url.pathname });
+    seen.push({ headers, path: url.pathname, dispatcher: (init as { dispatcher?: unknown } | undefined)?.dispatcher });
     const body = (init?.body === undefined ? {} : JSON.parse(String(init.body))) as Record<string, string>;
     const sessionId = /__Host-session=([^;]+)/.exec(headers.get("cookie") ?? "")?.[1];
     if (init?.method === "POST" && headers.get("origin") !== ORIGIN) return error(403, "AUTH.REQUEST_FORGERY");
@@ -165,6 +167,7 @@ function harness(options: { fault?: Fault; changed?: readonly string[]; origin?:
   let clock = 0;
   const sleeps: number[] = [];
   const passwords = [...PASSWORDS];
+  const dispatcher = new Agent({ connections: 1 });
   const deps: CheckLoginDeps = {
     env: options.env ?? {},
     deployedOrigin: () => (options.origin === null ? undefined : (options.origin ?? ORIGIN)),
@@ -176,6 +179,7 @@ function harness(options: { fault?: Fault; changed?: readonly string[]; origin?:
     address: sinkAddress,
     deliveryStatus: async (domain, to, since) => describeDelivery(await lastDeliveryEvent(cloud.api, ACCOUNT, domain, to, since)),
     fetch: stage.fetch,
+    dispatcher,
     writeEvidence: (input) => {
       records.push(input);
       return { recordPath: `/repo/validation/${input.record.target}/${input.record.runId}.json`, rawDir: "" };
@@ -195,7 +199,7 @@ function harness(options: { fault?: Fault; changed?: readonly string[]; origin?:
     const status = await checkLoginCommand(deps)(args, io);
     return { status, io, out: io.out + io.err };
   };
-  return { cloud, stage, records, run, sleeps, record: (): EvidenceRecord => records[0]!.record };
+  return { cloud, stage, records, run, sleeps, dispatcher, record: (): EvidenceRecord => records[0]!.record };
 }
 
 const ADDRESS = `sink+${RUN_ID}@t.example.test`;
@@ -266,6 +270,14 @@ describe("check-login: the steps (password.md §2)", () => {
     const hidden = (h.records[0]!.redactions ?? []).map((x) => x.value);
     expect(hidden).toEqual(expect.arrayContaining([ADDRESS, ...PASSWORDS, "owner-sub"]));
     expect(hidden.some((v) => v.startsWith("tok-verify-")) && hidden.some((v) => v.startsWith("tok-reset-"))).toBe(true);
+  });
+
+  it("[PWD §2 step 7] sends every request to the stage over the one dispatcher, so the burst comes from one client IP", async () => {
+    const h = harness();
+    const r = await h.run();
+    expect(r.status, r.out).toBe(0);
+    expect(h.stage.seen.length).toBeGreaterThan(SIGN_IN_LIMIT + 5);
+    expect(h.stage.seen.every((s) => s.dispatcher === h.dispatcher)).toBe(true);
   });
 
   it.each<[Fault, number, RegExp, "failed" | "passed" | "not-run"]>([
@@ -340,5 +352,15 @@ describe("check-login: the steps (password.md §2)", () => {
     failing.cloud.graphqlErrors = [{ message: "not authorized for that dataset" }];
     const b = await failing.run();
     expect(b.io.err).toMatch(/within 180 s; the delivery status could not be read \(the Email Sending analytics query failed: not authorized for that dataset\)/);
+  });
+});
+
+describe("check-login: one connection (PAR-330)", () => {
+  it("is one connection per origin, through the environment's proxy when one is set", () => {
+    const direct = oneConnectionDispatcher({});
+    expect(direct).toBeInstanceOf(Agent);
+    expect(direct).not.toBeInstanceOf(EnvHttpProxyAgent);
+    expect(oneConnectionDispatcher({ HTTPS_PROXY: "http://proxy.invalid:3128", NODE_USE_ENV_PROXY: "1" })).toBeInstanceOf(EnvHttpProxyAgent);
+    expect(oneConnectionDispatcher({ http_proxy: "http://proxy.invalid:3128" })).toBeInstanceOf(EnvHttpProxyAgent);
   });
 });
