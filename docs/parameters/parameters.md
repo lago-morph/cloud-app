@@ -99,6 +99,8 @@ The owner approved these values on 2026-10-25 ("Approve recommended values", DEC
 | PAR-341 | Mode of `.env.cloudflare` after every write | `600` (owner read and write only) | ai-proposed | Set by every framework write, also on an existing file with a wider mode (DEC-0571). Has no effect on Windows. |
 | PAR-342 | The bootstrap token's line after use | `# CLOUDFLARE_BOOTSTRAP_TOKEN=deleted by setup process` | owner | Replaces the `CLOUDFLARE_BOOTSTRAP_TOKEN=` line once the token has deleted itself (DEC-0571, plan-setup-wizard §4.2). |
 | PAR-343 | The `.gitignore` marker that keeps setup from adding `.env.cloudflare` | `# keep-env-cloudflare-tracked` (a whole line of the project's `.gitignore`) | ai-proposed | Plan-setup-wizard §4.3 step 1; the warnings still print (DEC-0572). |
+| PAR-360 | Time limit of each host of `cloudflare-setup`'s network check | 10 seconds | ai-proposed | `api.cloudflare.com`, the account's R2 storage host and its `workers.dev` subdomain; any HTTPS answer counts as reachable (plan-setup-wizard §4.3 step 8, DEC-0590). |
+| PAR-361 | The setting naming API token IDs `cloudflare-setup` never updates or deletes | `PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS` (environment; comma-separated token IDs) | ai-proposed | Added to the command's `protectedTokenIds` (DEC-0589); the live pass lists the owner's token there. |
 
 ## Secrets
 
