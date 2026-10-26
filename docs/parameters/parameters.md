@@ -128,6 +128,8 @@ Deferred to a later release (DEC-0508): these parameters belong to the AWS targe
 | PAR-070 | Maximum size of the skill's top-level router document | 8,000 UTF-8 bytes | ai-proposed | |
 | PAR-071 | Maximum size of each capability reference document | 12,000 UTF-8 bytes | ai-proposed | |
 | PAR-072 | Maximum size of each complete example | 20,000 UTF-8 bytes | ai-proposed | |
+| PAR-370 | How long `version-check` stays quiet about a newer npm release it has mentioned | 12 hours | ai-proposed | Stands for "once per session" (plan-setup-wizard §4.8a, DEC-0594): the mark is an empty file in the OS temp directory, keyed by the app folder and the release, so a cloud sandbox forgets it with the session and a computer after this long. |
+| PAR-371 | Time limit of each `version-check` network lookup | 5 seconds | ai-proposed | The npm registry's latest version and the release tag's CHANGELOG (DEC-0594). A lookup that fails or runs out of time skips the npm row quietly. |
 
 ## Testing
 

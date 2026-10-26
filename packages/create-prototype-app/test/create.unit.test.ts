@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { appNameFrom, create, FRAMEWORK_PACKAGE, packageNameFrom, SKILL_TARGET } from "../lib/create.mjs";
+import { appNameFrom, copySkill, create, firstCommit, FRAMEWORK_PACKAGE, initRepo, nextStep, packageNameFrom, SKILL_TARGET } from "../lib/create.mjs";
 import { bundle } from "../scripts/bundle.mjs";
 
 const PKG_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -126,6 +126,20 @@ describe("create", () => {
     expect(readFileSync(join(target, SKILL_TARGET, "SKILL.md"), "utf8")).toBe(readFileSync(join(SKILL, "SKILL.md"), "utf8"));
   });
 
+  it("gives every skill copy a VERSION marker from the plugin manifest, and keeps it when copying a copy", () => {
+    const plugin = JSON.parse(readFileSync(join(SKILL, ".claude-plugin", "plugin.json"), "utf8")) as { version: string };
+    expect(copySkill(SKILL, join(root, "a"))).toBe(plugin.version);
+    expect(readFileSync(join(root, "a", "VERSION"), "utf8")).toBe(`${plugin.version}\n`);
+    expect(copySkill(join(root, "a"), join(root, "b"))).toBe(plugin.version);
+    expect(readFileSync(join(root, "b", "VERSION"), "utf8")).toBe(`${plugin.version}\n`);
+  });
+
+  it("lists .env.cloudflare in the new app's .gitignore", () => {
+    const target = join(root, "app");
+    create({ target, templateDir: TEMPLATE, frameworkSpec: "0.1.0" });
+    expect(readFileSync(join(target, ".gitignore"), "utf8").split("\n")).toContain(".env.cloudflare");
+  });
+
   it("refuses a non-empty folder without changing it, and overwrites with force", () => {
     const target = join(root, "app");
     mkdirSync(target);
@@ -153,24 +167,80 @@ describe("bundle (prepack)", () => {
   });
 });
 
-describe("command line", () => {
-  const run = (...args: string[]) => spawnSync(process.execPath, [BIN, ...args], { cwd: root, encoding: "utf8" });
+/** A git identity for the first commit, as a configured machine has; CI runners have none. */
+const GIT_ENV = { GIT_AUTHOR_NAME: "Test", GIT_AUTHOR_EMAIL: "test@example.com", GIT_COMMITTER_NAME: "Test", GIT_COMMITTER_EMAIL: "test@example.com" };
+const git = (cwd: string, ...args: string[]) => spawnSync("git", args, { cwd, encoding: "utf8", env: { ...process.env, ...GIT_ENV } });
 
-  it("creates an app with the skill and prints the next steps and the plugin commands", () => {
+describe("git (never fails the starter)", () => {
+  it("initializes a repository and makes the first commit of everything not ignored", () => {
+    const target = join(root, "app");
+    create({ target, templateDir: TEMPLATE, frameworkSpec: "0.1.0" });
+    writeFileSync(join(target, ".dev.vars"), "SECRET_API_KEY=local\n");
+    expect(initRepo(target)).toEqual({ status: "initialized" });
+    const saved = { ...process.env };
+    Object.assign(process.env, GIT_ENV);
+    try {
+      expect(firstCommit(target, "First")).toEqual({ ok: true });
+    } finally {
+      for (const k of Object.keys(GIT_ENV)) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+    }
+    const tracked = git(target, "ls-files").stdout.split("\n");
+    expect(tracked).toContain("src/app.ts");
+    expect(tracked).toContain(".gitignore");
+    expect(tracked).not.toContain(".dev.vars");
+  });
+
+  it("warns when git is missing, and when the commit fails", () => {
+    const target = join(root, "app");
+    mkdirSync(target);
+    const missing = initRepo(target, { git: join(root, "no-such-git") });
+    expect(missing.status).toBe("warned");
+    expect(missing.message).toMatch(/^WARNING: git was not found/);
+    const failed = firstCommit(target, "First", { git: join(root, "no-such-git") });
+    expect(failed.ok).toBe(false);
+    expect(failed.message).toMatch(/^WARNING: the first commit failed\. Commit yourself: git add -A && git commit/);
+  });
+
+  it("leaves a folder inside an existing repository to that repository", () => {
+    expect(git(root, "init", "-q").status).toBe(0);
+    const target = join(root, "sub");
+    mkdirSync(target);
+    expect(initRepo(target).status).toBe("inside-repo");
+    expect(existsSync(join(target, ".git"))).toBe(false);
+  });
+});
+
+describe("command line", () => {
+  const run = (...args: string[]) => spawnSync(process.execPath, [BIN, ...args], { cwd: root, encoding: "utf8", env: { ...process.env, ...GIT_ENV } });
+
+  it("creates an app with the skill and a first commit, and ends with the next step", () => {
     const r = run("demo", "--no-install", "--framework", "0.1.0");
     expect(r.stderr).toBe("");
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("Created demo in");
-    expect(r.stdout).toContain("/plugin marketplace add lago-morph/cloud-app");
-    expect(r.stdout).toContain("/plugin install prototype-framework@lago-morph");
+    expect(r.stdout).toContain("Made the first git commit.");
+    expect(r.stdout).not.toContain("/plugin");
+    expect(r.stdout.trimEnd().split("\n").at(-1)).toBe("cd demo, then `npm install` and `npm run dev`, or open this folder in Claude Code and say what to build.");
     expect(existsSync(join(root, "demo", SKILL_TARGET, "SKILL.md"))).toBe(true);
+    expect(git(join(root, "demo"), "ls-files", SKILL_TARGET).stdout).toContain("SKILL.md");
   });
 
-  it("defaults the framework spec to its own version", () => {
-    expect(run("demo", "--no-install", "--no-skill").status).toBe(0);
+  it("defaults the framework spec to its own version, and without the skill names the plugin", () => {
+    const r = run("demo", "--no-install", "--no-skill");
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("/plugin marketplace add lago-morph/cloud-app");
+    expect(r.stdout).toContain("/plugin install prototype-framework@lago-morph");
     const pkg = JSON.parse(readFileSync(join(root, "demo", "package.json"), "utf8")) as { dependencies: Record<string, string> };
     expect(pkg.dependencies[FRAMEWORK_PACKAGE]).toBe(SELF.version);
     expect(existsSync(join(root, "demo", ".claude"))).toBe(false);
+  });
+
+  it("prints exactly plan §3.1's closing line, with the folder as typed", () => {
+    expect(nextStep("my-app")).toBe("cd my-app, then `npm run dev`, or open this folder in Claude Code and say what to build.");
+    expect(nextStep(".")).toBe("Run `npm run dev`, or open this folder in Claude Code and say what to build.");
   });
 
   it("exits 2 with usage on bad arguments, and 1 on a non-empty folder", () => {
