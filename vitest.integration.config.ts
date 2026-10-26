@@ -5,7 +5,7 @@ import { defineConfig } from "vitest/config";
 // (playwright.config.ts, project "integration"), so the globs never overlap (PAR-116).
 export default defineConfig({
   test: {
-    include: ["packages/framework/test/integration/**/*.test.ts", "tests/compliance/criteria/**/*.test.ts", "tests/skill/**/*.test.ts"],
+    include: ["packages/framework/test/integration/**/*.test.ts", "tests/compliance/criteria/**/*.test.ts", "tests/skill/**/*.test.ts", "packages/create-prototype-app/test/**/*.offline.test.ts"],
     pool: "forks",
     testTimeout: 60_000,
   },

@@ -1,0 +1,14 @@
+{
+  "name": "prototype-framework",
+  "displayName": "Prototype framework",
+  "version": "0.1.0",
+  "description": "Build, test and deploy small web apps on @lago-morph/prototype-framework, locally and on Cloudflare",
+  "author": {
+    "name": "Lagomorph Labs",
+    "url": "https://github.com/lago-morph"
+  },
+  "homepage": "https://github.com/lago-morph/cloud-app/blob/main/skill/SKILL.md",
+  "repository": "https://github.com/lago-morph/cloud-app",
+  "license": "MIT",
+  "keywords": ["framework", "cloudflare", "hono", "skill"]
+}

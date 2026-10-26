@@ -1,6 +1,27 @@
 {
   "name": "@lago-morph/prototype-framework",
   "version": "0.1.0",
+  "description": "A small portable web-app framework: one app runs unchanged locally and on Cloudflare, with SQL, KV, files, configuration, secrets, logging and login behind one API.",
+  "keywords": [
+    "framework",
+    "prototype",
+    "cloudflare",
+    "workers",
+    "hono",
+    "d1",
+    "r2"
+  ],
+  "license": "MIT",
+  "author": "Lagomorph Labs",
+  "homepage": "https://github.com/lago-morph/cloud-app/tree/main/packages/framework#readme",
+  "bugs": {
+    "url": "https://github.com/lago-morph/cloud-app/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lago-morph/cloud-app.git",
+    "directory": "packages/framework"
+  },
   "type": "module",
   "engines": {
     "node": "22.22.0"
@@ -41,12 +62,17 @@
   "files": [
     "bin",
     "dist",
+    "!dist/**/*.test-support.*",
     "migrations"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
   },
   "dependencies": {
     "@electric-sql/pglite": "0.5.8",
