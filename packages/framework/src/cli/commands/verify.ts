@@ -6,9 +6,14 @@
  * test-runner process. Every step runs and reports, so one run shows every problem
  * (DEC-0238); `verify` fails if any step fails or no test ran. Output holds no clock
  * times or durations, so two runs on the same app print the same text.
+ *
+ * Before the first step and again before the verdict, `verify` prints the git warnings for the
+ * app's `.env.cloudflare` (not ignored, tracked; plan-setup-wizard §4.5, DEC-0572), on every run.
+ * They never fail `verify` and never change its exit status.
  */
 import type { Dialect } from "../../sql/dialect.js";
 import { parseOptions } from "../args.js";
+import { formatGitWarning } from "../cloudflare-settings.js";
 import { EXIT, type Command } from "../io.js";
 
 /** One problem found by a static step, in the shape of CHECK's diagnostics. */
@@ -47,6 +52,8 @@ export interface VerifyDeps {
   migrationChecker(appDir: string): Promise<readonly Diagnostic[]>;
   zodVersion(appDir: string): Promise<{ readonly expected: string; readonly installed: string | undefined }>;
   runTests(appDir: string, dialect: Dialect): Promise<TestRun>;
+  /** The git warnings for the app's `.env.cloudflare` (DEC-0572); printed, never a failure. */
+  gitSafetyWarnings?(appDir: string): readonly string[];
 }
 
 export const VERIFY_DIALECTS: readonly Dialect[] = ["sqlite", "postgres"];
@@ -106,6 +113,16 @@ export function verifyCommand(deps: VerifyDeps): Command {
     parseOptions(args, []);
     const dir = io.cwd;
     const failed: string[] = [];
+    let gitWarnings: readonly string[] = [];
+    try {
+      gitWarnings = deps.gitSafetyWarnings?.(dir) ?? [];
+    } catch {
+      // The git check never fails verify (DEC-0572).
+    }
+    const printGitWarnings = (): void => {
+      for (const w of gitWarnings) io.stdout(formatGitWarning("verify", w));
+    };
+    printGitWarnings();
     const staticStep = async (label: string, run: () => Promise<readonly Diagnostic[]>): Promise<void> => {
       io.stdout(`verify: ${label}\n`);
       const diagnostics = sorted(await run());
@@ -139,6 +156,7 @@ export function verifyCommand(deps: VerifyDeps): Command {
       if (problem !== undefined) failed.push(label);
       io.stdout(`verify: ${label}: ${problem ?? "passed"} (${testCounts(run)})\n`);
     }
+    printGitWarnings();
     if (failed.length > 0) {
       io.stdout(`verify failed: ${failed.join(", ")}\n`);
       return EXIT.failed;

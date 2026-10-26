@@ -54,7 +54,7 @@ export const cloudflareOperations: OperationsFactory =
     const env = options.env;
     if (options.requireCredentials) {
       const missing = missingCredentials(env);
-      if (missing.length > 0) throw new Error(`missing Cloudflare credentials: ${missing.join(", ")} (set them in the environment; values are never printed)`);
+      if (missing.length > 0) throw new Error(`missing Cloudflare credentials: ${missing.join(", ")} (set them in the environment or in .env.cloudflare; values are never printed)`);
     }
     const accountId = env.CLOUDFLARE_ACCOUNT_ID ?? "";
     const withFetch = options.fetch === undefined ? {} : { fetch: options.fetch };
