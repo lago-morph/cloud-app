@@ -142,16 +142,15 @@ describe(".env.cloudflare and the environment (plan-setup-wizard §4.2; DEC-0570
     if (isPosix) expect(mode()).toBe(0o600);
   });
 
-  it("never changes a value already in the file; adds a missing line; creates an absent file at mode 600", () => {
+  it("never changes a value already in the file; adds a missing line; never creates an absent file (plan §3.4, SETUP-AC-002)", () => {
     write(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_EMAIL_DOMAIN=kept.example\n`);
     expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account", CLOUDFLARE_EMAIL_DOMAIN: "other.example" })).toEqual(["CLOUDFLARE_ACCOUNT_ID"]);
     expect(read()).toBe(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_EMAIL_DOMAIN=kept.example\nCLOUDFLARE_ACCOUNT_ID=fake-account\n`);
     expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "another" })).toEqual([]);
 
     rmSync(file());
-    expect(fillInSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "mail.example" })).toEqual(["CLOUDFLARE_EMAIL_DOMAIN"]);
-    expect(read()).toBe("CLOUDFLARE_EMAIL_DOMAIN=mail.example\n");
-    if (isPosix) expect(mode()).toBe(0o600);
+    expect(fillInSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "mail.example" })).toEqual([]);
+    expect(existsSync(file())).toBe(false);
   });
 
   it("refuses a value it could not write back as one line, without naming the value", () => {

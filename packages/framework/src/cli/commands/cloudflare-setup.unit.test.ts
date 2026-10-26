@@ -347,13 +347,14 @@ describe("cloudflare-setup: later runs (plan §3.4)", () => {
     expect(readEnvFile(dir)).toBe(before);
   });
 
-  it("valid tokens already in the environment are used without any prompt; the file gets the account and domain", async () => {
+  it("valid tokens already in the environment are used without any prompt; no .env.cloudflare is created (plan §3.4, SETUP-AC-002)", async () => {
     const world = await setUpWorld();
     const dir = project();
     const { status, io } = await run(world, dir, { env: { CLOUDFLARE_API_TOKEN: EVERYDAY_VALUE, CLOUDFLARE_EMAIL_DOMAIN: DOMAIN } });
     expect(status).toBe(0);
     expect(io.out).not.toMatch(/https:\/\/dash\.cloudflare\.com\/\?to=/);
-    expect(readEnvFile(dir)).toBe(`CLOUDFLARE_EMAIL_DOMAIN=${DOMAIN}\nCLOUDFLARE_ACCOUNT_ID=${ACCOUNT}\n`);
+    expect(io.out).toContain("Everything is already set up and current: nothing to do.");
+    expect(existsSync(join(dir, ".env.cloudflare"))).toBe(false);
   });
 
   it("a second project on the same account: the copied file is enough, no bootstrap token needed", async () => {

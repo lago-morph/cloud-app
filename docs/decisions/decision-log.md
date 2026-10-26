@@ -5585,7 +5585,7 @@ Origin: orchestrator, pending owner review (the existing-repository rule); the r
 ### DEC-0597 — The template app gains the npm scripts `version-check`, `upgrade` and `cloudflare-setup`
 Origin: ai-proposed · Status: accepted · Amends: CLI-REQ-001 (two commands) · Affects: `apps/template/package.json`, `src/cli/main.ts`, `src/cli/main.unit.test.ts`, cli.md
 
-`version-check` and `upgrade` join CLI-REQ-001's table and the template's scripts. `cloudflare-setup` points at `prototype-framework cloudflare-setup`, which batch 4 adds; until then that script ends with "unknown command". CLI-AC-001's local part (`tests/compliance/criteria/cli/commands.test.ts`) lists the commands it runs; the test author adds the two new ones.
+`version-check` and `upgrade` join CLI-REQ-001's table and the template's scripts. `cloudflare-setup` points at `prototype-framework cloudflare-setup`, which batch 4 adds (DEC-0584). CLI-AC-001's local part (`tests/compliance/criteria/cli/commands.test.ts`) lists the commands it runs; the test author adds the two new ones.
 
 ## Setup wizard, batch 4: the `cloudflare-setup` state machine (2026-10-26)
 
@@ -5623,6 +5623,7 @@ Origin: ai-proposed (review findings on DEC-0570, DEC-0571, DEC-0577, DEC-0579) 
 - **Other fields kept.** `writeAccountSettings` keeps every other field of the stored object (DEC-0577); a changed email domain drops only the setup record's fields (`setupVersion`, `frameworkVersion`, `appliedAt`, `completedSteps`), which described the old domain, until the setup writes them for the new one. It reads the object before writing.
 - `./provision` exports `PERMISSIONS_VERSION` and `ACCOUNT_SETUP_VERSION`, which `upgrade` reads from a fresh process (DEC-0595).
 - **Token sources** (review of DEC-0570, DEC-0571): a `.env.cloudflare` that is a symbolic link is written through to its target (temporary file and rename in the target's folder, mode 600), so the link stays; an environment value of only whitespace is absent everywhere, also in `missingCredentials` and in the merged environment when the file has no value.
+- **No file is created to fill in** (plan §3.4, SETUP-AC-002): `fillInSettings` fills only an existing `.env.cloudflare`. When every setting is in the environment and no file exists, a run on a set-up account writes nothing and says "already set up"; copying the file to start another project applies only to a project that has one.
 
 ### DEC-0588 — Exit status, the plan check, and when the bootstrap token is kept
 Origin: orchestrator, pending owner review · Status: accepted · Affects: `src/provision/cloudflare/cloudflare-setup.ts`, CLI-REQ-003
@@ -5644,8 +5645,6 @@ Origin: owner (never print a token value, an account ID, a zone ID or the `worke
 
 - Messages name settings, account names, the email domain and zone names, permission names and HTTP statuses only. The network check names each host by its kind: "the account's R2 storage host (`<account ID>.r2.cloudflarestorage.com`)", "the account's workers.dev subdomain (`<subdomain>.workers.dev`)", with where to change a cloud environment's network access (allow `api.cloudflare.com`, `*.r2.cloudflarestorage.com`, `*.workers.dev`). Any HTTPS answer within PAR-360 counts as reachable.
 - **Backstop.** Every line the run prints passes a redaction of each token value, account ID, zone ID, token ID and the subdomain known to the run (`[hidden]`), so a message from a lower layer (for example an API request's "got no response", which names its path) cannot leak one. A subdomain that is part of a printed name is hidden there too. The unit tests check that no run's output needs it.
-
-`version-check` and `upgrade` join CLI-REQ-001's table and the template's scripts. `cloudflare-setup` points at `prototype-framework cloudflare-setup`, which batch 4 adds (DEC-0584). CLI-AC-001's local part (`tests/compliance/criteria/cli/commands.test.ts`) lists the commands it runs; the test author adds the two new ones.
 
 ## Setup wizard, batch 6: the skill, the settings deny rule, the quickstart, the docs and the spec (2026-10-26)
 
