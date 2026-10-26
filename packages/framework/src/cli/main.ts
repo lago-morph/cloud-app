@@ -6,7 +6,7 @@
 import { UsageError } from "./args.js";
 import { describeFailure } from "./failure.js";
 import { EXIT, type CliIo, type Command } from "./io.js";
-import { buildBinding, cloud, devBinding, generateMigrationBinding, mailBinding, resetLocalBinding, secretsBinding, verifyBinding } from "./wiring.js";
+import { buildBinding, cloud, devBinding, generateMigrationBinding, mailBinding, resetLocalBinding, secretsBinding, upgradeBinding, verifyBinding, versionCheckBinding } from "./wiring.js";
 
 export { EXIT, type CliIo, type Command } from "./io.js";
 
@@ -14,12 +14,6 @@ export interface Entry {
   readonly summary: string;
   readonly run: Command;
 }
-
-/** A command loaded when it runs, so one command never loads another's tooling. */
-const lazy =
-  (load: () => Promise<Command>): Command =>
-  async (args, io) =>
-    (await load())(args, io);
 
 /** `smoke` (C-04; never loads Vitest's Node API for other commands), with the cloud process check (D-05) in front. */
 const smokeBinding: Command = cloud("smoke", async (env) => {
@@ -37,9 +31,6 @@ const setupAccountBinding: Command = cloud("setup-account", async (env) => (awai
 const checkLoginBinding: Command = cloud("check-login", async (env) => (await import("./commands/check-login.js")).checkLoginBinding(env));
 /** `admins` (CLI-REQ-005): the local D1, or the D1 HTTP API on Cloudflare. */
 const adminsBinding: Command = cloud("admins", async (env) => (await import("./commands/admins.js")).adminsBinding(env));
-/** `version-check` and `upgrade` (plan-setup-wizard §4.8a; DEC-0594, DEC-0595). */
-const versionCheckBinding: Command = lazy(async () => (await import("./commands/version-check.js")).versionCheckBinding());
-const upgradeBinding: Command = lazy(async () => (await import("./commands/upgrade.js")).upgradeBinding());
 
 const COMMANDS: Readonly<Record<string, Entry>> = {
   dev: { summary: "run the app locally on http://localhost:<port>", run: devBinding },
