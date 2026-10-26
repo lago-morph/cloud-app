@@ -161,7 +161,7 @@ describe("deploy sequence (PROV-REQ-002, MIG-REQ-006)", () => {
     expect(result.failure?.step).toBe("migrate");
     expect(t.healthTries.at(-1)! - t.healthTries[0]!).toBe(30_000);
     expect(io.err).toContain(`stage state: previous version restarted but not answering (status 404); database ${db(2)} unchanged`);
-    expect(io.err).not.toMatch(/previous version restarted;/);
+    expect(io.err).not.toContain(`stage state: previous version restarted; database ${db(2)} unchanged`);
   });
 
   it("[provisioning.md §2] a migration that fails after the copy still prints which copy ran, as does the after-copy abort", async () => {
@@ -186,7 +186,8 @@ describe("deploy sequence (PROV-REQ-002, MIG-REQ-006)", () => {
     expect(t.databaseNames(stage)).toEqual([db(2)]);
     expect(t.answering(stage)).toBe(db(2));
     expect(io.err).toMatch(/check of the migrated database failed: row count of notes changed/);
-    expect(io.err).toContain("previous version restarted");
+    expect(io.err).toContain(`stage state: previous version restarted; database ${db(2)} unchanged`);
+    expect(io.err).not.toContain("not answering");
   });
 
   it("failing stop, copy or old-database deletion also restart the previous version on the unchanged database", async () => {
@@ -198,7 +199,8 @@ describe("deploy sequence (PROV-REQ-002, MIG-REQ-006)", () => {
       expect(t.databaseNames(stage), op).toEqual([db(2)]);
       expect(t.answering(stage), op).toBe(db(2));
       expect(io.err, op).toContain(`${op} broke`);
-      expect(io.err, op).toContain("previous version restarted");
+      expect(io.err, op).toContain(`stage state: previous version restarted; database ${db(2)} unchanged`);
+      expect(io.err, op).not.toContain("not answering");
     }
   });
 
