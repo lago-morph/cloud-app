@@ -52,8 +52,7 @@ Owner check of the 12-group bootstrap link (2026-10-26):
 
 Owner check of the 7-group everyday link (2026-10-26): all groups arrived ticked. The 3 zone groups (Zone Read, Zone Analytics Read, Email Routing Rules Read) were ticked, and the account summary listed Workers Scripts Write, Workers R2 Storage Write, D1 Write "+1 more" (Email Sending Read). It has the same entire-account scope as the bootstrap link.
 
-Not yet verified:
-- **Setup script:** is a skill written to `~/.claude/skills` by a cloud environment setup script loaded? (§4.8)
+Owner check of the setup script (2026-10-26): a cloud environment setup script that copies the skill into `~/.claude/skills/prototype-framework` makes it available in new sessions. A session on a repository with no committed copy listed `prototype-framework` among its skills.
 
 ## 3. User flows
 
@@ -185,8 +184,8 @@ The everyday token reads the record through R2, then checks with its own permiss
 - **Text:** a short "Cloudflare setup" section that runs `npm run cloudflare-setup` and relays its output as is. It covers the rules of §4.5 and §4.6, and what to do on each of the setup command's stop messages.
 - **`owner-tasks.md`:** rewritten around the two links and one command. README §2–§3 shrink to a pointer.
 
-### 4.8 Getting the skill into an empty cloud session (to test)
-A cloud environment setup script that copies the skill, pinned to a release tag, into `~/.claude/skills/prototype-framework`:
+### 4.8 Getting the skill into an empty cloud session (verified 2026-10-26)
+This is the recommended cloud start. A cloud environment setup script copies the skill, pinned to a release tag, into `~/.claude/skills/prototype-framework`, and every new session in that environment has it, whatever the repository:
 ```sh
 set -euo pipefail
 d=$(mktemp -d)
@@ -196,7 +195,9 @@ rm -rf ~/.claude/skills/prototype-framework
 cp -r "$d/skill" ~/.claude/skills/prototype-framework
 rm -rf "$d"
 ```
-The docs don't say whether such a skill is loaded. The owner tests it by adding the script to an environment and asking a new session which skills it has. If it works, this becomes the recommended cloud start, alongside the copy committed in each app repository. If it doesn't, the cloud start is a repository made with the starter.
+- **The quickstart** gives this script with the current release tag filled in.
+- **A starter-made repository** still carries the committed copy in `.claude/skills/`, for environments without the script and for the command line.
+- **Versions:** when both copies exist they may differ. The skill's first step checks its own version against the app's framework version and says which to update.
 
 ### 4.9 Docs
 - **New `QUICKSTART.md`:** one page covering local in one line, Cloudflare in one command, cloud and command-line variants, and the requirements.
@@ -239,7 +240,6 @@ The docs don't say whether such a skill is loaded. The owner tests it by adding 
   5. a bad-paste message.
   
   These need a dashboard-made bootstrap token: the API can't create one (§2). So that run needs the owner to supply one, or else uses the account's existing dashboard token, read-only except for its own temporary tokens.
-- **Owner check, once:** the setup-script skill load (§4.8).
 
 ## 7. Work breakdown
 1. **Permission list and deep links** (§4.1): code, generated tables, unit tests.
