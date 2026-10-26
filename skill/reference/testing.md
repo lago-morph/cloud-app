@@ -4,8 +4,8 @@ Read this when you write or fix app tests, write the smoke test, test time-depen
 
 ## What runs your tests
 
-- `npx prototype-framework verify` runs every `tests/**/*.test.ts` file (PAR-116) with Vitest twice, once on SQLite and once on Postgres, each in its own process, with 60 s test and hook timeouts. It fails if any test fails or if no test passed. Tests must need no network.
-- `npx prototype-framework smoke --target <t> --stage <s>` runs only `tests/smoke/**/*.test.ts`, against the running `dev` server (`--target local`) or against a deployed **test** stage (a stage whose name starts with `test-`). It refuses to run when tracked files differ from the last commit (the evidence record names the commit), writes an evidence record to `validation/<target>/<runId>.json` at the top of the git repository that holds the app (the app directory when the app is its own repository; commit the record with the run's commit), and prints the stage's log location for the day.
+- `npm run verify` runs every `tests/**/*.test.ts` file (PAR-116) with Vitest twice, once on SQLite and once on Postgres, each in its own process, with 60 s test and hook timeouts. It fails if any test fails or if no test passed. Tests must need no network.
+- `npm run smoke -- --target <t> --stage <s>` runs only `tests/smoke/**/*.test.ts`, against the running `dev` server (`--target local`) or against a deployed **test** stage (a stage whose name starts with `test-`). It refuses to run when tracked files differ from the last commit (the evidence record names the commit), writes an evidence record to `validation/<target>/<runId>.json` at the top of the git repository that holds the app (the app directory when the app is its own repository; commit the record with the run's commit), and prints the stage's log location for the day.
 - An app is not done on a cloud until its smoke test has passed on a deployed stage there.
 - Your tests and your smoke test reach the app only through its API; behaviour that exists only in the page (how text renders, the clipboard, an image displaying) is checked by the framework's browser tests, not the app's, so keep page text to `textContent` (`no-raw-html`), test the API side, and do not add a browser driver or raise this as a framework issue.
 
@@ -38,7 +38,7 @@ Keep it short: the health route (`GET /api/__framework/health` answers 204), one
 
 `t.request` sends only to the app: a URL on any other origin is refused before anything is sent, on both test apps, so the stage's session cookie never leaves the stage. An upload or download ticket a route returns is JSON `{ url, method?, headers?, expiresAt }` on every target. Locally and in-process its `url` is a path on the app, sent with `t.request(url, { method, headers, body })`; on a cloud it is an absolute signed storage URL, sent with plain `fetch(url, { method: ticket.method ?? "GET", headers: ticket.headers, body })` and no cookie. Choose with `/^\/(?![\/\\])/.test(ticket.url) ? t.request(…) : fetch(…)`, so `//host` and `/\host` URLs go to `fetch` too. Behind a proxy, `smoke` needs `NODE_USE_ENV_PROXY=1` for that `fetch`.
 
-To run it on a cloud, deploy a test stage first, for example `npx prototype-framework deploy --target cloudflare --stage test-1`, then `npx prototype-framework smoke --target cloudflare --stage test-1`, and remove the stage afterwards ([deploying.md](deploying.md)). Test stages use `config/<target>/test.json` and the authentication mock and hold no real data.
+To run it on a cloud, deploy a test stage first, for example `npm run deploy -- --target cloudflare --stage test-1`, then `npm run smoke -- --target cloudflare --stage test-1`, and remove the stage afterwards ([deploying.md](deploying.md)). Test stages use `config/<target>/test.json` and the authentication mock and hold no real data.
 
 ## Failures
 
@@ -52,4 +52,4 @@ To run it on a cloud, deploy a test stage first, for example `npx prototype-fram
 
 ## Stopping condition
 
-Stop reading when each route has tests for success, access level, invalid input and other users' data, the smoke test covers each capability you use, and `npx prototype-framework verify` passes on both dialects. For deploying and running the smoke test on a cloud, read [deploying.md](deploying.md).
+Stop reading when each route has tests for success, access level, invalid input and other users' data, the smoke test covers each capability you use, and `npm run verify` passes on both dialects. For deploying and running the smoke test on a cloud, read [deploying.md](deploying.md).

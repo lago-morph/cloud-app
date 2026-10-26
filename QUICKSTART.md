@@ -79,4 +79,4 @@ rm -rf ~/.claude/skills/prototype-framework
 cp -r package/skill ~/.claude/skills/prototype-framework
 ```
 
-The skill's first step in each session, `npx prototype-framework version-check`, says when this line or the app needs a newer version; `npm run upgrade` moves the app and prints the new line. Apps made with `npm create` also carry their own copy of the skill, and command-line users can install it as a plugin: `/plugin marketplace add lago-morph/cloud-app`, then `/plugin install prototype-framework@lago-morph`.
+The skill's first step in each session, `npm run version-check`, says when this line or the app needs a newer version; `npm run upgrade` moves the app and prints the new line. Apps made with `npm create` also carry their own copy of the skill, and command-line users can install it as a plugin: `/plugin marketplace add lago-morph/cloud-app`, then `/plugin install prototype-framework@lago-morph`.

@@ -38,4 +38,4 @@ KV behaves identically on every target; you never see where it is stored.
 
 ## Stopping condition
 
-Stop reading when every key your code builds has a fixed prefix plus trusted IDs, values stay under 4,096 bytes, `list` callers pass the cursor back with the same prefix, and `npx prototype-framework verify` passes.
+Stop reading when every key your code builds has a fixed prefix plus trusted IDs, values stay under 4,096 bytes, `list` callers pass the cursor back with the same prefix, and `npm run verify` passes.

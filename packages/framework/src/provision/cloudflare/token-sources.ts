@@ -18,11 +18,12 @@
  *
  * Every write leaves the file readable and writable by its owner only (mode 600, PAR-341), and
  * replaces it atomically: a temporary file at that mode in the same directory, renamed over it. A
- * `.env.cloudflare` that is a symbolic link is written through to its target (DEC-0587).
+ * `.env.cloudflare` that is a symbolic link is written through to its target (DEC-0587), also a
+ * dangling one, whose target is then created (DEC-0614).
  */
 import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync, lstatSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { chmodSync, existsSync, lstatSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import type { Environment } from "./environment.js";
 
 /** The file's name, in the project root (PAR-340). */
@@ -178,6 +179,26 @@ export function cloudflareEnvironment(projectDir: string, env: Environment): Env
 }
 
 /**
+ * The file a path's symbolic links lead to, followed one link at a time (as `lstat` sees them), so a
+ * dangling link names the target it would create (DEC-0614); the path itself when it is no link.
+ */
+function linkTarget(path: string): string {
+  let current = path;
+  for (let hops = 0; hops < 40; hops++) {
+    let isLink: boolean;
+    try {
+      isLink = lstatSync(current).isSymbolicLink();
+    } catch {
+      return current;
+    }
+    if (!isLink) return current;
+    // A relative link is read from the folder it is really in.
+    current = resolve(realpathSync(dirname(current)), readlinkSync(current));
+  }
+  throw new Error(`${ENV_CLOUDFLARE_FILE} is a chain of more than 40 symbolic links; setup did not write it`);
+}
+
+/**
  * Replaces the file atomically at mode 600: the content goes to a new temporary file at that mode
  * in the same directory, which is renamed over the file, so a reader sees the old or the new file
  * whole, and a file that had a wider mode never holds the new content.
@@ -185,8 +206,7 @@ export function cloudflareEnvironment(projectDir: string, env: Environment): Env
 function writeFile(projectDir: string, lines: readonly string[]): void {
   // A symbolic link (a file shared between projects) is written through to its target, which keeps
   // being the file; the temporary file is made next to the target, so the rename stays atomic.
-  const link = filePath(projectDir);
-  const path = existsSync(link) && lstatSync(link).isSymbolicLink() ? realpathSync(link) : link;
+  const path = linkTarget(filePath(projectDir));
   const temporary = join(dirname(path), `${basename(path)}.${randomBytes(6).toString("hex")}.tmp`);
   try {
     writeFileSync(temporary, lines.length === 0 ? "" : `${lines.join("\n")}\n`, { encoding: "utf8", mode: ENV_CLOUDFLARE_MODE, flag: "wx" });
@@ -233,12 +253,14 @@ const commentedEmpty = (name: string): RegExp => new RegExp(`^\\s*#\\s*${name}\\
  * Fills in `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_EMAIL_DOMAIN` where the file has them empty or
  * absent, so copying the file starts the next project (plan §4.2). A value already in the file is
  * never changed. An empty line is filled in place; else the template's commented line is
- * uncommented and filled; else a line is added. Creates the file when absent. Returns the names
+ * uncommented and filled; else a line is added. An absent file is never created (settings that
+ * live in the environment only stay there; plan §3.4, SETUP-AC-002). Returns the names
  * filled in. `replace` names settings whose value in the file is changed when it differs: only the
  * account switch replaces `CLOUDFLARE_ACCOUNT_ID` (plan §3.4; DEC-0585).
  */
 export function fillInSettings(projectDir: string, values: Partial<Record<FillName, string>>, options: { readonly replace?: readonly FillName[] } = {}): string[] {
-  const parsed = readParsed(projectDir) ?? { lines: [], assignments: [], unreadable: [] };
+  const parsed = readParsed(projectDir);
+  if (parsed === undefined) return [];
   const current = fileValues(parsed);
   const lines = [...parsed.lines];
   const filled: string[] = [];
@@ -256,6 +278,6 @@ export function fillInSettings(projectDir: string, values: Partial<Record<FillNa
     else lines.push(line);
     filled.push(name);
   }
-  if (filled.length > 0 || !existsSync(filePath(projectDir))) writeFile(projectDir, lines);
+  if (filled.length > 0) writeFile(projectDir, lines);
   return filled;
 }

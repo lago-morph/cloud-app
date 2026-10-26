@@ -26,7 +26,7 @@ Origin: provenance-unclear · Derives from: SYS-REQ-006, SYS-REQ-025, SYS-REQ-02
 The router MUST require app agents to:
 - use only the framework's public exports;
 - never insert user text as HTML;
-- pass `npx <package> verify` (the framework package's own command, DEC-0049) before declaring work done;
+- pass `npm run verify` (the framework package's own command through the app's script, DEC-0049, DEC-0616) before declaring work done;
 - claim an app works on a cloud only after the app's smoke test has passed on a deployed stage there (SYS-REQ-028);
 - never change framework version pins;
 - record a suspected framework defect in a reproducible `FRAMEWORK-ISSUE.md` instead of working around the framework. Each entry MUST state the task attempted, the contract or reference consulted, a minimal reproduction, the observed code or diagnostic, and the workaround not taken;
@@ -63,9 +63,9 @@ Amendment (Origin: owner · Decision: DEC-0521, DEC-0522, DEC-0523): "finding on
 Amendment (Origin: owner, plan-setup-wizard §4.7 · Decision: DEC-0563, DEC-0601; supersedes DEC-0551's amendment above): the Cloudflare steps are built around two pre-filled dashboard links and one command. The instructions MUST give `npm run cloudflare-setup` as the one setup step; describe the everyday token (`prototype-framework`, for every command) and the bootstrap token (`prototype-framework-bootstrap`, made in the dashboard, used once and deleted by setup); say where the values go in a cloud session and on the command line; and say what to do on each of the setup command's stop messages. A permission list they show MUST be generated from the framework's permission list (DEC-0602).
 
 #### SKILL-REQ-007 — Trigger phrases and first step
-Origin: owner · Derives from: SYS-REQ-029 · Decision: DEC-0594, DEC-0600
+Origin: owner · Derives from: SYS-REQ-029 · Decision: DEC-0594, DEC-0600, DEC-0616
 
-The router's description MUST list the trigger phrases "set up Cloudflare", "continue prototype setup" and "continue setup", and the `/prototype-framework …` invocation. The router MUST make `npx <package> version-check` the first step of every session, relaying its suggestions (the newer-npm-release one once per session), and MUST have a "Cloudflare setup" section that, on those phrases, runs `npm run cloudflare-setup` and relays its output as is.
+The router's description MUST list the trigger phrases "set up Cloudflare", "continue prototype setup" and "continue setup", and the `/prototype-framework …` invocation. The router MUST make `npm run version-check` the first step of every session, relaying its suggestions (the newer-npm-release one once per session) and skipping it while the app is not installed, and MUST have a "Cloudflare setup" section that, on those phrases, runs `npm run cloudflare-setup` and relays its output as is.
 
 #### SKILL-REQ-008 — The agent stays away from the token values
 Origin: owner · Derives from: SYS-REQ-015 · Decision: DEC-0598, DEC-0599
@@ -127,7 +127,7 @@ CORE (export list), CHECK, CLI, and the contracts of every capability.
 | SKILL-AC-004 | CI type-checks and runs every example and the template. No example file is derived from `apps/demo/`. | SKILL-REQ-004 | Local |
 | SKILL-AC-005 | Scaffolding into a directory with existing files stops without changing them. | SKILL-REQ-005 | Local |
 | SKILL-AC-006 | Following only the documented owner steps, an AI-agent tester does the following. They set up an account, including the email domain. They deploy a production stage from `skill/templates/production-stage.json`, with no admin or users list. They sign up with a sink address `sink+<tag>@t.<domain>` (DEC-0527), read the verification mail with `mail last --target cloudflare`, verify and sign in, and are `user`. With `admins grant … --confirm-production <s>` they become `admin` on the next request, with no commit or redeploy. With `admins revoke` they are `user` again. Then they remove the stage. No step needs the owner or a browser, and no step edits a values file to change a level. | SKILL-REQ-006 | Cloud (milestone) |
-| SKILL-AC-007 | The router's front matter description contains "set up Cloudflare", "continue prototype setup", "continue setup" and `/prototype-framework`; the router names `npx <package> version-check` as the first step of a session, with its newer-npm-release suggestion once per session; and its "Cloudflare setup" section runs `npm run cloudflare-setup` on those phrases and says to relay its output as is. | SKILL-REQ-007 | Local |
+| SKILL-AC-007 | The router's front matter description contains "set up Cloudflare", "continue prototype setup", "continue setup" and `/prototype-framework`; the router names `npm run version-check` (or `npm exec --no -- <package> version-check`) as the first step of a session, with its newer-npm-release suggestion once per session, names no `npx prototype-framework`, and says to skip the check while the app is not installed; and its "Cloudflare setup" section runs `npm run cloudflare-setup` on those phrases and says to relay its output as is. | SKILL-REQ-007 | Local |
 | SKILL-AC-008 | The router says never to open, print or search `.env.cloudflare` and never to echo `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_BOOTSTRAP_TOKEN`; it gives both git commands, when to run them (a session starting work on the app, before every commit or push), to remind the user when either finds a problem, and never to refuse a commit. The template's `.claude/settings.json` parses as JSON and its `permissions.deny` holds `Read(.env.cloudflare)`, and an app made with the starter has the same file. | SKILL-REQ-008 | Local |
 
 ## 5. Portability note

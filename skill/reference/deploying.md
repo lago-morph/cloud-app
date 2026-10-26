@@ -2,7 +2,7 @@
 
 Read this when you deploy, smoke-test, stop, start or remove a stage on a cloud. Cloudflare setup (the tokens and the email domain), secrets, sign-up and admins are in [owner-tasks.md](owner-tasks.md).
 
-Commands run in the app's directory, after `npm run cloudflare-setup` has said everything is set up ([owner-tasks.md](owner-tasks.md) §2); each reads the tokens itself, from the environment or `.env.cloudflare`. Each `npm run <command> -- …` is the same as `npx prototype-framework <command> …`. Behind an HTTPS proxy, put `NODE_USE_ENV_PROXY=1 ` in front of every cloud command; the command says so if it is needed.
+Commands run in the app's directory, after `npm run cloudflare-setup` has said everything is set up ([owner-tasks.md](owner-tasks.md) §2); each reads the tokens itself, from the environment or `.env.cloudflare`. Each `npm run <command> -- …` is the same as `npm exec --no -- prototype-framework <command> …`. Behind an HTTPS proxy, put `NODE_USE_ENV_PROXY=1 ` in front of every cloud command; the command says so if it is needed.
 
 ## 1. Test stages and production stages
 

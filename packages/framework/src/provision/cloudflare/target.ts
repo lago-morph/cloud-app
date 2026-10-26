@@ -60,7 +60,7 @@ import { readStageRecord, writeStageRecord } from "./stage-record.js";
 import type { CloudflareDatabases } from "./databases.js";
 import { missingCredentials, type Environment } from "./environment.js";
 import { checkStageHealth } from "./health.js";
-import { accountResourceClash, filesBucketName, isStageStateObject, publicOrigin, STATE_BUCKET, workerName } from "./names.js";
+import { accountResourceClash, filesBucketName, isStageStateObject, legacySigningTokenName, publicOrigin, STATE_BUCKET, workerName } from "./names.js";
 import { deleteObjects, listObjectKeys } from "./objects.js";
 import { deleteSigningToken, findLegacySigningToken, readSigningCredentials, SIGNING_RESOURCE, signingCredentialState, tokenWriteProblems } from "./r2-token.js";
 import { INFRASTRUCTURE_COMPONENT, processSstExec, runSst, writeSstApp, type SstExec, type WorkerCode } from "./sst.js";
@@ -311,7 +311,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       await attempt(async () => deleteObjects(api, accountId, bucket, await listObjectKeys(api, accountId, bucket)));
       await attempt(async () => {
         const token = await findLegacySigningToken(api, accountId, stage);
-        if (token) await deleteSigningToken(api, accountId, token.id);
+        if (token) await deleteSigningToken(api, accountId, token.id, legacySigningTokenName(stage));
       });
       await attempt(async () => {
         // SST knows a stage only by its `app/<app>/<stage>` object (PullState); without it,

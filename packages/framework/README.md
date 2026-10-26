@@ -26,7 +26,7 @@ The other subpaths (`/targets/*`, `/provision`, `/check`) are used by the comman
 
 ## Commands
 
-Run them in an app's folder as `npx prototype-framework <command>` or `npm run <command>`:
+Run them in an app's folder as `npm run <command>` or `npm exec --no -- prototype-framework <command>` (not plain `npx`, which, before `npm install`, would fetch an unrelated package of that name):
 
 `dev`, `verify`, `build`, `generate-migration`, `deploy`, `smoke`, `remove`, `stop`, `start`, `secrets`, `cloudflare-setup`, `setup-account`, `check-login`, `mail`, `admins`, `reset-local`, `version-check`, `upgrade`.
 

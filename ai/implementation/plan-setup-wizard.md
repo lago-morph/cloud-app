@@ -205,7 +205,7 @@ Copying the skill into `~/.claude/skills` from a setup script was verified on 20
 - **claude.ai:** uploading the skill there (Customize → Skills) also reaches cloud sessions, but each upgrade means uploading again.
 
 ### 4.8a Version check (the skill's first step) and `npm run upgrade`
-The skill's first step runs a framework command, `npx prototype-framework version-check`. It **never changes anything** and only prints suggestions:
+The skill's first step runs a framework command, `npm run version-check` (DEC-0616: never `npx prototype-framework`, whose unscoped name npx would fetch from the registry before `npm install`; the check is skipped until the app is installed). It **never changes anything** and only prints suggestions:
 
 | Finding | Suggestion |
 |---|---|

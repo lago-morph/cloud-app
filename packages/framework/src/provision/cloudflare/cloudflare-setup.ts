@@ -32,9 +32,10 @@
  *
  * Output never holds a token value, an account ID, a zone ID or the `workers.dev` subdomain
  * (DEC-0573, DEC-0590): messages are written without them, and every line is also passed through a
- * redaction of each such value known to the run. Token writes go through a guard (DEC-0589): a DELETE
- * only of the bootstrap token's own ID (or setup's own signing tokens), a PUT only of the everyday
- * token's ID, and never either on an ID in `protectedTokenIds`.
+ * redaction of each such value known to the run. Token writes go through a guard (DEC-0589, DEC-0618),
+ * an allow-list: a DELETE only of the bootstrap token's own ID (in its last step) or of a signing
+ * token the guard saw by its name (`prototype-r2-signing`, listed or just created by the signing
+ * step), a PUT only of the everyday token's ID, and never either on an ID in `protectedTokenIds`.
  * Exit status: 0 when the account is set up and reachable, 1 when the run stopped for something the
  * user must do or failed (DEC-0588).
  */
@@ -43,7 +44,7 @@ import { emailDomainProblem } from "../core/account-settings.js";
 import { describeLocalSetup, runLocalSetup, type EnsureIgnoredResult, type LocalSetupDeps, type LocalSetupOutcome } from "../core/local-setup.js";
 import { EXIT, messageOf, type ProvisionIo, type ProvisionStatus } from "../core/output.js";
 import { accountSubdomain } from "./account.js";
-import { describeFailure, succeeded, type ApiReply, type CloudflareApi } from "./api.js";
+import { CloudflareRequestsStopped, describeFailure, sentPath, succeeded, type ApiReply, type CloudflareApi } from "./api.js";
 import { zoneCandidates } from "./email.js";
 import type { Environment } from "./environment.js";
 import { ensureEnvCloudflareIgnored, gitSafetyWarnings, inspectGitSafety } from "./git-safety.js";
@@ -63,6 +64,7 @@ import {
   type TokenPolicy,
 } from "./permissions.js";
 import { workersPlanReader } from "./plan.js";
+import { SIGNING_TOKEN_NAME } from "./r2-token.js";
 import { frameworkVersion as packageVersion } from "./setup-record.js";
 import { applySetupSteps, checkAccountSetup, SETUP_STEPS, type SetupStepOptions } from "./setup-steps.js";
 import { commentOutBootstrap, ENV_CLOUDFLARE_FILE, ENV_CLOUDFLARE_TEMPLATE, fillInSettings, readCloudflareSettings, writeTemplateIfAbsent, type CloudflareSettings } from "./token-sources.js";
@@ -92,7 +94,10 @@ export interface CloudflareSetupDeps {
   apiFor(token: string): CloudflareApi;
   /** Step 0 (default `runLocalSetup`, with `ensureIgnored` given). */
   localSetup?(projectDir: string, deps: Pick<LocalSetupDeps, "ensureIgnored">): Promise<readonly LocalSetupOutcome[]>;
-  /** Resolves when an HTTPS request to `url` got any answer; rejects when the host cannot be reached. */
+  /**
+   * Resolves when an HTTPS request to `url` got any answer; rejects when the host cannot be reached.
+   * A `CloudflareRequestsStopped` rejection (a request layer's budget or 429 stop) ends the run.
+   */
   reach(url: string): Promise<void>;
   /** Token IDs never to update or delete (DEC-0589), in addition to `PROTECTED_TOKEN_IDS_ENV`. */
   readonly protectedTokenIds?: readonly string[];
@@ -194,43 +199,66 @@ function redactor(): { add(value: string | undefined): void; redact(text: string
   };
 }
 
-/** An API token's own path, `/accounts/<a>/tokens/<id>` or `/user/tokens/<id>`, with any sub-path (such as `/value`, the roll). */
-const TOKEN_PATH = /^\/(?:accounts\/[^/]+|user)\/tokens\/([^/]+)(\/.*)?$/;
+/** An API token's own path, `/accounts/<a>/tokens/<id>` or `/user/tokens/<id>`, with any sub-path (such as `/value`, the roll); any case. */
+const TOKEN_PATH = /^\/(?:accounts\/[^/]+|user)\/tokens\/([^/]+)(\/.*)?$/i;
 /** Paths under `tokens/` that are not a token's ID. */
 const NOT_TOKEN_IDS = new Set(["verify", "permission_groups"]);
+/** The token list or create path, `/accounts/<a>/tokens` or `/user/tokens`; any case. */
+const TOKENS_LIST_PATH = /^\/(?:accounts\/[^/]+|user)\/tokens\/?$/i;
 
 /**
- * The token write guard (DEC-0589): every request through `api` other than a GET that names an API
- * token's ID is checked before it is sent. The path is read as Cloudflare would: without its query,
- * with doubled and trailing slashes collapsed and the ID decoded. Refused: any such request on a
- * protected ID; any method but PUT and DELETE, and any sub-path (the value roll); a DELETE of the
- * everyday token; a DELETE of the bootstrap token outside its self-delete; a PUT of anything but
- * the everyday token. Creating a token (`POST …/tokens`, the signing step) names no ID.
+ * The token write guard (DEC-0589, DEC-0613): every request through `api` other than a GET that
+ * names an API token's ID is checked before it is sent. The path judged is the one sent
+ * (`sentPath`: `API_BASE + path` as the URL parser normalises it, each segment decoded), and IDs
+ * and the path's names are compared in any case. Refused: any such request on a protected ID; any
+ * method but PUT and DELETE, and any sub-path (the value roll); a DELETE of the everyday token; a
+ * DELETE of the bootstrap token outside its self-delete; a DELETE of any other ID unless the guard
+ * saw it as a signing token (DEC-0618); a PUT of anything but the everyday token; a request whose
+ * URL cannot be parsed. Creating a token (`POST …/tokens`, the signing step) names no ID. The
+ * signing step's rotation finds its old tokens by name (`GET …/tokens`) and may delete the token it
+ * just created when its record cannot be written, so the guard learns the IDs of tokens named
+ * `SIGNING_TOKEN_NAME` from the token lists and creates that pass through it. Every token ID those
+ * answers name goes to `onTokenId` (the run's redaction, SETUP-REQ-007).
  */
 export function guardTokenWrites(
   api: CloudflareApi,
-  rules: { readonly protectedIds: ReadonlySet<string>; readonly everydayId?: string; readonly bootstrapId?: string; readonly selfDeleteArmed: () => boolean },
+  rules: { readonly protectedIds: ReadonlySet<string>; readonly everydayId?: string; readonly bootstrapId?: string; readonly selfDeleteArmed: () => boolean; readonly onTokenId?: (id: string) => void },
 ): CloudflareApi {
+  const protectedIds = new Set([...rules.protectedIds].map((id) => id.toLowerCase()));
+  const everydayId = rules.everydayId?.toLowerCase();
+  const bootstrapId = rules.bootstrapId?.toLowerCase();
+  const signingIds = new Set<string>();
+  const learnSigning = (item: unknown) => {
+    const { id, name } = (item ?? {}) as { id?: unknown; name?: unknown };
+    if (typeof id !== "string" || id === "") return;
+    rules.onTokenId?.(id);
+    if (name === SIGNING_TOKEN_NAME) signingIds.add(id.toLowerCase());
+  };
   return async (method, path, body) => {
-    const clean = (path.split(/[?#]/)[0] ?? "").replace(/\/{2,}/g, "/").replace(/(.)\/$/, "$1");
-    const m = TOKEN_PATH.exec(clean);
-    let id: string | undefined;
-    try {
-      id = m?.[1] === undefined ? undefined : decodeURIComponent(m[1]);
-    } catch {
-      id = m?.[1];
-    }
-    if (method !== "GET" && id !== undefined && !NOT_TOKEN_IDS.has(id)) {
+    if (method !== "GET") {
       const refuse = (why: string) => {
         throw new Error(`setup refused to ${method === "DELETE" ? "delete" : "update"} an API token: ${why}`);
       };
-      if (rules.protectedIds.has(id)) refuse("its ID is protected");
-      if ((method !== "PUT" && method !== "DELETE") || m?.[2] !== undefined) refuse("setup only deletes the bootstrap token and updates the everyday token's permissions");
-      if (method === "DELETE" && id === rules.everydayId) refuse("it is the everyday token");
-      if (method === "DELETE" && id === rules.bootstrapId && !rules.selfDeleteArmed()) refuse("the bootstrap token is deleted only by its own last step");
-      if (method === "PUT" && (id !== rules.everydayId || id === rules.bootstrapId)) refuse("only the everyday token is updated in place");
+      const sent = sentPath(path);
+      if (sent === undefined) refuse("its URL cannot be read");
+      const m = TOKEN_PATH.exec(sent ?? "");
+      const id = m?.[1]?.toLowerCase();
+      if (id !== undefined && !NOT_TOKEN_IDS.has(id)) {
+        if (protectedIds.has(id)) refuse("its ID is protected");
+        if ((method !== "PUT" && method !== "DELETE") || m?.[2] !== undefined) refuse("setup only deletes the bootstrap token and updates the everyday token's permissions");
+        if (method === "DELETE" && id === everydayId) refuse("it is the everyday token");
+        if (method === "DELETE" && id === bootstrapId && !rules.selfDeleteArmed()) refuse("the bootstrap token is deleted only by its own last step");
+        if (method === "DELETE" && id !== bootstrapId && !signingIds.has(id)) refuse("setup deletes only the bootstrap token and its own signing tokens");
+        if (method === "PUT" && (id !== everydayId || id === bootstrapId)) refuse("only the everyday token is updated in place");
+      }
     }
-    return api(method, path, body);
+    const reply = await api(method, path, body);
+    if ((method === "GET" || method === "POST") && succeeded(reply) && TOKENS_LIST_PATH.test(sentPath(path) ?? "")) {
+      const result = (reply.body as { result?: unknown } | null)?.result;
+      if (Array.isArray(result)) result.forEach(learnSigning);
+      else if (method === "POST" && typeof result === "object" && result !== null) learnSigning({ ...result, name: (body as { name?: unknown } | undefined)?.name });
+    }
+    return reply;
   };
 }
 
@@ -415,7 +443,7 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     if (problems.length > 0 || everyday === undefined) return stop([...problems.map((p) => problemText(p.slot, p.text)), NEXT_PROMPT].join("\n"));
 
     let selfDeleteArmed = false;
-    const guard = (api: CloudflareApi) => guardTokenWrites(api, { protectedIds, everydayId: everyday.id, ...(boot === undefined ? {} : { bootstrapId: boot.id }), selfDeleteArmed: () => selfDeleteArmed });
+    const guard = (api: CloudflareApi) => guardTokenWrites(api, { protectedIds, everydayId: everyday.id, ...(boot === undefined ? {} : { bootstrapId: boot.id }), selfDeleteArmed: () => selfDeleteArmed, onTokenId: (id) => hidden.add(id) });
     const everydayApi = guard(everyday.api);
     const bootApi = boot === undefined ? undefined : guard(boot.api);
 
@@ -652,7 +680,11 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     }
   }
 
-  /** Step 8: each host by its kind, never the account ID or the subdomain (DEC-0590). */
+  /**
+   * Step 8: each host by its kind, never the account ID or the subdomain (DEC-0590). A failed read
+   * or request counts as a blocked host, except a request layer's stop (`CloudflareRequestsStopped`,
+   * DEC-0619), which is rethrown: nothing more is sent and the run fails with its message.
+   */
   async function networkProblems(accountId: string, api: CloudflareApi): Promise<string[]> {
     const hosts: { what: string; url: string }[] = [
       { what: "the Cloudflare API (api.cloudflare.com)", url: "https://api.cloudflare.com/client/v4/" },
@@ -662,7 +694,8 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       const subdomain = await accountSubdomain(api, accountId);
       hidden.add(subdomain);
       hosts.push({ what: "the account's workers.dev subdomain (<subdomain>.workers.dev)", url: `https://${subdomain}.workers.dev/` });
-    } catch {
+    } catch (error) {
+      if (error instanceof CloudflareRequestsStopped) throw error;
       hosts.push({ what: "the account's workers.dev subdomain (it could not be read)", url: "" });
     }
     const blocked: string[] = [];
@@ -670,7 +703,8 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       try {
         if (h.url === "") throw new Error("unknown");
         await deps.reach(h.url);
-      } catch {
+      } catch (error) {
+        if (error instanceof CloudflareRequestsStopped) throw error;
         blocked.push(h.what);
       }
     }

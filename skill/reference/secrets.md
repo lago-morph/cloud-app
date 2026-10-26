@@ -14,8 +14,8 @@ Values are not cached across requests (a value is reused only within one request
 
 A secret's value is read from standard input, never from a command-line argument or a file in the repository.
 
-- Local development: `printf '%s' 'the-value' | npx prototype-framework secrets set apiKey --target local --stage local`. It writes the git-ignored `.dev.vars` file and prints the name and location, never the value. `dev` also generates the framework's own local keys there on first start.
-- A cloud stage: `npx prototype-framework secrets set apiKey --target cloudflare --stage <stage>`, then type or paste the value and end input. On Cloudflare the stage's Worker must exist, so on a stage's first deploy `deploy` stops, names each unset secret, and asks you to set them and deploy again.
+- Local development: `printf '%s' 'the-value' | npm run secrets -- set apiKey --target local --stage local`. It writes the git-ignored `.dev.vars` file and prints the name and location, never the value. `dev` also generates the framework's own local keys there on first start.
+- A cloud stage: `npm run secrets -- set apiKey --target cloudflare --stage <stage>`, then type or paste the value and end input. On Cloudflare the stage's Worker must exist, so on a stage's first deploy `deploy` stops, names each unset secret, and asks you to set them and deploy again.
 - The owner's copy-and-paste steps for this are in [owner-tasks.md](owner-tasks.md).
 
 A deploy's health check fails when any declared secret has no value, so a secret the app declares must be set on every stage it is deployed to.
@@ -39,4 +39,4 @@ For a signed token such as a share link, copy the template's `src/server/signing
 
 ## Stopping condition
 
-Stop reading when every secret is declared in `secrets`, read only through `c.var.secrets.get`, never returned or logged, set on each stage with `secrets set`, given a value in tests, and `npx prototype-framework verify` passes.
+Stop reading when every secret is declared in `secrets`, read only through `c.var.secrets.get`, never returned or logged, set on each stage with `secrets set`, given a value in tests, and `npm run verify` passes.

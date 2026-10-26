@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ACCOUNT } from "../../provision/cloudflare/fake-cloud.test-support.js";
+import { CloudflareRequestsStopped } from "../../provision/cloudflare/api.js";
 import { guardTokenWrites, NEXT_PROMPT } from "../../provision/cloudflare/cloudflare-setup.js";
 import { ACCOUNT_SETUP_VERSION, BOOTSTRAP, deepLink, EVERYDAY } from "../../provision/cloudflare/permissions.js";
 import { readSetupRecord, SETUP_STEPS } from "../../provision/cloudflare/setup-record.js";
@@ -269,6 +270,39 @@ describe("cloudflare-setup: a fresh account with both tokens (plan §4.3 steps 4
     expect(world.writes()).toEqual([]);
   });
 
+  it("replaces an old signing token found by name through the guard: the old one is deleted, no other token (DEC-0618)", async () => {
+    const world = freshWorld();
+    world.addToken("everyday", EVERYDAY_VALUE, "everyday-id");
+    world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
+    world.cloud().tokens.set("old-sign-id", { name: "prototype-r2-signing", resources: {} });
+    world.cloud().tokens.set("unrelated-id", { name: "someone-else", resources: {} });
+    const { status, io } = await run(world, project({ env: bothTokens() }));
+    expect(io.err).toBe("");
+    expect(status).toBe(0);
+    expect(world.requests.filter((r) => / DELETE .*\/tokens\//.test(r))).toEqual([`boot-id DELETE /accounts/${ACCOUNT}/tokens/old-sign-id`, `boot-id DELETE /accounts/${ACCOUNT}/tokens/boot-id`]);
+    expect(world.cloud().tokens.has("old-sign-id")).toBe(false);
+    expect(world.cloud().tokens.has("unrelated-id")).toBe(true);
+  });
+
+  it("a failed delete of an old signing token prints no token ID, only its name (SETUP-REQ-007)", async () => {
+    const OLD = "0ld5ign000000000000000000000000b";
+    const world = freshWorld();
+    world.addToken("everyday", EVERYDAY_VALUE, "everyday-id");
+    world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
+    world.cloud().tokens.set(OLD, { name: "prototype-r2-signing", resources: {} });
+    const io = captureIo(project({ env: bothTokens() }));
+    runs.push({ io, world });
+    const apiFor = (value: string) => {
+      const api = world.apiFor(value);
+      return async (method: Parameters<typeof api>[0], path: string, body?: unknown) =>
+        method === "DELETE" && path.endsWith(`/tokens/${OLD}`) ? { status: 403, body: { success: false, errors: [{ code: 9109, message: "Unauthorized" }], result: null } } : api(method, path, body);
+    };
+    const status = await cloudflareSetupCommand({ env: {}, apiFor, reach: async () => {}, localSetup: fakeLocalSetup, stepOptions: { newSubdomain: () => SUB, email: { sleep: async () => {} } }, now: () => NOW })([], io);
+    expect(status).toBe(1);
+    expect(io.out + io.err).toContain("deleting the R2 API token prototype-r2-signing failed");
+    expect(io.out + io.err).not.toContain(OLD);
+  });
+
   it("the same cloud environment run twice: the second run finds the bootstrap token deleted, notes it, asks for nothing, exit 0", async () => {
     const world = await setUpWorld();
     world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
@@ -347,13 +381,14 @@ describe("cloudflare-setup: later runs (plan §3.4)", () => {
     expect(readEnvFile(dir)).toBe(before);
   });
 
-  it("valid tokens already in the environment are used without any prompt; the file gets the account and domain", async () => {
+  it("valid tokens already in the environment are used without any prompt; no .env.cloudflare is created (plan §3.4, SETUP-AC-002)", async () => {
     const world = await setUpWorld();
     const dir = project();
     const { status, io } = await run(world, dir, { env: { CLOUDFLARE_API_TOKEN: EVERYDAY_VALUE, CLOUDFLARE_EMAIL_DOMAIN: DOMAIN } });
     expect(status).toBe(0);
     expect(io.out).not.toMatch(/https:\/\/dash\.cloudflare\.com\/\?to=/);
-    expect(readEnvFile(dir)).toBe(`CLOUDFLARE_EMAIL_DOMAIN=${DOMAIN}\nCLOUDFLARE_ACCOUNT_ID=${ACCOUNT}\n`);
+    expect(io.out).toContain("Everything is already set up and current: nothing to do.");
+    expect(existsSync(join(dir, ".env.cloudflare"))).toBe(false);
   });
 
   it("a second project on the same account: the copied file is enough, no bootstrap token needed", async () => {
@@ -561,16 +596,59 @@ describe("cloudflare-setup: the token write guard (DEC-0589)", () => {
       ["DELETE", "/accounts/a/tokens/boot"],
       ["PUT", "/accounts/a/tokens/boot"],
       ["PUT", "/accounts/a/tokens/signing"],
+      ["DELETE", "/accounts/a/tokens/tok0"],
+      ["DELETE", "/user/tokens/tok0"],
     ] as const) {
       await expect(api(method, path), `${method} ${path}`).rejects.toThrow(/setup refused to/);
     }
     expect(sent).toEqual([]);
     armed = true;
+    await expect(api("DELETE", "/accounts/a/tokens/tok0"), "an ID setup did not learn as a signing token").rejects.toThrow(/setup refused to delete/);
     await api("DELETE", "/accounts/a/tokens/boot");
     await api("PUT", "/accounts/a/tokens/every", {});
-    await api("DELETE", "/accounts/a/tokens/tok0");
     await api("GET", "/accounts/a/tokens/owner");
-    expect(sent).toEqual(["DELETE /accounts/a/tokens/boot", "PUT /accounts/a/tokens/every", "DELETE /accounts/a/tokens/tok0", "GET /accounts/a/tokens/owner"]);
+    expect(sent).toEqual(["DELETE /accounts/a/tokens/boot", "PUT /accounts/a/tokens/every", "GET /accounts/a/tokens/owner"]);
+  });
+
+  it("guardTokenWrites deletes only the signing tokens it saw by name: listed or just created as prototype-r2-signing (DEC-0618)", async () => {
+    const sent: string[] = [];
+    const replies: Record<string, unknown> = {
+      "GET /accounts/a/tokens?per_page=50&page=1": { success: true, result: [{ id: "old-sign", name: "prototype-r2-signing" }, { id: "other", name: "someone-else" }, { id: "owner", name: "prototype-r2-signing" }], result_info: { total_pages: 1 } },
+      "POST /accounts/a/tokens": { success: true, result: { id: "new-sign", name: "prototype-r2-signing", value: "v" } },
+    };
+    const api = guardTokenWrites(async (method, path) => (sent.push(`${method} ${path}`), { status: 200, body: replies[`${method} ${path}`] ?? { success: true, result: {} } }), {
+      protectedIds: new Set(["owner"]),
+      everydayId: "every",
+      bootstrapId: "boot",
+      selfDeleteArmed: () => false,
+    });
+    await expect(api("DELETE", "/accounts/a/tokens/old-sign")).rejects.toThrow(/setup refused to delete/);
+    await api("GET", "/accounts/a/tokens?per_page=50&page=1");
+    await api("POST", "/accounts/a/tokens", { name: "prototype-r2-signing" });
+    await api("DELETE", "/accounts/a/tokens/OLD-SIGN");
+    await api("DELETE", "/accounts/a/tokens/new-sign");
+    for (const path of ["/accounts/a/tokens/other", "/accounts/a/tokens/owner", "/accounts/a/tokens/every", "/accounts/a/tokens/boot"]) {
+      await expect(api("DELETE", path), path).rejects.toThrow(/setup refused to delete/);
+    }
+    await expect(api("PUT", "/accounts/a/tokens/old-sign", {})).rejects.toThrow(/setup refused to update/);
+    expect(sent).toEqual(["GET /accounts/a/tokens?per_page=50&page=1", "POST /accounts/a/tokens", "DELETE /accounts/a/tokens/OLD-SIGN", "DELETE /accounts/a/tokens/new-sign"]);
+  });
+
+  it("guardTokenWrites hands every token ID a token list or create answer names to the run's redaction (SETUP-REQ-007)", async () => {
+    const seen: string[] = [];
+    const replies: Record<string, unknown> = {
+      "GET /accounts/a/tokens?per_page=50&page=1": { success: true, result: [{ id: "old-sign", name: "prototype-r2-signing" }, { id: "other", name: "someone-else" }] },
+      "POST /accounts/a/tokens": { success: true, result: { id: "new-sign", value: "v" } },
+    };
+    const api = guardTokenWrites(async (method, path) => ({ status: 200, body: replies[`${method} ${path}`] ?? { success: true, result: [{ id: "not-a-token" }] } }), {
+      protectedIds: new Set(),
+      selfDeleteArmed: () => false,
+      onTokenId: (id) => seen.push(id),
+    });
+    await api("GET", "/accounts/a/tokens?per_page=50&page=1");
+    await api("POST", "/accounts/a/tokens", { name: "prototype-r2-signing" });
+    await api("GET", "/accounts/a/workers/scripts");
+    expect(seen).toEqual(["old-sign", "other", "new-sign"]);
   });
 
   it("guardTokenWrites cannot be bypassed by a query string, a trailing or doubled slash, an encoded ID, a sub-path (the value roll) or another method", async () => {
@@ -603,6 +681,56 @@ describe("cloudflare-setup: the token write guard (DEC-0589)", () => {
     await api("POST", "/accounts/a/tokens", {});
     await api("GET", "/accounts/a/tokens/owner?x=1");
     expect(sent).toEqual(["POST /accounts/a/tokens", "GET /accounts/a/tokens/owner?x=1"]);
+  });
+
+  it("guardTokenWrites judges the path the URL parser sends: dot segments, backslashes, tabs and newlines, encoded segments and case (DEC-0613)", async () => {
+    const sent: string[] = [];
+    const api = guardTokenWrites(async (method, path) => (sent.push(`${method} ${path}`), { status: 200, body: { success: true, result: {} } }), {
+      protectedIds: new Set(["owner"]),
+      everydayId: "every",
+      bootstrapId: "boot",
+      selfDeleteArmed: () => false,
+    });
+    for (const [method, path] of [
+      ["DELETE", "/accounts/a/x/../tokens/owner"],
+      ["DELETE", "/accounts/a/tokens/x/../owner"],
+      ["DELETE", "/accounts/a/tokens\\owner"],
+      ["DELETE", "/accounts\\a\\tokens\\owner"],
+      ["DELETE", "/accounts/a/tok\tens/owner"],
+      ["DELETE", "/accounts/a/tokens/ow\nner"],
+      ["DELETE", "/accounts/a/tokens/own\r\ner"],
+      ["DELETE", "/user/./tokens/owner"],
+      ["DELETE", "/user/tokens/./owner"],
+      ["DELETE", "/accounts/a/%74okens/owner"],
+      ["DELETE", "/%61ccounts/a/tokens/owner"],
+      ["DELETE", "/accounts/a/tokens/x/%2e%2e/owner"],
+      ["DELETE", "/accounts/a/tokens/x/%2E./owner"],
+      ["DELETE", "/accounts/a/tokens%2Fowner"],
+      ["DELETE", "/accounts/a/tokens%5Cowner"],
+      ["DELETE", "/accounts/a/tokens/%256Fwner"],
+      ["DELETE", "/../../accounts/a/tokens/owner"],
+      ["DELETE", "/accounts/a/tokens/owner#x"],
+      ["DELETE", "/accounts/a/tokens/OWNER"],
+      ["DELETE", "/accounts/a/TOKENS/owner"],
+      ["DELETE", "/USER/tokens/owner"],
+      ["DELETE", "/accounts/a/tokens/EVERY"],
+      ["DELETE", "/accounts/a/x/../tokens/every"],
+      ["DELETE", "/accounts/a/tokens/./boot"],
+      ["PUT", "/accounts/a/tokens/x/../owner"],
+      ["PUT", "/accounts/a/tokens/every/./value"],
+      ["PUT", "/accounts/a/tokens/every%2Fvalue"],
+      ["PUT", "/accounts/a/tokens/x/../signing"],
+      ["PATCH", "/accounts/a/tokens\\every"],
+      ["POST", "/user/tokens/x/%2e%2e/owner/value"],
+      ["DELETE", "/accounts/a/tokens/x/../tok0"],
+    ] as const) {
+      await expect(api(method, path), JSON.stringify(`${method} ${path}`)).rejects.toThrow(/setup refused to/);
+    }
+    expect(sent).toEqual([]);
+    // The everyday update reached by another spelling is still the everyday update; a create is not a write of an ID.
+    await api("PUT", "/accounts/a/tokens/./every", {});
+    await api("POST", "/accounts/a/tokens/x/..", {});
+    expect(sent).toEqual(["PUT /accounts/a/tokens/./every", "POST /accounts/a/tokens/x/.."]);
   });
 });
 
@@ -649,6 +777,42 @@ describe("cloudflare-setup: local setup, git and the network (plan §4.3 steps 0
     expect(status).toBe(1);
     expect(io.out).toContain("This environment cannot reach the account's workers.dev subdomain (<subdomain>.workers.dev), which deploy needs.");
     expect(io.out).toContain("Network access");
+  });
+
+  it("a stop of the request layer (a budget used up, a 429) during the network check ends the run instead of counting as a blocked host (DEC-0619)", async () => {
+    const world = await setUpWorld();
+    const urls: string[] = [];
+    const stopped = await run(world, project({ env: everydayOnly() }), {
+      reach: async (url) => {
+        urls.push(url);
+        throw new CloudflareRequestsStopped("live pass stopped: HTTP 429 on GET (rate limited)");
+      },
+    });
+    expect(stopped.status).toBe(1);
+    expect(urls).toHaveLength(1);
+    expect(stopped.io.err).toContain("cloudflare-setup failed: live pass stopped: HTTP 429 on GET (rate limited)");
+    expect(stopped.io.out).not.toContain("cannot reach");
+
+    // The same when the network check's subdomain read (an API call; the run's last) is the one stopped.
+    world.requests.length = 0;
+    const reads = (await run(world, project({ env: everydayOnly() }))).status === 0 ? world.requests.filter((r) => r.endsWith("/workers/subdomain")).length : -1;
+    let seen = 0;
+    const apiFor = (value: string) => {
+      const api = world.apiFor(value);
+      return async (method: Parameters<typeof api>[0], path: string, body?: unknown) => {
+        if (path.endsWith("/workers/subdomain") && ++seen === reads) throw new CloudflareRequestsStopped("the pass budget is used");
+        return api(method, path, body);
+      };
+    };
+    world.requests.length = 0;
+    const io = captureIo(project({ env: everydayOnly() }));
+    runs.push({ io, world });
+    const reached: string[] = [];
+    const status = await cloudflareSetupCommand({ env: {}, apiFor, reach: async (url) => void reached.push(url), localSetup: fakeLocalSetup, now: () => NOW })([], io);
+    expect(status).toBe(1);
+    expect(io.err).toContain("cloudflare-setup failed: the pass budget is used");
+    expect(io.out).not.toContain("cannot reach");
+    expect(reached).toEqual([]);
   });
 
   it("a failure whose message holds the account ID or a token is printed with them hidden (the redaction backstop)", async () => {

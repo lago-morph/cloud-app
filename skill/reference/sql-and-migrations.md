@@ -65,9 +65,9 @@ Build every write on the step's own `w`, never on `c.var.sql`; do not `await` in
 ## Migrations
 
 1. Change the tables in `src/server/schema.ts`.
-2. Run `npm run generate-migration` (or `npx prototype-framework generate-migration --name <slug>`). It writes a pair of files, `migrations/sqlite/<nnnn>_<slug>.sql` and `migrations/postgres/<nnnn>_<slug>.sql`, plus snapshots under `meta/`, and records their checksums in `migrations/checksums.json`.
+2. Run `npm run generate-migration` (or `npm run generate-migration -- --name <slug>`). It writes a pair of files, `migrations/sqlite/<nnnn>_<slug>.sql` and `migrations/postgres/<nnnn>_<slug>.sql`, plus snapshots under `meta/`, and records their checksums in `migrations/checksums.json`.
 3. Commit all of them. Never edit a generated file. A migration that was never deployed to any cloud stage may be deleted (both files, their `meta/` snapshots) and generated again.
-4. `npx prototype-framework verify` checks both histories give the same schema and that only supported changes are used.
+4. `npm run verify` checks both histories give the same schema and that only supported changes are used.
 
 Supported changes: add a table; add a column that is nullable or has a static default; drop a column; drop a table; add or drop an index or a unique constraint.
 
@@ -101,4 +101,4 @@ Locally, `dev` and `createTestApp` apply pending migrations. On a cloud, `deploy
 
 ## Stopping condition
 
-Stop reading when your tables use only the helpers above, your queries use only the allowed column, a migration pair has been generated and committed for every schema change, and `npx prototype-framework verify` passes on both dialects.
+Stop reading when your tables use only the helpers above, your queries use only the allowed column, a migration pair has been generated and committed for every schema change, and `npm run verify` passes on both dialects.
