@@ -29,6 +29,15 @@
  * the variable, and redacted from every output and the evidence; it is never written to disk or
  * logged. The driver deletes it at the end of the run, also when the run failed, and the leftover
  * check reports every `prototype-compliance-*` token still listed.
+ *
+ * The cloud test hooks' R2 tokens (`criteria/_cloud/r2.ts`: `compliance-r2read-*`,
+ * `compliance-r2scoped-*`, 30-minute expiry) are named with the run ID
+ * (`compliance-r2read-<run ID>-<random>`), so the driver can tell its own run's from another
+ * run's. At the start and the end of a cloud run it deletes every such token that is expired or
+ * older than an hour, and at the end also every one of its own run (whose test processes have
+ * all ended); the leftover check reports every such token still listed. Names without a run ID
+ * (created before the run ID was added, or by a process outside the driver) are deleted only
+ * once expired or older than an hour (`hookTokensToDelete`).
  */
 import { detectD1Plan, type CfCall, type PlanReading } from "./d1-budget.js";
 import { USER_AGENT } from "./http.js";
@@ -37,6 +46,16 @@ import { guardFetch, MAIN_TOKEN_PURPOSE } from "./token-guard.js";
 export const TEST_TOKEN_PREFIX = "prototype-compliance-";
 /** PAR-286: lifetime of a self-created test token (a backstop; the driver deletes it at the end of the run). */
 export const TEST_TOKEN_LIFETIME_MS = 6 * 60 * 60_000;
+
+/** The cloud test hooks' read-only R2 token (`criteria/_cloud/r2.ts`). */
+export const R2_READ_TOKEN_PREFIX = "compliance-r2read-";
+/** The cloud test hooks' R2 token scoped to the buckets one test names (`withR2Access`). */
+export const R2_SCOPED_TOKEN_PREFIX = "compliance-r2scoped-";
+export const HOOK_TOKEN_PREFIXES: readonly string[] = Object.freeze([R2_READ_TOKEN_PREFIX, R2_SCOPED_TOKEN_PREFIX]);
+/** A hook token's lifetime (a backstop; the hook deletes it when its process ends). */
+export const HOOK_TOKEN_LIFETIME_MS = 30 * 60_000;
+/** A hook token older than this belongs to no live process (its expiry passed long ago). */
+export const HOOK_TOKEN_STALE_AFTER_MS = 60 * 60_000;
 
 export const NO_R2_TOKEN_PERMISSION_ENV = "COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_R2_TOKEN_PERMISSION";
 /** PROV-AC-002's token is DEC-0551's everyday token: the variable keeps DEC-0531's name. */
@@ -133,6 +152,56 @@ export async function createRestrictedToken(call: CfCall, accountId: string, spe
   return { id: result.id, name, value: result.value };
 }
 
+/**
+ * The exact names the hooks generate: `<prefix><run ID>-<12 hex>` or, without a run ID (and before
+ * the run ID was added), `<prefix><12 hex>`. Nothing else is a hook token, so an owner's token
+ * with a similar name (`compliance-r2read-notes`) is never listed, deleted or reported.
+ */
+const HOOK_TOKEN_NAME = /^(compliance-r2read-|compliance-r2scoped-)(?:([a-z0-9]{1,64})-)?[0-9a-f]{12}$/;
+const RUN_ID_SHAPE = /^[a-z0-9]{1,64}$/;
+const RANDOM_SHAPE = /^[0-9a-f]{12}$/;
+
+/** Whether `name` is a cloud test hook's R2 token (`compliance-r2read-*`, `compliance-r2scoped-*`), by its exact shape. */
+export const isHookToken = (name: string): boolean => HOOK_TOKEN_NAME.test(name);
+
+/**
+ * A hook token's name: `<prefix><run ID>-<random>`, or `<prefix><random>` when the process runs
+ * outside the driver (no usable run ID: lowercase letters and digits, as `newRunId` makes).
+ * `random` is 12 lowercase hex digits.
+ */
+export function hookTokenName(prefix: string, runId: string | undefined, random: string): string {
+  if (!HOOK_TOKEN_PREFIXES.includes(prefix)) throw new Error(`not a hook token prefix: ${prefix}`);
+  if (!RANDOM_SHAPE.test(random)) throw new Error(`a hook token name's random part is not 12 lowercase hex digits`);
+  return runId !== undefined && RUN_ID_SHAPE.test(runId) ? `${prefix}${runId}-${random}` : `${prefix}${random}`;
+}
+
+/** The run ID in a hook token's name, or undefined (another token, or a name without one). */
+export function hookTokenRunId(name: string): string | undefined {
+  return HOOK_TOKEN_NAME.exec(name)?.[2];
+}
+
+/**
+ * The hook tokens (`compliance-r2read-*`, `compliance-r2scoped-*`) that may be deleted: every
+ * one that is expired or older than an hour (no live process holds it), and, when `endedRun` is
+ * given, every one named with that run's ID (all its test processes ended). A token of another
+ * run, or without a run ID, that is unexpired and not known to be over an hour old is kept: it
+ * may belong to a live process.
+ */
+export function hookTokensToDelete<T extends ListedTestToken>(tokens: readonly T[], now: Date, endedRun?: string): T[] {
+  const at = (iso: string | undefined): number | undefined => {
+    const t = iso === undefined ? NaN : Date.parse(iso);
+    return Number.isNaN(t) ? undefined : t;
+  };
+  return tokens.filter((t) => {
+    if (!isHookToken(t.name)) return false;
+    if (endedRun !== undefined && hookTokenRunId(t.name) === endedRun) return true;
+    const expires = at(t.expiresOn);
+    if (expires !== undefined && expires <= now.getTime()) return true;
+    const issued = at(t.issuedOn);
+    return issued !== undefined && now.getTime() - issued > HOOK_TOKEN_STALE_AFTER_MS;
+  });
+}
+
 /** A listed `prototype-compliance-*` token, with the times Cloudflare gives for it (ISO 8601), when it gives them. */
 export interface ListedTestToken {
   readonly id: string;
@@ -163,7 +232,10 @@ export function staleTestTokens<T extends ListedTestToken>(tokens: readonly T[],
   });
 }
 
-/** Every listed token whose name starts with `prototype-compliance-` (bounded: 20 pages of 50). */
+/**
+ * Every listed token the harness creates: `prototype-compliance-*` and the hooks' R2 tokens
+ * (`compliance-r2read-*`, `compliance-r2scoped-*`) (bounded: 20 pages of 50).
+ */
 export async function listTestTokens(call: CfCall, accountId: string): Promise<ListedTestToken[]> {
   const out: ListedTestToken[] = [];
   for (let page = 1; page <= 20; page++) {
@@ -171,7 +243,8 @@ export async function listTestTokens(call: CfCall, accountId: string): Promise<L
     if (!ok(r)) throw failure("listing the account's API tokens", r);
     const body = r.body as { result: { id: string; name?: string; issued_on?: unknown; expires_on?: unknown }[]; result_info?: { total_pages?: unknown } };
     for (const t of body.result) {
-      if (!(t.name ?? "").startsWith(TEST_TOKEN_PREFIX)) continue;
+      const name = t.name ?? "";
+      if (!name.startsWith(TEST_TOKEN_PREFIX) && !isHookToken(name)) continue;
       out.push({ id: t.id, name: t.name ?? "", ...(typeof t.issued_on === "string" ? { issuedOn: t.issued_on } : {}), ...(typeof t.expires_on === "string" ? { expiresOn: t.expires_on } : {}) });
     }
     const total = body.result_info?.total_pages;
@@ -203,7 +276,7 @@ export interface CloudAccountOps {
   d1Plan(): Promise<PlanReading>;
   createRestrictedToken(spec: RestrictedTokenSpec, runId: string): Promise<CreatedToken>;
   deleteToken(id: string): Promise<void>;
-  /** The `prototype-compliance-*` tokens the account lists. */
+  /** The `prototype-compliance-*` and hook R2 (`compliance-r2read-*`, `compliance-r2scoped-*`) tokens the account lists. */
   testTokens(): Promise<readonly ListedTestToken[]>;
   /** Set when these operations are fakes. */
   readonly dryRun?: string;

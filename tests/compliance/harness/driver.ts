@@ -12,7 +12,10 @@
  * Cloud account (DEC-0530, DEC-0531): at the start of a cloud run the driver reads the account's
  * plan and D1 budget and creates the restricted test tokens the selected clauses need
  * (`DriverDeps.cloudAccount`, test-tokens.ts); at the end it deletes them, also after a failure,
- * and reports every `prototype-compliance-*` token still listed as a leftover.
+ * and reports every `prototype-compliance-*` token still listed as a leftover. The cloud test
+ * hooks' R2 tokens (`compliance-r2read-*`, `compliance-r2scoped-*`, named with the run ID) are
+ * swept at the start and the end (`hookTokensToDelete`: expired or over an hour old, and at the
+ * end every one of this run), and any still listed after that is a leftover too.
  *
  * A run against fakes (overridden not-run rules, or stage operations that say they are fakes) is
  * marked `dryRun` in its record, which no report counts (G-EV F3).
@@ -43,7 +46,7 @@ import { grepPattern, parsePlaywrightJson, parseVitestJson } from "./reports.js"
 import { criterionResults, type TestOutcome } from "./results.js";
 import { idsFor, runnerSelection, scopeTests } from "./selection.js";
 import { d1Budget, describeBudget, RUN_PLAN_ENV, type D1Plan } from "./d1-budget.js";
-import { RESTRICTED_TOKENS, staleTestTokens, type CloudAccountOps, type CreatedToken } from "./test-tokens.js";
+import { hookTokensToDelete, RESTRICTED_TOKENS, staleTestTokens, type CloudAccountOps, type CreatedToken, type ListedTestToken } from "./test-tokens.js";
 
 /** The start of every record command the driver writes (`npm run compliance -- <argv>`). */
 const DRIVER_COMMAND_PREFIX = "npm run compliance --";
@@ -344,18 +347,59 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
    * interrupted earlier run left, and create each restricted token a selected clause needs and
    * the operator did not supply. A token's value goes only into `tokenEnv` and the redactions.
    */
-  const prepareAccount = async (acc: CloudAccountOps): Promise<void> => {
-    const reading = await acc.d1Plan();
-    runPlan = reading.plan;
-    const budget = d1Budget(reading.plan);
-    raw["d1-budget.json"] = `${JSON.stringify({ ...reading, budget }, null, 2)}\n`;
-    log(`compliance: ${describeBudget(budget)} (plan from ${reading.source}: ${reading.detail})`);
-    // Only tokens an interrupted earlier run left (compliance.md §4): another run's tokens younger
-    // than PAR-286 may be in use (a nested or concurrent run), and the current run's are its own.
-    for (const old of staleTestTokens(await acc.testTokens(), runId, deps.now())) {
-      await acc.deleteToken(old.id);
-      log(`compliance: deleted the test token ${old.name} an earlier run left`);
+  /**
+   * Deletes the hooks' R2 test tokens (`compliance-r2read-*`, `compliance-r2scoped-*`) that no live
+   * process holds: expired or over an hour old, and at the end of the run also every one named
+   * with this run's ID (its test processes have all ended). Resolves to the IDs deleted; a failed
+   * deletion is logged (the token then stays listed and is a leftover).
+   */
+  const deleteHookTokens = async (acc: CloudAccountOps, listed: readonly ListedTestToken[], when: "start" | "end"): Promise<Set<string>> => {
+    const deleted = new Set<string>();
+    for (const t of hookTokensToDelete(listed, deps.now(), when === "end" ? runId : undefined)) {
+      try {
+        await acc.deleteToken(t.id);
+        deleted.add(t.id);
+        log(`compliance: deleted the R2 test token ${t.name} (${when} of run)`);
+      } catch (error) {
+        log(`compliance: deleting the R2 test token ${t.name} failed: ${firstLine(error)}`);
+      }
     }
+    return deleted;
+  };
+  const prepareAccount = async (acc: CloudAccountOps): Promise<void> => {
+    // Each step in its own try, so a failure in one (the plan read, a stale token's deletion) does
+    // not skip the sweeps after it; the first failure then fails the setup.
+    let failed: { readonly error: unknown } | undefined;
+    try {
+      const reading = await acc.d1Plan();
+      runPlan = reading.plan;
+      const budget = d1Budget(reading.plan);
+      raw["d1-budget.json"] = `${JSON.stringify({ ...reading, budget }, null, 2)}\n`;
+      log(`compliance: ${describeBudget(budget)} (plan from ${reading.source}: ${reading.detail})`);
+    } catch (error) {
+      failed ??= { error };
+    }
+    let listed: readonly ListedTestToken[] | undefined;
+    try {
+      listed = await acc.testTokens();
+      // Only tokens an interrupted earlier run left (compliance.md §4): another run's tokens younger
+      // than PAR-286 may be in use (a nested or concurrent run), and the current run's are its own.
+      for (const old of staleTestTokens(listed, runId, deps.now())) {
+        await acc.deleteToken(old.id);
+        log(`compliance: deleted the test token ${old.name} an earlier run left`);
+      }
+    } catch (error) {
+      failed ??= { error };
+    }
+    // The hooks' R2 tokens: expired or over an hour old (none of a live process; this run has none yet).
+    if (listed !== undefined) {
+      try {
+        await deleteHookTokens(acc, listed, "start");
+      } catch (error) {
+        failed ??= { error };
+      }
+    }
+    if (failed !== undefined) throw failed.error;
     for (const spec of RESTRICTED_TOKENS) {
       if (!toRun.includes(spec.criterion) || (process.env[spec.env] ?? "") !== "") continue;
       const token = await acc.createRestrictedToken(spec, runId);
@@ -365,7 +409,10 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
       log(`compliance: created the test token ${token.name} (lacks ${spec.omitted}) for ${spec.criterion}`);
     }
   };
-  /** Deletes this run's test tokens, then reports every `prototype-compliance-*` token still listed as a leftover. */
+  /**
+   * Deletes this run's test tokens and the hooks' R2 tokens no live process holds, then reports
+   * every `prototype-compliance-*` and hook R2 token still listed as a leftover.
+   */
   const cleanUpTokens = async (acc: CloudAccountOps): Promise<void> => {
     for (const token of createdTokens) {
       try {
@@ -375,7 +422,9 @@ export async function runCompliance(args: ComplianceArgs, argv: readonly string[
       }
     }
     try {
-      leftovers.push(...(await acc.testTokens()).map((t) => `API token ${t.name}`));
+      const listed = await acc.testTokens();
+      const deleted = await deleteHookTokens(acc, listed, "end");
+      leftovers.push(...listed.filter((t) => !deleted.has(t.id)).map((t) => `API token ${t.name}`));
     } catch (error) {
       leftovers.push(`test token check failed: ${firstLine(error)}`);
     }
