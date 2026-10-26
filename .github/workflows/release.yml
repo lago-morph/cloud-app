@@ -73,12 +73,12 @@ jobs:
       # prepack builds the framework and bundles the template and skill into the starter.
       # A version already on npm is skipped, so the first release (published by hand to create
       # the packages, docs/RELEASING.md) and a re-run after a failed later step both work.
-      - name: Publish @lago-morph/prototype-framework and @lago-morph/create-prototype-app
+      - name: Publish @lago-morph/prototype-framework, @lago-morph/create-prototype-app and @lago-morph/prototype-framework-skill
         env:
           NPM_TAG: ${{ steps.meta.outputs.npm_tag }}
         run: |
           version="${GITHUB_REF_NAME#v}"
-          for ws in packages/framework packages/create-prototype-app; do
+          for ws in packages/framework packages/create-prototype-app packages/prototype-framework-skill; do
             name="$(node -p "require('./$ws/package.json').name")"
             if [ "$(npm view "$name@$version" version 2>/dev/null)" = "$version" ]; then
               echo "$name@$version is already on npm; skipping"
