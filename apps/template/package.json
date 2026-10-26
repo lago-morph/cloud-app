@@ -15,10 +15,13 @@
     "start": "prototype-framework start",
     "secrets": "prototype-framework secrets",
     "setup-account": "prototype-framework setup-account",
+    "cloudflare-setup": "prototype-framework cloudflare-setup",
     "check-login": "prototype-framework check-login",
     "reset-local": "prototype-framework reset-local",
     "mail": "prototype-framework mail",
-    "admins": "prototype-framework admins"
+    "admins": "prototype-framework admins",
+    "version-check": "prototype-framework version-check",
+    "upgrade": "prototype-framework upgrade"
   },
   "dependencies": {
     "@lago-morph/prototype-framework": "0.1.0",

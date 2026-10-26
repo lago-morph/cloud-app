@@ -11,6 +11,9 @@ dist/
 .mail/
 .dev.vars
 
+# Cloudflare tokens (cloudflare-setup); never commit
+.env.cloudflare
+
 # Playwright output
 test-results/
 playwright-report/

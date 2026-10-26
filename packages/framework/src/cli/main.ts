@@ -37,6 +37,9 @@ const setupAccountBinding: Command = lazy(async () => (await import("./commands/
 const checkLoginBinding: Command = lazy(async () => (await import("./commands/check-login.js")).checkLoginBinding());
 /** `admins` (CLI-REQ-005): the local D1, or the D1 HTTP API on Cloudflare. */
 const adminsBinding: Command = lazy(async () => (await import("./commands/admins.js")).adminsBinding());
+/** `version-check` and `upgrade` (plan-setup-wizard §4.8a; DEC-0594, DEC-0595). */
+const versionCheckBinding: Command = lazy(async () => (await import("./commands/version-check.js")).versionCheckBinding());
+const upgradeBinding: Command = lazy(async () => (await import("./commands/upgrade.js")).upgradeBinding());
 
 const COMMANDS: Readonly<Record<string, Entry>> = {
   dev: { summary: "run the app locally on http://localhost:<port>", run: devBinding },
@@ -54,6 +57,8 @@ const COMMANDS: Readonly<Record<string, Entry>> = {
   "reset-local": { summary: "clear local state (local D1, R2, .logs/ and .mail/)", run: resetLocalBinding },
   mail: { summary: "mail last --to <address> [--target <t>]: print the latest framework email sent to an address", run: mailBinding },
   admins: { summary: "admins grant <email> | revoke <email> | list --target <t> --stage <s> [--confirm-production <s>]: the admin role", run: adminsBinding },
+  "version-check": { summary: "compare the app's framework, its skill copies and npm's latest release; changes nothing", run: versionCheckBinding },
+  upgrade: { summary: "upgrade [<version>]: move the app to a framework release (default: latest), refresh its skill copy and verify", run: upgradeBinding },
 };
 
 export const COMMAND_NAMES: readonly string[] = Object.keys(COMMANDS);

@@ -6,7 +6,7 @@
 import { existsSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { copyTree, FRAMEWORK_PACKAGE, SKILL_SKIP, SKIP } from "../lib/create.mjs";
+import { copySkill, copyTree, FRAMEWORK_PACKAGE, SKIP } from "../lib/create.mjs";
 
 const pkgDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const repo = join(pkgDir, "..", "..");
@@ -27,7 +27,7 @@ export function bundle(out = pkgDir, { templateDir = join(repo, "apps", "templat
   copyTree(templateDir, template, SKIP);
   // npm never packs a file named .gitignore; create() renames it back.
   if (existsSync(join(template, ".gitignore"))) renameSync(join(template, ".gitignore"), join(template, "gitignore"));
-  copyTree(skillDir, skill, SKILL_SKIP);
+  copySkill(skillDir, skill);
   return { template, skill };
 }
 
