@@ -24,17 +24,16 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      # Decide what this change can affect:
-      # - full=false: only plans, evidence, archives or top-level Markdown changed, which no
-      #   check reads. Everything below is skipped and the job still reports success, so a
-      #   required check never hangs. docs/ is NOT in that list: tests read its contracts,
-      #   parameters and criteria.
-      # - browser=true: something the browser test can see changed. The template app, the
-      #   framework it runs on, the skill's examples, the browser test and its support, the
-      #   dependencies, or this workflow. Only then is Chromium installed and
-      #   tests/skill/example-pages.test.ts run, once.
-      # With no usable base commit (for example a new branch's first push), everything runs.
-      - name: Decide which checks are needed
+      # Every check runs on every change, except the one browser test (the template's pages in
+      # Chromium, in tests/skill/example-pages.test.ts). Installing Chromium takes about 10
+      # minutes, so it runs only when something the browser actually loads changed:
+      # - the template app;
+      # - the framework it runs on;
+      # - the browser test and its page driver;
+      # - the lockfile, which pins the framework's dependencies and Playwright.
+      # Skill text, contracts, docs, plans, .github and .claude can't change what the browser
+      # sees. With no usable base commit (for example a new branch's first push), it runs.
+      - name: Decide whether the browser test is needed
         id: scope
         env:
           EVENT: ${{ github.event_name }}
@@ -43,35 +42,28 @@ jobs:
         run: |
           if [ "$EVENT" = pull_request ]; then base="$PR_BASE"; else base="$PUSH_BEFORE"; fi
           if [ -z "$base" ] || [ "$base" = 0000000000000000000000000000000000000000 ] || ! changed=$(git diff --name-only "$base" HEAD); then
-            { echo "full=true"; echo "browser=true"; } >> "$GITHUB_OUTPUT"
-            echo "No usable base commit: running everything."
-            exit 0
+            echo "browser=true" >> "$GITHUB_OUTPUT"; echo "No usable base commit: running the browser test."; exit 0
           fi
-          code=$(printf '%s\n' "$changed" | grep -vE '^(ai|archive|archive-index|validation|retrospective)/|^[^/]+\.md$' | grep -v '^$' || true)
-          browser=$(printf '%s\n' "$changed" | grep -E '^(apps/template/|packages/framework/|skill/|tests/skill/|tests/support/|tests/compliance/e2e/support/|\.github/workflows/)|^(package\.json|package-lock\.json|playwright\.config\.ts|vitest\.integration\.config\.ts)$' || true)
-          if [ -z "$code" ]; then echo "full=false" >> "$GITHUB_OUTPUT"; else echo "full=true" >> "$GITHUB_OUTPUT"; fi
-          if [ -n "$code" ] && [ -n "$browser" ]; then echo "browser=true" >> "$GITHUB_OUTPUT"; else echo "browser=false" >> "$GITHUB_OUTPUT"; fi
-          echo "Changed files:"; printf '  %s\n' $changed
-          [ -z "$code" ] && echo "Only plans, evidence or top-level Markdown changed: skipping the checks."
-          [ -n "$code" ] && [ -z "$browser" ] && echo "No browser-visible change: skipping Chromium and the browser test."
-          exit 0
+          hits=$(printf '%s\n' "$changed" | grep -E '^(apps/template/|packages/framework/)|^(tests/skill/example-pages\.test\.ts|tests/compliance/e2e/support/template-pages\.ts|package-lock\.json)$' || true)
+          if [ -n "$hits" ]; then
+            echo "browser=true" >> "$GITHUB_OUTPUT"; echo "Browser-visible changes:"; printf '  %s\n' $hits
+          else
+            echo "browser=false" >> "$GITHUB_OUTPUT"; echo "No browser-visible change: skipping Chromium and the browser test."
+          fi
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        if: steps.scope.outputs.full == 'true'
         with:
           node-version: 22.22.0 # engines pin (packages/framework/package.json)
           cache: npm
 
       - run: npm ci
-        if: steps.scope.outputs.full == 'true'
 
       - name: Playwright browser (used only by the browser test)
         if: steps.scope.outputs.browser == 'true'
         run: npx playwright install --with-deps chromium
 
-      # The parts of `npm run verify` before its browser test (see package.json "verify").
+      # `npm run verify` without its last part, the browser test file (see package.json "verify").
       - name: Verify (build, typecheck, lint, unit tests, template and reference app verify)
-        if: steps.scope.outputs.full == 'true'
         run: |
           npm run build -w packages/framework
           npm run typecheck
@@ -80,18 +72,19 @@ jobs:
           npm --workspace apps/template run verify
           npm --workspace apps/reference run verify
 
-      - name: Browser test (the template's pages and the skill's examples in Chromium)
-        if: steps.scope.outputs.browser == 'true'
-        run: npx vitest run --config vitest.integration.config.ts tests/skill/example-pages.test.ts
+      # The browser test file's first test needs no browser: it checks that every browser
+      # example in the skill is loaded by the template's index.html. It runs every time.
+      - name: Skill tests, including the plugin manifests and the example-to-template check (no browser)
+        run: |
+          npx vitest run --config vitest.integration.config.ts tests/skill --exclude tests/skill/example-pages.test.ts
+          npx vitest run --config vitest.integration.config.ts tests/skill/example-pages.test.ts -t "each copied index.html"
 
-      - name: Skill tests, including the Claude Code plugin manifests (browser test excluded; it runs above)
-        if: steps.scope.outputs.full == 'true'
-        run: npx vitest run --config vitest.integration.config.ts tests/skill --exclude tests/skill/example-pages.test.ts
+      - name: Browser test (the template's pages in Chromium)
+        if: steps.scope.outputs.browser == 'true'
+        run: npx vitest run --config vitest.integration.config.ts tests/skill/example-pages.test.ts -t "work in Chromium"
 
       - name: npm create, offline, against the packed framework
-        if: steps.scope.outputs.full == 'true'
         run: npx vitest run --config vitest.integration.config.ts packages/create-prototype-app
 
       - name: Package contents
-        if: steps.scope.outputs.full == 'true'
         run: npm pack --dry-run --workspace packages/framework --workspace packages/create-prototype-app --workspace packages/prototype-framework-skill
