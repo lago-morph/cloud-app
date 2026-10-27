@@ -4,15 +4,12 @@ Plan: ai/implementation/plan-setup-wizard.md. Owner questions: ai/implementation
 
 Number ranges: b1 DEC-0563–0569/PAR-331–339; b2 DEC-0570–0576/PAR-340–349; b3 DEC-0577–0583/PAR-350–359; b4 DEC-0584–0590/PAR-360–369; b5 DEC-0591–0597/PAR-370–379; b6 DEC-0598–0604/PAR-380–389; fixes/tests DEC-0605–0619/PAR-390–399.
 
-## Status (2026-10-26, after wave 2)
-- Done (merged to main): wave 1 #32 b1, #33 b2, #34 b3, #35 b5 (see decision log DEC-0563–0597); wave 2 #38 b4 cloudflare-setup state machine (DEC-0584–0590, PAR-360–361; carried-forward minors 1–12 fixed), #36 b6 skill/settings deny/QUICKSTART/docs/spec (DEC-0598–0604, PAR-380; SETUP-REQ/AC in docs/components/setup.md). Each PR: CI green + independent review, fixes re-reviewed.
-- Verify: main 009aa03, clean clone, `npm run verify` exit 0 (with the browser shim below).
-- In progress (step 5):
-  - #39 claude/wizard-fix-guard — token-write guard judges the URL-normalised path (`sentPath`), dangling-symlink write-through, + the live-pass guarded layer (ai/implementation/spikes/live-wizard/, preflight.md). CI failed once on an unrelated AUTH-AC-011 flake (tamper of last 2 chars can be a no-op); diagnosis under review, test fix on claude/wizard-fix-auth-flake.
-  - #40 claude/wizard-tests — compliance criteria tests (SETUP-AC-001–010, CLI-AC-008, CLI-AC-001 additions, SKILL-AC-007/008, offline starter integration). Defect found: SETUP-AC-002 env-only run creates .env.cloudflare; diagnosis confirmed; fix being added on the same branch.
-  - Whole-feature independent review of everything since 9316a19 (+#39, #40).
-- Next: fix review findings red-green, re-review, merge #39/#40/flake fix; then the live pass (step 6) with the guarded layer; final handoff + merge #37.
-- Open questions: owner-questions.md (18 items).
+## Status (2026-10-27, FINAL — plan implemented, merged and verified)
+- Merged to main: #32 b1 permissions; #33 b2 token sources + git safety; #34 b3 setup record + steps; #35 b5 starter, version-check, upgrade, framework skill copy; #38 b4 cloudflare-setup state machine; #36 b6 skill, settings deny rule, QUICKSTART, docs, spec (SETUP-REQ/AC); #41 AUTH-AC-011 test flake fix; #42 compliance criteria tests (SETUP-AC-001–010, CLI-AC-008, CLI-AC-001, SKILL-AC-007/008) + token-guard hardening (#39, #40 contained) + whole-feature review fixes (no unscoped npx; guard allow-lists; 429 stop not swallowed); #44 protected bootstrap kept, stops reported; #46 live defects D1 (network check probed the bare workers.dev host) and D2 (record-only upgrade reported); #45 live evidence. Every PR: CI green + independent review with no open blocker/major; fixes re-reviewed; defects diagnosed, diagnosis independently reviewed, fixed red-green.
+- Verify: main c22151c, clean clone, `npm run verify` exit 0 (2527 unit tests) with the browser shim below; tests/compliance/criteria/setup 45/45 with CLOUDFLARE_* unset.
+- Live pass (2026-10-26, evidence ai/implementation/spikes/live-wizard/live-pass-2026-10-26.md): all exercises passed through the guarded layer (owner token protected, wizard-named ≤2 h tokens, budgets, no 429, no guard refusals); in-place PUT with the top-level zone form accepted and value unchanged; real runs exit 0 after #46; account setup record upgraded to setupVersion 1 (frameworkVersion 0.1.0); all wizard tokens deleted; Workers/buckets/D1 match the preflight baseline. SETUP-AC-011's self-delete clause covered by fake API + plan §2 (owner question 20).
+- Not done / open: owner-questions.md (20 items + ideas). No workflow-patch files were needed. Unrelated PR #43 (plan v0.2.0) was merged on main by another session meanwhile.
+- Next (for the owner): review owner-questions.md; nothing else is in progress.
 
 ## Carried-forward minor findings (assigned to b4)
 1. Deny on a stronger group marks the weaker missing; treat deny as "remake token", not "upgrade".
