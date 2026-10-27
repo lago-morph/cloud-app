@@ -1,0 +1,90 @@
+# Offline-safe checks on every pull request and every push to main. No Cloudflare secrets:
+# nothing here deploys or calls a cloud. Actions are pinned to full commit SHAs.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # Every check runs on every change, except the one browser test (the template's pages in
+      # Chromium, in tests/skill/example-pages.test.ts). Installing Chromium takes about 10
+      # minutes, so it runs only when something the browser actually loads changed:
+      # - the template app;
+      # - the framework it runs on;
+      # - the browser test and its page driver;
+      # - the lockfile, which pins the framework's dependencies and Playwright.
+      # Skill text, contracts, docs, plans, .github and .claude can't change what the browser
+      # sees. With no usable base commit (for example a new branch's first push), it runs.
+      - name: Decide whether the browser test is needed
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then base="$PR_BASE"; else base="$PUSH_BEFORE"; fi
+          if [ -z "$base" ] || [ "$base" = 0000000000000000000000000000000000000000 ] || ! changed=$(git diff --name-only "$base" HEAD); then
+            echo "browser=true" >> "$GITHUB_OUTPUT"; echo "No usable base commit: running the browser test."; exit 0
+          fi
+          hits=$(printf '%s\n' "$changed" | grep -E '^(apps/template/|packages/framework/)|^(tests/skill/example-pages\.test\.ts|tests/compliance/e2e/support/template-pages\.ts|package-lock\.json)$' || true)
+          if [ -n "$hits" ]; then
+            echo "browser=true" >> "$GITHUB_OUTPUT"; echo "Browser-visible changes:"; printf '  %s\n' $hits
+          else
+            echo "browser=false" >> "$GITHUB_OUTPUT"; echo "No browser-visible change: skipping Chromium and the browser test."
+          fi
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.22.0 # engines pin (packages/framework/package.json)
+          cache: npm
+
+      - run: npm ci
+
+      - name: Playwright browser (used only by the browser test)
+        if: steps.scope.outputs.browser == 'true'
+        run: npx playwright install --with-deps chromium
+
+      # `npm run verify` without its last part, the browser test file (see package.json "verify").
+      - name: Verify (build, typecheck, lint, unit tests, template and reference app verify)
+        run: |
+          npm run build -w packages/framework
+          npm run typecheck
+          npm run lint
+          npm run test:unit
+          npm --workspace apps/template run verify
+          npm --workspace apps/reference run verify
+
+      # The browser test file's first test needs no browser: it checks that every browser
+      # example in the skill is loaded by the template's index.html. It runs every time.
+      - name: Skill tests, including the plugin manifests and the example-to-template check (no browser)
+        run: |
+          npx vitest run --config vitest.integration.config.ts tests/skill --exclude tests/skill/example-pages.test.ts
+          npx vitest run --config vitest.integration.config.ts tests/skill/example-pages.test.ts -t "each copied index.html"
+
+      - name: Browser test (the template's pages in Chromium)
+        if: steps.scope.outputs.browser == 'true'
+        run: npx vitest run --config vitest.integration.config.ts tests/skill/example-pages.test.ts -t "work in Chromium"
+
+      - name: npm create, offline, against the packed framework
+        run: npx vitest run --config vitest.integration.config.ts packages/create-prototype-app
+
+      - name: Package contents
+        run: npm pack --dry-run --workspace packages/framework --workspace packages/create-prototype-app --workspace packages/prototype-framework-skill
