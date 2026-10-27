@@ -24,7 +24,7 @@
     "upgrade": "prototype-framework upgrade"
   },
   "dependencies": {
-    "@lago-morph/prototype-framework": "0.1.0",
+    "@lago-morph/prototype-framework": "0.1.1",
     "hono": "4.13.13",
     "zod": "4.6.7"
   },

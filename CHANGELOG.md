@@ -4,9 +4,35 @@ All notable changes to the published packages and the Claude Code plugin from th
 
 - `@lago-morph/prototype-framework` (npm)
 - `@lago-morph/create-prototype-app` (npm; run as `npm create @lago-morph/prototype-app`)
+- `@lago-morph/prototype-framework-skill` (npm)
 - the `prototype-framework` Claude Code plugin (marketplace `lago-morph`, this repository)
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [Semantic Versioning](https://semver.org/); before 1.0.0, a minor version may make breaking changes.
+
+## [0.1.1] - 2026-10-27
+
+### Added
+
+- `npm run cloudflare-setup` (`prototype-framework cloudflare-setup`): one re-runnable Cloudflare setup. It runs the local setup first, warns about git, finds the tokens (environment first, then `.env.cloudflare`), checks the account, plan and email domain, and runs the missing account setup steps. It checks the everyday token's permissions once and adds missing ones in place, keeping the value, then deletes the bootstrap token. It finishes with a network check. Both tokens come from pre-filled dashboard links, and no token value is ever printed. See `QUICKSTART.md`.
+- `.env.cloudflare`: every Cloudflare command reads the tokens from the environment or this file (mode 600). Commands and `verify` warn, but never fail, when the file is not git-ignored or is tracked.
+- `npm create @lago-morph/prototype-app my-app` now installs dependencies, sets random local secrets, adds `.env.cloudflare` to `.gitignore` and makes a first commit.
+- `version-check` (changes nothing; suggests upgrades) and `upgrade [<version>]` (`npm run upgrade`: moves the app to a framework release, refreshes its skill copy and runs `verify`).
+- `@lago-morph/prototype-framework-skill`: the skill alone, for a cloud environment's setup script. The framework package also ships `skill/`.
+- The skill: trigger phrases ("set up Cloudflare", "continue prototype setup"), `npm run version-check` first, and a Cloudflare setup section. The template's `.claude/settings.json` denies reading `.env.cloudflare`.
+- `QUICKSTART.md`: local in one line, Cloudflare in one command.
+
+### Changed
+
+- `setup-account` runs as named steps that are checked first and applied only when missing, and records the account setup version in the account's setup record.
+
+- The skill and docs run the framework through `npm run <command>` or `npm exec --no -- prototype-framework <command>`, never `npx prototype-framework`: an unscoped `npx` name could fetch an unrelated package.
+- The everyday Cloudflare token now also needs "Email Routing Rules Read" (zone), so it can check the whole account setup by itself.
+
+### Upgrading an app made with 0.1.0
+
+1. Set `@lago-morph/prototype-framework` to `0.1.1` in `package.json` and run `npm install`.
+2. Add the template's new npm scripts to `package.json`: `"cloudflare-setup": "prototype-framework cloudflare-setup"`, `"version-check": "prototype-framework version-check"` and `"upgrade": "prototype-framework upgrade"`. Or run them as `npm exec --no -- prototype-framework <command>`. Optionally copy the template's `.claude/settings.json`, which stops Claude Code from reading `.env.cloudflare`.
+3. Run `npm run cloudflare-setup` once for each Cloudflare account. It needs the bootstrap token once, from the link it prints: it upgrades the account's setup record and adds "Email Routing Rules Read" to the existing everyday token in place. `deploy` and the other commands keep working without this step.
 
 ## [0.1.0] - 2026-10-26
 
@@ -26,4 +52,5 @@ First public release. Release 1 targets local development and Cloudflare (DEC-05
 - The Cloudflare commands have run against a simulated Cloudflare; see `apps/template/README.md` for what is verified on a real account.
 - Google login has not been run against Google.
 
+[0.1.1]: https://github.com/lago-morph/cloud-app/releases/tag/v0.1.1
 [0.1.0]: https://github.com/lago-morph/cloud-app/releases/tag/v0.1.0

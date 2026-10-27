@@ -1,6 +1,6 @@
 {
   "name": "@lago-morph/prototype-framework",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A small portable web-app framework: one app runs unchanged locally and on Cloudflare, with SQL, KV, files, configuration, secrets, logging and login behind one API.",
   "keywords": [
     "framework",
