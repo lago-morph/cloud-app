@@ -1,0 +1,75 @@
+# Offline-safe checks on every pull request and every push to main. No Cloudflare secrets:
+# nothing here deploys or calls a cloud. Actions are pinned to full commit SHAs.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # Plans, evidence, archives and top-level Markdown are read by no check, so a change that
+      # touches only those skips the rest. docs/ is NOT skipped: tests read its contracts,
+      # parameters and criteria. The job still reports success, so a required check never hangs.
+      - name: Decide whether the full checks are needed
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then base="$PR_BASE"; else base="$PUSH_BEFORE"; fi
+          if [ -z "$base" ] || [ "$base" = 0000000000000000000000000000000000000000 ] || ! changed=$(git diff --name-only "$base" HEAD); then
+            echo "full=true" >> "$GITHUB_OUTPUT"; echo "No usable base commit: running everything."; exit 0
+          fi
+          code=$(printf '%s\n' "$changed" | grep -vE '^(ai|archive|archive-index|validation|retrospective)/|^[^/]+\.md$' | grep -v '^$' || true)
+          if [ -z "$code" ]; then
+            echo "full=false" >> "$GITHUB_OUTPUT"; echo "Only plans, evidence or top-level Markdown changed: skipping the checks."
+          else
+            echo "full=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.scope.outputs.full == 'true'
+        with:
+          node-version: 22.22.0 # engines pin (packages/framework/package.json)
+          cache: npm
+
+      - run: npm ci
+        if: steps.scope.outputs.full == 'true'
+
+      - name: Playwright browser (used by the template and skill browser tests)
+        if: steps.scope.outputs.full == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify (build, typecheck, lint, unit tests, template and reference app verify)
+        if: steps.scope.outputs.full == 'true'
+        run: npm run verify
+
+      - name: Skill tests, including the Claude Code plugin manifests
+        if: steps.scope.outputs.full == 'true'
+        run: npx vitest run --config vitest.integration.config.ts tests/skill
+
+      - name: npm create, offline, against the packed framework
+        if: steps.scope.outputs.full == 'true'
+        run: npx vitest run --config vitest.integration.config.ts packages/create-prototype-app
+
+      - name: Package contents
+        if: steps.scope.outputs.full == 'true'
+        run: npm pack --dry-run --workspace packages/framework --workspace packages/create-prototype-app
