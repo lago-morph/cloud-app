@@ -25,9 +25,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 - `setup-account` runs as named steps that are checked first and applied only when missing, and records the account setup version in the account's setup record.
 
-### Upgrading
+- The skill and docs run the framework through `npm run <command>` or `npm exec --no -- prototype-framework <command>`, never `npx prototype-framework`: an unscoped `npx` name could fetch an unrelated package.
+- The everyday Cloudflare token now also needs "Email Routing Rules Read" (zone), so it can check the whole account setup by itself.
 
-- Run `npm run cloudflare-setup` once on each Cloudflare account. It upgrades the account's setup record, which needs the bootstrap token once, from the link it prints.
+### Upgrading an app made with 0.1.0
+
+1. Set `@lago-morph/prototype-framework` to `0.1.1` in `package.json` and run `npm install`.
+2. Add the template's new npm scripts to `package.json`: `"cloudflare-setup": "prototype-framework cloudflare-setup"`, `"version-check": "prototype-framework version-check"` and `"upgrade": "prototype-framework upgrade"`. Or run them as `npm exec --no -- prototype-framework <command>`. Optionally copy the template's `.claude/settings.json`, which stops Claude Code from reading `.env.cloudflare`.
+3. Run `npm run cloudflare-setup` once for each Cloudflare account. It needs the bootstrap token once, from the link it prints: it upgrades the account's setup record and adds "Email Routing Rules Read" to the existing everyday token in place. `deploy` and the other commands keep working without this step.
 
 ## [0.1.0] - 2026-10-26
 
