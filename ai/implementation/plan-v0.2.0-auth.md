@@ -315,6 +315,13 @@ Verified strings: "Super Administrator - All Privileges" (admin) and "HTTP Appli
   - (e) the admin app pages (§5.2);
   - (f) Secrets Store adoption, including the signing credential, deploy bindings, and the fallback to Worker secrets;
   - (g) the skill, quickstart and migration notes (§5.3, §8).
+  - (h) the root `README.md`, which v0.1.1 adds. Rewrite whatever it says about sign-in, passwords, mail, the `admins` command and Cloudflare setup to match v0.2.0:
+    - sign-in with Cloudflare through the auth app, with roles from account membership (§4);
+    - the bootstrap token, then the admin app (§5);
+    - the removals (§6);
+    - the upgrade from 0.1.x (§8).
+    
+    Read the README as it is on main when this work starts; don't assume its layout.
 - **Then:**
   - a test author for the criteria (§7);
   - an independent review;
