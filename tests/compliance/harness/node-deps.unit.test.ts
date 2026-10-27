@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -41,7 +41,8 @@ describe("driver process helpers", () => {
 
   it("reads exact framework and dependency versions from the installed packages", () => {
     const versions = readVersions(repo);
-    expect(versions["@lago-morph/prototype-framework"]).toBe("0.1.0");
+    const framework = JSON.parse(readFileSync(join(repo, "packages/framework/package.json"), "utf8")) as { version: string };
+    expect(versions["@lago-morph/prototype-framework"]).toBe(framework.version);
     expect(versions.node).toBe(process.version);
     expect(versions.vitest).toMatch(/^\d+\.\d+\.\d+/);
     expect(versions["@playwright/test"]).toMatch(/^\d+\.\d+\.\d+/);
