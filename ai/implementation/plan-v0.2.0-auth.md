@@ -88,6 +88,51 @@ There are no email or profile scopes. `openid` and `offline_access` are added by
 
 **Consent screen** (the owner's screenshot): it shows the client name and "This application has not verified ownership of any domain" (expected for a private client); required scopes as fixed rows (Profile Information, User Details Read, Memberships Read, Background Access); and optional scopes grouped by category with toggles, plus "Read only" and "Full access" shortcuts.
 
+### 2.1a Cloudflare OAuth: second live test, 2026-10-27 (a minimal member, and admin setup actions)
+Method: a private client `pf-oauth-test2` offering the optional scopes `secrets-store.write`, `secrets-store.read`, `workers-scripts.write`, `d1.write`, `workers-r2.write` and `account-api-tokens.write`. Two sign-ins, both approving every optional scope:
+- **A:** the owner, whose role is "Super Administrator - All Privileges";
+- **B:** an invited member whose only role is "HTTP Applications Read", the most restrictive role available.
+
+60 API calls in all, and everything was deleted afterwards. Both runs got the same granted scope string, the same ID-token claims (with `email` and `email_verified` true), and the same 18 `/user` fields. Revoking worked in both.
+
+**A minimal member can authorize a private client.** There was no error and the token exchange returned 200. Their `/memberships` for this account shows:
+- roles `["HTTP Applications Read"]`, status `accepted`;
+- `api_access_enabled` null (it's null for the admin too);
+- a `permissions` object with only 4 keys (`http_applications`, `organization`, `waf`, `zone`), each `{read: true, edit: false}`. The admin's object has about 60 keys.
+
+**A sign-in token is capped by the user's own role.** Granted scopes are necessary, but they never add rights beyond the role.
+
+| Action, with the user's token | A (Super Admin) | B (HTTP Applications Read) |
+|---|---|---|
+| Create OAuth client | 403, code 10000 | 403, code 10000 |
+| List Secrets Store stores | 200 (1 store) | 403, code 10000 |
+| Create Secrets Store secret | 200; deleted (202) | not reached |
+| Create D1 database | 200; deleted (200) | 401, code 10000 |
+| Create R2 bucket | 200; deleted (200) | 403, code 10000 |
+| Upload Worker script | 200; deleted (200) | 403 "No access to the specified resource." |
+| Create API token | 400, code 1001 (see below) | 403, code 9109 |
+| GET workers/scripts | 200, 4 scripts | 200, **0** scripts (filtered, not refused) |
+| GET d1/database, GET r2/buckets | 200 | 401 / 403, code 10000 |
+
+**What follows for the design:**
+- **No OAuth Clients scope exists** (the OAuth scope list has none), and creating a client with a sign-in token is refused. So **the bootstrap token creates BOTH OAuth clients**, the admin client and the sign-in client (§5.1).
+- **A token created through a sign-in can only hold the permission groups that the session's granted scopes cover.** Asking for "Account Settings Read" without `account-settings.read` granted was refused with 400, code 1001: "The OAuth session does not include the scopes required for the requested permission groups". (With the scope granted, the same create worked: §2.1.) So **the admin client must request a scope for every permission group in the everyday token.**
+- **Role mapping by role name works for both kinds of member.** The minimal member is a "user".
+
+### 2.1b Bootstrap permissions and tooling: API checks, 2026-10-27 (11 API calls, read-only plus temporary tokens)
+- **Permission groups** (account-scoped; they are named "Write", not "Edit"):
+  - Secrets Store Read `5e33b7d77788455c9fdf18cbd38ee5a0` and Secrets Store Write `adc8fa2bc6124928a8b3314dc63a1235`. These are the only two; **there is no "deploy" group**.
+  - OAuth Client Read `0b7793327a1a417681e4d49ee233e184` and OAuth Client Write `50fc2f43318f40e4855a35d8de5bf643` (singular "Client").
+  - Workers Scripts Write `e086da7e2179491d91ee5f35b3ca210a`.
+  - Account API Tokens Write `5bc3f8b21c554832afc660159ab75fa4`.
+- **The workers.dev subdomain:** `GET` and `PUT /accounts/{A}/workers/subdomain` need only Workers Scripts Write, per the docs. A token holding only that permission read the subdomain (200). PUT wasn't called.
+- **The bootstrap set without Account API Tokens Write** (Workers Scripts Write, OAuth Client Write, Secrets Store Write) can be created by API (200). It could list OAuth clients (200), list Secrets Store stores (200; the account has 1 store) and read the subdomain (200). With Account API Tokens Write added, the API refuses it (400, code 1001), so the bootstrap token must be made in the dashboard, as planned.
+- **Tooling:**
+  - **wrangler 4.149.0:** supports `secrets_store_secrets` and `services` bindings.
+  - **Pulumi Cloudflare 6.15.0:** `WorkersScriptBinding` accepts `secrets_store_secret` (with `storeId` and `secretName`) and `service`.
+  - **SST 4.17.2:** the Worker component maps `serviceBindings`, but has **no Secrets Store binding**. Add one through `transform.worker`. This was inferred from SST's code and is *untested*.
+  - **Fallback:** the script-upload API accepts `{type:"secrets_store_secret", name, store_id, secret_name}` and `{type:"service", name, service}` directly.
+
 ### 2.2 Cloudflare OAuth: docs (developers.cloudflare.com/fundamentals/oauth/)
 - **Private clients:** "can only be authorized by members of the parent Cloudflare account", need no domain verification, and are the default. Making a client public is permanent and needs a verified domain.
 - **Plans:** all plans, Free included. It's GA, not beta, and optional scopes are GA (changelog 2026-08-20).
@@ -170,16 +215,18 @@ The app clears its cookie. Cloudflare's session logout (`end_session`) is option
 - **User:** any other `accepted` membership.
 - **No membership in this account:** refused. That can't happen with a private client, but the check stays.
 
-The exact role-name strings for roles other than Super Administrator are *unverified*. The implementer should read them from `/memberships` for a non-admin test member, or from the role-listing API, and record them.
+Verified strings: "Super Administrator - All Privileges" (admin) and "HTTP Applications Read" (a minimal member, so "user"), §2.1a. The exact string for the plain "Administrator" role is *unverified*. Read it from the role-listing API (`GET /accounts/{A}/roles`) and record it.
 
 ## 5. Setup flow, replacing parts of v0.1.1's wizard
 
 ### 5.1 Bootstrap (CLI `cloudflare-setup`, cloud or command line)
-**Permission set:** Workers Scripts Edit (deploying the admin app, and registering the workers.dev subdomain if needed; *unverified* whether that permission covers the subdomain), OAuth Clients Edit, Secrets Store Edit (*name unverified*), Account API Tokens Edit (needed only to delete itself, §2.3). The deep link is generated as in v0.1.1, with group IDs looked up from `/tokens/permission_groups`.
+**Permission set (verified, §2.1b):** Workers Scripts Write (deploying the admin and auth Workers, and registering the workers.dev subdomain if needed), OAuth Client Write, Secrets Store Write, and Account API Tokens Write, which is needed only to delete itself (§2.3) and is why the token must come from the dashboard. The deep link is generated as in v0.1.1, with group IDs looked up from `/tokens/permission_groups`.
 
 **Steps:**
 1. Read `CLOUDFLARE_BOOTSTRAP_TOKEN` from the environment or `.env.cloudflare`. Verify it and read its `expires_on`. If it has no expiry, or one more than 1 day away, **DELETE it at once** and tell the user to make a new one with a 1-day expiry, giving the link.
-2. Create the **admin client** (private, confidential; required scopes `user-details.read`, `memberships.read`; optional scopes as §5.2 needs). Put its secret straight into Secrets Store, since it's shown only once (§2.1).
+2. Create **both OAuth clients**, because no sign-in scope can create clients (§2.1a). Put each secret straight into Secrets Store, since it's shown only once (§2.1):
+   - **the admin client:** private and confidential; required scopes `user-details.read` and `memberships.read`; optional scopes covering everything §5.2 needs, including one scope for every permission group in the everyday token (§2.1a);
+   - **the sign-in client:** private and confidential; required scopes `user-details.read` and `memberships.read` only.
 3. Deploy the admin app and bind it.
 4. **Delete the bootstrap token.**
    - Comment out its line in `.env.cloudflare` (as in v0.1.1).
@@ -189,8 +236,7 @@ The exact role-name strings for roles other than Super Administrator are *unveri
 
 ### 5.2 Admin app pages. Each requests only its own optional scopes through the admin client.
 1. **Account setup:**
-   - create the sign-in client and store its secret in Secrets Store;
-   - deploy the auth app with its D1 database;
+   - deploy the auth app with its D1 database, bound to the sign-in client's secret, which the bootstrap already stored;
    - create the shared resources from v0.1.1, without anything email-related: log bucket, state bucket, backups, the signing credential (moved to Secrets Store);
    - write the setup record (v0.1.1 §4.4), bumping `ACCOUNT_SETUP_VERSION`.
 2. **Everyday token:** create it through the user's grant (`account-api-tokens.write`, verified §2.1), with the minimal everyday permission set (v0.1.1 §4.1 minus email). **Show the value once to the human,** with a copy button and the env-file or environment-settings instructions. **The agent never sees it.** It can also add permissions to the existing everyday token in place (§2.3).
@@ -277,7 +323,7 @@ The exact role-name strings for roles other than Super Administrator are *unveri
 
 ## 10. Risks
 - **Single point of failure:** if the auth app is down, nobody can sign in. Existing sessions keep working until they expire.
-- **Testers must be account members.** The owner invites them with the least dashboard role that works. Which role that is remains *unverified*.
+- **Testers must be account members.** "HTTP Applications Read" works as the least-privilege tester role: verified that such a member can sign in, and is capped by that role (§2.1a).
 - **Secrets Store is a beta.** Keep a fallback to Worker secrets.
 - **Role names are free text** from the API. Keep the mapping as a PAR, and record the verified strings.
 - **Cloudflare could change the claims.** If the ID token stops carrying `email` (discovery lists only `sub`), fall back to `/user`, which needs `user-details.read`; that is already required.
