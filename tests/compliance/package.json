@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@lago-morph/prototype-framework": "0.1.0",
+    "@lago-morph/prototype-framework": "0.1.1",
     "zod": "4.6.7"
   },
   "devDependencies": {

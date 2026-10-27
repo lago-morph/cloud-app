@@ -1,7 +1,7 @@
 {
   "name": "prototype-framework",
   "displayName": "Prototype framework",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Build, test and deploy small web apps on @lago-morph/prototype-framework, locally and on Cloudflare",
   "author": {
     "name": "Lagomorph Labs",

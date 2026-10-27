@@ -1,6 +1,6 @@
 {
   "name": "@lago-morph/prototype-framework-skill",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The Claude Code skill for @lago-morph/prototype-framework, at the same version as the framework",
   "keywords": [
     "claude-code",
