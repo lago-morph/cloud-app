@@ -15,7 +15,8 @@
  *   the routing DNS records (the zone's `dns_records` needs "DNS Read") and the routing settings.
  *   A step whose read is refused counts as done only when the setup record of the same domain
  *   lists it as completed, and its `detail` says so.
- * - **Apply** (`applySetupSteps`, with the bootstrap token): inspects every step, stops before any
+ * - **Apply** (`applySetupSteps`, with the bootstrap token): inspects every step, reading each one
+ *   directly (a refused read stops it; the record never vouches here), stops before any
  *   change when a requested step's resource belongs to another account or when the token lacks a
  *   permission the setup needs (as `setup-account`, DEC-0515, DEC-0551), applies only the
  *   requested steps that are not done, in order, and writes the setup record last
@@ -119,7 +120,12 @@ interface Inspected {
   readonly detail?: string;
 }
 
-async function inspectAll(steps: readonly Step[], emailDomain: string, record: AccountSetupRecord | undefined): Promise<Inspected[]> {
+/**
+ * Every step's inspection. With `record` a refused read counts as done when the record of the same
+ * domain lists the step (the everyday token's inspection). With `"direct"` (the bootstrap token's
+ * apply, DEC-0579) a refused read is an error naming the step: its token must read every step.
+ */
+async function inspectAll(steps: readonly Step[], emailDomain: string, record: AccountSetupRecord | undefined | "direct"): Promise<Inspected[]> {
   const earlier = new Map<AccountStepId, "owned" | "absent" | "foreign">();
   const out: Inspected[] = [];
   for (const step of steps) {
@@ -127,7 +133,10 @@ async function inspectAll(steps: readonly Step[], emailDomain: string, record: A
     if ((ACCOUNT_STEP_IDS as readonly string[]).includes(step.id)) {
       earlier.set(step.id as AccountStepId, inspection.state === "done" ? "owned" : inspection.state === "foreign" ? "foreign" : "absent");
     }
-    if (inspection.state !== "unreadable") {
+    if (inspection.state === "unreadable" && record === "direct") {
+      throw new Error(`the token could not read ${step.resource(emailDomain)} (${inspection.detail ?? "the read was refused"}); nothing was changed`);
+    }
+    if (inspection.state !== "unreadable" || record === "direct") {
       out.push({ step, inspection, done: inspection.state === "done", ...(inspection.detail === undefined ? {} : { detail: inspection.detail }) });
       continue;
     }
@@ -180,19 +189,21 @@ export interface ApplySetupInput extends SetupStepOptions {
 
 /**
  * Applies the requested steps that are not done, in order, and then writes the setup record
- * (`applied`: the steps it ran). Needs the bootstrap token's permissions for any change; changes
- * nothing, and throws naming the cause, when the domain is invalid, a requested step's resource
- * belongs to another account, or the token lacks a permission. Idempotent: a second run applies
- * nothing and writes nothing.
+ * (`applied`: the steps it ran; `written`: whether the record was written, also when only its
+ * version or completed steps changed). Needs the bootstrap token's permissions for any change; changes
+ * nothing, and throws naming the cause, when the domain is invalid, a step's read is refused, a
+ * requested step's resource belongs to another account, or the token lacks a permission.
+ * Idempotent: a second run applies nothing and writes nothing.
  */
-export async function applySetupSteps(api: CloudflareApi, accountId: string, input: ApplySetupInput): Promise<{ readonly applied: readonly SetupStepId[]; readonly record: AccountSetupRecord }> {
+export async function applySetupSteps(api: CloudflareApi, accountId: string, input: ApplySetupInput): Promise<{ readonly applied: readonly SetupStepId[]; readonly record: AccountSetupRecord; readonly written: boolean }> {
   const problem = emailDomainProblem(input.emailDomain);
   if (problem !== undefined) throw new Error(`the email domain ${problem}; nothing was changed`);
   const unknown = input.steps.filter((s) => !(SETUP_STEPS as readonly string[]).includes(s));
   if (unknown.length > 0) throw new Error(`unknown setup step${unknown.length === 1 ? "" : "s"} ${unknown.join(", ")}; nothing was changed`);
 
   const { email, steps } = stepsOf(api, accountId, input);
-  const inspected = await inspectAll(steps, input.emailDomain, await readSetupRecord(api, accountId));
+  // The bootstrap token reads every step itself; the record never stands in for a refused read (DEC-0579).
+  const inspected = await inspectAll(steps, input.emailDomain, "direct");
   const requested = inspected.filter((i) => input.steps.includes(i.step.id));
   const foreign = requested.filter((i) => i.inspection.state === "foreign");
   if (foreign.length > 0) throw new Error(foreignResourcesMessage(foreign.map((i) => i.step.resource(input.emailDomain))));
@@ -209,12 +220,16 @@ export async function applySetupSteps(api: CloudflareApi, accountId: string, inp
     await i.step.apply(input.emailDomain);
     applied.push(i.step.id);
   }
+  let written = false;
   const completedSteps = inspected.filter((i) => i.done || applied.includes(i.step.id)).map((i) => i.step.id);
   const record = await writeSetupRecord(
     api,
     accountId,
     { emailDomain: input.emailDomain, completedSteps, setupVersion: input.setupVersion, frameworkVersion: input.frameworkVersion, now: input.now },
     applied.length > 0,
+    () => {
+      written = true;
+    },
   );
-  return { applied, record };
+  return { applied, record, written };
 }

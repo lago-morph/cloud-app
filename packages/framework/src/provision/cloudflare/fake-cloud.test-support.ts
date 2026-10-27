@@ -340,9 +340,10 @@ export class FakeCloud {
     const p = url.pathname;
     const b = body as Record<string, unknown>;
     if (p === "/zones" && method === "GET") {
+      // `?name=` finds one zone; without it, every zone of the account (cloudflare-setup's domain choice).
       const name = url.searchParams.get("name");
-      const zone = name === null ? undefined : this.zones.get(name);
-      return ok(zone ? [{ id: zone.id, name: zone.name, status: zone.status, account: { id: ACCOUNT } }] : [], { result_info: { page: 1, total_pages: 1 } });
+      const zones = name === null ? [...this.zones.values()] : [this.zones.get(name)].filter((z): z is FakeZone => z !== undefined);
+      return ok(zones.map((zone) => ({ id: zone.id, name: zone.name, status: zone.status, account: { id: ACCOUNT } })), { result_info: { page: 1, total_pages: 1 } });
     }
     const one = /^\/zones\/([^/]+)$/.exec(p);
     if (one && method === "GET") {

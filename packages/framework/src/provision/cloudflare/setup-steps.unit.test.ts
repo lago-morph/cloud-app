@@ -212,6 +212,14 @@ describe("the account setup steps (plan-setup-wizard §4.4, DEC-0578)", () => {
     }
   });
 
+  it("the apply reads every step directly: a refused read stops it before any change, even when the record lists the step", async () => {
+    const cloud = await setUpCloud();
+    const zoneId = cloud.zones.get(DOMAIN)!.id;
+    cloud.override.set(`GET /zones/${zoneId}/email/routing`, { status: 403, body: { success: false, errors: [{ code: 10000, message: "Authentication error" }] } });
+    await expect(applySetupSteps(cloud.api, ACCOUNT, input())).rejects.toThrow(/could not read .*subaddress.*nothing was changed/);
+    expect(writes(cloud)).toEqual([]);
+  });
+
   it("an invalid domain or an unknown step is refused before any request", async () => {
     const cloud = freshCloud();
     await expect(applySetupSteps(cloud.api, ACCOUNT, input({ emailDomain: "Not A Domain" }))).rejects.toThrow(/is not a domain name.*nothing was changed/);
@@ -276,5 +284,12 @@ describe("setup-account --target cloudflare on the steps (PROV-REQ-004, DEC-0577
     expect(writes(cloud)).toEqual([]);
     // The steps' own apply agrees: nothing to do.
     expect((await applySetupSteps(cloud.api, ACCOUNT, input())).applied).toEqual([]);
+  });
+
+  it("says whether it wrote the setup record: yes for an old record without the setup fields, no on a second run", async () => {
+    const cloud = await setUpCloud();
+    cloud.objectBodies.set(RECORD, { emailDomain: DOMAIN });
+    expect(await applySetupSteps(cloud.api, ACCOUNT, input())).toMatchObject({ applied: [], written: true });
+    expect(await applySetupSteps(cloud.api, ACCOUNT, input())).toMatchObject({ applied: [], written: false });
   });
 });

@@ -81,11 +81,11 @@ describe("comparePolicies", () => {
   const scope = { accountId: A, zoneId: Z };
 
   it("the dashboard's token: nothing missing, the zone covered by all zones", () => {
-    expect(comparePolicies(dashboardPolicies(EVERYDAY), EVERYDAY, scope)).toEqual({ missing: [], wrongAccount: false, zoneCovered: true });
+    expect(comparePolicies(dashboardPolicies(EVERYDAY), EVERYDAY, scope)).toEqual({ missing: [], denied: [], wrongAccount: false, zoneCovered: true });
   });
 
   it("a specific zone covers it; another zone does not, and its groups are missing", () => {
-    expect(comparePolicies(dashboardPolicies(EVERYDAY, oneZone(Z)), EVERYDAY, scope)).toEqual({ missing: [], wrongAccount: false, zoneCovered: true });
+    expect(comparePolicies(dashboardPolicies(EVERYDAY, oneZone(Z)), EVERYDAY, scope)).toEqual({ missing: [], denied: [], wrongAccount: false, zoneCovered: true });
     const elsewhere = comparePolicies(dashboardPolicies(EVERYDAY, oneZone("zone2")), EVERYDAY, scope);
     expect(elsewhere.zoneCovered).toBe(false);
     expect(elsewhere.wrongAccount).toBe(false);
@@ -106,10 +106,31 @@ describe("comparePolicies", () => {
     expect(names(comparePolicies(stronger, EVERYDAY, scope).missing)).toEqual(["Analytics Read"]);
   });
 
-  it("a deny policy takes a group away", () => {
+  it("a deny policy takes a group away, and is reported as denied", () => {
     const dns = BOOTSTRAP.find((g) => g.name === "DNS Write")!;
     const policies = [...dashboardPolicies(BOOTSTRAP), { effect: "deny" as const, resources: allZones, permission_groups: [{ id: dns.id }] }];
-    expect(names(comparePolicies(policies, BOOTSTRAP, scope).missing)).toEqual(["DNS Write"]);
+    const c = comparePolicies(policies, BOOTSTRAP, scope);
+    expect(names(c.missing)).toEqual(["DNS Write"]);
+    expect(names(c.denied)).toEqual(["DNS Write"]);
+  });
+
+  it("a deny of a stronger group leaves the weaker one granted (denying Zone Write keeps Zone Read)", () => {
+    const policies = [...dashboardPolicies(EVERYDAY), { effect: "deny" as const, resources: allZones, permission_groups: [{ id: "e6d2666161e84845a636613608cee8d5", name: "Zone Write" }] }];
+    expect(comparePolicies(policies, EVERYDAY, scope)).toEqual({ missing: [], denied: [], wrongAccount: false, zoneCovered: true });
+  });
+
+  it("the dashboard's single entire-account policy with every group passes", () => {
+    for (const list of [EVERYDAY, BOOTSTRAP]) {
+      const one = [{ id: "p", effect: "allow" as const, resources: accountRes, permission_groups: list.map((g) => ({ id: g.id, name: g.name })) }];
+      expect(comparePolicies(one, list, scope)).toEqual({ missing: [], denied: [], wrongAccount: false, zoneCovered: true });
+    }
+  });
+
+  it("an account group in a policy that names only zones of the account is not granted on the account", () => {
+    const zonesOnly = [{ effect: "allow" as const, resources: oneZone(Z), permission_groups: EVERYDAY.map((g) => ({ id: g.id })) }];
+    const c = comparePolicies(zonesOnly, EVERYDAY, scope);
+    expect(c.missing).toEqual(byScope(EVERYDAY, "account"));
+    expect(c.zoneCovered).toBe(true);
   });
 
   it("a token of another account: wrong account, everything missing", () => {
@@ -122,7 +143,7 @@ describe("comparePolicies", () => {
 
   it("an account given as `*` is not the wrong account; top-level zone keys name no account", () => {
     const star = [{ effect: "allow" as const, resources: { "com.cloudflare.api.account.*": "*" }, permission_groups: EVERYDAY.map((g) => ({ id: g.id })) }];
-    expect(comparePolicies(star, EVERYDAY, scope)).toEqual({ missing: [], wrongAccount: false, zoneCovered: true });
+    expect(comparePolicies(star, EVERYDAY, scope)).toEqual({ missing: [], denied: [], wrongAccount: false, zoneCovered: true });
     const zoneOnly = [{ effect: "allow" as const, resources: { [`com.cloudflare.api.account.zone.${Z}`]: "*" }, permission_groups: byScope(EVERYDAY, "zone").map((g) => ({ id: g.id })) }];
     const c = comparePolicies(zoneOnly, EVERYDAY, scope);
     expect(c.wrongAccount).toBe(false);
@@ -141,9 +162,14 @@ describe("withMissingPermissions and inPlaceUpdateBody", () => {
     expect(body.slice(0, 2)).toEqual(existing.map((p) => ({ id: p.id, effect: p.effect, resources: p.resources, permission_groups: p.permission_groups.map((g) => ({ id: g.id })) })));
     expect(body.slice(2)).toEqual([
       { effect: "allow", resources: accountRes, permission_groups: [{ id: sending.id }] },
-      { effect: "allow", resources: oneZone(Z), permission_groups: [{ id: rules.id }] },
+      { effect: "allow", resources: { [`com.cloudflare.api.account.zone.${Z}`]: "*" }, permission_groups: [{ id: rules.id }] },
     ]);
     expect(comparePolicies(body, EVERYDAY, { accountId: A, zoneId: Z }).missing).toEqual([]);
+  });
+
+  it("keeps a group's meta", () => {
+    const withMeta: TokenPolicy[] = [{ id: "pm", effect: "allow", resources: accountRes, permission_groups: [{ id: sending.id, name: sending.name, meta: { key: "k", value: "v" } }] }];
+    expect(withMissingPermissions(withMeta, [], { accountId: A })[0]?.permission_groups).toEqual([{ id: sending.id, meta: { key: "k", value: "v" } }]);
   });
 
   it("without a zone, the zone groups go on all the account's zones; nothing missing adds nothing", () => {

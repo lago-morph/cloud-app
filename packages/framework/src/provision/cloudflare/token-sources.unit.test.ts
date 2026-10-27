@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -6,6 +6,7 @@ import {
   BOOTSTRAP_DELETED_LINE,
   cloudflareEnvironment,
   commentOutBootstrap,
+  mergeCloudflareSettings,
   ENV_CLOUDFLARE_FILE,
   ENV_CLOUDFLARE_TEMPLATE,
   fillInSettings,
@@ -141,16 +142,15 @@ describe(".env.cloudflare and the environment (plan-setup-wizard §4.2; DEC-0570
     if (isPosix) expect(mode()).toBe(0o600);
   });
 
-  it("never changes a value already in the file; adds a missing line; creates an absent file at mode 600", () => {
+  it("never changes a value already in the file; adds a missing line; never creates an absent file (plan §3.4, SETUP-AC-002)", () => {
     write(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_EMAIL_DOMAIN=kept.example\n`);
     expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account", CLOUDFLARE_EMAIL_DOMAIN: "other.example" })).toEqual(["CLOUDFLARE_ACCOUNT_ID"]);
     expect(read()).toBe(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_EMAIL_DOMAIN=kept.example\nCLOUDFLARE_ACCOUNT_ID=fake-account\n`);
     expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "another" })).toEqual([]);
 
     rmSync(file());
-    expect(fillInSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "mail.example" })).toEqual(["CLOUDFLARE_EMAIL_DOMAIN"]);
-    expect(read()).toBe("CLOUDFLARE_EMAIL_DOMAIN=mail.example\n");
-    if (isPosix) expect(mode()).toBe(0o600);
+    expect(fillInSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "mail.example" })).toEqual([]);
+    expect(existsSync(file())).toBe(false);
   });
 
   it("refuses a value it could not write back as one line, without naming the value", () => {
@@ -199,6 +199,59 @@ describe(".env.cloudflare and the environment (plan-setup-wizard §4.2; DEC-0570
     expect(settings.values).toEqual({ CLOUDFLARE_API_TOKEN: FILE_TOKEN });
     expect(settings.sources).toEqual({ CLOUDFLARE_API_TOKEN: "file" });
     expect(settings.notices).toEqual([]);
+  });
+
+  it("a whitespace-only environment value is left out of the merged environment, also when the file has none", () => {
+    const merged = cloudflareEnvironment(dir, { CLOUDFLARE_API_TOKEN: "   ", CLOUDFLARE_ACCOUNT_ID: " ", PATH: "/bin" });
+    expect(merged.CLOUDFLARE_API_TOKEN).toBeUndefined();
+    expect(merged.CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
+    expect(merged.PATH).toBe("/bin");
+    expect(mergeCloudflareSettings({ CLOUDFLARE_EMAIL_DOMAIN: "\t" }, readCloudflareSettings(dir, {})).CLOUDFLARE_EMAIL_DOMAIN).toBeUndefined();
+  });
+
+  it.runIf(isPosix)("a .env.cloudflare that is a symbolic link is written through to its target, which stays at mode 600; the link stays a link", () => {
+    const shared = join(dir, "shared");
+    mkdirSync(shared);
+    const target = join(shared, "cloudflare.env");
+    writeFileSync(target, `CLOUDFLARE_BOOTSTRAP_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_API_TOKEN=x\n`);
+    chmodSync(target, 0o644);
+    symlinkSync(target, file());
+    expect(commentOutBootstrap(dir)).toBe(true);
+    expect(lstatSync(file()).isSymbolicLink()).toBe(true);
+    expect(readFileSync(target, "utf8")).toBe(`${BOOTSTRAP_DELETED_LINE}\nCLOUDFLARE_API_TOKEN=x\n`);
+    expect(statSync(target).mode & 0o777).toBe(0o600);
+    expect(fillInSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "example.test" })).toEqual(["CLOUDFLARE_EMAIL_DOMAIN"]);
+    expect(lstatSync(file()).isSymbolicLink()).toBe(true);
+    expect(readFileSync(target, "utf8")).toContain("CLOUDFLARE_EMAIL_DOMAIN=example.test\n");
+    expect(readdirSync(shared)).toEqual(["cloudflare.env"]);
+  });
+
+  it.runIf(isPosix)("a .env.cloudflare that is a dangling symbolic link is written through by the template write (target created at mode 600, the link stays a link) and a later rewrite; fillInSettings creates nothing through it (DEC-0614, DEC-0587)", () => {
+    const shared = join(dir, "shared");
+    mkdirSync(shared);
+    const target = join(shared, "cloudflare.env");
+    // A relative link, through a second link, to a file not made yet.
+    symlinkSync("hop", file());
+    symlinkSync(join("shared", "cloudflare.env"), join(dir, "hop"));
+    expect(writeTemplateIfAbsent(dir)).toBe(true);
+    expect(lstatSync(file()).isSymbolicLink()).toBe(true);
+    expect(lstatSync(join(dir, "hop")).isSymbolicLink()).toBe(true);
+    expect(readFileSync(target, "utf8")).toBe(ENV_CLOUDFLARE_TEMPLATE);
+    expect(statSync(target).mode & 0o777).toBe(0o600);
+    expect(readdirSync(shared)).toEqual(["cloudflare.env"]);
+    // A rewrite of the existing target through the links (a new file renamed over it in its own folder).
+    chmodSync(target, 0o644);
+    expect(fillInSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "example.test" })).toEqual(["CLOUDFLARE_EMAIL_DOMAIN"]);
+    expect(lstatSync(file()).isSymbolicLink()).toBe(true);
+    expect(lstatSync(join(dir, "hop")).isSymbolicLink()).toBe(true);
+    expect(readFileSync(target, "utf8")).toContain("CLOUDFLARE_EMAIL_DOMAIN=example.test\n");
+    expect(statSync(target).mode & 0o777).toBe(0o600);
+    expect(readdirSync(shared)).toEqual(["cloudflare.env"]);
+    // fillInSettings never creates a missing file (SETUP-AC-002, DEC-0587): a dangling link counts as missing.
+    rmSync(target);
+    expect(fillInSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "example.test" })).toEqual([]);
+    expect(readdirSync(shared)).toEqual([]);
+    expect(lstatSync(file()).isSymbolicLink()).toBe(true);
   });
 
   it("comments out a bootstrap line the parser cannot read, so no value stays in the file", () => {

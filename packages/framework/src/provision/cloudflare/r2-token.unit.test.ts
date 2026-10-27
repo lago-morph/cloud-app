@@ -151,6 +151,25 @@ describe("a stage's legacy signing token (DEC-0100, superseded by DEC-0550)", ()
     const api = stubApi({ [`DELETE ${TOKENS}/t2`]: ok({ id: "t2" }) });
     await deleteSigningToken(api, ACCOUNT, "t2");
     await deleteSigningToken(stubApi({ [`DELETE ${TOKENS}/t2`]: err(404, 1003, "not found") }), ACCOUNT, "t2");
-    await expect(deleteSigningToken(stubApi({ [`DELETE ${TOKENS}/t2`]: err(403, 9109, "Unauthorized") }), ACCOUNT, "t2")).rejects.toThrow(/deleting R2 API token t2 failed: HTTP 403/);
+    const failure = await deleteSigningToken(stubApi({ [`DELETE ${TOKENS}/t2`]: err(403, 9109, "Unauthorized") }), ACCOUNT, "t2", "notes-test-abc-files-signing").then(() => "", (e: unknown) => String(e));
+    // Named by its name only: a token ID is not printed (SETUP-REQ-007).
+    expect(failure).toMatch(/deleting the R2 API token notes-test-abc-files-signing failed: HTTP 403/);
+    expect(failure).not.toContain("t2");
+  });
+
+  it("a failed delete of an old signing token after a replacement names the token by its name, never its ID", async () => {
+    const OLD = "0ld0000000000000000000000000000a";
+    const api = stubApi({
+      [`GET ${TOKENS}?per_page=50&page=1`]: ok([{ id: OLD, name: SIGNING_TOKEN_NAME }], { page: 1, total_pages: 1 }),
+      [`GET ${TOKENS}/permission_groups`]: GROUPS,
+      [`POST ${TOKENS}`]: ok({ id: "tok123", value: "token-value-xyz" }),
+      [`PUT ${RECORD}`]: ok({}),
+      [`DELETE ${TOKENS}/${OLD}`]: err(403, 9109, "Unauthorized"),
+    });
+    const failure = await createAccountSigningCredential(api, ACCOUNT).then(() => "", (e: unknown) => String(e));
+    expect(failure).toMatch(new RegExp(`the new .* and its record are in place, but deleting the R2 API token ${SIGNING_TOKEN_NAME} failed: HTTP 403`));
+    expect(failure).toContain(`delete the older token named ${SIGNING_TOKEN_NAME}`);
+    expect(failure).not.toContain(OLD);
+    expect(failure).not.toContain("tok123");
   });
 });

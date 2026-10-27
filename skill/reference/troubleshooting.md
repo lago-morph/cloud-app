@@ -35,7 +35,7 @@ The date and time are UTC. `smoke` prints today's prefix.
 
 **Dashboard (no setup; these menu names are not yet verified).** Open Storage & databases → R2 → `prototype-logs`. Then open the folders `<app>` / `<stage>` / year / month / day. The file name ends in the request ID. Open the file and choose Download to read it.
 
-**Command line, with the API token from [owner-tasks.md](owner-tasks.md) §2.** `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` must be set in the shell. These two `curl` commands are **verified on Cloudflare**: on a real test stage, the list command found a failed request's key and the read command returned its `CORE.INTERNAL` entry (E2E-011, Cloudflare pass 2–5; the framework repository's `validation/cloudflare/pass-2to5/SUMMARY.md` and `logs/5-trouble.log`). List one day's keys:
+**Command line, only where both values are in the environment.** These commands need `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` in the shell's environment, for example in a cloud session whose environment settings hold them. When the tokens are only in `.env.cloudflare` (the usual case, [owner-tasks.md](owner-tasks.md) §2), the variables are empty and the requests fail: use the dashboard route above instead. Never `source`, `cat` or otherwise read `.env.cloudflare` to fill them in. These two `curl` commands are **verified on Cloudflare**: on a real test stage, the list command found a failed request's key and the read command returned its `CORE.INTERNAL` entry (E2E-011, Cloudflare pass 2–5; the framework repository's `validation/cloudflare/pass-2to5/SUMMARY.md` and `logs/5-trouble.log`). List one day's keys:
 
 ```sh
 STAGE='<stage>'; DAY=$(date -u +%Y/%m/%d)
@@ -70,7 +70,7 @@ Not yet verified on Cloudflare in this phase.
   ```sh
   npx wrangler tail "$APP-$STAGE" --format pretty
   ```
-  It needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` set. Not yet verified on Cloudflare in this phase.
+  It needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the shell's environment, as the `curl` commands above do; with the tokens only in `.env.cloudflare`, use the dashboard instead (Workers & Pages → `<app>-<stage>` → Logs, menu names not yet verified). Not yet verified on Cloudflare in this phase.
 - If entries are printed as lines starting `[prototype-framework:log]` in `wrangler tail`, the Worker has no `LOGS` binding. Run `deploy` again.
 - Locally, entries reach `.logs/` only while `npm run dev` runs. In-process tests write no files.
 
@@ -103,8 +103,8 @@ Every stage signs people in with email and password. A failed attempt writes one
 
 No mail arrives:
 - Locally nothing is sent: read `.mail/` with `npm run mail -- last --to '<address>'`. On a test stage the mail is captured, not sent.
-- On a production stage, look for a `MAIL` entry `mail send failed: <code>` (§1). The sender is `no-reply@<domain>`; if `deploy` or `setup-account` said the domain is not verified for sending, run `npm run setup-account -- --target cloudflare` again.
-- A test address `sink+<tag>@t.<domain>`: read it with `npm run mail -- last --to '<address>' --target cloudflare`. Only `sink+…` addresses reach the test mailbox. Right after `setup-account` created the mailbox rule, a send may be rejected for a minute.
+- On a production stage, look for a `MAIL` entry `mail send failed: <code>` (§1). The sender is `no-reply@<domain>`; if `deploy` or setup said the domain is not verified for sending, run `npm run cloudflare-setup` again.
+- A test address `sink+<tag>@t.<domain>`: read it with `npm run mail -- last --to '<address>' --target cloudflare`. Only `sink+…` addresses reach the test mailbox. Right after setup created the mailbox rule, a send may be rejected for a minute.
 
 Signed in, but not admin: the `admin` role is granted per stage with `admins grant` ([owner-tasks.md](owner-tasks.md) §7); check with `admins list`.
 
@@ -112,8 +112,8 @@ Signed in, but not admin: the `admin` role is granted per stage with `admins gra
 
 `deploy` prints the failed step, the stage's state and the next action. Follow the next action. Common messages:
 
-- `run setup-account … first`: the account's shared resources are missing. See [owner-tasks.md](owner-tasks.md) §3.
-- A missing `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID`, or a missing permission: see [owner-tasks.md](owner-tasks.md) §2. "Account API Tokens Write" is the setup token's, needed only by `setup-account`; "R2 signing credential … missing" means `setup-account` must run with the setup token.
+- `run setup-account … first`: the account's shared resources are missing. Run `npm run cloudflare-setup` ([owner-tasks.md](owner-tasks.md) §2).
+- A missing `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID`, a missing permission, or "R2 signing credential … missing": run `npm run cloudflare-setup`, which says what to fix ([owner-tasks.md](owner-tasks.md) §2). "Account API Tokens Write" is the bootstrap token's only.
 - `NODE_USE_ENV_PROXY`: you are behind an HTTPS proxy. Put `NODE_USE_ENV_PROXY=1 ` in front of the command.
 - `required secrets are not set: …`: this happens on the first deploy of a stage. Set each named secret with `--target cloudflare`, then run `deploy` again.
 - An error about the number of D1 databases: an account holds at most 10, and a schema-changing deploy briefly holds two per stage. Remove unused test stages ([deploying.md](deploying.md)).

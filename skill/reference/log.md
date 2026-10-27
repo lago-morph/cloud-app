@@ -51,4 +51,4 @@ On a connected test stage (`connectTestStage`) `logs()` throws: entries are in t
 
 ## Stopping condition
 
-Stop reading when your code logs what only it knows, without secrets or personal data, does not duplicate the framework's error entries, your error displays show the request ID, and `npx prototype-framework verify` passes.
+Stop reading when your code logs what only it knows, without secrets or personal data, does not duplicate the framework's error entries, your error displays show the request ID, and `npm run verify` passes.

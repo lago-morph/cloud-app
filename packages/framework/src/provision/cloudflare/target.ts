@@ -60,7 +60,7 @@ import { readStageRecord, writeStageRecord } from "./stage-record.js";
 import type { CloudflareDatabases } from "./databases.js";
 import { missingCredentials, type Environment } from "./environment.js";
 import { checkStageHealth } from "./health.js";
-import { accountResourceClash, filesBucketName, isStageStateObject, publicOrigin, STATE_BUCKET, workerName } from "./names.js";
+import { accountResourceClash, filesBucketName, isStageStateObject, legacySigningTokenName, publicOrigin, STATE_BUCKET, workerName } from "./names.js";
 import { deleteObjects, listObjectKeys } from "./objects.js";
 import { deleteSigningToken, findLegacySigningToken, readSigningCredentials, SIGNING_RESOURCE, signingCredentialState, tokenWriteProblems } from "./r2-token.js";
 import { INFRASTRUCTURE_COMPONENT, processSstExec, runSst, writeSstApp, type SstExec, type WorkerCode } from "./sst.js";
@@ -184,8 +184,9 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       return problems;
     },
     async setUpEmail(emailDomain) {
-      const created = await email.setUp(emailDomain);
+      const created = [...(await email.setUp(emailDomain))];
       // The last step of setup-account: every step is done now, so the setup record is written (DEC-0577).
+      // A write is reported with what was created, so a run that only records a new version does not say "nothing changed".
       await writeSetupRecord(
         api,
         accountId,
@@ -197,6 +198,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
           now: () => new Date((options.now ?? Date.now)()),
         },
         setupChanged || created.length > 0,
+        (record) => created.push(`account setup record (setup version ${String(record.setupVersion)})`),
       );
       setupChanged = false;
       return created;
@@ -309,7 +311,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       await attempt(async () => deleteObjects(api, accountId, bucket, await listObjectKeys(api, accountId, bucket)));
       await attempt(async () => {
         const token = await findLegacySigningToken(api, accountId, stage);
-        if (token) await deleteSigningToken(api, accountId, token.id);
+        if (token) await deleteSigningToken(api, accountId, token.id, legacySigningTokenName(stage));
       });
       await attempt(async () => {
         // SST knows a stage only by its `app/<app>/<stage>` object (PullState); without it,

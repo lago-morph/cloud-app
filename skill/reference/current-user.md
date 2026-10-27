@@ -62,4 +62,4 @@ The mock chooses the level directly: it reads no roles.
 
 ## Stopping condition
 
-Stop reading when every private route has a guard and filters by `c.var.user.id`, admin routes use `requireAdmin()`, the stage's values file has the lists the owner wants, your tests cover anonymous, user and admin callers, and `npx prototype-framework verify` passes.
+Stop reading when every private route has a guard and filters by `c.var.user.id`, admin routes use `requireAdmin()`, the stage's values file has the lists the owner wants, your tests cover anonymous, user and admin callers, and `npm run verify` passes.

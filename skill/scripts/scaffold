@@ -42,4 +42,4 @@ try {
   console.error(`scaffold: ${err instanceof Error ? err.message : String(err)}`);
   process.exit(1);
 }
-console.log(`Scaffolded ${resolve(positional[0])}. Next: cd there, then npx prototype-framework dev / verify.`);
+console.log(`Scaffolded ${resolve(positional[0])}. Next: cd there, then npm run dev / npm run verify.`);

@@ -111,6 +111,16 @@ function tokenOf(message: MailInput | undefined): string {
   return decodeURIComponent(match[2]);
 }
 
+/**
+ * The verification token with its signature changed. The first signature character holds six
+ * whole bits of the HMAC's first byte, so changing it always changes the signed bytes; changing
+ * the last one need not (it carries two padding bits that decoding ignores).
+ */
+function tampered(token: string): string {
+  const at = token.lastIndexOf(".") + 1;
+  return `${token.slice(0, at)}${token[at] === "A" ? "B" : "A"}${token.slice(at + 1)}`;
+}
+
 async function failure(promise: Promise<unknown>): Promise<string> {
   try {
     await promise;
@@ -292,7 +302,7 @@ describe.each([
       await provider.signUp(ctx(), { email, password: PASSWORD, displayName: "A" });
       await settle();
       const token = tokenOf(mail.last(email));
-      for (const bad of ["bogus", "", `${token.slice(0, -2)}xx`]) expect(await failure(provider.verify(ctx(), { token: bad }))).toBe("AUTH.LOGIN_FAILED");
+      for (const bad of ["bogus", "", tampered(token)]) expect(await failure(provider.verify(ctx(), { token: bad }))).toBe("AUTH.LOGIN_FAILED");
       expect(entries.filter((e) => e.message === "login failed: invalid token")).toHaveLength(3);
       expect(await failure(provider.signIn(ctx(), { email, password: PASSWORD }))).toBe("AUTH.NOT_VERIFIED");
       expect(await count(AUTH_MODEL_NAMES.session)).toBe(0);
@@ -664,6 +674,19 @@ describe.each([
       ]);
       expect(auth.credentials?.context).toBeTypeOf("function");
     });
+  });
+});
+
+describe("the tampered verification token (AUTH-AC-011)", () => {
+  /** The HS256 signature bytes, decoded as jose decodes them (padding bits ignored). */
+  const signature = (jwt: string): Buffer => Buffer.from(jwt.slice(jwt.lastIndexOf(".") + 1), "base64url");
+  // Fixed fake tokens: header.payload.signature, the signature 43 base64url characters (32 bytes).
+  const header = "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6ImFAZXhhbXBsZS50ZXN0In0";
+
+  it.each([`${"Q".repeat(41)}xx`, `${"Q".repeat(41)}xy`, `A${"Q".repeat(40)}xz`, `B${"Q".repeat(40)}xw`])("always changes the signed bytes (%s)", (sig) => {
+    const token = `${header}.${sig}`;
+    // The last character of a 32-byte signature carries 2 ignored bits: "xx", "xy", "xz" and "xw" decode alike.
+    expect(signature(tampered(token)).equals(signature(token))).toBe(false);
   });
 });
 

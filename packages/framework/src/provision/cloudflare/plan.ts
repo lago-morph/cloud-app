@@ -9,7 +9,7 @@
  * without it the plan is unknown and messages name both limits. Read only when the limit
  * matters (a database creation refused with code 7406), never on an ordinary deploy.
  */
-import type { CloudflareApi } from "./api.js";
+import { CloudflareRequestsStopped, type CloudflareApi } from "./api.js";
 
 export type WorkersPlan = "free" | "paid";
 
@@ -46,7 +46,10 @@ function setting(env: Readonly<Record<string, string | undefined>>): WorkersPlan
   return value === "free" || value === "paid" ? value : undefined;
 }
 
-/** A reader of the account's plan: one request, Cloudflare first, then the setting. Never throws. */
+/**
+ * A reader of the account's plan: one request, Cloudflare first, then the setting. Throws only a
+ * request layer's stop (`CloudflareRequestsStopped`, DEC-0619), which is not "no answer".
+ */
 export function workersPlanReader(api: CloudflareApi, accountId: string, env: Readonly<Record<string, string | undefined>> = {}): WorkersPlanReader {
   return async () => {
     try {
@@ -54,7 +57,8 @@ export function workersPlanReader(api: CloudflareApi, accountId: string, env: Re
       const body = r.body as { success?: unknown; result?: unknown } | null;
       const plan = r.status === 200 && body?.success === true ? planFromSubscriptions(body.result) : undefined;
       if (plan !== undefined) return { plan, source: "api" };
-    } catch {
+    } catch (error) {
+      if (error instanceof CloudflareRequestsStopped) throw error;
       // no answer: the setting decides
     }
     const fallback = setting(env);

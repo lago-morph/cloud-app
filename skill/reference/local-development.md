@@ -32,7 +32,7 @@ Then:
 
 ## Commands
 
-Run them in the app directory, as `npm run <command>` or `npx prototype-framework <command>`:
+Run them in the app directory, as `npm run <command>` (flags after `--`) or `npm exec --no -- prototype-framework <command>` (never plain `npx`: before `npm install` it would fetch an unrelated package of that name from the registry):
 
 | Command | Does |
 | --- | --- |
@@ -70,4 +70,4 @@ Run them in the app directory, as `npm run <command>` or `npx prototype-framewor
 
 ## Stopping condition
 
-Stop reading when `npm run dev` serves your app at `http://localhost:<port>/`, you can log in with the mock, and `npx prototype-framework verify` passes. For deploying to a cloud, read [deploying.md](deploying.md).
+Stop reading when `npm run dev` serves your app at `http://localhost:<port>/`, you can log in with the mock, and `npm run verify` passes. For deploying to a cloud, read [deploying.md](deploying.md).
