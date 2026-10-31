@@ -37,7 +37,7 @@ const fieldValue: fc.Arbitrary<unknown> = fc.oneof(
   fc.jsonValue(),
   fc.string({ unit: "grapheme", maxLength: 600 }),
   fc.nat({ max: 600 }).map((n) => " ".repeat(n)),
-  fc.constantFrom("", " ", " ", "​", "a".repeat(500), "a".repeat(501)),
+  fc.constantFrom("", " ", "\u00a0", "\u200b", "a".repeat(500), "a".repeat(501)),
 );
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -65,6 +65,10 @@ async function errorCode(res: Response): Promise<string | undefined> {
 
 export async function fuzzJsonRoute(app: Requester, options: FuzzJsonRouteOptions): Promise<void> {
   const { path, method = "POST", schema, examples, numRuns, seed } = options;
+  // A wrong example would leave the "never INVALID_INPUT for an accepted body" check untested.
+  for (const example of examples) {
+    if (!(await schema.safeParseAsync(example)).success) throw new Error(`fuzzJsonRoute: the example ${JSON.stringify(example)} is refused by the schema; give bodies it accepts`);
+  }
   const body = fc.oneof(fc.constantFrom(...examples), fc.constantFrom(...examples).chain(changed), fc.jsonValue());
   await fc.assert(
     fc.asyncProperty(body, async (value) => {

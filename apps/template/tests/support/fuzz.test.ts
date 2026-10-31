@@ -52,13 +52,21 @@ describe("fuzzJsonRoute", () => {
 
   it("sends the method and path given, as JSON", async () => {
     const seen: string[] = [];
+    const correct = route((_b, valid) => (valid ? created() : invalidInput()));
     const r: Requester = {
       request(path, init) {
         seen.push(`${init?.method ?? "GET"} ${path} ${new Headers(init?.headers).get("content-type") ?? ""}`);
-        return Promise.resolve(invalidInput());
+        return correct.request(path, init);
       },
     };
-    await fuzzJsonRoute(r, { path: "/api/y", method: "PUT", schema: z.object({ never: z.literal("x").array().length(3) }), examples: [{ never: 1 }], numRuns: 5, seed: 1 });
+    await fuzzJsonRoute(r, { path: "/api/y", method: "PUT", schema, examples: [{ text: "hi" }], numRuns: 5, seed: 1 });
     expect(new Set(seen)).toEqual(new Set(["PUT /api/y application/json"]));
+  });
+
+  it("refuses an example the schema refuses, before sending anything", async () => {
+    const seen: string[] = [];
+    const r: Requester = { request: (path) => (seen.push(path), Promise.resolve(created())) };
+    await expect(fuzzJsonRoute(r, { path: "/api/x", schema, examples: [{ text: "" }], ...RUNS })).rejects.toThrow(/example .* is refused by the schema/);
+    expect(seen).toEqual([]);
   });
 });
