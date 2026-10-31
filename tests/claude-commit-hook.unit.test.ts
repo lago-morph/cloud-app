@@ -65,6 +65,49 @@ describe("commitPlan: which commands commit, and what they add first", () => {
   it("looks inside bash -c / sh -c", () => {
     expect(plan("bash -c 'cd /r && git commit -m x'").commits[0]?.cwd).toBe("/r");
   });
+
+  it("expands environment variables in cd and git -C, and marks a directory it cannot know as null", () => {
+    const env = { D: "/r" };
+    expect(commitPlan('cd "$D" && git commit -m x', "/base", env).commits[0]?.cwd).toBe("/r");
+    expect(commitPlan("cd ${D}/sub && git commit -m x", "/base", env).commits[0]?.cwd).toBe("/r/sub");
+    expect(commitPlan("cd $UNSET && git commit -m x", "/base", env).commits[0]?.cwd).toBeNull();
+    expect(commitPlan('git -C "$(pwd)" commit -m x', "/base", env).commits[0]?.cwd).toBeNull();
+    expect(commitPlan("cd $(git rev-parse --show-toplevel) && git commit -m x", "/base", env).commits[0]?.cwd).toBeNull();
+    expect(commitPlan("cd `pwd` && git commit -m x", "/base", env).commits[0]?.cwd).toBeNull();
+    expect(commitPlan('cd "$(pwd)" && cd /abs && git commit -m x', "/base", env).commits[0]?.cwd).toBe("/abs");
+  });
+
+  it("restores the directory after a subshell and on popd", () => {
+    expect(plan("(cd /tmp && ls) && git commit -m x").commits[0]?.cwd).toBe("/base");
+    expect(plan("pushd /tmp && popd && git commit -m x").commits[0]?.cwd).toBe("/base");
+    expect(plan("pushd /a; pushd /b; popd; git commit -m x").commits[0]?.cwd).toBe("/a");
+  });
+
+  it("sees commands behind shell keywords, braces and !", () => {
+    for (const c of ["if true; then git commit -m x; fi", "{ git commit -m x; }", "! git commit -m x", "while false; do :; done; until false; do git commit -m x; done"]) {
+      expect(plan(c).commits, c).toHaveLength(1);
+    }
+  });
+
+  it("sees commands behind timeout, sudo, nice, stdbuf, xargs and eval", () => {
+    for (const c of ["timeout 60 git commit -m x", "timeout -s KILL 60 git commit -m x", "sudo -u me git commit -m x", "nice -n 5 git commit -m x", "stdbuf -oL git commit -m x", "echo | xargs git commit -m x", 'eval "git commit -m x"']) {
+      expect(plan(c).commits, c).toHaveLength(1);
+    }
+  });
+
+  it("reads a here-string as a word, not a heredoc", () => {
+    expect(plan("cat <<< hi\ngit commit -m x").commits).toHaveLength(1);
+  });
+
+  it("treats a git add pathspec it cannot know as the whole tree", () => {
+    expect(plan("for f in a b; do git add $f; done; git commit -m x").adds).toEqual([{ cwd: "/base", mode: "all", pathspecs: [":/"] }]);
+  });
+
+  it("records --pathspec-from-file and git add -f", () => {
+    expect(plan("git commit --pathspec-from-file=list.txt -m x").commits[0]?.pathspecFile).toBe("/base/list.txt");
+    expect(plan("git add --pathspec-from-file list.txt && git commit -m x").adds[0]?.pathspecFile).toBe("/base/list.txt");
+    expect(plan("git add -f ignored.md && git commit -m x").adds[0]?.force).toBe(true);
+  });
 });
 
 // ---- runHook against temporary git repositories ----
@@ -196,7 +239,7 @@ describe("runHook", () => {
 
   it("runs eslint on staged JavaScript and TypeScript files and typechecks the projects they belong to", () => {
     const dir = repo();
-    write(dir, "packages/framework/src/a.ts", "export const a = 2;\n");
+    write(dir, "packages/framework/test/a.test.ts", "export const a = 2;\n");
     write(dir, "scripts/x.mjs", "export {};\n");
     write(dir, "docs/x.md", "x");
     stage(dir, ".");
@@ -205,11 +248,76 @@ describe("runHook", () => {
     const eslint = r.calls.filter((c) => tool(c) === "eslint");
     expect(eslint).toHaveLength(1);
     expect(eslint[0]?.cwd).toBe(dir);
-    expect(eslint[0]?.args.slice(-2).sort()).toEqual(["packages/framework/src/a.ts", "scripts/x.mjs"]);
+    expect(eslint[0]?.args.slice(-2).sort()).toEqual(["packages/framework/test/a.test.ts", "scripts/x.mjs"]);
     expect(eslint[0]?.args).toContain("--no-warn-ignored");
     const tsc = r.calls.filter((c) => tool(c) === "tsc");
     expect(tsc.map((c) => c.args.slice(-2))).toEqual([["-p", "packages/framework/tsconfig.json"]]);
     expect(r.calls.filter((c) => tool(c) === "build")).toEqual([]);
+  });
+
+  it("also typechecks the harness project, after a build, when framework source changes (it reads the framework's dist)", () => {
+    const dir = repo();
+    write(dir, "packages/framework/src/a.ts", "export const a = 2;\n");
+    stage(dir, ".");
+    const r = recorder();
+    expect(runHook(input("git commit -m x", dir), { run: r.run }).code).toBe(0);
+    expect(r.calls.filter((c) => tool(c) !== "eslint").map((c) => (tool(c) === "tsc" ? c.args.slice(-1)[0] : tool(c)))).toEqual([
+      "packages/framework/tsconfig.json",
+      "build",
+      "tests/compliance/harness/tsconfig.json",
+    ]);
+  });
+
+  it("finds the repository when the commit's directory cannot be known, and follows variables, subshells and keywords", () => {
+    const dir = repo();
+    write(dir, REC, NO_REVIEW);
+    stage(dir, REC);
+    const elsewhere = mkdtempSync(join(tmpdir(), "commit-hook-elsewhere-"));
+    const r = recorder();
+    expect(runHook(input('git -C "$(pwd)" commit -m x', dir), { run: r.run }).code).toBe(2);
+    expect(runHook(input('cd "$D" && git commit -m x', elsewhere), { run: r.run, env: { D: dir } }).code).toBe(2);
+    expect(runHook(input(`(cd ${elsewhere} && ls) && git commit -m x`, dir), { run: r.run }).code).toBe(2);
+    expect(runHook(input("if true; then git commit -m x; fi", dir), { run: r.run }).code).toBe(2);
+    expect(runHook(input("timeout 60 git commit -m x", dir), { run: r.run }).code).toBe(2);
+  });
+
+  it("falls back to the session's repository when the command mentions git and commit but no commit is parsed", () => {
+    const dir = repo();
+    write(dir, REC, NO_REVIEW);
+    stage(dir, REC);
+    expect(runHook(input("g=git; $g commit -m x", dir), { run: recorder().run }).code).toBe(2);
+    expect(runHook(input("git log --grep=commit", dir), { run: recorder().run }).code).toBe(0);
+  });
+
+  it("lints an ignored file that git add -f adds, and the pathspecs of --pathspec-from-file", () => {
+    const dir = repo();
+    write(dir, ".gitignore", "node_modules/\nai/implementation/root-causes/2026-10-31-S2-ignored.md\n");
+    stage(dir, ".gitignore");
+    execFileSync("git", ["commit", "-q", "-m", "ignore"], { cwd: dir });
+    const ignored = "ai/implementation/root-causes/2026-10-31-S2-ignored.md";
+    write(dir, ignored, NO_REVIEW);
+    expect(runHook(input(`git add -f ${ignored} && git commit -m x`, dir), { run: recorder().run }).code).toBe(2);
+    const old = "ai/implementation/root-causes/2026-10-19-old-record.md";
+    write(dir, old, "# still old\n");
+    write(dir, "list.txt", `${old}\n`);
+    expect(runHook(input("git commit --pathspec-from-file=list.txt -m x", dir), { run: recorder().run }).code).toBe(2);
+  });
+
+  it("gives each linter a timeout within the hook's budget, and blocks when the budget runs out", () => {
+    const dir = repo();
+    write(dir, "packages/framework/src/a.ts", "export const a = 2;\n");
+    stage(dir, ".");
+    const timeouts: number[] = [];
+    const run = (_cmd: string, _args: string[], _cwd: string, timeoutMs: number) => {
+      timeouts.push(timeoutMs);
+      return { status: 0, output: "" };
+    };
+    expect(runHook(input("git commit -m x", dir), { run }).code).toBe(0);
+    expect(timeouts.length).toBeGreaterThan(0);
+    for (const t of timeouts) expect(t > 0 && t <= 280_000).toBe(true);
+    const res = runHook(input("git commit -m x", dir), { run, budgetMs: 0 });
+    expect(res.code).toBe(2);
+    expect(res.stderr).toContain("ran out of time");
   });
 
   it("maps files to the three typecheck projects, building the framework first for the harness project", () => {
