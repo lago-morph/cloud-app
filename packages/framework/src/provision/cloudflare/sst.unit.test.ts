@@ -119,6 +119,30 @@ describe("the SST app built from the app definition (PROV-REQ-001; cloudflare.md
     expect(() => sstProgram({ stage: prodStage, worker: { ...prodWorker, emailDomain: undefined as never } })).toThrow(/email domain/);
   });
 
+  it("binds each Secrets Store secret under its SECRET_<NAME> name as a secrets_store_secret binding; only that binding type may take a SECRET_* name (DEC-0727)", async () => {
+    const secretsStore = [{ binding: "SECRET_FRAMEWORK_R2_ACCESS_KEY_ID", storeId: "store1", secretName: "PROTOTYPE_R2_ACCESS_KEY_ID" }];
+    const { config, components } = evaluate(sstProgram({ stage, worker: { ...worker, secretsStore } }));
+    await config.run();
+    expect(components[1]!.transformed.bindings).toContainEqual({ type: "secrets_store_secret", name: "SECRET_FRAMEWORK_R2_ACCESS_KEY_ID", storeId: "store1", secretName: "PROTOTYPE_R2_ACCESS_KEY_ID" });
+    expect(components[1]!.transformed.keepBindings).toEqual(["secret_text", "secret_key"]);
+    expect(() => sstProgram({ stage, worker: { ...worker, secretsStore: [{ ...secretsStore[0]!, binding: "R2_KEY" }] } })).toThrow(/Secrets Store binding R2_KEY.*SECRET_/);
+    expect(() => sstProgram({ stage, worker: { ...worker, secretsStore, code: { ...code, variables: { SECRET_FRAMEWORK_R2_ACCESS_KEY_ID: "x" } } } })).toThrow(/would replace the Worker secret/);
+  });
+
+  it("with the auth app given, the Worker binds AUTH to its AuthApp entrypoint and gets FRAMEWORK_AUTH_APP_ORIGIN (DEC-0667, DEC-0661); without it neither", async () => {
+    const authApp = { service: "prototype-auth", origin: "https://prototype-auth.example.workers.dev" };
+    const { config, components } = evaluate(sstProgram({ stage, worker: { ...worker, authApp } }));
+    await config.run();
+    const w = components[1]!;
+    expect(w.transformed.bindings).toContainEqual({ type: "service", name: "AUTH", service: "prototype-auth", entrypoint: "AuthApp" });
+    expect((w.args.environment as Record<string, string>)["FRAMEWORK_AUTH_APP_ORIGIN"]).toBe("https://prototype-auth.example.workers.dev");
+
+    const plain = evaluate(sstProgram(full));
+    await plain.config.run();
+    expect((plain.components[1]!.transformed.bindings as { name: string }[]).some((b) => b.name === "AUTH")).toBe(false);
+    expect("FRAMEWORK_AUTH_APP_ORIGIN" in (plain.components[1]!.args.environment as object)).toBe(false);
+  });
+
   it("[MAIL-AC-004] a test stage binds no EMAIL; with a recorded domain it still gets FRAMEWORK_MAIL_FROM", async () => {
     for (const w of [worker, { ...worker, emailDomain: "example.test" }]) {
       const { config, components } = evaluate(sstProgram({ stage, worker: w }));
