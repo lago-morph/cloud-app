@@ -100,3 +100,14 @@ Reviewer: independent Claude Code remote session. Date: 2026-10-31. Round 1.
 2. **minor** — The fix addresses the cause (the decoder accepting non-canonical input), not the symptom, and matches the framework's `base64urlDecode`. The fixer must apply the same edit to the `secrets.md` block at line 97 and the test block at line 149 in the same commit, as the record already states.
 3. **minor** — The proposed red test (last-character index XOR 1, 2, 3 refused; issued spelling still accepted) is adequate. Suggest also asserting that the issued token's last character has its low 2 bits zero, so a future change to `toBase64url` that emitted non-canonical spellings would be caught by the same test rather than silently breaking issued links.
 4. **minor** — Similar cases are correct: `apps/demo/src/server/signing.ts` is a one-time copy that no step owns or regenerates, carries the same live defect (DEMO-REQ-007 share links), and must become a separate item under §7a.1.8 step 4 / §1 ownership if `apps/demo/` is outside item G's owned paths; it must not be fixed silently in this item. `apps/reference/src/server/encoding.ts` is correctly excluded.
+
+## Fix (attempt 1)
+
+Fixer: item G (the template owner), after the accepted Review above (round 1, commit `d91aeed`), on branch `v0.2.0/69-fix-template-signing`.
+
+- **Red.** `apps/template/tests/signing.test.ts` gains "accepts only the issued spelling of a signature, not one re-spelled in its last character": it checks the issued 43-character signature leaves the 2 unused low bits at zero (Review reason 3), then that each of the 3 other spellings of the last character is refused. Before the fix (`cd apps/template && npx vitest run tests/signing.test.ts`, Node v22.23.4): `× accepts only the issued spelling … AssertionError: dO9: expected 'note-1' to be null`, 1 failed, 3 passed.
+- **Fix.** `fromBase64url` returns the bytes only when `toBase64url(bytes) === text`, the same re-encode-and-compare rule as the framework's `auth/signing.ts`. `signToken` is unchanged, so every link the template issues still verifies.
+- **Green.** The same command: 4 passed. `npm --workspace apps/template run verify`: 28/28 on SQLite and on Postgres, e2e-api 3/3. `skill/examples/secrets.md` copies both files again (Review reason 2); `tests/skill/example-copies.test.ts` and `budgets-and-links.test.ts`: 17 passed.
+- **Similar cases** (step 4, the diagnoser's search, confirmed by the Review): `apps/demo/src/server/signing.ts` has the same defect, but it is a one-time copy that no copy step owns (`apps/demo/BUILD-RECORD.md`; no script, scaffold or starter step regenerates it), and `apps/demo/**` is not G's. It is recorded as a new item for the DEMO owner (DEC-0742), not fixed here. No other `atob(` decoder under `apps/` or `skill/` decides identity or a signature.
+- **Re-check (step 6):** by the PR's independent reviewer, which changed nothing.
+
