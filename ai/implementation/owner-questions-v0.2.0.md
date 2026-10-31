@@ -51,3 +51,9 @@ Decisions the orchestrator took while the owner was away during the v0.2.0 run. 
 41. (E, DEC-0718) Should the optional cleanup also delete the zone's email settings? — No. They are listed as dashboard steps instead. — To reverse: add email and zone scopes to the admin client.
 42. (E, DEC-0720) Should the admin app run with `nodejs_compat`? — Yes, because C's `account.ts` and F's `r2-token.ts` use `node:crypto`. — To reverse: switch those two files to WebCrypto and drop the flag.
 43. (E, DEC-0710) Is a PKCE verifier in a signed but unencrypted cookie acceptable? — Yes. — To reverse: store grant state in D1.
+44. (B) What is a signed-in user's display name? — `null` (the email is not used as the name). — To reverse: change one line in `auth-app-provider.ts`.
+45. (B, PAR-425–427) Role refresh every 5 min, 2 retries, 200 ms between them. — Yes. — To reverse: edit the PAR values used by `role-refresh.ts`.
+46. (B) Session format 3 signs every existing user out once on upgrade. — Accepted. — To reverse: restore reading of format 2 sessions.
+47. (B) When the auth app is unreachable, is sign-in reported as a failed login rather than a 503? — Failed login. — To reverse: map the binding error to a 503 in the provider.
+48. (B) **Production gate:** a production deploy between B's #89 and F's #101 (PR 52, the AUTH service binding) would have no binding. — Merge F's 52 before any production deploy of a build with #89. — To reverse: n/a (ordering rule).
+49. (B, DEC-0671) B's stack order: 42 (drop tables) moved to the top, after the removals, because dropping the tables first breaks 43–47 and MIG-AC-001 forces the schema change and the drop migration into one commit. — Yes. — To reverse: n/a.
