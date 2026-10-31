@@ -23,7 +23,8 @@ Replace it with a new token from this link:
 
 1. Plan §5.2 page 2 makes the everyday token with four groups and no zone group (evidence 1, and 2 for `EVERYDAY_V2`).
 2. `cloudflare-setup`, which runs at "continue prototype setup" (plan §5.3 step 4), still asks the everyday token for the email domain's zones (evidence 2, 3). That needs Zone Read, which the four-group token lacks.
-3. So the check refuses the token and links the 0.1.x seven-group token (evidence 2: its link holds the zone and email groups). This is the open switch of DEC-0716 (evidence 4). The other tests had not chained page 2 into the CLI check before, so E2E-017 is the first test to show it.
+3. A second blocker sits behind the first (review, minor): C's `parseSetupRecord` still requires `emailDomain` (DEC-0719, `v020-E.md`), and page 1 never invents one, so even past the zone lookup the check would read the v0.2.0 setup record as "not set up" until 34a drops that field.
+4. So the check refuses the token and links the 0.1.x seven-group token (evidence 2: its link holds the zone and email groups). This is the open switch of DEC-0716 (evidence 4). The other tests had not chained page 2 into the CLI check before, so E2E-017 is the first test to show it.
 
 ## Alternatives ruled out
 
@@ -37,8 +38,14 @@ There is no new fix. The existing plan of DEC-0716 applies: C's 34a removes the 
 ## Verification plan
 
 - Red now, as above.
-- Green after 57z: `npx playwright test --project=e2e-api E2E-017` gives 8 passed, and so does `npm run compliance -- --target local --only E2E-017`.
+- Green after 57z and 34a (both: the zone lookup and the record's `emailDomain`): `npx playwright test --project=e2e-api E2E-017` gives 8 passed, and so does `npm run compliance -- --target local --only E2E-017`.
 
 ## Review
 
-(pending: independent root-cause reviewer)
+Reviewer: independent cloud session `session_014mWQ6m8zBDKqZTwp94x58L` (found neither cause, wrote none of the code), 2026-10-31.
+Verdict: `accepted-with-changes`.
+- Reproduced: 7 passed, 1 failed, with the quoted refusal and the seven-group link. Each link holds: with no `CLOUDFLARE_EMAIL_DOMAIN`, `cloudflare-setup.ts` lines 531–534 list zones with the everyday token; the fake refuses `/zones` without Zone Read; the link's extra keys are `EVERYDAY`'s zone and email groups. Both alternatives are ruled out; setting a domain would not help either (the zone lookup at line 541 needs Zone Read too).
+- **minor:** name the second blocker, `parseSetupRecord` requiring `emailDomain` (DEC-0719): done, causal chain link 3 and the verification plan.
+- **minor:** the diagnoser is the implementer; keep the disclosure (kept).
+- "No new fix, 57z covers it, keep the test red" is right: DEC-0716 already decided it and calls it a hard release blocker.
+- **minor:** say in the PR body how CI treats this known-red e2e test until 57z: done (PR 79 body).

@@ -137,6 +137,7 @@ test(tag("E2E-017", "bootstrap: interrupted while deploying the admin app, then 
   expect(again.status, again.out).toBe(0);
   expect([...world.cloud().oauthClients.values()].map((c) => c.name).sort()).toEqual([CLIENT_NAMES.admin, CLIENT_NAMES.signin].sort());
   expect(world.token(`boot-${BOOT(4).slice(-6)}`).deleted).toBe(true);
+  expect(readFileSync(join(appDir, ".env.cloudflare"), "utf8")).toMatch(/^# CLOUDFLARE_BOOTSTRAP_TOKEN=(?!e2e017)/m);
   expect(readFileSync(join(appDir, ".env.cloudflare"), "utf8")).not.toContain(BOOT(4));
   adminOrigin = /https:\/\/prototype-admin\.[a-z0-9-]+\.workers\.dev/.exec(again.out)?.[0] ?? "";
   expect(adminOrigin, "the bootstrap prints the admin app's URL").toBe(`https://${APP_SCRIPTS.admin}.${SUB}.workers.dev`);
@@ -226,12 +227,14 @@ test(tag("E2E-017", "account setup: an unticked scope is named and nothing is wr
   const owner = new Browser();
   await owner.grant("/signin", "owner");
   const before = world.cloud().requests.length;
+  const edgeBefore = edge.writes.length;
   edge.untick.add("d1.write");
   const unticked = await owner.grant("/setup", "owner");
   edge.untick.clear();
   expect(unticked.status).toBe(403);
   expect(unticked.text).toContain("d1.write");
   expect(world.cloud().requests.slice(before).filter((r) => !r.startsWith("GET "))).toEqual([]);
+  expect(edge.writes.slice(edgeBefore)).toEqual([]);
 
   // Interrupted at its last step, the setup record (every resource made, the record not written).
   const record = `PUT /accounts/${ACCOUNT}/r2/buckets/${STATE_BUCKET}/objects/${encodeURIComponent(ACCOUNT_SETTINGS_KEY)}`;
@@ -247,6 +250,9 @@ test(tag("E2E-017", "account setup: an unticked scope is named and nothing is wr
   const workers = world.cloud().workers.size;
   expect((await owner.grant("/setup", "owner")).status, "run again").toBe(200);
   expect(world.cloud().workers.size).toBe(workers);
+  // Nothing made twice across the interrupted run and both re-runs: one auth-app database, one signing token.
+  expect(edge.databases.map((d) => d.name)).toEqual(["prototype-auth"]);
+  expect([...world.cloud().tokens.values()].filter((t) => t.name === "prototype-r2-signing")).toHaveLength(1);
 });
 
 let everydayValue = "";
