@@ -29,7 +29,7 @@ The other three CORE-AC-001 tests in the file pass.
 2. **The hub on 71n** (`packages/framework/src/testing/index.ts:6`) exports the types `LogEntry, MailMessage, TestApp, TestAppOptions, TestCapability, TestMail, TestRole`, and `public.ts:8` exports the same list. Neither exports `TestAuthApp` or `TestClock`.
 3. **The contract exports both.** `docs/contracts/ts/testing.d.ts:100` has `export interface TestAuthApp { … }`, stated in public terms: its identity parameter is an inline `{ sub; email; role: "admin" | "user" }`. `:110` has `export interface TestClock`. `loginWithAuthApp` (`:159`) also takes the inline identity type.
 4. **The implementation names internal types.** `packages/framework/src/testing/test-app.ts:89` has `loginWithAuthApp(identity: AuthAppIdentity)`. `:115` has `export type TestAuthApp = Pick<FakeAuthAppBinding, …>`. Both come from `src/auth/auth-app-binding.ts`, whose header says the binding is "Never exported to app code" (`:5`). Following `FakeAuthAppBinding` reaches `AuthAppBinding`, `AuthAppIdentity`, `AuthAppRole` and `RedeemInput`. These are exactly the other nine entries.
-5. **Where it came from.** `679c3bf` ("createTestApp signs in through the fake auth app (B, PR 41a)") added `authApp: TestAuthApp`, `clock: TestClock`, `loginWithAuthApp(AuthAppIdentity)` and the `Pick`. In the same commit it added `TestAuthApp` and `TestClock` to `testing.d.ts`, but it did not touch `testing/index.ts` or `public.ts` (`git show 679c3bf --stat`). The hub's last change is `25429b3` (2026-10-25).
+5. **Where it came from.** `679c3bf` ("createTestApp signs in through the fake auth app (B, PR 41a)") added `authApp: TestAuthApp`, `clock: TestClock`, `loginWithAuthApp(AuthAppIdentity)` and the `Pick`. In the same commit it added `TestAuthApp` and `TestClock` to `testing.d.ts`, but it did not touch `testing/index.ts` or `public.ts` (`git show 679c3bf --stat`). `git log -1 origin/v0.2.0/71n-path-map-after-removals -- packages/framework/src/testing/index.ts` gives `25429b3` (2026-10-25), so the hub predates B 41a.
 6. **Experiment, minimal fix.** In a scratch worktree of `60b5e8e`, I made three changes:
    - (a) stated `TestAuthApp` as an interface, with the contract's inline identity type;
    - (b) gave `loginWithAuthApp` the same inline type;
@@ -64,4 +64,18 @@ Branch `v0.2.0/97-fix-testing-type-exports` on 71n. It changes no test.
 - Green: on the fix branch, the same command gives 4 passed. `npm run compliance -- --target local --only CORE-AC-001` passes. Typecheck, lint and `npm run test:unit` stay clean.
 
 ## Review
-Status: awaiting review
+Reviewer: independent root-cause reviewer, session_014mWQ6hjtYXfjcSWXUEWwEy, 2026-10-31
+Verdict: accepted-with-changes
+
+Reasons:
+- **minor** Every link of the causal chain holds in the source. On 71n, `test-app.ts:25,89,115` import `AuthAppIdentity` and define `TestAuthApp` as a `Pick<FakeAuthAppBinding, …>`. `auth-app-binding.ts:5` says "Never exported to app code". `testing/index.ts` and `public.ts` do not export `TestAuthApp` or `TestClock`, while `testing.d.ts:100,110` exports both with the inline identity type. `679c3bf --stat` touches `test-app.ts` and `testing.d.ts` but neither hub file. No `origin/v0.2.0/*` branch (all 100 scanned) has `TestClock` in the hub.
+- **minor** The proposed fix addresses the cause: the implementation now matches the contract and the hub lists exactly the names in `testing.d.ts`. I compared the two name lists after the fix: no contract name is missing from the hub. It does not export internal types, and it changes no test.
+- **minor** Factual correction. Evidence 5 says the hub's last change is `25429b3` (2026-10-25). `git log -1 -- packages/framework/src/testing/index.ts` on 71n gives `9f6de80` (2026-10-26, the Playwright-install fix). Correct the statement or drop it. The causal chain does not depend on it.
+
+Re-run:
+- Red, on `60b5e8e`: `npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/core/types.test.ts` gives 1 failed, 3 passed. The diff has exactly the 11 entries in the Symptom.
+- Green, with fix 97 applied as briefed: the same command gives 4 passed. `npm run typecheck` is clean, `eslint packages/framework/src/testing` is clean, and `vitest --config vitest.unit.config.ts packages/framework/src/testing` gives 60 passed. `npm run compliance -- --target local --only CHECK-AC-005,CLI-AC-008,CORE-AC-001,SEC-AC-002` (run `he319fk0u13979l`, on `60b5e8e` plus fixes 97 and 98) records CORE-AC-001 as passed.
+
+## Response (round 1)
+- **Hub's last change (minor 3).** The original statement stands. `git log --format='%h %ci %s' -1 origin/v0.2.0/71n-path-map-after-removals -- packages/framework/src/testing/index.ts` gives `25429b3 2026-10-25 21:07:00 +0000 Fix pass-3 failures: CORE-AC-001 re-export, …`. `9f6de80` may be the last commit for a different path or ref (for example the whole `src/testing/` directory) in the reviewer's checkout. Either way, as the reviewer notes, the chain does not depend on it, so evidence 5 is reworded to name the command and its output.
+- **Fix commit order.** The fix is committed on this branch after this Review, as the accepted Proposed fix states. Its own compliance green is run `atfwxyjibj7s38q` (`--only CORE-AC-001,CHECK-AC-005` on `60b5e8e` plus fixes 97 and 98): CORE-AC-001 5 of 5 passed.
