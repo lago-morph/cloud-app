@@ -7,6 +7,7 @@ import { cloudflareAccountOps, NO_EMAIL_PERMISSION_ENV, NO_R2_TOKEN_PERMISSION_E
 import { validateEvidence, writeEvidence, type EvidenceRecord, type GitState, type WriteEvidenceInput } from "../../../packages/framework/src/evidence/public.js";
 import { parseArgs } from "./args.js";
 import { NOT_SELECTED, parseWhere, type CatalogueEntry } from "./catalogue.js";
+import { checkLoginOutcomes } from "./prodcheck.js";
 import { isDriverCommand, runCompliance, SecretsNotSetError, SKIP_NOTES_REPORTER, type CloudStageOps, type DriverDeps, type RunCall } from "./driver.js";
 import type { NotRunRule } from "./expected.js";
 import { buildApp } from "../../../packages/framework/src/build/public.js";
@@ -655,7 +656,7 @@ describe("[COMPL-AC-005] the production checks on prodcheck", () => {
         remove: (stage) => (events.push(`remove ${stage}`), Promise.resolve("removed")),
         checkLogin: (stage) => (
           events.push(`check-login ${stage}`),
-          Promise.resolve({ status: 0, output: "check-login passed", record: checkLoginRecord([{ id: "AUTH-AC-011", status: "passed" }, { id: "E2E-008", status: "passed" }]) })
+          Promise.resolve({ status: 0, output: "check-login passed", record: checkLoginRecord([{ id: "PWD-AC-009", status: "not-run", detail: "retired with the password provider (plan-v0.2.0 §6)" }, { id: "AUTH-AC-011", status: "passed" }, { id: "E2E-008", status: "passed" }]) })
         ),
       },
     });
@@ -674,12 +675,14 @@ describe("[COMPL-AC-005] the production checks on prodcheck", () => {
     expect(result.exitStatus).toBe(0);
     const results = recordOf(h).results;
     for (const id of ["AUTH-AC-011", "E2E-008"]) expect(results.filter((r) => r.id === id), id).toEqual([{ id, status: "passed" }]);
+    // The command's entry for the retired PWD-AC-009 (DEC-0787) is never folded into the run's record.
+    expect(results.filter((r) => r.id === "PWD-AC-009")).toEqual([]);
     expect(h.written[0]?.raw?.["prodcheck-deploy.log"]).toBe("deployed prodcheck");
     expect(h.written[0]?.raw?.["check-login.log"]).toBe("check-login passed");
     expect(h.events).not.toContain("pending+ prodcheck");
   });
 
-  it("a failed step is failed with check-login's detail, a check it did not reach is not-run, and the run exits non-zero", async () => {
+  it("a failed step is failed with check-login's detail for each ID, a not-run result folds as not-run, and the run exits non-zero", async () => {
     const h = harness({
       catalogue,
       cloud: {
@@ -688,7 +691,8 @@ describe("[COMPL-AC-005] the production checks on prodcheck", () => {
             status: 1,
             output: "check-login failed",
             record: checkLoginRecord([
-              { id: "AUTH-AC-011", status: "not-run", detail: "check-login stopped before its checks" },
+              { id: "PWD-AC-009", status: "not-run", detail: "retired with the password provider (plan-v0.2.0 §6)" },
+              { id: "AUTH-AC-011", status: "failed", detail: "step 1: login: expected a 302 redirect, got status 500" },
               { id: "E2E-008", status: "failed", detail: "step 1: login: expected a 302 redirect, got status 500" },
             ]),
           }),
@@ -697,8 +701,12 @@ describe("[COMPL-AC-005] the production checks on prodcheck", () => {
     const result = await runCompliance(parseArgs(["--target", "cloudflare"]), [], h.deps);
     expect(result.exitStatus).toBe(1);
     const byId = (id: string) => recordOf(h).results.filter((r) => r.id === id);
-    expect(byId("E2E-008")).toEqual([{ id: "E2E-008", status: "failed", detail: expect.stringMatching(/check-login failed: step 1: login: expected a 302 redirect.*\(record cl1\)/) }]);
-    expect(byId("AUTH-AC-011")).toEqual([{ id: "AUTH-AC-011", status: "not-run", detail: "check-login stopped before its checks" }]);
+    for (const id of ["AUTH-AC-011", "E2E-008"]) expect(byId(id)).toEqual([{ id, status: "failed", detail: expect.stringMatching(/check-login failed: step 1: login: expected a 302 redirect.*\(record cl1\)/) }]);
+    expect(byId("PWD-AC-009")).toEqual([]);
+    // The command writes not-run only for the retired ID today; a not-run result for a folded ID is still a skip with its detail.
+    expect(checkLoginOutcomes(["AUTH-AC-011"], { status: 1, output: "", record: checkLoginRecord([{ id: "AUTH-AC-011", status: "not-run", detail: "not reached" }]) })).toEqual([
+      expect.objectContaining({ status: "skipped", note: "not reached" }),
+    ]);
   });
 
   it("when prodcheck cannot be redeployed, check-login is not run and its criteria are failed naming why; the first deploy's unset apiKey is set first", async () => {
@@ -748,7 +756,7 @@ describe("[COMPL-AC-005] the production checks on prodcheck", () => {
       recordDeployOutput(appDir, "cloudflare", stage, baseUrl);
       return { baseUrl, output: `deployed ${stage}` };
     };
-    const ok = checkLoginRecord([{ id: "AUTH-AC-011", status: "passed" }, { id: "E2E-008", status: "passed" }]);
+    const ok = checkLoginRecord([{ id: "PWD-AC-009", status: "not-run", detail: "retired with the password provider (plan-v0.2.0 §6)" }, { id: "AUTH-AC-011", status: "passed" }, { id: "E2E-008", status: "passed" }]);
     try {
       const h = harness({
         catalogue,
