@@ -76,7 +76,7 @@ const CLOUD: readonly Target[] = ["cloudflare"];
 
 /**
  * This phase's not-run rules (plan §8.1, §8.2; plan-auth.md, DEC-0520, DEC-0526). AUTH-AC-011
- * and E2E-008, the results `check-login` records (DEC-0700), have none: the driver runs
+ * and E2E-008, the results `check-login` records (DEC-0670; COMPL-AC-005 as #136 proposes, DEC-0700), have none: the driver runs
  * `check-login` on `prodcheck` (prodcheck.ts). The password-pending rules of the criteria that items T2 and T3 tagged cloud
  * tests for are gone (plan-auth.md): AUTH-AC-005's admin-role part, AUTH-AC-009's production
  * part, AUTH-AC-014, COMPL-AC-005, PWD-AC-008, MAIL-AC-006, MAIL-AC-007, E2E-006, E2E-007 and

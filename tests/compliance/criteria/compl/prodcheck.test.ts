@@ -8,7 +8,8 @@
  * - E2E-006: "`/api/auth/mock-login` and `/api/__framework/test-mail` return 404, the deployed
  *   bundle contains no mock or mail-capture code, and `/api/auth/login` redirects to the
  *   framework's sign-in page on the stage's public origin."
- * - COMPL-AC-005 (as amended, DEC-0700): "On every cloud run, after `prodcheck` is redeployed, the
+ * - COMPL-AC-005 as D's #136 proposes to amend it (DEC-0700, awaiting the owner's approval; the
+ *   text on this base still names PWD-AC-009): "On every cloud run, after `prodcheck` is redeployed, the
  *   evidence record has results for its production checks: mock-login and the test-mail route
  *   answer 404, `/api/auth/login` redirects to the auth app's `/start`, and `check-login`'s
  *   AUTH-AC-011 and E2E-008 results are present." This test is the record's result for the HTTP checks,
