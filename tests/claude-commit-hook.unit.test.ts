@@ -103,6 +103,18 @@ describe("commitPlan: which commands commit, and what they add first", () => {
     expect(plan("for f in a b; do git add $f; done; git commit -m x").adds).toEqual([{ cwd: "/base", mode: "all", pathspecs: [":/"] }]);
   });
 
+  it("reads a commit behind a command word it cannot resolve, and lists other git subcommands for alias lookup", () => {
+    expect(plan("g=git; $g commit -a -m x").commits).toEqual([{ cwd: "/base", all: true, pathspecs: [] }]);
+    expect(plan("$(which git) commit -m x").commits).toHaveLength(1);
+    expect(plan("echo ready to commit; git log | grep commit").commits).toEqual([]);
+    expect(plan("git -c alias.ci=commit ci -m x").others).toEqual([{ cwd: "/base", sub: "ci", args: ["-m", "x"], inline: { ci: "commit" } }]);
+    expect(plan("git status").others).toEqual([]);
+  });
+
+  it("marks a --pathspec-from-file it cannot locate as null", () => {
+    expect(commitPlan('git commit --pathspec-from-file="$(pwd)/l" -m x', "/base", {}).commits[0]?.pathspecFile).toBeNull();
+  });
+
   it("records --pathspec-from-file and git add -f", () => {
     expect(plan("git commit --pathspec-from-file=list.txt -m x").commits[0]?.pathspecFile).toBe("/base/list.txt");
     expect(plan("git add --pathspec-from-file list.txt && git commit -m x").adds[0]?.pathspecFile).toBe("/base/list.txt");
@@ -287,6 +299,42 @@ describe("runHook", () => {
     stage(dir, REC);
     expect(runHook(input("g=git; $g commit -m x", dir), { run: recorder().run }).code).toBe(2);
     expect(runHook(input("git log --grep=commit", dir), { run: recorder().run }).code).toBe(0);
+  });
+
+  it("reads pathspecs against the whole tree when the commit's or add's directory cannot be known or does not exist", () => {
+    const dir = repo();
+    const name = "2026-10-31-S2-scratch.md";
+    write(dir, REC, NO_REVIEW);
+    const run = recorder().run;
+    expect(runHook(input(`cd "$(pwd)/ai/implementation/root-causes" && git add ${name} && git commit -m x`, dir), { run }).code).toBe(2);
+    const old = "ai/implementation/root-causes/2026-10-19-old-record.md";
+    write(dir, old, "# still old\n");
+    expect(runHook(input(`cd "$(pwd)/ai"; git commit -m x -- implementation/root-causes/2026-10-19-old-record.md`, dir), { run }).code).toBe(2);
+    expect(runHook(input(`cd /nonexistent-s2-dir; git commit -m x -- ${old}`, dir), { run }).code).toBe(2);
+    write(dir, "list.txt", `${old}\n`);
+    expect(runHook(input('cd "$(pwd)"; git commit --pathspec-from-file=list.txt -m x', dir), { run }).code).toBe(2);
+  });
+
+  it("follows git aliases for commit, from the repository's config and from -c", () => {
+    const dir = repo();
+    write(dir, REC, NO_REVIEW);
+    stage(dir, REC);
+    execFileSync("git", ["config", "alias.ci", "commit -v"], { cwd: dir });
+    execFileSync("git", ["config", "alias.st", "status"], { cwd: dir });
+    const run = recorder().run;
+    expect(runHook(input("git ci -m x", dir), { run }).code).toBe(2);
+    expect(runHook(input("git -c alias.cm=commit cm -m x", dir), { run }).code).toBe(2);
+    expect(runHook(input("git st", dir), { run }).code).toBe(0);
+  });
+
+  it("does not check commands that only mention commit", () => {
+    const dir = repo();
+    write(dir, REC, NO_REVIEW);
+    stage(dir, REC);
+    const run = recorder().run;
+    for (const c of ['git log --oneline | grep "commit"', 'git push && gh pr create --body "fix commit hook"', "git status; echo ready to commit"]) {
+      expect(runHook(input(c, dir), { run }).code, c).toBe(0);
+    }
   });
 
   it("lints an ignored file that git add -f adds, and the pathspecs of --pathspec-from-file", () => {

@@ -11,8 +11,9 @@
 // The files: the staged ones (records read from the index), plus those the command adds before committing
 // (`git add <paths>`, `-A`, `-u`, `-f`, `--pathspec-from-file`) and those `git commit -a` or
 // `git commit <paths>` takes (read from the working tree). Committed files are never linted unless they are
-// part of the commit. When the commit's directory cannot be known (`cd "$(…)"`), or the command mentions git
-// and commit in a form the parser does not follow, the session's own repository is checked: it fails closed.
+// part of the commit. It fails closed: a commit whose directory cannot be known (`cd "$(…)"`) is checked in the
+// session's own repository with its pathspecs read against the whole tree; a command word it cannot resolve
+// followed by `commit` (`$g commit`) counts as a commit; git aliases for commit (`git ci`) are looked up.
 // There is no git hook, so `--no-verify` does not skip this. Apps never get it (TS-18): the template has no hooks.
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -188,6 +189,14 @@ const WRAPPERS = new Map([
   ["xargs", { values: ["-I", "-i", "-n", "-L", "-P", "-d", "-E", "-s", "-a", "--arg-file", "--delimiter", "--max-args", "--max-procs"], args: 0 }],
 ]);
 const GIT_GLOBAL_WITH_VALUE = new Set(["-c", "--git-dir", "--work-tree", "--namespace", "--config-env"]);
+/** git's own subcommands (never aliases, which git does not allow to shadow them): no alias lookup for these. */
+const GIT_BUILTINS = new Set(
+  ("add am annotate apply archive bisect blame branch bundle cat-file check-ignore checkout cherry cherry-pick clean clone commit-tree config " +
+    "count-objects credential describe diff diff-files diff-index diff-tree difftool fetch format-patch fsck gc grep hash-object help init " +
+    "log ls-files ls-remote ls-tree maintenance merge merge-base mergetool mv notes pull push range-diff read-tree rebase reflog remote repack " +
+    "replace reset restore rev-list rev-parse revert rm shortlog show show-ref sparse-checkout stash status submodule switch symbolic-ref tag " +
+    "update-index update-ref var verify-commit version whatchanged worktree write-tree lfs").split(" "),
+);
 const COMMIT_SHORT_WITH_VALUE = new Set(["m", "F", "C", "c", "t"]);
 const COMMIT_LONG_WITH_VALUE = new Set(["--message", "--file", "--reuse-message", "--reedit-message", "--template", "--author", "--date", "--fixup", "--squash", "--cleanup", "--trailer"]);
 
@@ -317,7 +326,11 @@ function walk(src, state) {
     if (cmd === undefined) continue;
     const rest = item.slice(k + 1);
     const name = basename(cmd);
-    if (cmd === "cd" || cmd === "pushd") {
+    if (dynamic(cmd)) {
+      // A command word that cannot be resolved (`$g commit`, `$(which git) commit`): read it as a commit.
+      const c = rest.indexOf("commit");
+      if (c >= 0) state.events.push({ kind: "commit", cwd: state.cwd, ...commitArgs(rest.slice(c + 1), state.cwd, state.env) });
+    } else if (cmd === "cd" || cmd === "pushd") {
       const dir = rest.find((w) => !w.startsWith("-") || w === "-");
       if (cmd === "pushd") state.dirs.push(state.cwd);
       if (dir === undefined) state.cwd = homedir();
@@ -332,17 +345,22 @@ function walk(src, state) {
     } else if (name === "git") {
       let cwd = state.cwd;
       let j = 0;
+      const inline = {};
       while (j < rest.length && rest[j].startsWith("-")) {
         if (rest[j] === "-C") {
           cwd = at(cwd, rest[j + 1] ?? ".", state.env);
           j += 2;
-        } else if (GIT_GLOBAL_WITH_VALUE.has(rest[j])) j += 2;
-        else j++;
+        } else if (GIT_GLOBAL_WITH_VALUE.has(rest[j])) {
+          const a = rest[j] === "-c" ? /^alias\.([^=]+)=(.*)$/s.exec(rest[j + 1] ?? "") : null;
+          if (a) inline[a[1]] = a[2];
+          j += 2;
+        } else j++;
       }
       const sub = rest[j];
       const args = rest.slice(j + 1);
       if (sub === "commit") state.events.push({ kind: "commit", cwd, ...commitArgs(args, cwd, state.env) });
       else if (sub === "add" || sub === "stage") state.events.push({ kind: "add", cwd, ...addArgs(args, cwd, state.env) });
+      else if (sub !== undefined && !GIT_BUILTINS.has(sub)) state.events.push({ kind: "other", cwd, sub, args, inline });
     }
   }
 }
@@ -355,18 +373,33 @@ function walk(src, state) {
 export function commitPlan(command, cwd, env = process.env) {
   const state = { cwd, env, dirs: [], events: [] };
   walk(command, state);
-  const last = state.events.map((e) => e.kind).lastIndexOf("commit");
+  const last = state.events.reduce((n, e, i) => (e.kind === "commit" || e.kind === "other" ? i : n), -1);
   return {
     commits: state.events.filter((e) => e.kind === "commit").map(({ cwd: c, all, pathspecs, pathspecFile }) => ({ cwd: c, all, pathspecs, pathspecFile })),
     adds: state.events
       .slice(0, Math.max(last, 0))
       .filter((e) => e.kind === "add")
       .map(({ cwd: c, mode, pathspecs, force, pathspecFile }) => ({ cwd: c, mode, pathspecs, force, pathspecFile })),
+    // Subcommands that are not git built-ins, which may be aliases for commit (resolved by runHook).
+    others: state.events.filter((e) => e.kind === "other").map(({ cwd: c, sub, args, inline }) => ({ cwd: c, sub, args, inline })),
   };
 }
 
-/** Whether the raw command names git and a `commit` word, for commands the parser does not follow. */
-const MENTIONS_COMMIT = /\bgit\b[\s\S]*?(?:^|[\s;&|('"])commit(?=$|[\s;&|)'"])/;
+/** The commit a git alias stands for, or null. A shell alias (`!…`) that mentions commit counts as `commit -a`. */
+function aliasCommit(o, top) {
+  let value = o.inline[o.sub];
+  if (value === undefined && top) {
+    try {
+      value = git(top, ["config", "--get", `alias.${o.sub}`]).trim();
+    } catch {
+      value = undefined;
+    }
+  }
+  if (!value) return null;
+  if (value.startsWith("!")) return /\bcommit\b/.test(value) ? { cwd: o.cwd, all: true, pathspecs: [] } : null;
+  const words = value.split(/\s+/).filter(Boolean);
+  return words[0] === "commit" ? { cwd: o.cwd, ...commitArgs([...words.slice(1), ...o.args], o.cwd, {}) } : null;
+}
 
 // ---- What the commit holds, and the linters ----
 
@@ -397,23 +430,32 @@ function commitFiles(top, commits, adds) {
   const fromTree = (cwd, args) => {
     let out;
     try {
-      out = git(cwd ?? top, ["ls-files", "-z", "--full-name", ...args]);
+      out = git(cwd, ["ls-files", "-z", "--full-name", ...args]);
     } catch {
-      return; // a pathspec git itself would refuse
+      return; // a pathspec git itself would refuse (the directory is known to exist here)
     }
     for (const p of nul(out)) if (existsSync(join(top, p))) files.set(p, "worktree");
   };
+  const known = (cwd) => cwd !== null && existsSync(cwd);
+  /** The pathspecs to read: the whole tree when they are relative to a directory that cannot be known. */
+  const specsOf = (x) => {
+    const given = x.pathspecs.length > 0 || x.pathspecFile !== undefined;
+    if (!given) return [];
+    if (!known(x.cwd) || x.pathspecFile === null) return [":/"];
+    return [...x.pathspecs, ...pathspecsFrom(x.pathspecFile)];
+  };
   for (const c of commits) {
     if (c.all) fromTree(top, ["--modified"]);
-    const specs = [...c.pathspecs, ...pathspecsFrom(c.pathspecFile)];
-    if (specs.length) fromTree(c.cwd, ["--modified", "--", ...specs]);
+    const specs = specsOf(c);
+    if (specs.length) fromTree(known(c.cwd) ? c.cwd : top, ["--modified", "--", ...specs]);
   }
   for (const a of adds) {
-    const given = [...a.pathspecs, ...pathspecsFrom(a.pathspecFile)];
+    const given = specsOf(a);
     const specs = given.length ? given : a.mode === "paths" ? null : [":/"];
     if (!specs) continue;
-    if (a.mode === "update") fromTree(a.cwd, ["--modified", "--", ...specs]);
-    else fromTree(a.cwd, ["--modified", "--others", ...(a.force ? [] : ["--exclude-standard"]), "--", ...specs]);
+    const cwd = known(a.cwd) ? a.cwd : top;
+    if (a.mode === "update") fromTree(cwd, ["--modified", "--", ...specs]);
+    else fromTree(cwd, ["--modified", "--others", ...(a.force ? [] : ["--exclude-standard"]), "--", ...specs]);
   }
   return files;
 }
@@ -503,11 +545,12 @@ export function runHook(input, { run = spawnRun, env = process.env, budgetMs = B
   if (typeof command !== "string") return pass;
   const start = input.cwd ?? process.cwd();
   const plan = commitPlan(command, start, env);
-  // A command that names git and commit in a form the parser does not follow is checked in the session's directory.
-  const commits = plan.commits.length ? plan.commits : MENTIONS_COMMIT.test(command) ? [{ cwd: start, all: false, pathspecs: [] }] : [];
-  if (commits.length === 0) return pass;
+  if (plan.commits.length === 0 && plan.others.length === 0) return pass;
   const deadline = Date.now() + budgetMs;
   try {
+    // Aliases for commit (`git ci`), looked up in the repository the subcommand runs in.
+    const commits = [...plan.commits, ...plan.others.map((o) => aliasCommit(o, topOf(o.cwd) ?? topOf(start))).filter(Boolean)];
+    if (commits.length === 0) return pass;
     const repos = new Map();
     for (const c of commits) {
       // A directory that cannot be known, or is not in a repository, falls back to the session's repository.
