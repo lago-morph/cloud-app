@@ -10,23 +10,26 @@
  *    the bootstrap token: DEC-0574's filter is for the everyday commands). Each is checked: valid and
  *    active (`GET /accounts/<a>/tokens/verify`, or `/user/tokens/verify` for a user token), its
  *    account (`GET /accounts`), and, for the everyday token, one read per permission
- *    (`probeEveryday`) once the zone is known.
- * 3. **No everyday token**: plan §3.2's requirements, links, template, where it goes and the next
- *    prompt; stop.
- * 4. **The account**: several visible without `CLOUDFLARE_ACCOUNT_ID`: their names, and stop; a
- *    different account than the recorded `CLOUDFLARE_ACCOUNT_ID`: the account switch (§3.4); the plan
- *    (`GET /accounts/<a>/subscriptions`, "Billing Read"): Workers Free stops.
- * 5. **The email domain**: `--email-domain`, else `CLOUDFLARE_EMAIL_DOMAIN`, else the account's zone
- *    names, and stop.
+ *    (`probeEveryday`) once the zone is known. A bootstrap token with no expiry, or one more than
+ *    1 day away (PAR-435), deletes itself at once and the run stops with its link (v0.2.0 plan §5.1
+ *    step 1; DEC-0681).
+ * 3. **No token to work with** (no everyday token and no usable bootstrap token): the requirements,
+ *    links, template, where it goes and the next prompt; stop.
+ * 4. **The account**: the everyday token's, else the bootstrap token's; several visible without
+ *    `CLOUDFLARE_ACCOUNT_ID`: their names, and stop; a different account than the recorded
+ *    `CLOUDFLARE_ACCOUNT_ID`: the account switch (§3.4).
+ * 5–7. **With the bootstrap token: the bootstrap** (v0.2.0 plan §5.1): its own permissions checked
+ *    (`BOOTSTRAP`); then it deletes itself at the end (its own ID, from its own verify call), its line
+ *    in `.env.cloudflare` is commented out and its value is never written (DEC-0683). One whose ID is
+ *    protected (`protectedTokenIds`) is not deleted: no DELETE is sent, its line is kept and a note
+ *    says so. The bootstrap token does no account setup and never reads or changes the everyday
+ *    token: both are the admin app's (plan §5.2; DEC-0682).
+ * 5. **Without it, the email domain**: `--email-domain`, else `CLOUDFLARE_EMAIL_DOMAIN`, else the
+ *    account's zone names, and stop; the plan (only the `PROTOTYPE_FRAMEWORK_CLOUDFLARE_PLAN` setting
+ *    can say Workers Free now): Workers Free stops.
  * 6. **The setup record**, with the everyday token (`checkAccountSetup`): current and the quick check
- *    passes: done. Otherwise the bootstrap token is needed: without it, only its link; stop.
- * 7. **With the bootstrap token**: its own permissions checked; the missing setup steps applied and
- *    the record written (`applySetupSteps`); the everyday token checked exactly once with the
- *    bootstrap token (`GET …/tokens/<id>`, `comparePolicies`) and missing permissions added in place
- *    (`PUT …/tokens/<id>`, value unchanged); a token of the wrong account or zone, or with a deny, is
- *    explained with the everyday link only. Then the bootstrap token deletes itself (its own ID, from
- *    its own verify call) and its line in `.env.cloudflare` is commented out; one whose ID is
- *    protected (`protectedTokenIds`) is not: no DELETE is sent, its line is kept and a note says so.
+ *    passes: done. Otherwise what is missing, and the admin app (or, before it is deployed, the
+ *    bootstrap link); stop.
  * 8. **Network**: `api.cloudflare.com`, the account's R2 storage host and its `workers.dev`
  *    subdomain, each named by its kind only.
  * 9. **Summary** and the next step; `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_EMAIL_DOMAIN` filled in.
@@ -34,7 +37,8 @@
  * Output never holds a token value, an account ID, a zone ID or the `workers.dev` subdomain
  * (DEC-0573, DEC-0590): messages are written without them, and every line is also passed through a
  * redaction of each such value known to the run. Token writes go through a guard (DEC-0589, DEC-0618),
- * an allow-list: a DELETE only of the bootstrap token's own ID (in its last step) or of a signing
+ * an allow-list: a DELETE only of the bootstrap token's own ID (in its last step, or at once for a
+ * long-lived one) or of a signing
  * token the guard saw by its name (`prototype-r2-signing`, listed or just created by the signing
  * step), a PUT only of the everyday token's ID, and never either on an ID in `protectedTokenIds`.
  * Exit status: 0 when the account is set up and reachable, 1 when the run stopped for something the
@@ -49,25 +53,10 @@ import { CloudflareRequestsStopped, describeFailure, sentPath, succeeded, type A
 import { zoneCandidates } from "./email.js";
 import type { Environment } from "./environment.js";
 import { ensureEnvCloudflareIgnored, gitSafetyWarnings, inspectGitSafety } from "./git-safety.js";
-import {
-  ACCOUNT_SETUP_VERSION,
-  BOOTSTRAP,
-  comparePolicies,
-  deepLink,
-  EVERYDAY,
-  inPlaceUpdateBody,
-  PERMISSIONS_VERSION,
-  probeEveryday,
-  TOKEN_NAMES,
-  type PermissionGroup,
-  type TokenDetails,
-  type TokenKind,
-  type TokenPolicy,
-} from "./permissions.js";
+import { ACCOUNT_SETUP_VERSION, BOOTSTRAP, comparePolicies, deepLink, PERMISSIONS_VERSION, probeEveryday, TOKEN_NAMES, type PermissionGroup, type TokenDetails, type TokenKind } from "./permissions.js";
 import { workersPlanReader } from "./plan.js";
 import { SIGNING_TOKEN_NAME } from "./r2-token.js";
-import { frameworkVersion as packageVersion } from "./setup-record.js";
-import { applySetupSteps, checkAccountSetup, SETUP_STEPS, type SetupStepOptions } from "./setup-steps.js";
+import { checkAccountSetup, type SetupStepOptions } from "./setup-steps.js";
 import { commentOutBootstrap, ENV_CLOUDFLARE_FILE, ENV_CLOUDFLARE_TEMPLATE, fillInSettings, readCloudflareSettings, writeTemplateIfAbsent, type CloudflareSettings } from "./token-sources.js";
 
 const COMMAND = "cloudflare-setup";
@@ -150,10 +139,30 @@ const TITLE: Readonly<Record<Slot, string>> = {
 /** What to choose on each link's page (plan §2, §3.2): the link cannot set the account, the zone or the expiry. */
 const PAGE_CHOICES: Readonly<Record<TokenKind, string>> = {
   bootstrap:
-    "On the page: pick your account if the dashboard asks; keep your email domain's zone included (the link covers all the account's zones); under TTL, set an end date 7 days away or sooner. Then choose Continue to summary, then Create Token, and copy the token.",
+    "On the page: pick your account if the dashboard asks; under TTL, set an end date no more than 1 day away (setup deletes a bootstrap token that lives longer, or has no end date, at once). Then choose Continue to summary, then Create Token, and copy the token.",
   everyday:
     "On the page: pick your account if the dashboard asks; keep your email domain's zone included (the link covers all the account's zones); no TTL (expiry) is needed. Then choose Continue to summary, then Create Token, and copy the token.",
 };
+
+/** PAR-435: the longest a bootstrap token may still have to live when setup reads it, in milliseconds (1 day; supersedes PAR-380's 7 days). */
+export const BOOTSTRAP_MAX_LIFETIME_MS = 86_400_000;
+
+/**
+ * Why a bootstrap token's expiry (`expires_on` from its verify call) is refused (DEC-0681): none,
+ * one that cannot be read, or one more than `BOOTSTRAP_MAX_LIFETIME_MS` after `now`. Exactly 1 day
+ * away is accepted. `undefined` when it is accepted.
+ */
+export function bootstrapExpiryProblem(expiresOn: string | undefined, now: Date): string | undefined {
+  if (expiresOn === undefined) return "it has no expiry";
+  const at = Date.parse(expiresOn);
+  if (Number.isNaN(at)) return "its expiry cannot be read";
+  if (at - now.getTime() > BOOTSTRAP_MAX_LIFETIME_MS) return `it expires more than 1 day from now (${new Date(at).toISOString()})`;
+  return undefined;
+}
+
+/** Where the account setup and the everyday token's permissions are made since v0.2.0 (plan §5.2; DEC-0682). */
+export const ADMIN_APP_NEXT =
+  "Open the admin app and sign in: its Account setup page sets the account up, and its Everyday token page makes or updates the everyday token. If the admin app is not deployed yet, run this setup once with a bootstrap token first:";
 
 /** One token's link with what to choose on its page. */
 export function linkBlock(kind: TokenKind): string {
@@ -438,23 +447,50 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       boot = undefined;
     }
 
-    // 3. No everyday token (only a bootstrap token): its link, the template and where it goes.
-    if (everydayValue === undefined) {
+    let selfDeleteArmed = false;
+    const guard = (api: CloudflareApi) =>
+      guardTokenWrites(api, {
+        protectedIds,
+        ...(everyday === undefined ? {} : { everydayId: everyday.id }),
+        ...(boot === undefined ? {} : { bootstrapId: boot.id }),
+        selfDeleteArmed: () => selfDeleteArmed,
+        onTokenId: (id) => hidden.add(id),
+      });
+    const bootApi = boot === undefined ? undefined : guard(boot.api);
+
+    // The bootstrap token's expiry (v0.2.0 plan §5.1 step 1; DEC-0681): none, or more than 1 day
+    // away (PAR-435), and it is deleted at once, before anything else is checked or used. Its own
+    // details are read first: a token that cannot read them (the everyday token pasted there) lacks
+    // "Account API Tokens Write", so it could not delete itself either.
+    let bootPolicies: TokenDetails["policies"] = [];
+    if (boot !== undefined && bootApi !== undefined) {
+      const own = await bootApi("GET", `/accounts/${boot.owner?.id ?? ""}/tokens/${boot.id}`);
+      const ownDetails = resultOf<TokenDetails>(own);
+      if (ownDetails === undefined || !Array.isArray(ownDetails.policies)) {
+        problems.push({ slot: BOOTSTRAP_SETTING, text: `it cannot read API tokens (${describeFailure(own)}), so it lacks "Account API Tokens Write": was the everyday token pasted there?` });
+        boot = undefined;
+      } else {
+        bootPolicies = ownDetails.policies;
+        const tooLong = bootstrapExpiryProblem(boot.expiresOn, (deps.now ?? (() => new Date()))());
+        if (tooLong !== undefined) return refuseLongLived(boot, bootApi, tooLong);
+      }
+    }
+
+    // 3. No token to work with: no everyday token, and no usable bootstrap token. Its link, the template and where it goes.
+    if (everydayValue === undefined && boot === undefined) {
       const lines = [`${EVERYDAY_SETTING} is not set. Setup needs the everyday token too.\n`, linkBlock("everyday")];
       for (const p of problems) lines.push(problemText(p.slot, p.text));
       if (unusableBootstrap !== undefined) lines.push(problemText(BOOTSTRAP_SETTING, unusableBootstrap));
       lines.push(`Fill in this template:\n${ENV_CLOUDFLARE_TEMPLATE}`, WHERE_IT_GOES, NEXT_PROMPT);
       return stop(lines.join("\n"));
     }
-    if (problems.length > 0 || everyday === undefined) return stop([...problems.map((p) => problemText(p.slot, p.text)), NEXT_PROMPT].join("\n"));
+    if (problems.length > 0) return stop([...problems.map((p) => problemText(p.slot, p.text)), NEXT_PROMPT].join("\n"));
+    // Either token is usable here: the bootstrap token alone runs the bootstrap (v0.2.0 plan §5.1).
+    const chooser = everyday ?? boot;
+    if (chooser === undefined) return stop(NEXT_PROMPT);
 
-    let selfDeleteArmed = false;
-    const guard = (api: CloudflareApi) => guardTokenWrites(api, { protectedIds, everydayId: everyday.id, ...(boot === undefined ? {} : { bootstrapId: boot.id }), selfDeleteArmed: () => selfDeleteArmed, onTokenId: (id) => hidden.add(id) });
-    const everydayApi = guard(everyday.api);
-    const bootApi = boot === undefined ? undefined : guard(boot.api);
-
-    // 4. The account: the everyday token's, checked against CLOUDFLARE_ACCOUNT_ID (DEC-0585).
-    const candidates = everyday.accounts;
+    // 4. The account: the everyday token's (else the bootstrap token's), checked against CLOUDFLARE_ACCOUNT_ID (DEC-0585).
+    const candidates = chooser.accounts;
     let account: Account | undefined;
     let switched = false;
     if (configuredAccount !== undefined) {
@@ -462,7 +498,7 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       if (account === undefined) {
         if (candidates.length > 1) return stop(chooseAccountText(candidates, true));
         account = candidates[0];
-        if (account === undefined) return stop(problemText(EVERYDAY_SETTING, "it can see no Cloudflare account"));
+        if (account === undefined) return stop(problemText(chooser.slot, "it can see no Cloudflare account"));
         if (request.switchAccount !== true) return stop(accountSwitchText(account));
         switched = true;
         say(`switching this project to the account "${account.name}" (--switch-account)`);
@@ -472,7 +508,7 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     } else {
       return stop(chooseAccountText(candidates, false));
     }
-    if (account === undefined) return stop(problemText(EVERYDAY_SETTING, "it can see no Cloudflare account"));
+    if (account === undefined) return stop(problemText(chooser.slot, "it can see no Cloudflare account"));
     const accountId = account.id;
     hidden.add(accountId);
     if (boot !== undefined && !boot.accounts.some((a) => a.id === accountId)) {
@@ -481,17 +517,22 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     }
     say(`account: ${account.name}`);
 
-    // 4 (cont.). The plan, before the email domain is asked for: read with Billing Read (the bootstrap token's); a refused read is not checked.
-    const plan = await workersPlanReader(bootApi ?? everydayApi, accountId, deps.env)();
+    // 5–7 with the bootstrap token: the bootstrap (v0.2.0 plan §5.1); the everyday token is left as it is.
+    if (boot !== undefined && bootApi !== undefined) return bootstrap(boot, bootApi, account, switched);
+    if (everyday === undefined) return stop(NEXT_PROMPT);
+    const everydayApi = guard(everyday.api);
+
+    // 4 (cont.). The plan, before the email domain is asked for: neither token holds Billing Read, so only the setting decides (plan.ts).
+    const plan = await workersPlanReader(everydayApi, accountId, deps.env)();
     if (plan.plan === "free") {
       return stop(
         `The account "${account.name}" is on the Workers Free plan. Sign-in by email (Better Auth with Cloudflare Email Sending) needs Workers Paid: upgrade it in the dashboard (Workers & Pages, Plans), then run setup again.\n${NEXT_PROMPT}`,
       );
     }
-    const planText = plan.plan === "paid" ? "Workers Paid" : 'not checked (reading it needs "Billing Read", which only the bootstrap token has)';
+    const planText = plan.plan === "paid" ? "Workers Paid" : 'not checked (reading it needs "Billing Read")';
 
     // 5. The email domain.
-    const zoneApi = bootApi ?? everydayApi;
+    const zoneApi = everydayApi;
     const given = request.emailDomain?.trim().toLowerCase();
     const fromSettings = settings.values.CLOUDFLARE_EMAIL_DOMAIN?.trim().toLowerCase();
     if (given !== undefined && fromSettings !== undefined && given !== fromSettings) warn(`note: using --email-domain ${given} instead of CLOUDFLARE_EMAIL_DOMAIN (${fromSettings})`);
@@ -508,7 +549,7 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     for (const name of zoneCandidates(domain)) {
       const found = await listZones(zoneApi, accountId, name);
       if (!Array.isArray(found)) {
-        return stop([`Looking up the zone of ${domain} failed (${describeFailure(found)}).`, problemText(boot === undefined ? EVERYDAY_SETTING : BOOTSTRAP_SETTING, 'it needs "Zone Read" on the email domain\'s zone'), NEXT_PROMPT].join("\n"));
+        return stop([`Looking up the zone of ${domain} failed (${describeFailure(found)}).`, problemText(EVERYDAY_SETTING, 'it needs "Zone Read" on the email domain\'s zone'), NEXT_PROMPT].join("\n"));
       }
       zone = found.find((z) => z.name === name);
       if (zone !== undefined) break;
@@ -528,122 +569,43 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     const probeText = failedProbe.map((r) => `"${r.group.name}" (HTTP ${String(r.status)})`).join(", ");
 
     let changed = false;
-    let everydayState = `passed the quick check (one read per permission of list version ${String(PERMISSIONS_VERSION)})`;
-    let setupState: string;
-    if (boot === undefined || bootApi === undefined) {
-      // 6. The setup record, with the everyday token.
-      let reasons: string[];
-      try {
-        const status = await checkAccountSetup(everydayApi, accountId, domain, ACCOUNT_SETUP_VERSION, deps.stepOptions ?? {});
-        reasons = [];
-        if (status.record === undefined) reasons.push("the account has not been set up by this setup yet");
-        else if (status.record.setupVersion < ACCOUNT_SETUP_VERSION) reasons.push(`the account's setup is at version ${String(status.record.setupVersion)}, and this release needs version ${String(ACCOUNT_SETUP_VERSION)}`);
-        else if (status.record.emailDomain !== domain) reasons.push(`the account was set up for another email domain (${status.record.emailDomain})`);
-        if (status.missing.length > 0) reasons.push(`these setup steps are missing: ${status.missing.join(", ")}`);
-        if (reasons.length === 0 && !status.current) reasons.push("the account's setup is not current");
-      } catch (error) {
-        // A request layer's stop is not unreadable setup (DEC-0619): the run ends with it.
-        if (error instanceof CloudflareRequestsStopped) throw error;
-        reasons = [`the account's setup could not be read with ${EVERYDAY_SETTING} (${messageOf(error)})`];
-      }
-      if (failedProbe.length > 0) reasons.push(`${EVERYDAY_SETTING} failed the quick check for ${probeText}; the bootstrap token adds missing permissions to it in place (its value stays the same)`);
-      if (reasons.length > 0) {
-        return stop(
-          [
-            `This needs the bootstrap token once:\n${reasons.map((r) => `  - ${r}`).join("\n")}\n`,
-            unusableBootstrap === undefined ? linkBlock("bootstrap") : problemText(BOOTSTRAP_SETTING, unusableBootstrap),
-            `Put it in ${BOOTSTRAP_SETTING}.`,
-            WHERE_IT_GOES,
-            NEXT_PROMPT,
-          ].join("\n"),
-        );
-      }
-      setupState = `current (setup version ${String(ACCOUNT_SETUP_VERSION)})`;
-      if (unusableBootstrap !== undefined) {
-        const where = settings.sources.CLOUDFLARE_BOOTSTRAP_TOKEN === "file" ? ENV_CLOUDFLARE_FILE : cloudSession ? "the cloud environment's settings (environment menu, Edit, Environment variables)" : "the environment";
-        warn(`note: ${BOOTSTRAP_SETTING} is no longer a valid token (setup deletes it when it is done). Nothing needs it now: remove it from ${where}.`);
-      }
-    } else {
-      // 7. With the bootstrap token: its own permissions first.
-      const own = await bootApi("GET", `/accounts/${accountId}/tokens/${boot.id}`);
-      const ownDetails = resultOf<TokenDetails>(own);
-      if (ownDetails === undefined || !Array.isArray(ownDetails.policies)) {
-        return stop([problemText(BOOTSTRAP_SETTING, `it cannot read API tokens (${describeFailure(own)}), so it lacks "Account API Tokens Write": was the everyday token pasted there?`), NEXT_PROMPT].join("\n"));
-      }
-      const own_ = comparePolicies(ownDetails.policies, BOOTSTRAP, scope);
-      if (own_.missing.length > 0) return stop([problemText(BOOTSTRAP_SETTING, `it lacks ${groupNames(own_.missing)} on this account or the email domain's zone`), NEXT_PROMPT].join("\n"));
-      // A protected bootstrap token (in the live pass, the owner's own standing in for it) is never deleted (DEC-0589).
-      const bootProtected = isProtected(boot.id);
-      if (boot.expiresOn === undefined && !bootProtected) {
-        warn(`WARNING: ${BOOTSTRAP_SETTING} has no expiry. Setup deletes it at the end of a successful run; if setup stops before that, delete it yourself in the dashboard (Manage account, Account API tokens, ${TOKEN_NAMES.bootstrap}), or make it with a TTL of 7 days or less next time.`);
-      }
-
-      // The missing setup steps, then the record (applySetupSteps writes it last).
-      const { applied, written, record } = await applySetupSteps(bootApi, accountId, {
-        emailDomain: domain,
-        steps: SETUP_STEPS,
-        setupVersion: ACCOUNT_SETUP_VERSION,
-        frameworkVersion: deps.frameworkVersion ?? packageVersion(),
-        now: deps.now ?? (() => new Date()),
-        ...deps.stepOptions,
-        note: (message) => say(`note: ${message}`),
-      });
-      const recorded = written ? `; recorded setup version ${String(record.setupVersion)}` : "";
-      if (applied.length > 0 || written) changed = true;
-      say(applied.length > 0 ? `account setup: applied ${applied.join(", ")}${recorded}` : `account setup: every step was already done${recorded}`);
-      setupState = `current (setup version ${String(ACCOUNT_SETUP_VERSION)})`;
-
-      // The everyday token, checked exactly once with the bootstrap token.
-      const check = await checkEverydayOnce();
-      if ("remake" in check) {
-        return stop([problemText(EVERYDAY_SETTING, check.remake), `The bootstrap token was kept, so the next run checks the new everyday token.`, NEXT_PROMPT].join("\n"));
-      }
-      everydayState = check.state;
-      if (check.updated === true) changed = true;
-
-      // The bootstrap token deletes itself: its own ID, from its own verify call, never another.
-      // A protected one does not: no DELETE is sent (the guard would refuse it) and its line stays.
-      if (bootProtected) {
-        say(`note: the bootstrap token is protected, so setup did not delete it; ${BOOTSTRAP_SETTING} is kept as it is`);
-      } else {
-        selfDeleteArmed = true;
-        const deleted = await bootApi("DELETE", `/accounts/${accountId}/tokens/${boot.id}`);
-        selfDeleteArmed = false;
-        if (!succeeded(deleted)) {
-          return stop(
-            `The bootstrap token could not delete itself (${describeFailure(deleted)}). Delete it in the dashboard (Manage account, Account API tokens, ${TOKEN_NAMES.bootstrap}), then remove ${BOOTSTRAP_SETTING}.`,
-          );
-        }
-        changed = true;
-        say("the bootstrap token deleted itself");
-        try {
-          if (commentOutBootstrap(dir)) say(`commented out ${BOOTSTRAP_SETTING} in ${ENV_CLOUDFLARE_FILE}`);
-        } catch (error) {
-          warn(`could not comment out ${BOOTSTRAP_SETTING} in ${ENV_CLOUDFLARE_FILE} (${messageOf(error)}); the token is deleted, so remove the line yourself`);
-        }
-        if (settings.sources.CLOUDFLARE_BOOTSTRAP_TOKEN === "environment") {
-          say(
-            cloudSession
-              ? `You can now remove ${BOOTSTRAP_SETTING} from the cloud environment's settings (environment menu, Edit, Environment variables). The token is already deleted: until you remove it, later runs note that it is no longer valid and go on.`
-              : `You can now remove ${BOOTSTRAP_SETTING} from the environment. The token is already deleted: until you remove it, later runs note that it is no longer valid and go on.`,
-          );
-        }
-      }
+    const everydayState = `passed the quick check (one read per permission of list version ${String(PERMISSIONS_VERSION)})`;
+    // 6. The setup record, with the everyday token. Since v0.2.0 the account setup and the everyday
+    // token's permissions are the admin app's (plan §5.2), not the bootstrap token's (DEC-0682).
+    let reasons: string[];
+    try {
+      const status = await checkAccountSetup(everydayApi, accountId, domain, ACCOUNT_SETUP_VERSION, deps.stepOptions ?? {});
+      reasons = [];
+      if (status.record === undefined) reasons.push("the account has not been set up by this setup yet");
+      else if (status.record.setupVersion < ACCOUNT_SETUP_VERSION) reasons.push(`the account's setup is at version ${String(status.record.setupVersion)}, and this release needs version ${String(ACCOUNT_SETUP_VERSION)}`);
+      else if (status.record.emailDomain !== domain) reasons.push(`the account was set up for another email domain (${status.record.emailDomain})`);
+      if (status.missing.length > 0) reasons.push(`these setup steps are missing: ${status.missing.join(", ")}`);
+      if (reasons.length === 0 && !status.current) reasons.push("the account's setup is not current");
+    } catch (error) {
+      // A request layer's stop is not unreadable setup (DEC-0619): the run ends with it.
+      if (error instanceof CloudflareRequestsStopped) throw error;
+      reasons = [`the account's setup could not be read with ${EVERYDAY_SETTING} (${messageOf(error)})`];
+    }
+    if (failedProbe.length > 0) reasons.push(`${EVERYDAY_SETTING} failed the quick check for ${probeText}`);
+    if (reasons.length > 0) {
+      return stop(
+        [
+          `This needs the admin app:\n${reasons.map((r) => `  - ${r}`).join("\n")}\n`,
+          ADMIN_APP_NEXT,
+          unusableBootstrap === undefined ? linkBlock("bootstrap") : problemText(BOOTSTRAP_SETTING, unusableBootstrap),
+          WHERE_IT_GOES,
+          NEXT_PROMPT,
+        ].join("\n"),
+      );
+    }
+    const setupState = `current (setup version ${String(ACCOUNT_SETUP_VERSION)})`;
+    if (unusableBootstrap !== undefined) {
+      const where = settings.sources.CLOUDFLARE_BOOTSTRAP_TOKEN === "file" ? ENV_CLOUDFLARE_FILE : cloudSession ? "the cloud environment's settings (environment menu, Edit, Environment variables)" : "the environment";
+      warn(`note: ${BOOTSTRAP_SETTING} is no longer a valid token (setup deletes it when it is done). Nothing needs it now: remove it from ${where}.`);
     }
 
     // 9 (record). CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_EMAIL_DOMAIN filled in, so copying the file starts the next project.
-    if (switched && settings.sources.CLOUDFLARE_ACCOUNT_ID === "environment") {
-      say(`Change CLOUDFLARE_ACCOUNT_ID in the environment to the account "${account.name}"'s ID (environment settings in a cloud session); it still names the old account.`);
-    }
-    try {
-      const filled = fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: accountId, CLOUDFLARE_EMAIL_DOMAIN: domain }, switched && settings.sources.CLOUDFLARE_ACCOUNT_ID === "file" ? { replace: ["CLOUDFLARE_ACCOUNT_ID"] } : {});
-      if (filled.length > 0) {
-        changed = true;
-        say(`recorded ${filled.join(" and ")} in ${ENV_CLOUDFLARE_FILE}`);
-      }
-    } catch (error) {
-      warn(`could not record the account and email domain in ${ENV_CLOUDFLARE_FILE} (${messageOf(error)})`);
-    }
+    if (fillIn({ CLOUDFLARE_ACCOUNT_ID: accountId, CLOUDFLARE_EMAIL_DOMAIN: domain }, account, switched)) changed = true;
 
     // 8. Network.
     const blocked = await networkProblems(accountId, everydayApi);
@@ -667,30 +629,91 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     say(`\nNext step: deploy a test stage: npm run deploy -- --target cloudflare --stage ${FIRST_TEST_STAGE} (or ask Claude to deploy a test stage).`);
     return EXIT.ok;
 
-    /** Step 7's single check of the everyday token, with the bootstrap token. */
-    async function checkEverydayOnce(): Promise<{ readonly state: string; readonly updated?: boolean } | { readonly remake: string }> {
-      if (everyday === undefined || bootApi === undefined || zone === undefined) throw new Error("internal: the everyday check needs both tokens and the zone");
-      const r = everyday.user ? undefined : await bootApi("GET", `/accounts/${accountId}/tokens/${everyday.id}`);
-      const details = r === undefined ? undefined : resultOf<TokenDetails>(r);
-      if (details === undefined || !Array.isArray(details.policies)) {
-        // A user token, or one of another account: its permissions cannot be read here (DEC-0586).
-        if (failedProbe.length === 0) return { state: "passed the quick check; it is not an account API token of this account, so its permissions were not read" };
-        return { remake: `it failed the quick check for ${probeText}, and it is not an account API token of this account, so setup cannot add them; make the everyday token from its link` };
+    /** Records the values in `.env.cloudflare` (an account switch replaces the account ID there); true when the file changed. */
+    function fillIn(values: Partial<Record<"CLOUDFLARE_ACCOUNT_ID" | "CLOUDFLARE_EMAIL_DOMAIN", string>>, to: Account, switchedTo: boolean): boolean {
+      if (switchedTo && settings.sources.CLOUDFLARE_ACCOUNT_ID === "environment") {
+        say(`Change CLOUDFLARE_ACCOUNT_ID in the environment to the account "${to.name}"'s ID (environment settings in a cloud session); it still names the old account.`);
       }
-      const policies: readonly TokenPolicy[] = details.policies;
-      const c = comparePolicies(policies, EVERYDAY, scope);
-      if (c.wrongAccount) return { remake: "it is scoped to another account; make it again from its link, on this account" };
-      const zoneGroups = EVERYDAY.filter((g) => g.scope === "zone");
-      // Zone groups granted somewhere, but not on the email domain's zone: scoped to the wrong zone.
-      const someZoneGrant = policies.some((p) => p.effect === "allow" && zoneGroups.some((g) => p.permission_groups.some((h) => h.id === g.id || h.name === g.name)));
-      if (!c.zoneCovered && someZoneGrant) return { remake: `it is scoped to other zones, not the email domain's zone (${zone.name}); make it again from its link, keeping that zone included` };
-      if (c.denied.length > 0) return { remake: `a deny policy takes away ${groupNames(c.denied)}, which an update cannot override; make it again from its link` };
-      if (c.missing.length === 0) return { state: `has every permission of list version ${String(PERMISSIONS_VERSION)}` };
-      if (isProtected(everyday.id)) return { remake: `it lacks ${groupNames(c.missing)}, and its ID is protected, so setup did not change it` };
-      const put = await bootApi("PUT", `/accounts/${accountId}/tokens/${everyday.id}`, inPlaceUpdateBody(details, c.missing, scope));
-      if (!succeeded(put)) throw new Error(`adding ${groupNames(c.missing)} to ${EVERYDAY_SETTING} failed (${describeFailure(put)}); the bootstrap token was kept, so run setup again`);
-      say(`added ${groupNames(c.missing)} to ${EVERYDAY_SETTING} in place (its value is unchanged)`);
-      return { state: `updated in place to list version ${String(PERMISSIONS_VERSION)}`, updated: true };
+      try {
+        const filled = fillInSettings(dir, values, switchedTo && settings.sources.CLOUDFLARE_ACCOUNT_ID === "file" ? { replace: ["CLOUDFLARE_ACCOUNT_ID"] } : {});
+        if (filled.length > 0) say(`recorded ${filled.join(" and ")} in ${ENV_CLOUDFLARE_FILE}`);
+        return filled.length > 0;
+      } catch (error) {
+        warn(`could not record ${Object.keys(values).join(" and ")} in ${ENV_CLOUDFLARE_FILE} (${messageOf(error)})`);
+        return false;
+      }
+    }
+
+    /**
+     * The bootstrap (v0.2.0 plan §5.1): the token's own permissions, then (DEC-0683) it deletes
+     * itself at the end of the run, its line is commented out and its value is never written. The
+     * everyday token, the account setup and the plan are not the bootstrap token's (DEC-0682).
+     */
+    async function bootstrap(token: Token, api: CloudflareApi, to: Account, switchedTo: boolean): Promise<ProvisionStatus> {
+      const missing = comparePolicies(bootPolicies, BOOTSTRAP, { accountId: to.id, zoneId: "*" }).missing;
+      if (missing.length > 0) return stop([problemText(BOOTSTRAP_SETTING, `it lacks ${groupNames(missing)} on this account`), NEXT_PROMPT].join("\n"));
+
+      // The bootstrap token deletes itself last: its own ID, from its own verify call, never another.
+      // A protected one does not: no DELETE is sent (the guard would refuse it) and its line stays.
+      if (isProtected(token.id)) {
+        say(`note: the bootstrap token is protected, so setup did not delete it; ${BOOTSTRAP_SETTING} is kept as it is`);
+      } else {
+        const deleted = await selfDelete(token, api);
+        if (!succeeded(deleted)) {
+          return stop(`The bootstrap token could not delete itself (${describeFailure(deleted)}). Delete it in the dashboard (Manage account, Account API tokens, ${TOKEN_NAMES.bootstrap}), then remove ${BOOTSTRAP_SETTING}.`);
+        }
+        say("the bootstrap token deleted itself");
+        afterSelfDelete();
+      }
+      fillIn({ CLOUDFLARE_ACCOUNT_ID: to.id }, to, switchedTo);
+      say();
+      say("The Cloudflare bootstrap is complete.");
+      say(`  account: ${to.name}`);
+      return EXIT.ok;
+    }
+
+    /**
+     * A bootstrap token with no expiry or one more than 1 day away (DEC-0681): deleted at once,
+     * before anything else is checked or used, with how to make a new one. A protected one is
+     * neither deleted nor used.
+     */
+    async function refuseLongLived(token: Token, api: CloudflareApi, why: string): Promise<ProvisionStatus> {
+      const remake = `Make a new bootstrap token with an expiry of 1 day or less from this link, put it in ${BOOTSTRAP_SETTING} and run setup again:\n  ${deepLink("bootstrap")}\n  ${PAGE_CHOICES.bootstrap}\n`;
+      const head = `${TITLE[BOOTSTRAP_SETTING]}: ${why}, and a bootstrap token may live 1 day at most.`;
+      if (isProtected(token.id)) return stop(`${head} Its ID is protected, so setup neither deleted nor used it.\n${remake}\n${NEXT_PROMPT}`);
+      const deleted = await selfDelete(token, api);
+      if (!succeeded(deleted)) {
+        return stop(`${head} Setup could not delete it (${describeFailure(deleted)}): delete it in the dashboard (Manage account, Account API tokens, ${TOKEN_NAMES.bootstrap}).\n${remake}\n${NEXT_PROMPT}`);
+      }
+      say(`${head} Setup deleted it at once and used it for nothing else.`);
+      afterSelfDelete();
+      return stop(`${remake}\n${NEXT_PROMPT}`);
+    }
+
+    /** The bootstrap token's only DELETE: its own ID on its own account (the guard allows it only while armed). */
+    async function selfDelete(token: Token, api: CloudflareApi): Promise<ApiReply> {
+      selfDeleteArmed = true;
+      try {
+        return await api("DELETE", `/accounts/${token.owner?.id ?? ""}/tokens/${token.id}`);
+      } finally {
+        selfDeleteArmed = false;
+      }
+    }
+
+    /** After the self-delete: its line in `.env.cloudflare` commented out (the value is never written), and where else to remove it. */
+    function afterSelfDelete(): void {
+      try {
+        if (commentOutBootstrap(dir)) say(`commented out ${BOOTSTRAP_SETTING} in ${ENV_CLOUDFLARE_FILE}`);
+      } catch (error) {
+        warn(`could not comment out ${BOOTSTRAP_SETTING} in ${ENV_CLOUDFLARE_FILE} (${messageOf(error)}); the token is deleted, so remove the line yourself`);
+      }
+      if (settings.sources.CLOUDFLARE_BOOTSTRAP_TOKEN === "environment") {
+        say(
+          cloudSession
+            ? `You can now remove ${BOOTSTRAP_SETTING} from the cloud environment's settings (environment menu, Edit, Environment variables). The token is already deleted: until you remove it, later runs note that it is no longer valid and go on.`
+            : `You can now remove ${BOOTSTRAP_SETTING} from the environment. The token is already deleted: until you remove it, later runs note that it is no longer valid and go on.`,
+        );
+      }
     }
   }
 
