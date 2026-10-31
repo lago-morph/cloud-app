@@ -864,6 +864,20 @@ describe("cloudflare-setup: the token write guard (DEC-0589)", () => {
     expect(sent).toEqual(["DELETE /accounts/a/tokens/boot", "GET /accounts/a/tokens/owner"]);
   });
 
+  it("guardTokenWrites refuses a protected bootstrap ID's DELETE even while its self-delete is armed, with or without the everyday token's ID (defence in depth behind DEC-0733)", async () => {
+    for (const everydayId of ["every", undefined]) {
+      const sent: string[] = [];
+      const api = guardTokenWrites(async (method, path) => (sent.push(`${method} ${path}`), { status: 200, body: { success: true, result: {} } }), {
+        protectedIds: new Set(["BOOT"]),
+        ...(everydayId === undefined ? {} : { everydayId }),
+        bootstrapId: "boot",
+        selfDeleteArmed: () => true,
+      });
+      await expect(api("DELETE", "/accounts/a/tokens/boot"), String(everydayId)).rejects.toThrow("setup refused to delete an API token: its ID is protected");
+      expect(sent, String(everydayId)).toEqual([]);
+    }
+  });
+
   it("guardTokenWrites deletes only the signing tokens it saw by name: listed or just created as prototype-r2-signing (DEC-0618)", async () => {
     const sent: string[] = [];
     const replies: Record<string, unknown> = {
