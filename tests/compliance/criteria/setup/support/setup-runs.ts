@@ -22,7 +22,8 @@ import { join, relative } from "node:path";
 import { cloudflareSetupCommand, type CloudflareSetupCommandDeps } from "../../../../../packages/framework/src/cli/commands/cloudflare-setup.js";
 import type { ApiReply, CloudflareApi } from "../../../../../packages/framework/src/provision/cloudflare/api.js";
 import { ACCOUNT, FakeCloud } from "../../../../../packages/framework/src/provision/cloudflare/fake-cloud.test-support.js";
-import { deepLink, EVERYDAY, BOOTSTRAP, type PermissionGroup, type TokenPolicy } from "../../../../../packages/framework/src/provision/cloudflare/permissions.js";
+import { ACCOUNT_SETUP_VERSION, deepLink, EVERYDAY, BOOTSTRAP, type PermissionGroup, type TokenPolicy } from "../../../../../packages/framework/src/provision/cloudflare/permissions.js";
+import { applySetupSteps, SETUP_STEPS } from "../../../../../packages/framework/src/provision/cloudflare/setup-steps.js";
 import { SetupWorld, type WorldToken } from "../../../../../packages/framework/src/provision/cloudflare/setup-world.test-support.js";
 import { runLocalSetup } from "../../../../../packages/framework/src/provision/core/local-setup.js";
 
@@ -64,22 +65,9 @@ export const NEXT_PROMPT_PHRASE = "continue prototype setup";
 export const BOOT_LINK = deepLink("bootstrap");
 export const EVERYDAY_LINK = deepLink("everyday");
 
-/** Plan §4.1's lists, by name (the permission list of release 1, PAR-331 version 1). */
+/** Plan §4.1's everyday list and v0.2.0 plan §5.1's bootstrap list, by name (PAR-331 version 2). */
 export const EVERYDAY_NAMES = ["Workers Scripts Write", "Workers R2 Storage Write", "D1 Write", "Email Sending Read", "Zone Read", "Analytics Read", "Email Routing Rules Read"];
-export const BOOTSTRAP_NAMES = [
-  "Workers Scripts Write",
-  "Workers R2 Storage Write",
-  "Account API Tokens Write",
-  "Email Sending Write",
-  "Email Routing Addresses Write",
-  "Billing Read",
-  "D1 Write",
-  "Email Routing Rules Write",
-  "DNS Write",
-  "Zone Settings Write",
-  "Zone Read",
-  "Analytics Read",
-];
+export const BOOTSTRAP_NAMES = ["Workers Scripts Write", "OAuth Client Write", "Secrets Store Write", "Account API Tokens Write"];
 
 /** The permission group of either list with this name. */
 export function group(name: string): PermissionGroup {
@@ -178,8 +166,11 @@ export interface Tokens {
   readonly bootstrap: WorldToken;
 }
 
-/** One week from the fake "now" of the dashboard: a bootstrap token with a short expiry (PAR-380). */
-export const EXPIRES = "2099-01-08T00:00:00Z";
+/** 12 hours from now: a bootstrap token within PAR-435's 1-day expiry (v0.2.0 plan §5.1; supersedes PAR-380's 7 days). */
+export const EXPIRES = new Date(Date.now() + 12 * 3_600_000).toISOString().replace(/\.\d{3}Z$/, "Z");
+
+/** Two days from now: a bootstrap token setup deletes at once (more than 1 day away). */
+export const EXPIRES_TOO_LATE = new Date(Date.now() + 48 * 3_600_000).toISOString().replace(/\.\d{3}Z$/, "Z");
 
 /** An everyday and a bootstrap token made from the deep links on `account`. */
 export function addTokens(world: SetupWorld, label: string, account = ACCOUNT, options: { bootstrapExpires?: string | null } = {}): Tokens {
@@ -330,11 +321,30 @@ export async function runSetup(label: string, world: SetupWorld, dir: string, op
 }
 
 /**
+ * The account setup on the fake account, as the admin app's Account setup page does it since
+ * v0.2.0 (plan §5.2 page 1; DEC-0682): every step and the setup record, through the fake's own API.
+ */
+export async function setUpAccount(world: SetupWorld, account = ACCOUNT): Promise<void> {
+  // `ACCOUNT` is right for every account: each `FakeCloud` answers under the fake's own account ID (the world maps the real one to it).
+  await applySetupSteps(world.cloud(account).api, ACCOUNT, {
+    emailDomain: DOMAIN,
+    steps: SETUP_STEPS,
+    setupVersion: ACCOUNT_SETUP_VERSION,
+    frameworkVersion: "0.0.0-test",
+    now: () => new Date(),
+    newSubdomain: () => SUB,
+    email: { sleep: async () => {} },
+  });
+}
+
+/**
  * A first project set up from scratch with a fresh pair of tokens (the state SETUP-AC-002, -004,
- * -005 and -007 start from): exit 0 is required, with the output in the error otherwise.
+ * -005 and -007 start from): the account set up (`setUpAccount`), then the bootstrap run;
+ * exit 0 is required, with the output in the error otherwise.
  */
 export async function setUpFirstProject(label: string): Promise<{ world: SetupWorld; dir: string; tokens: Tokens }> {
   const world = freshWorld();
+  await setUpAccount(world);
   const tokens = addTokens(world, label);
   const dir = await project({ envFile: envFile({ [BOOTSTRAP_SETTING]: tokens.bootstrap.value, [EVERYDAY_SETTING]: tokens.everyday.value, CLOUDFLARE_EMAIL_DOMAIN: DOMAIN }) });
   const r = await runSetup(`${label}: first setup`, world, dir);
