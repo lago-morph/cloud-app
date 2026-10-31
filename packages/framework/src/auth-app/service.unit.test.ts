@@ -57,9 +57,11 @@ describe("createAuthAppService", () => {
       },
       batch: () => Promise.reject(new Error("D1_ERROR")),
     };
-    const s = createAuthAppService({ db: broken, now: () => t });
-    await expect(s.role("sub-a")).rejects.toThrow("auth app unavailable");
-    await expect(s.redeem({ code: "A".repeat(43), app: APP })).rejects.toThrow("auth app unavailable");
+    const seen: unknown[] = [];
+    const s = createAuthAppService({ db: broken, now: () => t, onError: (e) => seen.push(e) });
+    await expect(s.role("sub-a")).rejects.toThrow(/^auth app unavailable$/);
+    await expect(s.redeem({ code: "A".repeat(43), app: APP })).rejects.toThrow(/^auth app unavailable$/);
+    expect(seen.map((e) => (e as Error).message)).toEqual(["D1_ERROR: database unavailable", "D1_ERROR: database unavailable"]);
   });
 });
 
@@ -86,6 +88,18 @@ describe("readConfig", () => {
       discoveryUrl: "http://127.0.0.1:1/cf/.well-known/openid-configuration",
       apiBase: "http://127.0.0.1:2/client/v4",
     });
+  });
+
+  it("allows http only for a localhost origin (no cleartext callback elsewhere)", async () => {
+    await expect(readConfig({ ...env, AUTH_APP_ORIGIN: "http://localhost:8788" })).resolves.toMatchObject({ callbackUrl: "http://localhost:8788/callback" });
+    await expect(readConfig({ ...env, AUTH_APP_ORIGIN: "http://127.0.0.1:8788" })).resolves.toMatchObject({ callbackUrl: "http://127.0.0.1:8788/callback" });
+    await expect(readConfig({ ...env, AUTH_APP_ORIGIN: "http://auth.example" })).rejects.toThrow(/^auth app misconfigured: AUTH_APP_ORIGIN is not an origin$/);
+  });
+
+  it("names the secret, not Cloudflare's error, when the Secrets Store read fails or is empty", async () => {
+    const failing = { get: async () => Promise.reject(new Error("store error with detail")) };
+    await expect(readConfig({ ...env, AUTH_APP_CLIENT_SECRET: failing })).rejects.toThrow(/^auth app misconfigured: AUTH_APP_CLIENT_SECRET could not be read$/);
+    await expect(readConfig({ ...env, AUTH_APP_CLIENT_SECRET: { get: async () => "" } })).rejects.toThrow(/^auth app misconfigured: AUTH_APP_CLIENT_SECRET is not set$/);
   });
 
   it("names a missing or empty setting, never a value", async () => {
