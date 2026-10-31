@@ -3,6 +3,7 @@
  * `/user` fallback), membership and role, and revocation of both tokens on every path once they
  * exist (§7 "the tokens being revoked in the callback"). Against the fake upstream; no network.
  */
+import { createHash } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 import { SignInError } from "./errors.js";
 import { ACCESS_TOKEN, FAKE_ACCOUNT, FAKE_API, FAKE_CLIENT_ID, FAKE_DISCOVERY, REFRESH_TOKEN, fakeUpstream, makeSigningKey, type FakeUpstreamOptions, type SignedKey } from "./fake-upstream.test-support.js";
@@ -14,17 +15,20 @@ beforeAll(async () => {
 });
 
 const NONCE = "nonce-xyz";
+const VERIFIER = "verifier-abc";
+const CHALLENGE = createHash("sha256").update(VERIFIER).digest("base64url");
 const member = (roles: string[], account = FAKE_ACCOUNT, status = "accepted") => ({ account: { id: account }, status, roles });
 
 function setup(over: Partial<FakeUpstreamOptions> = {}) {
-  const up = fakeUpstream({ key, claims: { sub: "sub-1", nonce: NONCE, email: "a@example.com", email_verified: true }, membershipPages: [[member(["HTTP Applications Read"])]], ...over });
+  const expect_ = { clientSecret: "client-secret-value", code: "upstream-code-123", redirectUri: "https://auth.example.test/callback", challenge: CHALLENGE };
+  const up = fakeUpstream({ key, expect: expect_, claims: { sub: "sub-1", nonce: NONCE, email: "a@example.com", email_verified: true }, membershipPages: [[member(["HTTP Applications Read"])]], ...over });
   const logs: string[] = [];
   const deps: SignInDeps = {
     fetch: up.fetch,
     log: (line) => logs.push(line),
     config: { clientId: FAKE_CLIENT_ID, clientSecret: "client-secret-value", accountId: FAKE_ACCOUNT, discoveryUrl: FAKE_DISCOVERY, apiBase: FAKE_API, callbackUrl: "https://auth.example.test/callback" },
   };
-  const run = () => completeSignIn(deps, { code: "upstream-code-123", verifier: "verifier-abc", nonce: NONCE });
+  const run = (verifier = VERIFIER) => completeSignIn(deps, { code: "upstream-code-123", verifier, nonce: NONCE });
   return { up, logs, run };
 }
 
@@ -52,6 +56,12 @@ describe("completeSignIn", () => {
     const ex = up.requests.find((r) => r.url.endsWith("/oauth2/token"))!;
     expect(ex.body.get("redirect_uri")).toBe("https://auth.example.test/callback");
     expect(ex.body.get("code_verifier")).toBe("verifier-abc");
+  });
+
+  it("is refused by the issuer when the PKCE verifier does not match the challenge", async () => {
+    const { up, run } = setup();
+    expect(await refused(run("not-the-verifier"))).toBe("token exchange rejected (400)");
+    expect(up.revoked()).toHaveLength(0);
   });
 
   it("reads /user when the ID token has no email (plan §10)", async () => {
@@ -108,7 +118,7 @@ describe("completeSignIn", () => {
     const { logs, run } = setup({ revokeStatus: 503 });
     await expect(run()).resolves.toMatchObject({ sub: "sub-1" });
     expect(logs).toHaveLength(1);
-    expect(JSON.parse(logs[0]!)).toEqual({ level: "warn", component: "AUTH_APP", message: "token revocation failed" });
+    expect(JSON.parse(logs[0]!)).toEqual({ level: "warn", component: "AUTH_APP", message: "token revocation failed (access_token, refresh_token)" });
   });
 
   it("never puts the code, verifier, tokens or client secret in a refusal", async () => {
