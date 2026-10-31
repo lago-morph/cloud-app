@@ -4,7 +4,7 @@ import type { NoteList } from "../../shared/types";
 import type { Env } from "../env";
 import { notes } from "../schema";
 
-const newNote = z.object({ text: z.string().trim().min(1).max(500) });
+export const newNote = z.object({ text: z.string().trim().min(1).max(500) });
 
 /** SQL and log: a logged-in user writes notes and lists their own. */
 export function noteRoutes(api: Hono<Env>): void {
