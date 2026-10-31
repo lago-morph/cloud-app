@@ -68,10 +68,8 @@ if (target().target === "local") {
         { name: "state mismatch", reason: "state", run: async (app, b) => { const begun = await beginLogin(b); const code = issue(app, begun); return { res: await callback(b, begun, { code, state: "t1-wrong-state" }), secrets: [code, state(begun)] }; } },
         { name: "binding cannot answer", reason: "outage", run: async (app, b) => { const begun = await beginLogin(b); const code = issue(app, begun); app.authApp.setUnavailable(true); return { res: await callback(b, begun, { code, state: state(begun) }), secrets: [code, state(begun)] }; } },
       ];
-      const reasons = new Map<string, Set<string>>();
-
-      for (const c of cases) {
-        it(tag("AUTH-AC-013", `${c.name}: no session, redirect as specified, one log entry naming a fixed reason`), async () => {
+      /** Runs one failing sign-in, checks it, and returns the logged reason. */
+      async function failCase(c: Case): Promise<string> {
           const app = await openReference({ authAppLoginProvider: true });
           const b = new Browser(app);
           const logs = app.logs().length;
@@ -82,21 +80,36 @@ if (target().target === "local") {
           expect([...location.searchParams.keys()].sort()).toStrictEqual(["authError", "requestId"]);
           expect(location.searchParams.get("authError")).toBe("login_failed");
           expect(setCookies(res.headers).filter((k) => k.name === SESSION && !clears(k, app.clock.now())), "no session cookie").toEqual([]);
+          // "Creates no session": the callback sets no session cookie (above), and the browser, which holds
+          // only the cookies the callback set, is still anonymous once the auth app answers again.
           app.authApp.setUnavailable(false);
-          expect(await new Browser(app).json("/api/auth/me")).toStrictEqual({ level: "anonymous" });
+          expect(await b.json("/api/auth/me")).toStrictEqual({ level: "anonymous" });
 
           const failed = authWarnings(app, logs).filter((e) => e.message.startsWith("login failed: "));
           expect(failed, "one login-failed entry for the failing callback").toHaveLength(1);
           expect(failed[0]?.requestId, "the redirect's requestId is the request's").toBe(location.searchParams.get("requestId"));
           const reason = failed[0]!.message.slice("login failed: ".length);
           for (const secret of secrets) expect(reason).not.toContain(secret);
+          // auth.md §2 lists "code refused by the auth app" and "the auth app could not answer"; the outage's
+          // reason must name the auth app and must not be the refused-code reason.
           expect(reason).toMatch({ refused: /code refused/, state: /state mismatch/, outage: /auth app/ }[c.reason]);
-          reasons.set(c.reason, new Set([...(reasons.get(c.reason) ?? []), reason]));
+          if (c.reason === "outage") expect(reason).not.toMatch(/refused/);
+          return reason;
+      }
+
+      for (const c of cases) {
+        it(tag("AUTH-AC-013", `${c.name}: no session, redirect as specified, one log entry naming a fixed reason`), async () => {
+          await failCase(c);
         });
       }
 
-      it(tag("AUTH-AC-013", "the reasons are fixed: one for every refused code, distinct from the state mismatch's and the outage's"), () => {
-        expect(reasons.size, "every case above ran").toBe(3);
+      it(tag("AUTH-AC-013", "the reasons are fixed: one for every refused code, distinct from the state mismatch's and the outage's"), async () => {
+        const reasons = new Map<string, Set<string>>();
+        for (const c of cases) {
+          const reason = await failCase(c);
+          reasons.set(c.reason, new Set([...(reasons.get(c.reason) ?? []), reason]));
+          await disposeReference();
+        }
         for (const [kind, set] of reasons) expect([...set], kind).toHaveLength(1);
         expect(new Set([...reasons.values()].map((s) => [...s][0])).size).toBe(3);
       });
@@ -106,7 +119,9 @@ if (target().target === "local") {
       const app = await openReference({ authAppLoginProvider: true });
       const anon = await new Browser(app).get("/api/auth/me");
       expect(anon.headers.get("cache-control")).toBe("no-store");
-      expect(isCurrentUserResponse(await anon.json())).toBe(true);
+      const anonBody = await anon.json();
+      expect(isCurrentUserResponse(anonBody)).toBe(true);
+      expect(anonBody).toStrictEqual({ level: "anonymous" });
       for (const role of ["user", "admin"] as const) {
         const { browser, callback: done } = await signInWithAuthApp(app, { sub: `t1-ac005-${role}`, email: `t1-ac005-${role}@example.com`, role });
         expect(done.status).toBe(302);
