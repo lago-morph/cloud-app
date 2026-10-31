@@ -5,6 +5,7 @@
  * record at `ACCOUNT_SETUP_VERSION`. Fake Cloudflare enforcing scopes in front of C's FakeCloud.
  */
 import { beforeEach, describe, expect, it } from "vitest";
+import { readAccountSettings } from "../provision/cloudflare/account-settings.js";
 import type { ApiReply, CloudflareApi } from "../provision/cloudflare/api.js";
 import { ACCOUNT as CLOUD_ACCOUNT, FakeCloud } from "../provision/cloudflare/fake-cloud.test-support.js";
 import { CLIENT_SECRET_NAMES } from "../provision/cloudflare/oauth-clients.js";
@@ -133,13 +134,70 @@ describe("page 1: account setup", () => {
     expect(cloud.objectBodies.get("sst-state/framework/account.json")).toMatchObject({ emailDomain: "old.example", setupVersion: 9, other: "kept" });
   });
 
+  const writes = () => cloud.requests.filter((r) => !r.startsWith("GET "));
+
   it("without the sign-in client (the bootstrap did not finish): says so, writes nothing", async () => {
     cloud.secretStores.get("store1")!.secrets.clear();
     const r = await setup();
     expect(r.status).toBe(502);
     expect(await r.text()).toContain("run npm run cloudflare-setup with a bootstrap token first");
-    expect(cloud.workers.has("prototype-auth")).toBe(false);
-    expect(cloud.buckets.size).toBe(0);
+    expect(writes()).toEqual([]);
+    expect(dbs).toEqual([]);
+  });
+
+  it("without a Secrets Store (no bootstrap): points to the bootstrap and creates no store", async () => {
+    cloud.secretStores.clear();
+    const r = await setup();
+    expect(r.status).toBe(502);
+    expect(await r.text()).toContain("npm run cloudflare-setup");
+    expect(writes()).toEqual([]);
+  });
+
+  it("without a workers.dev subdomain (no bootstrap): points to the bootstrap, not to v0.1.x's setup-account", async () => {
+    cloud.subdomain = undefined;
+    const r = await setup();
+    expect(r.status).toBe(502);
+    const html = await r.text();
+    expect(html).toContain("npm run cloudflare-setup");
+    expect(html).not.toContain("setup-account");
+    expect(writes()).toEqual([]);
+  });
+
+  it("a foreign bucket stops the run before anything is written", async () => {
+    cloud.override.set(`GET /accounts/${ACCOUNT}/r2/buckets/sst-state`, { status: 403, body: { success: false, errors: [{ code: 10000, message: "Authentication error" }] } });
+    const r = await setup();
+    expect(r.status).toBe(502);
+    expect(await r.text()).toContain("R2 bucket sst-state belongs to another account");
+    expect(writes()).toEqual([]);
+    expect(dbs).toEqual([]);
+  });
+
+  it("the record on a new account has no emailDomain, so the deploy preflight's reader accepts it", async () => {
+    await setup();
+    const record = cloud.objectBodies.get("sst-state/framework/account.json") as Record<string, unknown>;
+    expect(record).not.toHaveProperty("emailDomain");
+    await expect(readAccountSettings(cloud.api, ACCOUNT)).resolves.toEqual({});
+  });
+
+  it("moves a 0.1.x signing credential held in the record into Secrets Store", async () => {
+    cloud.buckets.set("sst-state", new Set());
+    cloud.addSigningCredential();
+    const r = await setup();
+    expect(await r.text()).toContain("in Secrets Store");
+    const store = cloud.secretStores.get("store1")!;
+    for (const name of Object.values(SIGNING_SECRET_NAMES)) expect(store.secrets.has(name), name).toBe(true);
+    const record = cloud.objectBodies.get("sst-state/framework/r2-signing.json") as Record<string, unknown>;
+    expect(record).not.toHaveProperty("secretAccessKey");
+    expect(record).toHaveProperty("secretsStore");
+  });
+
+  it("a record a newer release wrote is left as it is", async () => {
+    cloud.buckets.set("sst-state", new Set(["framework/account.json"]));
+    const newer = { setupVersion: ACCOUNT_SETUP_VERSION + 5, frameworkVersion: "9.9.9", appliedAt: "2030-01-01T00:00:00.000Z", completedSteps: ["log-bucket"] };
+    cloud.objectBodies.set("sst-state/framework/account.json", { ...newer });
+    const html = await (await setup()).text();
+    expect(cloud.objectBodies.get("sst-state/framework/account.json")).toEqual(newer);
+    expect(html).toContain(`newer setup version ${String(ACCOUNT_SETUP_VERSION + 5)}`);
   });
 
   it("an unticked scope runs nothing", async () => {
