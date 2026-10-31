@@ -65,8 +65,10 @@ export function fakeTokens(accountId: string, options: { perPage?: number } = {}
       t.name = b.name;
       t.policies = b.policies;
       if (b.status !== undefined) t.status = b.status;
-      t.expires_on = b.expires_on;
-      t.condition = b.condition;
+      if (b.expires_on === undefined) delete t.expires_on;
+      else t.expires_on = b.expires_on;
+      if (b.condition === undefined) delete t.condition;
+      else t.condition = b.condition;
       return Promise.resolve(ok({ ...listed(t), policies: t.policies }));
     }
     if (method === "DELETE") {
