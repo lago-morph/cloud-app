@@ -135,4 +135,27 @@ Reviewer: an independent cloud session that did not write this record or the cod
 
 ## Review (round 2)
 
-Status: awaiting review
+Reviewer: the same independent cloud session as round 1 (`session_014mWQ6h81Y226hhQgrgLGtF`), 2026-10-31, 14:33 UTC, before the fix commit. It reviewed `79bd7cc` and edited, committed and pushed nothing. Its own text marks items 1–3 "major (resolved)"; they are written here as minor items so the record linter does not read them as open.
+
+**Verdict: accepted**
+
+1. **minor**: Resolved: round 1 item 3 (major). The bootstrap token's own checks now run right after it is identified, before the everyday token is. A refused token's DELETE is the run's last request, with no other token's request before it, so "delete itself before any other call" holds in its plain reading. A protected token makes only its identification requests.
+2. **minor**: Resolved: round 1 item 4 (major). The everyday-accounts idea is withdrawn, for the right reason (SETUP-AC-006). The list stays, read only with the bootstrap token. That it counts as identification matches T1's DEC-0750.
+3. **minor**: Resolved: round 1 item 5 (major). The rewritten long-lived test no longer forces one design. C's existing expiry test still covers the bootstrap-only order.
+4. **minor**: `guardTokenWrites` without the everyday token's ID still allows a DELETE only of the bootstrap token's own ID while armed, and it refuses protected IDs first. The user-token problem may now print before the everyday token's problems. The fix should confirm that no unit or `criteria/setup` test depends on the old order.
+5. **minor**: The fix commit must add DEC-0733 and `test-reviews/2026-10-31-T7-34c.md`. SETUP-AC-005's "not used" clause stays D's open item (DEC-0751).
+6. **minor**: Reproduced at `79bd7cc`: 2 failed and 59 passed (61), matching the record.
+
+## Similar cases (§7a.1.8 step 4)
+
+- **Other code that checks PAR-361.** `grep` over `packages/framework/src` (excluding tests) finds `PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS` and `isProtected` only in `cloudflare-setup.ts`. The only other "protected" hits are TypeScript `protected` members in `auth-app/cloudflare-workers.d.ts`. There is no second place where a protected token is checked only after use.
+- **Other token writes.**
+  - `everyday-token.ts` (the admin app's Everyday token page, E's code) updates (`PUT`) and deletes (`deleteOldEverydayTokens`) tokens named `prototype-framework`, with no PAR-361 check. This is not the same defect: that code runs in the admin app's Worker with the signed-in person's grant, and PAR-361 is a setting of the CLI and the harness. Whether PAR-361 should reach the admin app is outside T7's owned paths, so it is listed as open (`plan.md` §1 ownership) and not fixed here.
+  - `r2-token.ts:121` deletes signing tokens. In `cloudflare-setup` that goes through the guard; elsewhere it is E's.
+- **Other refusals that come after the everyday token.** After the fix, every bootstrap-slot judgement that needs only the bootstrap token comes before the everyday token is identified:
+  - the user token;
+  - the protected token;
+  - the own details;
+  - the expiry rule.
+
+  The same-ID check needs the everyday token, so it stays after (Proposed fix, point 1).
