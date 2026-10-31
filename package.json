@@ -20,9 +20,11 @@
     "lint": "eslint packages/framework/src packages/framework/bin packages/framework/test",
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:integration": "npm run build -w packages/framework && vitest run --config vitest.integration.config.ts && playwright test --project integration --pass-with-no-tests",
-    "test:e2e": "playwright test --project e2e",
+    "test:e2e": "playwright test --project e2e-api --project e2e-ui",
+    "test:e2e:api": "playwright test --project e2e-api",
+    "test:e2e:ui": "playwright test --project e2e-ui",
     "compliance": "node tests/compliance/harness/run.mjs",
-    "verify": "npm run build -w packages/framework && npm run typecheck && npm run lint && npm run test:unit && npm --workspace apps/template run verify && npm --workspace apps/reference run verify && vitest run --config vitest.integration.config.ts tests/skill/example-pages.test.ts"
+    "verify": "npm run build -w packages/framework && npm run typecheck && npm run lint && npm run test:unit && npm --workspace apps/template run verify && npm --workspace apps/reference run verify && vitest run --config vitest.integration.config.ts tests/skill/example-pages.test.ts tests/skill/example-copies.test.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",
