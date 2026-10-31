@@ -14,7 +14,7 @@ Build, typecheck, lint and `permission-tables --check` are clean. On 34a alone (
 3. The fake world's everyday token gets `dashboardPolicies(EVERYDAY, account)` (`setup-world.test-support.ts:88`), so it holds Secrets Store Read and no Secrets Store Write.
 4. `setup-world.test-support.ts:165–172` makes every request under `/secrets_store` need "Secrets Store Write", whatever the method: `const bootstrapNeeds = … rest.startsWith("/secrets_store") ? "Secrets Store Write" : …`. A GET with only Secrets Store Read therefore answers `UNAUTHORIZED` (403).
 5. **Experiment** (then reverted): let a `GET` of `/secrets_store/stores` (the list, with or without a query) pass with "Secrets Store Read" (`/^\/secrets_store\/stores\/?(\?|$)/`). With it, `cloudflare-setup.unit.test.ts` passes 59/59 and `criteria/setup` passes 43/43 on the merge.
-6. **The live API and the other fakes agree that listing stores is a read.**
+6. **The plan and the other fakes treat listing stores as a read.** This is the plan's design assumption (§5.2: "Secrets Store Read … checking that they exist during the setup check"), *not verified live*: §2.1a listed stores with a sign-in user token, and §2.1b with the bootstrap set, which holds Write.
    - Plan §2.1b names "Secrets Store Read" and "Secrets Store Write" as the only two groups.
    - E's admin-app fake (`admin-app/fake-cloudflare.test-support.ts:40`) maps a Secrets Store GET to `secrets-store.read` and a write to `secrets-store.write`.
    - `permissions.ts` `IMPLIED` lists Secrets Store Write as also satisfying Secrets Store Read, so Read is the narrower group.
@@ -28,24 +28,72 @@ Build, typecheck, lint and `permission-tables --check` are clean. On 34a alone (
 
 ## Alternatives ruled out
 - *34a's code is wrong.* On 34a alone every test passes, and the reported failure is the quick check of a group that 34a neither added nor reads. The command's report is correct for the 403 it got.
-- *57z's probe reads the wrong endpoint.* The store list is the documented read (§2.1a table: "List Secrets Store stores" with the user's token), and E's fake treats it as a read (evidence 6).
+- *57z's probe reads the wrong endpoint.* By the plan's design (§5.2), listing stores is what Secrets Store Read is for, and E's fake treats it as a read (evidence 6). This is an assumption, not verified live (Response round 1).
 - *The fake token lacks the group.* It holds every `EVERYDAY` group (evidence 3). The refusal comes from the fake's path rule, not from the token.
 
 ## Proposed fix
 - **Where:** `setup-world.test-support.ts` (C's file), on 34b, the stack's behaviour-change PR (test support, not a removal).
-- **Change:** a `GET` of the store list (`/secrets_store/stores`, with or without a query) needs only "Secrets Store Read". Every other Secrets Store request still needs Write.
-  - `has()` goes through `comparePolicies`, which applies `IMPLIED`, so a token with Write still passes the list read.
-  - The fake's `g()` resolves group names from `EVERYDAY` and `BOOTSTRAP` only. On 34b, before 57z, Secrets Store Read is only in `EVERYDAY_V2`, so `g()` must also search `EVERYDAY_V2`.
-- **Red–green:** a new unit test `setup-world.unit.test.ts`. A token holding only Secrets Store Read gets 200 on the list and 403 on a store create (`POST`) and on a secret write. It fails on 34b before the fix.
+- **Change (as amended by Response round 1):** a `GET` under `/secrets_store` needs "Secrets Store Read", and every other method needs "Secrets Store Write". `has()` applies `IMPLIED`, so Write also satisfies Read. `groupNamed` also searches `EVERYDAY_V2`.
+- **Red–green:** a new unit test, `setup-world.unit.test.ts`, red on 34b before the fix:
+  - a token holding only Secrets Store Read gets 200 on the store list and on a store's secrets, and 403 on a store create and on a secret `POST` or `PUT`;
+  - a token holding only Secrets Store Write lists the stores.
 - **Then:** merge 34b → 34a → 57z again.
-
-## Similar cases (§7a.1.8 step 4)
-To do after review: the other request rules of the same fake (`reads`, `bootstrapNeeds`) for any read that requires a write group, and `fake-cloud.test-support.ts` `everydayApi`.
 
 ## Verification plan
 - On 34b: the new test is red before the fix and green after it, and unit and setup criteria stay green.
 - On 34a: the same.
 - On the 57z merge: unit and `criteria/setup` are fully green, and permission tables are clean.
 
-## Review
+## Review (round 1)
+
+Reviewer: an independent cloud session that did not write this record (`session_014mWQ6jgCbDDUrS6CFmp5o3`), 2026-10-31. It reproduced the failure on a local merge of 34a into 57z, then removed the merge and its experiments.
+
+**Verdict: accepted-with-changes (binding)**
+
+1. **minor**: The symptom reproduces as recorded: 13 unit and 14 criteria failures, each "Secrets Store Read" (HTTP 403).
+2. **minor**: Evidence 3 and 4 check out.
+3. **minor**: The record's experiment gives unit 59/59, `criteria/setup` 43/43 and `provision` 395/395. Every link of the chain is supported, and the alternatives are ruled out for the test failures.
+4. **major**: Evidence 6 and the second alternative overstate what was verified live.
+   - §2.1a listed stores with a sign-in user token; §2.1b with a set that holds Write.
+   - Reword both as the plan's design assumption, not verified live.
+   - Add it to the §5.2 live verification.
+5. **major**: Exempting one endpoint treats the symptom. The fix at the cause is method-based: a `GET` under `/secrets_store` needs Read, and every other method needs Write. This matches E's fake and `IMPLIED`. The reviewer ran it: unit `src` 2313/2313, `criteria/setup` 43/43.
+6. **minor**: `rest` is a pathname with no query, so the regex's `(\?|$)` branch does nothing.
+7. **minor**: The `g()`/`EVERYDAY_V2` note is correct.
+8. **minor**: The red–green test should also cover:
+   - Write alone lists the stores (`IMPLIED`);
+   - Read alone gets 200 on a GET of a store's secrets and 403 on a `PUT`/`POST` of a secret.
+
+   Show it red on 34b first.
+9. **minor**: The step 4 sweep should include production reads of Secrets Store by the everyday token beyond the quick check, such as the deploy-time binding and the secret-existence check.
+
+## Response (round 1)
+
+- **To 4:** accepted. Evidence 6 and the alternative now say the Read-only list is the plan's design assumption (§5.2), not verified live. Adding the live check is not C's to do: the live-pass runbook (`live-pass-v0.2.0.md`) is L's, on branch 00. It goes as an open item for L: "list Secrets Store stores with a token holding only Secrets Store Read (everyday token, 57z)".
+- **To 5:** accepted. The fix is method-based:
+  - in `setup-world.test-support.ts`, a `GET` under `/secrets_store` needs Secrets Store Read, and any other method needs Secrets Store Write;
+  - `IMPLIED` lets Write satisfy Read;
+  - the regex goes, which also answers 6.
+- **To 7:** `groupNamed` also searches `EVERYDAY_V2`.
+- **To 8:** `setup-world.unit.test.ts` covers four cases: Read lists the stores and a store's secrets; Read cannot create a store or `POST`/`PUT` a secret; Write alone lists the stores. It is red on 34b before the fix.
+- **To 9:** the step 4 sweep covers it, see below.
+
+## Similar cases (§7a.1.8 step 4)
+
+- **The same fake's other rules (`setup-world.test-support.ts`).**
+  - `oauth_clients` needs OAuth Client Write for any method. This is the same pattern, but nothing reaches it today:
+    - no token in any list holds "OAuth Client Read", and `permissions.ts` does not list that group;
+    - only the bootstrap token, which holds Write, touches clients.
+
+    It is not changed. It is noted so that a later read with Read alone is recognised.
+  - `/workers/subdomain` needs Workers Scripts Write, which matches §2.1b ("need only Workers Scripts Write").
+  - `reads` for GETs (Workers Scripts, R2, D1) uses the Write groups. These are the only groups those families have in the everyday set, so they are correct.
+- **`fake-cloud.test-support.ts` `everydayApi`:** it refuses only token paths and zone writes, and never refuses a Secrets Store read. No case.
+- **E's admin-app fake:** already method-based. No case.
+- **Production reads by the everyday token beyond the quick check.**
+  - F's deploy-time binding and `readSigningPlacement` (`r2-token.ts`) read the store list or a store's secrets.
+  - Their tests run against `FakeCloud.api` (`fake-cloud.test-support.ts`), which checks no group, so no test hides the same assumption.
+  - The live question is the same open item for L.
+
+## Review (round 2)
 Status: awaiting review
