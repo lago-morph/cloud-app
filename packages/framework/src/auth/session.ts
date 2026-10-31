@@ -16,8 +16,8 @@
  */
 import { signToken, verifyToken } from "./signing.js";
 
-/** PAR-250: session lifetime (7 days), in seconds. */
-export const SESSION_LIFETIME_SECONDS = 7 * 24 * 60 * 60;
+/** PAR-250: session lifetime (12 hours, DEC-0791), in seconds. */
+export const SESSION_LIFETIME_SECONDS = 12 * 60 * 60;
 /** PAR-252: clock skew tolerated for an issued-at time in the future, in seconds. */
 export const CLOCK_SKEW_SECONDS = 60;
 

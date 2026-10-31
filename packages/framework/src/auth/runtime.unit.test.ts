@@ -294,7 +294,7 @@ describe("login and callback", () => {
     expect(res.headers.get("location")).toBe("/notes/42?tab=files");
     const set = cookiesOf(res);
     expect(set.get("login_local")).toBe("; Path=/; Max-Age=0; HttpOnly; SameSite=Lax");
-    expect(set.get("session_local")).toMatch(/; Path=\/; Max-Age=604800; HttpOnly; SameSite=Lax$/);
+    expect(set.get("session_local")).toMatch(/; Path=\/; Max-Age=43200; HttpOnly; SameSite=Lax$/);
     const me = await request("/api/auth/me", { headers: { cookie: `session_local=${valueOf(set.get("session_local"))}` } });
     const { deriveUserId } = await import("./user-id.js");
     expect(await me.json()).toStrictEqual({ level: "user", id: await deriveUserId("stub", "alice"), displayName: "Alice" });
@@ -394,7 +394,7 @@ describe("authentication mock", () => {
       expect(res.status).toBe(204);
       expect(await res.text()).toBe("");
       const line = cookiesOf(res).get("session_local") ?? "";
-      expect(line).toMatch(/; Path=\/; Max-Age=604800; HttpOnly; SameSite=Lax$/);
+      expect(line).toMatch(/; Path=\/; Max-Age=43200; HttpOnly; SameSite=Lax$/);
       const me = await request("/api/auth/me", { headers: { cookie: `session_local=${valueOf(line)}` } });
       expect(await me.json()).toStrictEqual(identity);
     }

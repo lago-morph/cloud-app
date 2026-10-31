@@ -4873,7 +4873,7 @@ The owner, 2026-10-24: "Move aws code to a branch". The first release targets lo
 Plan: `ai/implementation/plan-auth.md`. Spike evidence: `ai/implementation/spikes/ba-s1-s3/RESULT.md` (S1, S3, and the offline part of S2). The owner answered the plan's §7 on 2026-10-24 and 2026-10-25.
 
 ### DEC-0509 — Email and password, through Better Auth self-hosted in the app's Worker, is release 1's real login provider; Workers Paid is required
-Origin: owner · Status: superseded by DEC-0691 (sign-in with Cloudflare through the shared auth app replaces email and password; pending owner approval of DEC-0691's wording) (was: accepted) · Supersedes: DEC-0016 (its Google part, for release 1) · Affects: SYS-REQ-019, SYS-REQ-026, SYS-REQ-027, AUTH, `docs/components/password.md` (PWD), `docs/components/mail.md` (MAIL), CF, PROV, CLI, COMPL, SKILL, PAR-122, PAR-241…PAR-245, PAR-254…PAR-259
+Origin: owner · Status: superseded by DEC-0691 (sign-in with Cloudflare through the shared auth app replaces email and password; DEC-0691's wording approved by the owner on 2026-10-31) (was: accepted) · Supersedes: DEC-0016 (its Google part, for release 1) · Affects: SYS-REQ-019, SYS-REQ-026, SYS-REQ-027, AUTH, `docs/components/password.md` (PWD), `docs/components/mail.md` (MAIL), CF, PROV, CLI, COMPL, SKILL, PAR-122, PAR-241…PAR-245, PAR-254…PAR-259
 
 The owner, 2026-10-24: Better Auth (BA), self-hosted in the app's Worker. The account is on Workers Paid, and the owner confirmed on 2026-10-25 that Workers Paid is active. Password hashing (scrypt, about 72 ms CPU per operation in local workerd, RESULT.md S2) does not fit the Free plan's CPU limit, so Workers Paid is a prerequisite of every Cloudflare account that hosts a production stage. The new component PWD owns the provider. App code still sees only the access level, the opaque user ID and the display name (SYS-REQ-017). Further providers stay addable behind the provider interface (SYS-REQ-019).
 
@@ -4896,14 +4896,14 @@ Framework routes forward a rebuilt request to BA's own handler (the "handler bri
 BA's admin and test-utils plugins are not used.
 
 ### DEC-0511 — Email verification is mandatory, sent through Cloudflare Email Service from `no-reply@<domain>`
-Origin: owner · Status: superseded by DEC-0691 (no email and password login, so no email verification; pending owner approval of DEC-0691's wording) (was: accepted) · Affects: PWD-REQ-001, MAIL-REQ-001…MAIL-REQ-005, CF §2, PROV-REQ-002, PROV-REQ-004
+Origin: owner · Status: superseded by DEC-0691 (no email and password login, so no email verification; DEC-0691's wording approved by the owner on 2026-10-31) (was: accepted) · Affects: PWD-REQ-001, MAIL-REQ-001…MAIL-REQ-005, CF §2, PROV-REQ-002, PROV-REQ-004
 
 The owner, 2026-10-24: for self-hosted auth, email verification is mandatory, sent through Cloudflare Email Service (https://developers.cloudflare.com/email-service/). Arbitrary recipients need Workers Paid and a sender domain on Cloudflare DNS.
 
 The owner, 2026-10-25: "Sender no-reply@domain." The local part is fixed as `no-reply`, and the domain is DEC-0514's single setting. A new component, MAIL, owns sending.
 
 ### DEC-0512 — An automated real-provider check on a production deployment replaces the guided manual certification
-Origin: owner · Status: superseded by DEC-0692 (the real sign-in is checked once per release by the owner, the rest is automated; pending owner approval of DEC-0692's wording) (was: accepted) · Supersedes: DEC-0021 · Affects: SYS-REQ-026, SYS-REQ-027, PWD-AC-009, AUTH-AC-011, COMPL-REQ-005, COMPL-REQ-006, COMPL-AC-005, COMPL-AC-006, E2E-006, E2E-008, CLI-REQ-001
+Origin: owner · Status: superseded by DEC-0692 (the real sign-in is checked once per release by the owner, the rest is automated; DEC-0692's wording approved by the owner on 2026-10-31) (was: accepted) · Supersedes: DEC-0021 · Affects: SYS-REQ-026, SYS-REQ-027, PWD-AC-009, AUTH-AC-011, COMPL-REQ-005, COMPL-REQ-006, COMPL-AC-005, COMPL-AC-006, E2E-006, E2E-008, CLI-REQ-001
 
 The owner, 2026-10-24: setup and testing must be possible for an AI agent without manual steps or browser automation. `check-login --target cloudflare --stage prodcheck` replaces `certify-auth`. Over HTTP only, it:
 - signs up a fresh address under `t.<domain>`;
@@ -5031,7 +5031,7 @@ Origin: ai-proposed · Status: superseded by DEC-0696 (PWD retired) (was: accept
 The owner's two decisions of 2026-10-25, and the design the orchestrator proposed for them, which the owner agreed. They replace configuration-based admins (DEC-0015) and the optional users list (DEC-0080).
 
 ### DEC-0521 — Admins are a role stored with the account in the stage's database, not a list in configuration
-Origin: owner · Status: superseded by DEC-0690 (admins are the Cloudflare account's administrators; pending owner approval of DEC-0690's wording) (was: accepted) · Supersedes: DEC-0015 · Affects: SYS-REQ-018, AUTH-REQ-003, AUTH-REQ-005, PWD-REQ-008, CFG-REQ-005, SKILL-REQ-006, `docs/contracts/schemas/stage-config.schema.json`, `docs/contracts/ts/testing.d.ts`
+Origin: owner · Status: superseded by DEC-0690 (admins are the Cloudflare account's administrators; DEC-0690's wording approved by the owner on 2026-10-31) (was: accepted) · Supersedes: DEC-0015 · Affects: SYS-REQ-018, AUTH-REQ-003, AUTH-REQ-005, PWD-REQ-008, CFG-REQ-005, SKILL-REQ-006, `docs/contracts/schemas/stage-config.schema.json`, `docs/contracts/ts/testing.d.ts`
 
 The owner, 2026-10-25: "We can assign users to groups in better auth, correct? If so on cloudflare let's create an admin group and assign users there, not in a file." And, clarifying: "The user is not assigned any roles though. There is not a 'user' role."
 
@@ -5046,7 +5046,7 @@ The owner, 2026-10-25: "We can assign users to groups in better auth, correct? I
 - **No admins in configuration.** `framework.admins` leaves the stage-config schema. A values file that still holds it is rejected, like any unknown field (CFG-REQ-005 as amended).
 
 ### DEC-0522 — Anyone who signs up and verifies their address is a user; the users list is removed
-Origin: owner · Status: superseded by DEC-0690 (only members of the owner's Cloudflare account sign in; pending owner approval of DEC-0690's wording) (was: accepted) · Supersedes: DEC-0080 · Affects: SYS-REQ-018, AUTH-REQ-003, AUTH-REQ-005, CFG-REQ-005, DEMO-REQ-011, SKILL-REQ-006, `docs/contracts/schemas/stage-config.schema.json`, `docs/contracts/http/framework.openapi.yaml` (`unlistedId`)
+Origin: owner · Status: superseded by DEC-0690 (only members of the owner's Cloudflare account sign in; DEC-0690's wording approved by the owner on 2026-10-31) (was: accepted) · Supersedes: DEC-0080 · Affects: SYS-REQ-018, AUTH-REQ-003, AUTH-REQ-005, CFG-REQ-005, DEMO-REQ-011, SKILL-REQ-006, `docs/contracts/schemas/stage-config.schema.json`, `docs/contracts/http/framework.openapi.yaml` (`unlistedId`)
 
 The owner, 2026-10-25: "Anyone who signs up is a user."
 
@@ -5056,7 +5056,7 @@ The owner, 2026-10-25: "Anyone who signs up is a user."
 - DEMO-REQ-011 ("only listed people can post") and DEMO-AC-011 are retired. On the demo, every signed-up user can post, as DEMO-REQ-002's permissions table already says for level `user`.
 
 ### DEC-0523 — The first admin is granted with the operator command `admins`
-Origin: ai-proposed · Status: superseded by DEC-0690 (`admins` removed; roles come from Cloudflare; pending owner approval of DEC-0690's wording) (was: accepted) · Affects: CLI-REQ-001, CLI-REQ-005, CLI-AC-006, CLI-AC-007, SKILL-REQ-006
+Origin: ai-proposed · Status: superseded by DEC-0690 (`admins` removed; roles come from Cloudflare; DEC-0690's wording approved by the owner on 2026-10-31) (was: accepted) · Affects: CLI-REQ-001, CLI-REQ-005, CLI-AC-006, CLI-AC-007, SKILL-REQ-006
 
 Better Auth's own `setRole` needs an existing admin's session, so nobody could ever become the first admin through it. The framework adds an operator command instead:
 
@@ -5077,7 +5077,7 @@ Better Auth's own `setRole` needs an existing admin's session, so nobody could e
 - **Idempotent.** Granting a role already held, or revoking one not held, changes nothing and exits 0.
 
 ### DEC-0524 — The level is read from the account on every request that carries a valid session; one D1 read per authenticated request
-Origin: ai-proposed · Status: superseded by DEC-0690 and DEC-0694 (the role lives in the session and is refreshed after an interval; pending owner approval of DEC-0690's wording) (was: accepted) · Amends: DEC-0028 (sessions stay stateless and unrevocable; only the level is read per request) · Affects: AUTH-REQ-003, AUTH-REQ-006, AUTH §2 (session cookie), `docs/contracts/ts/internal/login-provider.d.ts` (`AccountStatus`)
+Origin: ai-proposed · Status: superseded by DEC-0690 and DEC-0694 (the role lives in the session and is refreshed after an interval; DEC-0690's wording approved by the owner on 2026-10-31) (was: accepted) · Amends: DEC-0028 (sessions stay stateless and unrevocable; only the level is read per request) · Affects: AUTH-REQ-003, AUTH-REQ-006, AUTH §2 (session cookie), `docs/contracts/ts/internal/login-provider.d.ts` (`AccountStatus`)
 
 - **When it reads.** AUTH reads the account's verification flag and role list from the stage's database once per request. It does so only when the request carries a valid framework session from a real provider: a session cookie with a good signature that has not expired. These requests make no database read:
   - a request without a session cookie;
@@ -5093,7 +5093,7 @@ Origin: ai-proposed · Status: superseded by DEC-0690 and DEC-0694 (the role liv
   - Sessions themselves stay stateless: logout, a password reset and a revoke do not end a copied session. A revoke does lower that session's level on the next request.
 
 ### DEC-0525 — Tests: the mock still chooses a level; a test helper grants roles to real-provider accounts
-Origin: ai-proposed · Status: accepted; the test helper granting roles to password-provider accounts superseded by DEC-0690 (pending owner approval of DEC-0690's wording); `grantRole` and `revokeRole` stay for the stub · Affects: AUTH-REQ-009, `docs/contracts/ts/testing.d.ts` (`TestApp.grantRole`, `TestApp.revokeRole`, `TestAppOptions.config`)
+Origin: ai-proposed · Status: accepted; the test helper granting roles to password-provider accounts superseded by DEC-0690 (DEC-0690's wording approved by the owner on 2026-10-31); `grantRole` and `revokeRole` stay for the stub · Affects: AUTH-REQ-009, `docs/contracts/ts/testing.d.ts` (`TestApp.grantRole`, `TestApp.revokeRole`, `TestAppOptions.config`)
 
 - **The authentication mock is unchanged.** `mock-login`, `as()` and `createTestApp`'s `user` choose `anonymous`, `user` or `admin` directly, and no role is read for them.
 - **The role helpers.** `TestApp.grantRole(userId, "admin")` and `revokeRole(userId, "admin")` change a real-provider account's roles. They work in a test app created with `passwordLoginProvider` or `stubLoginProvider`.
@@ -5104,7 +5104,7 @@ Origin: ai-proposed · Status: accepted; the test helper granting roles to passw
 - **Configuration.** `createTestApp`'s reserved `config.framework` key no longer takes `admins` or `users`. With either, it throws, as the build does.
 
 ### DEC-0526 — What changes because admins are a role
-Origin: ai-proposed · Status: accepted; `admins grant` on `prodcheck`, and E2E-007 and AUTH-AC-005 automated on every cloud run, superseded by DEC-0690 and DEC-0692 (pending owner approval of their wording; the live parts return as the real sign-in) · Amends: DEC-0520 (its first bullet) · Affects: E2E-007, AUTH-AC-003, AUTH-AC-005, AUTH-AC-012, AUTH-AC-013, AUTH-AC-015, PWD-AC-010, CFG-AC-005, CLI-AC-006, CLI-AC-007, SKILL-AC-006, DEMO-REQ-009, DEMO-REQ-011, DEMO-AC-011, COMPL-REQ-006, MIG §2, `tests/compliance/harness/expected.ts`
+Origin: ai-proposed · Status: accepted; `admins grant` on `prodcheck`, and E2E-007 and AUTH-AC-005 automated on every cloud run, superseded by DEC-0690 and DEC-0692 (wording approved by the owner on 2026-10-31; the live parts return as the real sign-in) · Amends: DEC-0520 (its first bullet) · Affects: E2E-007, AUTH-AC-003, AUTH-AC-005, AUTH-AC-012, AUTH-AC-013, AUTH-AC-015, PWD-AC-010, CFG-AC-005, CLI-AC-006, CLI-AC-007, SKILL-AC-006, DEMO-REQ-009, DEMO-REQ-011, DEMO-AC-011, COMPL-REQ-006, MIG §2, `tests/compliance/harness/expected.ts`
 
 - **No more "copy your user ID into configuration".** The skill's and the template README's copy-ID steps go away. Becoming an admin is one `admins grant <address>` command, run by the owner or an agent. `/api/auth/me` and the demo's account page still show the ID, for support and for the test helpers.
 - **Milestone parts become automated.**
@@ -6412,7 +6412,7 @@ Item: v0.2.0 C.
 
 Plan-v0.2.0 §4.4, §6, §6.1. Range DEC-0690–0709, PAR-440–444; DEC-0700…0709 and the PARs are unused.
 
-DEC-0690, DEC-0691 and DEC-0692 are the three owner amendments of plan §6.1, and DEC-0699 proposes a fourth. **Their wording is pending owner approval** (owner questions 18–19). They are drafted in the plan's proposed wording, and implementation proceeds on it. The amended texts carry `Origin: owner-approved` in the docs, because they take effect only when the owner approves the wording by merging PR 36 (PR 39a for DEC-0699). If the owner changes the wording, those PRs and these entries change with it, and so do the supersessions below that rest on them.
+DEC-0690, DEC-0691 and DEC-0692 are the three owner amendments of plan §6.1, and DEC-0699 proposes a fourth. **The owner approved their wording on 2026-10-31** (owner questions 18 and 55; DEC-0699 with one addition, below). Until then it was pending owner approval (owner questions 18–19). They are drafted in the plan's proposed wording, and implementation proceeds on it. The amended texts carry `Origin: owner-approved` in the docs, because they take effect only when the owner approves the wording by merging PR 36 (PR 39a for DEC-0699). If the owner changes the wording, those PRs and these entries change with it, and so do the supersessions below that rest on them.
 
 D's supersessions (plan §6 "Spec"), marked on each entry's Status line:
 
@@ -6449,19 +6449,19 @@ D's correction to the log: DEC-0277's `Affects:` list gains E2E-013, which also 
 Integrated by item I1 from `ai/implementation/decisions/v020-D.md`.
 
 ### DEC-0690 — Admins are the Cloudflare account's administrators (SYS-REQ-018 amended)
-Origin: ai-proposed (owner amendment; becomes owner-approved when the owner approves the wording) · Status: pending owner approval of wording · Supersedes: DEC-0521, DEC-0522, DEC-0523, DEC-0524 (as the SYS-REQ-018 amendment) · Affects: SYS-REQ-018, AUTH (PR 37), plan §1 D1/D2, §4.1 step 5, §4.4, §6.1 item 1
+Origin: owner-approved (owner amendment; wording approved by the owner on 2026-10-31) · Status: accepted (owner approved 2026-10-31) · Supersedes: DEC-0521, DEC-0522, DEC-0523, DEC-0524 (as the SYS-REQ-018 amendment) · Affects: SYS-REQ-018, AUTH (PR 37), plan §1 D1/D2, §4.1 step 5, §4.4, §6.1 item 1
 
 Only members of the owner's Cloudflare account can sign in. A member whose account role is an administrator role is an admin, any other member is a user, and anyone not signed in is anonymous. The administrator role names, the role refresh interval, and the refresh retries and delay are parameters (PR 37 adds them). A role change takes effect at the next role refresh or session renewal, not necessarily on the next request. If a refresh cannot confirm the role after its retries, the person is signed out (fail closed). The operator command `admins` and the role stored in the stage's database go. Configuration still holds no admin or user list.
 Item: v0.2.0 D.
 
 ### DEC-0691 — The real login is sign-in with Cloudflare through the shared auth app (SYS-REQ-019 amended)
-Origin: ai-proposed (owner amendment; becomes owner-approved when the owner approves the wording) · Status: pending owner approval of wording · Supersedes: DEC-0509, DEC-0511 (as the SYS-REQ-019 amendment) · Affects: SYS-REQ-019, AUTH, PWD, MAIL, plan §1 D1/D5, §6.1 item 2
+Origin: owner-approved (owner amendment; wording approved by the owner on 2026-10-31) · Status: accepted (owner approved 2026-10-31) · Supersedes: DEC-0509, DEC-0511 (as the SYS-REQ-019 amendment) · Affects: SYS-REQ-019, AUTH, PWD, MAIL, plan §1 D1/D5, §6.1 item 2
 
 The real login is sign-in with Cloudflare, through the account's shared auth app, limited to members of the owner's Cloudflare account. Email and password login is removed. Unchanged: app code cannot tell which provider is in use, and further providers can be added behind the abstraction without app changes.
 Item: v0.2.0 D.
 
 ### DEC-0692 — The real sign-in is checked once per release by the owner; the rest is automated (SYS-REQ-027, SYS-REQ-026, COMPL-REQ-006, "Testers")
-Origin: ai-proposed (owner amendment; becomes owner-approved when the owner approves the wording) · Status: pending owner approval of wording · Supersedes: DEC-0512 (the automated real-provider check) · Affects: SYS-REQ-026, SYS-REQ-027, COMPL-REQ-006, COMPL-AC-006, `compliance.md` §2 "Testers", E2E-007, E2E-008, plan §6.1 items 3 and 4
+Origin: owner-approved (owner amendment; wording approved by the owner on 2026-10-31) · Status: accepted (owner approved 2026-10-31) · Supersedes: DEC-0512 (the automated real-provider check) · Affects: SYS-REQ-026, SYS-REQ-027, COMPL-REQ-006, COMPL-AC-006, `compliance.md` §2 "Testers", E2E-007, E2E-008, plan §6.1 items 3 and 4
 
 - **Why:** with Cloudflare sign-in a person has to sign in on Cloudflare's own login page, so a real sign-in cannot be fully automated.
 - **SYS-REQ-027:** once per release, the owner signs in for real (a milestone item). Every compliance run on each cloud automatically checks the parts that need no person: the app sends people to the auth app's sign-in address with its own app ID and its registered return URL. Automated runs on test stages keep using the authentication mock.
@@ -6541,9 +6541,9 @@ Origin: ai-proposed (wording); the removals are the owner's (plan-v0.2.0 §1, §
 Item: v0.2.0 D.
 
 ### DEC-0699 — The owner's live pass also covers the setup steps that need the owner ("Testers", proposed owner amendment)
-Origin: ai-proposed (owner amendment; becomes owner-approved when the owner approves the wording) · Status: pending owner approval of wording · Affects: `compliance.md` §2 "Testers", SKILL-AC-006, SETUP-AC-011, plan §6.1 item 4
+Origin: owner-approved (owner amendment; wording approved by the owner on 2026-10-31) · Status: accepted (owner approved 2026-10-31) · Affects: `compliance.md` §2 "Testers", SKILL-AC-006, SETUP-AC-011, plan §6.1 item 4
 
-Plan §6.1 item 4 adds one exception to "Testers": the owner's once-per-release real sign-in. D9 and D10 also make the owner create the bootstrap token in the dashboard and authorize the admin app's pages as the signed-in admin, and an AI agent cannot do either. The proposed wording extends the same once-per-release live pass to those steps. If the owner rejects it, SKILL-AC-006 and SETUP-AC-011 must be narrowed to the agent's steps. PR 39a carries "owner approval of wording needed".
+Plan §6.1 item 4 adds one exception to "Testers": the owner's once-per-release real sign-in. D9 and D10 also make the owner create the bootstrap token in the dashboard and authorize the admin app's pages as the signed-in admin, and an AI agent cannot do either. The proposed wording extends the same once-per-release live pass to those steps. The owner may override this in a session. (Added by the owner on approval, 2026-10-31.) If the owner had rejected it, SKILL-AC-006 and SETUP-AC-011 would have been narrowed to the agent's steps. PR 39a carried "owner approval of wording needed".
 Item: v0.2.0 D.
 
 ## Release v0.2.0, item P0: local compliance baseline (2026-10-31)
@@ -6578,3 +6578,17 @@ It must run before the driver starts, because `dev` does not reload `.dev.vars` 
 - **CI.** The CI step that runs it before the compliance step is added by item S3, in the job that runs criteria through the harness. P0 edits no workflow.
 - **Evidence.** `ai/implementation/root-causes/2026-10-31-P0-apikey-local-runner-step.md` (verdict `accepted`): with the step alone, all five IDs went from `blocked` to `passed`, in both orders of `dev` and the step.
 Item: v0.2.0 P0.
+
+## Owner decisions on v0.2.0 (2026-10-31)
+
+The owner's answers to owner questions 9, 18, 53, 54, 55 and 56 (`ai/implementation/owner-questions-v0.2.0.md`). The wording of DEC-0690, DEC-0691, DEC-0692 and DEC-0699 (above) and of DEC-0700 and DEC-0703 (`ai/implementation/decisions/v020-D.md`) is approved; DEC-0699 with the addition "The owner may override this in a session."
+
+### DEC-0791 — Sessions last 12 hours; a role change or removal shows at the next sign-in
+Origin: owner · Status: accepted · Supersedes: DEC-0766 (E2E-007 red until the auth app's role is current), PAR-250's value of DEC-0057 · Affects: PAR-250, SYS-REQ-018, AUTH-REQ-005, `auth.md` §2, E2E-007, `skill/reference/current-user.md`, `skill/reference/owner-tasks.md`, `apps/template/README.md`, `packages/framework/src/auth/session.ts`
+
+Sessions last 12 hours (PAR-250, was 7 days). A role change or removal shows at the next sign-in; an existing session keeps its role until it expires or the person signs in again (owner question 56, option a).
+
+- **Why.** The auth app records a person's role only at sign-in, and a role refresh re-reads that recorded role (owner question 25's design, DEC-0703). A removed or demoted member therefore keeps their role in a session they already have. The owner accepts that, and bounds it with a shorter session lifetime.
+- **Change.** `SESSION_LIFETIME_SECONDS` is 12 hours; PAR-250's row, `auth.md` §2, the skill's references and the template README say so. E2E-007 now states and tests this rule: an existing session keeps its level after a role refresh, a new sign-in shows the new level, a removed member's new sign-in is refused, and a session ends just after 12 hours (in-process, on the test clock).
+- **To reverse:** set PAR-250 back, or make the role refresh re-read `/memberships` (owner question 56, option b), which needs a stored token or an admin-app update path.
+Item: owner decisions on v0.2.0.

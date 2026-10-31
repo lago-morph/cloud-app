@@ -109,7 +109,7 @@ To let someone sign in, invite them to the account (Manage Account → Members).
 
 **A member whose account role is "Super Administrator - All Privileges" or "Administrator" (PAR-413) is the app's admin**; every other member is a user. To make someone an admin, give them one of those roles in the dashboard (Manage Account → Members); to make them a user again, give them another role. No file edit, no commit and no deploy.
 
-The apps learn a role change when the person **next signs in**, to any app on the account; their other open sessions pick it up within 5 minutes (PAR-425). Until then they keep their old level: ask them to log out and in again. Removing someone from the account stops new sign-ins, but a session they already have lasts until it expires (7 days, PAR-250) or they log out.
+The apps learn a role change when the person **next signs in**, to any app on the account; their other open sessions pick it up within 5 minutes (PAR-425). Until then they keep their old level: ask them to log out and in again. Removing someone from the account stops new sign-ins, but a session they already have lasts until it expires (12 hours, PAR-250) or they log out.
 
 ## 8. Checking the real sign-in (optional)
 

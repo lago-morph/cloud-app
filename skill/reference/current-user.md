@@ -37,7 +37,7 @@ From `@lago-morph/prototype-framework/client`: `getCurrentUser()` (the user as t
 
 A failed login returns to `/?authError=login_failed&requestId=<id>`. Show a message with the request ID; the reason is in the log ([troubleshooting.md](troubleshooting.md)).
 
-Sessions last 7 days (PAR-250). There is no server-side session list: logging out clears this browser's cookie only.
+Sessions last 12 hours (PAR-250). There is no server-side session list: logging out clears this browser's cookie only.
 
 ## Which login runs where
 

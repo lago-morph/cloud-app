@@ -84,15 +84,17 @@ Verifies: SYS-REQ-018
 Where: Local; live sign-in: cloud (milestone)
 Origin: ai-proposed (reviewed by the owner before 2026-10-31)
 
-A person's level comes from their membership of the owner's Cloudflare account (SYS-REQ-018 as amended by DEC-0690). Locally, with the reference app's production bundle, the auth app, mock-oauth2-server and a fake memberships API:
+A person's level comes from their membership of the owner's Cloudflare account (SYS-REQ-018 as amended by DEC-0690). A role change or a removal takes effect at the person's next sign-in; an existing session keeps its level until it expires (PAR-250, 12 hours) or the person signs in again (SYS-REQ-018 and AUTH-REQ-005 as amended by DEC-0703; DEC-0791). Locally, with the reference app's production bundle, the auth app, mock-oauth2-server and a fake memberships API:
 1. A member whose roles include no administrator role signs in through `/api/auth/login`: `/api/auth/me` shows level `user`, and an admin-only reference route answers 403 `AUTH.FORBIDDEN`.
 2. A member with an administrator role (PAR-413) signs in: level `admin`, and the admin-only route answers 200.
-3. With both sessions kept, the first member is promoted to an administrator role, the second is demoted, and a third signed-in member is removed from the account, all in the fake memberships API. Until the role-refresh interval (PAR-425) has passed, each session keeps its level. On the first request after it, the first is `admin`, the second `user`, and the third's session ends and the request is handled as anonymous (401 `AUTH.UNAUTHENTICATED` on a user-only route).
-4. Someone with no accepted membership of the account is refused: the app's callback signs no one in.
+3. With both sessions kept, the first member is promoted to an administrator role, the second is demoted, and a third signed-in member is removed from the account, all in the fake memberships API. Each existing session keeps its level, also after the role-refresh interval (PAR-425) has passed: the first stays `user`, the second `admin` (the admin-only route still answers 200), and the third `user`.
+4. Each of them signs in again: the first is now `admin` and the second `user`; the third, no longer a member, is refused, and the callback signs no one in.
+5. In-process, with `createTestApp` using the auth-app provider over the fake binding and its clock (workerd's clock cannot be moved, DEC-0765): a member's existing session takes the level of their new sign-in at its next role refresh; a demoted admin who does not sign in again keeps `admin` in their existing session until just before 12 hours after its sign-in, and just after it the session is gone (anonymous, 401 `AUTH.UNAUTHENTICATED` on a user-only route).
+6. Someone with no accepted membership of the account is refused: the app's callback signs no one in.
 
 Live sign-in (milestone, once per release; plan-v0.2.0 §7 "Live", steps 3 and 4): the owner's real sign-in to `prodcheck` (E2E-008) shows level `admin`, and, if the owner can invite one, a member with no administrator role signs in there and is shown `user`.
 
-Pass: each step shows the level stated; a role change takes effect at the role refresh and not before, with no new sign-in, no deploy and no command; nobody outside the account gets a session.
+Pass: each step shows the level stated; a role change or removal takes effect at the person's next sign-in, with no deploy and no command, and an existing session keeps its level until it expires (PAR-250, 12 hours) or the person signs in again; nobody outside the account gets a session.
 
 #### E2E-008 — Sign-in through the auth app on the production stage
 Verifies: SYS-REQ-019, SYS-REQ-027
