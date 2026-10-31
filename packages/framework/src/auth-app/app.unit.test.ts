@@ -10,7 +10,7 @@ import { localD1, type LocalD1 } from "./d1.test-support.js";
 import { ACCESS_TOKEN, FAKE_ACCOUNT, FAKE_API, FAKE_CLIENT_ID, FAKE_DISCOVERY, FAKE_ISSUER, REFRESH_TOKEN, fakeUpstream, makeSigningKey, type FakeUpstream, type SignedKey } from "./fake-upstream.test-support.js";
 import { SIGN_IN_TRANSACTION_MS } from "./params.js";
 import { createAuthAppService } from "./service.js";
-import { ensureSchema, registerReturnUrl } from "./store.js";
+import { ensureSchema, registerReturnUrl, unregisterApp, type D1Like } from "./store.js";
 
 const ORIGIN = "https://auth.acct.workers.dev";
 const APP = "notes-prod";
@@ -20,6 +20,7 @@ let key: SignedKey;
 let up: FakeUpstream;
 let logs: string[];
 let now: number;
+let db: D1Like;
 
 beforeAll(async () => {
   d1 = await localD1();
@@ -32,12 +33,13 @@ afterAll(async () => {
 });
 beforeEach(() => {
   now = 1_800_000_000_000;
+  db = d1.db;
   logs = [];
   up = fakeUpstream({ key, claims: { sub: "sub-1", email: "a@example.com", email_verified: true }, membershipPages: [[{ account: { id: FAKE_ACCOUNT }, status: "accepted", roles: ["Administrator"] }]] });
 });
 
 const deps = (): AuthAppDeps => ({
-  db: d1.db,
+  db,
   fetch: up.fetch,
   now: () => now,
   log: (l) => logs.push(l),
@@ -175,5 +177,99 @@ describe("/callback", () => {
     await callback(authorize, cookie);
     const all = logs.join("\n");
     for (const s of ["upstream-code", authorize.searchParams.get("state")!, ACCESS_TOKEN, REFRESH_TOKEN, "client-secret", "app-state-1"]) expect(all).not.toContain(s);
+  });
+});
+
+describe("review cases (independent review of PR 27)", () => {
+  it("refuses open-redirect return values at /start, with no redirect and no cookie", async () => {
+    for (const ret of [
+      "https://evil.acct.workers.dev/api/auth/callback",
+      RETURN.toUpperCase(),
+      RETURN.replace("/api/", "/API/"),
+      RETURN.replace("/api/", "/%61pi/"),
+      `${RETURN}?next=https://evil.example`,
+      RETURN.slice(0, -1),
+      "//evil.example/cb",
+    ]) {
+      const res = await get(startPath({ return: ret }));
+      expect(res.status, ret).toBe(400);
+      expect(res.headers.get("location"), ret).toBeNull();
+      expect(res.headers.get("set-cookie"), ret).toBeNull();
+    }
+  });
+
+  it("accepts an app state of exactly 512 characters", async () => {
+    expect((await get(startPath({ state: "s".repeat(512) }))).status).toBe(302);
+  });
+
+  it("accepts a callback at exactly PAR-416", async () => {
+    const { authorize, cookie } = await start();
+    now += SIGN_IN_TRANSACTION_MS;
+    expect((await callback(authorize, cookie)).status).toBe(302);
+  });
+
+  it("does not redirect to a return URL unregistered while the sign-in was in flight", async () => {
+    const { authorize, cookie } = await start();
+    await unregisterApp(d1.db, APP);
+    try {
+      const res = await callback(authorize, cookie);
+      expect(res.status).toBe(400);
+      expect(res.headers.get("location")).toBeNull();
+      expect(up.requests.some((r) => r.url.endsWith("/oauth2/token"))).toBe(false);
+    } finally {
+      await registerReturnUrl(d1.db, APP, RETURN);
+    }
+  });
+
+  it("does not clear the state cookie on a mismatched or unknown callback (a cross-site GET cannot cancel a sign-in)", async () => {
+    const { authorize } = await start();
+    const mismatch = await callback(authorize, `${SIGN_IN_COOKIE}=other`);
+    expect(mismatch.headers.get("set-cookie")).toBeNull();
+    const unknown = await get(`/callback?state=nope&code=c`, { cookie: `${SIGN_IN_COOKIE}=nope` });
+    expect(unknown.status).toBe(400);
+    expect(unknown.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("answers 503 at /start when discovery fails, with no cookie, no redirect and no saved sign-in", async () => {
+    const count = async () => (await d1.db.prepare("SELECT COUNT(*) AS n FROM sign_ins").first<{ n: number }>())?.n;
+    const before = await count();
+    up.options.discovery = { issuer: "" };
+    const res = await get(startPath());
+    expect(res.status).toBe(503);
+    expect(res.headers.get("set-cookie")).toBeNull();
+    expect(res.headers.get("location")).toBeNull();
+    expect(await count()).toBe(before);
+  });
+
+  it("sends the person back with login_failed when issuing the code fails, logging an internal error", async () => {
+    const { authorize, cookie } = await start();
+    db = { prepare: (q: string) => (q.startsWith("INSERT INTO codes") ? (() => { throw new Error("D1 down"); })() : d1.db.prepare(q)), batch: (s) => d1.db.batch(s) };
+    const res = await callback(authorize, cookie);
+    expect(res.headers.get("location")).toBe(`${RETURN}?error=login_failed&state=app-state-1`);
+    expect(logs.map((l) => JSON.parse(l).message)).toContain("sign-in failed: internal error");
+  });
+
+  it("logs 'other' for a provider error outside the expected shape, and prefers error over code", async () => {
+    const { authorize, cookie } = await start();
+    const res = await callback(authorize, cookie, { error: "<script>x</script>", code: "upstream-code" });
+    expect(res.headers.get("location")).toBe(`${RETURN}?error=login_failed&state=app-state-1`);
+    expect(JSON.parse(logs.at(-1)!).message).toBe("sign-in refused: provider refused (other)");
+    expect(up.requests.some((r) => r.url.endsWith("/oauth2/token"))).toBe(false);
+  });
+
+  it("marks the success redirect no-store and logs nothing secret on success, decline, mismatch and replay", async () => {
+    const a = await start();
+    const ok = await callback(a.authorize, a.cookie);
+    expect(ok.headers.get("cache-control")).toBe("no-store");
+    await callback(a.authorize, a.cookie); // replay
+    const b = await start();
+    await callback(b.authorize, b.cookie, { error: "access_denied" });
+    const c = await start();
+    await callback(c.authorize, `${SIGN_IN_COOKIE}=x`);
+    const all = logs.join("\n");
+    const code = new URL(ok.headers.get("location")!).searchParams.get("code")!;
+    for (const s of [code, "upstream-code", a.authorize.searchParams.get("state")!, b.authorize.searchParams.get("state")!, c.authorize.searchParams.get("state")!, ACCESS_TOKEN, REFRESH_TOKEN, "client-secret", "app-state-1"]) {
+      expect(all).not.toContain(s);
+    }
   });
 });

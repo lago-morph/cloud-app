@@ -29,7 +29,7 @@ function setup(over: Partial<FakeUpstreamOptions> = {}) {
     config: { clientId: FAKE_CLIENT_ID, clientSecret: "client-secret-value", accountId: FAKE_ACCOUNT, discoveryUrl: FAKE_DISCOVERY, apiBase: FAKE_API, callbackUrl: "https://auth.example.test/callback" },
   };
   const run = (verifier = VERIFIER) => completeSignIn(deps, { code: "upstream-code-123", verifier, nonce: NONCE });
-  return { up, logs, run };
+  return { up, logs, run, deps };
 }
 
 async function refused(p: Promise<unknown>): Promise<string> {
@@ -119,6 +119,46 @@ describe("completeSignIn", () => {
     await expect(run()).resolves.toMatchObject({ sub: "sub-1" });
     expect(logs).toHaveLength(1);
     expect(JSON.parse(logs[0]!)).toEqual({ level: "warn", component: "AUTH_APP", message: "token revocation failed (access_token, refresh_token)" });
+  });
+
+  it("refuses a 200 without an id_token and still revokes the tokens it did get (plan §2.1)", async () => {
+    const { up, run, deps } = setup();
+    const inner = deps.fetch;
+    (deps as { fetch: typeof fetch }).fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const res = await inner(input, init);
+      if (!String(input).endsWith("/oauth2/token") || res.status !== 200) return res;
+      const { id_token: _drop, ...rest } = (await res.json()) as Record<string, unknown>;
+      return Response.json(rest);
+    }) as typeof fetch;
+    expect(await refused(run())).toBe("token exchange: no id token");
+    expect(up.revoked().sort()).toEqual([ACCESS_TOKEN, REFRESH_TOKEN].sort());
+  });
+
+  it("revokes on every later failure: JWKS, expired token, /user, /memberships unreachable", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const cases: [Partial<FakeUpstreamOptions>, string, ((u: string) => boolean)?][] = [
+      [{}, "jwks failed: unreachable", (u) => u.endsWith("/jwks.json")],
+      [{ claims: { sub: "sub-1", nonce: NONCE, email: "a@example.com", exp: now - 3600 } }, "id token: expired"],
+      [{ claims: { sub: "sub-1", nonce: NONCE } }, "user lookup failed: unreachable", (u) => u.endsWith("/user")],
+      [{}, "memberships failed: unreachable", (u) => u.includes("/memberships")],
+    ];
+    for (const [over, why, down] of cases) {
+      const { up, run, deps } = setup(over);
+      if (down !== undefined) {
+        const inner = deps.fetch;
+        (deps as { fetch: typeof fetch }).fetch = ((input: RequestInfo | URL, init?: RequestInit) => (down(String(input)) ? Promise.reject(new TypeError("fetch failed")) : inner(input, init))) as typeof fetch;
+      }
+      expect(await refused(run()), why).toBe(why);
+      expect(up.revoked(), why).toHaveLength(2);
+    }
+  });
+
+  it("logs the failed kinds, and no token, when the revoke request itself throws", async () => {
+    const { run, deps, logs } = setup();
+    const inner = deps.fetch;
+    (deps as { fetch: typeof fetch }).fetch = ((input: RequestInfo | URL, init?: RequestInit) => (String(input).endsWith("/revoke") ? Promise.reject(new TypeError("fetch failed")) : inner(input, init))) as typeof fetch;
+    await expect(run()).resolves.toMatchObject({ sub: "sub-1" });
+    expect(logs).toEqual([JSON.stringify({ level: "warn", component: "AUTH_APP", message: "token revocation failed (access_token, refresh_token)" })]);
   });
 
   it("never puts the code, verifier, tokens or client secret in a refusal", async () => {

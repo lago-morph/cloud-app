@@ -70,7 +70,7 @@ describe("exchangeCode", () => {
     const tokens = await exchangeCode(up.fetch, d, { ...client, code: "c1", verifier: "v1", redirectUri: CALLBACK });
     expect(tokens.accessToken).toBe(ACCESS_TOKEN);
     expect(tokens.refreshToken).toBe(REFRESH_TOKEN);
-    expect(tokens.idToken.split(".")).toHaveLength(3);
+    expect(tokens.idToken!.split(".")).toHaveLength(3);
     const sent = up.requests.find((r) => r.url === `${FAKE_ISSUER}/oauth2/token`)!;
     expect(Object.fromEntries(sent.body)).toEqual({ grant_type: "authorization_code", code: "c1", code_verifier: "v1", redirect_uri: CALLBACK, client_id: FAKE_CLIENT_ID, client_secret: "secret-1" });
   });
@@ -119,15 +119,42 @@ describe("upstream failures (no redirects followed, fixed reasons, no secrets)",
   const SECRET = "client-secret-SENTINEL";
   const raw = (status: number, body: string) => (async () => new Response(body, { status })) as unknown as typeof fetch;
 
-  it("sends every upstream request with redirect: error, so a 3xx never re-posts the secret", async () => {
+  /**
+   * workerd's fetch rule (root cause 2026-10-31-A-workerd-fetch-redirect-error): any redirect mode
+   * other than unset, "follow" or "manual" throws TypeError before any I/O. The guard also fails
+   * any upstream call that does not pass "manual", so a later default ("follow") cannot slip in.
+   */
+  const workerdFetch = (inner: typeof fetch): typeof fetch =>
+    ((input: RequestInfo | URL, init?: RequestInit) => {
+      const mode = init?.redirect;
+      if (mode !== undefined && mode !== "follow" && mode !== "manual") throw new TypeError(`Invalid redirect value, must be one of "follow" or "manual"`);
+      if (mode !== "manual") throw new Error(`upstream call without redirect: "manual": ${String(input)}`);
+      return inner(input, init);
+    }) as typeof fetch;
+
+  it("works under workerd's fetch rule and never follows a redirect (redirect: manual on every call)", async () => {
     const up = fakeUpstream({ key, expect: { clientSecret: SECRET } });
-    const d = await loadDiscovery(up.fetch, FAKE_DISCOVERY);
-    await exchangeCode(up.fetch, d, { clientId: FAKE_CLIENT_ID, clientSecret: SECRET, code: "c", verifier: "v", redirectUri: CALLBACK });
-    await loadJwks(up.fetch, d);
-    await revokeTokens(up.fetch, d, { clientId: FAKE_CLIENT_ID, clientSecret: SECRET }, [{ token: ACCESS_TOKEN, hint: "access_token" }]);
-    await fetchUserEmail(up.fetch, FAKE_API, ACCESS_TOKEN);
-    await fetchMemberships(up.fetch, FAKE_API, ACCESS_TOKEN);
-    expect(up.requests.map((r) => r.redirect)).toEqual(Array(up.requests.length).fill("error"));
+    const f = workerdFetch(up.fetch);
+    const d = await loadDiscovery(f, FAKE_DISCOVERY);
+    await expect(exchangeCode(f, d, { clientId: FAKE_CLIENT_ID, clientSecret: SECRET, code: "c", verifier: "v", redirectUri: CALLBACK })).resolves.toMatchObject({ accessToken: ACCESS_TOKEN });
+    await expect(loadJwks(f, d)).resolves.toHaveLength(1);
+    await expect(revokeTokens(f, d, { clientId: FAKE_CLIENT_ID, clientSecret: SECRET }, [{ token: ACCESS_TOKEN, hint: "access_token" }])).resolves.toEqual([]);
+    await expect(fetchUserEmail(f, FAKE_API, ACCESS_TOKEN)).resolves.toBe("from-user@example.com");
+    await expect(fetchMemberships(f, FAKE_API, ACCESS_TOKEN)).resolves.toEqual([]);
+    expect(up.requests.map((r) => r.redirect)).toEqual(Array(up.requests.length).fill("manual"));
+  });
+
+  it("refuses a 3xx from the token endpoint or the API as redirected, and never requests its target", async () => {
+    const seen: string[] = [];
+    const redirecting = (async (input: RequestInfo | URL) => {
+      seen.push(String(input));
+      return new Response("moved", { status: 307, headers: { location: "https://evil.example/steal" } });
+    }) as typeof fetch;
+    const d = await loadDiscovery(fakeUpstream({ key }).fetch, FAKE_DISCOVERY);
+    expect(await reason(exchangeCode(redirecting, d, { clientId: FAKE_CLIENT_ID, clientSecret: SECRET, code: "c", verifier: "v", redirectUri: CALLBACK }))).toBe("token exchange rejected: redirected");
+    expect(await reason(fetchMemberships(redirecting, FAKE_API, ACCESS_TOKEN))).toBe("memberships failed: redirected");
+    await expect(revokeTokens(redirecting, d, { clientId: FAKE_CLIENT_ID, clientSecret: SECRET }, [{ token: ACCESS_TOKEN, hint: "access_token" }])).resolves.toEqual(["access_token"]);
+    expect(seen.some((u) => u.includes("evil.example"))).toBe(false);
   });
 
   it("names an unreachable endpoint", async () => {
@@ -145,11 +172,13 @@ describe("upstream failures (no redirects followed, fixed reasons, no secrets)",
     expect(await reason(loadDiscovery(fakeUpstream({ key, discovery: { code_challenge_methods_supported: undefined } }).fetch, FAKE_DISCOVERY))).toBe("discovery: no S256");
   });
 
-  it("refuses a token response without an id_token, and takes a missing refresh_token as none", async () => {
+  it("returns whatever tokens a 200 holds, so the caller can revoke them even without an id_token", async () => {
     const d = await loadDiscovery(fakeUpstream({ key }).fetch, FAKE_DISCOVERY);
     const tokenOnly = (body: unknown) => (async () => Response.json(body)) as unknown as typeof fetch;
-    expect(await reason(exchangeCode(tokenOnly({ access_token: "a" }), d, { ...client, code: "c", verifier: "v", redirectUri: CALLBACK }))).toBe("token exchange: no access or id token");
-    await expect(exchangeCode(tokenOnly({ access_token: "a", id_token: "i" }), d, { ...client, code: "c", verifier: "v", redirectUri: CALLBACK })).resolves.toEqual({ accessToken: "a", refreshToken: null, idToken: "i" });
+    const params = { ...client, code: "c", verifier: "v", redirectUri: CALLBACK };
+    await expect(exchangeCode(tokenOnly({ access_token: "a", refresh_token: "r" }), d, params)).resolves.toEqual({ accessToken: "a", refreshToken: "r", idToken: null });
+    await expect(exchangeCode(tokenOnly({ access_token: "a", id_token: "i" }), d, params)).resolves.toEqual({ accessToken: "a", refreshToken: null, idToken: "i" });
+    await expect(exchangeCode(tokenOnly({ id_token: "i", access_token: 5 }), d, params)).resolves.toEqual({ accessToken: null, refreshToken: null, idToken: "i" });
   });
 
   it("refuses a JWKS without keys, a refused /user, and /memberships without a result list or success", async () => {
