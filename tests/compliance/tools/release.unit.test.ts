@@ -126,10 +126,10 @@ describe("[COMPL-AC-006] release report", () => {
     const real = readCatalogue(fileURLToPath(new URL("../../../docs", import.meta.url)));
     const ids = (target: "local" | "cloudflare", mode: "automated" | "milestone"): string[] =>
       real.filter((e) => (mode === "automated" ? e.applies[target]?.automated === true : (e.applies[target]?.milestone.length ?? 0) > 0)).map((e) => e.id);
-    for (const id of ["AUTH-AC-011", "E2E-008"]) {
-      expect(ids("cloudflare", "automated"), id).toContain(id);
-      expect(ids("cloudflare", "milestone"), `${id} is not a milestone item`).not.toContain(id);
-    }
+    for (const id of ["AUTH-AC-011", "E2E-008"]) expect(ids("cloudflare", "automated"), id).toContain(id);
+    expect(ids("cloudflare", "milestone"), "AUTH-AC-011 is not a milestone item").not.toContain("AUTH-AC-011");
+    // DEC-0692, DEC-0755: E2E-008's live sign-in is a milestone part beside its automated part.
+    expect(ids("cloudflare", "milestone"), "E2E-008's live sign-in part").toContain("E2E-008");
     expect(real.filter((e) => e.id.startsWith("GOOGLE-")), "the retired GOOGLE criteria are not in the catalogue").toEqual([]);
     expect(real.filter((e) => e.id.startsWith("PWD-") || e.id.startsWith("MAIL-")), "the retired PWD and MAIL criteria are not in the catalogue").toEqual([]);
     const passed = (list: string[]): EvidenceRecord["results"] => list.map((id) => ({ id, status: "passed" as const }));

@@ -26,8 +26,8 @@ export const PRODCHECK_STAGE = "prodcheck";
 /** The results `check-login` records (password.md §2; `CHECK_LOGIN_IDS` of the command). */
 export const CHECK_LOGIN_IDS: readonly string[] = ["PWD-AC-009", "AUTH-AC-011", "E2E-008"];
 
-/** The criteria whose cloud part runs on `prodcheck` (compliance.md §2): the driver redeploys it when one of them runs. */
-export const PRODCHECK_IDS: readonly string[] = [...CHECK_LOGIN_IDS, "COMPL-AC-005", "E2E-006", "E2E-007", "AUTH-AC-005", "AUTH-AC-009", "MAIL-AC-006", "CLI-AC-007"];
+/** The criteria whose cloud part runs on `prodcheck` (compliance.md §2): the driver redeploys it when one of them runs. E2E-007 left with its cloud part (plan-v0.2.0 §7.1, DEC-0758): only its live sign-in, a milestone part, is on `prodcheck`. */
+export const PRODCHECK_IDS: readonly string[] = [...CHECK_LOGIN_IDS, "COMPL-AC-005", "E2E-006", "AUTH-AC-005", "AUTH-AC-009", "MAIL-AC-006", "CLI-AC-007"];
 
 export const DRIVER_CHECK_TITLE = "check-login --stage prodcheck, run by the compliance driver after the test layers (COMPL-REQ-005)";
 export const DRIVER_CHECK_FILE = "tests/compliance/harness/prodcheck.ts";

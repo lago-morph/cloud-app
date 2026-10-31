@@ -147,11 +147,13 @@ describe("[COMPL-AC-002] the real documents", () => {
     for (const id of ["CLI-AC-006", "CLI-AC-007"]) expect(ids).not.toContain(id);
   });
 
-  it("parse E2E-016's review part; AUTH-AC-005 and E2E-007 have no milestone part (DEC-0526)", () => {
+  it("parse E2E-016's review part and the live sign-in parts of E2E-007 and E2E-008 (DEC-0755); AUTH-AC-005 has no milestone part (DEC-0526)", () => {
     const byId = new Map(catalogue.map((e) => [e.id, e.applies]));
     expect(byId.get("E2E-016")).toEqual({ local: { automated: true, milestone: ["review"] } });
     expect(byId.get("AUTH-AC-005")?.cloudflare).toEqual({ automated: true, milestone: [] });
-    expect(byId.get("E2E-007")?.cloudflare).toEqual({ automated: true, milestone: [] });
+    // Plan-v0.2.0 §7.1 (DEC-0753): E2E-007 is automated locally only; on a cloud it has only its live sign-in.
+    expect(byId.get("E2E-007")).toEqual({ local: { automated: true, milestone: [] }, cloudflare: { automated: false, milestone: ["live sign-in"] }, aws: { automated: false, milestone: ["live sign-in"] } });
+    expect(byId.get("E2E-008")?.cloudflare).toEqual({ automated: true, milestone: ["live sign-in"] });
     expect(byId.get("CF-AC-001")).toEqual({ cloudflare: { automated: true, milestone: [] } });
   });
 });
