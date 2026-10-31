@@ -12,10 +12,19 @@ import type { SecretsService } from "./public.js";
 /** Reads one secret by logical name; resolves `undefined` when the stage has no value. */
 export type SecretReader = (name: string) => Promise<string | undefined>;
 
-/** Local and Cloudflare: the value is the Worker env binding `SECRET_<NAME>` (SEC-REQ-003). */
+/**
+ * Local and Cloudflare: the value is the Worker env binding `SECRET_<NAME>` (SEC-REQ-003): a Worker
+ * secret (a string), or on Cloudflare a Secrets Store binding (`{ get() }`, plan-v0.2.0 D7), which
+ * `deploy` puts under the same name in place of the Worker secret (DEC-0727). A rejecting `get()`
+ * is a store failure (SEC.UNAVAILABLE upstream).
+ */
 export function envSecretReader(env: Readonly<Record<string, unknown>>, target: Target): SecretReader {
   return async (name) => {
     const value = env[secretLocation(target, name)];
+    if (typeof value === "object" && value !== null && typeof (value as { get?: unknown }).get === "function") {
+      const stored: unknown = await (value as { get(): Promise<unknown> }).get();
+      return typeof stored === "string" ? stored : undefined;
+    }
     return typeof value === "string" ? value : undefined;
   };
 }

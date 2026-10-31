@@ -38,6 +38,16 @@ export async function setSecret(api: CloudflareApi, accountId: string, stage: St
   resultOf(r, `setting secret ${name} on Worker ${workerName(stage)}`);
 }
 
+/**
+ * Deletes the Worker secret `SECRET_<NAME>`, as `deploy` does before a Secrets Store binding takes
+ * its name (DEC-0727). An absent secret, or Worker, counts as deleted.
+ */
+export async function deleteSecret(api: CloudflareApi, accountId: string, stage: Stage, name: string): Promise<void> {
+  const r = await api("DELETE", `${scriptPath(accountId, stage)}/secrets/${secretLocation("cloudflare", name)}`);
+  if (r.status === 404) return;
+  resultOf(r, `deleting secret ${name} from Worker ${workerName(stage)}`);
+}
+
 /** Logical names of the Worker's secrets; null while the Worker does not exist. */
 export async function listSetSecrets(api: CloudflareApi, accountId: string, stage: Stage): Promise<ReadonlySet<string> | null> {
   const r = await api("GET", `${scriptPath(accountId, stage)}/secrets`);
