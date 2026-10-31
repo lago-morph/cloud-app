@@ -6,8 +6,8 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { RunnerSelection } from "../harness/selection.js";
-import { FrameworkBuildMissingError, ListingTimeoutError, listSelection } from "./listing.js";
+import { runnerSelection, type RunnerSelection } from "../harness/selection.js";
+import { driverListingLimitMs, FrameworkBuildMissingError, LISTING_CHILD_TIMEOUT_MS, LISTING_OVERHEAD_MS, ListingTimeoutError, listSelection } from "./listing.js";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -82,6 +82,15 @@ describe("listing child processes are bounded", () => {
     expect(pids).toHaveLength(3);
     expect(survivors(pids)).toEqual([]);
   }, 30_000);
+});
+
+describe("a listing test's own limit (binding fix 4)", () => {
+  it("is every runner's limit plus the overhead, so it never fires before a runner's limit does", () => {
+    for (const target of ["local", "cloudflare"] as const) {
+      expect(driverListingLimitMs(target), target).toBe(runnerSelection({ target }).length * LISTING_CHILD_TIMEOUT_MS + LISTING_OVERHEAD_MS);
+    }
+    expect(driverListingLimitMs("cloudflare")).toBe(2 * 300_000 + 30_000);
+  });
 });
 
 describe("listing needs the framework build", () => {
