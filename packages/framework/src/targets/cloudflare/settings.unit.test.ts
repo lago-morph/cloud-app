@@ -70,9 +70,10 @@ describe("cloudflareWorkerSettings", () => {
     expect(recorded.vars["FRAMEWORK_MAIL_FROM"]).toBe("no-reply@example.test");
   });
 
-  it("a production stage without the account's email domain is CORE.MISCONFIGURED naming setup-account", () => {
+  it("a production stage without the account's email domain is CORE.MISCONFIGURED naming the missing domain, and no removed option (v0.2.0, DEC-0689)", () => {
     const { emailDomain: _omitted, ...withoutDomain } = production;
-    expect(() => cloudflareWorkerSettings(withoutDomain)).toThrow(/setup-account --target cloudflare --email-domain/);
+    expect(() => cloudflareWorkerSettings(withoutDomain)).toThrow(/needs the account's email domain for its EMAIL binding; the account settings record names none/);
+    expect(() => cloudflareWorkerSettings(withoutDomain)).not.toThrow(/--email-domain/);
   });
 
   it("refuses a public origin that is not an https origin", () => {

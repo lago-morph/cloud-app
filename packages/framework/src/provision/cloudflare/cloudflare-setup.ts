@@ -451,7 +451,7 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       }
     }
 
-    // 3. No token to work with: no everyday token, and no usable bootstrap token. Its link, the template and where it goes.
+    // 3. No token to work with: no everyday token, and no usable bootstrap token. The Everyday token page, the bootstrap link, the template and where it goes.
     if (everydayValue === undefined && boot === undefined) {
       const lines = [`${EVERYDAY_SETTING} is not set. Setup needs the everyday token too.`, `${EVERYDAY_PAGE}\n`];
       for (const p of problems) lines.push(problemText(p.slot, p.text));

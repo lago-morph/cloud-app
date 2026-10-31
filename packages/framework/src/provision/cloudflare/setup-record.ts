@@ -79,8 +79,8 @@ export interface SetupRecordInput {
 }
 
 /**
- * Writes the setup record unless the stored one already says the same: the same completed steps and a `setupVersion` at least the input's (`changed` forces the write: the run
- * applied a step). A stored higher `setupVersion` is kept: an older release re-running setup on
+ * Writes the setup record unless the stored one already says the same: the same completed steps
+ * and a `setupVersion` at least the input's (`changed` forces the write: the run applied a step). A stored higher `setupVersion` is kept: an older release re-running setup on
  * an account a newer one set up does not make it look out of date to the newer one. Every other
  * field of the stored object is kept. Returns the record now stored; `onWrite` is called when it
  * was written (so `setup-account` does not say "nothing changed" after recording a new version).
