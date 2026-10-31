@@ -12,10 +12,8 @@ import { FRAMEWORK_SECRETS } from "../secrets/names.js";
 import { deferredCheck } from "../core/deferred.js";
 import { clearCookie, cookieSettings, readCookie, setCookie, type CookieSettings } from "./cookies.js";
 import { levelFromAccount } from "./levels.js";
-import type { AccountStatus, CredentialContext, CredentialProvider, LoginProvider, ProviderContext, ProviderIdentity } from "./login-provider.js";
+import type { AccountStatus, LoginProvider, ProviderContext, ProviderIdentity } from "./login-provider.js";
 import { MOCK_DEFAULT_IDS } from "./mock-ids.js";
-import { PAGES } from "./password/pages.js";
-import { registerPasswordRoutes } from "./password/routes.js";
 import type { AuthMock } from "./mock.js";
 import type { CurrentUser } from "./public.js";
 import { sanitizeReturnTo } from "./return-to.js";
@@ -42,11 +40,6 @@ export interface AuthOptions {
    * bindings (`env.AUTH`, DEC-0667).
    */
   readonly provider?: LoginProvider | ((c: RuntimeContext) => LoginProvider);
-  /**
-   * The stage's credential provider (PWD), built per request over that request's SQL database
-   * (DEC-0510). AUTH derives the user ID from its `id` and subject and issues the session.
-   */
-  readonly credentialProvider?: (c: RuntimeContext) => CredentialProvider;
   /** The authentication mock: only locally and on test stages. */
   readonly mock?: AuthMock;
   /** Cookie settings; default: the cloud settings. The local runtime passes `LOCAL_COOKIES`; non-Secure settings on a cloud target are CORE.MISCONFIGURED. */
@@ -57,36 +50,12 @@ export interface AuthOptions {
   readonly sleep?: (ms: number) => Promise<void>;
 }
 
-/**
- * The credential operations the password routes call (password.md §2, auth.md §2 "Credential
- * login"), each over the request's credential provider and a context AUTH builds. Only
- * `signIn` creates a session: on success it appends the framework session cookie to the
- * response (`c.header("Set-Cookie", ...)`), with the user ID `deriveUserId(provider.id, subject)`.
- * Failures are the provider's FrameworkErrors (internal/login-provider.d.ts).
- */
-export interface CredentialOperations {
-  /** The context handed to the provider for this request. */
-  context(c: RuntimeContext): CredentialContext;
-  signUp(c: RuntimeContext, input: { readonly email: string; readonly password: string; readonly displayName: string }): Promise<void>;
-  /** Validates the credentials, sets the session cookie, and returns the derived user ID. */
-  signIn(c: RuntimeContext, input: { readonly email: string; readonly password: string }): Promise<{ readonly id: string }>;
-  sendVerification(c: RuntimeContext, input: { readonly email: string }): Promise<void>;
-  verify(c: RuntimeContext, input: { readonly token: string }): Promise<void>;
-  requestReset(c: RuntimeContext, input: { readonly email: string }): Promise<void>;
-  reset(c: RuntimeContext, input: { readonly token: string; readonly newPassword: string }): Promise<void>;
-}
-
 export interface AuthParts {
   readonly currentUser: MiddlewareHandler<RuntimeEnv>;
   readonly forgeryCheck: MiddlewareHandler<RuntimeEnv>;
   /** Registers `/auth/*` on the framework's `/api` router. */
   readonly routes: (api: Hono<RuntimeEnv>) => void;
-  /** Present when the stage has a credential provider. */
-  readonly credentials: CredentialOperations | undefined;
 }
-
-/** CredentialContext.clientIp where the request has no `CF-Connecting-IP` (locally, createTestApp). */
-export const LOCAL_CLIENT_IP = "127.0.0.1";
 
 const ANONYMOUS: CurrentUser = Object.freeze({ level: "anonymous" });
 const STATE_CHANGING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -178,45 +147,6 @@ export function createAuthParts(options: AuthOptions): AuthParts {
     };
   }
 
-  function credentialContext(c: RuntimeContext): CredentialContext {
-    const config = { framework: options.framework ?? {} };
-    return {
-      publicOrigin: originOf(c),
-      origin: c.req.header("origin") ?? "",
-      clientIp: c.req.header("cf-connecting-ip") ?? LOCAL_CLIENT_IP,
-      userAgent: c.req.header("user-agent") ?? null,
-      waitUntil: (work) => {
-        try {
-          c.executionCtx.waitUntil(work);
-        } catch {
-          // No execution context (Hono throws): the work still runs to completion on its own.
-          work.catch(() => undefined);
-        }
-      },
-      getSecret: (name) => options.secret(c, name),
-      getConfig: (key) => lookup(config, key),
-    };
-  }
-
-  function credentialOperations(factory: (c: RuntimeContext) => CredentialProvider): CredentialOperations {
-    return {
-      context: credentialContext,
-      signUp: (c, input) => factory(c).signUp(credentialContext(c), input),
-      async signIn(c, input) {
-        const provider = factory(c);
-        const identity = await provider.signIn(credentialContext(c), input);
-        const id = await deriveUserId(provider.id, identity.subject);
-        const session: ProviderSessionData = { id, displayName: identity.displayName, provider: provider.id, subject: identity.subject, ...confirmedRole(identity) };
-        c.header("Set-Cookie", await issueSessionCookie(c, session), { append: true });
-        return { id };
-      },
-      sendVerification: (c, input) => factory(c).sendVerification(credentialContext(c), input),
-      verify: (c, input) => factory(c).verify(credentialContext(c), input),
-      requestReset: (c, input) => factory(c).requestReset(credentialContext(c), input),
-      reset: (c, input) => factory(c).reset(credentialContext(c), input),
-    };
-  }
-
   async function identify(c: RuntimeContext): Promise<CurrentUser> {
     const fixed = mock?.fixedUser(c);
     if (fixed !== undefined) return fixed;
@@ -239,12 +169,8 @@ export function createAuthParts(options: AuthOptions): AuthParts {
    */
   async function levelOf(c: RuntimeContext, session: ProviderSessionData): Promise<CurrentUser> {
     let read: ((subject: string) => Promise<AccountStatus | null>) | undefined;
-    const credential = options.credentialProvider?.(c);
-    if (credential !== undefined && credential.id === session.provider) read = (subject) => credential.accountStatus(subject);
-    else {
-      const provider = providerFor(c);
-      if (provider !== undefined && provider.id === session.provider) read = (subject) => provider.accountStatus(subject);
-    }
+    const provider = providerFor(c);
+    if (provider !== undefined && provider.id === session.provider) read = (subject) => provider.accountStatus(subject);
     if (read === undefined) return ANONYMOUS;
     return refreshedLevel(c, session, session.role, read);
   }
@@ -274,10 +200,7 @@ export function createAuthParts(options: AuthOptions): AuthParts {
     return user;
   }
 
-  const credentials = options.credentialProvider === undefined ? undefined : credentialOperations(options.credentialProvider);
-
   return {
-    credentials,
     currentUser: async (c, next) => {
       cookies();
       c.set("user", await identify(c));
@@ -308,14 +231,9 @@ export function createAuthParts(options: AuthOptions): AuthParts {
 
       api.get("/auth/login", async (c) => {
         const returnTo = sanitizeReturnTo(c.req.query("returnTo"));
-        if (credentials !== undefined) {
-          // DEC-0516: the credential provider is on every stage, so login is its sign-in page.
-          const query = returnTo === "/" ? "" : `?${new URLSearchParams({ returnTo }).toString()}`;
-          return c.redirect(`${PAGES.signIn}${query}`, 302);
-        }
         const provider = providerFor(c);
         if (provider === undefined) {
-          // Only createTestApp's mock-only app gets here (no stage lacks the credential provider).
+          // Local development and test stages: no real provider, only the mock (plan-v0.2.0 §4.3).
           if (mock === undefined) throw new FrameworkError("CORE.MISCONFIGURED", "no login provider is configured for this deployment");
           // Mock only: log in as the mock's default user (local development and test stages).
           c.header("Set-Cookie", await issueSessionCookie(c, { id: MOCK_DEFAULT_IDS.user, displayName: null, mockLevel: "user" }), { append: true });
@@ -359,8 +277,6 @@ export function createAuthParts(options: AuthOptions): AuthParts {
         c.header("Set-Cookie", clearCookie(cookies(), cookies().session), { append: true });
         return c.body(null, 204);
       });
-
-      if (credentials !== undefined) registerPasswordRoutes(api, credentials);
 
       mock?.registerRoutes(api, {
         issue: issueSessionCookie,

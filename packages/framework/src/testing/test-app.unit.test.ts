@@ -296,55 +296,6 @@ describe("createTestApp", { timeout: 60_000 }, () => {
     }
   });
 
-  it(tag("AUTH-AC-003", "with the password provider, grantRole and revokeRole change the signed-in account's level on its next request"), async () => {
-    const t = await open({ ...base, passwordLoginProvider: true, secrets: { apiKey: "k" } });
-    const post = (path: string, body: unknown) =>
-      t.request(`/api/auth/password/${path}`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(body) });
-    const email = "role@example.test";
-    const password = "correct horse battery staple";
-    expect((await post("sign-up", { email, password, displayName: "Role" })).status).toBeLessThan(300);
-    let message = await t.mail.lastTo(email);
-    for (let i = 0; message === undefined && i < 50; i++) {
-      await new Promise((r) => setTimeout(r, 20));
-      message = await t.mail.lastTo(email);
-    }
-    const token = /[?&]token=([^&\s"<]+)/.exec(message?.text ?? "")?.[1] ?? "";
-    expect(token).not.toBe("");
-    expect((await post("verify", { token: decodeURIComponent(token) })).status).toBeLessThan(300);
-    const signIn = await post("sign-in", { email, password });
-    expect(signIn.status).toBeLessThan(300);
-    const pair = signIn.headers.getSetCookie().map((line) => line.split(";")[0] ?? "").find((p) => p.startsWith("session_local=") && p !== "session_local=");
-    expect(pair).toBeDefined();
-    const cookie = { headers: { cookie: pair ?? "" } };
-    const level = async () => ((await (await t.request("/api/auth/me", cookie)).json()) as { level: string; id: string });
-    const me = await level();
-    expect(me.level).toBe("user");
-    await t.grantRole(me.id, "admin");
-    expect((await level()).level).toBe("admin");
-    await t.revokeRole(me.id, "admin");
-    expect((await level()).level).toBe("user");
-  });
-
-  it("keeps only the loginWithStub session (local.md, DEC-0193): a password sign-in's cookie is not sent on later requests", async () => {
-    const t = await open({ ...base, passwordLoginProvider: true, secrets: { apiKey: "k" } });
-    const post = (path: string, body: unknown) =>
-      t.request(`/api/auth/password/${path}`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(body) });
-    const email = "kept@example.test";
-    const password = "correct horse battery staple";
-    await post("sign-up", { email, password, displayName: "Kept" });
-    let message = await t.mail.lastTo(email);
-    for (let i = 0; message === undefined && i < 50; i++) {
-      await new Promise((r) => setTimeout(r, 20));
-      message = await t.mail.lastTo(email);
-    }
-    const token = /[?&]token=([^&\s"<]+)/.exec(message?.text ?? "")?.[1] ?? "";
-    await post("verify", { token: decodeURIComponent(token) });
-    const signIn = await post("sign-in", { email, password });
-    expect(signIn.status).toBeLessThan(300);
-    expect(signIn.headers.getSetCookie().some((line) => line.startsWith("session_local=") && !line.startsWith("session_local=;"))).toBe(true);
-    expect(await (await t.request("/api/auth/me")).json()).toEqual({ level: "anonymous" });
-  });
-
   it("loginWithStub with a stub failure leaves no session", async () => {
     const t = await open({ ...base, stubLoginProvider: true });
     await t.loginWithStub("person-2", { stubFailure: "refused" }).catch(() => undefined);
@@ -358,19 +309,6 @@ describe("createTestApp", { timeout: 60_000 }, () => {
     const stub = await open({ ...base, stubLoginProvider: true });
     const none = await stub.request("/api/auth/mock-login", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
     expect(none.status).toBe(404);
-  });
-
-  it("passwordLoginProvider installs the password provider instead of the mock, with an empty outbox and its secret", async () => {
-    const t = await open({ ...base, passwordLoginProvider: true, secrets: { apiKey: "k" } });
-    expect(() => t.as(mockUsers.user())).toThrow(/password login provider/);
-    const none = await t.request("/api/auth/mock-login", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-    expect(none.status).toBe(404);
-    expect(await t.mail.all()).toEqual([]);
-    expect(await t.mail.lastTo("nobody@example.test")).toBeUndefined();
-    // The health check finds frameworkAuthSecret.
-    expect((await t.request("/api/__framework/health")).status).toBe(204);
-    await expect(createTestApp(app, { ...base, passwordLoginProvider: true, stubLoginProvider: true })).rejects.toThrow(/cannot be combined/);
-    await expect(createTestApp(app, { ...base, passwordLoginProvider: true, user: mockUsers.user() })).rejects.toThrow(/cannot be combined/);
   });
 
   it("refuses URLs on any other origin or protocol before the app sees them (root cause F-02 entry 2 revised)", async () => {

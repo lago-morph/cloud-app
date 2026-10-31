@@ -2,7 +2,7 @@
  * Local target runtime (`./targets/local` subpath; importable by generated entry points only,
  * CORE-REQ-005): the Worker that `dev` runs under Wrangler. It uses the Cloudflare adapters
  * (local D1 and R2 bindings, `SECRET_<NAME>` from `.dev.vars`) with the local-only parts of
- * local.md §2: the password provider (PWD) beside the authentication mock, same-origin file transfers
+ * local.md §2: the authentication mock (the only login locally), same-origin file transfers
  * through `/api/__framework/files/*` signed with `frameworkLocalTicketKey`, and log entries as
  * marked Worker output lines that `dev` captures into `.logs/` (DEC-0066), and the framework's
  * email likewise as marked lines that `dev` captures into `.mail/` (MAIL §2; nothing is sent and
@@ -23,7 +23,6 @@ import { LOCAL_COOKIES } from "../../auth/local-cookies.js";
 import { createLocalTicketIssuer } from "../../files/local/tickets.js";
 import { registerLocalTransferRoute } from "../../files/local/route.js";
 import { workerPublicOrigin, workerSecretValues, workerSql, workerStore, type WorkerHandler } from "../cloudflare/bindings.js";
-import { workerCredentialProvider } from "../cloudflare/password.js";
 import { assembleStage } from "../stage.js";
 
 export type { WorkerHandler } from "../cloudflare/bindings.js";
@@ -42,10 +41,9 @@ export function createLocalWorker<C extends ConfigDeclaration, S extends string>
     readSecret: (env) => envSecretReader(env, target),
     readFrameworkSecret: (env) => envSecretReader(env, target),
     secretValues: (c) => workerSecretValues(c.env),
-    requiredFrameworkSecrets: [FRAMEWORK_SECRETS.sessionKey, FRAMEWORK_SECRETS.authSecret, ...LOCAL_FRAMEWORK_SECRETS],
+    requiredFrameworkSecrets: [FRAMEWORK_SECRETS.sessionKey, ...LOCAL_FRAMEWORK_SECRETS],
     cookies: LOCAL_COOKIES,
-    // The real provider (DEC-0516), beside the mock: PWD over the local D1, mailing into `.mail/`.
-    credentialProvider: workerCredentialProvider,
+    // Mock login only (plan-v0.2.0 §4.3).
     mock: createAuthMock(),
     routes: (api) => registerLocalTransferRoute(api, { key: ticketKey }),
     mail: () => mail,

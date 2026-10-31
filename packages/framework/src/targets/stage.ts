@@ -20,7 +20,7 @@ import { createHttpParts, type HealthCheck } from "../http/runtime.js";
 import { createAuthParts } from "../auth/runtime.js";
 import type { AuthMock } from "../auth/mock.js";
 import type { CookieSettings } from "../auth/cookies.js";
-import type { CredentialProvider, LoginProvider } from "../auth/login-provider.js";
+import type { LoginProvider } from "../auth/login-provider.js";
 import { createKv } from "../kv/service.js";
 import { createFilesService, type FilesStore, type TicketIssuer } from "../files/service.js";
 import { createFrameworkSecrets, createSecretsService, type SecretReader } from "../secrets/service.js";
@@ -78,8 +78,6 @@ export interface StageOptions {
   readonly authClock?: { readonly now: () => number; readonly sleep: (ms: number) => Promise<void> };
   /** The stage's real login provider (the auth-app provider, built per request), or the stub in tests. */
   readonly provider?: LoginProvider | ((c: RuntimeContext) => LoginProvider);
-  /** The stage's credential provider (PWD), built per request over the request's database (password.md §2). */
-  readonly credentialProvider?: (c: RuntimeContext) => CredentialProvider;
   /** Further framework routes under `/api` (the local file-transfer route, the test-stage test-mail route). */
   readonly routes?: (api: Hono<RuntimeEnv>) => void;
   /**
@@ -128,7 +126,6 @@ export function assembleStage<C extends ConfigDeclaration, S extends string>(def
     framework: resolved.email === undefined ? {} : { email: resolved.email },
     secret: (c, name) => frameworkSecrets(c.env, c.var.log).get(name as FrameworkSecretName),
     ...(options.provider === undefined ? {} : { provider: options.provider }),
-    ...(options.credentialProvider === undefined ? {} : { credentialProvider: options.credentialProvider }),
     ...(options.mock === undefined ? {} : { mock: options.mock }),
     ...(options.cookies === undefined ? {} : { cookies: options.cookies }),
     ...(options.authClock === undefined ? {} : { now: options.authClock.now, sleep: options.authClock.sleep }),

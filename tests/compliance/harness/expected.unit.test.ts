@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isDeferred, parseWhere, readCatalogue, RELEASE_TARGETS, type CatalogueEntry } from "./catalogue.js";
-import { CLAUSE_RULES, checkRules, expectedCriteria, PASSWORD_PENDING, NO_REDIRECT_PROVIDER, PHASE_RULES, type ClauseRule, type NotRunRule } from "./expected.js";
+import { CLAUSE_RULES, checkRules, E2E_REWRITE_PENDING, expectedCriteria, PASSWORD_PENDING, NO_REDIRECT_PROVIDER, PHASE_RULES, type ClauseRule, type NotRunRule } from "./expected.js";
 
 const docs = new URL("../../../docs/", import.meta.url).pathname;
 
@@ -78,9 +78,11 @@ describe("[COMPL-AC-001] this phase's not-run rules (plan §8) against the docum
     // PWD-AC-008 and MAIL-AC-006 are retired with PWD and MAIL (v0.2.0, DEC-0696) and are expected nowhere.
     // CLI-AC-007 is retired with `admins` (v0.2.0, DEC-0698) and is expected nowhere.
     expect(cf.has("CLI-AC-007")).toBe(false);
-    for (const id of ["AUTH-AC-009", "AUTH-AC-014", "COMPL-AC-005", "E2E-006", "E2E-007"]) {
+    for (const id of ["AUTH-AC-009", "AUTH-AC-014", "COMPL-AC-005", "E2E-006"]) {
       expect(cf.get(id), id).toEqual({ id, run: true, parts: [""], notRunParts: [] });
     }
+    // Plan-v0.2.0 §6, §7.1: E2E-007's password, mail and admins steps went with those features; not run until T2 rewrites it.
+    expect(cf.get("E2E-007")?.notRun).toBe(E2E_REWRITE_PENDING);
     // CLI-AC-001's cloud part (the whole command table from the template on a cloud) has no cloud test yet.
     expect(cf.get("CLI-AC-001")?.notRun).toBe("password login provider not implemented yet (DEC-0509)");
     // Item I-G: check-login runs on prodcheck in every cloud run (the driver, prodcheck.ts), so its criteria run.
