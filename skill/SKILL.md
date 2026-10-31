@@ -17,7 +17,7 @@ Read this page, then only the references your task needs (task map below).
 2. **Never insert user text as HTML.** Build elements and set `textContent`; no `innerHTML` or other raw-HTML sinks.
 3. **Pass `npm run verify` before declaring any work done**, including its e2e-api tests, and `npm run test:e2e:ui` when a page changed. Never skip or weaken a test, and never disable, suppress or weaken a check (`eslint-disable`, `@ts-ignore`, `any`, `as` casts, editing lint configuration).
 4. **Claim an app works on a cloud only after its smoke test has passed on a deployed stage there** (`smoke --target <t> --stage test-…`). Local success says nothing about a cloud.
-5. **Never change framework version pins**: the exact versions of `@lago-morph/prototype-framework`, `hono`, `zod`, `typescript`, `vite`, `vitest` and `@playwright/test` in the app's `package.json`.
+5. **Never change framework version pins**: the exact versions of `@lago-morph/prototype-framework`, `hono`, `zod`, `typescript`, `vite`, `vitest`, `@playwright/test` and `fast-check` in the app's `package.json`.
 6. **Never work around the framework.** If you suspect a framework defect (a contract or reference that does not hold, a check that rejects code the references allow, a capability that is missing for the task), add an entry to `FRAMEWORK-ISSUE.md` at the app's root instead of patching, copying or bypassing framework code. Each entry states:
    - the task attempted;
    - the contract or reference consulted (file and section);
