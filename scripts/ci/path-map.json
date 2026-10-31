@@ -1,5 +1,5 @@
 {
-  "$comment": "CI change classification (plan-v0.2.0 §7a.2.4, TS-11/16/19). Read by scripts/ci/classify.mjs; checked by tests/ci-classify.unit.test.ts. Globs: ** any depth, * one segment, {a,b} alternatives, a leading ! excludes. Component codes and dependsOn follow docs/architecture/component-map.md §3.",
+  "$comment": "CI change classification (plan-v0.2.0 §7a.2.4, TS-11/16/19). Read by scripts/ci/classify.mjs; checked by tests/ci-classify.unit.test.ts. Globs: ** any depth, * one segment, {a,b} alternatives, a leading ! excludes. Component codes and dependsOn follow docs/architecture/component-map.md §3. A testInputs entry may name `direct` integration directories (never criteria) whose tests read its paths; CI runs them directly.",
   "docs": ["docs/**", "ai/**", "retrospective/**", "**/*.md"],
   "testInputs": [
     {
@@ -41,6 +41,11 @@
       "paths": ["docs/architecture/component-map.md"],
       "reads": "component dependencies, mirrored in this file's dependsOn",
       "unit": ["tests/ci-classify.unit.test.ts"]
+    },
+    {
+      "paths": ["tests/compliance/criteria/**", "tests/compliance/e2e/**"],
+      "reads": "every criterion and scenario test, as the runners list them: E2E-004's offline Cloudflare coverage test lists the driver's Cloudflare selection, so a tag changed or removed there must run it (DEC-0783)",
+      "direct": ["tests/compliance/coverage"]
     }
   ],
   "unitTests": ["**/*.unit.test.ts"],
@@ -71,7 +76,7 @@
     "SETUP": { "dependsOn": ["PROV", "CF", "CLI"], "paths": ["packages/framework/src/admin-app/**"], "integration": ["tests/compliance/criteria/setup"] },
     "CHECK": { "dependsOn": ["SQL", "MIG"], "paths": ["packages/framework/src/check/**"], "integration": ["packages/framework/test/integration/check", "tests/compliance/criteria/check"] },
     "CLI": { "dependsOn": ["LOCAL", "CHECK", "PROV", "MIG", "SEC", "PWD", "MAIL", "CORE", "COMPL"], "paths": ["packages/framework/src/cli/**", "packages/framework/bin/**"], "integration": ["packages/framework/test/integration/cli", "packages/framework/test/integration/build", "tests/compliance/criteria/cli"] },
-    "COMPL": { "dependsOn": ["SQL", "MIG", "KV", "FILES", "CFG", "SEC", "LOG", "AUTH", "PWD", "MAIL", "LOCAL", "CF"], "paths": ["packages/framework/src/evidence/**", "tests/compliance/tools/**"], "integration": ["tests/compliance/criteria/compl"] },
+    "COMPL": { "dependsOn": ["SQL", "MIG", "KV", "FILES", "CFG", "SEC", "LOG", "AUTH", "PWD", "MAIL", "LOCAL", "CF"], "paths": ["packages/framework/src/evidence/**", "tests/compliance/tools/**"], "integration": ["tests/compliance/criteria/compl", "tests/compliance/coverage"] },
     "SKILL": { "dependsOn": ["CORE", "CLI", "CFG", "PROV", "PWD", "SETUP"], "paths": ["skill/**", "apps/template/**", "packages/create-prototype-app/**", "packages/prototype-framework-skill/**"], "integration": ["tests/skill", "tests/compliance/criteria/skill", "packages/create-prototype-app/test"], "browser": true },
     "DEMO": { "dependsOn": ["SKILL"], "paths": ["apps/demo/**"], "integration": [] }
   },

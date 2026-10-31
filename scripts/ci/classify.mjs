@@ -50,30 +50,38 @@ export function loadMap(root = ROOT) {
 
 const componentGlobs = (c) => [...c.integration.map((d) => `${d}/**`), ...c.paths];
 
-/** The layers `files` select. `integration` maps each selected component to why it was selected. */
+/**
+ * The layers `files` select. `integration` maps each selected component to why it was selected; `direct`
+ * lists the integration directories selected because their tests read a changed file (testInputs `direct`).
+ */
 export function classify(files, map, options = {}) {
-  const r = { docs: [], testInputs: [], code: [], unit: { all: false, files: [] }, linters: [], build: false, integration: {}, e2e: { all: false, specs: [] }, chromium: false };
+  const r = { docs: [], testInputs: [], code: [], unit: { all: false, files: [] }, linters: [], build: false, integration: {}, direct: [], e2e: { all: false, specs: [] }, chromium: false };
   const linters = new Set();
   const unitFiles = new Set();
   const specs = new Set();
+  const direct = new Set();
   const why = new Map();
   const select = (code, reason) => why.set(code, new Set([...(why.get(code) ?? []), reason]));
   const changedSource = new Set();
+  const useInputs = (f, inputs) => {
+    for (const t of inputs) {
+      for (const u of t.unit ?? []) unitFiles.add(u);
+      if (t.typecheck === true) linters.add("typecheck");
+      for (const code of t.integration ?? []) select(code, `test input ${f}`);
+      for (const d of t.direct ?? []) direct.add(d);
+    }
+  };
   let everything = options.everything === true;
   for (const f of files) {
     for (const [name, globs] of Object.entries(map.linters)) if (matches(f, globs)) linters.add(name);
+    const inputs = map.testInputs.filter((t) => matches(f, t.paths));
     if (matches(f, map.docs)) {
-      const inputs = map.testInputs.filter((t) => matches(f, t.paths));
       if (inputs.length === 0) {
         r.docs.push(f);
         continue;
       }
       r.testInputs.push(f);
-      for (const t of inputs) {
-        for (const u of t.unit ?? []) unitFiles.add(u);
-        if (t.typecheck === true) linters.add("typecheck");
-        for (const code of t.integration ?? []) select(code, `test input ${f}`);
-      }
+      useInputs(f, inputs);
       continue;
     }
     r.code.push(f);
@@ -81,6 +89,9 @@ export function classify(files, map, options = {}) {
       everything = true;
       continue;
     }
+    // Code that tests read, such as the criteria and specs E2E-004's Cloudflare coverage test lists
+    // (DEC-0783), selects those tests besides its own layers. A unit test still selects nothing more.
+    if (!matches(f, map.unitTests)) useInputs(f, inputs);
     if (matches(f, map.e2e.specs)) {
       specs.add(f);
       continue;
@@ -108,9 +119,10 @@ export function classify(files, map, options = {}) {
   r.e2e.specs = r.e2e.all ? [] : [...specs].sort();
   r.linters = [...linters].sort();
   for (const code of [...why.keys()].sort()) r.integration[code] = [...(why.get(code) ?? [])].sort();
+  r.direct = [...direct].sort();
   const selected = Object.keys(r.integration);
   r.chromium = r.e2e.all || r.e2e.specs.some((s) => map.e2e.ui.includes(s)) || selected.some((code) => map.components[code]?.browser === true);
-  r.build = r.linters.includes("typecheck") || r.unit.all || r.unit.files.length > 0 || selected.length > 0 || r.e2e.all || r.e2e.specs.length > 0;
+  r.build = r.linters.includes("typecheck") || r.unit.all || r.unit.files.length > 0 || selected.length > 0 || r.direct.length > 0 || r.e2e.all || r.e2e.specs.length > 0;
   return r;
 }
 
@@ -122,6 +134,7 @@ export function report(r) {
   lines.push(`  linters: ${list(r.linters)}`, `  build: ${r.build ? "yes" : "no"}`, `  unit: ${r.unit.all ? "all" : list(r.unit.files)}`);
   const comps = Object.entries(r.integration);
   lines.push(`  integration: ${comps.length === 0 ? "none" : ""}`, ...comps.map(([code, reasons]) => `    ${code}: ${reasons.join("; ")}`));
+  lines.push(`  integration directories whose tests read a changed file: ${list(r.direct ?? [])}`);
   lines.push(`  e2e: ${r.e2e.all ? "all (e2e-api, e2e-ui)" : list(r.e2e.specs)}`, `  chromium: ${r.chromium ? "yes" : "no"}`);
   return lines.join("\n");
 }
@@ -152,8 +165,8 @@ export function tagsIn(root, paths) {
  * tagged under the selected components' integration directories plus every ID tagged in the selected e2e specs.
  * `direct` are the selected non-criteria integration directories. CI runs their tests with Vitest directly, except the
  * tests tagged with one of `ids` (`directFilter`), which the harness runs; so a test tagged only with an ID that is not
- * selected (for example an `E2E-nnn` tag on a framework suite) still runs once. Criteria always go through the
- * harness (P0). The harness selects by ID in every layer, so it also runs `alsoE2e` (unselected specs that carry a
+ * selected (for example an `E2E-nnn` tag on a framework suite) still runs once. `direct` also holds the classification's
+ * own `direct` directories (test inputs, DEC-0783). Criteria always go through the harness (P0). The harness selects by ID in every layer, so it also runs `alsoE2e` (unselected specs that carry a
  * selected integration ID) and `alsoIntegration` (integration test files that carry a selected e2e ID); DEC-0639.
  */
 export function ciPlan(r, map, root = ROOT) {
@@ -172,7 +185,7 @@ export function ciPlan(r, map, root = ROOT) {
     unit: r.unit.all ? "all" : r.unit.files.length > 0 ? "files" : "none",
     unitFiles: r.unit.files,
     ids,
-    direct: [...new Set(dirs.filter((d) => !d.startsWith(CRITERIA)))].sort(),
+    direct: [...new Set([...dirs, ...(r.direct ?? [])].filter((d) => !d.startsWith(CRITERIA)))].sort(),
     alsoE2e,
     alsoIntegration,
     chromium: r.chromium || alsoE2e.some((s) => map.e2e.ui.includes(s)),

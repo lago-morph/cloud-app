@@ -12,6 +12,7 @@ interface Result {
   linters: string[];
   build: boolean;
   integration: Record<string, string[]>;
+  direct: string[];
   e2e: { all: boolean; specs: string[] };
   chromium: boolean;
 }
@@ -123,26 +124,93 @@ describe("the CI plan (what the staged ci.yml runs)", () => {
   interface Plan { unit: string; unitFiles: string[]; ids: string[]; direct: string[]; alsoE2e: string[]; alsoIntegration: string[]; chromium: boolean }
   const plan = (...files: string[]): Plan => ciPlan(run(...files), map, REPO) as Plan;
 
-  it("a criteria doc runs COMPL's tagged criteria through the harness and the catalogue unit tests; no e2e ID", () => {
+  // COMPL's tests/compliance/coverage (E2E-004's Cloudflare coverage test, DEC-0782/0783) runs directly
+  // whenever COMPL is selected or a criterion or spec changed.
+  it("a criteria doc runs COMPL's tagged criteria through the harness, the catalogue unit tests and the Cloudflare coverage test; no e2e ID", () => {
     const p = plan("docs/acceptance/e2e-scenarios.md");
     expect(p.unit).toBe("files");
     expect(p.unitFiles).toContain("tests/compliance/harness/catalogue.unit.test.ts");
     expect(p.ids).toContain("COMPL-AC-001");
     expect(p.ids.filter((id) => id.startsWith("E2E-"))).toEqual([]);
-    expect(p.direct).toEqual([]);
+    expect(p.direct).toEqual(["tests/compliance/coverage"]);
   });
 
   it("framework source: criteria IDs of the component and its dependents, e2e IDs of every spec, untagged framework suites run directly", () => {
     const p = plan("packages/framework/src/kv/store.ts");
     expect(p.unit).toBe("all");
     expect(p.ids).toEqual(expect.arrayContaining(["KV-AC-001", "E2E-001", "E2E-016", "DEMO-AC-001"]));
-    expect(p.direct).toEqual(["packages/framework/test/integration/kv", "packages/framework/test/integration/local"]);
+    expect(p.direct).toEqual(["packages/framework/test/integration/kv", "packages/framework/test/integration/local", "tests/compliance/coverage"]);
     expect(p.chromium).toBe(true);
   });
 
-  it("an e2e spec change runs only that spec's IDs", () => {
+  it("an e2e spec change runs only that spec's IDs, and the Cloudflare coverage test directly", () => {
     const p = plan("tests/compliance/e2e/E2E-002.spec.ts");
-    expect(p).toMatchObject({ unit: "none", ids: ["DEMO-AC-010", "E2E-002"], direct: [], alsoE2e: [], chromium: false });
+    expect(p).toMatchObject({ unit: "none", ids: ["DEMO-AC-010", "E2E-002"], direct: ["tests/compliance/coverage"], alsoE2e: [], chromium: false });
+  });
+
+  describe("E2E-004's Cloudflare coverage test (tests/compliance/coverage, root cause 2026-10-31-selection-e2e004-under-load)", () => {
+    const COVERAGE = "tests/compliance/coverage";
+    const TITLE = "[E2E-004] the Cloudflare selection covers every criterion expected there > every criterion expected on Cloudflare has a tagged test in the cloud selection (AUTH-AC-005's contract part included)";
+    /** Whether CI runs the coverage test for `files`: in the direct run, and not filtered out of it; or by the harness. */
+    // With E2E-004 among the harness's IDs, the direct filter leaves the test out of the direct run and the harness
+    // runs it instead: its local Vitest selection is the whole integration config (no path filter, harness/selection.ts),
+    // which collects tests/compliance/coverage.
+    const runs = (...files: string[]): boolean => {
+      const p = plan(...files);
+      if (p.ids.includes("E2E-004")) return p.alsoIntegration.includes(`${COVERAGE}/cloudflare-selection.test.ts`) || p.direct.includes(COVERAGE);
+      return p.direct.includes(COVERAGE) && new RegExp(directFilter(p.ids) as string).test(TITLE);
+    };
+
+    it("a criteria-only change runs it directly, without selecting COMPL's criteria", () => {
+      const r = run("tests/compliance/criteria/kv/kv.pglite.test.ts");
+      expect(components(r)).toEqual(["KV"]);
+      expect(r.direct).toEqual([COVERAGE]);
+      const p = plan("tests/compliance/criteria/kv/kv.pglite.test.ts");
+      expect(p.direct).toEqual(["packages/framework/test/integration/kv", COVERAGE]);
+      expect(p.ids.some((id) => id.startsWith("COMPL-"))).toBe(false);
+      expect(runs("tests/compliance/criteria/kv/kv.pglite.test.ts")).toBe(true);
+    });
+
+    it("every change that can change the Cloudflare selection or its expectations runs it", () => {
+      for (const f of [
+        "tests/compliance/criteria/auth/contract.test.ts",
+        "tests/compliance/criteria/files/transfers.spec.ts",
+        "tests/compliance/criteria/_fakes/cloud-fakes.ts",
+        "tests/compliance/criteria/sql/suite.ts",
+        "tests/compliance/e2e/E2E-002.spec.ts",
+        "tests/compliance/e2e/E2E-004.spec.ts",
+        "tests/compliance/e2e/support/process.ts",
+        "docs/components/kv.md",
+        "docs/acceptance/e2e-scenarios.md",
+        "docs/demo/demo-spec.md",
+        "tests/compliance/harness/selection.ts",
+        "tests/compliance/tools/listing.ts",
+        "tests/compliance/tools/run-bounded.mjs",
+        "tests/compliance/coverage/cloudflare-selection.test.ts",
+        "tests/support/tags.ts",
+        "vitest.integration.config.ts",
+        "playwright.config.ts",
+        "packages/framework/src/targets/cloudflare/stage.ts",
+      ]) {
+        expect(existsSync(join(REPO, f)), f).toBe(true);
+        expect(runs(f), f).toBe(true);
+      }
+    });
+
+    it("a unit test under the criteria (not in the cloud selection), or a doc no test reads, does not run it", () => {
+      expect(run("tests/compliance/criteria/compl/support.unit.test.ts").direct).toEqual([]);
+      expect(runs("tests/compliance/criteria/compl/support.unit.test.ts")).toBe(false);
+      expect(runs("docs/README.md")).toBe(false);
+    });
+
+    it("the path map names it once, under COMPL, and its test-input directories are never criteria", () => {
+      const all = map as unknown as { components: Record<string, { integration: string[] }>; testInputs: { direct?: string[] }[] };
+      expect(Object.entries(all.components).filter(([, c]) => c.integration.includes(COVERAGE)).map(([code]) => code)).toEqual(["COMPL"]);
+      for (const d of all.testInputs.flatMap((t) => t.direct ?? [])) {
+        expect(existsSync(join(REPO, d)), d).toBe(true);
+        expect(d.startsWith("tests/compliance/criteria"), d).toBe(false);
+      }
+    });
   });
 
   it("an integration ID also tagged in an e2e spec names that spec, which the harness runs too", () => {

@@ -22,16 +22,16 @@ import { expectedCriteria } from "../harness/expected.js";
 import { tag, target } from "../harness/index.js";
 import { expect, test } from "../harness/playwright.js";
 import { uncovered } from "../harness/selection.js";
-import { listDriverTests } from "../tools/listing.js";
+import { driverListingLimitMs, listDriverTests } from "../tools/listing.js";
 import { REPO_ROOT } from "./support/process.js";
 
-// The coverage part lists every test of the driver's selection through the runners (collect
-// only, no test body runs): Vitest's collection of the integration and unit configs takes a while.
-const LISTING_TIMEOUT_MS = 10 * 60_000;
-
 test(tag("E2E-004", "coverage part: every criterion and scenario applicable on this target has a tagged test in the suite this run executes"), () => {
-  test.setTimeout(LISTING_TIMEOUT_MS);
   const t = target();
+  // The coverage part lists every test of the driver's selection through the runners (collect
+  // only, no test body runs). The listing runs them synchronously, so this limit cannot interrupt it:
+  // it is the listing's ceiling, derived from each runner's own limit (listing.ts), which is what
+  // stops a hung runner (root cause 2026-10-31-selection-e2e004-under-load, binding fix 4).
+  test.setTimeout(driverListingLimitMs(t.target));
   const catalogue = readCatalogue(join(REPO_ROOT, "docs"));
   const expected = expectedCriteria(catalogue, t.target, "automated").filter((e) => e.run);
   expect(expected.length, "criteria expected on this target").toBeGreaterThan(50);
