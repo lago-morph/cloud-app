@@ -21,7 +21,7 @@ Origin: provenance-unclear · Derives from: SYS-REQ-012, SYS-REQ-023 · Decision
 4. **Migrate.** If migrations are pending, run MIG-REQ-006 steps 1–5.
 5. **Code.** Deploy the code and bindings, wired to the resolved configuration, the secret locations, and the current database.
 6. **Start.** Explicitly restart the app (`startApp`, Per-target operations), without relying on the provisioning tool to undo a stop. This step runs on every deploy, whether or not migrations ran.
-7. **Health check.** Call `GET /api/__framework/health` on the stage. On a cloud target, also send one CORS preflight to the stage's storage from the stage's public origin. The health route also checks `frameworkAuthSecret` (SEC). On failure, print the error code and requestId.
+7. **Health check.** Call `GET /api/__framework/health` on the stage. On a cloud target, also send one CORS preflight to the stage's storage from the stage's public origin. The health route makes one trivial SQL read and checks that every declared app secret and every required framework secret has a value: on a cloud target the session key `frameworkSessionKey` (SEC). Since v0.2.0 it no longer checks `frameworkAuthSecret`, which was retired with the password provider (DEC-0698, DEC-0702). On failure, print the error code and requestId.
 
 Amendment (Origin: ai-proposed · Decision: DEC-0550, DEC-0551, DEC-0553): `deploy` needs no permission to create or read API tokens, and no write permission on email. On Cloudflare the preflight no longer checks the permission to create R2 API tokens; the stages' R2 signing credential is an account resource that `setup-account` creates. A production stage's email prerequisites are read with "Zone Read" and "Email Sending Read", and a refusal names the permission.
 
