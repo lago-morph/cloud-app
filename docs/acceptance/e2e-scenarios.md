@@ -241,15 +241,17 @@ One UI test signs in through the sign-in pages in a browser (E2E-005's auth-app 
 Pass: each step and each expected error behaves as stated, and no app response carries a provider token or the member's email address.
 
 #### E2E-019 — Upgrade from 0.1.x
-Verifies: SYS-REQ-012, SYS-REQ-022
+Verifies: SYS-REQ-012
 Where: Local
 Origin: ai-proposed
 
 Make an app the way a 0.1.x user did: with the published 0.1.1 `npm create` starter and framework. Use it under `dev` and store some of the app's own data. Then upgrade it with its own `npm run upgrade -- 0.2.0`, from a local 0.2.0 package tarball (served for the framework's scope by a local registry until 0.2.0 is published), and run `dev` again (plan-v0.2.0 §8).
 
+Expected error: an upgrade to a version the registry does not have stops before changing anything.
+
 Pass:
 - the app's own data survives the upgrade and the next `dev`;
-- the upgrade prints the pointer to re-run Cloudflare setup;
+- the upgrade prints the pointer to re-run Cloudflare setup (0.1.x's own upgrade command prints it, naming `cloudflare-setup` and the bootstrap token);
 - the next `dev` drops the Better Auth, sign-in rate-limit and test-mail tables through the framework's migrations.
 
 ## Retired scenarios

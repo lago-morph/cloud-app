@@ -6,8 +6,9 @@
  * with its template and skill bundled), given the packed framework with `--framework file:<tarball>`.
  *
  * E2E-001: "On a machine with no cloud credentials and networking to cloud providers blocked:
- * 1. Scaffold a new app from the template. It installs the framework from an npm pack tarball
- * at an exact version, and imports every public subpath. 2. Run dev; use each capability
+ * 1. Scaffold a new app with the npm create starter (@lago-morph/create-prototype-app), packed as
+ * it is published, with the template and the skill bundled. Give it the framework as an npm pack
+ * tarball at an exact version. The app imports every public subpath. 2. Run dev; use each capability
  * through the template's pages. 3. Run verify. Pass: the app works locally and verify passes."
  * - Scaffolding needs the npm registry for the template's other pinned dependencies (C-05), so
  *   it runs with the cloud credentials removed from the environment but with the proxy; every
@@ -48,6 +49,8 @@ function noCredentials(home: string | undefined): Record<string, string> {
 }
 
 let root: string;
+/** The packed framework the starter was given. */
+let framework: string;
 let appDir: string;
 let offlineHome: string;
 let verifiedClean = false;
@@ -69,7 +72,7 @@ test.beforeAll(async () => {
   appDir = join(root, "app");
   offlineHome = join(root, "home");
   mkdirSync(offlineHome);
-  const framework = await packFramework(root);
+  framework = await packFramework(root);
   const starter = await packStarter(root);
   // The starter's own bin, as `npm create @lago-morph/prototype-app` runs it: copy, name, pin, skill, npm install, local setup, git.
   const scaffold = await run(process.execPath, [join(starter, "bin", "create-prototype-app.js"), appDir, "--framework", `file:${framework}`], { cwd: root, env: noCredentials(undefined), timeoutMs: 15 * 60_000 });
@@ -89,8 +92,8 @@ test(tag(["E2E-001", "LOCAL-AC-001"], "a scaffolded app installs the framework f
   expect(pinned, "the template pins an exact version").toMatch(/^\d+\.\d+\.\d+$/);
   const appPkg = JSON.parse(readFileSync(join(appDir, "package.json"), "utf8")) as { dependencies: Record<string, string> };
   const spec = appPkg.dependencies[PACKAGE] ?? "";
-  expect(spec).toMatch(/^file:.+\.tgz$/);
-  expect(existsSync(spec.slice("file:".length)), "the packed tarball").toBe(true);
+  expect(spec, "the starter pins exactly the packed tarball it was given").toBe(`file:${framework}`);
+  expect(existsSync(framework), "the packed tarball").toBe(true);
   const installed = JSON.parse(readFileSync(join(appDir, "node_modules", ...PACKAGE.split("/"), "package.json"), "utf8")) as { version: string; exports: Record<string, unknown> };
   expect(installed.version).toBe(pinned);
 

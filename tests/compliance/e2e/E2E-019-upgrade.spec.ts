@@ -8,10 +8,13 @@
  * `npm install` behave as they will after publishing (DEC-0767). Every other package comes from the
  * public registry, as for any install, so the run needs the npm registry (not a cloud).
  *
- * Edge cases listed before writing (resources/edge-cases.md): the app's own data across the
- * upgrade (a note); the framework's dropped tables (all five `__framework_auth_*` and
- * `__framework_test_mail`); a second `dev` after the first (nothing pending). Not applicable: text,
- * order and access (the upgrade takes no names or lists; one user's data).
+ * Expected error: an upgrade to a version the registry does not have stops before changing
+ * anything. Edge cases listed before writing (resources/edge-cases.md): the app's own data across
+ * the upgrade (a note); every table the framework drops (all five `__framework_auth_*` and
+ * `__framework_test_mail`), each present before. Not applicable: text, order and access (the upgrade
+ * takes no names or lists; one user's data). The pointer printed is 0.1.1's upgrade command's own
+ * wording (`npm run cloudflare-setup`, "needs the bootstrap token once"): the old CLI runs the
+ * upgrade, as for every 0.1.x user (DEC-0767).
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -99,11 +102,18 @@ test(tag("E2E-019", "an app made with 0.1.1 upgrades to 0.2.0 from a local tarba
     await first.stop();
   }
   const before = localTables(appDir);
-  for (const t of ["__framework_auth_user", "__framework_test_mail", "notes"]) expect(before.has(t), `before the upgrade: ${t}`).toBe(true);
+  for (const t of [...DROPPED, "notes"]) expect(before.has(t), `before the upgrade: ${t}`).toBe(true);
 
   // 3. `npm run upgrade -- 0.2.0`, with 0.2.0 served by the local registry for the scope.
   registry = await startLocalRegistry([await packFramework(root, NEW)]);
   writeFileSync(join(appDir, ".npmrc"), `@lago-morph:registry=${registry.url}\n`);
+  // Expected error: a version the registry does not have. The upgrade stops before changing anything.
+  const pkgBefore = readFileSync(join(appDir, "package.json"), "utf8");
+  const missing = await run("npm", ["run", "upgrade", "--", "0.2.99"], { cwd: appDir, env, timeoutMs: 5 * 60_000 });
+  expect(missing.status, tail(missing.output)).not.toBe(0);
+  expect(missing.output).toMatch(/0\.2\.99/);
+  expect(readFileSync(join(appDir, "package.json"), "utf8"), "package.json unchanged").toBe(pkgBefore);
+  expect(installedVersion()).toBe(OLD);
   const upgraded = await run("npm", ["run", "upgrade", "--", NEW], { cwd: appDir, env, timeoutMs: 20 * 60_000 });
   const pin = (JSON.parse(readFileSync(join(appDir, "package.json"), "utf8")) as { dependencies: Record<string, string> }).dependencies["@lago-morph/prototype-framework"];
   expect(pin, tail(upgraded.output)).toBe(NEW);

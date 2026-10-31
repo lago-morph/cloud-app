@@ -2,7 +2,10 @@
  * The framework and the `npm create` starter packed as `npm publish` would pack them, into a temp
  * folder, without writing into the repository (E2E-001, E2E-019; DEC-0767).
  * - The framework: `npm pack --ignore-scripts` of `packages/framework` (which needs `dist/` built:
- *   `npm run build -w packages/framework`), plus the skill its `prepack` would bundle.
+ *   `npm run build -w packages/framework`), plus the skill its `prepack` would bundle. Two `prepack`
+ *   steps do not run here: the build (a stale `dist/` is not detected, so build first, as CI and
+ *   the compliance driver do) and its check that `skill/.claude-plugin/plugin.json` has the
+ *   package's version.
  * - The starter: a copy of `packages/create-prototype-app` with its template and skill bundled by its
  *   own `scripts/bundle.mjs <outDir>` (what its `prepack` does in place), then packed and unpacked.
  */
