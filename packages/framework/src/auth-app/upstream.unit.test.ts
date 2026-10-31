@@ -70,7 +70,7 @@ describe("exchangeCode", () => {
     const tokens = await exchangeCode(up.fetch, d, { ...client, code: "c1", verifier: "v1", redirectUri: CALLBACK });
     expect(tokens.accessToken).toBe(ACCESS_TOKEN);
     expect(tokens.refreshToken).toBe(REFRESH_TOKEN);
-    expect(tokens.idToken.split(".")).toHaveLength(3);
+    expect(tokens.idToken!.split(".")).toHaveLength(3);
     const sent = up.requests.find((r) => r.url === `${FAKE_ISSUER}/oauth2/token`)!;
     expect(Object.fromEntries(sent.body)).toEqual({ grant_type: "authorization_code", code: "c1", code_verifier: "v1", redirect_uri: CALLBACK, client_id: FAKE_CLIENT_ID, client_secret: "secret-1" });
   });
@@ -145,11 +145,13 @@ describe("upstream failures (no redirects followed, fixed reasons, no secrets)",
     expect(await reason(loadDiscovery(fakeUpstream({ key, discovery: { code_challenge_methods_supported: undefined } }).fetch, FAKE_DISCOVERY))).toBe("discovery: no S256");
   });
 
-  it("refuses a token response without an id_token, and takes a missing refresh_token as none", async () => {
+  it("returns whatever tokens a 200 holds, so the caller can revoke them even without an id_token", async () => {
     const d = await loadDiscovery(fakeUpstream({ key }).fetch, FAKE_DISCOVERY);
     const tokenOnly = (body: unknown) => (async () => Response.json(body)) as unknown as typeof fetch;
-    expect(await reason(exchangeCode(tokenOnly({ access_token: "a" }), d, { ...client, code: "c", verifier: "v", redirectUri: CALLBACK }))).toBe("token exchange: no access or id token");
-    await expect(exchangeCode(tokenOnly({ access_token: "a", id_token: "i" }), d, { ...client, code: "c", verifier: "v", redirectUri: CALLBACK })).resolves.toEqual({ accessToken: "a", refreshToken: null, idToken: "i" });
+    const params = { ...client, code: "c", verifier: "v", redirectUri: CALLBACK };
+    await expect(exchangeCode(tokenOnly({ access_token: "a", refresh_token: "r" }), d, params)).resolves.toEqual({ accessToken: "a", refreshToken: "r", idToken: null });
+    await expect(exchangeCode(tokenOnly({ access_token: "a", id_token: "i" }), d, params)).resolves.toEqual({ accessToken: "a", refreshToken: null, idToken: "i" });
+    await expect(exchangeCode(tokenOnly({ id_token: "i", access_token: 5 }), d, params)).resolves.toEqual({ accessToken: null, refreshToken: null, idToken: "i" });
   });
 
   it("refuses a JWKS without keys, a refused /user, and /memberships without a result list or success", async () => {
