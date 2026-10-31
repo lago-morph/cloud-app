@@ -9,7 +9,7 @@ Source: `ai/implementation/plan-v0.2.0-testing-auth.md` §7a.2.3 (TS-15); `docs/
 Agents keep the scenarios current with the framework's intent: whenever a flow is added or changes, its scenario changes in the same work (`SKILL.md`, rule 4). Agents may add, change and retire scenarios of any origin, with no owner approval. Each change needs:
 - a decision-log entry (a draft in the item's decision file);
 - a review by an independent subagent, which wrote neither the scenario text nor its tests. It checks that the text matches the framework's current intent and requirements, and that the tests carry the scenario out;
-- for a change or a retirement of a scenario whose tests have been green once, a test-change review (`resources/test-change-review.md`).
+- a test-change review for every once-green test that the change or retirement changes, removes, skips or re-tags (`resources/test-change-review.md`).
 
 ## A new scenario
 

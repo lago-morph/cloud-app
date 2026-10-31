@@ -54,7 +54,7 @@ The reviewer is a subagent that wrote neither the test change nor the code under
 - **Content:**
   - the groups, each with its reason code, its citation and its files;
   - the verdict for each group, with its reasons.
-- **Format:** `ai/implementation/test-reviews/README.md` gives the exact headings, which the commit hook's test-review linter checks.
+- **Format:** `ai/implementation/test-reviews/README.md` (added by item S2) gives the exact headings, which the commit hook's test-review linter checks. Until it exists, use the content list above with one heading per group.
 
 The evaluator checks that every change to a once-green test in its scope is covered by an accepted group.
 
