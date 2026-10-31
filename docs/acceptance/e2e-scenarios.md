@@ -195,12 +195,12 @@ An automated scan of every app-facing contract (`docs/contracts/ts/` excluding `
 Pass: the scan finds nothing, and the review is recorded with its findings resolved.
 
 #### E2E-017 — Setup: the bootstrap, then the admin app
-Verifies: SYS-REQ-015, SYS-REQ-018, SYS-REQ-023
+Verifies: SYS-REQ-015, SYS-REQ-018
 Where: Local
 Origin: ai-proposed
 
 From a new project and an account with nothing set up, follow the setup flow (plan-v0.2.0 §5), locally, against the fake Cloudflare API, which accepts mock-oauth2-server's access tokens and enforces each grant's scopes:
-1. Run `cloudflare-setup` with a bootstrap token. It makes both OAuth clients, deploys the admin app, deletes the token and comments out its line.
+1. Run `cloudflare-setup` with a bootstrap token. It makes both OAuth clients, deploys the admin app, deletes the token, and comments out its line in `.env.cloudflare` without its value.
 2. Run the admin app that the bootstrap uploaded, with its bindings, under local workerd. An administrator signs in through mock-oauth2-server.
 3. On the account setup page, set the account up: the auth app with its D1 database, the shared resources, the signing credential in Secrets Store and the setup record.
 4. On the everyday token page, make the everyday token. Save it, as the person would, and run `cloudflare-setup` again with it.
@@ -208,7 +208,8 @@ From a new project and an account with nothing set up, follow the setup flow (pl
 Expected errors and edge cases:
 - a bootstrap token with no expiry, or one expiring 1 day and 1 second away, is deleted at once and used for nothing else; one expiring exactly 1 day away is accepted;
 - a bootstrap token missing a permission is named, writes nothing and is kept;
-- a bootstrap interrupted while deploying the admin app, and an account setup interrupted before its record, each complete when run again, making nothing twice;
+- a bootstrap interrupted while deploying the admin app, and an account setup interrupted before its record, each complete when run again, making nothing twice (one of each client, database and signing token);
+- a grant is only for the OAuth client the bootstrap registered, and only for the scopes that client allows;
 - an anonymous visitor, a member with no administrator role and someone outside the account are refused by the admin app;
 - a page whose optional scope was unticked names it and writes nothing.
 

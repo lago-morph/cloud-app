@@ -6,11 +6,15 @@
  *   The framework's Cloudflare API client has a fixed base URL, so the command runs in-process with
  *   that API injected, as its own unit tests do (DEC-0761).
  * - **By OAuth grant**, over HTTP: `startSetupEdge` serves the issuer's discovery document with its
- *   token and revocation endpoints pointed at itself (a pass-through to mock-oauth2-server that
- *   records each grant's scopes, minus those the person unticks), and the Cloudflare API, which
+ *   token and revocation endpoints pointed at itself (a pass-through to mock-oauth2-server). As
+ *   Cloudflare does, a grant is only for a client the account registered (the bootstrap's OAuth
+ *   client: its ID, secret and redirect URI), and grants the asked scopes that client allows
+ *   (required plus optional, and `openid`), minus those the person unticks. The Cloudflare API
  *   accepts only a live access token mock-oauth2-server issued and **enforces its granted scopes**
  *   with the admin app's scope table (`scopeFor`, `covers`, `GROUP_SCOPE`), then answers from the
- *   same fake account. `/user` and `/memberships` come from `members`, keyed by the issuer's `sub`.
+ *   same fake account. `/user` and `/memberships` come from `members`, keyed by the issuer's `sub`;
+ *   they need only a live token (their required scopes are every grant's, so not checked).
+ *   Every write the edge serves itself (D1 databases, the everyday token) is recorded in `writes`.
  *   An everyday token the grant creates becomes a real token of the world, so `cloudflare-setup` can
  *   then use it.
  */
@@ -30,6 +34,10 @@ export interface SetupEdge {
   readonly members: Map<string, { roles: string[] }>;
   /** Optional scopes the person unticks at the consent screen, for the next grants. */
   readonly untick: Set<string>;
+  /** The account's D1 databases (the auth app's registry among them). */
+  readonly databases: readonly { uuid: string; name: string }[];
+  /** Writes the edge answered itself (`<METHOD> <path>`); the rest are in the fake account's `requests`. */
+  readonly writes: readonly string[];
   /** Every access token issued: its granted scopes and whether it was revoked. */
   readonly grants: { access: string; refresh: string; scope: string[]; revoked: boolean }[];
   /** Records the scopes an authorization request asked for; the next token answer grants them. */
@@ -54,7 +62,8 @@ export async function startSetupEdge(world: SetupWorld, issuerBase: string): Pro
   const members: SetupEdge["members"] = new Map();
   const untick = new Set<string>();
   const grants: SetupEdge["grants"] = [];
-  let asked: string[] = [];
+  let asked: { scopes: string[]; clientId: string; redirectUri: string } = { scopes: [], clientId: "", redirectUri: "" };
+  const writes: string[] = [];
   let self = "";
   let nextToken = 1;
   const databases: { uuid: string; name: string }[] = [];
@@ -87,6 +96,7 @@ export async function startSetupEdge(world: SetupWorld, issuerBase: string): Pro
       if (groups.some((g) => !grant.scope.includes(GROUP_SCOPE[g.id ?? ""] ?? GROUP_SCOPE[g.name ?? ""] ?? "-"))) {
         return { status: 400, body: apiErr(1001, "The OAuth session does not include the scopes required for the requested permission groups") };
       }
+      writes.push(`POST ${p} ${String(b.name)}`);
       if (b.name === TOKEN_NAMES.everyday) {
         // The everyday token the grant makes is a real token of the account from now on.
         const id = `everyday${String(nextToken++).padStart(24, "0")}`;
@@ -103,6 +113,7 @@ export async function startSetupEdge(world: SetupWorld, issuerBase: string): Pro
     }
     if (p === `/accounts/${ACCOUNT}/d1/database` && (method === "GET" || method === "POST")) {
       // The account's D1 databases by name (the fake account's own D1 stands in for stage databases only).
+      if (method === "POST") writes.push(`POST ${p}`);
       if (method === "POST") databases.push({ uuid: crypto.randomUUID(), name: (body as { name: string }).name });
       const result = method === "POST" ? databases.at(-1) : databases;
       return { status: 200, body: { success: true, errors: [], messages: [], result, result_info: { page: 1, per_page: 100, count: databases.length, total_count: databases.length } } };
@@ -119,10 +130,19 @@ export async function startSetupEdge(world: SetupWorld, issuerBase: string): Pro
         return send(res, 200, { ...doc, token_endpoint: `${self}/pass/token`, revocation_endpoint: `${self}/pass/revoke` });
       }
       if (req.method === "POST" && url.pathname === "/pass/token") {
-        const upstream = await fetch(`${issuer}/token`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: await rawBody(req) });
+        const raw = await rawBody(req);
+        const form = new URLSearchParams(Buffer.from(raw).toString("utf8"));
+        // Only a client the account registered, with its secret, for its own redirect URI and the one the authorization named.
+        const client = world.cloud().oauthClients.get(form.get("client_id") ?? "");
+        const redirects = (client?.body.redirect_uris as string[] | undefined) ?? [];
+        if (client === undefined || client.secret !== form.get("client_secret") || form.get("client_id") !== asked.clientId || !redirects.includes(form.get("redirect_uri") ?? "") || !redirects.includes(asked.redirectUri)) {
+          return send(res, 401, { error: "invalid_client" });
+        }
+        const allowed = new Set(["openid", ...((client.body.scopes as string[] | undefined) ?? []), ...((client.body.optional_scopes as string[] | undefined) ?? [])]);
+        const upstream = await fetch(`${issuer}/token`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: raw });
         const answer = (await upstream.json()) as Record<string, unknown>;
         if (upstream.ok && typeof answer.access_token === "string") {
-          const scope = asked.filter((s) => !untick.has(s));
+          const scope = asked.scopes.filter((s) => allowed.has(s) && !untick.has(s));
           grants.push({ access: answer.access_token, refresh: String(answer.refresh_token ?? ""), scope, revoked: false });
           answer.scope = scope.join(" ");
         }
@@ -150,9 +170,12 @@ export async function startSetupEdge(world: SetupWorld, issuerBase: string): Pro
     apiBase: `${self}/client/v4`,
     members,
     untick,
+    databases,
+    writes,
     grants,
     noteAuthorize: (authorizeUrl) => {
-      asked = (new URL(authorizeUrl).searchParams.get("scope") ?? "").split(" ").filter((s) => s !== "");
+      const q = new URL(authorizeUrl).searchParams;
+      asked = { scopes: (q.get("scope") ?? "").split(" ").filter((s) => s !== ""), clientId: q.get("client_id") ?? "", redirectUri: q.get("redirect_uri") ?? "" };
     },
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
