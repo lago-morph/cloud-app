@@ -101,6 +101,17 @@ describe("classification", () => {
     expect(components(r)).toEqual(Object.keys(map.components).sort());
   });
 
+  it("the skill, the template and the reference app select SKILL, whose tests compare the examples with them", () => {
+    for (const f of ["skill/reference/kv.md", "skill/examples/notes.md", "apps/template/src/server/app.ts", "apps/reference/src/server/app.ts", "QUICKSTART.md", "packages/framework/README.md"]) {
+      expect(components(run(f)), f).toContain("SKILL");
+    }
+    expect(run("packages/framework/README.md").linters).toContain("pack");
+  });
+
+  it("shared test support also runs the e2e projects (every spec imports it)", () => {
+    expect(run("tests/support/tags.ts").e2e.all).toBe(true);
+  });
+
   it("planned v0.2.0 paths are pre-declared", () => {
     expect(components(run("packages/framework/src/auth-app/worker.ts"))).toContain("AUTH");
     expect(components(run("packages/framework/src/admin-app/pages.ts"))).toContain("SETUP");

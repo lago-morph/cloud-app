@@ -27,6 +27,11 @@
       "unit": ["tests/permission-tables.unit.test.ts"]
     },
     {
+      "paths": ["QUICKSTART.md", "packages/*/README.md"],
+      "reads": "owner-facing setup text that tests/skill/cloudflare-setup.test.ts checks (the package READMEs are also packed)",
+      "integration": ["SKILL"]
+    },
+    {
       "paths": ["skill/**", "apps/template/**/*.md"],
       "reads": "skill text and examples: tests/skill and the starter's copy of the skill and template",
       "unit": ["packages/create-prototype-app/test/create.unit.test.ts"],
@@ -80,7 +85,7 @@
       "packages/framework/src/**", "packages/framework/bin/**", "packages/framework/migrations/**", "packages/framework/package.json",
       "apps/template/**", "apps/reference/**", "apps/demo/**",
       "packages/create-prototype-app/bin/**", "packages/create-prototype-app/lib/**", "packages/create-prototype-app/scripts/**", "packages/create-prototype-app/package.json",
-      "skill/scripts/**", "package-lock.json", "playwright.config.ts", "tests/compliance/harness/playwright.ts", "tests/compliance/e2e/support/**", "tests/compliance/e2e/*.txt",
+      "skill/scripts/**", "package-lock.json", "playwright.config.ts", "tests/compliance/harness/playwright.ts", "tests/compliance/e2e/support/**", "tests/support/**", "tests/compliance/e2e/*.txt",
       "!**/*.test.ts", "!apps/*/tests/**"
     ]
   },

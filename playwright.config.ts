@@ -9,6 +9,8 @@ import { defineConfig } from "@playwright/test";
 //   scripts/ci/path-map.json, so CI installs Chromium only when an e2e-ui spec is selected;
 //   tests/ci-classify.unit.test.ts fails when a spec that uses a browser is missing from it.
 // Each spec belongs to exactly one project. Run them through `npm run compliance` (they need its environment).
+// This file therefore reads the path map: a malformed scripts/ci/path-map.json fails every Playwright run
+// (the classifier unit tests parse it first).
 const E2E_UI: string[] = (JSON.parse(readFileSync(new URL("./scripts/ci/path-map.json", import.meta.url), "utf8")) as { e2e: { ui: string[] } }).e2e.ui.map((p) => p.replace(/^tests\/compliance\/e2e\//, ""));
 
 export default defineConfig({
