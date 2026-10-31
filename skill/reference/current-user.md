@@ -14,11 +14,11 @@ Store `c.var.user.id` in your rows to record ownership (an `ownerId: text()` col
 ## Levels
 
 - **Only members of the owner's Cloudflare account can sign in.** Level `user` means *any member of that account*, not a person this app trusts; an app that needs finer trust keeps its own records (for example a table of allowed user IDs).
-- **Admins** are members with an administrator role in the account. There is no "user" role, and no list of allowed people.
-- The level is confirmed with the account's auth app at sign-in and again every 5 minutes (PAR-425), so a role change shows at the next sign-in or within that time, with no deploy. If the role cannot be confirmed, the person is signed out: a protected route then answers 401.
+- **Admins** are members whose account role is one of PAR-413's administrator roles ("Super Administrator - All Privileges", "Administrator"). There is no "user" role, and no list of allowed people.
+- The auth app records the person's role at each sign-in, and the app re-reads that record every 5 minutes (PAR-425). So a role change in the dashboard shows after the person next signs in (to any app on the account), with no deploy; removing a member does not end a session they already have. If the role cannot be confirmed, the person is signed out: a protected route then answers 401.
 - Configuration holds no admins or users: `framework.admins` and `framework.users` are rejected by the build.
 
-How someone becomes an admin: [owner-tasks.md](owner-tasks.md) §7. In short: the owner gives them an administrator role in the Cloudflare dashboard (Manage Account → Members); another role takes it away. `/api/auth/me` shows a person's level and user ID.
+How someone becomes an admin: [owner-tasks.md](owner-tasks.md) §7. In short: the owner gives them one of those roles in the Cloudflare dashboard (Manage Account → Members), and they sign in again; another role takes it away the same way. `/api/auth/me` shows a person's level and user ID.
 
 ## Protecting routes
 
