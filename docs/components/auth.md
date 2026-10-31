@@ -47,7 +47,7 @@ The framework MUST provide the `/api/auth/*` routes in the HTTP contract. `/api/
 
 Amendment (Origin: owner · Decision: DEC-0521, DEC-0522, DEC-0523): there are no lists to copy an ID into. `/api/auth/me` MUST show a logged-in user their level and user ID, and MUST NOT return `unlistedId`. The skill and the app template's README MUST give copy-and-paste steps for granting and revoking the `admin` role with the `admins` command (CLI-REQ-005).
 
-Amendment for v0.2.0 (Origin: owner-approved · Decision: DEC-0690; when a role change takes effect: ai-proposed, DEC-0703, pending owner approval of wording): the original text and the amendment above are replaced by the following. There is no `admins` command and there are no lists. `/api/auth/me` MUST show a logged-in user their level and user ID, and MUST NOT return `unlistedId`. The skill and the app template's README MUST say how a person becomes an admin: an administrator role in the owner's Cloudflare account (PAR-413), which takes effect at their next sign-in (DEC-0703).
+Amendment for v0.2.0 (Origin: owner-approved · Decision: DEC-0690; when a role change takes effect: owner-approved, DEC-0703): the original text and the amendment above are replaced by the following. There is no `admins` command and there are no lists. `/api/auth/me` MUST show a logged-in user their level and user ID, and MUST NOT return `unlistedId`. The skill and the app template's README MUST say how a person becomes an admin: an administrator role in the owner's Cloudflare account (PAR-413), which takes effect at their next sign-in (DEC-0703).
 
 #### AUTH-REQ-006 — Sessions
 Origin: owner-approved · Derives from: SYS-REQ-017

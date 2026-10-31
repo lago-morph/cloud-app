@@ -139,7 +139,7 @@ Amendment (Origin: owner · Decision: DEC-0521, DEC-0522; the operator command, 
 - The framework MUST provide an operator command that grants, revokes and lists the `admin` role by email address on any stage. On a production stage the command MUST require an explicit confirmation.
 - Configuration MUST NOT hold admin or user lists.
 
-Amendment for v0.2.0 (Origin: owner-approved · Decision: DEC-0690; when a role change takes effect: ai-proposed, DEC-0703, pending owner approval of wording): sign-in is through Cloudflare (SYS-REQ-019 as amended by DEC-0691), and roles come from the owner's Cloudflare account. The original text and the amendment above (DEC-0521…DEC-0524) are replaced by the following:
+Amendment for v0.2.0 (Origin: owner-approved · Decision: DEC-0690; when a role change takes effect: owner-approved, DEC-0703): sign-in is through Cloudflare (SYS-REQ-019 as amended by DEC-0691), and roles come from the owner's Cloudflare account. The original text and the amendment above (DEC-0521…DEC-0524) are replaced by the following:
 - Anyone who is not a member of the owner's Cloudflare account MUST NOT be able to sign in.
 - A member whose account role is an administrator role MUST be level `admin`. Any other member MUST be level `user`. Anyone not signed in is `anonymous`.
 - The role names that count as administrator are a parameter.
