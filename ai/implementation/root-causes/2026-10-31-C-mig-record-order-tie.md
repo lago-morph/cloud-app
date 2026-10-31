@@ -49,4 +49,26 @@ The first is the minimal fix. The second changes recorded data and needs the MIG
 - **CI:** the `verify` job passes on the next push.
 
 ## Review
-(pending: an independent reviewer session)
+Reviewer: an independent reviewer session (Claude Code remote session `session_014mWQ6ioY6LQtpv18AcSoU8`), 2026-10-31, round 1. It reproduced the passing unmodified run, the frozen-clock failure, and a two-way tie.
+
+**Verdict: accepted-with-changes.**
+1. **minor:** The causal chain holds and the alternatives are ruled out.
+2. **major:** The Evidence misstates the frozen-clock result. With all five v1 migrations tied, `app/0000_schema` moves to the top of the list, not to the CI position. A clock of 1, 2, 3, 4, 4 (only the last two tied) reproduces exactly the CI diff, and that should be the reproduction.
+3. **minor:** Link 2 (a same-millisecond tie on CI) is inferred: the CI log has no `applied_at` values.
+4. **minor:** `docs/components/migrations.md:17` says each database "MUST record … framework migrations first, then app migrations, in order", and the order can be recovered from history rank and `id`. The test-side fix is therefore enough for the spec, and the change to `applyMigrations` is optional.
+5. **minor:** The second test-side option (`record()` ordered by history, then `id`) also fixes the same latent tie in MIG-AC-002 (`apply.unit.test.ts:94-104`). The fix item should name every test that reads `record()`.
+6. **minor:** The verification plan should use the 1, 2, 3, 4, 4 clock as its red check.
+
+## Response (round 1)
+- **To 2 (major), the corrected evidence.**
+  - Rerun on `v0.2.0/32-admin-app-deploy` with line 127 changed to `let n = 0; await applyMigrations(h.db, v1, () => Math.min(++n, 4));`, so that `framework/0003_auth_role` and `app/0000_schema` get the same `applied_at`.
+  - Both dialects failed with exactly the CI diff: `- "framework/0003_auth_role"` before `"app/0000_schema"`, and `+ "framework/0003_auth_role"` after it.
+  - The file was restored afterwards.
+  - The fully frozen clock (`() => 1_000`) also fails on both dialects, but it moves `app/0000_schema` to the top. It confirms the mechanism; it does not match CI's diff. The "matches the diff exactly" point now rests on the 1, 2, 3, 4, 4 run.
+- **To 3.** Agreed: link 2 is an inference. Two facts support it: the 4-4 tie is the only variation found that reproduces CI's exact diff, and the default clock has millisecond resolution.
+- **To 4 and 5, the revised fix** (still outside item C's owned paths, so a new item, for T7 or the MIG owner).
+  - Order `record()` by history (framework before app), then by `id`, as `migrations.md:17` defines the order. Apply it to every test that reads `record()`: MIG-AC-003 and MIG-AC-002 in `apply.unit.test.ts`.
+  - Leave `applyMigrations` unchanged.
+- **To 6, the verification plan.** Red: the 1, 2, 3, 4, 4 clock variant fails as on CI. Green: the same variant and an unmodified run pass after the fix, and CI `verify` passes.
+
+**Status:** accepted-with-changes; the changes are made above. The fix is not in item C: it is reported as a new item, and CI is re-run meanwhile, since the failure is a latent timing tie in an unrelated test.
