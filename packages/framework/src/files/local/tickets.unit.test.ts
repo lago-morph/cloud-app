@@ -60,4 +60,18 @@ describe("local tickets (FILES-REQ-003, files.md §2 Local)", () => {
     expect(await verifyLocalTicket(`${payload}.${signature}`, `${key}-other`)).toBeUndefined();
     for (const bad of ["", ".", "abc", "a.b.c", "%%.%%", `${payload}.`]) expect(await verifyLocalTicket(bad, key)).toBeUndefined();
   });
+
+  it("a ticket whose signature is re-spelled in its last character is refused (fuzz F4)", async () => {
+    // Root cause 2026-10-31-T4-files-base64url-noncanonical: the last of 43 characters carries 2
+    // unused bits, so 3 other spellings decoded to the same MAC bytes and verified.
+    const token = tokenOf(await issuer.download("a.png"));
+    const [payload = "", signature = ""] = token.split(".");
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const last = alphabet.indexOf(signature.slice(-1));
+    expect(await verifyLocalTicket(token, key)).toEqual({ op: "download", name: "a.png" });
+    for (const flip of [1, 2, 3]) {
+      const respelled = `${payload}.${signature.slice(0, -1)}${alphabet[last ^ flip]}`;
+      expect(await verifyLocalTicket(respelled, key), respelled).toBeUndefined();
+    }
+  });
 });

@@ -36,6 +36,13 @@ describe("cursor", () => {
     for (const c of bad) expect(codeOf(() => decodeCursor(c, "one/"))).toBe("KV.INVALID_CURSOR");
   });
 
+  it(tag("KV-AC-003", "a cursor with a byte order mark in front of its JSON is rejected with KV.INVALID_CURSOR (fuzz F6)"), () => {
+    // Root cause 2026-10-31-T4-files-base64url-noncanonical; "77u_WyIiLCJhIl0" is F6's shrunk counterexample.
+    expect(decodeCursor("WyJhLyIsImEveCJd", "a/")).toBe("a/x");
+    expect(codeOf(() => decodeCursor("77u_WyJhLyIsImEveCJd", "a/"))).toBe("KV.INVALID_CURSOR");
+    expect(codeOf(() => decodeCursor("77u_WyIiLCJhIl0", ""))).toBe("KV.INVALID_CURSOR");
+  });
+
   it("a cursor whose last key is outside its prefix or not a valid key is rejected", () => {
     expect(codeOf(() => decodeCursor(encodeCursor("one/", "two/1"), "one/"))).toBe("KV.INVALID_CURSOR");
     expect(codeOf(() => decodeCursor(encodeCursor("", ""), ""))).toBe("KV.INVALID_CURSOR");

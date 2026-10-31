@@ -33,7 +33,9 @@ export function decodeCursor(cursor: string, prefix: string): string {
   try {
     const bytes = fromBase64Url(cursor);
     if (toBase64Url(bytes) !== cursor) throw new Error("not canonical");
-    decoded = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    // ignoreBOM keeps a leading byte order mark, which JSON.parse then refuses: a cursor with one
+    // is not exactly the issued form (root cause 2026-10-31-T4-files-base64url-noncanonical).
+    decoded = JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes));
   } catch {
     throw invalid("is malformed");
   }
