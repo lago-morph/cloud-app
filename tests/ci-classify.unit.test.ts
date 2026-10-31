@@ -246,8 +246,8 @@ describe("the CI plan (what the staged ci.yml runs)", () => {
   });
 });
 
-describe("the staged ci.yml (scripts/ci/workflows/ci.yml, DEC-0637)", () => {
-  const yml = readFileSync(join(REPO, "scripts/ci/workflows/ci.yml"), "utf8");
+describe("ci.yml (.github/workflows/ci.yml; staged under scripts/ci/workflows/ until the owner applied it, DEC-0637)", () => {
+  const yml = readFileSync(join(REPO, ".github/workflows/ci.yml"), "utf8");
 
   it("runs on pull requests only and prints the classification first", () => {
     expect(yml).toMatch(/\non:\n {2}pull_request:\n\n/);
@@ -285,7 +285,7 @@ describe("no duplicates (plan-v0.2.0 §7a.2.4)", () => {
     const all = ciPlan(classify([], map, { everything: true }), map, REPO) as { unit: string; ids: string[]; direct: string[]; chromium: boolean };
     expect(all).toMatchObject({ unit: "all", chromium: true });
     expect(all.direct).toEqual(expect.arrayContaining(["packages/framework/test/integration/sql", "tests/skill", "packages/create-prototype-app/test"]));
-    const release = readFileSync(join(REPO, "scripts/ci/workflows/release.yml"), "utf8");
+    const release = readFileSync(join(REPO, ".github/workflows/release.yml"), "utf8");
     expect(release).toMatch(/\n {2}push:\n {4}tags: \["v\*\.\*\.\*"\]/);
     for (const step of ["node scripts/ci/classify.mjs --check-duplicates", "npm run test:unit", "node scripts/ci/classify.mjs --all --github-output", '$DIRECT ${DIRECT_FILTER:+-t "$DIRECT_FILTER"}', "DIRECT_FILTER: ${{ steps.all.outputs.direct_filter }}", "npm run secrets -- set apiKey --target local --stage local", 'npm run compliance -- --target local --out "$RUNNER_TEMP/compliance"', "npx playwright install --with-deps chromium"]) {
       expect(release, step).toContain(step);
