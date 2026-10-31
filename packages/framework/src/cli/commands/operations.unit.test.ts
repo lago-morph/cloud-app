@@ -31,7 +31,7 @@ describe("cloudflareOperations", () => {
   it("passes the release's ACCOUNT_SETUP_VERSION to the target, so setup-account records it", async () => {
     const cloud = new FakeCloud();
     cloud.subdomain = undefined;
-    await applySetupSteps(cloud.api, ACCOUNT, { emailDomain: "example.test", steps: SETUP_STEPS, setupVersion: 1, frameworkVersion: "0.0.0-test", now: () => new Date(), newSubdomain: () => "pf-test", email: { sleep: async () => {} } });
+    await applySetupSteps(cloud.api, ACCOUNT, { steps: SETUP_STEPS, setupVersion: 1, frameworkVersion: "0.0.0-test", now: () => new Date(), newSubdomain: () => "pf-test" });
     const env = { CLOUDFLARE_API_TOKEN: "fake-token", CLOUDFLARE_ACCOUNT_ID: ACCOUNT };
     const ops = cloudflareOperations({ env, fetch: fetchOver(cloud), requireCredentials: true })({ appDir: mkdtempSync(join(tmpdir(), "ops-")), target: "cloudflare" });
     const io = captureIo();

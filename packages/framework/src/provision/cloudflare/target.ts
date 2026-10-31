@@ -9,17 +9,16 @@
  *   other shared resources.
  * - `inspectAccount` / `createSharedResources`: the account steps of `account.ts` (DEC-0578).
  * - `readAccountSettings` / `writeAccountSettings`: the account settings record
- *   `framework/account.json` in `sst-state` (`account-settings.ts`, DEC-0514). A changed domain is
- *   written as `{ "emailDomain" }` alone, so the record has no setup fields until `setUpEmail`
- *   has set the new domain up.
- * - `emailSetupProblems` / `setUpEmail` / `emailPrerequisites`: `email.ts`'s email steps (Email
- *   Sending, the mail sink's bucket, Worker and Email Routing on `t.<emailDomain>`, the permission
- *   check). `setUpEmail`, the last operation of `setup-account`, then writes the setup record
- *   (`setup-record.ts`, DEC-0577) with every step completed, at `setupVersion` (default
- *   `FIRST_SETUP_VERSION`) and the framework's version; it writes nothing when the stored record
- *   already says so.
- * - The mail sink (`prototype-mailsink`) is an account resource: a stage whose fixed names would
- *   be an account resource's is refused by deploy, the stage listing and removal (`names.ts`).
+ *   `framework/account.json` in `sst-state` (`account-settings.ts`, DEC-0514); `deploy` reads the
+ *   email domain a 0.1.x setup recorded there, for a production stage's `EMAIL` binding.
+ * - `setupProblems` / `recordSetup`: `setup-account`'s check (the permission to create the
+ *   signing credential while it is absent, DEC-0551) and its last operation, which writes the
+ *   setup record (`setup-record.ts`, DEC-0577) with every step completed, at `setupVersion`
+ *   (default `FIRST_SETUP_VERSION`) and the framework's version; it writes nothing when the stored
+ *   record already says so. Since v0.2.0 there is no email setup (DEC-0689).
+ * - The 0.1.x mail sink (`prototype-mailsink`) is still an account resource until the admin app's
+ *   cleanup removes it: a stage whose fixed names would be an account resource's is refused by
+ *   deploy, the stage listing and removal (`names.ts`).
  * - `deployInfrastructure` (step 3): the stage bucket only, then the bucket's CORS policy for
  *   the stage's public origin (FILES' policy, DEC-0099). With a database, the program declares
  *   the Worker and the run is `sst deploy --target Files`; without one (a first deploy), the
@@ -45,8 +44,6 @@
  * - `listStageResources`: the Worker, the bucket, a legacy per-stage signing token (when the
  *   credential may list tokens) and the SST state objects, each by its exact identifier, plus
  *   every D1 database.
- * - `emailSetupProblems` also names "Account API Tokens Write" when the account's signing
- *   credential is absent, since `setup-account` then creates it (DEC-0551).
  * - `removeStage`: every step attempted: on a production stage clear its return URLs from the auth
  *   app's registry (DEC-0725), empty the bucket, delete a legacy token, `sst remove` (skipped
  *   when `sst-state` has no `app/<app>/<stage>`; its leftover `app/` object deleted after), then
@@ -62,7 +59,6 @@ import { FRAMEWORK_SECRETS } from "../../secrets/names.js";
 import type { DeployedCode, DeployInput, HealthOutcome, Stage, StageDatabase, StageResource, StageResources, TargetOperations } from "../core/operations.js";
 import { accountSubdomain, createSharedResources, inspectSharedResources, type SharedResourceOptions } from "./account.js";
 import { readAccountSettings, writeAccountSettings } from "./account-settings.js";
-import { createCloudflareEmailSetup, type CloudflareEmailSetup } from "./email.js";
 import { describeFailure, succeeded, type CloudflareApi, type CloudflareBytesApi } from "./api.js";
 import { backupStage, IN_FLIGHT_DRAIN_MS, listStageBackups } from "./backup.js";
 import { FIRST_SETUP_VERSION, frameworkVersion, SETUP_STEPS, writeSetupRecord } from "./setup-record.js";
@@ -105,8 +101,6 @@ export interface CloudflareTargetOptions {
   readonly fetch?: typeof fetch;
   /** A new generated framework key: the session key or the auth secret (PAR-253: 32 random bytes, base64url). */
   readonly randomKey?: () => string;
-  /** The email setup's Cloudflare calls; default `createCloudflareEmailSetup` over `api`. */
-  readonly email?: CloudflareEmailSetup;
   /** The subdomain `setup-account` registers on an account without one (default random, DEC-0552). */
   readonly newSubdomain?: SharedResourceOptions["newSubdomain"];
   /** The account setup version `setup-account` records: the release's `ACCOUNT_SETUP_VERSION` (DEC-0577); default `FIRST_SETUP_VERSION`. */
@@ -128,9 +122,6 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
   const sst = options.sst ?? processSstExec();
   const dir = sstAppDir(options.appDir);
   const randomKey = options.randomKey ?? (() => randomBytes(32).toString("base64url"));
-  const email =
-    options.email ??
-    createCloudflareEmailSetup({ api, accountId, ...(options.now === undefined ? {} : { now: options.now }), ...(options.sleep === undefined ? {} : { sleep: options.sleep }) });
   const origin = async (stage: Stage) => publicOrigin(stage, await accountSubdomain(api, accountId));
   const authApp = options.authApp ?? cloudflareAuthAppLink(api, accountId);
   /** Production stages sign in through the auth app; test stages use the mock only (plan §4.3, DEC-0667). */
@@ -215,32 +206,28 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
     },
     readAccountSettings: () => readAccountSettings(api, accountId),
     writeAccountSettings: (settings) => writeAccountSettings(api, accountId, settings),
-    async emailSetupProblems(emailDomain) {
-      const problems = [...(await email.setupProblems(emailDomain))];
-      if ((await signingCredentialState(api, accountId)) === "absent") problems.push(...(await tokenWriteProblems(api, accountId)));
-      return problems;
+    async setupProblems() {
+      return (await signingCredentialState(api, accountId)) === "absent" ? [...(await tokenWriteProblems(api, accountId))] : [];
     },
-    async setUpEmail(emailDomain) {
-      const created = [...(await email.setUp(emailDomain))];
+    async recordSetup() {
+      const written: string[] = [];
       // The last step of setup-account: every step is done now, so the setup record is written (DEC-0577).
-      // A write is reported with what was created, so a run that only records a new version does not say "nothing changed".
+      // A write is reported, so a run that only records a new version does not say "nothing changed".
       await writeSetupRecord(
         api,
         accountId,
         {
-          emailDomain,
           completedSteps: SETUP_STEPS,
           setupVersion: options.setupVersion ?? FIRST_SETUP_VERSION,
           frameworkVersion: options.frameworkVersion ?? frameworkVersion(),
           now: () => new Date((options.now ?? Date.now)()),
         },
-        setupChanged || created.length > 0,
-        (record) => created.push(`account setup record (setup version ${String(record.setupVersion)})`),
+        setupChanged,
+        (record) => written.push(`account setup record (setup version ${String(record.setupVersion)})`),
       );
       setupChanged = false;
-      return created;
+      return written;
     },
-    emailPrerequisites: (_stage, emailDomain) => email.productionPrerequisites(emailDomain),
 
     async deployInfrastructure(input: DeployInput) {
       // SST 4.17.2 resolves `--target` only in the stage's previous state (run.go:348-360), so

@@ -1,7 +1,16 @@
 /** The token permission check (DEC-0515): scopes and deny policies. No network. Moved with the code from `email-permissions.unit.test.ts` (DEC-0687). */
 import { describe, expect, it } from "vitest";
-import { EMAIL_PERMISSIONS } from "./email-permissions.js";
-import { missingPermissions, policyCovers } from "./token-policies.js";
+import { missingPermissions, policyCovers, type RequiredPermission } from "./token-policies.js";
+
+/** A required list with account and zone scopes and an `alsoSatisfiedBy`: the 0.1.x email list (DEC-0515), kept here as test data when `email-permissions.ts` went (DEC-0689). */
+const EMAIL_PERMISSIONS: readonly RequiredPermission[] = [
+  { name: "Email Sending Write", scope: "account" },
+  { name: "Email Routing Addresses Write", scope: "account" },
+  { name: "Email Routing Rules Write", scope: "zone" },
+  { name: "DNS Write", scope: "zone" },
+  { name: "Zone Settings Write", scope: "zone" },
+  { name: "Zone Read", scope: "zone", alsoSatisfiedBy: ["Zone Write"] },
+];
 
 const A = "acct";
 const Z = "zone1";

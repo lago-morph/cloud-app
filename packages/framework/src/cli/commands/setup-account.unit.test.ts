@@ -31,23 +31,19 @@ describe("setup-account (CLI-REQ-001, PROV-REQ-004)", () => {
     expect(fake.calls.some((c) => c.startsWith("createSharedResources"))).toBe(false);
   });
 
-  it("[PROV-AC-004] --email-domain records the account's email domain, lowercased; it is required while none is recorded", async () => {
+  it("[PROV-AC-004] needs no email domain: an account without one is set up (v0.2.0, DEC-0698)", async () => {
     const fake = new FakeTarget({ accountSettings: {} });
-    const { deps } = harness(fake);
-    const without = captureIo();
-    expect(await setupAccountCommand(deps)(["--target", "cloudflare"], without)).toBe(1);
-    expect(without.err).toContain("--email-domain <domain>");
     const io = captureIo();
-    expect(await setupAccountCommand(deps)(["--target", "cloudflare", "--email-domain", "Example.TEST"], io)).toBe(0);
-    expect(fake.accountSettings).toEqual({ emailDomain: "example.test" });
-    expect(await setupAccountCommand(deps)(["--target=cloudflare", "--email-domain=example.test"], captureIo())).toBe(0);
-    expect(fake.calls.filter((c) => c.startsWith("writeAccountSettings"))).toEqual(["writeAccountSettings example.test"]);
+    expect(await setupAccountCommand(harness(fake).deps)(["--target", "cloudflare"], io)).toBe(0);
+    expect(io.err).toBe("");
+    expect(fake.accountSettings).toEqual({});
   });
 
-  it("--email-domain needs a value and is refused for the local target", async () => {
+  it("takes no --email-domain any more (v0.2.0, DEC-0698): it is a usage error, for every target", async () => {
     const h = harness(new FakeTarget());
-    await expect(setupAccountCommand(h.deps)(["--target", "cloudflare", "--email-domain"], captureIo())).rejects.toThrow(/--email-domain needs a value/);
-    await expect(setupAccountCommand(h.deps)(["--target", "local", "--email-domain", "example.test"], captureIo())).rejects.toThrow(UsageError);
+    for (const target of ["cloudflare", "local"]) {
+      await expect(setupAccountCommand(h.deps)(["--target", target, "--email-domain", "example.test"], captureIo())).rejects.toThrow(UsageError);
+    }
     expect(h.events).toEqual([]);
   });
 

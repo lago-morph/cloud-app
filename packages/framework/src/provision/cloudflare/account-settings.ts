@@ -3,13 +3,14 @@
  * cloudflare.md "Deploy mechanics" `setupAccount`; DEC-0514): the JSON object
  * `framework/account.json` in the state home bucket `sst-state`, `{ "emailDomain": "<domain>" }`.
  * SST's own objects use other top-level prefixes (`app/`, `secret/`, `lock/`, …), so the stage
- * state checks (`isStageStateObject`) never match it. Written only by `setup-account`; `deploy`,
- * `check-login` and `mail --target cloudflare` read it on every run.
+ * state checks (`isStageStateObject`) never match it. Since v0.2.0 nothing records an email domain
+ * (DEC-0689): one a 0.1.x `setup-account` wrote is kept, and `deploy` reads it on every run for a
+ * production stage's `EMAIL` binding.
  *
  * Objects are read and written through the R2 object endpoints of `api.cloudflare.com`
  * (`GET`/`PUT …/r2/buckets/<bucket>/objects/<key>`): a GET answers the object's own bytes,
  * which the API seam parses as JSON. Not yet exercised against the live API (DEC-0334): the
- * first live `setup-account --email-domain` confirms the PUT's answer.
+ * first live write of the record confirms the PUT's answer.
  */
 import { emailDomainProblem, type AccountSettings } from "../core/account-settings.js";
 import { describeFailure, type CloudflareApi } from "./api.js";
@@ -25,13 +26,13 @@ const objectPath = (accountId: string) => `/accounts/${accountId}/r2/buckets/${S
 /** Validates a stored record. Throws naming the record when it is not one. */
 export function parseAccountSettings(body: unknown): AccountSettings {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
-    throw new Error(`the ${ACCOUNT_SETTINGS_RESOURCE} is not a JSON object; run setup-account --target cloudflare --email-domain <domain> to rewrite it`);
+    throw new Error(`the ${ACCOUNT_SETTINGS_RESOURCE} is not a JSON object; run account setup in the admin app again to rewrite it`);
   }
   const { emailDomain } = body as { emailDomain?: unknown };
   if (emailDomain === undefined) return {};
   const problem = typeof emailDomain === "string" ? emailDomainProblem(emailDomain) : "it is not a string";
   if (problem !== undefined) {
-    throw new Error(`the ${ACCOUNT_SETTINGS_RESOURCE} has an invalid emailDomain (${problem}); run setup-account --target cloudflare --email-domain <domain> to rewrite it`);
+    throw new Error(`the ${ACCOUNT_SETTINGS_RESOURCE} has an invalid emailDomain (${problem}); correct or remove that field in the Cloudflare dashboard (R2, bucket ${STATE_BUCKET})`);
   }
   return { emailDomain: emailDomain as string };
 }
