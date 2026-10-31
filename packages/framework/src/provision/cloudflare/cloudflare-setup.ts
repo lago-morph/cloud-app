@@ -40,7 +40,8 @@
  * an allow-list: a DELETE only of the bootstrap token's own ID (in its last step, or at once for a
  * long-lived one) or of a signing
  * token the guard saw by its name (`prototype-r2-signing`, listed or just created by the signing
- * step), a PUT only of the everyday token's ID, and never either on an ID in `protectedTokenIds`.
+ * step), never a PUT (since v0.2.0 no token is updated, DEC-0682), and never a DELETE on an ID in
+ * `protectedTokenIds`.
  * Exit status: 0 when the account is set up and reachable, 1 when the run stopped for something the
  * user must do or failed (DEC-0588).
  */
@@ -224,9 +225,9 @@ const TOKENS_LIST_PATH = /^\/(?:accounts\/[^/]+|user)\/tokens\/?$/i;
  * names an API token's ID is checked before it is sent. The path judged is the one sent
  * (`sentPath`: `API_BASE + path` as the URL parser normalises it, each segment decoded), and IDs
  * and the path's names are compared in any case. Refused: any such request on a protected ID; any
- * method but PUT and DELETE, and any sub-path (the value roll); a DELETE of the everyday token; a
- * DELETE of the bootstrap token outside its self-delete; a DELETE of any other ID unless the guard
- * saw it as a signing token (DEC-0618); a PUT of anything but the everyday token; a request whose
+ * method but DELETE (a PUT included: no token is updated since v0.2.0, DEC-0682), and any sub-path
+ * (the value roll); a DELETE of the everyday token; a DELETE of the bootstrap token outside its
+ * self-delete; a DELETE of any other ID unless the guard saw it as a signing token (DEC-0618); a request whose
  * URL cannot be parsed. Creating a token (`POST …/tokens`, the signing step) names no ID. The
  * signing step's rotation finds its old tokens by name (`GET …/tokens`) and may delete the token it
  * just created when its record cannot be written, so the guard learns the IDs of tokens named
@@ -258,11 +259,11 @@ export function guardTokenWrites(
       const id = m?.[1]?.toLowerCase();
       if (id !== undefined && !NOT_TOKEN_IDS.has(id)) {
         if (protectedIds.has(id)) refuse("its ID is protected");
-        if ((method !== "PUT" && method !== "DELETE") || m?.[2] !== undefined) refuse("setup only deletes the bootstrap token and updates the everyday token's permissions");
+        // Since v0.2.0 setup updates no token (DEC-0682): the everyday token's permissions are the admin app's.
+        if (method !== "DELETE" || m?.[2] !== undefined) refuse("setup only deletes the bootstrap token and its own signing tokens, and updates no token");
         if (method === "DELETE" && id === everydayId) refuse("it is the everyday token");
         if (method === "DELETE" && id === bootstrapId && !rules.selfDeleteArmed()) refuse("the bootstrap token is deleted only by its own last step");
         if (method === "DELETE" && id !== bootstrapId && !signingIds.has(id)) refuse("setup deletes only the bootstrap token and its own signing tokens");
-        if (method === "PUT" && (id !== everydayId || id === bootstrapId)) refuse("only the everyday token is updated in place");
       }
     }
     const reply = await api(method, path, body);

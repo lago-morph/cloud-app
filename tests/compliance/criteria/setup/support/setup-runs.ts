@@ -325,6 +325,7 @@ export async function runSetup(label: string, world: SetupWorld, dir: string, op
  * v0.2.0 (plan §5.2 page 1; DEC-0682): every step and the setup record, through the fake's own API.
  */
 export async function setUpAccount(world: SetupWorld, account = ACCOUNT): Promise<void> {
+  // `ACCOUNT` is right for every account: each `FakeCloud` answers under the fake's own account ID (the world maps the real one to it).
   await applySetupSteps(world.cloud(account).api, ACCOUNT, {
     emailDomain: DOMAIN,
     steps: SETUP_STEPS,
