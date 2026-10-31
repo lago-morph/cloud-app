@@ -53,7 +53,7 @@
     "apps/reference/**"
   ],
   "components": {
-    "CORE": { "dependsOn": [], "paths": ["packages/framework/src/core/**", "packages/framework/src/index.ts"], "integration": ["packages/framework/test/integration/core", "tests/compliance/criteria/core"] },
+    "CORE": { "dependsOn": [], "paths": ["packages/framework/src/core/**", "packages/framework/src/index.ts"], "integration": ["packages/framework/test/integration/core", "packages/framework/test/integration/testing", "tests/compliance/criteria/core"] },
     "HTTP": { "dependsOn": ["LOG"], "paths": ["packages/framework/src/http/**", "packages/framework/src/client/**"], "integration": ["packages/framework/test/integration/http", "tests/compliance/criteria/http"], "browser": true },
     "SQL": { "dependsOn": [], "paths": ["packages/framework/src/sql/**"], "integration": ["packages/framework/test/integration/sql", "tests/compliance/criteria/sql"] },
     "MIG": { "dependsOn": ["SQL"], "paths": ["packages/framework/src/mig/**", "packages/framework/migrations/**"], "integration": ["packages/framework/test/integration/mig", "tests/compliance/criteria/mig"] },
@@ -70,7 +70,7 @@
     "PROV": { "dependsOn": ["CFG", "SEC", "MIG", "LOG", "CF", "HTTP", "AUTH"], "paths": ["packages/framework/src/provision/**"], "integration": ["packages/framework/test/integration/provision", "tests/compliance/criteria/prov"] },
     "SETUP": { "dependsOn": ["PROV", "CF", "CLI"], "paths": ["packages/framework/src/admin-app/**", "tests/support/mock-oauth2/**"], "integration": ["packages/framework/test/integration/admin-app", "tests/compliance/criteria/setup"] },
     "CHECK": { "dependsOn": ["SQL", "MIG"], "paths": ["packages/framework/src/check/**"], "integration": ["packages/framework/test/integration/check", "tests/compliance/criteria/check"] },
-    "CLI": { "dependsOn": ["LOCAL", "CHECK", "PROV", "MIG", "SEC", "AUTH", "CORE", "COMPL"], "paths": ["packages/framework/src/cli/**", "packages/framework/bin/**"], "integration": ["packages/framework/test/integration/cli", "packages/framework/test/integration/build", "tests/compliance/criteria/cli"] },
+    "CLI": { "dependsOn": ["LOCAL", "CHECK", "PROV", "MIG", "SEC", "AUTH", "CORE", "COMPL"], "paths": ["packages/framework/src/cli/**", "packages/framework/bin/**"], "integration": ["packages/framework/test/integration/cli", "packages/framework/test/integration/build", "packages/framework/test/integration/testing", "tests/compliance/criteria/cli"] },
     "COMPL": { "dependsOn": ["SQL", "MIG", "KV", "FILES", "CFG", "SEC", "LOG", "AUTH", "PWD", "MAIL", "LOCAL", "CF"], "paths": ["packages/framework/src/evidence/**", "tests/compliance/tools/**"], "integration": ["tests/compliance/criteria/compl"] },
     "SKILL": { "dependsOn": ["CORE", "CLI", "CFG", "PROV", "SETUP"], "paths": ["skill/**", "apps/template/**", "packages/create-prototype-app/**", "packages/prototype-framework-skill/**"], "integration": ["tests/skill", "tests/compliance/criteria/skill", "packages/create-prototype-app/test"], "browser": true },
     "DEMO": { "dependsOn": ["SKILL"], "paths": ["apps/demo/**"], "integration": [] }
