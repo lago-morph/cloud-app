@@ -4,7 +4,7 @@
  * (DEC-0105), or PGlite for SQL when the process runs the Postgres dialect
  * (`PROTOTYPE_FRAMEWORK_DIALECT=postgres`) — with migrations applied and the local target's
  * runtime (the same stage runtime the local Worker uses), the authentication mock, the stub
- * login provider or the password provider (PWD) sending through MAIL's in-memory outbox, and an in-memory log.
+ * login provider or the auth-app provider over the fake binding, MAIL's in-memory outbox, and an in-memory log.
  * Node only; never part of a Worker bundle.
  */
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -22,6 +22,9 @@ import { secretLocation } from "../config/secret-locations.js";
 import { createAuthMock } from "../auth/mock.js";
 import { LOCAL_COOKIES } from "../auth/local-cookies.js";
 import { createStubLoginProvider, stubCallbackUrl, type StubFailure } from "../auth/stub-provider.js";
+import { createFakeAuthAppBinding, type AuthAppIdentity, type FakeAuthAppBinding } from "../auth/auth-app-binding.js";
+import { AUTH_APP_PROVIDER_ID, createAuthAppProvider } from "../auth/auth-app-provider.js";
+import { deriveUserId } from "../auth/user-id.js";
 import type { Role } from "../auth/roles.js";
 import type { CurrentUser } from "../auth/public.js";
 import { appUrl } from "./connect.js";
@@ -57,6 +60,11 @@ export interface TestAppOptions {
   readonly unavailable?: readonly TestCapability[];
   /** Use the test-only stub login provider instead of the authentication mock. Default false. */
   readonly stubLoginProvider?: boolean;
+  /**
+   * Use the auth-app provider (sign-in with Cloudflare, `cf-account`) over the in-memory fake
+   * binding (`TestApp.authApp`), instead of the authentication mock (DEC-0673). Default false.
+   */
+  readonly authAppLoginProvider?: boolean;
   /** For MAIL's own tests: a mail sender whose every send fails, or whose sends never complete. Default the outbox. */
   readonly mailSender?: "failing" | "never-completing";
   /** LOG-AC-001: a log writer that fails on every write, or whose writes never complete (DEC-0210). */
@@ -78,8 +86,14 @@ export interface TestApp {
   as(user: CurrentUser): TestApp;
   logs(): readonly LogEntry[];
   loginWithStub(subject: string, options?: { readonly displayName?: string; readonly stubFailure?: "refused" | "replayed" }): Promise<void>;
+  /** With `authAppLoginProvider`: signs in through `/api/auth/login`, the fake auth app and the callback as `identity`, and keeps the session. */
+  loginWithAuthApp(identity: AuthAppIdentity): Promise<void>;
+  /** With `authAppLoginProvider`: the fake auth app (its records, failures and call counts); throws otherwise. */
+  readonly authApp: TestAuthApp;
+  /** AUTH's clock (session times, role refresh; the fake auth app's too). Retry delays move it instead of waiting. In-process only. */
+  readonly clock: TestClock;
   /**
-   * With `stubLoginProvider`: adds `role` to the account whose user ID
+   * With `stubLoginProvider` or `authAppLoginProvider`: adds `role` to the account whose user ID
    * is `userId` (DEC-0525). Rejects when no account has that ID; throws with the mock and on a
    * connected stage.
    */
@@ -97,6 +111,20 @@ export interface TestApp {
 
 /** The roles a test can grant (testing.d.ts): `admin` only; "user" is a level, not a role. */
 export type TestRole = "admin";
+
+/** The fake auth app as a test sees it (`TestApp.authApp`). */
+export type TestAuthApp = Pick<FakeAuthAppBinding, "issueCode" | "setRole" | "unregisterApp" | "failNext" | "setUnavailable" | "calls">;
+
+/** A test app's clock (`TestApp.clock`). */
+export interface TestClock {
+  /** The current time, in ms. */
+  now(): number;
+  /** Moves the clock forward by `ms`. */
+  advance(ms: number): void;
+}
+
+/** The fake auth app's origin and the app ID it knows the test app by. */
+const TEST_AUTH_APP_ORIGIN = "https://auth-app.test";
 
 /** Role changes of the test app's real provider: `TestApp.grantRole`, `revokeRole`. */
 type RoleChanger = (userId: string, role: Role, change: "grant" | "revoke") => Promise<boolean>;
@@ -185,10 +213,16 @@ interface Shared {
   readonly fixed: WeakMap<Request, CurrentUser>;
   readonly logs: () => readonly LogEntry[];
   readonly mail: TestMail;
-  /** The app has no authentication mock (the stub provider): `as` throws. */
-  readonly noMock: "stub" | undefined;
+  /** The app has no authentication mock (the stub or the auth-app provider): `as` throws. */
+  readonly noMock: "stub" | "auth-app" | undefined;
   readonly stub: boolean;
-  /** Present with the stub provider (DEC-0525). */
+  /** Present with `authAppLoginProvider`. */
+  readonly authApp: FakeAuthAppBinding | undefined;
+  readonly authAppId: string;
+  /** User IDs of the subjects signed in with `loginWithAuthApp`. */
+  readonly authAppSubjects: Map<string, string>;
+  readonly clock: TestClock;
+  /** Present with the stub or the auth-app provider (DEC-0525). */
   readonly changeRole: RoleChanger | undefined;
   /** The capabilities that fail now (`unavailable`, then `setUnavailable`); read on every request. */
   readonly unavailable: Set<TestCapability>;
@@ -201,7 +235,7 @@ async function changeRole(shared: Shared, userId: string, role: Role, change: "g
   const name = change === "grant" ? "grantRole" : "revokeRole";
   if (shared.disposed) throw new Error("this test app was disposed");
   if (shared.changeRole === undefined) {
-    throw new Error(`${name} needs a real login provider (stubLoginProvider); with the authentication mock, choose the level with the user option or as()`);
+    throw new Error(`${name} needs a real login provider (stubLoginProvider or authAppLoginProvider); with the authentication mock, choose the level with the user option or as()`);
   }
   if (role !== "admin") throw new Error(`${name}: unknown role ${JSON.stringify(role)}; the only role is "admin"`);
   if (!(await shared.changeRole(userId, role, change))) throw new Error(`${name}: no account has the user ID ${JSON.stringify(userId)}`);
@@ -223,9 +257,15 @@ function testApp(shared: Shared, user: CurrentUser | undefined): TestApp {
         ...(body instanceof ReadableStream ? { duplex: "half" } : {}),
       } as RequestInit);
       if (user !== undefined) shared.fixed.set(request, user);
-      // Only the `loginWithStub` session is kept (local.md, DEC-0193): no other response cookie,
-      // including a password sign-in's, is sent on later requests; such tests pass `Cookie` themselves.
-      return shared.fetch(request);
+      // Only a `loginWithStub` or `loginWithAuthApp` session is kept (local.md, DEC-0193): no other
+      // response cookie is sent on later requests. A kept session
+      // follows its role refreshes: re-issued or cleared by the response, as in a browser (DEC-0673).
+      const response = await shared.fetch(request);
+      if (shared.session !== undefined && !(init.headers !== undefined && new Headers(init.headers).has("cookie"))) {
+        const next = cookiePairs(response).get(LOCAL_COOKIES.session);
+        if (next !== undefined) shared.session = next === "" ? undefined : `${LOCAL_COOKIES.session}=${next}`;
+      }
+      return response;
     },
     mail: shared.mail,
     as(next) {
@@ -255,6 +295,26 @@ function testApp(shared: Shared, user: CurrentUser | undefined): TestApp {
       }
       shared.session = `${name}=${session}`;
     },
+    async loginWithAuthApp(identity) {
+      const fake = shared.authApp;
+      if (fake === undefined) throw new Error("loginWithAuthApp needs createTestApp(app, { authAppLoginProvider: true })");
+      const begin = await self.request("/api/auth/login");
+      const start = new URL(begin.headers.get("location") ?? "", TEST_APP_ORIGIN);
+      if (begin.status !== 302 || start.pathname !== "/start") throw new Error(`auth-app login: /api/auth/login answered ${begin.status} without a redirect to /start`);
+      const transaction = [...cookiePairs(begin)].filter(([, v]) => v !== "").map(([k, v]) => `${k}=${v}`).join("; ");
+      const code = fake.issueCode(identity, { app: shared.authAppId, returnUrl: start.searchParams.get("return") ?? "" });
+      const query = new URLSearchParams({ code, state: start.searchParams.get("state") ?? "" });
+      const done = await self.request(`/api/auth/callback?${query.toString()}`, { headers: { cookie: transaction } });
+      const session = cookiePairs(done).get(LOCAL_COOKIES.session);
+      if (session === undefined || session === "") throw new Error(`auth-app login as ${JSON.stringify(identity.sub)} failed: redirected to ${done.headers.get("location") ?? "(none)"}`);
+      shared.authAppSubjects.set(await deriveUserId(AUTH_APP_PROVIDER_ID, identity.sub), identity.sub);
+      shared.session = `${LOCAL_COOKIES.session}=${session}`;
+    },
+    get authApp(): TestAuthApp {
+      if (shared.authApp === undefined) throw new Error("authApp needs createTestApp(app, { authAppLoginProvider: true })");
+      return shared.authApp;
+    },
+    clock: shared.clock,
     grantRole: (userId, role) => changeRole(shared, userId, role, "grant"),
     revokeRole: (userId, role) => changeRole(shared, userId, role, "revoke"),
     setUnavailable(capabilities) {
@@ -278,6 +338,9 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
   const resolved = resolveTestConfig(defined, deployment, options.config ?? {});
   const unavailable = new Set<TestCapability>(options.unavailable ?? []);
   const stub = options.stubLoginProvider === true;
+  const authAppLogin = options.authAppLoginProvider === true;
+  if (authAppLogin && stub) throw new Error("authAppLoginProvider cannot be combined with stubLoginProvider");
+  if (authAppLogin && options.user !== undefined) throw new Error("the user option needs the authentication mock; it cannot be combined with authAppLoginProvider");
   if (stub && options.user !== undefined) throw new Error("the user option needs the authentication mock; it cannot be combined with stubLoginProvider");
 
   const dialect = processDialect();
@@ -322,7 +385,28 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
   const kvUnavailable = (): boolean => sqlUnavailable() || unavailable.has("kv");
 
   const stubProvider = stub ? createStubLoginProvider() : undefined;
-  const roleChanger: RoleChanger | undefined = stubProvider !== undefined ? (userId, role, change) => stubProvider.changeRole(userId, role, change) : undefined;
+  // The test clock (DEC-0673): AUTH and the fake auth app read it; a retry delay moves it.
+  let clockOffset = 0;
+  const clock: TestClock = {
+    now: () => Date.now() + clockOffset,
+    advance: (ms) => {
+      clockOffset += ms;
+    },
+  };
+  const authApp = authAppLogin ? createFakeAuthAppBinding({ now: clock.now }) : undefined;
+  const authAppId = `${deployment.app}-${deployment.stage}`;
+  const authAppSubjects = new Map<string, string>();
+  const roleChanger: RoleChanger | undefined =
+    stubProvider !== undefined
+      ? (userId, role, change) => stubProvider.changeRole(userId, role, change)
+      : authApp !== undefined
+        ? async (userId, _role, change) => {
+            const sub = authAppSubjects.get(userId);
+            if (sub === undefined) return false;
+            authApp.setRole(sub, change === "grant" ? "admin" : "user");
+            return true;
+          }
+        : undefined;
 
   const hono = assembleStage(defined, {
     resolved,
@@ -339,7 +423,17 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
     secretValues: () => Object.values(secretEnv),
     requiredFrameworkSecrets: [FRAMEWORK_SECRETS.sessionKey, ...LOCAL_FRAMEWORK_SECRETS],
     cookies: LOCAL_COOKIES,
-    ...(stubProvider !== undefined ? { provider: stubProvider } : { mock: createAuthMock({ fixedUser: (c) => fixed.get(c.req.raw) }) }),
+    authClock: {
+      now: clock.now,
+      sleep: async (ms) => {
+        clock.advance(ms);
+      },
+    },
+    ...(stubProvider !== undefined
+      ? { provider: stubProvider }
+      : authApp !== undefined
+        ? { provider: createAuthAppProvider({ binding: authApp, app: authAppId, authAppOrigin: TEST_AUTH_APP_ORIGIN }) }
+        : { mock: createAuthMock({ fixedUser: (c) => fixed.get(c.req.raw) }) }),
     routes: (api) => registerLocalTransferRoute(api, { key: ticketKey }),
     mail: () => mailSender,
   });
@@ -349,8 +443,12 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
     fixed,
     logs: () => memory.entries(),
     mail: { lastTo: outbox.lastTo, all: outbox.all },
-    noMock: stub ? "stub" : undefined,
+    noMock: stub ? "stub" : authApp !== undefined ? "auth-app" : undefined,
     stub,
+    authApp,
+    authAppId,
+    authAppSubjects,
+    clock,
     changeRole: roleChanger,
     unavailable,
     session: undefined,

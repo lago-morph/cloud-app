@@ -12,12 +12,15 @@
  *   1. `GET /api/auth/login`, sent with a forged host, redirects (302) to an https `/start` on the
  *      auth app with exactly `app=<app>-<stage>`, `return=<public origin>/api/auth/callback` (from
  *      the deployment, not the forged host: AUTH-REQ-008) and a state, and sets `__Host-login`;
- *   2. that `/start` accepts it (302, so the return URL is registered for the app ID) and sends
+ *   2. `GET /api/auth/callback` with that state, the transaction cookie and a bogus code
+ *      redirects to `/?authError=login_failed&requestId=<id>`, sets no session cookie, and
+ *      leaves `/api/auth/me` anonymous;
+ *   3. that `/start` accepts it (302, so the return URL is registered for the app ID) and sends
  *      the browser on to an https authorization endpoint with `response_type=code`, PKCE S256 and
  *      a state, setting its own sign-in cookie. A 400 means the return URL is not registered.
  *
- * One evidence record (`src/evidence`) with results for E2E-008 (its automated part) and
- * AUTH-AC-011 (the callback URL under a forged host); PWD-AC-009 is `not-run` (retired with the
+ * One evidence record (`src/evidence`) with results for E2E-008 (its automated part, steps 1–3)
+ * and AUTH-AC-011 (steps 1–2); PWD-AC-009 is `not-run` (retired with the
  * password provider, plan §6). Exit 0 only if every step passed. The account's `workers.dev`
  * subdomain is never recorded (DEC-0086). Test stages and target `local` are refused before any
  * request: they sign in with the authentication mock only (plan §4.3).
@@ -98,9 +101,12 @@ export async function runLoginCheck(options: LoginCheckOptions, io: LoginCheckIo
     const values = url.searchParams.getAll(name);
     if (values.length !== 1 || values[0] === "") fail(`${what}: the redirect has no single ${name} parameter`);
     const value = values[0] as string;
-    if (expected !== undefined && value !== expected) fail(`${what}: ${name} is ${JSON.stringify(value)}, expected ${JSON.stringify(expected)}`);
+    // Only a short prefix of what the server sent goes into the message and the record.
+    if (expected !== undefined && value !== expected) fail(`${what}: ${name} is ${JSON.stringify(value.slice(0, 120))}, expected ${JSON.stringify(expected)}`);
     return value;
   };
+  /** Steps 1 and 2 are AUTH-AC-011; every step is E2E-008's automated part. */
+  let auth011 = false;
 
   try {
     step = 1;
@@ -110,11 +116,26 @@ export async function runLoginCheck(options: LoginCheckOptions, io: LoginCheckIo
     if (start.pathname !== "/start") fail(`login: the redirect goes to ${start.pathname}, not the auth app's /start`);
     param("login", start, "app", options.appId);
     param("login", start, "return", `${origin}/api/auth/callback`);
-    param("login", start, "state");
-    if (!cookieNames(login).includes("__Host-login")) fail("login: no __Host-login transaction cookie was set");
+    const state = param("login", start, "state");
+    const transaction = login.headers.getSetCookie().find((line) => line.startsWith("__Host-login="))?.split(";")[0];
+    if (transaction === undefined || transaction === "__Host-login=") fail("login: no __Host-login transaction cookie was set");
 
     step = 2;
-    io.print("step 2: the auth app accepts the app ID and the return URL");
+    io.print("step 2: a callback with that state and a bogus code is a failed login");
+    const bogus = new URL("/api/auth/callback", origin);
+    bogus.searchParams.set("code", "check-login-bogus-code");
+    bogus.searchParams.set("state", state);
+    const failedLogin = await get(bogus, { cookie: transaction as string });
+    const home = failedLogin.status === 302 ? failedLogin.headers.get("location") : null;
+    if (home === null || !/^\/\?authError=login_failed&requestId=[0-9a-f-]{36}$/.test(home)) fail(`callback with a bogus code: expected a 302 to /?authError=login_failed&requestId=<id>, got status ${String(failedLogin.status)}`);
+    if (cookieNames(failedLogin).includes("__Host-session") && !failedLogin.headers.getSetCookie().some((l) => /^__Host-session=;/.test(l))) fail("callback with a bogus code: a session cookie was set");
+    const me = await get(new URL("/api/auth/me", origin));
+    const level = me.status === 200 ? ((await me.json().catch(() => ({}))) as { level?: unknown }).level : undefined;
+    if (level !== "anonymous") fail(`after the bogus callback: /api/auth/me is not anonymous (status ${String(me.status)})`);
+    auth011 = true;
+
+    step = 3;
+    io.print("step 3: the auth app accepts the app ID and the return URL");
     const accepted = await get(start);
     if (accepted.status === 400) fail("the auth app refused the sign-in (400): the return URL is not registered for this app ID; deploy the stage again");
     const authorize = redirectOf("auth app /start", accepted);
@@ -127,8 +148,7 @@ export async function runLoginCheck(options: LoginCheckOptions, io: LoginCheckIo
     const problem = `step ${String(error.step)}: ${error.message}`;
     const results: EvidenceResult[] = [
       retired(),
-      // AUTH-AC-011 is the callback URL check of step 1.
-      error.step === 1 ? { id: "AUTH-AC-011", status: "failed", detail: problem } : { id: "AUTH-AC-011", status: "passed" },
+      auth011 ? { id: "AUTH-AC-011", status: "passed" } : { id: "AUTH-AC-011", status: "failed", detail: problem },
       { id: "E2E-008", status: "failed", detail: problem },
     ];
     return { failure: { step: error.step, problem: error.message }, results };
