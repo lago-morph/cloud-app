@@ -35,9 +35,9 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 async function getJson(f: typeof fetch, url: string, what: string, init?: RequestInit): Promise<Record<string, unknown>> {
   let res: Response;
   try {
-    res = await f(url, { ...init, headers: { accept: "application/json", ...init?.headers } });
+    res = await f(url, { ...init, redirect: "error", headers: { accept: "application/json", ...init?.headers } });
   } catch {
-    throw new SignInError(`${what} unreachable`);
+    throw new SignInError(`${what}: unreachable`);
   }
   if (!res.ok) throw new SignInError(`${what} (${res.status})`);
   const body: unknown = await res.json().catch(() => undefined);
@@ -54,7 +54,7 @@ function url(doc: Record<string, unknown>, field: string): string {
 export async function loadDiscovery(f: typeof fetch, discoveryUrl: string): Promise<Discovery> {
   const doc = await getJson(f, discoveryUrl, "discovery failed");
   const methods = doc.code_challenge_methods_supported;
-  if (Array.isArray(methods) && !methods.includes("S256")) throw new SignInError("discovery: no S256");
+  if (!Array.isArray(methods) || !methods.includes("S256")) throw new SignInError("discovery: no S256");
   if (typeof doc.issuer !== "string" || doc.issuer === "") throw new SignInError("discovery: missing issuer");
   return {
     issuer: doc.issuer,
@@ -105,22 +105,25 @@ export async function loadJwks(f: typeof fetch, d: Discovery): Promise<JsonWebKe
   return body.keys.filter(isRecord) as JsonWebKey[];
 }
 
+export type TokenKind = "access_token" | "refresh_token";
+
 /**
- * Revokes each token (RFC 7009). Never throws: the auth app keeps no token whatever happens
- * (plan §4.1 step 3.6), so a failed revoke is reported (false) and logged, and sign-in goes on.
+ * Revokes each token (RFC 7009, with its `token_type_hint`) and returns the kinds whose revoke
+ * failed, never a value. Never throws: the auth app keeps no token whatever happens (plan §4.1
+ * step 3.6), so a failed revoke is logged and sign-in goes on (DEC-0655).
  */
-export async function revokeTokens(f: typeof fetch, d: Discovery, c: ClientCredentials, tokens: readonly string[]): Promise<boolean> {
-  let allOk = true;
-  for (const token of tokens) {
+export async function revokeTokens(f: typeof fetch, d: Discovery, c: ClientCredentials, tokens: readonly { token: string; hint: TokenKind }[]): Promise<TokenKind[]> {
+  const failed: TokenKind[] = [];
+  for (const { token, hint } of tokens) {
     try {
-      const res = await f(d.revocationEndpoint, form({ token, client_id: c.clientId, client_secret: c.clientSecret }));
-      if (!res.ok) allOk = false;
+      const res = await f(d.revocationEndpoint, { ...form({ token, token_type_hint: hint, client_id: c.clientId, client_secret: c.clientSecret }), redirect: "error" });
+      if (!res.ok) failed.push(hint);
       await res.body?.cancel();
     } catch {
-      allOk = false;
+      failed.push(hint);
     }
   }
-  return allOk;
+  return failed;
 }
 
 const bearer = (token: string): RequestInit => ({ headers: { authorization: `Bearer ${token}` } });
@@ -138,6 +141,7 @@ export async function fetchMemberships(f: typeof fetch, apiBase: string, accessT
   for (let page = 1; page <= MAX_MEMBERSHIP_PAGES; page += 1) {
     const body = await getJson(f, `${apiBase}/memberships?page=${page}&per_page=50`, "memberships failed", bearer(accessToken));
     if (!Array.isArray(body.result)) throw new SignInError("memberships failed: malformed response");
+    if (body.success !== true) throw new SignInError("memberships failed: not successful");
     all.push(...body.result);
     const info = body.result_info;
     const total = isRecord(info) && typeof info.total_pages === "number" ? info.total_pages : 1;
