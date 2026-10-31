@@ -42,8 +42,8 @@ You need a Cloudflare account. The Workers Free plan is enough. Setup has two pa
    ```
 
    In Claude Code, say "set up Cloudflare" instead. Setup prints a pre-filled dashboard link for the bootstrap token and tells you where to put it (`CLOUDFLARE_BOOTSTRAP_TOKEN`). Give the token an expiry of 1 day or less: setup deletes a token that lives longer, or has no expiry, at once.
-2. Run setup again with the bootstrap token. It creates the account's two OAuth clients, keeps their secrets in Cloudflare Secrets Store, deploys the admin app and prints its address. Then the token deletes itself. It is used once and never stored.
-3. Open the admin app and sign in with Cloudflare, as an administrator of the account. Its Account setup page deploys the auth app and creates the account's shared resources. Its Everyday token page makes the everyday token, which every other command uses, and shows it once, to you and not to the agent. Save it as `CLOUDFLARE_API_TOKEN`.
+2. Run setup again with the bootstrap token. It creates the account's two OAuth clients, keeps their secrets in Cloudflare Secrets Store, deploys the admin app and prints its address. Then setup deletes the token and comments out its line in `.env.cloudflare`; in a cloud session you can remove the environment setting. The token is used once and never stored.
+3. Open the admin app and sign in with Cloudflare, as an administrator of the account. Its Account setup page deploys the auth app and creates the account's shared resources. Its Everyday token page makes the everyday token, which `deploy` and the other Cloudflare commands use, and shows it once, to you and not to the agent. Save it as `CLOUDFLARE_API_TOKEN`.
 4. Say "continue prototype setup", or run `npm run cloudflare-setup` again, to check that everything works.
 
 [QUICKSTART.md](QUICKSTART.md) has every step, including the cloud session variant.
@@ -74,7 +74,7 @@ This moves the app to the latest framework release, refreshes its skill copy and
 
 - **Password accounts and sessions are dropped.** Everyone signs in again with Cloudflare. New framework migrations drop the old sign-in and test-mail tables; they run with the app's migrations (locally, on the next `npm run dev`).
 - **Removed:** the password pages and endpoints, the `mail` command and the mail sink, the email domain and Email Service setup, and the `admins` command, with the template's `mail` and `admins` scripts. Admins are now the account's administrators (see [Sign-in](#sign-in)). Cloudflare setup no longer needs Workers Paid or a domain on Cloudflare DNS.
-- **Set up again.** `npm run upgrade` to 0.2.0 points you to setup: a new bootstrap token, then the admin app ([Put it on Cloudflare](#put-it-on-cloudflare)). The Everyday token page brings your existing everyday token to the new permission list, without the email and zone permissions.
+- **Set up again.** `npm run upgrade` to 0.2.0 points you to setup: a new bootstrap token, then the admin app ([Put it on Cloudflare](#put-it-on-cloudflare)). The Everyday token page brings your existing everyday token to the new permission list, without the email and zone permissions. If it has to make a new token instead, it shows the new value once: save it in place of the old one.
 - **Cleanup is optional.** The admin app offers to remove the 0.1.x email resources (routing rules, test mailbox, the `prototype-mailsink` Worker and bucket, the sending domain). It never does so on its own.
 
 ## Working on the framework
