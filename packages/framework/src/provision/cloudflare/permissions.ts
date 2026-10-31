@@ -51,6 +51,7 @@ const GROUPS = {
   apiTokensWrite: group("5bc3f8b21c554832afc660159ab75fa4", "Account API Tokens Write", "account"),
   oauthClientWrite: group("50fc2f43318f40e4855a35d8de5bf643", "OAuth Client Write", "account"),
   secretsStoreWrite: group("adc8fa2bc6124928a8b3314dc63a1235", "Secrets Store Write", "account"),
+  secretsStoreRead: group("5e33b7d77788455c9fdf18cbd38ee5a0", "Secrets Store Read", "account"),
   zoneRead: group("c8fed203ed3043cba015a93ad1616f1f", "Zone Read", "zone"),
   analyticsRead: group("9c88f9c5bce24ce7af9a958ba9c504db", "Analytics Read", "zone"),
   emailRoutingRulesRead: group("1b600d9d8062443e986a973f097e728a", "Email Routing Rules Read", "zone"),
@@ -69,6 +70,16 @@ export const EVERYDAY: readonly PermissionGroup[] = Object.freeze([
 ]);
 
 /**
+ * v0.2.0 plan §5.2 page 2's everyday set (DEC-0715): 4 account groups and no zone group, because
+ * v0.2.0 has no email domain. Each is covered by one admin-client scope (`workers-scripts.write`,
+ * `workers-r2.write`, `d1.write`, `secrets-store.read`; PAR-447). The admin app's everyday-token
+ * page creates or updates the token with exactly these (`everyday-token.ts`). It becomes `EVERYDAY`
+ * (with the tables and the quick check) once `cloudflare-setup`'s check no longer looks up the
+ * email domain's zone with the everyday token (DEC-0716).
+ */
+export const EVERYDAY_V2: readonly PermissionGroup[] = Object.freeze([GROUPS.workersScriptsWrite, GROUPS.r2StorageWrite, GROUPS.d1Write, GROUPS.secretsStoreRead]);
+
+/**
  * The bootstrap token's 4 groups (v0.2.0 plan §5.1, IDs from §2.1b; DEC-0680), all account-scoped:
  * deploying the admin (and later auth) Worker and registering the `workers.dev` subdomain, creating
  * both OAuth clients, putting their secrets in Secrets Store, and "Account API Tokens Write", which
@@ -84,6 +95,7 @@ const SATISFIED_BY: Readonly<Record<string, readonly { readonly id: string; read
   [GROUPS.zoneRead.id]: [{ id: "e6d2666161e84845a636613608cee8d5", name: "Zone Write" }],
   [GROUPS.emailSendingRead.id]: [GROUPS.emailSendingWrite],
   [GROUPS.emailRoutingRulesRead.id]: [GROUPS.emailRoutingRulesWrite],
+  [GROUPS.secretsStoreRead.id]: [GROUPS.secretsStoreWrite],
 });
 
 export type TokenKind = "everyday" | "bootstrap";

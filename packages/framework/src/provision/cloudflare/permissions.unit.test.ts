@@ -7,6 +7,7 @@ import {
   comparePolicies,
   deepLink,
   EVERYDAY,
+  EVERYDAY_V2,
   inPlaceUpdateBody,
   PERMISSIONS_VERSION,
   permissionTableMarkdown,
@@ -45,6 +46,20 @@ describe("the permission list", () => {
     expect(new Set(all.map((g) => `${g.id} ${g.name}`)).size).toBe(new Set(all.map((g) => g.id)).size);
     expect(new Set(all.map((g) => g.id)).size).toBe(new Set(all.map((g) => g.name)).size);
     expect(EVERYDAY.some((g) => g.name.startsWith("Account API Tokens") || (g.scope === "zone" && g.name.endsWith("Write")))).toBe(false);
+  });
+
+  it("EVERYDAY_V2 is v0.2.0 plan §5.2 page 2's set: exactly four account groups, no zone group, with their IDs (§2.1b for Secrets Store Read)", () => {
+    expect(Object.fromEntries(EVERYDAY_V2.map((g) => [g.name, g.id]))).toEqual({
+      "Workers Scripts Write": "e086da7e2179491d91ee5f35b3ca210a",
+      "Workers R2 Storage Write": "bf7481a1826f439697cb59a20b22293e",
+      "D1 Write": "09b2857d1c31407795e75e3fed8617a1",
+      "Secrets Store Read": "5e33b7d77788455c9fdf18cbd38ee5a0",
+    });
+    expect(EVERYDAY_V2.every((g) => g.scope === "account")).toBe(true);
+    // Secrets Store Write includes Read, as Zone Write includes Zone Read.
+    const read = EVERYDAY_V2.find((g) => g.name === "Secrets Store Read")!;
+    const writeOnly = [{ effect: "allow" as const, resources: accountRes, permission_groups: [{ id: "adc8fa2bc6124928a8b3314dc63a1235", name: "Secrets Store Write" }] }];
+    expect(comparePolicies(writeOnly, [read], { accountId: A, zoneId: Z }).missing).toEqual([]);
   });
 
   it("the bootstrap groups carry the IDs read from permission_groups (v0.2.0 plan §2.1b)", () => {
