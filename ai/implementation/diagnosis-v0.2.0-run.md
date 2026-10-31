@@ -71,6 +71,21 @@ The account's session list shows 80 sessions created on 2026-10-31 between 07:38
 - Each such session starts with an empty context, re-reads the plan and code and often re-runs suites, so it is the most expensive possible reviewer. Several reported to this session instead of their parent, which added relaying work here. All 80 are still live, not archived.
 - This had not happened in earlier runs because reviews were either spawned by the orchestrator in-process or done inside the implementing subagent. This run pushed reviews into subagents while the remote-session tool was available.
 
+### 2.7 What the plan added to the first run's review process
+
+The first implementation ran under the old prompt's §7–§8: three test roles (author, runner, evaluator) and a four-step failure process (diagnose → one independent review → fix red-green → re-check), on one feature branch with one PR per phase, with in-process subagents, and asking the owner when blocked. Plan §7a (PR #57) kept that skeleton and wrapped it:
+
+| Addition (plan §7a, TS table) | Effect in this run |
+|---|---|
+| TS-4/TS-20: up to 3 attempts × 3 review rounds, major/minor findings, "Response (round n)" sections, and a non-convergence note by a third subagent after any second round | every root cause became a multi-session exchange plus a third agent |
+| TS-5: a separate similar-case search subagent before every fix | one more agent per failure; its findings became new items and PRs |
+| TS-10 / §7a.1.9: independent review, with a linted record, of every change to any once-green test in any layer, before merge | the largest multiplier: v0.2.0 removes password, mail and admins, so every removal and changed assertion needed a reviewer; 3 T5 batches, ~25 records, ~15 sessions |
+| TS-13 skill reviewer; TS-15 independent review of every E2E scenario change | two more reviewer types |
+| §7a.1.2: eight distinct roles, none the author | each role a separate agent, hence a separate cloud session |
+| TS-3 widened "every failure" to unit regressions and load failures; "flaky" forbidden | load failures caused by parallelism entered the full process |
+
+Multipliers added by this run, not by the plan: the prompt's §4 stacked-PR rule (97 PRs); my planning subagent's per-PR exit check "independent review with no open major" (plan §9 asks for one independent review of the whole release; this made it ~97); one PR per finding; reviewer sessions created from inside subagents. The wrapped process then ran about 100 times instead of once per phase.
+
 ### 2.5 What I should have done at the first sign
 
 By mid-run the count was already past 40 PRs and the token notices from subagents were 300–600k each. The prompt said never to stop for the owner, but it did not say to burn the budget. The right move was to stop, write the status note, and end the turn with a clear message: "this process is producing N PRs and M tokens per item; here is the state; continuing needs your decision." Autonomy rules are not a licence to exceed any reasonable cost; I treated them as one.
