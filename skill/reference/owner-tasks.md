@@ -35,8 +35,8 @@ Any Cloudflare account works, on the free Workers plan too. No domain is needed.
 3. **Put it where setup reads it**, as `CLOUDFLARE_BOOTSTRAP_TOKEN` (add `CLOUDFLARE_ACCOUNT_ID` only if setup asks for it):
    - **In a Claude Code cloud session:** the environment's settings (environment menu → Edit → Environment variables), then start a new session.
    - **On your computer:** the file `.env.cloudflare` in the app's folder (setup writes the template there; git ignores it), in your editor; or the environment. The environment wins when both are set.
-4. **Run `npm run cloudflare-setup` again** (in Claude Code, say **"continue prototype setup"**). With the bootstrap token it creates the account's two sign-in clients, stores their secrets in Cloudflare's Secrets Store, deploys the **admin app**, and deletes the bootstrap token. It prints the admin app's address and "open the admin app and sign in". In a cloud session you may then delete the bootstrap variable: it is already invalid.
-5. **In the admin app** (the owner, in a browser), sign in with your Cloudflare account. You need an administrator role in it. Then:
+4. **Run `npm run cloudflare-setup` again** (in Claude Code, say **"continue prototype setup"**). With the bootstrap token it creates the admin app's client and the sign-in client, stores their secrets in Cloudflare's Secrets Store, deploys the **admin app**, and deletes the bootstrap token. It prints the admin app's address and "open the admin app and sign in". In a cloud session you may then delete the bootstrap variable: it is already invalid.
+5. **In the admin app** (the owner, in a browser), sign in with your Cloudflare account. You need one of the administrator roles of PAR-413 in it: "Super Administrator - All Privileges" or "Administrator". Then:
    - **Account setup:** press its button and allow what Cloudflare asks. It deploys the account's **auth app** (it signs people in to every app) and creates the shared resources (§3).
    - **Everyday token:** make the token `prototype-framework` that every command uses. The page shows its value **once**: copy it into `CLOUDFLARE_API_TOKEN`, where step 3 says. Never paste it into the chat: the agent never sees it.
 6. **Say "continue prototype setup"** (or run `npm run cloudflare-setup`). Without a bootstrap token it checks the everyday token, the account setup and the network, and says "everything is set up" with the next step, a `deploy` of a `test-` stage. Copy `.env.cloudflare` into another app's folder to start that one: it needs no bootstrap token and no admin app visit.
@@ -49,7 +49,7 @@ Any Cloudflare account works, on the free Workers plan too. No domain is needed.
 | the bootstrap token expires more than 1 day from now, or has none; it was deleted | make a new one with a shorter TTL (step 2) |
 | a setting's token is not accepted, not active, the same in both settings, a user token, or of another account | the bootstrap token: make it again from the link. The everyday token: make it again on the admin app's Everyday token page. Replace its line |
 | something the admin app does is missing (with the page) | open that admin app page. If the admin app is not deployed yet, steps 2–4 first |
-| the everyday token lacks a permission | the admin app's Everyday token page updates it; its value stays the same |
+| the everyday token lacks a permission | the admin app's Everyday token page updates it; its value stays the same. If the page shows a new value instead, save it as `CLOUDFLARE_API_TOKEN`, then press its button to delete the old token |
 | several accounts, by name | copy the chosen account's ID from the dashboard into `CLOUDFLARE_ACCOUNT_ID` |
 | the tokens belong to another account than this project's | remove the old account's stages first if you want, with its everyday token, then `npm run cloudflare-setup -- --switch-account` |
 | a host is blocked | allow `api.cloudflare.com`, `*.r2.cloudflarestorage.com` and `*.workers.dev` in the environment's network access settings |
@@ -103,11 +103,13 @@ The deploy registers the stage with the auth app and prints its address. Without
 2. Sign in on Cloudflare's page, and allow the app to see your user details and memberships.
 3. You are back on the app. `<stage address>/api/auth/me` shows `"level":"user"` or `"level":"admin"`.
 
-To let someone sign in, invite them to the account (Manage Account → Members). The least-privileged role that works is a read-only one such as "HTTP Applications Read". Locally and on `test-` stages there is no real sign-in: the login button signs in a test user.
+To let someone sign in, invite them to the account (Manage Account → Members). A read-only role works, for example "HTTP Applications Read" (plan-v0.2.0 §2.1a). Locally and on `test-` stages there is no real sign-in: the login button signs in a test user.
 
 ## 7. Admins
 
-**A member with an administrator role in the Cloudflare account is the app's admin**; every other member is a user. To make someone an admin, give them an administrator role in the dashboard (Manage Account → Members); to make them a user again, give them another role. No file edit, no commit and no deploy. The change shows at their next sign-in, or within 5 minutes (PAR-425) when the app next confirms their role. Removing someone from the account signs them out at that point too.
+**A member whose account role is "Super Administrator - All Privileges" or "Administrator" (PAR-413) is the app's admin**; every other member is a user. To make someone an admin, give them one of those roles in the dashboard (Manage Account → Members); to make them a user again, give them another role. No file edit, no commit and no deploy.
+
+The apps learn a role change when the person **next signs in**, to any app on the account; their other open sessions pick it up within 5 minutes (PAR-425). Until then they keep their old level: ask them to log out and in again. Removing someone from the account stops new sign-ins, but a session they already have lasts until it expires (7 days, PAR-250) or they log out.
 
 ## 8. Checking the real sign-in (optional)
 
