@@ -157,6 +157,17 @@ describe("sign-in", () => {
     expect(b.jar.has(SESSION_COOKIE)).toBe(false);
   });
 
+  it("an ID token with a wrong nonce, audience or expiry is refused: no session, both tokens revoked (plan §7)", async () => {
+    for (const bad of [{ nonce: "other-nonce" }, { aud: "another-client" }, { exp: Math.floor(Date.now() / 1000) - 3600 }]) {
+      cf.idTokenClaims = bad;
+      const b = browser();
+      const r = await signIn(b);
+      expect(r.status, JSON.stringify(bad)).toBe(400);
+      expect(b.jar.has(SESSION_COOKIE)).toBe(false);
+      expect(cf.issued.at(-1)).toMatchObject({ revokedAccess: true, revokedRefresh: true });
+    }
+  });
+
   it("a declined consent shows a clear page and no session", async () => {
     const b = browser();
     const r = await signIn(b, "admin-1", { decline: true });
@@ -284,10 +295,23 @@ describe("a page's grant", () => {
     const r = await b.get(cf.consent(start.headers.get("location")!, { sub: "admin-1" }));
     expect(r.status).toBe(401);
     expect(ran).toHaveLength(0);
-    expect(cf.issued.every((t) => t.revokedAccess)).toBe(true);
+    // Refused before the exchange: only the sign-in's tokens were ever issued.
+    expect(cf.issued).toHaveLength(1);
+    expect(b.jar.has(GRANT_COOKIE)).toBe(false);
   });
 
-  it("no output, header or log line holds a token, code, verifier or the client secret", async () => {
+  it("a page whose action throws shows a generic error page, and both tokens are still revoked", async () => {
+    const failing: AdminPage = { ...statusPage, run: () => Promise.reject(new Error("boom")) };
+    const b = browser(() => deps({ pages: [failing] }));
+    await signIn(b);
+    const start = await b.post("/status");
+    const r = await b.get(cf.consent(start.headers.get("location")!, { sub: "admin-1" }));
+    expect(r.status).toBe(502);
+    expect(await r.text()).toContain("That step failed");
+    expect(cf.issued.every((t) => t.revokedAccess && t.revokedRefresh)).toBe(true);
+  });
+
+  it("no output, header or log line holds a token, an authorization code or the client secret", async () => {
     const b = browser();
     const bodies: string[] = [];
     const headers: string[] = [];
@@ -296,12 +320,20 @@ describe("a page's grant", () => {
       bodies.push(await r.clone().text());
       return r;
     };
-    await record(await signIn(b));
+    const codes: string[] = [];
+    const consent = (location: string, as: { sub: string; untick?: string[] }) => {
+      const back = cf.consent(location, as);
+      codes.push(new URL(back).searchParams.get("code")!);
+      return back;
+    };
+    const s = await record(await b.post("/signin"));
+    await record(await b.get(consent(s.headers.get("location")!, { sub: "admin-1" })));
     const start = await record(await b.post("/status"));
-    await record(await b.get(cf.consent(start.headers.get("location")!, { sub: "admin-1", untick: ["d1.write"] })));
+    await record(await b.get(consent(start.headers.get("location")!, { sub: "admin-1", untick: ["d1.write"] })));
     const again = await record(await b.post("/status"));
-    await record(await b.get(cf.consent(again.headers.get("location")!, { sub: "admin-1" })));
+    await record(await b.get(consent(again.headers.get("location")!, { sub: "admin-1" })));
     const all = [...bodies, ...headers, ...logs].join("\n");
+    for (const c of codes) expect(all).not.toContain(c);
     for (const t of cf.issued) {
       expect(all).not.toContain(t.access);
       expect(all).not.toContain(t.refresh);

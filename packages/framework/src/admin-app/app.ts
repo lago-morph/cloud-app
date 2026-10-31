@@ -132,6 +132,11 @@ async function callback(request: Request, url: URL, deps: AdminDeps): Promise<Re
   }
   const session = g.page === "signin" ? null : await sessionOf(request, deps);
   const target = g.page === "signin" ? undefined : deps.pages.find((p) => p.id === g.page);
+  // A page's grant needs a live session: refused before the code is exchanged, so no token is issued for nothing.
+  if (g.page !== "signin" && (session === null || target === undefined)) {
+    warn("no session");
+    return refusedPage(401, "Your admin session ended. Sign in again, then repeat the step.", done);
+  }
   try {
     return await useGrant(deps, g, code, async (grant: Grant) => {
       if (g.page === "signin") {
@@ -139,10 +144,8 @@ async function callback(request: Request, url: URL, deps: AdminDeps): Promise<Re
         deps.log(logLine("info", "admin signed in"));
         return redirect("/", 303, [...done, cookie(SESSION_COOKIE, value, ADMIN_SESSION_MS)]);
       }
-      if (session === null || target === undefined) {
-        warn("no session");
-        return refusedPage(401, "Your admin session ended. Sign in again, then repeat the step.", done);
-      }
+      // Checked before the exchange; repeated for the type checker.
+      if (session === null || target === undefined) return refusedPage(401, "Your admin session ended. Sign in again, then repeat the step.", done);
       if (grant.admin.sub !== session.sub) {
         warn("grant by another person than the session's");
         return refusedPage(403, "You approved this at Cloudflare as a different person than the one signed in here. Sign in again.", [...done, clear(SESSION_COOKIE)]);
@@ -156,7 +159,16 @@ async function callback(request: Request, url: URL, deps: AdminDeps): Promise<Re
         );
       }
       const api = grantApi(deps.fetch, deps.config.apiBase, grant.accessToken);
-      const html = await target.run({ admin: grant.admin, accountId: deps.config.accountId, api, granted: grant.granted, log: deps.log, now: deps.now });
+      let html: string;
+      try {
+        html = await target.run({ admin: grant.admin, accountId: deps.config.accountId, api, granted: grant.granted, log: deps.log, now: deps.now });
+      } catch (e) {
+        // Step errors name the step and Cloudflare's answer, never a token or a value (each step's own rule).
+        const message = e instanceof Error ? e.message : "unknown error";
+        deps.log(logLine("warn", `${target.id} step failed`));
+        const advice = /code 9109\b/.test(message) ? "<p>Cloudflare refused a permission: start again and keep every permission on the Cloudflare page ticked.</p>" : "";
+        return withCookies(page(target.title, `<p class="warn">That step failed: ${esc(message)}</p>${advice}${button(`/${target.id}`, "Start again")}<p><a href="/">Back to the admin app</a></p>`, { status: 502 }), done);
+      }
       return withCookies(page(target.title, `${html}<p><a href="/">Back to the admin app</a></p>`), done);
     });
   } catch (e) {

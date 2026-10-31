@@ -27,12 +27,26 @@ describe("fake Cloudflare", () => {
     expect(body.scope.split(" ")).toEqual(["openid", "user-details.read", "memberships.read", "workers-scripts.write", "offline_access"]);
   });
 
-  it("refuses a call whose scope was not granted with 403 code 9109, and allows it when granted", async () => {
-    const without = await tokenFor(["workers-scripts.write"]);
-    const r = await without.call("GET", `/accounts/${ACCOUNT}/workers/scripts`);
+  it("refuses a call whose scope was asked for but unticked with 403 code 9109, and allows it when granted", async () => {
+    const without = await tokenFor(["account-api-tokens.write"]);
+    const r = await without.call("GET", `/accounts/${ACCOUNT}/tokens`);
     expect(r.status).toBe(403);
     expect(r.body.errors?.[0]?.code).toBe(9109);
-    expect((await (await tokenFor()).call("GET", `/accounts/${ACCOUNT}/workers/scripts`)).status).toBe(200);
+    expect((await (await tokenFor()).call("GET", `/accounts/${ACCOUNT}/tokens`)).status).toBe(200);
+  });
+
+  it("answers the Workers list without its scope with 200 and an empty list: filtered, not refused (§2.1)", async () => {
+    const without = await tokenFor(["workers-scripts.write"]);
+    const r = await without.call("GET", `/accounts/${ACCOUNT}/workers/scripts`);
+    expect(r).toEqual({ status: 200, body: { success: true, errors: [], messages: [], result: [] } });
+  });
+
+  it("answers D1 and R2 never asked for with code 10000 (401 and 403), as §2.1 recorded", async () => {
+    const { call } = await tokenFor();
+    const d1 = await call("GET", `/accounts/${ACCOUNT}/d1/database`);
+    expect([d1.status, d1.body.errors?.[0]?.code]).toEqual([401, 10000]);
+    const r2 = await call("GET", `/accounts/${ACCOUNT}/r2/buckets`);
+    expect([r2.status, r2.body.errors?.[0]?.code]).toEqual([403, 10000]);
   });
 
   it("refuses a grant-made token holding a group no granted scope covers with 400 code 1001 (§2.1a)", async () => {
