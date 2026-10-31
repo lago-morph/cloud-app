@@ -178,7 +178,10 @@ export async function signingCredentialState(api: CloudflareApi, accountId: stri
   try {
     stored = await storedSecrets(api, accountId, storeId);
   } catch (error) {
-    throw new Error(`checking the ${SIGNING_RESOURCE} in Secrets Store needs "Secrets Store Read": ${error instanceof Error ? error.message : String(error)}`);
+    const detail = error instanceof Error ? error.message : String(error);
+    // Only a refusal names the permission; another failure is reported as it is.
+    if (/HTTP 40[13]/.test(detail)) throw new Error(`checking the ${SIGNING_RESOURCE} in Secrets Store needs "Secrets Store Read": ${detail}`);
+    throw error;
   }
   return Object.values(SIGNING_SECRET_NAMES).every((name) => stored.get(name)?.comment === tokenId) ? "owned" : "absent";
 }
@@ -249,7 +252,9 @@ export async function createAccountSigningCredential(
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     if (written) {
-      throw new Error(`Secrets Store may hold part of the new ${SIGNING_RESOURCE}, but ${detail}; the new and the old tokens were kept: run account setup again`);
+      throw new Error(
+        `Secrets Store may hold part of the new ${SIGNING_RESOURCE} (its key ID beside the old secret), but ${detail}; the new and the old tokens were kept: run account setup again; stages bound to the store cannot sign R2 transfers until then`,
+      );
     }
     await deleteSigningToken(api, accountId, credentials.id).catch(() => undefined);
     throw error;

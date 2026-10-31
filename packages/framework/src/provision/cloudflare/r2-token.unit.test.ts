@@ -235,6 +235,7 @@ describe("the signing credential in Secrets Store (plan-v0.2.0 §5.2 page 1, D7,
     cloud.override.set(`PATCH /accounts/${FAKE_ACCOUNT}/secrets_store/stores/store1/secrets/${secretId}`, fail500);
     const failure = await createAccountSigningCredential(cloud.api, FAKE_ACCOUNT, { secretsStore: true }).then(() => "", (e: unknown) => String(e));
     expect(failure).toMatch(/Secrets Store may hold part of the new R2 signing credential .*run account setup again/);
+    expect(failure).toContain("stages bound to the store cannot sign R2 transfers until then");
     expect(failure).not.toMatch(/[0-9a-f]{64}/);
     expect(tokenNames(cloud)).toHaveLength(first.length + 1);
     expect(tokenNames(cloud)).toEqual(expect.arrayContaining(first));
@@ -252,6 +253,10 @@ describe("the signing credential in Secrets Store (plan-v0.2.0 §5.2 page 1, D7,
     await createAccountSigningCredential(cloud.api, FAKE_ACCOUNT, { secretsStore: true });
     cloud.override.set(`GET /accounts/${FAKE_ACCOUNT}/secrets_store/stores/store1/secrets?per_page=100`, err(403, 10000, "Authentication error"));
     await expect(signingCredentialState(cloud.api, FAKE_ACCOUNT)).rejects.toThrow(/needs "Secrets Store Read".*HTTP 403/);
+    cloud.override.set(`GET /accounts/${FAKE_ACCOUNT}/secrets_store/stores/store1/secrets?per_page=100`, err(500, 10001, "internal"));
+    const other = await signingCredentialState(cloud.api, FAKE_ACCOUNT).then(() => "", (e: unknown) => String(e));
+    expect(other).toMatch(/HTTP 500/);
+    expect(other).not.toContain("Secrets Store Read");
     const { accessKeyId: _id, ...noKeyId } = cloud.objectBodies.get(RECORD_KEY) as Record<string, unknown>;
     cloud.objectBodies.set(RECORD_KEY, noKeyId);
     await expect(readSigningPlacement(cloud.api, FAKE_ACCOUNT)).rejects.toThrow(/not a valid signing record/);

@@ -274,11 +274,12 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       const placement = await signingPlacement();
       const fromStore = placement.kind === "secrets-store" ? { secretsStore: signingBindings(placement.storeId) } : {};
       const worker = { ...(await workerInput(input, input.database, options.code)), ...fromStore };
+      // Written (and so validated) before anything is deleted.
+      writeSstApp(dir, { stage: input.stage, worker });
       // A Worker cannot hold a secret and a binding of one name: copies an earlier deploy made go first,
       // exactly the names bound (DEC-0727). Should the upload then fail, the stage has neither until the
       // next successful deploy, which the step's failure already asks for.
       for (const b of fromStore.secretsStore ?? []) await deleteSecret(api, accountId, input.stage, logicalSecretName(b.binding)!);
-      writeSstApp(dir, { stage: input.stage, worker });
       await runSst(sst, sstRun(input.stage), "deploy");
       await ensureFrameworkSecrets(input.stage, placement);
       // The return URL is registered once the Worker that answers it exists, before step 6 starts it (DEC-0725).
