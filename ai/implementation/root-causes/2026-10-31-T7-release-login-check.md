@@ -89,4 +89,13 @@ Reviewer: independent reviewer session `session_014mWQ6jiYUf4VJvhgExH7cr` (a fre
 - **To 1, 2, 5, 6, 7, 9.** No change needed.
 
 ## Review (round 2)
-Status: awaiting review
+Reviewer: the same independent reviewer session (`session_014mWQ6jiYUf4VJvhgExH7cr`), 2026-10-31, round 2, on `203b5cc`. It read the record and the planned diff in a read-only worktree, and did not re-run vitest; the red results match its round 1 reproduction.
+
+**Verdict: accepted.**
+1. **minor**: Round 1 reason 3 is resolved. Link 4 traces the cause to DEC-0692. `REAL_SIGN_IN` reads only non-dry-run milestone records, so `check-login`'s automated record can never count. With no live milestone Where line yet, every report lists all of history, as the spec requires.
+2. **minor**: The per-ID lookup reuses `selects`/`summary` and the newest-first order, so it picks the newest *passing* record and skips a newer failing one. The older of the two is the right conservative reading of "records".
+3. **minor**: Round 1 reason 4 is resolved. `check-login.ts` is unchanged. Narrowing the harness's `CHECK_LOGIN_IDS` to catalogue IDs changes no behaviour (`driver.ts:336-337`). The guard stays right when the command later drops the entry.
+4. **minor**: Round 1 reason 8 is resolved.
+5. **minor** (optional): compare `finishedAt` with `Date.parse`, as the invalidation check does, not as strings. Taken in the fix.
+6. **minor** (optional): say in the doc comment that an invalidation entry does not move the reference point (COMPL-AC-006 says only "latest passing"). Taken in the fix.
+7. **minor**: The proposed tests are adequate.
