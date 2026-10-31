@@ -17,7 +17,7 @@ Origin: owner · Derives from: SYS-REQ-017
 The user ID MUST be derived deterministically from the provider's name and the provider's stable identifier for the person. It is the same in every stage and target, cannot be reversed into the provider identifier, and changes if the person signs in through a different provider.
 
 #### AUTH-REQ-003 — Levels from the account (amended; formerly admin by configuration)
-Origin: owner · Derives from: SYS-REQ-017, SYS-REQ-018 · Decision: DEC-0080 (superseded), DEC-0521, DEC-0522, DEC-0524
+Origin: owner · Derives from: SYS-REQ-017, SYS-REQ-018 · Decision: DEC-0080 (superseded), DEC-0521 (superseded), DEC-0522 (superseded), DEC-0524 (superseded), DEC-0690, DEC-0694
 
 With a real provider, a logged-in user MUST be `admin` exactly when their user ID is in the configured admin list, evaluated on every request. When the optional `framework.users` list is present, a validated login whose ID is in neither `framework.users` nor `framework.admins` MUST be treated as anonymous, also evaluated on every request. Without the list, level `user` means any account the login provider accepts. With the authentication mock, the level chosen by the test is used directly (AUTH-REQ-009).
 
@@ -28,7 +28,7 @@ Amendment (Origin: owner · Decision: DEC-0521, DEC-0522; the per-request read: 
 
 A grant or revoke MUST take effect on the next request, with no new login. The account MUST be read at most once per request, and only for a request that carries a valid session (good signature, not expired) from a real provider. A request without one MUST cause no database read for its level. If the read fails, the request MUST be anonymous. With the authentication mock, the level chosen by the test is used directly, with no read (AUTH-REQ-009).
 
-Amendment for v0.2.0 (Origin: owner-approved · Decision: DEC-0690; the role held in the session: ai-proposed, DEC-0694): the amendment above is replaced by the following. Levels come from the owner's Cloudflare account, through the auth app (SYS-REQ-018 as amended):
+Amendment for v0.2.0 (Origin: owner-approved · Decision: DEC-0690; the role held in the session: ai-proposed, DEC-0694): the original text and the amendment above are replaced by the following. Levels come from the owner's Cloudflare account, through the auth app (SYS-REQ-018 as amended):
 - `anonymous`: the request has no valid session, or its session was ended because its role could not be confirmed;
 - `user`: a valid session whose confirmed role is `user`;
 - `admin`: a valid session whose confirmed role is `admin`. The auth app maps a membership to `admin` when one of its role names is in PAR-413.
@@ -41,13 +41,13 @@ Origin: provenance-unclear · Derives from: SYS-REQ-010, SYS-REQ-017
 `requireUser()` MUST reject anonymous requests with 401 `AUTH.UNAUTHENTICATED`. `requireAdmin()` MUST additionally reject users with 403 `AUTH.FORBIDDEN`. `requireCurrentUser(c)` MUST return the logged-in user, or throw `AUTH.UNAUTHENTICATED` for an anonymous request.
 
 #### AUTH-REQ-005 — Framework routes and "who am I"
-Origin: owner · Derives from: SYS-REQ-018 · Decision: DEC-0080 (superseded), DEC-0521, DEC-0522, DEC-0523
+Origin: owner · Derives from: SYS-REQ-018 · Decision: DEC-0080 (superseded), DEC-0521 (superseded), DEC-0522 (superseded), DEC-0523 (superseded), DEC-0690
 
 The framework MUST provide the `/api/auth/*` routes in the HTTP contract. `/api/auth/me` MUST show a logged-in user their user ID, including a validated login that `framework.users` makes anonymous. The skill and the app template's README MUST give copy-and-paste steps for adding that ID to the admin list or to `framework.users`.
 
 Amendment (Origin: owner · Decision: DEC-0521, DEC-0522, DEC-0523): there are no lists to copy an ID into. `/api/auth/me` MUST show a logged-in user their level and user ID, and MUST NOT return `unlistedId`. The skill and the app template's README MUST give copy-and-paste steps for granting and revoking the `admin` role with the `admins` command (CLI-REQ-005).
 
-Amendment for v0.2.0 (Origin: owner-approved · Decision: DEC-0690): there is no `admins` command. `/api/auth/me` MUST show a logged-in user their level and user ID, and MUST NOT return `unlistedId`. The skill and the app template's README MUST say how a person becomes an admin: an administrator role in the owner's Cloudflare account (PAR-413), which takes effect at their next sign-in or role refresh.
+Amendment for v0.2.0 (Origin: owner-approved · Decision: DEC-0690): the original text and the amendment above are replaced by the following. There is no `admins` command and there are no lists. `/api/auth/me` MUST show a logged-in user their level and user ID, and MUST NOT return `unlistedId`. The skill and the app template's README MUST say how a person becomes an admin: an administrator role in the owner's Cloudflare account (PAR-413), which takes effect at their next sign-in or role refresh.
 
 #### AUTH-REQ-006 — Sessions
 Origin: owner-approved · Derives from: SYS-REQ-017
@@ -60,13 +60,13 @@ Origin: provenance-unclear · Derives from: SYS-REQ-017 · Decision: DEC-0516
 A state-changing request (POST, PUT, PATCH, DELETE) that carries a session MUST be rejected with `AUTH.REQUEST_FORGERY` unless its `Origin` header equals the deployment's public origin. Every POST to a path under `/api/auth/` MUST be rejected in the same way whether or not it carries a session, so that no sign-in, sign-up, verification, reset or resend can be submitted from another site (login forgery). Together with SameSite=Lax session cookies, this is the whole protection (DEC-0072); the credential library's own origin check is not relied on. State-changing behavior on GET routes is not allowed, except the framework's `/api/auth/login` and `/api/auth/callback`, which set login cookies; the callback is protected by the transaction state.
 
 #### AUTH-REQ-008 — Provider interface
-Origin: owner · Derives from: SYS-REQ-019
+Origin: owner · Derives from: SYS-REQ-019 · Decision: DEC-0509 (superseded), DEC-0510 (superseded), DEC-0691, DEC-0694
 
 Each login provider MUST implement the internal provider interface. All protocol validation MUST happen inside the provider. The callback URL MUST be built from the deployment's resolved public origin, never from request headers.
 
 Amendment for release 1 (Origin: owner · Decision: DEC-0509, DEC-0510): a provider implements either the redirect interface (`LoginProvider`) or the credential interface (`CredentialProvider`); release 1's real provider, PWD, is a credential provider. All credential validation MUST happen inside the provider, the provider MUST return only a stable identifier and a display name, and links the provider sends by email MUST be built from the deployment's resolved public origin, never from request headers.
 
-Amendment for v0.2.0 (Origin: owner-approved · Decision: DEC-0691; the empty display name: ai-proposed, DEC-0694): the release-1 amendment above is replaced by the following. The real provider is the auth-app provider (`id` `cf-account`), a redirect provider (`LoginProvider`); the credential interface is removed. All protocol validation (Cloudflare's OAuth flow, PKCE, the ID token and the membership) MUST happen in the auth app. The provider MUST return only the stable identifier (`sub`) and the role, with no display name, so the email address the auth app holds never reaches app code (AUTH-REQ-001). The return URL the provider sends to the auth app MUST be the app's callback URL, built from the deployment's resolved public origin, never from request headers.
+Amendment for v0.2.0 (Origin: owner-approved · Decision: DEC-0691; the empty display name: ai-proposed, DEC-0694): the original text and the release-1 amendment above are replaced by the following. The real provider is the auth-app provider (`id` `cf-account`), a redirect provider (`LoginProvider`); the credential interface is removed. All protocol validation (Cloudflare's OAuth flow, PKCE, the ID token and the membership) MUST happen in the auth app. The provider MUST return only the stable identifier (`sub`) and the role, with no display name, so the email address the auth app holds never reaches app code (AUTH-REQ-001). The return URL the provider sends to the auth app MUST be the app's callback URL, built from the deployment's resolved public origin, never from request headers.
 
 #### AUTH-REQ-009 — Authentication mock
 Origin: owner · Derives from: SYS-REQ-020
@@ -74,7 +74,7 @@ Origin: owner · Derives from: SYS-REQ-020
 A mock provider and the `/api/auth/mock-login` route MUST let tests choose any identity — access level, user ID (used as given, not derived), and display name — without contacting a real provider. Both MUST be present only locally and in test stages, and MUST be absent from production deployments.
 
 #### AUTH-REQ-010 — Failed login
-Origin: provenance-unclear · Derives from: SYS-REQ-010 · Decision: DEC-0516
+Origin: provenance-unclear · Derives from: SYS-REQ-010 · Decision: DEC-0516, DEC-0694
 
 A failed login MUST NOT create a session, and MUST log the provider's reason without exposing it to the browser. A failed redirect-provider login MUST redirect to `/?authError=login_failed&requestId=<id>`, where `<id>` is the request's ID. A failed credential sign-in MUST answer as the internal HTTP contract specifies: a catalogue error in JSON, or a redirect to the sign-in page with a generic message for a form; both are identical for an unknown account and a wrong password (PWD-REQ-005).
 
