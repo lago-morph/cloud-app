@@ -16,7 +16,7 @@ For each criterion and each scenario, the test author lists its edge cases **bef
   - exactly at a documented limit;
   - one past it.
 
-  Boundary tests run in-process or locally only. On a cloud, follow the cloud usage limits (`ai/implementation/plan.md` §1): one oversized row, never many rows, and no probing of platform limits.
+  Boundary tests run in-process or locally only. On a cloud, follow the cloud usage limits (`ai/implementation/plan.md` §1): one oversized row, never many rows, and no probing of platform limits unless a binding requirement names that exact limit; then the smallest test that shows it.
 - **Text:**
   - Unicode, case and normalisation;
   - `..`, `/` and percent-encoding in names;
