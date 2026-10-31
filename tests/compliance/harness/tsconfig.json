@@ -2,5 +2,5 @@
   // Compliance harness, tools and the compliance tests that use them (C-02): Node tooling lib
   // set. Checked by the root `npm run typecheck`.
   "extends": "../../../tsconfig.node.json",
-  "include": ["./**/*.ts", "../tools/**/*.ts", "../criteria/**/*.ts", "../e2e/**/*.ts"]
+  "include": ["./**/*.ts", "../tools/**/*.ts", "../criteria/**/*.ts", "../coverage/**/*.ts", "../e2e/**/*.ts"]
 }
