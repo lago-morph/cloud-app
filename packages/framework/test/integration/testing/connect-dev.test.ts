@@ -4,7 +4,8 @@
  * `PROTOTYPE_FRAMEWORK_SMOKE_CONNECTION` (the name is CLI's, cli.md), the base URL from it,
  * logins through mock-login with `as()`, `Origin` on state-changing requests, `dispose`, the
  * in-process-only members refused, and a non-test stage refused before anything is sent.
- * Untagged: CLI-AC-005 is evidenced by `smoke` itself.
+ * Untagged: CLI-AC-005 is evidenced by `smoke` itself. Matchers such as /connected stage/ pin
+ * today's messages, which testing.d.ts does not word.
  */
 import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
@@ -73,6 +74,9 @@ describe("connectTestStage against the local dev server", { timeout: 300_000 }, 
     const other = stage.as(mockUsers.user("u_disposed"));
     expect((await json(other, "/api/whoami")).id).toBe("u_disposed");
     await other.dispose();
+    // Its session is over: a later request through it is refused or anonymous (testing.d.ts words neither).
+    const after = await other.request("/api/whoami").then(async (r) => (await r.json()) as Record<string, unknown>, (e: unknown) => e);
+    expect(after instanceof Error || (after as { level?: string }).level === "anonymous", String(JSON.stringify(after))).toBe(true);
     expect(await json(stage, "/api/whoami")).toEqual({ level: "anonymous" });
     expect((await json(stage.as(mockUsers.user("u_disposed")), "/api/whoami")).id, "the same user logs in again").toBe("u_disposed");
   });

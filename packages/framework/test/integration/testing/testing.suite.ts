@@ -9,6 +9,9 @@
  * stub provider, user ID) and B's DEC-0668/0672/0673 (PAR-425 = 300 s), not from the code.
  * Every other suite uses `createTestApp` as a harness; this one checks the harness itself, so it
  * is untagged. Imports the framework: load only after the dialect is selected.
+ *
+ * Message matchers such as /disposed/, /failed/, /mock/ or /login provider/ pin today's messages,
+ * which testing.d.ts does not word; they keep a bare `toThrow()` from passing on any TypeError.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { defineApp, defineTable, id, text } from "../../../src/index.js";
@@ -31,7 +34,8 @@ const app = defineApp({
   secrets: ["apiKey"],
   tables: { notes },
   routes: (api) => {
-    probeRoutes(api as never);
+    // The probe routes are typed for an app with no secrets; only the request vars' type differs.
+    probeRoutes(api as unknown as Parameters<typeof probeRoutes>[0]);
     api.get("/whoami", (c) => c.json(c.var.user));
   },
 });
