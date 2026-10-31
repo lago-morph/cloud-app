@@ -43,7 +43,7 @@ The other five SEC-AC-002 tests pass: secret values, session cookies, ticket URL
 - After D's amendment, the criterion text and the tests agree, with no tagged SEC-AC-002 test for the password clause.
 
 ## Confirmation run
-Pending.
+I made a scratch merge of `origin/v0.2.0/34a-remove-email-files` (#150, `97a8fba`, which already contains 71n) into 71n. It fast-forwards to `97a8fba`. I rebuilt the framework, set a throwaway local apiKey on stdin, and ran `npm run compliance -- --target local --only SEC-AC-002` (run `1nxoecbpeai44fd`): **passed**, 5 of 5 tests. These are the secret-value scan, the stub-login entries, the in-process entries and responses, the in-process stub code, and the repository, build and `.logs/` scan. With the test file removed, no password test remains. The criterion's clause still stands in `secrets.md` (open, above).
 
 ## Review
 Status: awaiting review

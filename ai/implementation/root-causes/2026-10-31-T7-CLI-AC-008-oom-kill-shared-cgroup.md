@@ -53,6 +53,15 @@ No code or test change. It is an environment cause (class c):
 - **Runner rule.** Run `npm run compliance -- --target local` (full) only when no other heavy job (another compliance run, an app `verify`, an e2e run) is running in the same session's sandbox. Or treat a run that overlapped one as unreliable, and re-run the affected IDs alone. Before reporting a `-1` exit status as a failure, check the kernel log for a cgroup OOM kill in the test's window: `dmesg -T | grep 'Killed process'`. This belongs in the orchestration notes (progress §6, owned by R). It is listed as open.
 - **Optional harness improvement, not made here.** `runCommand` could append `[c-t1] ended by signal <name>` when `close` reports a signal, so a killed child is named in the evidence. It is outside T7's owned paths, so it is listed as a suggestion for S3 / the harness owner, not an item.
 
+## Similar cases (§7a.1.8 step 4)
+- **Disk, the other shared resource.** My full run on `60b5e8e` (run `pe62vhrw8mv2yhe`, 13:35–14:24 UTC) also failed E2E-003 and E2E-009. Neither failed in T1's run.
+  - E2E-003's output shows `verify failed (exit 228)` with `npm error code ENOSPC … no space left on device` at 14:18.
+  - E2E-009 failed with `download.saveAs: canceled` while saving a 100 MB download.
+  - `df -h /` then showed 1.1 GB free (98%). The session's agents share one disk too, and my own four extra worktrees (about 575 MB of `node_modules` each) were part of the load. Removing them freed it to 3.1 GB.
+
+  Same class and the same runner rule: a full local run needs free disk (several GB for scratch copies and downloads) as well as memory. A run that hits ENOSPC is unreliable for the IDs that failed then. These two IDs are not in T1's list. I did not diagnose them further, and they need a clean re-run.
+- **E2E-004 on 71n alone.** E2E-004's coverage part failed in my run because AUTH-AC-012, AUTH-AC-013 and AUTH-AC-015 have no tagged test on 71n. T1's PRs #131/#132 add those tests, and T1's run on branch 75 did not fail E2E-004. This is covered, not environmental.
+
 ## Verification plan
 - Re-run `npm run compliance -- --target local --only CLI-AC-008` with no concurrent heavy job. Expect 5 passed, as in `hv2yas3d80t67es`.
 - On any future `-1` (null status) in a CLI criterion, the kernel log shows a matching `Killed process` line in the test's window. If none appears, this record does not explain that failure, and it needs its own diagnosis.
