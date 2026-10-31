@@ -185,10 +185,11 @@ export function defineTestingSuite(dialect: Dialect): void {
 
     it(`with the fake auth app, a role changed by grantRole/revokeRole or authApp.setRole shows at the next role refresh after PAR-425, with one role call and no new sign-in ${on}`, async () => {
       const a = await open({ authAppLoginProvider: true });
-      await a.loginWithAuthApp({ sub: "cf-sub-1", email: "member@example.com", role: "user" });
+      await a.loginWithAuthApp({ sub: "cf-sub-1", role: "user" });
       const signedIn = await me(a);
       expect(signedIn).toMatchObject({ level: "user", id: deriveUserId("cf-account", "cf-sub-1"), displayName: null });
-      expect(JSON.stringify(signedIn)).not.toContain("member@example.com");
+      // The fake auth app makes up the email `<sub>@auth-app.test` (DEC-0734); it must not reach the app.
+      expect(JSON.stringify(signedIn)).not.toContain("cf-sub-1@auth-app.test");
       const id = signedIn.id!;
       const redeems = a.authApp.calls.redeem;
 

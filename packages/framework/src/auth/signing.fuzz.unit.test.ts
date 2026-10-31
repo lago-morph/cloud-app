@@ -10,7 +10,7 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { readCookie } from "./cookies.js";
-import { readSession, issueSession, type SessionData } from "./session.js";
+import { readSession, issueSession, SESSION_LIFETIME_SECONDS, type SessionData } from "./session.js";
 import { base64urlDecode, base64urlEncode, verifyToken } from "./signing.js";
 import { issueTransaction, readTransaction } from "./transaction.js";
 
@@ -74,7 +74,15 @@ function mutate(token: string, m: Mutation): string {
 
 const text = fc.string({ unit: "binary", maxLength: 8 });
 const sessionData: fc.Arbitrary<SessionData> = fc.oneof(
-  fc.record({ id: text.filter((s) => s !== ""), displayName: fc.option(text, { nil: null }), provider: fc.constantFrom("cf-account", "oidc"), subject: text.filter((s) => s !== "") }),
+  fc.record({
+    id: text.filter((s) => s !== ""),
+    displayName: fc.option(text, { nil: null }),
+    provider: fc.constantFrom("cf-account", "oidc"),
+    subject: text.filter((s) => s !== ""),
+    role: fc.record({ level: fc.constantFrom("user" as const, "admin" as const), checkedAt: fc.integer({ min: 0, max: NOW / 1000 }) }),
+    // Session format 3: readSession returns the expiry, and issueSession keeps a given one.
+    expiresAt: fc.integer({ min: NOW / 1000 + 1, max: NOW / 1000 + SESSION_LIFETIME_SECONDS }),
+  }),
   fc.record({ id: text.filter((s) => s !== ""), displayName: fc.option(text, { nil: null }), mockLevel: fc.constantFrom("user" as const, "admin" as const) }),
 );
 const transactionData = fc.record({ state: text, returnTo: text });
