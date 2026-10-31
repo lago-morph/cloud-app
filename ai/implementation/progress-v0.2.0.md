@@ -63,7 +63,7 @@ Format: **ID — title** · plan § · deps · status. Then Owns / PRs (`nn` bra
 - Tests: none added (docs); catalogue must still parse the scenarios (Origin lines must not break `catalogue.ts`). E2E: no scenario change in meaning; E2E-004 unaffected. Fuzz: none.
 - IDs: DEC-0625–0629, PAR-400–402.
 
-**S2 — commit hook and record linters** · §7a.2.5, TS-12, TS-18 · — · `running`
+**S2 — commit hook and record linters** · §7a.2.5, TS-12, TS-18 · — · `done` (#87 linters, #91 hook; 96/96 unit; hook verified blocking a real `claude -p` commit; reviews accepted / accepted-with-changes, no open major; PRs over size, see owner-questions 13)
 - Owns: `.claude/settings.json` (new), `scripts/lint-records.mjs`, `scripts/claude-commit-hook.mjs` (new), `tests/lint-records.unit.test.ts`, `tests/claude-commit-hook.unit.test.ts`, `ai/implementation/test-reviews/README.md` (new, record format). Must not edit root `package.json` (S3 owns it in batch 1): scripts are run as `node scripts/…`.
 - PRs: `10-record-linters` ← main (root-cause + test-review lint, unit tests; ~300) · `11-claude-commit-hook` ← 10 (PreToolUse hook on `git commit`: eslint + typecheck + record lints on staged files; ~150).
 - Exit: `npx vitest run --config vitest.unit.config.ts tests/lint-records.unit.test.ts tests/claude-commit-hook.unit.test.ts` green; a scratch commit with a record missing "Review" is blocked by the hook (transcript in PR); existing records not linted unless staged; no `.git/hooks` file written; template has no hook (`git diff main -- apps/template` empty).

@@ -15,3 +15,10 @@ Decisions the orchestrator took while the owner was away during the v0.2.0 run. 
 10. (S3, DEC-0636) S1's PR 05 edits `docs/acceptance/e2e-scenarios.md`, which the catalogue parses, so its CI runs the catalogue unit tests and the COMPL criteria, not "linters only" as the S3 exit check said. — I followed the plan's test-input rule. — To reverse: drop `docs/acceptance/*.md` from the test-input entry in `scripts/ci/path-map.json`.
 11. (S3, DEC-0638) The Playwright project names live in `tests/compliance/harness/selection.ts`, not in `harness/playwright.ts`, the file the plan names. — S3 made a one-line edit there. — To reverse: rename the projects back.
 12. (S3, DEC-0639) The aggregate CI job keeps the name `verify`. — Make `verify` the required status check. — To reverse: rename the job and update branch protection.
+13. (S2) PRs #87 (+819) and #91 (+1274) are well over the ~400-line target. About half of each is tests, and five review rounds hardened the hook so it fails closed. — Both were kept whole rather than re-split after review, because the review evidence is tied to those PRs. — To reverse: split #91 into the command parser with its tests, then the hook wiring with `.claude/settings.json`.
+14. (S2, DEC-0630–0634) Lint and hook scope:
+   - Editing a pre-v0.2.0 root-cause record (43 of them fail the new lint) means bringing it to the new format in the same commit. No exemption. To reverse: add a date cut-off in `lintRecord`.
+   - At least one reason must be marked major/minor, not every reason. To reverse: require a `Reasons:` list.
+   - `merge`, `cherry-pick`, `revert`, `rebase` and `am` are not checked; the plan names only `git commit`. To reverse: add them in `gitCommand`.
+   - The hook fails closed, so it can block some clean commits, for example `"$TOOL" commit`. To reverse: narrow `commitPlan`.
+   - It costs about 67 s on a framework-source commit and stops itself at 280 s.
