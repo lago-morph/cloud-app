@@ -89,7 +89,9 @@ describe.each([
     framework: readHistory(FRAMEWORK_MIGRATIONS_DIR, dialect, "framework"),
     app: readHistory(root, dialect, "app"),
   });
-  const record = () => h.rows(`SELECT * FROM "__framework_migrations" ORDER BY applied_at, id`);
+  // The record's order: history (framework, then app), then ID (MIG-REQ-002, migrations.md).
+  // Not `applied_at`, which ties within a millisecond (root cause 2026-10-31-C-mig-record-order-tie).
+  const record = () => h.rows(`SELECT * FROM "__framework_migrations" ORDER BY CASE WHEN id LIKE 'framework/%' THEN 0 ELSE 1 END, id`);
 
   it(tag("MIG-AC-002", "a fresh database gets the framework migrations, then the app's, each recorded once in order with its dialect and checksum"), async () => {
     const root = await appHistory({ parents, children });
@@ -103,6 +105,20 @@ describe.each([
     expect(rows.every((r) => r["dialect"] === dialect && Number(r["applied_at"]) > 0)).toBe(true);
     expect(await h.rows(`SELECT * FROM "children"`)).toEqual([]);
     expect(await h.rows(`SELECT * FROM "__framework_kv"`)).toEqual([]);
+  });
+
+  // Root cause 2026-10-31-C-mig-record-order-tie: `applied_at` has millisecond resolution, so
+  // neighbouring migrations can share it. The record's order is the history rank (framework,
+  // then app), then the ID (MIG-REQ-002, migrations.md), never `applied_at` alone.
+  it(tag("MIG-AC-002", "the record lists the framework migrations, then the app's, even when two neighbouring migrations share applied_at"), async () => {
+    const root = await appHistory({ parents, children });
+    const { framework, app } = histories(root);
+    // 1, 2, …, n, n: the last framework migration and the first app migration tie, as on CI.
+    let calls = 0;
+    await applyMigrations(h.db, histories(root), () => Math.min(++calls, framework.length));
+    const rows = await record();
+    expect(rows.map((r) => Number(r["applied_at"]))).toEqual([...framework.map((_, i) => i + 1), ...app.map(() => framework.length)]);
+    expect(rows.map((r) => r["id"])).toEqual([...framework, ...app].map((m) => m.id));
   });
 
   it(tag("MIG-AC-002", "a second run with nothing pending applies nothing and changes no data or record"), async () => {
