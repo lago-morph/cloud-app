@@ -1,0 +1,20 @@
+<!--
+  mock-oauth2-server's runtime classpath for local runs (tests/support/mock-oauth2/launcher.ts,
+  DEC-0661). Maven Central publishes only the thin jar, so the launcher resolves its dependencies
+  with `mvn dependency:copy-dependencies` into a cache directory and runs the standalone main class.
+  Keep MOCK_OAUTH2_VERSION in launcher.ts equal to the version here.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>local.prototype-framework</groupId>
+  <artifactId>mock-oauth2-classpath</artifactId>
+  <version>1</version>
+  <packaging>pom</packaging>
+  <dependencies>
+    <dependency>
+      <groupId>no.nav.security</groupId>
+      <artifactId>mock-oauth2-server</artifactId>
+      <version>6.1.4</version>
+    </dependency>
+  </dependencies>
+</project>
