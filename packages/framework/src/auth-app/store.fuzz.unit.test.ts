@@ -12,7 +12,8 @@ import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { beforeAll, describe, expect, it } from "vitest";
 import { SIGN_IN_COOKIE, handleAuthAppRequest } from "./app.js";
 import { createAuthAppService } from "./service.js";
-import { createCode, ensureSchema, isRegistered, registerReturnUrl, saveSignIn, takeSignIn, upsertUser, validReturnUrl, type D1Like, type D1Statement } from "./store.js";
+import { AUTH_APP_CODE_LIFETIME_MS } from "../auth/auth-app-binding.js";
+import { createCode, ensureSchema, isRegistered, redeemCode, registerReturnUrl, saveSignIn, takeSignIn, upsertUser, validReturnUrl, type D1Like, type D1Statement } from "./store.js";
 
 /** SQLite in memory behind the store's D1 interface; counts the statements executed. */
 function sqliteD1(): { db: D1Like; executed: () => number } {
@@ -204,6 +205,10 @@ const config = { clientId: "fuzz-client", clientSecret: "fuzz-client-secret-not-
 describe("F3: auth app code and state parsing fuzz (plan §4.1 steps 3–4, PAR-414)", () => {
   let store: ReturnType<typeof sqliteD1>;
   let issued: string;
+  /** An issued code already redeemed once, and one past its PAR-414 lifetime (PR review of #111, minor 2). */
+  let used: string;
+  let expired: string;
+  const EXPIRED_AT = NOW - AUTH_APP_CODE_LIFETIME_MS - 1;
   const savedState = "s".repeat(CODE_LENGTH);
   beforeAll(async () => {
     store = sqliteD1();
@@ -211,6 +216,10 @@ describe("F3: auth app code and state parsing fuzz (plan §4.1 steps 3–4, PAR-
     await registerReturnUrl(store.db, APP, RETURN);
     await upsertUser(store.db, { sub: "sub-a", email: "a@example.com", role: "user" }, NOW);
     issued = await createCode(store.db, { sub: "sub-a", app: APP, returnUrl: RETURN }, NOW);
+    used = await createCode(store.db, { sub: "sub-a", app: APP, returnUrl: RETURN }, NOW);
+    expect(await redeemCode(store.db, { code: used, app: APP }, NOW)).not.toBeNull();
+    // Created last: `createCode` deletes codes that have expired by its own clock.
+    expired = await createCode(store.db, { sub: "sub-a", app: APP, returnUrl: RETURN }, EXPIRED_AT);
     await saveSignIn(store.db, savedState, { verifier: "v", nonce: "n", app: APP, returnUrl: RETURN, appState: "app-state" }, NOW);
   });
 
@@ -220,10 +229,11 @@ describe("F3: auth app code and state parsing fuzz (plan §4.1 steps 3–4, PAR-
       codeMutation.map((m) => ({ mutation: m })),
       fc.string({ unit: "binary", maxLength: 64 }).map((raw) => ({ raw })),
       fc.string({ unit: fc.constantFrom(...B64URL), minLength: CODE_LENGTH - 1, maxLength: CODE_LENGTH + 1 }).map((raw) => ({ raw })),
+      fc.constantFrom("used" as const, "expired" as const).map((known) => ({ known })),
     );
     await fc.assert(
       fc.asyncProperty(candidate, fc.constantFrom(APP, "notes-test", "Notes-prod", ""), async (c, app) => {
-        const code = "raw" in c ? c.raw : mutateCode(issued, c.mutation);
+        const code = "raw" in c ? c.raw : "known" in c ? (c.known === "used" ? used : expired) : mutateCode(issued, c.mutation);
         fc.pre(!(code === issued && app === APP));
         const before = store.executed();
         await expect(service.redeem({ code, app })).resolves.toBeNull();
@@ -231,9 +241,11 @@ describe("F3: auth app code and state parsing fuzz (plan §4.1 steps 3–4, PAR-
       }),
       { seed: F3_SEED, numRuns: F3_RUNS },
     );
-    // Not vacuous: the issued code was never used up, and redeems exactly once.
+    // Not vacuous: the issued code was never used up, and redeems exactly once; the expired code
+    // was refused only for its age (it still redeems at a time inside its lifetime).
     await expect(service.redeem({ code: issued, app: APP })).resolves.toEqual({ sub: "sub-a", email: "a@example.com", role: "user" });
     await expect(service.redeem({ code: issued, app: APP })).resolves.toBeNull();
+    await expect(redeemCode(store.db, { code: expired, app: APP }, EXPIRED_AT)).resolves.toEqual({ sub: "sub-a", email: "a@example.com", role: "user" });
   });
 
   it(`a /callback whose state is not a saved sign-in's is a 400, never a redirect or a 5xx, and logs no code or state (${F3_RUNS} runs, seed ${F3_SEED})`, async () => {
