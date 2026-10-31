@@ -236,15 +236,60 @@ describe("cloudflare-setup: the bootstrap token's rules (v0.2.0 plan §5.1, §7;
     expect(readEnvFile(dir)).toBe(`CLOUDFLARE_BOOTSTRAP_TOKEN=${BOOT_VALUE}\n`);
   });
 
-  it("a long-lived protected token is neither deleted nor used (DEC-0589)", async () => {
+  it("a long-lived protected token is neither deleted nor used (DEC-0589); it is refused before its expiry is judged (DEC-0733)", async () => {
     const world = freshWorld();
     world.addToken("bootstrap", BOOT_VALUE, "boot-id");
     const dir = project({ env: envFile({ CLOUDFLARE_BOOTSTRAP_TOKEN: BOOT_VALUE }) });
     const { status, io } = await run(world, dir, { protectedTokenIds: ["boot-id"] });
     expect(status).toBe(1);
-    expect(io.out).toContain("Its ID is protected, so setup neither deleted nor used it.");
+    expect(io.out).toContain("CLOUDFLARE_BOOTSTRAP_TOKEN (the bootstrap token): it is protected (its ID is in PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS) and was not deleted");
+    expect(world.requests).toEqual([`boot-id GET /accounts?per_page=50`, `boot-id GET /accounts/${ACCOUNT}/tokens/verify`]);
     expect(world.writes()).toEqual([]);
     expect(world.token("boot-id").deleted).toBe(false);
+  });
+
+  // Found by T1's SETUP criteria (DEC-0751, and DEC-0750's account-list gap); root cause 2026-10-31-T7-bootstrap-token-rules.
+  const ownRequests = (world: SetupWorld, id: string) => world.requests.filter((r) => r.startsWith(`${id} `));
+  /** Its identification: the verify call that gives its ID, and the account list that finds where to verify it when no account is known otherwise. */
+  const IDENTIFICATION = new RegExp(`^boot-id GET /accounts(\\?per_page=50|/${ACCOUNT}/tokens/verify)$`);
+  const PROTECTED_TEXT = "CLOUDFLARE_BOOTSTRAP_TOKEN (the bootstrap token): it is protected (its ID is in PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS) and was not deleted";
+
+  it("a protected bootstrap token is refused before any use: no request of its own but its identification, no OAuth client, no admin app, no DELETE; says it is protected and was not deleted; its line kept; exit 1 (SETUP-REQ-004 as amended, DEC-0681)", async () => {
+    for (const [label, withEveryday] of [["with an everyday token", true], ["bootstrap token only", false]] as const) {
+      const world = withEveryday ? await setUpWorld() : freshWorld();
+      world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
+      const dir = project({ env: withEveryday ? bothTokens() : envFile({ CLOUDFLARE_BOOTSTRAP_TOKEN: BOOT_VALUE }) });
+      const before = readEnvFile(dir);
+      const { status, io } = await run(world, dir, { env: { PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS: "boot-id" } });
+      expect(status, label).toBe(1);
+      expect(io.out, label).toContain(PROTECTED_TEXT);
+      expect(io.out, label).toContain(BOOT_LINK);
+      expect(ownRequests(world, "boot-id").filter((r) => !IDENTIFICATION.test(r)), label).toEqual([]);
+      expect(world.writes(), label).toEqual([]);
+      expect(world.cloud().oauthClients.size, label).toBe(0);
+      expect(world.cloud().workers.has("prototype-admin"), label).toBe(false);
+      expect(world.token("boot-id").deleted, label).toBe(false);
+      expect(readEnvFile(dir), label).toBe(before);
+      expect(io.out, label).not.toContain("The Cloudflare bootstrap is complete.");
+    }
+  });
+
+  it("a long-lived bootstrap token deletes itself before any other call: its identification, its own details, then its DELETE as the run's last request; with an everyday token set, no request of the everyday token anywhere in the run (DEC-0681)", async () => {
+    for (const [label, expires] of [
+      ["1 day + 1 s away", AT(ONE_DAY + 1000)],
+      ["no expiry", undefined],
+    ] as const) {
+      const world = await setUpWorld();
+      world.addToken("bootstrap", BOOT_VALUE, "boot-id", expires === undefined ? {} : { expires_on: expires });
+      const { status } = await run(world, project({ env: bothTokens() }));
+      expect(status, label).toBe(1);
+      const own = ownRequests(world, "boot-id");
+      const DELETE = `boot-id DELETE /accounts/${ACCOUNT}/tokens/boot-id`;
+      expect(own.slice(-2), label).toEqual([`boot-id GET /accounts/${ACCOUNT}/tokens/boot-id`, DELETE]);
+      expect(own.slice(0, -2).filter((r) => !IDENTIFICATION.test(r)), `${label}: only its identification before its own details`).toEqual([]);
+      expect(world.requests, `${label}: no other token's request, before or after the DELETE`).toEqual(own);
+      expect(world.token("boot-id").deleted, label).toBe(true);
+    }
   });
 
   it("the value is never written: after the bootstrap, no file in the project holds it (in the file or the environment)", async () => {
@@ -754,22 +799,25 @@ describe("cloudflare-setup: an everyday token short of a permission (the admin a
 });
 
 describe("cloudflare-setup: the token write guard (DEC-0589)", () => {
-  it("a protected bootstrap ID is never deleted: the self-delete is skipped (no DELETE sent), its line is kept, the run finishes normally (DEC-0589)", async () => {
+  it("a protected bootstrap ID is never deleted and never used: refused after its verify call (no DELETE sent, no bootstrap), its line is kept, says it is protected and was not deleted, exit 1 (DEC-0589; SETUP-REQ-004 as amended, DEC-0733)", async () => {
     for (const how of ["option", "environment"] as const) {
       const world = await setUpWorld();
       world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
       const dir = project({ env: bothTokens() });
       const { status, io } = await run(world, dir, how === "option" ? { protectedTokenIds: ["boot-id"] } : { env: { PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS: "x, BOOT-ID" } });
       expect(io.err, how).toBe("");
-      expect(status, how).toBe(0);
-      expect(io.out).toContain("note: the bootstrap token is protected, so setup did not delete it");
+      expect(status, how).toBe(1);
+      expect(io.out, how).toContain("CLOUDFLARE_BOOTSTRAP_TOKEN (the bootstrap token): it is protected (its ID is in PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS) and was not deleted: setup did not use it for the bootstrap");
       expect(io.out).not.toContain("deleted itself");
       expect(io.out).not.toContain("commented out");
       expect(world.requests.filter((r) => / DELETE /.test(r))).toEqual([]);
+      // Only its identification: it is used for nothing (no own details, no OAuth client, no deploy).
+      expect(world.requests.filter((r) => r.startsWith("boot-id ")), how).toEqual([`boot-id GET /accounts?per_page=50`, `boot-id GET /accounts/${ACCOUNT}/tokens/verify`]);
+      expect(world.cloud().oauthClients.size, how).toBe(0);
       expect(world.token("boot-id").deleted).toBe(false);
       // The token still exists, so its line stays as it was.
       expect(readEnvFile(dir).startsWith(`CLOUDFLARE_BOOTSTRAP_TOKEN=${BOOT_VALUE}\n`)).toBe(true);
-      expect(io.out).toContain("The Cloudflare bootstrap is complete.");
+      expect(io.out).not.toContain("The Cloudflare bootstrap is complete.");
     }
   });
 
@@ -814,6 +862,20 @@ describe("cloudflare-setup: the token write guard (DEC-0589)", () => {
     await api("DELETE", "/accounts/a/tokens/boot");
     await api("GET", "/accounts/a/tokens/owner");
     expect(sent).toEqual(["DELETE /accounts/a/tokens/boot", "GET /accounts/a/tokens/owner"]);
+  });
+
+  it("guardTokenWrites refuses a protected bootstrap ID's DELETE even while its self-delete is armed, with or without the everyday token's ID (defence in depth behind DEC-0733)", async () => {
+    for (const everydayId of ["every", undefined]) {
+      const sent: string[] = [];
+      const api = guardTokenWrites(async (method, path) => (sent.push(`${method} ${path}`), { status: 200, body: { success: true, result: {} } }), {
+        protectedIds: new Set(["BOOT"]),
+        ...(everydayId === undefined ? {} : { everydayId }),
+        bootstrapId: "boot",
+        selfDeleteArmed: () => true,
+      });
+      await expect(api("DELETE", "/accounts/a/tokens/boot"), String(everydayId)).rejects.toThrow("setup refused to delete an API token: its ID is protected");
+      expect(sent, String(everydayId)).toEqual([]);
+    }
   });
 
   it("guardTokenWrites deletes only the signing tokens it saw by name: listed or just created as prototype-r2-signing (DEC-0618)", async () => {
