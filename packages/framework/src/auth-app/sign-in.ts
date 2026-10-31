@@ -50,7 +50,8 @@ export async function completeSignIn(deps: SignInDeps, input: { code: string; ve
     if (membership === null) throw new SignInError("no accepted membership in this account");
     return { sub: id.sub, email, role: mapRole(membership.roles) };
   } finally {
-    const all = [tokens.accessToken, ...(tokens.refreshToken === null ? [] : [tokens.refreshToken])];
-    if (!(await revokeTokens(f, discovery, client, all))) deps.log(logLine("warn", "token revocation failed"));
+    const all = [{ token: tokens.accessToken, hint: "access_token" as const }, ...(tokens.refreshToken === null ? [] : [{ token: tokens.refreshToken, hint: "refresh_token" as const }])];
+    const failed = await revokeTokens(f, discovery, client, all);
+    if (failed.length > 0) deps.log(logLine("warn", `token revocation failed (${failed.join(", ")})`));
   }
 }

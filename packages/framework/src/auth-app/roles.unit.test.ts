@@ -56,6 +56,27 @@ describe("pickMembership", () => {
     expect(pickMembership(list, "acct")).toEqual({ roles: ["Administrator"] });
   });
 
+  it("picks the accepted entry when a pending one for the same account comes first", () => {
+    expect(pickMembership([m("acct", "pending", ["Administrator"]), m("acct", "accepted", ["HTTP Applications Read"])], "acct")).toEqual({ roles: ["HTTP Applications Read"] });
+  });
+
+  it("treats a roles value that is a string, not a list, as no roles (user)", () => {
+    const picked = pickMembership([{ account: { id: "acct" }, status: "accepted", roles: "Administrator" }], "acct");
+    expect(picked).toEqual({ roles: [] });
+    expect(mapRole(picked!.roles)).toBe("user");
+  });
+
+  it("maps Unicode look-alikes and decomposed forms of an admin name to user", () => {
+    for (const name of ["Adminіstrator" /* Cyrillic і */, "Administrator​", "Super Administrator – All Privileges", "Super Administrator - All Privileges".normalize("NFD") + "́"]) {
+      expect(mapRole([name]), JSON.stringify(name)).toBe("user");
+    }
+  });
+
+  it("never takes an admin role from another account's membership", () => {
+    const picked = pickMembership([m("other", "accepted", ["Super Administrator - All Privileges"]), m("acct", "accepted", ["HTTP Applications Read"])], "acct");
+    expect(mapRole(picked!.roles)).toBe("user");
+  });
+
   it("treats a missing roles list as no roles", () => {
     expect(pickMembership([{ account: { id: "acct" }, status: "accepted" }], "acct")).toEqual({ roles: [] });
   });
