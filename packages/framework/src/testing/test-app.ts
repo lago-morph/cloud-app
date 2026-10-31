@@ -11,9 +11,8 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PGlite } from "@electric-sql/pglite";
-import { drizzle as drizzleD1, type AnyD1Database } from "drizzle-orm/d1";
-import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
-import type { RuntimeContext, RuntimeEnv } from "../core/assemble.js";
+import type { AnyD1Database } from "drizzle-orm/d1";
+import type { RuntimeEnv } from "../core/assemble.js";
 import { createDeployment } from "../core/identity.js";
 import type { DefinedApp } from "../core/public.js";
 import type { ConfigDeclaration } from "../config/public.js";
@@ -24,10 +23,7 @@ import { createAuthMock } from "../auth/mock.js";
 import { LOCAL_COOKIES } from "../auth/local-cookies.js";
 import { createStubLoginProvider, stubCallbackUrl, type StubFailure } from "../auth/stub-provider.js";
 import type { Role } from "../auth/roles.js";
-import { changeAccountRole, subjectOfUserId } from "../auth/password/account.js";
 import type { CurrentUser } from "../auth/public.js";
-import { createPasswordProvider, PASSWORD_PROVIDER_ID } from "../auth/password/provider.js";
-import type { PasswordDatabase } from "../auth/password/options.js";
 import { appUrl } from "./connect.js";
 import { checkSecretDeclarations, FRAMEWORK_SECRETS } from "../secrets/names.js";
 import { LOCAL_FRAMEWORK_SECRETS, LOCAL_TICKET_KEY } from "../secrets/local-names.js";
@@ -37,7 +33,7 @@ import { failingSink, neverCompletingSink } from "../log/test-sinks.js";
 import type { LogEntry } from "../log/entry.js";
 import { processDialect } from "../sql/dialect.js";
 import { sqliteDb } from "../sql/d1.js";
-import { openPostgres, postgresDb, queuedClient } from "../sql/postgres.js";
+import { openPostgres, postgresDb } from "../sql/postgres.js";
 import type { AnyTable } from "../sql/types.js";
 import { d1MigrationDatabase, migrateLocal, pgliteMigrationDatabase, type D1Like } from "../mig/apply.js";
 import { generateAppMigrations } from "../mig/generate.js";
@@ -45,9 +41,7 @@ import type { FilesStore } from "../files/service.js";
 import { createLocalTicketIssuer } from "../files/local/tickets.js";
 import { registerLocalTransferRoute } from "../files/local/route.js";
 import { createOutbox, failingMailSender, neverCompletingMailSender, type TestMail } from "../mail/outbox.js";
-import type { MailSender } from "../mail/sender.js";
 import { mailSenderName } from "../mail/config.js";
-import { requestMailSender } from "../mail/request.js";
 import { assembleStage } from "../targets/stage.js";
 import { startPlatformProxy } from "../targets/local/platform-proxy.js";
 
@@ -63,12 +57,6 @@ export interface TestAppOptions {
   readonly unavailable?: readonly TestCapability[];
   /** Use the test-only stub login provider instead of the authentication mock. Default false. */
   readonly stubLoginProvider?: boolean;
-  /**
-   * Use the real email-and-password login provider (password.md) with the in-memory outbox,
-   * instead of the authentication mock; its rate limits and origin check are on. Mutually
-   * exclusive with `stubLoginProvider`. Default false.
-   */
-  readonly passwordLoginProvider?: boolean;
   /** For MAIL's own tests: a mail sender whose every send fails, or whose sends never complete. Default the outbox. */
   readonly mailSender?: "failing" | "never-completing";
   /** LOG-AC-001: a log writer that fails on every write, or whose writes never complete (DEC-0210). */
@@ -91,7 +79,7 @@ export interface TestApp {
   logs(): readonly LogEntry[];
   loginWithStub(subject: string, options?: { readonly displayName?: string; readonly stubFailure?: "refused" | "replayed" }): Promise<void>;
   /**
-   * With `passwordLoginProvider` or `stubLoginProvider`: adds `role` to the account whose user ID
+   * With `stubLoginProvider`: adds `role` to the account whose user ID
    * is `userId` (DEC-0525). Rejects when no account has that ID; throws with the mock and on a
    * connected stage.
    */
@@ -112,18 +100,6 @@ export type TestRole = "admin";
 
 /** Role changes of the test app's real provider: `TestApp.grantRole`, `revokeRole`. */
 type RoleChanger = (userId: string, role: Role, change: "grant" | "revoke") => Promise<boolean>;
-
-/** The request's mail sender as the stage runtime bound it (MAIL's sender path, mail/request.ts). */
-function requestSender(c: RuntimeContext): MailSender {
-  // Looked up on first send: AUTH also builds the provider before the mail sender is bound (accountStatus).
-  return {
-    async send(message) {
-      const sender = requestMailSender(c);
-      if (sender === undefined) throw new Error("this test app has no mail sender");
-      return sender.send(message);
-    },
-  };
-}
 
 /** The test app's public origin: state-changing requests carry it in `Origin`. */
 export const TEST_APP_ORIGIN = "http://localhost:8787";
@@ -209,10 +185,10 @@ interface Shared {
   readonly fixed: WeakMap<Request, CurrentUser>;
   readonly logs: () => readonly LogEntry[];
   readonly mail: TestMail;
-  /** The app has no authentication mock (stub or password provider): `as` throws. */
-  readonly noMock: "stub" | "password" | undefined;
+  /** The app has no authentication mock (the stub provider): `as` throws. */
+  readonly noMock: "stub" | undefined;
   readonly stub: boolean;
-  /** Present with the stub or password provider (DEC-0525). */
+  /** Present with the stub provider (DEC-0525). */
   readonly changeRole: RoleChanger | undefined;
   /** The capabilities that fail now (`unavailable`, then `setUnavailable`); read on every request. */
   readonly unavailable: Set<TestCapability>;
@@ -225,7 +201,7 @@ async function changeRole(shared: Shared, userId: string, role: Role, change: "g
   const name = change === "grant" ? "grantRole" : "revokeRole";
   if (shared.disposed) throw new Error("this test app was disposed");
   if (shared.changeRole === undefined) {
-    throw new Error(`${name} needs a real login provider (passwordLoginProvider or stubLoginProvider); with the authentication mock, choose the level with the user option or as()`);
+    throw new Error(`${name} needs a real login provider (stubLoginProvider); with the authentication mock, choose the level with the user option or as()`);
   }
   if (role !== "admin") throw new Error(`${name}: unknown role ${JSON.stringify(role)}; the only role is "admin"`);
   if (!(await shared.changeRole(userId, role, change))) throw new Error(`${name}: no account has the user ID ${JSON.stringify(userId)}`);
@@ -302,10 +278,7 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
   const resolved = resolveTestConfig(defined, deployment, options.config ?? {});
   const unavailable = new Set<TestCapability>(options.unavailable ?? []);
   const stub = options.stubLoginProvider === true;
-  const password = options.passwordLoginProvider === true;
-  if (stub && password) throw new Error("stubLoginProvider and passwordLoginProvider cannot be combined");
   if (stub && options.user !== undefined) throw new Error("the user option needs the authentication mock; it cannot be combined with stubLoginProvider");
-  if (password && options.user !== undefined) throw new Error("the user option needs the authentication mock; it cannot be combined with passwordLoginProvider");
 
   const dialect = processDialect();
   // Outside the dev registry; guarded by "createTestApp and the dev registry" in test-app.unit.test.ts.
@@ -346,22 +319,11 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
   const mailSender = options.mailSender === "failing" ? failingMailSender() : options.mailSender === "never-completing" ? neverCompletingMailSender() : outbox.sender;
   // The request's background tasks (`waitUntil`): sends run after the response, as on a Worker.
   const executionCtx = { waitUntil: (pending: Promise<unknown>) => void pending.catch(() => undefined), passThroughOnException: () => undefined, props: {} };
-  // PWD's database: BA's Drizzle adapter over the same local D1 or PGlite as the app; on PGlite it takes the
-  // handles' connection turns, so a guarded operation behind an auth transaction stays bounded (DEC-0557).
-  const passwordDatabase: PasswordDatabase = pg === undefined ? { dialect: "sqlite", db: drizzleD1(proxy.env.DB) } : { dialect: "postgres", db: drizzlePglite(queuedClient(pg)) };
   const sqlUnavailable = (): boolean => unavailable.has("sql");
   const kvUnavailable = (): boolean => sqlUnavailable() || unavailable.has("kv");
 
   const stubProvider = stub ? createStubLoginProvider() : undefined;
-  const roleChanger: RoleChanger | undefined =
-    stubProvider !== undefined
-      ? (userId, role, change) => stubProvider.changeRole(userId, role, change)
-      : password
-        ? async (userId, role, change) => {
-            const subject = await subjectOfUserId(passwordDatabase, PASSWORD_PROVIDER_ID, userId);
-            return subject !== undefined && (await changeAccountRole(passwordDatabase, subject, role, change));
-          }
-        : undefined;
+  const roleChanger: RoleChanger | undefined = stubProvider !== undefined ? (userId, role, change) => stubProvider.changeRole(userId, role, change) : undefined;
 
   const hono = assembleStage(defined, {
     resolved,
@@ -378,11 +340,7 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
     secretValues: () => Object.values(secretEnv),
     requiredFrameworkSecrets: [FRAMEWORK_SECRETS.sessionKey, FRAMEWORK_SECRETS.authSecret, ...LOCAL_FRAMEWORK_SECRETS],
     cookies: LOCAL_COOKIES,
-    ...(stubProvider !== undefined
-      ? { provider: stubProvider }
-      : password
-        ? { credentialProvider: (c) => createPasswordProvider({ database: passwordDatabase, log: c.var.log, mail: requestSender(c) }) }
-        : { mock: createAuthMock({ fixedUser: (c) => fixed.get(c.req.raw) }) }),
+    ...(stubProvider !== undefined ? { provider: stubProvider } : { mock: createAuthMock({ fixedUser: (c) => fixed.get(c.req.raw) }) }),
     routes: (api) => registerLocalTransferRoute(api, { key: ticketKey }),
     mail: () => mailSender,
   });
@@ -392,7 +350,7 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
     fixed,
     logs: () => memory.entries(),
     mail: { lastTo: outbox.lastTo, all: outbox.all },
-    noMock: stub ? "stub" : password ? "password" : undefined,
+    noMock: stub ? "stub" : undefined,
     stub,
     changeRole: roleChanger,
     unavailable,
