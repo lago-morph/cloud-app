@@ -170,6 +170,15 @@ describe("lintRootCause", () => {
     expect(lintRootCause(rootCause("Verdict: rejected\n\n- rename the test (**minor**)"))).toEqual([]);
   });
 
+  it("counts `R1 (**major**):` and `**R1, major**` markings, but not a bold sentence that only mentions major", () => {
+    const flagged = "## Review: verdict accepted lists a **major** issue; a major issue needs a Response (round n) and another review round";
+    for (const reason of ["- R1 (**major**): x", "- **R1, major** (file:1): x"]) {
+      expect(lintRootCause(rootCause(`Verdict: accepted\n\n${reason}`)), reason).toEqual([flagged]);
+    }
+    expect(lintRootCause(rootCause("Verdict: rejected\n\n- R2 (**minor**): x"))).toEqual([]);
+    expect(lintRootCause(rootCause("Verdict: accepted\n\n**No major issues.**"))).toEqual([]);
+  });
+
   it("rejects an accepted verdict that carries a **major** issue, which needs a Response first (§7a.1.8 step 3)", () => {
     expect(lintRootCause(rootCause("Verdict: accepted\n\n- **major** link 2 has no evidence"))).toEqual([
       "## Review: verdict accepted lists a **major** issue; a major issue needs a Response (round n) and another review round",
