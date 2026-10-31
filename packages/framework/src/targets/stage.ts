@@ -28,8 +28,6 @@ import type { FrameworkSecretName } from "../secrets/names.js";
 import { requestLogFactory } from "../log/request.js";
 import type { LogSink } from "../log/writer.js";
 import type { LogService } from "../log/public.js";
-import type { MailSender } from "../mail/sender.js";
-import { bindRequestMail } from "../mail/request.js";
 import { adapterOf } from "../sql/handle.js";
 import type { PortableDb } from "../sql/types.js";
 import { frameworkTables } from "../mig/framework.js";
@@ -78,14 +76,8 @@ export interface StageOptions {
   readonly authClock?: { readonly now: () => number; readonly sleep: (ms: number) => Promise<void> };
   /** The stage's real login provider (the auth-app provider, built per request), or the stub in tests. */
   readonly provider?: LoginProvider | ((c: RuntimeContext) => LoginProvider);
-  /** Further framework routes under `/api` (the local file-transfer route, the test-stage test-mail route). */
+  /** Further framework routes under `/api` (the local file-transfer route). */
   readonly routes?: (api: Hono<RuntimeEnv>) => void;
-  /**
-   * The stage's outgoing-mail sender for one request (MAIL §2): Email Service on production
-   * stages, a capture everywhere else. It is bound to each request; the password provider (PWD)
-   * sends through it with `sendRequestMail` (mail/request.ts), after the response.
-   */
-  readonly mail?: (c: RuntimeContext) => MailSender;
 }
 
 function requestLog(deployment: ResolvedConfig["deployment"], options: StageOptions): (c: RuntimeContext) => LogService {
@@ -149,14 +141,6 @@ export function assembleStage<C extends ConfigDeclaration, S extends string>(def
     forgeryCheck: auth.forgeryCheck,
     ...http.parts,
     frameworkRoutes: (api) => {
-      const { mail } = options;
-      if (mail !== undefined) {
-        // Framework code sends through `requestMail`/`sendRequestMail` (mail/request.ts); the sender is made on first use.
-        api.use(async (c, next) => {
-          bindRequestMail(c, mail);
-          await next();
-        });
-      }
       http.parts.frameworkRoutes?.(api);
       auth.routes(api);
       options.routes?.(api);

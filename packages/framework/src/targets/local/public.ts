@@ -4,9 +4,7 @@
  * (local D1 and R2 bindings, `SECRET_<NAME>` from `.dev.vars`) with the local-only parts of
  * local.md §2: the authentication mock (the only login locally), same-origin file transfers
  * through `/api/__framework/files/*` signed with `frameworkLocalTicketKey`, and log entries as
- * marked Worker output lines that `dev` captures into `.logs/` (DEC-0066), and the framework's
- * email likewise as marked lines that `dev` captures into `.mail/` (MAIL §2; nothing is sent and
- * no `send_email` binding is used). Workers-compatible.
+ * marked Worker output lines that `dev` captures into `.logs/` (DEC-0066). Workers-compatible.
  */
 import type { RuntimeContext } from "../../core/assemble.js";
 import type { DefinedApp } from "../../core/public.js";
@@ -14,8 +12,6 @@ import type { ConfigDeclaration } from "../../config/public.js";
 import type { ResolvedConfig } from "../../config/resolve.js";
 import { createAuthMock } from "../../auth/mock.js";
 import { workerOutputSink } from "../../log/local.js";
-import { workerOutputMailSender } from "../../mail/local.js";
-import { mailSenderName } from "../../mail/config.js";
 import { createFrameworkSecrets, envSecretReader } from "../../secrets/service.js";
 import { FRAMEWORK_SECRETS } from "../../secrets/names.js";
 import { LOCAL_FRAMEWORK_SECRETS, LOCAL_TICKET_KEY } from "../../secrets/local-names.js";
@@ -30,7 +26,6 @@ export type { WorkerHandler } from "../cloudflare/bindings.js";
 export function createLocalWorker<C extends ConfigDeclaration, S extends string>(app: DefinedApp<C, S>, resolved: ResolvedConfig): WorkerHandler {
   const target = "local";
   const ticketKey = (c: RuntimeContext) => createFrameworkSecrets({ read: envSecretReader(c.env, target), log: c.var.log, extra: LOCAL_FRAMEWORK_SECRETS }).get(LOCAL_TICKET_KEY);
-  const mail = workerOutputMailSender({ senderName: mailSenderName(resolved) });
   const hono = assembleStage(app, {
     resolved,
     sink: workerOutputSink(),
@@ -46,7 +41,6 @@ export function createLocalWorker<C extends ConfigDeclaration, S extends string>
     // Mock login only (plan-v0.2.0 §4.3).
     mock: createAuthMock(),
     routes: (api) => registerLocalTransferRoute(api, { key: ticketKey }),
-    mail: () => mail,
   });
   return { fetch: (request, env, ctx) => hono.fetch(request, env, ctx as never) };
 }

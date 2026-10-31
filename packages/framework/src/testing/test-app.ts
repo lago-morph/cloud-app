@@ -43,8 +43,7 @@ import { generateAppMigrations } from "../mig/generate.js";
 import type { FilesStore } from "../files/service.js";
 import { createLocalTicketIssuer } from "../files/local/tickets.js";
 import { registerLocalTransferRoute } from "../files/local/route.js";
-import { createOutbox, failingMailSender, neverCompletingMailSender, type TestMail } from "../mail/outbox.js";
-import { mailSenderName } from "../mail/config.js";
+import { createOutbox, type TestMail } from "../mail/outbox.js";
 import { assembleStage } from "../targets/stage.js";
 import { startPlatformProxy } from "../targets/local/platform-proxy.js";
 
@@ -65,7 +64,7 @@ export interface TestAppOptions {
    * binding (`TestApp.authApp`), instead of the authentication mock (DEC-0673). Default false.
    */
   readonly authAppLoginProvider?: boolean;
-  /** For MAIL's own tests: a mail sender whose every send fails, or whose sends never complete. Default the outbox. */
+  /** No effect: the framework sends no email (MAIL removed, plan-v0.2.0 §6). Kept with `mail` until their last users go. */
   readonly mailSender?: "failing" | "never-completing";
   /** LOG-AC-001: a log writer that fails on every write, or whose writes never complete (DEC-0210). */
   readonly logWriter?: "failing" | "never-completing";
@@ -377,8 +376,8 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
   const env = proxy.env as unknown as RuntimeEnv["Bindings"];
   const unreachable = unreachableStore();
   const store = (): FilesStore => (unavailable.has("files") ? unreachable : proxy.env.FILES);
-  const outbox = createOutbox({ senderName: mailSenderName(resolved) });
-  const mailSender = options.mailSender === "failing" ? failingMailSender() : options.mailSender === "never-completing" ? neverCompletingMailSender() : outbox.sender;
+  // The framework sends no email any more (MAIL removed, plan-v0.2.0 §6): the outbox stays empty.
+  const outbox = createOutbox({ senderName: defined.definition.name });
   // The request's background tasks (`waitUntil`): sends run after the response, as on a Worker.
   const executionCtx = { waitUntil: (pending: Promise<unknown>) => void pending.catch(() => undefined), passThroughOnException: () => undefined, props: {} };
   const sqlUnavailable = (): boolean => unavailable.has("sql");
@@ -435,7 +434,6 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
         ? { provider: createAuthAppProvider({ binding: authApp, app: authAppId, authAppOrigin: TEST_AUTH_APP_ORIGIN }) }
         : { mock: createAuthMock({ fixedUser: (c) => fixed.get(c.req.raw) }) }),
     routes: (api) => registerLocalTransferRoute(api, { key: ticketKey }),
-    mail: () => mailSender,
   });
 
   const shared: Shared = {

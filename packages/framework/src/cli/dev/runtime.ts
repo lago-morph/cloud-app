@@ -15,7 +15,6 @@ import { d1MigrationDatabase, migrateLocal, type D1Like } from "../../mig/apply.
 import { ensureDevSecrets } from "../../secrets/local.js";
 import { ClientPortInUseError, type ClientServer, type DevDeps, type WorkerProcess } from "../commands/dev.js";
 import { createDevLogCapture } from "./logs.js";
-import { createDevMailCapture } from "../../mail/local-files.js";
 import { devPaths, devServerReadyPort, isAllowedHost, LOOPBACK, readyLinePort } from "./plan.js";
 
 const require = createRequire(import.meta.url);
@@ -66,10 +65,9 @@ const startWorker: DevDeps["startWorker"] = async ({ appDir, args, io }) => {
     port ??= readyLinePort(line);
     if (line.trim() !== "") io.stderr(`[wrangler] ${line}\n`);
   };
-  // Log lines go to .logs/, mail lines to .mail/ (MAIL §2), everything else is forwarded.
-  const lines = createDevMailCapture(appDir, forward);
-  const out = createDevLogCapture(appDir, lines);
-  const err = createDevLogCapture(appDir, lines);
+  // Log lines go to .logs/, everything else is forwarded.
+  const out = createDevLogCapture(appDir, forward);
+  const err = createDevLogCapture(appDir, forward);
   const { stdout, stderr } = child;
   if (stdout === null || stderr === null) throw new Error("wrangler was started without output pipes");
   stdout.setEncoding("utf8").on("data", (d: string) => out.push(d));
