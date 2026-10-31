@@ -1,7 +1,8 @@
 /** The admin app's deploy by the bootstrap (v0.2.0 plan §5.1 steps 3 and 5; DEC-0686, DEC-0711, DEC-0712), on the fake Cloudflare API, and the Worker it uploads. */
+import { Miniflare } from "miniflare";
 import { describe, expect, it } from "vitest";
-import { bundleAdminApp } from "../../admin-app/bundle.js";
-import { ADMIN_APP_BINDINGS, ADMIN_APP_MODULE, ADMIN_APP_SETTINGS, deployAdminApp } from "./admin-app-deploy.js";
+import { ADMIN_APP_NODE_IMPORTS, bundleAdminApp } from "../../admin-app/bundle.js";
+import { ADMIN_APP_BINDINGS, ADMIN_APP_COMPATIBILITY_DATE, ADMIN_APP_COMPATIBILITY_FLAGS, ADMIN_APP_MODULE, ADMIN_APP_SETTINGS, deployAdminApp } from "./admin-app-deploy.js";
 import { ACCOUNT, FakeCloud } from "./fake-cloud.test-support.js";
 
 const SUB = "pf-adminsub";
@@ -9,13 +10,39 @@ const SUB = "pf-adminsub";
 type Loaded = { default: { fetch(request: Request, env: Record<string, unknown>): Promise<Response> } };
 
 describe("the uploaded admin app (E replaced C's stub)", () => {
-  it("is one self-contained ES module: it imports nothing", async () => {
+  it("is one ES module whose only import is node:crypto (DEC-0720)", async () => {
     const source = await bundleAdminApp();
-    expect(source).not.toMatch(/^\s*import\s/m);
-    expect(source).not.toMatch(/\bnode:/);
-    // Loaded in Node below, so Node-only globals must be ruled out here.
+    const imports = [...source.matchAll(/^\s*import\s[^;]*?from\s*["']([^"']+)["']/gm)].map((m) => m[1]);
+    expect(new Set(imports)).toEqual(new Set(ADMIN_APP_NODE_IMPORTS));
+    expect(source).not.toMatch(/\bnode:(?!crypto\b)/);
+    // Loaded in Node below, so Node-only globals must be ruled out here (workerd: the test after next).
     expect(source).not.toMatch(/\bBuffer\b|\bprocess\.|\brequire\(|import\.meta/);
+    expect(source).not.toMatch(/__PF_AUTH_APP_SOURCE__|__PF_FRAMEWORK_VERSION__/);
   });
+
+  it("runs under local workerd with nodejs_compat, as uploaded: the sign-in page", async () => {
+    const text = (value: string) => ({ type: "text" as const, value });
+    const mf = new Miniflare({
+      workers: [
+        {
+          config: {
+            name: "admin",
+            compatibilityDate: ADMIN_APP_COMPATIBILITY_DATE,
+            compatibilityFlags: [...ADMIN_APP_COMPATIBILITY_FLAGS],
+            manifest: { mainModule: "worker.js", modules: { "worker.js": { type: "esm" as const, contents: await bundleAdminApp() } } },
+            env: { ADMIN_CLIENT_ID: text("cid"), ADMIN_CLIENT_SECRET: text("csecret-value"), ADMIN_ACCOUNT_ID: text("acct"), ADMIN_APP_ORIGIN: text(`https://prototype-admin.${SUB}.workers.dev`) },
+          },
+        },
+      ],
+    });
+    try {
+      const r = await mf.dispatchFetch(`https://prototype-admin.${SUB}.workers.dev/`);
+      expect(r.status).toBe(200);
+      expect(await r.text()).toContain('action="/signin"');
+    } finally {
+      await mf.dispose();
+    }
+  }, 60_000);
 
   it("serves the sign-in page when its settings are bound, and a generic 500 page without them", async () => {
     const loaded = (await import(`data:text/javascript,${encodeURIComponent(await bundleAdminApp())}`)) as Loaded;
@@ -51,6 +78,17 @@ describe("deployAdminApp", () => {
     expect(w.enabled).toBe(true);
     expect(w.previews).toBe(false);
     expect(cloud.requests.filter((r) => !r.startsWith("GET "))).toEqual([`PUT /accounts/${ACCOUNT}/workers/scripts/prototype-admin`, `POST /accounts/${ACCOUNT}/workers/scripts/prototype-admin/subdomain`]);
+  });
+
+  it("uploads with nodejs_compat and the compatibility date (DEC-0720)", async () => {
+    const cloud = new FakeCloud();
+    const metas: unknown[] = [];
+    const api: typeof cloud.api = async (method, path, body) => {
+      if (body instanceof FormData) metas.push(JSON.parse(await (body.get("metadata") as Blob).text()));
+      return cloud.api(method, path, body);
+    };
+    await deployAdminApp(api, ACCOUNT, { storeId: "store1", subdomain: SUB });
+    expect(metas).toEqual([expect.objectContaining({ main_module: "worker.js", compatibility_date: ADMIN_APP_COMPATIBILITY_DATE, compatibility_flags: ["nodejs_compat"] })]);
   });
 
   it("run again: uploads again (the framework's current admin app), the same bindings, and the route is set again (on, previews off)", async () => {
