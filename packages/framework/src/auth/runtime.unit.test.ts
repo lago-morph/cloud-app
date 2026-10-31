@@ -509,7 +509,7 @@ describe("sign-in through the auth app (plan §4.1 steps 1 and 4)", () => {
     return { ...h, binding, built, begin, signIn, clock, delays };
   }
 
-  it(tag("AUTH-AC-008", "login redirects to the auth app's /start with the app ID and the callback URL from the public origin"), async () => {
+  it("login redirects to the auth app's /start with the app ID and the callback URL from the public origin", async () => {
     const { begin } = await authAppHarness();
     const { start } = await begin();
     expect(`${start.origin}${start.pathname}`).toBe("https://auth.example.test/start");
@@ -517,7 +517,7 @@ describe("sign-in through the auth app (plan §4.1 steps 1 and 4)", () => {
     expect(start.searchParams.get("return")).toBe(`${ORIGIN}/api/auth/callback`);
   });
 
-  it(tag("AUTH-AC-002", "a redeemed code creates a cf-account session whose user ID is derived from the Cloudflare sub"), async () => {
+  it("a redeemed code creates a cf-account session whose user ID is derived from the Cloudflare sub", async () => {
     const { deriveUserId } = await import("./user-id.js");
     const { readSession } = await import("./session.js");
     const { request, signIn, clock } = await authAppHarness();
@@ -530,7 +530,7 @@ describe("sign-in through the auth app (plan §4.1 steps 1 and 4)", () => {
     expect(await (await request("/api/whoami", { headers: { cookie } })).json()).toStrictEqual({ level: "user", id, displayName: null });
   });
 
-  it(tag("AUTH-AC-003", "the level follows the auth app's role at its next refresh, and a removed user is anonymous"), async () => {
+  it("the level follows the auth app's role at its next refresh, and a removed user is anonymous", async () => {
     const { request, signIn, binding, clock } = await authAppHarness();
     const cookie = cookieOf((await signIn({ sub, email: "alice@example.com", role: "admin" })).res);
     expect(await (await request("/api/whoami", { headers: { cookie } })).json()).toMatchObject({ level: "admin" });
@@ -622,7 +622,7 @@ describe("sign-in through the auth app (plan §4.1 steps 1 and 4)", () => {
     });
   });
 
-  it(tag("AUTH-AC-010", "the auth app's error redirect is a failed login: no session, one warn naming the reason"), async () => {
+  it("the auth app's error redirect is a failed login: no session, one warn naming the reason", async () => {
     const { request, written, binding, begin } = await authAppHarness();
     const { state, tx } = await begin();
     const res = await request(`/api/auth/callback?${new URLSearchParams({ error: "login_failed", state }).toString()}`, { headers: { cookie: tx } });

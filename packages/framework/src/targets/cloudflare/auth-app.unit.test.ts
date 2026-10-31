@@ -10,6 +10,7 @@ import { createDeployment } from "../../core/identity.js";
 import type { ResolvedConfig } from "../../config/resolve.js";
 import { createFakeAuthAppBinding } from "../../auth/auth-app-binding.js";
 import { deriveUserId } from "../../auth/user-id.js";
+import { issueSession } from "../../auth/session.js";
 import { createCloudflareWorker } from "./public.js";
 import { authAppId } from "./auth-app.js";
 import { BINDINGS } from "./bindings.js";
@@ -73,6 +74,13 @@ describe("Cloudflare runtime: sign-in through the auth app", () => {
     const res = await setup({ [BINDINGS.authAppOrigin]: undefined }).fetch("/api/auth/login");
     expect(res.status).toBe(500);
     expect(await code(res)).toBe("CORE.MISCONFIGURED");
+  });
+
+  it("without the AUTH binding, a cf-account session reads as anonymous (the role read fails)", async () => {
+    const token = await issueSession("s".repeat(43), { id: "u_X", displayName: null, provider: "cf-account", subject: "cf-sub" }, Date.now());
+    const res = await setup({ [BINDINGS.authApp]: undefined }).fetch("/api/auth/me", { headers: { cookie: `__Host-session=${token}` } });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toStrictEqual({ level: "anonymous" });
   });
 
   it("without the AUTH binding, the callback is CORE.MISCONFIGURED, not a failed login", async () => {

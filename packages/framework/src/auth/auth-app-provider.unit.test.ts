@@ -63,7 +63,9 @@ describe("auth-app login provider", () => {
 
   it("a malformed auth-app origin is CORE.MISCONFIGURED, naming no value", async () => {
     const provider = createAuthAppProvider({ binding: createFakeAuthAppBinding(), app: APP, authAppOrigin: "not a url" });
-    await expect(provider.beginLogin(ctx)).rejects.toMatchObject({ code: "CORE.MISCONFIGURED" });
+    const error = await provider.beginLogin(ctx).catch((e: unknown) => e);
+    expect(error).toMatchObject({ code: "CORE.MISCONFIGURED" });
+    expect((error as Error).message).not.toContain("not a url");
   });
 
   it("completes a valid code as the Cloudflare subject, with no display name, using the code up", async () => {
@@ -98,7 +100,28 @@ describe("auth-app login provider", () => {
     const code = binding.issueCode(alice, { app: APP, returnUrl: CALLBACK });
     expect(await failure(provider.completeLogin(ctx, back(transactionState, { code, error: "login_failed" }), transactionState))).toBe("provider refused");
     expect(await failure(provider.completeLogin(ctx, back(transactionState, {}), transactionState))).toBe("provider refused");
+    expect(await failure(provider.completeLogin(ctx, back(transactionState, { code: "" }), transactionState))).toBe("provider refused");
     expect(binding.calls.redeem).toBe(0);
+  });
+
+  it("a callback with no state, or an empty one, is a state mismatch", async () => {
+    const { binding, provider } = setup();
+    const { transactionState } = await provider.beginLogin(ctx);
+    const code = binding.issueCode(alice, { app: APP, returnUrl: CALLBACK });
+    expect(await failure(provider.completeLogin(ctx, new URLSearchParams({ code }), transactionState))).toBe("state mismatch");
+    expect(await failure(provider.completeLogin(ctx, new URLSearchParams({ code, state: "" }), transactionState))).toBe("state mismatch");
+    expect(binding.calls.redeem).toBe(0);
+  });
+
+  it("with a repeated code or state parameter, the first value is the one used", async () => {
+    const { binding, provider } = setup();
+    const { transactionState: s } = await provider.beginLogin(ctx);
+    const code = binding.issueCode(alice, { app: APP, returnUrl: CALLBACK });
+    const crossed = new URLSearchParams([["code", code], ["state", "forged"], ["state", s]]);
+    expect(await failure(provider.completeLogin(ctx, crossed, s))).toBe("state mismatch");
+    const doubled = new URLSearchParams([["code", "unknown-code"], ["code", code], ["state", s]]);
+    expect(await failure(provider.completeLogin(ctx, doubled, s))).toBe("code refused");
+    expect(await provider.completeLogin(ctx, new URLSearchParams([["code", code], ["code", "x"], ["state", s]]), s)).toMatchObject({ subject: alice.sub });
   });
 
   it("a code issued to another app, expired, or for an unregistered return URL is 'code refused'", async () => {
@@ -121,6 +144,9 @@ describe("auth-app login provider", () => {
     const code = binding.issueCode(alice, { app: APP, returnUrl: CALLBACK });
     binding.failNext(1);
     expect(await failure(provider.completeLogin(ctx, back(s, { code }), s))).toBe("auth app unavailable");
+    binding.setUnavailable(true);
+    expect(await failure(provider.completeLogin(ctx, back(s, { code }), s))).toBe("auth app unavailable");
+    binding.setUnavailable(false);
     expect(await provider.completeLogin(ctx, back(s, { code }), s)).toMatchObject({ subject: alice.sub });
   });
 
