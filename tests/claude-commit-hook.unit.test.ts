@@ -121,6 +121,19 @@ describe("commitPlan: which commands commit, and what they add first", () => {
     }
   });
 
+  it("walks a quoted command string given to another program, and env -S", () => {
+    for (const c of ["watch 'git commit -m x'", "find . -exec sh -c 'git commit -m x' \\;", "parallel 'git commit -m {}' ::: 1", "su -c 'cd /r && git commit -m x' me", "flock f -c 'git commit -m x'", "env -S 'git commit -m x'"]) {
+      expect(plan(c).commits, c).toHaveLength(1);
+    }
+    expect(plan('gh pr create --body "fix git commit hook"').commits).toEqual([]);
+  });
+
+  it("does not read git as a command when it is the text or pattern of echo, printf or a search tool", () => {
+    for (const c of ["echo git commit", "printf '%s' git commit", "rg git -g commit", "grep -r git commit"]) {
+      expect(plan(c).commits, c).toEqual([]);
+    }
+  });
+
   it("marks a --pathspec-from-file it cannot locate as null", () => {
     expect(commitPlan('git commit --pathspec-from-file="$(pwd)/l" -m x', "/base", {}).commits[0]?.pathspecFile).toBeNull();
   });
@@ -347,6 +360,18 @@ describe("runHook", () => {
     const run = recorder().run;
     expect(runHook(input("git cm -m x", dir), { run }).code).toBe(2);
     expect(runHook(input("git cx -m x", dir), { run }).code).toBe(2);
+  });
+
+  it("blocks when an alias chain is deeper than it follows, rather than letting it through", () => {
+    const dir = repo();
+    write(dir, REC, NO_REVIEW);
+    stage(dir, REC);
+    for (const [a, v] of [["a1", "commit"], ["a2", "a1"], ["a3", "a2"], ["a4", "a3"], ["a5", "a4"]]) execFileSync("git", ["config", `alias.${a}`, v], { cwd: dir });
+    execFileSync("git", ["config", "alias.lp", "lq"], { cwd: dir });
+    execFileSync("git", ["config", "alias.lq", "lp"], { cwd: dir });
+    const run = recorder().run;
+    expect(runHook(input("git a5 -m x", dir), { run }).code).toBe(2);
+    expect(runHook(input("git lp", dir), { run }).code).toBe(2);
   });
 
   it("blocks a commit run inside a command substitution or behind another command", () => {

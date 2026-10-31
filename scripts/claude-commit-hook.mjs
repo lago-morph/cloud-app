@@ -188,7 +188,9 @@ const WRAPPERS = new Map([
   ["stdbuf", { values: ["-i", "-o", "-e"], args: 0 }],
   ["xargs", { values: ["-I", "-i", "-n", "-L", "-P", "-d", "-E", "-s", "-a", "--arg-file", "--delimiter", "--max-args", "--max-procs"], args: 0 }],
 ]);
-const GIT_GLOBAL_WITH_VALUE = new Set(["-c", "--git-dir", "--work-tree", "--namespace", "--config-env"]);
+/** Commands whose arguments are text or patterns, never a command to run. */
+const TEXT_TOOLS = new Set(["echo", "printf", "grep", "egrep", "fgrep", "rg", "ag", "ack", "cat", "less", "more", "head", "tail", "man", "wc", "sed", "awk"]);
+const GIT_GLOBAL_WITH_VALUE =new Set(["-c", "--git-dir", "--work-tree", "--namespace", "--config-env"]);
 /** git's own subcommands (never aliases, which git does not allow to shadow them): no alias lookup for these. */
 const GIT_BUILTINS = new Set(
   ("add am annotate apply archive bisect blame branch bundle cat-file check-ignore checkout cherry cherry-pick clean clone commit-tree config " +
@@ -370,9 +372,20 @@ function walk(src, state) {
     for (const body of item.flatMap(substitutions)) walk(body, { ...state, dirs: [] });
     const k = commandStart(item);
     const cmd = item[k];
+    const name = cmd === undefined ? undefined : basename(cmd);
+    // A quoted command string given to another program (`watch 'git commit'`, `su -c '…'`, `env -S '…'`):
+    // walk it too, strictly (only commands it runs itself, so prose such as a PR body is not a commit). Not
+    // git's own arguments (a message), text tools' text, or what eval and `sh -c` already walk.
+    const runsText = cmd === "eval" || ["bash", "sh", "zsh", "dash"].includes(name) || name === "git" || TEXT_TOOLS.has(name);
+    const depth = state.depth ?? 0;
+    if (!runsText && depth < 3) {
+      for (const w of item) {
+        const words = w.replace(/\$\([^]*\)|`[^`]*`/g, " "); // substitutions are walked above
+        if (/\s/.test(w) && /\bgit\b/.test(words)) walk(w, { ...state, dirs: [], strict: true, depth: depth + 1 });
+      }
+    }
     if (cmd === undefined) continue;
     const rest = item.slice(k + 1);
-    const name = basename(cmd);
     if (dynamic(cmd)) {
       // A command word that cannot be resolved (`$g commit`, `$(which git) commit`): read it as a commit.
       const c = rest.indexOf("commit");
@@ -391,8 +404,9 @@ function walk(src, state) {
       walk(rest[1], inner);
     } else if (name === "git") {
       gitCommand(rest, state);
-    } else {
-      // git as an argument of another command (`watch git commit`, `find -exec git commit`, `parallel git commit`).
+    } else if (!state.strict && !TEXT_TOOLS.has(name)) {
+      // git as an argument of another command (`watch git commit`, `find -exec git commit`, `parallel git commit`);
+      // not the text or pattern of echo, printf or a search tool.
       const g = rest.findIndex((w) => basename(w) === "git");
       if (g >= 0) gitCommand(rest.slice(g + 1), state);
     }
@@ -421,7 +435,8 @@ export function commitPlan(command, cwd, env = process.env) {
 
 /**
  * The commit a git alias stands for, or null. An alias may set options before its subcommand and may name
- * another alias (followed up to 3 levels). A shell alias (`!…`) that mentions commit counts as `commit -a`.
+ * another alias (followed up to 5 levels; a deeper chain or a loop counts as a commit, failing closed).
+ * A shell alias (`!…`) that mentions commit counts as `commit -a`.
  */
 function aliasCommit(o, top, depth = 0) {
   let value = o.inline[o.sub];
@@ -436,7 +451,8 @@ function aliasCommit(o, top, depth = 0) {
   if (value.startsWith("!")) return /\bcommit\b/.test(value) ? { cwd: o.cwd, all: true, pathspecs: [] } : null;
   const { sub, args } = gitWords(value.split(/\s+/).filter(Boolean), o.cwd, {});
   if (sub === "commit") return { cwd: o.cwd, ...commitArgs([...args, ...o.args], o.cwd, {}) };
-  if (sub === undefined || GIT_BUILTINS.has(sub) || sub === "add" || depth >= 2) return null;
+  if (sub === undefined || GIT_BUILTINS.has(sub) || sub === "add") return null;
+  if (depth >= 4) return { cwd: o.cwd, all: false, pathspecs: [] };
   return aliasCommit({ ...o, sub, args: [...args, ...o.args] }, top, depth + 1);
 }
 
