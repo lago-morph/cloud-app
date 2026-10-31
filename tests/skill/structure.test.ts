@@ -11,9 +11,10 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { tag } from "../support/tags.js";
-import { linkedFiles, markdownFiles, read, REFERENCE_DIR, repoPath, ROUTER, sections, tableRows, withoutFrontMatter } from "./support.js";
+import { linkedFiles, markdownFiles, read, REFERENCE_DIR, repoPath, ROUTER, sections, tableRows, TESTING_REFERENCE_DIR, withoutFrontMatter } from "./support.js";
 
-const references = markdownFiles(REFERENCE_DIR);
+/** The references CHECK names plus the testing workflow references under reference/testing/ (DEC-0738). */
+const references = [...markdownFiles(REFERENCE_DIR), ...markdownFiles(TESTING_REFERENCE_DIR)];
 
 /** The first paragraph after the document's H1 title, or a description of what is there instead. */
 function opening(text: string): string {
@@ -85,5 +86,26 @@ describe("SKILL: reference structure and router task coverage", () => {
       if (!hit) uncovered.push(`${task.name} → ${task.reference}`);
     }
     expect(uncovered, "tasks with no task-map row linking their reference").toEqual([]);
+  });
+
+  // plan-v0.2.0 §7a.3: the skill tells the app's agent to run failure diagnosis, review changes to
+  // once-green tests, state test impact, keep e2e current and fuzz only where it qualifies, each in a
+  // reference read only when needed. testing.md, which the task map links, is where they are reached from.
+  const TESTING_WORKFLOWS = ["failures.md", "test-changes.md", "e2e.md", "fuzzing.md"] as const;
+
+  it("reference/testing/ holds the testing workflow references, and testing.md links each one (plan-v0.2.0 §7a.3)", () => {
+    const present = markdownFiles(TESTING_REFERENCE_DIR).map((f) => f.slice(TESTING_REFERENCE_DIR.length + 1));
+    expect(present.sort()).toEqual([...TESTING_WORKFLOWS].sort());
+    const linked = linkedFiles(join(REFERENCE_DIR, "testing.md"));
+    const missing = TESTING_WORKFLOWS.filter((f) => !linked.has(join(TESTING_REFERENCE_DIR, f)));
+    expect(missing, "testing workflow references testing.md does not link").toEqual([]);
+  });
+
+  it("testing.md no longer limits app tests to the API or forbids a browser driver (plan-v0.2.0 §7a.3, TS-14)", () => {
+    const text = read(join(REFERENCE_DIR, "testing.md"));
+    expect(text).not.toMatch(/do not add a browser driver/i);
+    expect(text).not.toMatch(/reach the app only through its API/i);
+    expect(text).toMatch(/e2e-api/);
+    expect(text).toMatch(/e2e-ui/);
   });
 });

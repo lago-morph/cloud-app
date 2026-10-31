@@ -15,9 +15,9 @@ Read this page, then only the references your task needs (task map below).
 
 1. **Use only the framework's public exports**: `@lago-morph/prototype-framework` in server code, `/client` in browser code, `/testing` in tests, plus `hono` and `zod`. No platform SDKs, database drivers, Node built-ins or other framework subpaths.
 2. **Never insert user text as HTML.** Build elements and set `textContent`; no `innerHTML` or other raw-HTML sinks.
-3. **Pass `npm run verify` before declaring any work done.** Never disable, suppress or weaken a check (`eslint-disable`, `@ts-ignore`, `any`, `as` casts, editing lint configuration).
+3. **Pass `npm run verify` before declaring any work done**, including its e2e-api tests, and `npm run test:e2e:ui` when a page changed. Never skip or weaken a test, and never disable, suppress or weaken a check (`eslint-disable`, `@ts-ignore`, `any`, `as` casts, editing lint configuration).
 4. **Claim an app works on a cloud only after its smoke test has passed on a deployed stage there** (`smoke --target <t> --stage test-…`). Local success says nothing about a cloud.
-5. **Never change framework version pins**: the exact versions of `@lago-morph/prototype-framework`, `hono`, `zod`, `typescript`, `vite` and `vitest` in the app's `package.json`.
+5. **Never change framework version pins**: the exact versions of `@lago-morph/prototype-framework`, `hono`, `zod`, `typescript`, `vite`, `vitest` and `@playwright/test` in the app's `package.json`.
 6. **Never work around the framework.** If you suspect a framework defect (a contract or reference that does not hold, a check that rejects code the references allow, a capability that is missing for the task), add an entry to `FRAMEWORK-ISSUE.md` at the app's root instead of patching, copying or bypassing framework code. Each entry states:
    - the task attempted;
    - the contract or reference consulted (file and section);
@@ -49,7 +49,7 @@ On "set up Cloudflare", "continue prototype setup" or "continue setup", run `npm
 | Add a per-stage setting | [configuration.md](reference/configuration.md) |
 | Use an API key; sign or verify data | [secrets.md](reference/secrets.md) |
 | Record what happened | [log.md](reference/log.md) |
-| Test (in-process, time-dependent, smoke) | [testing.md](reference/testing.md) |
+| Test (TDD, in-process, e2e, smoke, fuzz); a test or check fails; a test must change | [testing.md](reference/testing.md), then the one file under `reference/testing/` it names |
 | Deploy, run the smoke test on a cloud, remove a stage | [deploying.md](reference/deploying.md) |
 | Diagnose a failing request or deploy; a `verify` diagnostic | [troubleshooting.md](reference/troubleshooting.md), and the reference the diagnostic names |
 | Set up Cloudflare; steps the owner performs (bootstrap token and admin app, secrets, sign-in, admins, deploy and remove, logs) | [owner-tasks.md](reference/owner-tasks.md) |
@@ -58,10 +58,10 @@ Every `verify` diagnostic ends with `(read skill/reference/<file>.md)`; that fil
 
 ## Examples and templates
 
-Examples are whole files copied unchanged from the framework's template and compliance reference app, which CI type-checks and tests: [endpoint-and-page](examples/endpoint-and-page.md), [notes-sql](examples/notes-sql.md), [status-kv](examples/status-kv.md), [files-tickets](examples/files-tickets.md), [admin-and-current-user](examples/admin-and-current-user.md), [secrets](examples/secrets.md), [configuration](examples/configuration.md), [tests](examples/tests.md). Start from the template, not from any other app.
+Examples are whole files copied unchanged from the template and the reference app, type-checked and tested in CI: [endpoint-and-page](examples/endpoint-and-page.md), [notes-sql](examples/notes-sql.md), [status-kv](examples/status-kv.md), [files-tickets](examples/files-tickets.md), [admin-and-current-user](examples/admin-and-current-user.md), [secrets](examples/secrets.md), [configuration](examples/configuration.md), [tests](examples/tests.md). Start from the template, not from any other app.
 
-A new app starts from the template: `npm create @lago-morph/prototype-app@latest <dir>`, or `skill/scripts/scaffold <dir>` in a checkout of the framework repository ([local-development.md](reference/local-development.md)); [templates/](templates/README.md) holds the other files you fill in.
+A new app starts from the template: `npm create @lago-morph/prototype-app@latest <dir>`, or `skill/scripts/scaffold <dir>` in the framework repository ([local-development.md](reference/local-development.md)); [templates/](templates/README.md) holds the files you fill in.
 
 ## Done means
 
-`npm run verify` passes; every requirement is implemented and tested; for each cloud you claim, the smoke test passed on a deployed test stage there; and `FRAMEWORK-ISSUE.md` has no open entry blocking a requirement. Cloud runs that could not go ahead are listed as unfinished (`not-run` or `blocked`, hard rule 8), not raised as issues.
+`npm run verify` passes; every requirement is implemented and tested, each flow end to end ([testing.md](reference/testing.md)); for each cloud you claim, the smoke test passed on a deployed test stage there; and `FRAMEWORK-ISSUE.md` has no open entry blocking a requirement. Cloud runs that could not go ahead are listed as unfinished (`not-run` or `blocked`, hard rule 8), not raised as issues.

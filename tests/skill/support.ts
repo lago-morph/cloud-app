@@ -16,6 +16,12 @@ export const SKILL_DIR = join(REPO_ROOT, "skill");
 export const ROUTER = join(SKILL_DIR, "SKILL.md");
 export const REFERENCE_DIR = join(SKILL_DIR, "reference");
 export const EXAMPLES_DIR = join(SKILL_DIR, "examples");
+/**
+ * The testing workflow references of plan-v0.2.0 §7a.3 ("each of these is a reference read only
+ * when needed"), reached from `reference/testing.md` (DEC-0738). They are references too, so they
+ * carry the same opening, stopping condition and PAR-071 budget.
+ */
+export const TESTING_REFERENCE_DIR = join(REFERENCE_DIR, "testing");
 
 /** Size budgets in UTF-8 bytes (docs/parameters/parameters.md). */
 export const PAR_070_ROUTER_BYTES = 8_000;

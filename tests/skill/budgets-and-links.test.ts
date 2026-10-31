@@ -24,6 +24,7 @@ import {
   repoPath,
   ROUTER,
   SKILL_DIR,
+  TESTING_REFERENCE_DIR,
   filesUnder,
 } from "./support.js";
 
@@ -43,6 +44,13 @@ describe("SKILL: size budgets and links", () => {
   it(tag("SKILL-AC-001", "size check: every reference is within PAR-071 (12,000 bytes)"), () => {
     expect(references.length, "skill/reference/*.md").toBeGreaterThan(0);
     const over = references.filter((f) => bytes(f) > PAR_071_REFERENCE_BYTES).map((f) => `${repoPath(f)}: ${bytes(f)} bytes`);
+    expect(over).toEqual([]);
+  });
+
+  it(tag("SKILL-AC-001", "size check: every testing workflow reference (reference/testing/) is within PAR-071 (12,000 bytes)"), () => {
+    const testingRefs = markdownFiles(TESTING_REFERENCE_DIR);
+    expect(testingRefs.length, "skill/reference/testing/*.md").toBeGreaterThan(0);
+    const over = testingRefs.filter((f) => bytes(f) > PAR_071_REFERENCE_BYTES).map((f) => `${repoPath(f)}: ${bytes(f)} bytes`);
     expect(over).toEqual([]);
   });
 
