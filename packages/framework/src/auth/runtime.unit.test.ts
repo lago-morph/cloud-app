@@ -618,7 +618,34 @@ describe("sign-in through the auth app (plan §4.1 steps 1 and 4)", () => {
       clock.now += due;
       const res = await request("/api/auth/logout", { method: "POST", headers: { cookie, origin: ORIGIN } });
       expect(res.status).toBe(204);
-      expect(sessionLines(res).at(-1)).toBe("session_local=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax");
+      const lines = sessionLines(res);
+      expect(lines).toHaveLength(2);
+      expect(lines[0]).not.toContain("Max-Age=0");
+      expect(lines[1]).toBe("session_local=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax");
+    });
+
+    it("a callback on a request whose old session refreshes ends with the new session's cookie", async () => {
+      const { readSession } = await import("./session.js");
+      const { cookie, clock, begin, binding, request } = await signedIn();
+      clock.now += due;
+      const { start, state, tx } = await begin();
+      const code = binding.issueCode({ sub: "cf-sub-bob", email: "bob@example.com", role: "admin" }, { app: "notes-dev", returnUrl: start.searchParams.get("return") ?? "" });
+      const res = await request(`/api/auth/callback?${new URLSearchParams({ code, state }).toString()}`, { headers: { cookie: `${cookie}; ${tx}` } });
+      const lines = sessionLines(res);
+      expect(lines).toHaveLength(2);
+      expect(await readSession(KEY, valueOf(lines[1]).slice("session_local=".length), clock.now)).toMatchObject({ subject: "cf-sub-bob", role: { level: "admin" } });
+    });
+
+    it("an unverified account at refresh ends the session at once, with no log line", async () => {
+      const fake = fakeProvider(new Map([["s-user", { verified: false, roles: [] }]]));
+      const now = Date.parse("2026-10-31T12:00:00Z");
+      const { request, written } = harness({ provider: fake.provider, now: () => now, sleep: async () => undefined });
+      const stale = { ...real("u_USER", null), role: { level: "user" as const, checkedAt: now / 1000 - ROLE_REFRESH_INTERVAL_SECONDS - 1 } };
+      const res = await request("/api/whoami", { headers: { cookie: await session(stale, now - 1000) } });
+      expect(await res.json()).toStrictEqual({ level: "anonymous" });
+      expect(fake.reads).toStrictEqual(["s-user"]);
+      expect(sessionLines(res)).toStrictEqual(["session_local=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"]);
+      expect(written.filter((w) => w.component === "AUTH")).toStrictEqual([]);
     });
   });
 
