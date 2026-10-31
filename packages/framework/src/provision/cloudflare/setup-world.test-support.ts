@@ -163,7 +163,13 @@ export class SetupWorld {
       }
       const reads: Record<string, string> = { "/workers/scripts": "Workers Scripts Write", "/r2/buckets": "Workers R2 Storage Write", "/d1/database": "D1 Write" };
       // The bootstrap's own resources (v0.2.0 plan §2.1b): any request needs its group.
-      const bootstrapNeeds = rest.startsWith("/oauth_clients") ? "OAuth Client Write" : rest.startsWith("/secrets_store") ? "Secrets Store Write" : undefined;
+      const bootstrapNeeds = rest.startsWith("/oauth_clients")
+        ? "OAuth Client Write"
+        : rest.startsWith("/secrets_store")
+          ? "Secrets Store Write"
+          : rest === "/workers/subdomain"
+            ? "Workers Scripts Write"
+            : undefined;
       if (bootstrapNeeds !== undefined && !this.has(t, bootstrapNeeds, a)) return UNAUTHORIZED;
       const needs = method === "GET" ? reads[rest] : undefined;
       if (needs !== undefined && !this.has(t, needs, a)) return UNAUTHORIZED;

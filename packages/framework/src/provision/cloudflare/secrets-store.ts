@@ -36,20 +36,35 @@ export async function ensureStore(api: CloudflareApi, accountId: string): Promis
   return id;
 }
 
+/** One stored secret as the list shows it: its ID and comment, never its value. */
+export interface StoredSecret {
+  readonly id: string;
+  readonly comment?: string;
+}
+
+/** The store's secrets by name (at most 100 per account, plan §2.3, so one page holds them all). */
+export async function storedSecrets(api: CloudflareApi, accountId: string, storeId: string): Promise<Map<string, StoredSecret>> {
+  const r = await api("GET", `/accounts/${accountId}/secrets_store/stores/${storeId}/secrets?per_page=100`);
+  const list = listOf(r) as { id?: unknown; name?: unknown; comment?: unknown }[] | undefined;
+  if (list === undefined) throw new Error(`listing the Secrets Store's secrets failed: ${describeFailure(r)}`);
+  return new Map(
+    list.flatMap((s) => (typeof s.name === "string" && typeof s.id === "string" ? [[s.name, { id: s.id, ...(typeof s.comment === "string" ? { comment: s.comment } : {}) }] as const] : [])),
+  );
+}
+
 /** The names of the store's secrets, with their IDs (never their values). */
 export async function secretIds(api: CloudflareApi, accountId: string, storeId: string): Promise<Map<string, string>> {
-  const r = await api("GET", `/accounts/${accountId}/secrets_store/stores/${storeId}/secrets?per_page=100`);
-  const list = listOf(r);
-  if (list === undefined) throw new Error(`listing the Secrets Store's secrets failed: ${describeFailure(r)}`);
-  return new Map(list.flatMap((s) => (typeof s.name === "string" && typeof s.id === "string" ? [[s.name, s.id] as const] : [])));
+  return new Map([...(await storedSecrets(api, accountId, storeId))].map(([name, s]) => [name, s.id]));
 }
 
 /**
  * Puts `value` into the store as the secret `name`: a new secret, or the existing one's value
- * replaced (`existing`: its ID from `secretIds`). Throws naming the secret, never the value.
+ * replaced (`existing`: its ID from `secretIds`), with `comment` when given. Throws naming the
+ * secret, never the value.
  */
-export async function putSecret(api: CloudflareApi, accountId: string, storeId: string, name: string, value: string, existing?: string): Promise<void> {
+export async function putSecret(api: CloudflareApi, accountId: string, storeId: string, name: string, value: string, existing?: string, comment?: string): Promise<void> {
   const base = `/accounts/${accountId}/secrets_store/stores/${storeId}/secrets`;
-  const r = existing === undefined ? await api("POST", base, [{ name, value, scopes: [...SECRET_SCOPES] }]) : await api("PATCH", `${base}/${existing}`, { value });
+  const note = comment === undefined ? {} : { comment };
+  const r = existing === undefined ? await api("POST", base, [{ name, value, scopes: [...SECRET_SCOPES], ...note }]) : await api("PATCH", `${base}/${existing}`, { value, ...note });
   if (!succeeded(r)) throw new Error(`putting the secret ${name} into Secrets Store failed: ${describeFailure(r)}`);
 }

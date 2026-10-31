@@ -123,6 +123,52 @@ describe("ensureOAuthClients (plan §5.1 step 2)", () => {
     ]);
   });
 
+  it("each stored entry names its client (the secret's comment holds the client ID), so the entries are tied to one client", async () => {
+    const cloud = new FakeCloud();
+    await ensureOAuthClients(cloud.api, ACCOUNT, { subdomain: SUB });
+    const store = cloud.secretStores.get("store1")!.secrets;
+    for (const kind of ["admin", "signin"] as const) {
+      const id = store.get(CLIENT_SECRET_NAMES[kind].id)!.value;
+      expect(store.get(CLIENT_SECRET_NAMES[kind].id)?.comment).toBe(id);
+      expect(store.get(CLIENT_SECRET_NAMES[kind].secret)?.comment).toBe(id);
+    }
+  });
+
+  it("review A: a replacement whose ID put failed leaves the secret of the new client and the ID of the deleted one; the next run replaces the client again", async () => {
+    const cloud = new FakeCloud();
+    await ensureOAuthClients(cloud.api, ACCOUNT, { subdomain: SUB });
+    const store = cloud.secretStores.get("store1")!.secrets;
+    store.delete(CLIENT_SECRET_NAMES.admin.secret);
+    const idEntry = store.get(CLIENT_SECRET_NAMES.admin.id)!.id;
+    cloud.override.set(`PATCH /accounts/${ACCOUNT}/secrets_store/stores/store1/secrets/${idEntry}`, { status: 500, body: { success: false, errors: [{ code: 1, message: "Internal" }], result: null } });
+    await expect(ensureOAuthClients(cloud.api, ACCOUNT, { subdomain: SUB })).rejects.toThrow(/the next setup run replaces the client/);
+    cloud.override.clear();
+    expect(await ensureOAuthClients(cloud.api, ACCOUNT, { subdomain: SUB })).toEqual({ created: ["admin"], kept: ["signin"] });
+    const admin = [...cloud.oauthClients.values()].filter((c) => c.name === CLIENT_NAMES.admin);
+    expect(admin).toHaveLength(1);
+    expect(store.get(CLIENT_SECRET_NAMES.admin.id)?.value).toBe(admin[0]!.id);
+    expect(store.get(CLIENT_SECRET_NAMES.admin.secret)?.value).toBe(admin[0]!.secret);
+  });
+
+  it("review B: entries of a client deleted in the dashboard are not taken for the client found by name", async () => {
+    const cloud = new FakeCloud();
+    await ensureOAuthClients(cloud.api, ACCOUNT, { subdomain: SUB });
+    const old = [...cloud.oauthClients.values()].find((c) => c.name === CLIENT_NAMES.signin)!;
+    cloud.oauthClients.delete(old.id);
+    // Someone made a client of the same name by hand: its secret is not in the store.
+    cloud.oauthClients.set("hand-made", { id: "hand-made", name: CLIENT_NAMES.signin, body: {}, secret: "unknown" });
+    expect(await ensureOAuthClients(cloud.api, ACCOUNT, { subdomain: SUB })).toEqual({ created: ["signin"], kept: ["admin"] });
+    expect(cloud.oauthClients.has("hand-made")).toBe(false);
+    const fresh = [...cloud.oauthClients.values()].find((c) => c.name === CLIENT_NAMES.signin)!;
+    expect(cloud.secretStores.get("store1")!.secrets.get(CLIENT_SECRET_NAMES.signin.id)?.value).toBe(fresh.id);
+  });
+
+  it("a client list longer than one page is refused rather than read in part (a missed client would be duplicated)", async () => {
+    const cloud = new FakeCloud();
+    cloud.override.set(`GET /accounts/${ACCOUNT}/oauth_clients?per_page=100`, { status: 200, body: { success: true, errors: [], result: [], result_info: { page: 1, per_page: 100, count: 0, total_count: 101 } } });
+    await expect(ensureOAuthClients(cloud.api, ACCOUNT, { subdomain: SUB })).rejects.toThrow("the account has 101 OAuth clients, more than one page of 100; setup reads one page only");
+  });
+
   it("a create answer without a secret: fails naming the client; nothing is stored for it", async () => {
     const cloud = new FakeCloud();
     cloud.override.set(`POST /accounts/${ACCOUNT}/oauth_clients`, { status: 200, body: { success: true, errors: [], result: { client_id: "c-x", name: CLIENT_NAMES.admin } } });
