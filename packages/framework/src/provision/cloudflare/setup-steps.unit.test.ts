@@ -182,6 +182,15 @@ describe("the account setup steps (plan-setup-wizard §4.4, DEC-0578)", () => {
     }
   });
 
+  it("a refused read of a step stops the apply before any change", async () => {
+    const cloud = await setUpCloud();
+    cloud.buckets.delete("prototype-logs");
+    cloud.override.set(`GET /accounts/${ACCOUNT}/r2/buckets/sst-state/objects/${encodeURIComponent("framework/r2-signing.json")}`, { status: 403, body: { success: false, errors: [{ code: 10000, message: "Authentication error" }] } });
+    await expect(applySetupSteps(cloud.api, ACCOUNT, input())).rejects.toThrow(/403/);
+    expect(writes(cloud)).toEqual([]);
+    expect(cloud.buckets.has("prototype-logs")).toBe(false);
+  });
+
   it("an unknown step is refused before any request", async () => {
     const cloud = freshCloud();
     await expect(applySetupSteps(cloud.api, ACCOUNT, input({ steps: ["no-such-step" as SetupStepId] }))).rejects.toThrow(/unknown setup step no-such-step/);
