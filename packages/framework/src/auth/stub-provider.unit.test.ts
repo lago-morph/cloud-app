@@ -37,7 +37,7 @@ describe("stub login provider", () => {
     const stub = createStubLoginProvider();
     const begun = await stub.beginLogin(ctx);
     const url = stubCallbackUrl(begun.redirectUrl, { subject: "alice", displayName: "Alice" });
-    expect(await stub.completeLogin(ctx, new URL(url).searchParams, begun.transactionState)).toStrictEqual({ subject: "alice", displayName: "Alice" });
+    expect(await stub.completeLogin(ctx, new URL(url).searchParams, begun.transactionState)).toStrictEqual({ subject: "alice", displayName: "Alice", roles: [] });
     const plain = await stub.beginLogin(ctx);
     const identity = await stub.completeLogin(ctx, new URL(plain.redirectUrl).searchParams, plain.transactionState);
     expect(identity.subject).not.toBe("");

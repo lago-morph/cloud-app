@@ -6,7 +6,7 @@
 import { UsageError } from "./args.js";
 import { describeFailure } from "./failure.js";
 import { EXIT, type CliIo, type Command } from "./io.js";
-import { buildBinding, cloud, cloudflareSetupBinding, devBinding, generateMigrationBinding, mailBinding, resetLocalBinding, secretsBinding, upgradeBinding, verifyBinding, versionCheckBinding } from "./wiring.js";
+import { buildBinding, cloud, cloudflareSetupBinding, devBinding, generateMigrationBinding, resetLocalBinding, secretsBinding, upgradeBinding, verifyBinding, versionCheckBinding } from "./wiring.js";
 
 export { EXIT, type CliIo, type Command } from "./io.js";
 
@@ -27,10 +27,8 @@ const removeBinding: Command = cloud("remove", async (env) => (await import("./c
 const stopBinding: Command = cloud("stop", async (env) => (await import("./commands/stop-start.js")).stopBinding(env));
 const startBinding: Command = cloud("start", async (env) => (await import("./commands/stop-start.js")).startBinding(env));
 const setupAccountBinding: Command = cloud("setup-account", async (env) => (await import("./commands/setup-account.js")).setupAccountBinding(env));
-/** `check-login` (PWD §2): the real login provider on a production stage, with the mail sink. */
+/** `check-login` (plan-v0.2.0 §7.1 E2E-008): the automated part of the real-login check on a production stage, up to the auth app. */
 const checkLoginBinding: Command = cloud("check-login", async (env) => (await import("./commands/check-login.js")).checkLoginBinding(env));
-/** `admins` (CLI-REQ-005): the local D1, or the D1 HTTP API on Cloudflare. */
-const adminsBinding: Command = cloud("admins", async (env) => (await import("./commands/admins.js")).adminsBinding(env));
 
 const COMMANDS: Readonly<Record<string, Entry>> = {
   dev: { summary: "run the app locally on http://localhost:<port>", run: devBinding },
@@ -47,8 +45,6 @@ const COMMANDS: Readonly<Record<string, Entry>> = {
   "cloudflare-setup": { summary: "cloudflare-setup [--email-domain <d>] [--switch-account]: the re-runnable Cloudflare setup (tokens, account, email domain)", run: cloudflareSetupBinding },
   "check-login": { summary: "check-login --target <t> --stage <s>: automated real-login check on a production stage", run: checkLoginBinding },
   "reset-local": { summary: "clear local state (local D1, R2, .logs/ and .mail/)", run: resetLocalBinding },
-  mail: { summary: "mail last --to <address> [--target <t>]: print the latest framework email sent to an address", run: mailBinding },
-  admins: { summary: "admins grant <email> | revoke <email> | list --target <t> --stage <s> [--confirm-production <s>]: the admin role", run: adminsBinding },
   "version-check": { summary: "compare the app's framework, its skill copies and npm's latest release; changes nothing", run: versionCheckBinding },
   upgrade: { summary: "upgrade [<version>]: move the app to a framework release (default: latest), refresh its skill copy and verify", run: upgradeBinding },
 };
