@@ -30,6 +30,7 @@ jobs:
       unit_files: ${{ steps.classify.outputs.unit_files }}
       ids: ${{ steps.classify.outputs.ids }}
       direct: ${{ steps.classify.outputs.direct }}
+      direct_filter: ${{ steps.classify.outputs.direct_filter }}
       chromium: ${{ steps.classify.outputs.chromium }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -98,6 +99,7 @@ jobs:
     env:
       IDS: ${{ needs.classify.outputs.ids }}
       DIRECT: ${{ needs.classify.outputs.direct }}
+      DIRECT_FILTER: ${{ needs.classify.outputs.direct_filter }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -118,9 +120,11 @@ jobs:
       - name: Reference app's local test secret
         working-directory: apps/reference
         run: node -e "process.stdout.write(require('crypto').randomBytes(24).toString('hex'))" | npm run secrets -- set apiKey --target local --stage local
-      - name: Untagged integration tests of the selected suites (no criterion tag; the harness runs the tagged ones)
+      # Every test of the selected framework, skill and starter suites except those tagged with
+      # one of IDS, which the harness runs next: each test runs once.
+      - name: Integration tests of the selected suites not run by the harness
         if: env.DIRECT != ''
-        run: npx vitest run --config vitest.integration.config.ts $DIRECT -t '^(?!.*\[(?:[A-Z]+-AC|E2E)-\d{3}\])' --passWithNoTests
+        run: npx vitest run --config vitest.integration.config.ts $DIRECT ${DIRECT_FILTER:+-t "$DIRECT_FILTER"} --passWithNoTests
       - name: Criteria and scenarios through the compliance harness
         if: env.IDS != ''
         run: npm run compliance -- --target local --only "$IDS" --out "$RUNNER_TEMP/compliance"

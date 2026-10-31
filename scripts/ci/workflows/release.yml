@@ -56,10 +56,11 @@ jobs:
       - name: Selection for a full run
         id: all
         run: node scripts/ci/classify.mjs --all --github-output "$GITHUB_OUTPUT"
-      - name: Untagged integration tests (the harness runs the tagged ones)
+      - name: Integration tests the harness does not run (tagged with no criterion or scenario)
         env:
           DIRECT: ${{ steps.all.outputs.direct }}
-        run: npx vitest run --config vitest.integration.config.ts $DIRECT -t '^(?!.*\[(?:[A-Z]+-AC|E2E)-\d{3}\])' --passWithNoTests
+          DIRECT_FILTER: ${{ steps.all.outputs.direct_filter }}
+        run: npx vitest run --config vitest.integration.config.ts $DIRECT ${DIRECT_FILTER:+-t "$DIRECT_FILTER"} --passWithNoTests
       # The runner sets the reference app's local test secret before a local compliance run
       # (DEC-0277, DEC-0398; root cause ai/implementation/root-causes/2026-10-31-P0-apikey-local-runner-step.md).
       # A fresh random value each run; it is never printed and never stored.
