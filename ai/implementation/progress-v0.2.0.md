@@ -16,6 +16,8 @@ Plan: `ai/implementation/plan-v0.2.0-testing-auth.md` ("plan §n"); governing pr
 
 ## Open items
 <!-- blocked items, cross-stack merge preconditions still pending, owner questions raised -->
+- From S4 (#61): (1) T4 adds `fast-check` (PAR-410, exact pin) to framework devDependencies, plus the template if G 68 needs it. T4 is the lockfile editor in its batch. (2) F's exit check "criteria/prov and cf green against fakes" passes vacuously, because those tests are Cloud-only placeholders locally. F's brief must name real local checks. (3) The F4 fuzz target is expected to expose that `files/base64url.ts` accepts 4 spellings of each local ticket MAC. T4 routes it through §7a.1.8. (4) The decision draft is `v020-S4.md`; I1 should match case-insensitively.
+- The S4 reviewer ran as a separate cloud session (`session_014mWQ6k9PiPRJThvcqKpHAZ`), because subagents have no Agent tool. Archive it at the end of the run.
 - **The local `main` branch is stale** (`deae62b`, PR #54) while `origin/main` is `1e0c289`. Create every worktree and branch from `origin/main` (or `git fetch && git branch -f main origin/main` first).
 - `00-run-records` is numbered 00 because it opens first; it is kept open and merged last (nothing stacks on it).
 - Plan gaps found while planning (handled in §3): deploy-side AUTH service binding and registry write/clear have no named item (assigned to F); `email-permissions.ts` holds generic token-policy helpers (assigned a refactor in C before its removal); §7.1 "own PR" vs §7a.2.3 "tagged tests land in the same change" (split as T2 below).
@@ -68,7 +70,7 @@ Format: **ID — title** · plan § · deps · status. Then Owns / PRs (`nn` bra
 - Tests: unit tests for the classifier; once-green test moves (`example-copies`) reviewed per §7a.1.9 (`refactor-only`). E2E: project split only, no scenario change. Fuzz: the classifier's path matcher is a candidate for S4's list.
 - IDs: DEC-0635–0644, PAR-406–409.
 
-**S4 — integration coverage list and fuzz target list** · §7a.2.2, §7a.1.7 · — · `running`
+**S4 — integration coverage list and fuzz target list** · §7a.2.2, §7a.1.7 · — · `done` (PR #61; reviewer confirmed all 6 fuzz targets)
 - Owns: `ai/implementation/v0.2.0-coverage-fuzz.md` (new). Read-only otherwise.
 - PRs: `20-coverage-fuzz-list` ← main (~150, doc).
 - Exit: lists every v0.2.0-end-state component (`docs/architecture/component-map.md`) with its suite path or "gap" (today none under `packages/framework/test/integration/` for provision, evidence, testing, targets, client; confirm against `tests/compliance/criteria/`); ≤ 8 fuzz targets, each with trust boundary, root-cause evidence, run count and seed; recommends a fuzz tool that runs offline in Node; an independent reviewer's per-target verdict appended in the file.
