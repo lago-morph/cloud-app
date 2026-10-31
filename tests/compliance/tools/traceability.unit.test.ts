@@ -116,8 +116,8 @@ describe("[COMPL-AC-002] traceability report", () => {
     const real = readCatalogue(new URL("../../../docs/", import.meta.url).pathname);
     const report = buildTraceability({ catalogue: real, tests: [], records: [] });
     expect(report.rows.map((r) => r.id)).toEqual(real.map((e) => e.id));
-    // 171, less the retired PWD-AC-001…010 and MAIL-AC-001…007 (v0.2.0, DEC-0696), and CLI-AC-006 and CLI-AC-007 (DEC-0698).
-    expect(report.rows.length).toBe(152);
+    // 171, less the retired PWD-AC-001…010 and MAIL-AC-001…007 (v0.2.0, DEC-0696), and CLI-AC-006 and CLI-AC-007 (DEC-0698). Then plus E2E-017 (DEC-0763), E2E-018 (DEC-0764) and E2E-019 (DEC-0767).
+    expect(report.rows.length).toBe(155);
   });
 
   it("finds tags in test sources: bracketed titles and tag() calls, not untagged mentions", () => {

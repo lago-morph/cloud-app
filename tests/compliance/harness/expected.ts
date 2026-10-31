@@ -16,8 +16,6 @@ export type RunMode = "automated" | "milestone";
  */
 export const PASSWORD_PENDING = "password login provider not implemented yet (DEC-0509)";
 
-/** A scenario whose steps went with the password provider, mail and `admins` (plan-v0.2.0 §6), until T2 rewrites it (§7.1). */
-export const E2E_REWRITE_PENDING = "steps removed with the password provider, mail and admins; rewrite for sign-in with Cloudflare pending (plan-v0.2.0 §7.1, T2)";
 
 /** AUTH-AC-005's successful-callback response needs a redirect login provider, which no cloud stage has (DEC-0513). */
 export const NO_REDIRECT_PROVIDER = "no redirect login provider on a cloud stage (DEC-0513)";
@@ -89,8 +87,6 @@ export const PHASE_RULES: readonly NotRunRule[] = [
   { id: "AUTH-AC-005", targets: CLOUD, mode: "automated", part: "contract part: successful callback (needs a redirect login provider)", detail: NO_REDIRECT_PROVIDER },
   { id: "SKILL-AC-006", targets: CLOUD, mode: "milestone", detail: PASSWORD_PENDING },
   { id: "CLI-AC-001", targets: CLOUD, mode: "automated", detail: PASSWORD_PENDING },
-  // Plan-v0.2.0 §6, §7.1: E2E-007's steps were password sign-up, mail and `admins`, removed with them; T2 rewrites it for sign-in with Cloudflare.
-  { id: "E2E-007", targets: CLOUD, mode: "automated", detail: E2E_REWRITE_PENDING },
   // DEC-0532: "Deploying without it fails with a clear message" needs an account on which setup-account never ran.
   { id: "PROV-AC-004", targets: CLOUD, mode: "milestone", part: "fresh-account clause: deploying without setup-account fails with a clear message", detail: SECOND_ACCOUNT_DEFERRED },
 ];

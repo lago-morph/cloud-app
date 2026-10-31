@@ -17,7 +17,10 @@ OIDC
 OAuth
 ID token
 access token
+refresh token
+PKCE
 issuer
 Better Auth
 scrypt
 Email Service
+Secrets Store

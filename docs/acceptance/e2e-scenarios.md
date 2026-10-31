@@ -4,7 +4,9 @@ These scenarios verify the system requirements on the assembled framework, the t
 
 Unless stated otherwise:
 - framework-level scenarios run against the reference app (`apps/reference/`); E2E-002 and E2E-015 use the demo;
-- cloud scenarios run on test stages using the authentication mock;
+- cloud scenarios run on test stages, which sign in with the authentication mock only; the scenarios that name the production-check stage `prodcheck` (COMPL §2) run there instead, where there is no mock and sign-in goes through the account's auth app;
+- the real sign-in is the owner's, once per release, in each scenario's `live sign-in` part (a milestone part); automated runs never sign in on Cloudflare's own page;
+- locally, `dev` signs in with the mock only. A scenario part that needs the real sign-in path runs the reference app's production bundle and the auth app's Worker under local workerd, with mock-oauth2-server as the OAuth issuer and the fake Cloudflare API for `/user` and `/memberships` (plan-v0.2.0 §4.3, §7a.1.4);
 - each scenario records an evidence record (COMPL-REQ-003).
 
 Each scenario's "Where" line names the targets it runs on, as the "Where" column does for component criteria. "Milestone" marks a milestone item (COMPL-REQ-006).
@@ -15,7 +17,7 @@ Where: Local
 Origin: ai-proposed (reviewed by the owner before 2026-10-31)
 
 On a machine with no cloud credentials and networking to cloud providers blocked:
-1. Scaffold a new app from the template. It installs the framework from an `npm pack` tarball at an exact version, and imports every public subpath.
+1. Scaffold a new app with the `npm create` starter (`@lago-morph/create-prototype-app`), packed as it is published, with the template and the skill bundled. Give it the framework as an `npm pack` tarball at an exact version. The app imports every public subpath.
 2. Run `dev`; use each capability through the template's pages.
 3. Run `verify`.
 
@@ -30,7 +32,7 @@ From one commit:
 1. Deploy the demo to a Cloudflare test stage and an AWS test stage. (The AWS stage: deferred, branch `aws`.)
 2. Run the demo smoke test on each (`smoke`), and locally.
 
-Pass: all three smoke runs pass, and no source file differs between them.
+Pass: the Cloudflare and local smoke runs pass, and no source file differs between them. (The AWS smoke run: deferred, branch `aws`.)
 
 #### E2E-003 — Portability is enforced
 Verifies: SYS-REQ-002, SYS-REQ-004, SYS-REQ-006, SYS-REQ-011, SYS-REQ-025
@@ -59,14 +61,14 @@ Run the full compliance suite on local, Cloudflare, and AWS for one commit. (Rel
 
 Pass: every applicable acceptance criterion passes on every target, and each target has a valid evidence record.
 
-#### E2E-005 — Access levels on a deployed app
+#### E2E-005 — Access levels, and nothing of the login provider exposed
 Verifies: SYS-REQ-005, SYS-REQ-017, SYS-REQ-020
-Where: Cloud
+Where: Local, cloud
 Origin: ai-proposed (reviewed by the owner before 2026-10-31)
 
-On each cloud test stage, use the mock to act as anonymous, user, and admin in a browser against the reference app, exercising its protected routes. Inspect every API response and the app-facing types.
+On each cloud test stage, and locally under `dev`, use the mock to act as anonymous, user, and admin in a browser against the reference app, exercising its protected routes. Locally, also sign in through the auth app (mock-oauth2-server as the issuer, the fake Cloudflare API for `/user` and `/memberships`) as a member with a non-administrator role and as one with an administrator role, whose identities carry an email address, and exercise the same routes over HTTP. Inspect every API response, including those of the sign-in redirects and the callback, and the app-facing types.
 
-Pass: each level gets exactly its permitted actions. No response or app-facing type exposes login-provider names, login-provider tokens, issuers, or email addresses.
+Pass: each level gets exactly its permitted actions, through the mock and through the auth app. No response or app-facing type exposes login-provider names, login-provider tokens, issuers, or email addresses; in particular, neither signed-in member's email address appears in any app response.
 
 #### E2E-006 — Production deployments have no mock
 Verifies: SYS-REQ-020, SYS-REQ-027
@@ -75,35 +77,36 @@ Origin: ai-proposed (reviewed by the owner before 2026-10-31)
 
 Redeploy the `prodcheck` stage (COMPL §2) on each cloud.
 
-Pass: `/api/auth/mock-login` and `/api/__framework/test-mail` return 404, the deployed bundle contains no mock or mail-capture code, and `/api/auth/login` redirects to the framework's sign-in page on the stage's public origin (DEC-0513).
+Pass: `/api/auth/mock-login` returns 404, the deployed bundle contains no mock code, and `/api/auth/login` redirects to the auth app's `/start`, carrying the app ID `<app>-prodcheck` and the return URL `<public origin>/api/auth/callback` of the stage's public origin (DEC-0667).
 
-#### E2E-007 — Becoming an admin
+#### E2E-007 — Role from membership
 Verifies: SYS-REQ-018
-Where: Local, cloud
+Where: Local; live sign-in: cloud (milestone)
 Origin: ai-proposed (reviewed by the owner before 2026-10-31)
 
-Follow only the documented steps (DEC-0521, DEC-0523, DEC-0526):
-1. Sign up and sign in to a stage: sign up, read the verification mail with `mail last`, verify, and sign in. Check that `/api/auth/me` shows level `user`, and that an admin-only reference route answers 403 `AUTH.FORBIDDEN`.
-2. Grant the role: `admins grant <address> --target <t> --stage <s>`, adding `--confirm-production <s>` on a production stage.
-3. Send the next request with the same session: no new login, no deploy.
-4. Revoke the role with `admins revoke`, and send one more request.
+A person's level comes from their membership of the owner's Cloudflare account (SYS-REQ-018 as amended by DEC-0690). Locally, with the reference app's production bundle, the auth app, mock-oauth2-server and a fake memberships API:
+1. A member whose roles include no administrator role signs in through `/api/auth/login`: `/api/auth/me` shows level `user`, and an admin-only reference route answers 403 `AUTH.FORBIDDEN`.
+2. A member with an administrator role (PAR-413) signs in: level `admin`, and the admin-only route answers 200.
+3. With both sessions kept, the first member is promoted to an administrator role, the second is demoted, and a third signed-in member is removed from the account, all in the fake memberships API. Until the role-refresh interval (PAR-425) has passed, each session keeps its level. On the first request after it, the first is `admin`, the second `user`, and the third's session ends and the request is handled as anonymous (401 `AUTH.UNAUTHENTICATED` on a user-only route).
+4. Someone with no accepted membership of the account is refused: the app's callback signs no one in.
 
-Locally this runs through `dev` and the reference app's local D1, with `--target local`. On each cloud it runs on the `prodcheck` stage, with a sink address `sink+<run ID>@t.<domain>` (DEC-0527), the mail read from the sink, and `--confirm-production prodcheck`. It is automated on every cloud run, with no owner step and no commit.
+Live sign-in (milestone, once per release; plan-v0.2.0 §7 "Live", steps 3 and 4): the owner's real sign-in to `prodcheck` (E2E-008) shows level `admin`, and, if the owner can invite one, a member with no administrator role signs in there and is shown `user`.
 
-Pass:
-- the user is `user` before the grant;
-- `admin` (the admin-only route answers 200) on the first request after it;
-- `user` again on the first request after the revoke;
-- the account has no role stored afterwards.
+Pass: each step shows the level stated; a role change takes effect at the role refresh and not before, with no new sign-in, no deploy and no command; nobody outside the account gets a session.
 
-#### E2E-008 — Real login provider check (automated)
+#### E2E-008 — Sign-in through the auth app on the production stage
 Verifies: SYS-REQ-019, SYS-REQ-027
-Where: Cloud
+Where: Cloud; live sign-in: cloud (milestone)
 Origin: ai-proposed (reviewed by the owner before 2026-10-31)
 
-On the `prodcheck` stage of each cloud, after it is redeployed, run `check-login` (PWD §2): sign-up with real email delivery to the mail sink, refusal before verification, verification, sign-in, password reset, and the sign-in rate limit, all over HTTP (DEC-0512).
+On the `prodcheck` stage of each cloud, after it is redeployed, run `check-login` (DEC-0670), over HTTP only and with no Cloudflare credential:
+1. `GET /api/auth/login`, sent with a forged host, redirects to the auth app's `/start` with exactly the app ID `<app>-prodcheck`, the return URL `<public origin>/api/auth/callback` taken from the deployment rather than the forged host, and a state;
+2. the app's callback, given that state and a bogus code, signs no one in;
+3. the auth app's `/start` accepts the redirect, which shows the return URL is registered for the app ID, and sends the browser on to Cloudflare's authorization endpoint with PKCE.
 
-Pass: `check-login` exits 0 and its evidence record shows every step passed. Runs on every cloud compliance run.
+Live sign-in (milestone, once per release; plan-v0.2.0 §7 "Live", step 3): the owner follows the same redirect in a browser, signs in on Cloudflare's own login page, and lands back on `prodcheck` signed in.
+
+Pass: on every cloud compliance run, `check-login` exits 0 and its evidence record shows E2E-008 passed; the live sign-in's latest record passed and has not been invalidated (COMPL-REQ-006).
 
 #### E2E-009 — Large photos
 Verifies: SYS-REQ-008, SYS-REQ-014
@@ -128,7 +131,7 @@ Verifies: SYS-REQ-007, SYS-REQ-021
 Where: Local, cloud
 Origin: ai-proposed (reviewed by the owner before 2026-10-31)
 
-On each cloud, exercise the reference app, including its route that throws a plain `Error`. Find that request's entry by its requestId in the account's log bucket, using only commands copied from the skill's troubleshooting reference. On AWS, repeat with the stage role denied writes to the log bucket, a stage-scoped deny that leaves the shared bucket untouched. Locally, repeat with an injected failing log writer.
+On each cloud, exercise the reference app, including its route that throws a plain `Error`. Find that request's entry by its requestId in the account's log bucket, using only commands copied from the skill's troubleshooting reference. On AWS (deferred, branch `aws`, DEC-0508), repeat with the stage role denied writes to the log bucket, a stage-scoped deny that leaves the shared bucket untouched. Locally, repeat with an injected failing log writer.
 
 Pass: app and framework entries appear under the app and stage prefix with timestamps, and the forced error's entry is found by its requestId. With log writes failing, the app still works.
 
@@ -184,16 +187,76 @@ Verifies: SYS-REQ-002, SYS-REQ-003, SYS-REQ-005, SYS-REQ-007
 Where: Local; review: milestone
 Origin: ai-proposed (reviewed by the owner before 2026-10-31)
 
-An automated scan of every app-facing contract (`docs/contracts/ts/` excluding `internal/`, and `framework.openapi.yaml`) finds no provider or protocol terms. The scan uses case-sensitive whole-word matching over identifiers, string literals, and comments. Its term list is kept in one file: S3, R2, D1, Aurora, Lambda, Worker, Cloudflare, AWS, Google, OIDC, OAuth, ID token, access token, issuer, Better Auth, scrypt, Email Service. A review, a milestone checklist item, then confirms three things:
+An automated scan of every app-facing contract (`docs/contracts/ts/` excluding `internal/`, and `framework.openapi.yaml`) finds no provider or protocol terms. The scan uses case-sensitive whole-word matching over identifiers, string literals, and comments. Its term list is kept in one file: S3, R2, D1, Aurora, Lambda, Worker, Cloudflare, AWS, Google, OIDC, OAuth, ID token, access token, refresh token, PKCE, issuer, Better Auth, scrypt, Email Service, Secrets Store. A review, a milestone checklist item, then confirms three things:
 - each component document has a portability note;
 - no capability contract references another capability's adapter;
 - no design adds features beyond its requirements.
 
 Pass: the scan finds nothing, and the review is recorded with its findings resolved.
 
+#### E2E-017 — Setup: the bootstrap, then the admin app
+Verifies: SYS-REQ-015, SYS-REQ-018
+Where: Local
+Origin: ai-proposed
+
+From a new project and an account with nothing set up, follow the setup flow (plan-v0.2.0 §5), locally, against the fake Cloudflare API, which accepts mock-oauth2-server's access tokens and enforces each grant's scopes:
+1. Run `cloudflare-setup` with a bootstrap token. It makes both OAuth clients, deploys the admin app, deletes the token, and comments out its line in `.env.cloudflare` without its value.
+2. Run the admin app that the bootstrap uploaded, with its bindings, under local workerd. An administrator signs in through mock-oauth2-server.
+3. On the account setup page, set the account up: the auth app with its D1 database, the shared resources, the signing credential in Secrets Store and the setup record.
+4. On the everyday token page, make the everyday token. Save it, as the person would, and run `cloudflare-setup` again with it.
+
+Expected errors and edge cases:
+- a bootstrap token with no expiry, or one expiring 1 day and 1 second away, is deleted at once and used for nothing else; one expiring exactly 1 day away is accepted;
+- a bootstrap token missing a permission is named, writes nothing and is kept;
+- a bootstrap interrupted while deploying the admin app, and an account setup interrupted before its record, each complete when run again, making nothing twice (one of each client, database and signing token);
+- a grant is only for the OAuth client the bootstrap registered, and only for the scopes that client allows;
+- an anonymous visitor, a member with no administrator role and someone outside the account are refused by the admin app;
+- a page whose optional scope was unticked names it and writes nothing.
+
+The live run of the same steps is the owner's (SETUP-AC-011, SKILL-AC-006; plan-v0.2.0 §7 "Live" steps 1 and 2).
+
+Pass: each step and each expected error behaves as stated. The everyday token holds exactly the four groups of plan-v0.2.0 §5.2 page 2, and `cloudflare-setup` with it finds the account set up and changes nothing. No bootstrap or everyday token value, OAuth token or client secret appears in any output, project file or admin-app response, except the everyday value, once, on its own page.
+
+#### E2E-018 — Sign-in through the auth app
+Verifies: SYS-REQ-017, SYS-REQ-018, SYS-REQ-019
+Where: Local
+Origin: ai-proposed
+
+Over HTTP, locally, with the reference app's production bundle, the auth app, mock-oauth2-server and the fake memberships API (preamble):
+1. Register the app's return URL with `deploy`'s own registry link, as a production deploy does.
+2. A member with no administrator role signs in through `/api/auth/login`, the auth app's `/start`, the issuer's login and both callbacks, and is level `user`. A member with an administrator role (PAR-413) is level `admin`.
+3. Sign out: the session ends.
+4. Clear the registration with `remove`'s registry link: the auth app refuses the app's sign-in again.
+
+Expected errors and edge cases:
+- a return URL not in the registry is refused with no redirect, including one that differs only by a trailing slash, case, port or percent-encoding, one on another origin, and one with a query;
+- an app ID that does not match the return URL is refused;
+- a code reused, or issued for another app, signs no one in. Of concurrent redemptions of one code, exactly one succeeds. A code past its 60-second lifetime (PAR-414) is the auth app's unit tests' case, with a fake clock (DEC-0765);
+- declined consent, someone with no membership of the account, and a pending member sign no one in;
+- an ID token with no `email` signs in through the `/user` fallback, which is the email the auth app stores; with no email from either, the sign-in is refused;
+- with the auth app unavailable, requests between role refreshes keep working. At the next role refresh the session ends and the request is handled as anonymous; the two retries before that are AUTH-AC-012's (`createTestApp`, counting calls). A sign-in in flight fails with the app's `authError=login_failed` and no session. A sign-in started then stops at the unavailable auth app's own pages. Once the auth app is back, signing in works again.
+
+One UI test signs in through the sign-in pages in a browser (E2E-005's auth-app part). The transaction cookie's attributes are checked on the way (AUTH-AC-006).
+
+Pass: each step and each expected error behaves as stated, and no app response carries a provider token or the member's email address.
+
+#### E2E-019 — Upgrade from 0.1.x
+Verifies: SYS-REQ-012
+Where: Local
+Origin: ai-proposed
+
+Make an app the way a 0.1.x user did: with the published 0.1.1 `npm create` starter and framework. Use it under `dev` and store some of the app's own data. Then upgrade it with its own `npm run upgrade -- 0.2.0`, from a local 0.2.0 package tarball (served for the framework's scope by a local registry until 0.2.0 is published), and run `dev` again (plan-v0.2.0 §8).
+
+Expected error: an upgrade to a version the registry does not have stops before changing anything.
+
+Pass:
+- the app's own data survives the upgrade and the next `dev`;
+- the upgrade prints the pointer to re-run Cloudflare setup (0.1.x's own upgrade command prints it, naming `cloudflare-setup` and the bootstrap token);
+- the next `dev` drops the Better Auth, sign-in rate-limit and test-mail tables through the framework's migrations.
+
 ## Retired scenarios
 
-A retired scenario is kept here for the record, outside any `####` heading and with no `Where:` line, so the compliance catalogue no longer expects it. Its ID is never reused (CONVENTIONS §2, §4). None is retired yet.
+A retired scenario is kept here for the record, outside any `####` heading and with no `Where:` line, so the compliance catalogue no longer expects it. Its ID is never reused (CONVENTIONS §2, §4). No scenario is retired. v0.2.0 rewrote E2E-005…E2E-008 in place for sign-in through the auth app and removed their password, mail and `admins` clauses: E2E-005's mock-only cloud run, E2E-006's test-mail route and sign-in page, E2E-007's sign-up, `mail last` and `admins grant`/`revoke` steps on `prodcheck`, and E2E-008's eight password and mail steps of `check-login` (DEC-0753, DEC-0754).
 
 | Retired ID | Former scenario | Former Where | Reason or replacement |
 | --- | --- | --- | --- |

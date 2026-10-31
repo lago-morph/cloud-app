@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isDeferred, parseWhere, readCatalogue, RELEASE_TARGETS, type CatalogueEntry } from "./catalogue.js";
-import { CLAUSE_RULES, checkRules, E2E_REWRITE_PENDING, expectedCriteria, PASSWORD_PENDING, NO_REDIRECT_PROVIDER, PHASE_RULES, type ClauseRule, type NotRunRule } from "./expected.js";
+import { CLAUSE_RULES, checkRules, expectedCriteria, PASSWORD_PENDING, NO_REDIRECT_PROVIDER, PHASE_RULES, type ClauseRule, type NotRunRule } from "./expected.js";
 
 const docs = new URL("../../../docs/", import.meta.url).pathname;
 
@@ -81,8 +81,8 @@ describe("[COMPL-AC-001] this phase's not-run rules (plan §8) against the docum
     for (const id of ["AUTH-AC-009", "AUTH-AC-014", "COMPL-AC-005", "E2E-006"]) {
       expect(cf.get(id), id).toEqual({ id, run: true, parts: [""], notRunParts: [] });
     }
-    // Plan-v0.2.0 §6, §7.1: E2E-007's password, mail and admins steps went with those features; not run until T2 rewrites it.
-    expect(cf.get("E2E-007")?.notRun).toBe(E2E_REWRITE_PENDING);
+    // Plan-v0.2.0 §7.1 (DEC-0753): E2E-007's automated part is local only; on a cloud it has only its live sign-in part.
+    expect(cf.has("E2E-007")).toBe(false);
     // CLI-AC-001's cloud part (the whole command table from the template on a cloud) has no cloud test yet.
     expect(cf.get("CLI-AC-001")?.notRun).toBe("password login provider not implemented yet (DEC-0509)");
     // Item I-G: check-login runs on prodcheck in every cloud run (the driver, prodcheck.ts), so its criteria run.
@@ -101,8 +101,9 @@ describe("[COMPL-AC-001] this phase's not-run rules (plan §8) against the docum
       parts: [""],
       notRunParts: [{ part: "fresh-account clause: deploying without setup-account fails with a clear message", detail: "deferred: needs a second Cloudflare account (owner, 2026-10-25)" }],
     });
-    // DEC-0526: E2E-007's cloud part and AUTH-AC-005's admin part left the milestone list.
-    for (const id of ["E2E-008", "E2E-007", "AUTH-AC-005"]) expect(cfm.has(id), id).toBe(false);
+    // DEC-0526: AUTH-AC-005's admin part left the milestone list. DEC-0692, DEC-0755: the live sign-in parts of E2E-007 and E2E-008 joined it.
+    expect(cfm.has("AUTH-AC-005")).toBe(false);
+    for (const id of ["E2E-007", "E2E-008"]) expect(cfm.get(id), id).toEqual({ id, run: true, parts: ["live sign-in"], notRunParts: [] });
     for (const target of ["local", "cloudflare"] as const) {
       for (const mode of ["automated", "milestone"] as const) {
         expect(expectedCriteria(real, target, mode).filter((e) => e.id.startsWith("GOOGLE-AC-")), `${target} ${mode}`).toEqual([]);
@@ -119,6 +120,12 @@ describe("[COMPL-AC-001] this phase's not-run rules (plan §8) against the docum
     expect(cf.get("AUTH-AC-005")).toEqual({ id: "AUTH-AC-005", run: true, parts: [""], notRunParts: [part] });
     const local = new Map(expectedCriteria(real, "local", "automated").map((e) => [e.id, e]));
     expect(local.get("AUTH-AC-005")).toEqual({ id: "AUTH-AC-005", run: true, parts: [""], notRunParts: [] });
+  });
+
+  // Plan-v0.2.0 §7.1 (DEC-0758, DEC-0764): PR 80 added the tests of E2E-005's and E2E-007's local auth-app parts, so both run whole.
+  it("runs E2E-005 and E2E-007 on local as a whole, with no part recorded not-run", () => {
+    const local = new Map(expectedCriteria(real, "local", "automated").map((e) => [e.id, e]));
+    for (const id of ["E2E-005", "E2E-007"]) expect(local.get(id), id).toEqual({ id, run: true, parts: [""], notRunParts: [] });
   });
 
   it("runs CHECK-AC-005 on local as a whole: its demo part has a tagged test, so no part is recorded not-run", () => {

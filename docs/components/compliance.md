@@ -38,7 +38,7 @@ The suite MUST also deploy a production stage of the reference app on each cloud
 Amendment for release 1 (Origin: owner · Decision: DEC-0512, DEC-0513): the Google check is replaced. On the production stage the suite MUST check that the mock and the test-mail route are absent (AUTH-AC-009, MAIL-AC-006), that `/api/auth/login` redirects to the framework's sign-in page, and MUST run `check-login` (PWD-AC-009), on every cloud run.
 
 #### COMPL-REQ-006 — Definition of "works"
-Origin: owner-approved · Derives from: SYS-REQ-026, SYS-REQ-027 · Decision: DEC-0512, DEC-0513, DEC-0526, DEC-0560, DEC-0692, DEC-0693, DEC-0696, DEC-0778
+Origin: owner-approved · Derives from: SYS-REQ-026, SYS-REQ-027 · Decision: DEC-0512, DEC-0513, DEC-0526, DEC-0560, DEC-0692, DEC-0693, DEC-0696, DEC-0778, DEC-0755
 
 The framework works for a commit only when both of the following hold:
 - every automated acceptance criterion and end-to-end scenario has passed on every applicable target for that commit;
@@ -61,6 +61,8 @@ Amendment for v0.2.0 (Origin: owner-approved · Decision: DEC-0692): the real lo
 Note (Origin: ai-proposed · Decision: DEC-0693): MAIL-AC-007 stays in the list above until its criterion row is retired, and leaves the list in the same change, so that the list and the Where columns name the same items. E2E-007 and E2E-008 are named before their Where lines gain a milestone part for the live sign-in (plan-v0.2.0 §7.1); until then COMPL-AC-001 counts only named items that have a milestone Where.
 
 Amendment (Origin: ai-proposed · Decision: DEC-0693, DEC-0696): MAIL is retired (DEC-0696), so MAIL-AC-007 leaves the list, as DEC-0692 says. The milestone items of release 1 are therefore E2E-007 (live part), E2E-008 (live part), E2E-015, E2E-016 (review part), SKILL-AC-006, and the stage-lifecycle and account criteria E2E-010, E2E-012, PROV-AC-002 (signing-credential clause), PROV-AC-003, PROV-AC-004, PROV-AC-006, COMPL-AC-008 and SETUP-AC-011.
+
+Amendment (Origin: ai-proposed · Decision: DEC-0755): the live sign-in parts of E2E-007 and E2E-008 now carry their own milestone Where segment, `live sign-in: cloud (milestone)` (e2e-scenarios.md; plan-v0.2.0 §7.1), so the interim rule of the DEC-0693 note above is spent: COMPL-AC-001 counts both like every other named item. E2E-007's automated part is local only, and E2E-008's automated part (`check-login` on `prodcheck`) stays in the automated tier on every cloud run. The milestone items of release 1 are therefore E2E-007 (live sign-in part), E2E-008 (live sign-in part), E2E-015, E2E-016 (review part), SKILL-AC-006, and the stage-lifecycle and account criteria E2E-010, E2E-012, PROV-AC-002 (signing-credential clause), PROV-AC-003, PROV-AC-004, PROV-AC-006, COMPL-AC-008 and SETUP-AC-011.
 
 ## 2. Design
 

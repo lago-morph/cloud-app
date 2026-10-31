@@ -47,7 +47,7 @@ paths:
         as last confirmed by the auth app (docs/components/auth.md, AUTH-REQ-003), and for
         a logged-in user the user ID and display name (AUTH-REQ-005). There is no
         `unlistedId`: configuration holds no users list, and admins are the members with
-        an administrator role in the owner's Cloudflare account (SYS-REQ-018, DEC-0690).
+        an administrator role in the account the auth app serves (the owner's) (SYS-REQ-018, DEC-0690).
         Responses are never cached.
       responses:
         "200":
