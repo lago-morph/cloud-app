@@ -238,7 +238,7 @@ export interface TargetOperations {
   removeStage(stage: Stage): Promise<void>;
   /**
    * Optional: takes the stage out of account-level registrations before anything of it is deleted
-   * (Cloudflare: a production stage's entry in the auth app's registry, DEC-0725, DEC-0780). The core
+   * (Cloudflare: a production stage's entry in the auth app's registry, DEC-0725, DEC-0730). The core
    * calls it in `remove` after the stop and a production backup succeeded, before the database deletes;
    * a failure is reported with the other removal failures and the rest is still removed. Idempotent.
    */

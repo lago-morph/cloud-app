@@ -84,7 +84,7 @@ Reviewer: an independent Claude Code remote session, `session_014mWQ6mgT34ZYNMLc
 5. **minor**: for similar cases, also check `stop-start.ts` and deploy's `stopAgain`.
 
 ## Response (round 1)
-- **1 (major), accepted.** The fix also changes provisioning.md §2 "Implementation". DEC-0725's draft is item F's file, so instead of editing it, the follow-up decision **DEC-0780** (T7's range, as T3's brief says for a fix's decision) is recorded in `ai/implementation/decisions/v020-T3.md`: *the clear runs in `runRemove` through the optional `TargetOperations.unregisterStage`, after a production backup succeeded and before any delete*. Its Affects line names `core/{operations,remove}.ts` and `cloudflare/target.ts`. I2 integrates it with DEC-0725.
+- **1 (major), accepted.** The fix also changes provisioning.md §2 "Implementation". DEC-0725's draft is item F's file, so instead of editing it, the follow-up decision **DEC-0730** (ID lent from F's unused range; first drafted as DEC-0780, which T7's #143 holds; as T3's brief says for a fix's decision) is recorded in `ai/implementation/decisions/v020-T3.md`: *the clear runs in `runRemove` through the optional `TargetOperations.unregisterStage`, after a production backup succeeded and before any delete*. Its Affects line names `core/{operations,remove}.ts` and `cloudflare/target.ts`. I2 integrates it with DEC-0725.
 - **2, accepted.** Evidence 5 is corrected here. `lifecycle.unit.test.ts` runs `runRemove`, but it records the auth-app calls and the database calls in separate arrays, so the order between them was never asserted. The fix strengthens that test with one shared sequence. This is recorded as `strengthened` in `test-reviews/2026-10-31-T3.md`.
 - **3, accepted.** `withD1` (deploy-d1) forwards every property it does not override through `Reflect.get`, so the optional hook passes through. `FakeTarget` is unchanged.
 - **4, accepted.** The hook runs only after a successful backup, with its own failure label. The core unit test is added.
@@ -93,7 +93,7 @@ Reviewer: an independent Claude Code remote session, `session_014mWQ6mgT34ZYNMLc
 ## Re-check (§7a.1.8 step 6)
 Evaluator: an independent remote session, `session_014mWQ6mTwhP8wD39BBbiXdC`, 2026-10-31. Result: **pass**.
 - **Order of commits.** The verdict and the response (`f3324a6`) come before the fix (`a66c1f6`), and after the red test and this record (`7df0bdf`).
-- **Changes from the review.** The fix makes every binding change: the spec and DEC-0780, the optional hook with its production guard, placement after a successful backup with its own failure label, and the similar-case search.
+- **Changes from the review.** The fix makes every binding change: the spec and DEC-0730, the optional hook with its production guard, placement after a successful backup with its own failure label, and the similar-case search.
 - **Test runs.** The provision unit tests passed 431/431 and the PROV integration suite 11/11. With the pre-fix `target.ts`, `remove.ts` and `operations.ts` restored, the two new unit assertions failed (red shown).
 - **Defects.** None. The evaluator called one JSDoc sentence ("first in `remove`") slightly loose, so it now reads "after the stop and a production backup succeeded".
 - **Test-change review.** `test-reviews/2026-10-31-T3.md`: accepted.

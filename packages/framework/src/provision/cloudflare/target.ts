@@ -341,7 +341,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
     },
 
     // The core calls this before it deletes anything of the stage: nobody new signs in to a stage
-    // being removed, and its outstanding codes go too (DEC-0725, DEC-0780). Test stages are not registered.
+    // being removed, and its outstanding codes go too (DEC-0725, DEC-0730). Test stages are not registered.
     async unregisterStage(stage) {
       if (production(stage)) await authApp.unregister(workerName(stage));
     },

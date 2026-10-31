@@ -70,7 +70,7 @@ describe("remove core (PROV-REQ-003)", () => {
     expect(err).toMatch(/leftovers could not be listed/);
   });
 
-  it("unregisters the stage through the target's optional hook before it deletes anything; a failed unregister is reported and the rest is still removed (DEC-0725, DEC-0780)", async () => {
+  it("unregisters the stage through the target's optional hook before it deletes anything; a failed unregister is reported and the rest is still removed (DEC-0725, DEC-0730)", async () => {
     for (const failing of [false, true]) {
       const t = twoStages();
       const hooked = Object.assign(t, {
