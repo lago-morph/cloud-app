@@ -62,8 +62,11 @@ interface GrantState {
   readonly action?: string;
 }
 
-/** A page's sub-action: a lower-case verb, optionally `:` and comma-separated hex IDs. */
-export const isAction = (v: unknown): v is string => typeof v === "string" && v.length <= 800 && /^[a-z]{1,20}(:[0-9a-f]{32}(,[0-9a-f]{32}){0,19})?$/.test(v);
+/** A page's sub-action: a lower-case verb, `:`, and 1–20 comma-separated 32-hex IDs. */
+export const isAction = (v: unknown): v is string => typeof v === "string" && v.length <= 800 && /^[a-z]{1,20}:[0-9a-f]{32}(,[0-9a-f]{32}){0,19}$/.test(v);
+
+/** The verb of a well-formed action. */
+export const actionVerb = (action: string): string => action.slice(0, action.indexOf(":"));
 
 /** The authorization URL for `page` and the sealed grant cookie value. */
 export async function startGrant(deps: GrantDeps, page: AdminPageId, action?: string): Promise<{ location: string; cookie: string }> {
