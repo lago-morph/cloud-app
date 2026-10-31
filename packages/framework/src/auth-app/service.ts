@@ -35,5 +35,5 @@ export function createAuthAppService(deps: AuthAppServiceDeps): AuthAppBinding {
       if (typeof sub !== "string" || sub === "") return null;
       return guarded(() => getRole(deps.db, sub));
     },
-  } as AuthAppBinding;
+  } satisfies AuthAppBinding; // methods take unknown: RPC arguments arrive unchecked
 }

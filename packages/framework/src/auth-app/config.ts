@@ -14,7 +14,11 @@ const fail = (message: string): never => {
 async function setting(env: Record<string, unknown>, name: string): Promise<string> {
   let value = env[name];
   if (typeof value === "object" && value !== null && typeof (value as { get?: unknown }).get === "function") {
-    value = await (value as { get(): Promise<unknown> }).get();
+    try {
+      value = await (value as { get(): Promise<unknown> }).get();
+    } catch {
+      return fail(`${name} could not be read`);
+    }
   }
   if (typeof value !== "string" || value === "") return fail(`${name} is not set`);
   return value;
@@ -32,7 +36,10 @@ export async function readConfig(env: Record<string, unknown>): Promise<AuthAppC
   const origin = await setting(env, "AUTH_APP_ORIGIN");
   if (!URL.canParse(origin)) fail("AUTH_APP_ORIGIN is not an origin");
   const parsed = new URL(origin);
-  if (parsed.origin !== origin || !["https:", "http:"].includes(parsed.protocol)) fail("AUTH_APP_ORIGIN is not an origin");
+  // https, or http only on localhost (the rule DEC-0657 applies to return URLs): the callback
+  // carries the upstream code.
+  const local = parsed.protocol === "http:" && (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1");
+  if (parsed.origin !== origin || !(parsed.protocol === "https:" || local)) fail("AUTH_APP_ORIGIN is not an origin");
   return {
     clientId,
     clientSecret,
