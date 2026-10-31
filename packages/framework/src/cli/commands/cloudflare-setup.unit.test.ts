@@ -247,6 +247,48 @@ describe("cloudflare-setup: the bootstrap token's rules (v0.2.0 plan §5.1, §7;
     expect(world.token("boot-id").deleted).toBe(false);
   });
 
+  // Found by T1's SETUP criteria (DEC-0751, and DEC-0750's account-list gap); root cause 2026-10-31-T7-bootstrap-token-rules.
+  const ownRequests = (world: SetupWorld, id: string) => world.requests.filter((r) => r.startsWith(`${id} `));
+  /** Its identification: the verify call that gives its ID, and the account list that finds where to verify it when no account is known otherwise. */
+  const IDENTIFICATION = new RegExp(`^boot-id GET /accounts(\\?per_page=50|/${ACCOUNT}/tokens/verify)$`);
+  const PROTECTED_TEXT = "CLOUDFLARE_BOOTSTRAP_TOKEN (the bootstrap token): it is protected (its ID is in PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS) and was not deleted";
+
+  it("a protected bootstrap token is refused before any use: no request of its own but its identification, no OAuth client, no admin app, no DELETE; says it is protected and was not deleted; its line kept; exit 1 (SETUP-REQ-004 as amended, DEC-0681)", async () => {
+    for (const [label, withEveryday] of [["with an everyday token", true], ["bootstrap token only", false]] as const) {
+      const world = withEveryday ? await setUpWorld() : freshWorld();
+      world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
+      const dir = project({ env: withEveryday ? bothTokens() : envFile({ CLOUDFLARE_BOOTSTRAP_TOKEN: BOOT_VALUE }) });
+      const before = readEnvFile(dir);
+      const { status, io } = await run(world, dir, { env: { PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS: "boot-id" } });
+      expect(status, label).toBe(1);
+      expect(io.out, label).toContain(PROTECTED_TEXT);
+      expect(io.out, label).toContain(BOOT_LINK);
+      expect(ownRequests(world, "boot-id").filter((r) => !IDENTIFICATION.test(r)), label).toEqual([]);
+      expect(world.writes(), label).toEqual([]);
+      expect(world.cloud().oauthClients.size, label).toBe(0);
+      expect(world.cloud().workers.has("prototype-admin"), label).toBe(false);
+      expect(world.token("boot-id").deleted, label).toBe(false);
+      expect(readEnvFile(dir), label).toBe(before);
+      expect(io.out, label).not.toContain("The Cloudflare bootstrap is complete.");
+    }
+  });
+
+  it("a long-lived bootstrap token deletes itself before any other call: with the everyday token's account known, it reads only its verify and its own details (no account list), no other token's request comes between, and nothing follows the DELETE (DEC-0681)", async () => {
+    for (const [label, expires] of [
+      ["1 day + 1 s away", AT(ONE_DAY + 1000)],
+      ["no expiry", undefined],
+    ] as const) {
+      const world = await setUpWorld();
+      world.addToken("bootstrap", BOOT_VALUE, "boot-id", expires === undefined ? {} : { expires_on: expires });
+      const { status } = await run(world, project({ env: bothTokens() }));
+      expect(status, label).toBe(1);
+      const own = ownRequests(world, "boot-id");
+      expect(own, label).toEqual([`boot-id GET /accounts/${ACCOUNT}/tokens/verify`, `boot-id GET /accounts/${ACCOUNT}/tokens/boot-id`, `boot-id DELETE /accounts/${ACCOUNT}/tokens/boot-id`]);
+      expect(world.requests.slice(world.requests.indexOf(own[0] ?? "")), `${label}: from its first request to its DELETE, and after it`).toEqual(own);
+      expect(world.token("boot-id").deleted, label).toBe(true);
+    }
+  });
+
   it("the value is never written: after the bootstrap, no file in the project holds it (in the file or the environment)", async () => {
     for (const fromFile of [true, false]) {
       const world = freshWorld();
