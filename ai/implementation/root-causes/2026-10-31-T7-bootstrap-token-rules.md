@@ -159,3 +159,23 @@ Reviewer: the same independent cloud session as round 1 (`session_014mWQ6h81Y226
   - the expiry rule.
 
   The same-ID check needs the everyday token, so it stays after (Proposed fix, point 1).
+
+## Fix (attempt 1)
+
+- **Red, before the fix.** At `79bd7cc`, `cloudflare-setup.unit.test.ts` gave 2 failed and 59 passed. The reviewer saw the same in round 2.
+- **Fix.** In `cloudflare-setup.ts` (amended fix, points 1–4):
+  - the bootstrap token's user-token, protected, own-details and expiry checks run before the everyday token is identified;
+  - a protected token becomes a bootstrap-slot problem (`PROTECTED_BOOTSTRAP`);
+  - the protected branches in `bootstrap()` and `refuseLongLived()` go.
+- **Green, after the fix, with `CLOUDFLARE_*` unset:**
+  - build, typecheck and lint are clean;
+  - `npm run test:unit` passes 2712/2712;
+  - `criteria/setup` passes 63/63, with T1's `bootstrap-v020.test.ts` copied in and not committed;
+  - `permission-tables --check` is clean.
+
+  No test depended on the old order of the problem messages (review round 2, item 4).
+- **Probe after the fix:**
+  - **Protected, with an everyday token:** exit 1, no OAuth client. The requests are `boot-id` list and verify, then the everyday token's list and verify.
+  - **Protected, bootstrap token only:** exit 1. The requests are `boot-id` list and verify only.
+  - **Long-lived, with or without an everyday token:** exit 1, deleted. The requests are `boot-id` list, verify, own details and DELETE, and no other request.
+- **Once-green test changes:** 2, in `test-reviews/2026-10-31-T7-34c.md` (`test-was-wrong` 1, `behaviour-changed` 1).

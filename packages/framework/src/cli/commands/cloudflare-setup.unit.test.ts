@@ -236,13 +236,14 @@ describe("cloudflare-setup: the bootstrap token's rules (v0.2.0 plan §5.1, §7;
     expect(readEnvFile(dir)).toBe(`CLOUDFLARE_BOOTSTRAP_TOKEN=${BOOT_VALUE}\n`);
   });
 
-  it("a long-lived protected token is neither deleted nor used (DEC-0589)", async () => {
+  it("a long-lived protected token is neither deleted nor used (DEC-0589); it is refused before its expiry is judged (DEC-0733)", async () => {
     const world = freshWorld();
     world.addToken("bootstrap", BOOT_VALUE, "boot-id");
     const dir = project({ env: envFile({ CLOUDFLARE_BOOTSTRAP_TOKEN: BOOT_VALUE }) });
     const { status, io } = await run(world, dir, { protectedTokenIds: ["boot-id"] });
     expect(status).toBe(1);
-    expect(io.out).toContain("Its ID is protected, so setup neither deleted nor used it.");
+    expect(io.out).toContain("CLOUDFLARE_BOOTSTRAP_TOKEN (the bootstrap token): it is protected (its ID is in PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS) and was not deleted");
+    expect(world.requests).toEqual([`boot-id GET /accounts?per_page=50`, `boot-id GET /accounts/${ACCOUNT}/tokens/verify`]);
     expect(world.writes()).toEqual([]);
     expect(world.token("boot-id").deleted).toBe(false);
   });
@@ -798,22 +799,25 @@ describe("cloudflare-setup: an everyday token short of a permission (the admin a
 });
 
 describe("cloudflare-setup: the token write guard (DEC-0589)", () => {
-  it("a protected bootstrap ID is never deleted: the self-delete is skipped (no DELETE sent), its line is kept, the run finishes normally (DEC-0589)", async () => {
+  it("a protected bootstrap ID is never deleted and never used: refused after its verify call (no DELETE sent, no bootstrap), its line is kept, says it is protected and was not deleted, exit 1 (DEC-0589; SETUP-REQ-004 as amended, DEC-0733)", async () => {
     for (const how of ["option", "environment"] as const) {
       const world = await setUpWorld();
       world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
       const dir = project({ env: bothTokens() });
       const { status, io } = await run(world, dir, how === "option" ? { protectedTokenIds: ["boot-id"] } : { env: { PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS: "x, BOOT-ID" } });
       expect(io.err, how).toBe("");
-      expect(status, how).toBe(0);
-      expect(io.out).toContain("note: the bootstrap token is protected, so setup did not delete it");
+      expect(status, how).toBe(1);
+      expect(io.out, how).toContain("CLOUDFLARE_BOOTSTRAP_TOKEN (the bootstrap token): it is protected (its ID is in PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS) and was not deleted: setup did not use it for the bootstrap");
       expect(io.out).not.toContain("deleted itself");
       expect(io.out).not.toContain("commented out");
       expect(world.requests.filter((r) => / DELETE /.test(r))).toEqual([]);
+      // Only its identification: it is used for nothing (no own details, no OAuth client, no deploy).
+      expect(world.requests.filter((r) => r.startsWith("boot-id ")), how).toEqual([`boot-id GET /accounts?per_page=50`, `boot-id GET /accounts/${ACCOUNT}/tokens/verify`]);
+      expect(world.cloud().oauthClients.size, how).toBe(0);
       expect(world.token("boot-id").deleted).toBe(false);
       // The token still exists, so its line stays as it was.
       expect(readEnvFile(dir).startsWith(`CLOUDFLARE_BOOTSTRAP_TOKEN=${BOOT_VALUE}\n`)).toBe(true);
-      expect(io.out).toContain("The Cloudflare bootstrap is complete.");
+      expect(io.out).not.toContain("The Cloudflare bootstrap is complete.");
     }
   });
 

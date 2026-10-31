@@ -10,9 +10,11 @@
  *    the bootstrap token: DEC-0574's filter is for the everyday commands). Each is checked: valid and
  *    active (`GET /accounts/<a>/tokens/verify`, or `/user/tokens/verify` for a user token), its
  *    account (`GET /accounts`), and, for the everyday token, one read per permission
- *    (`probeEveryday`, account reads only). A bootstrap token with no expiry, or one more than
- *    1 day away (PAR-435), deletes itself at once and the run stops with its link (v0.2.0 plan §5.1
- *    step 1; DEC-0681).
+ *    (`probeEveryday`, account reads only). The bootstrap token is identified and judged before the
+ *    everyday token is touched (DEC-0733): one whose ID is protected (`protectedTokenIds`, PAR-361)
+ *    is refused at once, neither used nor deleted, its line kept; one with no expiry, or one more
+ *    than 1 day away (PAR-435), deletes itself at once and the run stops with its link, with no
+ *    other token's request before or after (v0.2.0 plan §5.1 step 1; DEC-0681).
  * 3. **No token to work with** (no everyday token and no usable bootstrap token): the requirements,
  *    links, template, where it goes and the next prompt; stop.
  * 4. **The account**: the everyday token's, else the bootstrap token's; several visible without
@@ -20,9 +22,8 @@
  *    `CLOUDFLARE_ACCOUNT_ID`: the account switch (§3.4).
  * 5–7. **With the bootstrap token: the bootstrap** (v0.2.0 plan §5.1): its own permissions checked
  *    (`BOOTSTRAP`); then it deletes itself at the end (its own ID, from its own verify call), its line
- *    in `.env.cloudflare` is commented out and its value is never written (DEC-0683). One whose ID is
- *    protected (`protectedTokenIds`) is not deleted: no DELETE is sent, its line is kept and a note
- *    says so. The bootstrap token does no account setup and never reads or changes the everyday
+ *    in `.env.cloudflare` is commented out and its value is never written (DEC-0683). A protected one
+ *    never runs the bootstrap (step 2). The bootstrap token does no account setup and never reads or changes the everyday
  *    token: both are the admin app's (plan §5.2; DEC-0682).
  *    Without it there is no email domain to ask for and no zone to look up (v0.2.0 plan §5.3;
  *    DEC-0689): the everyday token needs no zone permission.
@@ -72,6 +73,9 @@ export const NEXT_PROMPT = 'Then say "continue prototype setup" (or run /prototy
 
 /** The environment variable naming token IDs setup must never update or delete (comma-separated; PAR-361). */
 export const PROTECTED_TOKEN_IDS_ENV = "PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS";
+
+/** What a protected bootstrap token's problem says (SETUP-REQ-004 as amended: "say that it is protected and was not deleted"; DEC-0733). */
+export const PROTECTED_BOOTSTRAP = `it is protected (its ID is in ${PROTECTED_TOKEN_IDS_ENV}) and was not deleted: setup did not use it for the bootstrap, and its line is kept as it is`;
 
 /** A made-up Worker name whose host under the account's `workers.dev` subdomain the network check requests (DEC-0590). */
 export const REACHABILITY_SCRIPT = "prototype-framework-reachability";
@@ -407,9 +411,10 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       hidden.add(found.token.id);
       return found.token;
     };
+    // The bootstrap token is identified and judged first, before the everyday token is touched, so a
+    // refused one deletes itself before any other request of the run (DEC-0681, DEC-0733).
     let boot = bootValue !== undefined && bootValue === everydayValue ? undefined : await identifyIn(BOOTSTRAP_SETTING, bootValue);
     if (bootValue !== undefined && bootValue === everydayValue) problems.push({ slot: BOOTSTRAP_SETTING, text: `it holds the same token as ${EVERYDAY_SETTING}; the two must be different tokens, each made from its own link` });
-    const everyday = await identifyIn(EVERYDAY_SETTING, everydayValue);
     if (boot?.user === true) {
       problems.push({
         slot: BOOTSTRAP_SETTING,
@@ -417,29 +422,34 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       });
       boot = undefined;
     }
-    if (boot !== undefined && everyday !== undefined && boot.id === everyday.id) {
-      problems.push({ slot: BOOTSTRAP_SETTING, text: `it is the same token as ${EVERYDAY_SETTING}` });
+    // A protected bootstrap token (PAR-361) is refused as soon as its verify call names it: it is
+    // neither used for the bootstrap nor deleted, and its line is kept (SETUP-REQ-004 as amended,
+    // DEC-0681, DEC-0733). Nothing else is sent with it.
+    if (boot !== undefined && isProtected(boot.id)) {
+      problems.push({ slot: BOOTSTRAP_SETTING, text: PROTECTED_BOOTSTRAP });
       boot = undefined;
     }
 
     let selfDeleteArmed = false;
-    const guard = (api: CloudflareApi) =>
+    const guard = (api: CloudflareApi, everydayId?: string) =>
       guardTokenWrites(api, {
         protectedIds,
-        ...(everyday === undefined ? {} : { everydayId: everyday.id }),
+        ...(everydayId === undefined ? {} : { everydayId }),
         ...(boot === undefined ? {} : { bootstrapId: boot.id }),
         selfDeleteArmed: () => selfDeleteArmed,
         onTokenId: (id) => hidden.add(id),
       });
-    const bootApi = boot === undefined ? undefined : guard(boot.api);
 
     // The bootstrap token's expiry (v0.2.0 plan §5.1 step 1; DEC-0681): none, or more than 1 day
     // away (PAR-435), and it is deleted at once, before anything else is checked or used. Its own
     // details are read first: a token that cannot read them (the everyday token pasted there) lacks
-    // "Account API Tokens Write", so it could not delete itself either.
+    // "Account API Tokens Write", so it could not delete itself either. The everyday token is not
+    // identified yet, so this guard does not know its ID; it still allows a DELETE only of the
+    // bootstrap token's own ID while the self-delete is armed (DEC-0733).
     let bootPolicies: TokenDetails["policies"] = [];
-    if (boot !== undefined && bootApi !== undefined) {
-      const own = await bootApi("GET", `/accounts/${boot.owner?.id ?? ""}/tokens/${boot.id}`);
+    if (boot !== undefined) {
+      const earlyApi = guard(boot.api);
+      const own = await earlyApi("GET", `/accounts/${boot.owner?.id ?? ""}/tokens/${boot.id}`);
       const ownDetails = resultOf<TokenDetails>(own);
       if (ownDetails === undefined || !Array.isArray(ownDetails.policies)) {
         problems.push({ slot: BOOTSTRAP_SETTING, text: `it cannot read API tokens (${describeFailure(own)}), so it lacks "Account API Tokens Write": was the everyday token pasted there?` });
@@ -447,9 +457,16 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       } else {
         bootPolicies = ownDetails.policies;
         const tooLong = bootstrapExpiryProblem(boot.expiresOn, (deps.now ?? (() => new Date()))());
-        if (tooLong !== undefined) return refuseLongLived(boot, bootApi, tooLong);
+        if (tooLong !== undefined) return refuseLongLived(boot, earlyApi, tooLong);
       }
     }
+
+    const everyday = await identifyIn(EVERYDAY_SETTING, everydayValue);
+    if (boot !== undefined && everyday !== undefined && boot.id === everyday.id) {
+      problems.push({ slot: BOOTSTRAP_SETTING, text: `it is the same token as ${EVERYDAY_SETTING}` });
+      boot = undefined;
+    }
+    const bootApi = boot === undefined ? undefined : guard(boot.api, everyday?.id);
 
     // 3. No token to work with: no everyday token, and no usable bootstrap token. The Everyday token page, the bootstrap link, the template and where it goes.
     if (everydayValue === undefined && boot === undefined) {
@@ -496,7 +513,7 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     // 5–7 with the bootstrap token: the bootstrap (v0.2.0 plan §5.1); the everyday token is left as it is.
     if (boot !== undefined && bootApi !== undefined) return bootstrap(boot, bootApi, account, switched);
     if (everyday === undefined) return stop(NEXT_PROMPT);
-    const everydayApi = guard(everyday.api);
+    const everydayApi = guard(everyday.api, everyday.id);
 
     // 2 (cont.). The everyday token's quick check: account reads only, no zone (DEC-0689).
     const probe = await probeEveryday(everydayApi, { accountId });
@@ -600,17 +617,13 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       say(`admin app: deployed (Worker ${APP_SCRIPTS.admin}), bound to the admin client's ID and secret in Secrets Store`);
 
       // The bootstrap token deletes itself last: its own ID, from its own verify call, never another.
-      // A protected one does not: no DELETE is sent (the guard would refuse it) and its line stays.
-      if (isProtected(token.id)) {
-        say(`note: the bootstrap token is protected, so setup did not delete it; ${BOOTSTRAP_SETTING} is kept as it is`);
-      } else {
-        const deleted = await selfDelete(token, api);
-        if (!succeeded(deleted)) {
-          return stop(`The bootstrap token could not delete itself (${describeFailure(deleted)}). Delete it in the dashboard (Manage account, Account API tokens, ${TOKEN_NAMES.bootstrap}), then remove ${BOOTSTRAP_SETTING}.`);
-        }
-        say("the bootstrap token deleted itself");
-        afterSelfDelete();
+      // A protected one never gets here: it is refused before any use (DEC-0733).
+      const deleted = await selfDelete(token, api);
+      if (!succeeded(deleted)) {
+        return stop(`The bootstrap token could not delete itself (${describeFailure(deleted)}). Delete it in the dashboard (Manage account, Account API tokens, ${TOKEN_NAMES.bootstrap}), then remove ${BOOTSTRAP_SETTING}.`);
       }
+      say("the bootstrap token deleted itself");
+      afterSelfDelete();
       fillIn({ CLOUDFLARE_ACCOUNT_ID: to.id }, to, switchedTo);
       say();
       // Step 5: the admin app's URL and the next step.
@@ -625,13 +638,12 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
 
     /**
      * A bootstrap token with no expiry or one more than 1 day away (DEC-0681): deleted at once,
-     * before anything else is checked or used, with how to make a new one. A protected one is
-     * neither deleted nor used.
+     * before anything else is checked or used, with how to make a new one. A protected one never
+     * gets here: it is refused before its own details are read (DEC-0733).
      */
     async function refuseLongLived(token: Token, api: CloudflareApi, why: string): Promise<ProvisionStatus> {
       const remake = `Make a new bootstrap token with an expiry of 1 day or less from this link, put it in ${BOOTSTRAP_SETTING} and run setup again:\n  ${deepLink("bootstrap")}\n  ${BOOTSTRAP_PAGE_CHOICES}\n`;
       const head = `${TITLE[BOOTSTRAP_SETTING]}: ${why}, and a bootstrap token may live 1 day at most.`;
-      if (isProtected(token.id)) return stop(`${head} Its ID is protected, so setup neither deleted nor used it.\n${remake}\n${NEXT_PROMPT}`);
       const deleted = await selfDelete(token, api);
       if (!succeeded(deleted)) {
         return stop(`${head} Setup could not delete it (${describeFailure(deleted)}): delete it in the dashboard (Manage account, Account API tokens, ${TOKEN_NAMES.bootstrap}).\n${remake}\n${NEXT_PROMPT}`);
