@@ -52,17 +52,9 @@ What the two links ask for:
 | Scope | On the dashboard | API name | Permission group ID |
 | --- | --- | --- | --- |
 | Account | Workers Scripts Edit | Workers Scripts Write | `e086da7e2179491d91ee5f35b3ca210a` |
-| Account | Workers R2 Storage Edit | Workers R2 Storage Write | `bf7481a1826f439697cb59a20b22293e` |
+| Account | OAuth Client Edit | OAuth Client Write | `50fc2f43318f40e4855a35d8de5bf643` |
+| Account | Secrets Store Edit | Secrets Store Write | `adc8fa2bc6124928a8b3314dc63a1235` |
 | Account | Account API Tokens Edit | Account API Tokens Write | `5bc3f8b21c554832afc660159ab75fa4` |
-| Account | Email Sending Edit | Email Sending Write | `5df633d6b41c42bcaf5b4a62b9d14b64` |
-| Account | Email Routing Addresses Edit | Email Routing Addresses Write | `e4589eb09e63436686cd64252a3aebeb` |
-| Account | Billing Read | Billing Read | `7cf72faf220841aabcfdfab81c43c4f6` |
-| Account | D1 Edit | D1 Write | `09b2857d1c31407795e75e3fed8617a1` |
-| Zone | Email Routing Rules Edit | Email Routing Rules Write | `79b3ec0d10ce4148a8f8bdc0cc5f97f2` |
-| Zone | DNS Edit | DNS Write | `4755a26eedb94da69e1066d98aa820be` |
-| Zone | Zone Settings Edit | Zone Settings Write | `3030687196b94b638145a3953da2b699` |
-| Zone | Zone Read | Zone Read | `c8fed203ed3043cba015a93ad1616f1f` |
-| Zone | Analytics Read | Analytics Read | `9c88f9c5bce24ce7af9a958ba9c504db` |
 <!-- /permission-table -->
 
 ## The skill in every cloud session: the setup script

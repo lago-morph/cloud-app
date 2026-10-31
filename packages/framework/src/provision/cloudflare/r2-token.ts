@@ -28,7 +28,7 @@
 import { createHash } from "node:crypto";
 import type { Stage } from "../core/operations.js";
 import { describeFailure, resultOf, succeeded, type CloudflareApi } from "./api.js";
-import { missingPermissions, tokenPolicies } from "./email-permissions.js";
+import { missingPermissions, tokenPolicies } from "./token-policies.js";
 import { ACCOUNT_BUCKETS, legacySigningTokenName, STATE_BUCKET } from "./names.js";
 
 export const ITEM_WRITE_PERMISSION = "Workers R2 Storage Bucket Item Write";

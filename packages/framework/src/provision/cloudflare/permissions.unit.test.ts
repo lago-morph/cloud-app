@@ -1,6 +1,5 @@
 /** The versioned permission list (DEC-0563…0565): deep links, policy comparison, the in-place update body, the quick check. */
 import { describe, expect, it } from "vitest";
-import { EMAIL_PERMISSIONS, MAIL_SINK_PERMISSIONS } from "./email-permissions.js";
 import { ACCOUNT, FakeCloud } from "./fake-cloud.test-support.js";
 import {
   ACCOUNT_SETUP_VERSION,
@@ -17,7 +16,6 @@ import {
   type PermissionGroup,
   type TokenPolicy,
 } from "./permissions.js";
-import { TOKEN_WRITE_PERMISSION } from "./r2-token.js";
 
 const A = "acct";
 const Z = "zone1";
@@ -33,13 +31,13 @@ const dashboardPolicies = (gs: readonly PermissionGroup[], zoneRes: Record<strin
 ];
 
 describe("the permission list", () => {
-  it("has plan §4.1's groups, versions and names", () => {
-    expect(PERMISSIONS_VERSION).toBe(1);
+  it("has plan §4.1's everyday groups, v0.2.0 plan §5.1's bootstrap groups, versions and names", () => {
+    expect(PERMISSIONS_VERSION).toBe(2);
     expect(ACCOUNT_SETUP_VERSION).toBe(1);
     expect(names(byScope(EVERYDAY, "account"))).toEqual(["Workers Scripts Write", "Workers R2 Storage Write", "D1 Write", "Email Sending Read"]);
     expect(names(byScope(EVERYDAY, "zone"))).toEqual(["Zone Read", "Analytics Read", "Email Routing Rules Read"]);
-    expect(names(byScope(BOOTSTRAP, "account"))).toEqual(["Workers Scripts Write", "Workers R2 Storage Write", "Account API Tokens Write", "Email Sending Write", "Email Routing Addresses Write", "Billing Read", "D1 Write"]);
-    expect(names(byScope(BOOTSTRAP, "zone"))).toEqual(["Email Routing Rules Write", "DNS Write", "Zone Settings Write", "Zone Read", "Analytics Read"]);
+    expect(names(byScope(BOOTSTRAP, "account"))).toEqual(["Workers Scripts Write", "OAuth Client Write", "Secrets Store Write", "Account API Tokens Write"]);
+    expect(byScope(BOOTSTRAP, "zone")).toEqual([]);
     expect(TOKEN_NAMES).toEqual({ everyday: "prototype-framework", bootstrap: "prototype-framework-bootstrap" });
     const all = [...EVERYDAY, ...BOOTSTRAP];
     for (const g of all) expect(g.id).toMatch(/^[0-9a-f]{32}$/);
@@ -49,10 +47,13 @@ describe("the permission list", () => {
     expect(EVERYDAY.some((g) => g.name.startsWith("Account API Tokens") || (g.scope === "zone" && g.name.endsWith("Write")))).toBe(false);
   });
 
-  it("holds every permission the existing setup-account checks name, with the same scope", () => {
-    for (const want of [...EMAIL_PERMISSIONS, ...MAIL_SINK_PERMISSIONS, { name: TOKEN_WRITE_PERMISSION, scope: "account" as const }]) {
-      expect(BOOTSTRAP.find((g) => g.name === want.name)?.scope, want.name).toBe(want.scope);
-    }
+  it("the bootstrap groups carry the IDs read from permission_groups (v0.2.0 plan §2.1b)", () => {
+    expect(Object.fromEntries(BOOTSTRAP.map((g) => [g.name, g.id]))).toEqual({
+      "Workers Scripts Write": "e086da7e2179491d91ee5f35b3ca210a",
+      "OAuth Client Write": "50fc2f43318f40e4855a35d8de5bf643",
+      "Secrets Store Write": "adc8fa2bc6124928a8b3314dc63a1235",
+      "Account API Tokens Write": "5bc3f8b21c554832afc660159ab75fa4",
+    });
   });
 });
 
@@ -107,11 +108,11 @@ describe("comparePolicies", () => {
   });
 
   it("a deny policy takes a group away, and is reported as denied", () => {
-    const dns = BOOTSTRAP.find((g) => g.name === "DNS Write")!;
-    const policies = [...dashboardPolicies(BOOTSTRAP), { effect: "deny" as const, resources: allZones, permission_groups: [{ id: dns.id }] }];
-    const c = comparePolicies(policies, BOOTSTRAP, scope);
-    expect(names(c.missing)).toEqual(["DNS Write"]);
-    expect(names(c.denied)).toEqual(["DNS Write"]);
+    const rules = EVERYDAY.find((g) => g.name === "Email Routing Rules Read")!;
+    const policies = [...dashboardPolicies(EVERYDAY), { effect: "deny" as const, resources: allZones, permission_groups: [{ id: rules.id }] }];
+    const c = comparePolicies(policies, EVERYDAY, scope);
+    expect(names(c.missing)).toEqual(["Email Routing Rules Read"]);
+    expect(names(c.denied)).toEqual(["Email Routing Rules Read"]);
   });
 
   it("a deny of a stronger group leaves the weaker one granted (denying Zone Write keeps Zone Read)", () => {
