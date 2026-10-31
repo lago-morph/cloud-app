@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isDeferred, parseWhere, readCatalogue, RELEASE_TARGETS, type CatalogueEntry } from "./catalogue.js";
-import { CLAUSE_RULES, checkRules, E2E_TESTS_PENDING, expectedCriteria, PASSWORD_PENDING, NO_REDIRECT_PROVIDER, PHASE_RULES, type ClauseRule, type NotRunRule } from "./expected.js";
+import { CLAUSE_RULES, checkRules, expectedCriteria, PASSWORD_PENDING, NO_REDIRECT_PROVIDER, PHASE_RULES, type ClauseRule, type NotRunRule } from "./expected.js";
 
 const docs = new URL("../../../docs/", import.meta.url).pathname;
 
@@ -122,14 +122,10 @@ describe("[COMPL-AC-001] this phase's not-run rules (plan §8) against the docum
     expect(local.get("AUTH-AC-005")).toEqual({ id: "AUTH-AC-005", run: true, parts: [""], notRunParts: [] });
   });
 
-  // Plan-v0.2.0 §7.1, §7a.2.3 (DEC-0758): PR 78 rewrote these local parts ahead of their tests, which land in PR 80.
-  it("records E2E-005's and E2E-007's local auth-app parts not-run until their tests land, and runs the rest of each", () => {
+  // Plan-v0.2.0 §7.1 (DEC-0758, DEC-0764): PR 80 added the tests of E2E-005's and E2E-007's local auth-app parts, so both run whole.
+  it("runs E2E-005 and E2E-007 on local as a whole, with no part recorded not-run", () => {
     const local = new Map(expectedCriteria(real, "local", "automated").map((e) => [e.id, e]));
-    for (const id of ["E2E-005", "E2E-007"]) {
-      const entry = local.get(id);
-      expect(entry?.run, id).toBe(true);
-      expect(entry?.notRunParts.map((p) => p.detail), id).toEqual([E2E_TESTS_PENDING]);
-    }
+    for (const id of ["E2E-005", "E2E-007"]) expect(local.get(id), id).toEqual({ id, run: true, parts: [""], notRunParts: [] });
   });
 
   it("runs CHECK-AC-005 on local as a whole: its demo part has a tagged test, so no part is recorded not-run", () => {
