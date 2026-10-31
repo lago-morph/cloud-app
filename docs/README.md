@@ -24,6 +24,8 @@ Reference material:
 | Conventions, system spec, component map, decision log, parameters register | Reviewed by owner |
 | Component designs, contracts, demo spec, end-to-end scenarios | Reviewed by owner |
 
+"Reviewed by owner" records a past review. It is not an approval gate for later changes: those follow each item's origin (CONVENTIONS §4), and agents keep the end-to-end scenarios current without owner approval.
+
 
 ## Release scope
 
