@@ -19,6 +19,9 @@ export const ADMIN_APP_MODULE = "worker.js";
 /** The admin app Worker's compatibility date. */
 export const ADMIN_APP_COMPATIBILITY_DATE = "2026-10-01";
 
+/** DEC-0720: the admin app imports `node:crypto` (through the account-setup code it reuses). */
+export const ADMIN_APP_COMPATIBILITY_FLAGS: readonly string[] = Object.freeze(["nodejs_compat"]);
+
 /** PAR-439: the admin app's binding names of the admin client's ID and secret. */
 export const ADMIN_APP_BINDINGS = Object.freeze({ clientId: "ADMIN_CLIENT_ID", clientSecret: "ADMIN_CLIENT_SECRET" });
 
@@ -35,6 +38,7 @@ export async function deployAdminApp(api: CloudflareApi, accountId: string, opti
   const metadata = {
     main_module: ADMIN_APP_MODULE,
     compatibility_date: ADMIN_APP_COMPATIBILITY_DATE,
+    compatibility_flags: [...ADMIN_APP_COMPATIBILITY_FLAGS],
     bindings: [
       binding(ADMIN_APP_BINDINGS.clientId, CLIENT_SECRET_NAMES.admin.id),
       binding(ADMIN_APP_BINDINGS.clientSecret, CLIENT_SECRET_NAMES.admin.secret),

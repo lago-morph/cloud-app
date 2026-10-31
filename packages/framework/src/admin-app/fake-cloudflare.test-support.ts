@@ -52,6 +52,9 @@ export const GROUP_SCOPE: Readonly<Record<string, string>> = {
   "Secrets Store Read": "secrets-store.read",
   "Secrets Store Write": "secrets-store.write",
   "Account Settings Read": "account-settings.read",
+  // Assumed (DEC-0719, live-pass item E-8): the R2 signing credential's group is covered by workers-r2.write.
+  "Workers R2 Storage Bucket Item Write": "workers-r2.write",
+  "2efd5506f9c8494dacb1fa10a3e7d5b6": "workers-r2.write",
   // The same groups by ID (permissions.ts), as a create or update body names them.
   e086da7e2179491d91ee5f35b3ca210a: "workers-scripts.write",
   bf7481a1826f439697cb59a20b22293e: "workers-r2.write",
@@ -192,9 +195,13 @@ export async function fakeCloudflare(options: { account?: CloudflareApi; omitSco
     if (url.href.startsWith(`${API_BASE}/`)) {
       const path = url.href.slice(API_BASE.length);
       const bearer = (req.headers.get("authorization") ?? "").replace(/^Bearer /, "");
-      const text = req.method === "GET" || req.method === "DELETE" ? "" : await req.text();
+      const type = req.headers.get("content-type") ?? "";
       let body: unknown;
-      if (text !== "") body = (req.headers.get("content-type") ?? "").startsWith("application/json") ? (JSON.parse(text) as unknown) : text;
+      if (type.startsWith("multipart/form-data")) body = await req.formData();
+      else {
+        const text = req.method === "GET" || req.method === "DELETE" ? "" : await req.text();
+        if (text !== "") body = type.startsWith("application/json") ? (JSON.parse(text) as unknown) : text;
+      }
       const r = await apiCall(req.method, path, bearer, body);
       return json(r.body, r.status);
     }
