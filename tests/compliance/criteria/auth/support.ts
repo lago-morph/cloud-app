@@ -35,8 +35,8 @@ export const sessionCookieName = (cloud = isCloud()): string => (cloud ? "__Host
 /** auth.md §2 "Login" step 2: `login_local` locally, `__Host-login` on cloud targets. */
 export const loginCookieName = (cloud = isCloud()): string => (cloud ? "__Host-login" : "login_local");
 
-/** PAR-250 (7 days) and PAR-251 (10 minutes), in seconds. */
-export const SESSION_LIFETIME_S = 7 * 24 * 60 * 60;
+/** PAR-250 (12 hours, DEC-0791) and PAR-251 (10 minutes), in seconds. */
+export const SESSION_LIFETIME_S = 12 * 60 * 60;
 export const LOGIN_LIFETIME_S = 10 * 60;
 
 /** The cookie's lifetime in seconds from Max-Age, else from Expires (relative to `now`). */

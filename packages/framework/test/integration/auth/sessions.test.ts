@@ -1,7 +1,7 @@
 /**
  * AUTH-AC-006, local: session and transaction cookie attributes, tampered / expired /
  * future-dated session cookies, and logout. docs/components/auth.md AUTH-REQ-006 and §2
- * ("Session cookie", "Login"); PAR-250 (7 days), PAR-251 (10 minutes).
+ * ("Session cookie", "Login"); PAR-250 (12 hours, DEC-0791), PAR-251 (10 minutes).
  *
  * Time: `createTestApp` runs in the runner's process, so the runner's fake timers govern
  * session expiry (core.md §2 "Testing"). Only `Date` is faked so local storage I/O keeps working.
@@ -21,7 +21,7 @@ import {
   type SetCookie,
 } from "./support.js";
 
-const SESSION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000; // PAR-250
+const SESSION_LIFETIME_MS = 12 * 60 * 60 * 1000; // PAR-250 (DEC-0791)
 const MINUTE = 60 * 1000;
 
 afterEach(async () => {

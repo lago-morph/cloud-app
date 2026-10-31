@@ -13,9 +13,9 @@ describe("AUTH cookies", () => {
     const local = cookieSettings("local", LOCAL_COOKIES);
     expect(local.session).toBe("session_local");
     expect(local.login).toBe("login_local");
-    const line = setCookie(local, local.session, "v1", 604800);
+    const line = setCookie(local, local.session, "v1", 43200);
     expect(line.startsWith("session_local=v1;")).toBe(true);
-    expect(attributes(line)).toStrictEqual(["Path=/", "Max-Age=604800", "HttpOnly", "SameSite=Lax"]);
+    expect(attributes(line)).toStrictEqual(["Path=/", "Max-Age=43200", "HttpOnly", "SameSite=Lax"]);
   });
 
   it(tag("AUTH-AC-006", "cloud: __Host- names, Secure, Path=/, no Domain"), () => {

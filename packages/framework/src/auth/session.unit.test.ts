@@ -9,9 +9,16 @@ const REAL = { id: "u_ABC", displayName: "Ada", provider: "stub", subject: "s-us
 const EXP = T0 / 1000 + SESSION_LIFETIME_SECONDS;
 
 describe("session tokens", () => {
-  it("PAR-250 is 7 days; the format is version 3 (DEC-0672)", () => {
-    expect(SESSION_LIFETIME_SECONDS).toBe(7 * 24 * 60 * 60);
+  it("PAR-250 is 12 hours (DEC-0791); the format is version 3 (DEC-0672)", () => {
+    expect(SESSION_LIFETIME_SECONDS).toBe(12 * 60 * 60);
     expect(SESSION_FORMAT_VERSION).toBe(3);
+  });
+
+  it(tag("AUTH-AC-006", "a session issued at T is still valid just before T + 12 hours and refused just after (PAR-250, DEC-0791)"), async () => {
+    const token = await issueSession(KEY, REAL, T0);
+    expect(await readSession(KEY, token, T0 + (SESSION_LIFETIME_SECONDS - 1) * 1000)).toStrictEqual({ ...REAL, expiresAt: EXP });
+    expect(EXP - T0 / 1000).toBe(12 * 60 * 60);
+    expect(await readSession(KEY, token, T0 + (SESSION_LIFETIME_SECONDS + 1) * 1000)).toBeUndefined();
   });
 
   it(tag("AUTH-AC-006", "a real-provider session reads back its user ID, display name, provider and subject until it expires"), async () => {

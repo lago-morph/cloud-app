@@ -137,7 +137,7 @@ To let someone sign in, invite them to the Cloudflare account (Manage Account �
 
 ## 8. Admins
 
-A member whose Cloudflare account role is "Super Administrator - All Privileges" or "Administrator" is admin; every other member is a user. Change a person's role in the dashboard (Manage Account → Members). No file edit, no commit and no deploy: the change shows when they next sign in (ask them to log out and in again). Removing someone from the account does not end a session they already have; it lasts until it expires (7 days) or they log out.
+A member whose Cloudflare account role is "Super Administrator - All Privileges" or "Administrator" is admin; every other member is a user. Change a person's role in the dashboard (Manage Account → Members). No file edit, no commit and no deploy: the change shows when they next sign in (ask them to log out and in again). Removing someone from the account does not end a session they already have; it lasts until it expires (12 hours) or they log out.
 
 ## 9. Stop, start and remove
 

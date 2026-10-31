@@ -65,7 +65,7 @@ Categories (see [CONVENTIONS.md §5](../CONVENTIONS.md)):
 
 | ID | Parameter | Value | Category | Notes |
 | --- | --- | --- | --- | --- |
-| PAR-250 | Session lifetime | 7 days | ai-proposed | The owner has no preference (DEC-0057). Kept in v0.2.0 (DEC-0696); a role refresh never lengthens a session (DEC-0668). |
+| PAR-250 | Session lifetime | 12 hours | owner | Set by the owner on 2026-10-31 (DEC-0791, owner question 56, option a); was 7 days (ai-proposed, DEC-0057). A role change shows at the next sign-in, so a session keeps its role at most this long. Kept in v0.2.0 (DEC-0696); a role refresh never lengthens a session (DEC-0668). |
 | PAR-251 | Validity of an in-progress login | 10 minutes | ai-proposed | Kept in v0.2.0 (DEC-0696); it matches the auth app's PAR-416. |
 | PAR-252 | Clock skew tolerated when validating provider responses | 60 seconds | ai-proposed | Also bounds a session cookie's future issued-at time (DEC-0169). Kept in v0.2.0 (DEC-0696); the auth app's ID-token leeway is PAR-417. |
 | PAR-253 | Minimum session signing key length | 32 bytes | ai-proposed | Also the length of `frameworkAuthSecret` (SEC). Kept in v0.2.0 (DEC-0696); `frameworkAuthSecret` is retired with the password provider (DEC-0698). |
