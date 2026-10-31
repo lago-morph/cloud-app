@@ -1,3 +1,6 @@
+# STAGED COPY (DEC-0637): this file replaces .github/workflows/release.yml. The session that wrote
+# it had no `workflow` token scope; copy it over .github/workflows/release.yml, then delete this one.
+#
 # Release on a version tag (v<semver>): verify, publish both npm packages with trusted publishing
 # (OIDC, no npm token) and provenance, then create the GitHub release from CHANGELOG.md.
 # The npm trusted publisher for each package names this file: release.yml. See docs/RELEASING.md.
@@ -18,7 +21,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 120 # the full local compliance run takes about 35 min
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -33,10 +36,43 @@ jobs:
         run: node scripts/release-check.mjs "$GITHUB_REF_NAME"
 
       - run: npm ci
-      - name: Playwright browser (used by the template and skill browser tests)
+      - name: Playwright browser (browser criteria, e2e-ui, the template-pages test)
         run: npx playwright install --with-deps chromium
-      - run: npm run verify
-      - run: npx vitest run --config vitest.integration.config.ts tests/skill packages/create-prototype-app
+
+      # Every test once (plan-v0.2.0 §7a.2.4 "Release", DEC-0642): linters, the unit layer, every
+      # integration test (Vitest and Playwright `integration`) and both local e2e projects.
+      # Tagged tests run only through the compliance harness (never bare, P0); untagged
+      # integration tests run directly. Cloud passes and milestone items keep their compliance
+      # tiers (compliance.md §2): GitHub Actions has no cloud credentials.
+      - name: Build, typecheck, lint
+        run: |
+          npm run build -w packages/framework
+          npm run typecheck
+          npm run lint
+      - name: No test file in two layers
+        run: node scripts/ci/classify.mjs --check-duplicates
+      - name: Unit tests
+        run: npm run test:unit
+      - name: Selection for a full run
+        id: all
+        run: node scripts/ci/classify.mjs --all --github-output "$GITHUB_OUTPUT"
+      - name: Integration tests the harness does not run (tagged with no criterion or scenario)
+        env:
+          DIRECT: ${{ steps.all.outputs.direct }}
+          DIRECT_FILTER: ${{ steps.all.outputs.direct_filter }}
+        run: npx vitest run --config vitest.integration.config.ts $DIRECT ${DIRECT_FILTER:+-t "$DIRECT_FILTER"} --passWithNoTests
+      # The runner sets the reference app's local test secret before a local compliance run
+      # (DEC-0277, DEC-0398; root cause ai/implementation/root-causes/2026-10-31-P0-apikey-local-runner-step.md).
+      # A fresh random value each run; it is never printed and never stored.
+      - name: Reference app's local test secret
+        working-directory: apps/reference
+        run: node -e "process.stdout.write(require('crypto').randomBytes(24).toString('hex'))" | npm run secrets -- set apiKey --target local --stage local
+      # Every expected local criterion and scenario (no --only): Vitest integration, Playwright
+      # integration, e2e-api and e2e-ui, and the unit-level IDs' unit tests (DEC-0643).
+      - name: Criteria and scenarios, all of them, through the compliance harness
+        run: npm run compliance -- --target local --out "$RUNNER_TEMP/compliance"
+      - name: Package contents
+        run: npm pack --dry-run --workspace packages/framework --workspace packages/create-prototype-app --workspace packages/prototype-framework-skill
 
   publish:
     needs: verify
