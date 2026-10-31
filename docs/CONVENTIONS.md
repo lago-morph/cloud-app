@@ -52,7 +52,7 @@ Every requirement, decision, parameter, and end-to-end scenario carries an **ori
 | `provenance-unclear` | Inherited from earlier AI-assisted work; origin cannot be established. Treat as `ai-proposed`. | An implementer, with a decision-log entry. |
 | `derived` | A consequence of other decisions, not a choice in itself. | Changes when its sources change. |
 
-**End-to-end scenarios** (`acceptance/e2e-scenarios.md`) carry their origin on an `Origin:` line after the `Where:` line. The scenarios that existed on 2026-10-31 carry `Origin: ai-proposed (reviewed by the owner before 2026-10-31)`, and a new scenario carries `Origin: ai-proposed`. For scenarios, the rule below replaces the table's last column: agents may add, change and retire E2E scenarios of any origin, to match the framework's current intent. Each such change needs a decision-log entry and a review by an independent subagent, and no owner approval. How to make the change is in the testing-standards skill (§8).
+**End-to-end scenarios** (`acceptance/e2e-scenarios.md`) carry their origin on an `Origin:` line after the `Where:` line. The scenarios that existed on 2026-10-31 carry `Origin: ai-proposed (reviewed by the owner before 2026-10-31)`, and a new scenario carries `Origin: ai-proposed`. For scenarios, the following rule replaces the table's last column: agents may add, change and retire E2E scenarios of any origin, to match the framework's current intent. Each such change needs a decision-log entry and a review by an independent subagent, and no owner approval. How to make the change is in the testing-standards skill (§8).
 
 ## 5. Parameter categories
 
