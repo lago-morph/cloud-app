@@ -50,7 +50,6 @@ describe("setup-account core (PROV-REQ-004)", () => {
     const t = new FakeTarget();
     expect(await runSetupAccount(t, captureIo())).toEqual({ status: 0, created: [] });
     expect(t.accountSettings).toEqual({ emailDomain: "example.test" });
-    expect(t.calls.some((c) => c.startsWith("writeAccountSettings"))).toBe(false);
   });
 
   it("[PROV-AC-007] (core part) a shared resource owned by another account stops setup-account with a message naming it and changes nothing", async () => {
@@ -59,7 +58,6 @@ describe("setup-account core (PROV-REQ-004)", () => {
     expect(await runSetupAccount(t, io)).toEqual({ status: 1, created: [] });
     expect(t.calls).toEqual(["inspectAccount"]);
     expect(t.shared.get("state home")).toBe("absent");
-    expect(t.calls.some((c) => c.startsWith("writeAccountSettings"))).toBe(false);
     expect(io.err).toMatch(/R2 bucket prototype-logs/);
     expect(io.err).toMatch(/another account/);
   });

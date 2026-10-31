@@ -78,15 +78,10 @@ import {
 } from "../_cloud/account.js";
 import { accountId, cfApi, cfOk } from "../_cloud/api.js";
 import { BACKUP_BUCKET, LOG_BUCKET, listObjects, STATE_BUCKET } from "../_cloud/r2.js";
-import { randomBytes } from "node:crypto";
 import { accountWorkers, listStageResources, MAIL_SINK, sharedResources } from "../_cloud/stage-resources.js";
 import { MARKER_PREFIX, stageOfMarkerKey } from "../../harness/criterion-stages.js";
 import { requireCloudD1 } from "../_cloud/d1.js";
 import { listKeys } from "../_cloud/r2.js";
-import { sinkAddress } from "../../../../packages/framework/src/provision/cloudflare/email.js";
-import { sinkMail } from "../cli/support/admins.js";
-import { createVerifiedAccount, expectAnswer, httpBrowser, signIn, testDisplayName, testIp, testPassword, type Account, type AuthBrowser } from "../pwd/support.js";
-import { emailDomain } from "../cli/support/admins.js";
 import { scratchCopy } from "../core/support/processes.js";
 import { isLocal, parameterNumber, REFERENCE_DIR } from "../core/support/repo.js";
 import { deployOrigin, runCli, tail } from "./support/stage.js";
@@ -170,10 +165,10 @@ async function requireNoOtherStages(): Promise<void> {
 /**
  * After the signing token was replaced: redeploys the reference app's `prodcheck` (when it
  * exists) from a scratch copy, so its Worker secrets hold the new credential (every deploy copies
- * the record, PROV-REQ-002 step 5), then shows a ticket round trip on it: a verified user (a
- * sink address under `t.<domain>`, as COMPL §2's prodcheck parts do; it is left with no role),
- * an upload through an upload ticket (R2 checks the ticket's signature) and the bytes read back
- * through a download ticket. The file is deleted afterwards.
+ * the record, PROV-REQ-002 step 5), and checks that the deploy, its health step included,
+ * passed. The signed-in ticket round trip that followed signed a user up with a password through
+ * the mail sink; both are removed in v0.2.0 (plan §6, B 45/46), so it went with them
+ * (`component-removed`, DEC-0689) until a production-stage sign-in exists for tests.
  */
 async function refreshProdcheck(t: string): Promise<void> {
   if (!(await accountWorkers()).includes(PRODCHECK_WORKER)) return;
@@ -183,25 +178,6 @@ async function refreshProdcheck(t: string): Promise<void> {
     expect(r.status, `redeploy of prodcheck with the new signing credential:\n${tail(r.output)}`).toBe(0);
     const origin = deployOrigin(r.output);
     expect(origin, "the prodcheck deploy printed its origin").toBeDefined();
-    const domain = await emailDomain();
-    const a: Account = { email: sinkAddress(domain, `prov-ac-004-${randomBytes(6).toString("hex")}`), password: testPassword(), displayName: testDisplayName("PROV 004") };
-    const b: AuthBrowser = { ...httpBrowser({ baseUrl: origin ?? "" }), mail: sinkMail() };
-    await createVerifiedAccount(b, a, testIp());
-    expectAnswer(await signIn(b, a.email, a.password, { ip: testIp() }), 200);
-    const name = `dt1/prov004-${randomBytes(6).toString("hex")}.txt`;
-    const bytes = new TextEncoder().encode(`prov-ac-004 ${name}`);
-    const cookie = Object.entries(b.cookies()).map(([k, v]) => `${k}=${v}`).join("; ");
-    try {
-      const up = expectAnswer(await b.post("/api/files/upload-ticket", { name, contentType: "text/plain" }), 200).json<{ ticket: { url: string } }>().ticket;
-      const put = await fetch(new URL(up.url, b.publicOrigin), { method: "PUT", headers: { "content-type": "text/plain" }, body: bytes, signal: AbortSignal.timeout(30_000) });
-      expect(put.status >= 200 && put.status < 300, `the upload through prodcheck's ticket (signed with the new credential): HTTP ${String(put.status)}`).toBe(true);
-      const down = expectAnswer(await b.post("/api/files/download-ticket", { name }), 200).json<{ ticket: { url: string } }>().ticket;
-      const got = await fetch(new URL(down.url, b.publicOrigin), { signal: AbortSignal.timeout(30_000) });
-      expect(got.status, "the download through prodcheck's ticket").toBe(200);
-      expect(new Uint8Array(await got.arrayBuffer()), "the downloaded bytes").toEqual(bytes);
-    } finally {
-      await fetch(new URL(`/api/files/content?name=${encodeURIComponent(name)}`, b.publicOrigin), { method: "DELETE", headers: { cookie, origin: b.publicOrigin }, signal: AbortSignal.timeout(30_000) });
-    }
   } finally {
     await copy.remove();
   }
@@ -279,7 +255,7 @@ if (!isLocal()) {
       }
     }, 30 * 60_000);
 
-    it(tag("PROV-AC-004", "a re-run of setup-account replaces a signing record written before the backup bucket existed: a new token with every account bucket denied, the old token deleted; prodcheck, redeployed, signs working tickets with it"), async () => {
+    it(tag("PROV-AC-004", "a re-run of setup-account replaces a signing record written before the backup bucket existed: a new token with every account bucket denied, the old token deleted; prodcheck is redeployed with it"), async () => {
       const t = target().target;
       if ((await accountWorkers()).includes(PRODCHECK_WORKER)) requireCloudD1(t);
       await requireNoOtherStages();

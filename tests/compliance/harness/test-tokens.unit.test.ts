@@ -14,15 +14,12 @@ import {
   isHookToken,
   listTestTokens,
   NO_API_TOKENS_WRITE_ENV,
-  NO_EMAIL_PERMISSION_ENV,
-  NO_EMAIL_SENDING_READ_ENV,
   NO_R2_STORAGE_WRITE_ENV,
   NO_R2_TOKEN_PERMISSION_ENV,
   RESTRICTED_TOKENS,
   SETUP_TOKEN,
   TEST_TOKEN_LIFETIME_MS,
 } from "./test-tokens.js";
-import { EMAIL_PERMISSIONS } from "../../../packages/framework/src/provision/cloudflare/email-permissions.js";
 
 const NOW = new Date("2026-10-25T10:00:00.123Z");
 const spec = (suffix: string) => {
@@ -43,20 +40,10 @@ describe("restricted test tokens (DEC-0531)", () => {
     expect(everyday).toMatchObject({ env: NO_R2_TOKEN_PERMISSION_ENV, criterion: "PROV-AC-002", account: [...EVERYDAY_TOKEN.account], zone: [...EVERYDAY_TOKEN.zone] });
     expect([...everyday.account, ...everyday.zone].some((g) => g.startsWith("Account API Tokens"))).toBe(false);
 
-    const email = spec("no-email");
-    expect(email).toMatchObject({ env: NO_EMAIL_PERMISSION_ENV, criterion: "PROV-AC-004", omitted: "Email Routing Addresses Write" });
-    const granted = new Set([...email.account, ...email.zone]);
-    expect(EMAIL_PERMISSIONS.filter((p) => !granted.has(p.name)).map((p) => p.name)).toEqual(["Email Routing Addresses Write"]);
-    expect([...SETUP_TOKEN.account, ...SETUP_TOKEN.zone].filter((g) => !granted.has(g))).toEqual(["Email Routing Addresses Write"]);
-
     const tokensWrite = spec("no-tokens-write");
     expect(tokensWrite).toMatchObject({ env: NO_API_TOKENS_WRITE_ENV, criterion: "PROV-AC-004", omitted: "Account API Tokens Write" });
     expect(tokensWrite.account).not.toContain("Account API Tokens Write");
     expect(tokensWrite.account).toContain("Account API Tokens Read");
-    expect(EMAIL_PERMISSIONS.every((p) => [...tokensWrite.account, ...tokensWrite.zone].includes(p.name))).toBe(true);
-
-    const sendingRead = spec("no-sending-read");
-    expect(sendingRead).toMatchObject({ env: NO_EMAIL_SENDING_READ_ENV, criterion: "PROV-AC-004", omitted: "Email Sending Read", account: ["Workers Scripts Write", "Workers R2 Storage Write", "D1 Write"], zone: ["Zone Read", "Analytics Read"] });
 
     const r2Write = spec("no-r2-write");
     expect(r2Write).toMatchObject({ env: NO_R2_STORAGE_WRITE_ENV, criterion: "PROV-AC-003", omitted: "Workers R2 Storage Write", account: ["Workers Scripts Write", "Workers R2 Storage Read", "D1 Write", "Email Sending Read"] });
@@ -64,8 +51,8 @@ describe("restricted test tokens (DEC-0531)", () => {
 
   it("creates a named, expiring token with only the spec's groups, account-scoped and zone groups on the account's zones", async () => {
     const api = fakeCfApi();
-    const token = await createRestrictedToken(api.call, FAKE_ACCOUNT, spec("no-email"), "run12345", NOW);
-    expect(token.name).toBe("prototype-compliance-run12345-no-email");
+    const token = await createRestrictedToken(api.call, FAKE_ACCOUNT, spec("no-tokens-write"), "run12345", NOW);
+    expect(token.name).toBe("prototype-compliance-run12345-no-tokens-write");
     const stored = api.tokens.get(token.id);
     expect(stored?.value).toBe(token.value);
     expect(stored?.expires_on).toBe("2026-10-25T16:00:00Z");
@@ -76,8 +63,8 @@ describe("restricted test tokens (DEC-0531)", () => {
     const groups = (await api.call("GET", `/accounts/${FAKE_ACCOUNT}/tokens/permission_groups`)).body as { result: { id: string; name: string }[] };
     const byId = new Map(groups.result.map((g) => [g.id, g.name]));
     const names = (p: Policy | undefined) => (p?.permission_groups ?? []).map((g) => byId.get(g.id));
-    expect(names(policies[0])).toEqual([...spec("no-email").account]);
-    expect(names(policies[1])).toEqual([...spec("no-email").zone]);
+    expect(names(policies[0])).toEqual([...spec("no-tokens-write").account]);
+    expect(names(policies[1])).toEqual([...spec("no-tokens-write").zone]);
     expect(policies.every((p) => p.effect === "allow")).toBe(true);
 
     const r2 = await createRestrictedToken(api.call, FAKE_ACCOUNT, spec("no-r2-token"), "run12345", NOW);
@@ -109,8 +96,8 @@ describe("restricted test tokens (DEC-0531)", () => {
     addForeignToken(api, "compliance-r2scoped-run1-0123456789ab");
     addForeignToken(api, "xcompliance-r2read-abc");
     const a = await createRestrictedToken(api.call, FAKE_ACCOUNT, spec("no-r2-token"), "r1", NOW);
-    const b = await createRestrictedToken(api.call, FAKE_ACCOUNT, spec("no-email"), "r1", NOW);
-    expect((await listTestTokens(api.call, FAKE_ACCOUNT)).map((t) => t.name).sort()).toEqual(["compliance-r2read-0123456789ab", "compliance-r2scoped-run1-0123456789ab", "prototype-compliance-r1-no-email", "prototype-compliance-r1-no-r2-token"]);
+    const b = await createRestrictedToken(api.call, FAKE_ACCOUNT, spec("no-tokens-write"), "r1", NOW);
+    expect((await listTestTokens(api.call, FAKE_ACCOUNT)).map((t) => t.name).sort()).toEqual(["compliance-r2read-0123456789ab", "compliance-r2scoped-run1-0123456789ab", "prototype-compliance-r1-no-r2-token", "prototype-compliance-r1-no-tokens-write"]);
     await deleteToken(api.call, FAKE_ACCOUNT, a.id);
     await deleteToken(api.call, FAKE_ACCOUNT, a.id);
     expect((await listTestTokens(api.call, FAKE_ACCOUNT)).map((t) => t.id).filter((id) => !id.startsWith("foreign-"))).toEqual([b.id]);

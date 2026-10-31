@@ -43,7 +43,6 @@ import { generateAppMigrations } from "../mig/generate.js";
 import type { FilesStore } from "../files/service.js";
 import { createLocalTicketIssuer } from "../files/local/tickets.js";
 import { registerLocalTransferRoute } from "../files/local/route.js";
-import { createOutbox, type TestMail } from "../mail/outbox.js";
 import { assembleStage } from "../targets/stage.js";
 import { startPlatformProxy } from "../targets/local/platform-proxy.js";
 
@@ -64,8 +63,6 @@ export interface TestAppOptions {
    * binding (`TestApp.authApp`), instead of the authentication mock (DEC-0673). Default false.
    */
   readonly authAppLoginProvider?: boolean;
-  /** No effect: the framework sends no email (MAIL removed, plan-v0.2.0 §6). Kept with `mail` until their last users go. */
-  readonly mailSender?: "failing" | "never-completing";
   /** LOG-AC-001: a log writer that fails on every write, or whose writes never complete (DEC-0210). */
   readonly logWriter?: "failing" | "never-completing";
 }
@@ -75,13 +72,8 @@ export type TestCapability = "sql" | "kv" | "files" | "secrets";
 
 const CAPABILITIES: readonly TestCapability[] = ["sql", "kv", "files", "secrets"];
 
-export type { TestMail } from "../mail/outbox.js";
-export type { MailMessage } from "../mail/sender.js";
-
 export interface TestApp {
   request(path: string, init?: RequestInit): Promise<Response>;
-  /** The framework's outgoing email: the in-memory outbox (in-process) or the stage's capture (connected). */
-  readonly mail: TestMail;
   as(user: CurrentUser): TestApp;
   logs(): readonly LogEntry[];
   loginWithStub(subject: string, options?: { readonly displayName?: string; readonly stubFailure?: "refused" | "replayed" }): Promise<void>;
@@ -211,7 +203,6 @@ interface Shared {
   readonly fetch: (request: Request) => Promise<Response>;
   readonly fixed: WeakMap<Request, CurrentUser>;
   readonly logs: () => readonly LogEntry[];
-  readonly mail: TestMail;
   /** The app has no authentication mock (the stub or the auth-app provider): `as` throws. */
   readonly noMock: "stub" | "auth-app" | undefined;
   readonly stub: boolean;
@@ -266,7 +257,6 @@ function testApp(shared: Shared, user: CurrentUser | undefined): TestApp {
       }
       return response;
     },
-    mail: shared.mail,
     as(next) {
       if (shared.noMock !== undefined) throw new Error(`as() needs the authentication mock; this test app uses the ${shared.noMock} login provider`);
       return testApp(shared, next);
@@ -376,8 +366,6 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
   const env = proxy.env as unknown as RuntimeEnv["Bindings"];
   const unreachable = unreachableStore();
   const store = (): FilesStore => (unavailable.has("files") ? unreachable : proxy.env.FILES);
-  // The framework sends no email any more (MAIL removed, plan-v0.2.0 §6): the outbox stays empty.
-  const outbox = createOutbox({ senderName: defined.definition.name });
   // The request's background tasks (`waitUntil`): sends run after the response, as on a Worker.
   const executionCtx = { waitUntil: (pending: Promise<unknown>) => void pending.catch(() => undefined), passThroughOnException: () => undefined, props: {} };
   const sqlUnavailable = (): boolean => unavailable.has("sql");
@@ -440,7 +428,6 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
     fetch: async (request) => hono.fetch(request, env, executionCtx),
     fixed,
     logs: () => memory.entries(),
-    mail: { lastTo: outbox.lastTo, all: outbox.all },
     noMock: stub ? "stub" : authApp !== undefined ? "auth-app" : undefined,
     stub,
     authApp,
