@@ -25,6 +25,7 @@ const EVERYDAY_VALUE = "MARKER-everyday-token-value-000000000001";
 const BOOT_VALUE = "MARKER-bootstrap-token-value-00000000002";
 const OTHER_VALUE = "MARKER-other-token-value-00000000000003";
 const SUB = "pf-markersubdomain";
+const ADMIN_URL = `https://prototype-admin.${SUB}.workers.dev`;
 const DOMAIN = "example.test";
 const NOW = new Date("2026-10-26T12:00:00.000Z");
 /** Within PAR-435's 1 day of `NOW`. */
@@ -39,7 +40,9 @@ const dirs: string[] = [];
 afterEach(() => {
   // No output of any run holds a token value, an account ID, a zone ID or the subdomain.
   for (const { io, world } of runs.splice(0)) {
-    const text = io.out + io.err;
+    // The one place the subdomain is printed: the admin app's URL, which the bootstrap must print (v0.2.0 plan §5.1 step 5; DEC-0686).
+    // On standard output only: standard error is searched as it is.
+    const text = io.out.split(ADMIN_URL).join("<admin app URL>") + io.err;
     const zoneIds = [...world.accounts.values()].flatMap((a) => [...a.cloud.zones.values()].map((z) => z.id));
     for (const secret of ["MARKER", ACCOUNT, OTHER_ACCOUNT, SUB, ...zoneIds]) expect(text, `output holds ${secret.slice(0, 6)}…`).not.toContain(secret);
     // The messages leave the values out themselves; the run's redaction (DEC-0590) is only a backstop.
@@ -281,6 +284,8 @@ describe("cloudflare-setup: the bootstrap token's rules (v0.2.0 plan §5.1, §7;
       "boot-id POST /oauth_clients",
       "boot-id POST /secrets_store/stores/store1/secrets",
       "boot-id POST /secrets_store/stores/store1/secrets",
+      "boot-id PUT /workers/scripts/prototype-admin",
+      "boot-id POST /workers/scripts/prototype-admin/subdomain",
       "boot-id DELETE /tokens/boot-id",
     ]);
     expect(await readSetupRecord(world.cloud().api, ACCOUNT)).toBeUndefined();
@@ -312,7 +317,54 @@ describe("cloudflare-setup: the bootstrap's OAuth clients (v0.2.0 plan §5.1 ste
     const { status, io } = await run(world, project({ env: envFile({ CLOUDFLARE_BOOTSTRAP_TOKEN: OTHER_VALUE }) }));
     expect(status).toBe(0);
     expect(io.out).toContain("OAuth clients: prototype-framework-admin and prototype-framework-sign-in already exist, with their secrets in Secrets Store");
-    expect(world.writes().filter((w) => w.startsWith("boot-2 "))).toEqual([`boot-2 DELETE /accounts/${ACCOUNT}/tokens/boot-2`]);
+    // The admin app is uploaded again (DEC-0686); no client and no secret is written.
+    expect(world.writes().filter((w) => w.startsWith("boot-2 "))).toEqual([
+      `boot-2 PUT /accounts/${ACCOUNT}/workers/scripts/prototype-admin`,
+      `boot-2 POST /accounts/${ACCOUNT}/workers/scripts/prototype-admin/subdomain`,
+      `boot-2 DELETE /accounts/${ACCOUNT}/tokens/boot-2`,
+    ]);
+  });
+
+  it("a Cloudflare error that echoes a callback URL is redacted: the subdomain appears only in the admin app's URL lines (DEC-0590, DEC-0686)", async () => {
+    const world = freshWorld();
+    world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
+    world.cloud().override.set(`POST /accounts/${ACCOUNT}/oauth_clients`, { status: 400, body: { success: false, errors: [{ code: 1001, message: `redirect_uris ${ADMIN_URL}/callback is not allowed` }], result: null } });
+    const { status, io } = await run(world, project({ env: envFile({ CLOUDFLARE_BOOTSTRAP_TOKEN: BOOT_VALUE }) }));
+    expect(status).toBe(1);
+    expect(io.err).toContain("creating the OAuth client prototype-framework-admin failed: HTTP 400: redirect_uris https://prototype-admin.[hidden].workers.dev/callback is not allowed");
+    expect(io.out + io.err).not.toContain(SUB);
+    // The backstop had to act here; the afterEach check allows that for this run only.
+    runs.pop();
+  });
+
+  it("deploys the admin app bound to the admin client, then deletes itself, then prints the admin app's URL and the next step (plan §5.1 steps 3–5; DEC-0686)", async () => {
+    const world = freshWorld();
+    world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
+    const { status, io } = await run(world, project({ env: envFile({ CLOUDFLARE_BOOTSTRAP_TOKEN: BOOT_VALUE }) }));
+    expect(io.err).toBe("");
+    expect(status).toBe(0);
+    const admin = world.cloud().workers.get("prototype-admin")!;
+    expect(admin.bindings.map((b) => b.name)).toEqual(["ADMIN_CLIENT_ID", "ADMIN_CLIENT_SECRET"]);
+    expect(admin.enabled).toBe(true);
+    const writes = world.writes();
+    expect(writes.indexOf(`boot-id PUT /accounts/${ACCOUNT}/workers/scripts/prototype-admin`)).toBeLessThan(writes.indexOf(`boot-id DELETE /accounts/${ACCOUNT}/tokens/boot-id`));
+    expect(writes.at(-1)).toBe(`boot-id DELETE /accounts/${ACCOUNT}/tokens/boot-id`);
+    expect(io.out).toContain("admin app: deployed (Worker prototype-admin), bound to the admin client's ID and secret in Secrets Store");
+    expect(io.out).toContain(`  admin app: ${ADMIN_URL}`);
+    expect(io.out.trimEnd().endsWith(`Next step: open the admin app and sign in: ${ADMIN_URL}`)).toBe(true);
+    expect(io.out.indexOf("the bootstrap token deleted itself")).toBeLessThan(io.out.indexOf("Next step: open the admin app"));
+  });
+
+  it("a failed admin app deploy stops the run before the self-delete: the token and its line are kept; exit 1", async () => {
+    const world = freshWorld();
+    world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
+    world.cloud().override.set(`PUT /accounts/${ACCOUNT}/workers/scripts/prototype-admin`, { status: 500, body: { success: false, errors: [{ code: 1, message: "Internal" }], result: null } });
+    const dir = project({ env: envFile({ CLOUDFLARE_BOOTSTRAP_TOKEN: BOOT_VALUE }) });
+    const { status, io } = await run(world, dir);
+    expect(status).toBe(1);
+    expect(io.err).toContain("uploading the admin app (Worker prototype-admin) failed: HTTP 500");
+    expect(world.token("boot-id").deleted).toBe(false);
+    expect(readEnvFile(dir)).toBe(`CLOUDFLARE_BOOTSTRAP_TOKEN=${BOOT_VALUE}\n`);
   });
 
   it("a failed Secrets Store put after a create stops the run: the token and its line are kept, and the client secret is printed nowhere; exit 1", async () => {
@@ -585,7 +637,7 @@ describe("cloudflare-setup: later runs (plan §3.4)", () => {
     const withBoot = await run(world, dir);
     expect(withBoot.io.err).toBe("");
     expect(withBoot.status).toBe(0);
-    expect(world.requests.filter((r) => / PUT /.test(r) || r.includes("/tokens/everyday-id"))).toEqual([]);
+    expect(world.requests.filter((r) => / PUT .*\/tokens\//.test(r) || r.includes("/tokens/everyday-id"))).toEqual([]);
     expect(JSON.stringify(everyday.policies)).toBe(before);
     expect(world.token("boot-id").deleted).toBe(true);
   });

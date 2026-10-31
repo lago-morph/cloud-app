@@ -332,6 +332,12 @@ if (isLocal()) {
   describe("SETUP: the setup record and the bootstrap token (SETUP-AC-005)", () => {
     const withBootstrap = (dir: string, boot: WorldToken) =>
       writeFileSync(join(dir, ".env.cloudflare"), readEnvFile(dir).replace(BOOTSTRAP_DELETED_LINE, `${BOOTSTRAP_SETTING}=${boot.value}`));
+    /** A bootstrap's writes once the OAuth clients exist: the admin app uploaded and routed again (plan §5.1 step 3; DEC-0686), then the self-delete. */
+    const rerunWrites = (boot: WorldToken) => [
+      `${boot.id} PUT /accounts/${ACCOUNT}/workers/scripts/prototype-admin`,
+      `${boot.id} POST /accounts/${ACCOUNT}/workers/scripts/prototype-admin/subdomain`,
+      `${boot.id} DELETE /accounts/${ACCOUNT}/tokens/${boot.id}`,
+    ];
 
     // Since v0.2.0 the account setup is the admin app's (plan §5.2 page 1; DEC-0682): the bootstrap
     // token creates no setup resource and writes no setup record.
@@ -342,7 +348,7 @@ if (isLocal()) {
       withBootstrap(dir, boot);
       const r = await runSetup("AC-005 older record", world, dir);
       expect(r.status, r.all).toBe(0);
-      expect(writesOf(r.requests), "the only write is the self-delete").toEqual([`${boot.id} DELETE /accounts/${ACCOUNT}/tokens/${boot.id}`]);
+      expect(writesOf(r.requests), "the admin app's upload and route, then the self-delete").toEqual(rerunWrites(boot));
       expect(world.cloud().objectBodies.get(RECORD_KEY)).toEqual({ emailDomain: DOMAIN });
       expect(boot.deleted).toBe(true);
     });
@@ -370,9 +376,11 @@ if (isLocal()) {
       const r = await runSetup("AC-005 current with bootstrap", world, dir);
       expect(r.status, r.all).toBe(0);
       expect(r.requests.filter((q) => q.endsWith(`/tokens/${tokens.everyday.id}`)), "the everyday token's permissions").toEqual([]);
-      expect(writesOf(r.requests), "the only write is the self-delete").toEqual([`${boot.id} DELETE /accounts/${ACCOUNT}/tokens/${boot.id}`]);
+      expect(writesOf(r.requests), "the admin app's upload and route, then the self-delete").toEqual(rerunWrites(boot));
       expect(boot.deleted).toBe(true);
       expect(readEnvFile(dir)).toContain(BOOTSTRAP_DELETED_LINE);
+      // Plan §5.1 step 5: the admin app's URL and the next step, last.
+      expect(r.out.trimEnd()).toMatch(/Next step: open the admin app and sign in: https:\/\/prototype-admin\.[a-z0-9-]+\.workers\.dev$/);
     });
 
     it(tag("SETUP-AC-005", "a bootstrap token without an expiry, or one more than 1 day away, is deleted at once and used for nothing else, exit 1; one within 1 day runs (PAR-435)"), async () => {
