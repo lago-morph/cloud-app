@@ -14,7 +14,12 @@
  * - `status` (page 3): reads the Workers, the setup record in R2 and the auth app's D1. The client
  *   offers no read variants of these (DEC-0713), so the write scopes are asked for; the page only reads.
  */
-import { REQUIRED_SCOPES } from "../provision/cloudflare/oauth-clients.js";
+/**
+ * The admin client's required scopes, as `REQUIRED_SCOPES` in oauth-clients.ts (a unit test keeps
+ * them equal). Not imported from there: that module pulls in Node's crypto, and this one is
+ * bundled into the Worker.
+ */
+const REQUIRED_SCOPES: readonly string[] = Object.freeze(["user-details.read", "memberships.read"]);
 
 export const PAGE_SCOPES = Object.freeze({
   signin: Object.freeze([] as string[]),
