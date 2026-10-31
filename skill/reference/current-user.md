@@ -13,12 +13,12 @@ Store `c.var.user.id` in your rows to record ownership (an `ownerId: text()` col
 
 ## Levels
 
-- **Anyone who signs up and verifies their email address is a user.** Level `user` means *any verified account*, not a person this app trusts; there is no list of allowed people. An unverified account cannot sign in.
-- **Admins** are users holding the `admin` role, stored with the account in the stage's own database. There is no "user" role: a new account has no roles.
-- The level is read from the account on every request with a session, so a grant or revoke applies from the person's next request, with no deploy and no new login.
+- **Only members of the owner's Cloudflare account can sign in.** Level `user` means *any member of that account*, not a person this app trusts; an app that needs finer trust keeps its own records (for example a table of allowed user IDs).
+- **Admins** are members with an administrator role in the account. There is no "user" role, and no list of allowed people.
+- The level is confirmed with the account's auth app at sign-in and again every 5 minutes (PAR-425), so a role change shows at the next sign-in or within that time, with no deploy. If the role cannot be confirmed, the person is signed out: a protected route then answers 401.
 - Configuration holds no admins or users: `framework.admins` and `framework.users` are rejected by the build.
 
-How someone becomes an admin (copy-and-paste steps): [owner-tasks.md](owner-tasks.md) §7. In short: they sign up and verify on the stage, then the owner (or an agent) runs `npm run admins -- grant <address> --target <t> --stage <s>`, adding `--confirm-production <s>` on a production stage; `admins revoke` takes it away and `admins list` shows the admins.
+How someone becomes an admin: [owner-tasks.md](owner-tasks.md) §7. In short: the owner gives them an administrator role in the Cloudflare dashboard (Manage Account → Members); another role takes it away. `/api/auth/me` shows a person's level and user ID.
 
 ## Protecting routes
 
@@ -43,16 +43,16 @@ Sessions last 7 days (PAR-250). There is no server-side session list: logging ou
 
 | Where | Login |
 | --- | --- |
-| Local `dev` | Email and password: the login button opens the sign-in page; mail is written to `.mail/` (`npm run mail -- last --to <address>`). Tests may also use the authentication mock. |
-| Test stages (`test-*`) | Email and password, plus the authentication mock for tests (`mockUsers`, `connectTestStage`) |
-| Production stages | Email and password only, with real mail ([owner-tasks.md](owner-tasks.md) §6) |
+| Local `dev` | The authentication mock: the login button signs in a test user. |
+| Test stages (`test-*`) | The authentication mock only, for tests (`mockUsers`, `connectTestStage`) |
+| Production stages | Sign-in with Cloudflare through the account's auth app ([owner-tasks.md](owner-tasks.md) §6) |
 
 The mock chooses the level directly: it reads no roles.
 
 ## Testing
 
 - Choose the identity per test app: `createTestApp(app, { user: mockUsers.user("alice") })`, or `t.as(mockUsers.admin())` for further requests with another identity (sharing the same storage). `mockUsers.user(id?)` and `mockUsers.admin(id?)` use the ID as given.
-- To test the **real login and roles**, use `createTestApp(app, { passwordLoginProvider: true })`: sign up, read the mail with `t.mail.lastTo(address)`, verify and sign in through the app's requests. `t.grantRole(userId, "admin")` and `t.revokeRole(userId, "admin")` change that account's roles as `admins` does (the ID as `/api/auth/me` shows it); the next request sees the new level. `as()` is not available on such a test app.
+- To test the **real sign-in and role changes**, use `createTestApp(app, { authAppLoginProvider: true })`: `await t.loginWithAuthApp({ sub: "cf-1", email: "a@example.com", role: "user" })` signs in through a fake auth app. `t.authApp.setRole("cf-1", "admin")` changes the role the next refresh reads; move `t.clock.advance(…)` past PAR-425 to see it, with no new login. `t.authApp.setUnavailable(true)` makes the refresh fail, which signs the person out. `as()` is not available on such a test app.
 - Assert 401 `AUTH.UNAUTHENTICATED` for anonymous and 403 `AUTH.FORBIDDEN` for a user on admin routes. See [testing.md](testing.md).
 
 ## Examples
@@ -62,4 +62,4 @@ The mock chooses the level directly: it reads no roles.
 
 ## Stopping condition
 
-Stop reading when every private route has a guard and filters by `c.var.user.id`, admin routes use `requireAdmin()`, the stage's values file has the lists the owner wants, your tests cover anonymous, user and admin callers, and `npm run verify` passes.
+Stop reading when every private route has a guard and filters by `c.var.user.id`, admin routes use `requireAdmin()`, your tests cover anonymous, user and admin callers, and `npm run verify` passes.
