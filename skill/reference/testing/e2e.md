@@ -13,6 +13,8 @@ The template ships two Playwright projects (`playwright.config.ts`), against a l
 - **`e2e-api`** (`tests/e2e/api/*.spec.ts`): most e2e tests. They drive the app's HTTP API with Playwright's `request` fixture, which needs no browser. `npm run verify` runs this project after the unit tests; `npm run test:e2e:api` runs it alone.
 - **`e2e-ui`** (`tests/e2e/ui/*.spec.ts`): only what a browser alone shows: a page renders the data, the login button signs in, a file uploads or downloads from the page, a cookie is set. At most a few per flow; every other case of the flow is an API test. `npm run test:e2e:ui` runs it; only this project needs Chromium (`npm exec --no -- playwright install chromium` once, when the user agrees). If Chromium cannot be installed, report the UI run as `not-run` with the reason (hard rule 8) and do not declare the page done.
 
+The config hides the server's own log. If the server does not start (Playwright times out waiting for it), run `npm run dev` to see why.
+
 Write a spec from the flow, not from the code:
 
 - Requests go to paths (`/api/notes`); the config sets the base URL and the `Origin` header the framework's forgery check needs.
@@ -20,6 +22,7 @@ Write a spec from the flow, not from the code:
 - Check status codes and `(await res.json()).error.code`, never messages.
 - In UI specs, find elements by role and visible text (`page.getByRole("button", { name: "Log in" })`).
 - Never wait in real time, and never test expiry here: use fake timers in-process ([../testing.md](../testing.md)).
+- `playwright.config.ts` is part of the gate: a change to it that could run fewer tests or pass more easily (projects, `testIgnore`, `retries`, timeouts) is reviewed like a change to a once-green test ([test-changes.md](test-changes.md)).
 
 ## Edge cases
 
