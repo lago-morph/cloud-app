@@ -30,6 +30,7 @@ The one passing test ("never redirects to an unregistered return URL") never rea
    node fetch: 200
    ```
 3. `grep -rn 'redirect: "error"' packages apps tests`: exactly two uses, both in `packages/framework/src/auth-app/upstream.ts` (line 38 `getJson`, line 119 `revokeTokens`).
+5. Direct proof of causal link 3 (the reviewer's experiment, see Review): in a throwaway worktree at `3a45312`, changing only `redirect: "error"` → `"manual"` in `upstream.ts` turned the suite from `7 failed | 1 passed` to `8 passed (8)`.
 4. The unit tests inject a fake `fetch` (`fake-upstream.test-support.ts`) that builds a Node `Request`, which accepts `redirect: "error"`; one unit test even asserts `redirect === "error"`. Nothing in the unit layer runs the upstream calls under workerd.
 
 ## Causal chain
@@ -103,4 +104,15 @@ server.close();
 
 ## Review
 
-(pending)
+Independent root-cause reviewer (a separate session that wrote neither the code nor the diagnosis), 2026-10-31 08:24 UTC, posted on PR #79: **Verdict: accepted-with-changes**. No major issues.
+
+- Reproduced once at `3a45312`: the probe output matches evidence 2; the suite gives `7 failed | 1 passed`, `expected 503 to be 302`, with `discovery failed: unreachable` logged 7 times.
+- Links 1, 2 and 4 supported by the evidence. Link 3 was inferred (`getJson` swallows the exception); one experiment closed it: only `redirect: "error"` → `"manual"`, suite 8/8 green. The alternatives are excluded by the same result.
+- The fix addresses the cause; `manual` keeps the PR 25a goal. The verification plan is adequate.
+
+Changes, binding on the fixer:
+- minor: add the experiment to Evidence (done: evidence 5).
+- minor: in `getJson`, cancel the body before raising `redirected` on a 3xx, and check 3xx before the `!res.ok` branch; status 0 (opaqueredirect) does not occur with `manual` in workerd or Node: keep it only as a defensive branch, untested.
+- minor: the reproduction fake mirrors workerd's rule exactly (throw `TypeError` for any `redirect` other than `undefined`, `"follow"`, `"manual"`), and a guard fails if any upstream call omits `redirect: "manual"`.
+- minor: the changed once-green assertion (`"error"` → `"manual"`) goes to §7a.1.9 test-change review as `test-was-wrong`, citing this record.
+- minor (process, not blocking): diagnosis by the implementer, disclosed above.
