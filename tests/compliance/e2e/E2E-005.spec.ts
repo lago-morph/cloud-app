@@ -1,6 +1,8 @@
 /**
- * E2E-005 — Access levels on a deployed app (Where: Cloud; written now, run in phase D).
+ * E2E-005 — Access levels, and nothing of the login provider exposed (Where: Local, cloud; rewritten
+ * for v0.2.0, DEC-0753).
  *
+ * Mock part, on every target (the text before v0.2.0, unchanged in substance):
  * "On each cloud test stage, use the mock to act as anonymous, user, and admin in a browser
  * against the reference app, exercising its protected routes. Inspect every API response and
  * the app-facing types. Pass: each level gets exactly its permitted actions. No response or
@@ -13,15 +15,23 @@
  * The app-facing types are the declaration files of the subpaths app code may import (`.`,
  * `./client`, `./testing`; CORE-REQ-005) as the package ships them, with every declaration file
  * they reach.
+ *
+ * Auth-app part, locally (DEC-0753, DEC-0764): a browser signs in through the auth app's pages and
+ * mock-oauth2-server's login form, against the reference app's production bundle
+ * (support/signin-stack.ts), as a member with no administrator role and as an administrator, both
+ * with an email address; it checks each level's actions and that no app response carries either
+ * address or any provider detail. This is also E2E-018's one UI test (the sign-in pages, cookies).
  */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import type { Page, Response } from "@playwright/test";
-import { tag } from "../harness/index.js";
+import { tag, target } from "../harness/index.js";
 import { expect, test } from "../harness/playwright.js";
 import { randomSuffix } from "./support/apps.js";
 import { REPO_ROOT } from "./support/process.js";
 import { providerExposures, relativeImports, typeTokens } from "./support/scan.js";
+import { APP_ID, startSignInStack } from "./support/signin-stack.js";
+import { ACCOUNT_ID } from "../../../packages/framework/test/integration/auth-app/support.js";
 
 type Level = "anonymous" | "user" | "admin";
 
@@ -188,3 +198,59 @@ test(tag("E2E-005", "no app-facing type exposes login-provider names, tokens, is
   expect(seen.size, "declaration files scanned").toBeGreaterThan(3);
   expect(exposures, `app-facing types exposing login-provider details:\n${exposures.join("\n")}`).toEqual([]);
 });
+
+// Locally only: test stages and `dev` have the mock only (plan-v0.2.0 §4.3), so the auth-app part needs the local stack.
+if (target().target === "local") {
+  test(tag(["E2E-005", "E2E-018"], "auth-app part: members with an email address sign in through the sign-in pages in a browser, get exactly their level's actions, and no app response carries the address or a provider detail"), async ({ page }) => {
+    test.setTimeout(600_000);
+    const stack = await startSignInStack();
+    try {
+      await stack.registry.register(APP_ID, `${stack.appOrigin}/api/auth/callback`);
+      const people = {
+        user: { sub: "e2e005-user", email: "e2e005.user@example.com", roles: ["HTTP Applications Read"] },
+        admin: { sub: "e2e005-admin", email: "e2e005.admin@example.com", roles: ["Super Administrator - All Privileges"] },
+      };
+      for (const p of Object.values(people)) stack.members.set(p.sub, { email: p.email, memberships: [{ account: { id: ACCOUNT_ID }, status: "accepted", roles: p.roles }] });
+      const app = (path: string) => `${stack.appOrigin}${path}`;
+      const fetchIn = async (call: Call): Promise<Outcome> => {
+        const r = await page.request.fetch(app(call.path), { method: call.method, ...(call.method === "POST" ? { headers: { "content-type": "application/json", origin: stack.appOrigin }, data: "{}" } : {}) });
+        const text = await r.text();
+        let body: unknown = text;
+        try {
+          body = JSON.parse(text);
+        } catch {
+          // not JSON
+        }
+        return { status: r.status(), body };
+      };
+      for (const level of ["user", "admin"] as const) {
+        const person = people[level];
+        await page.context().clearCookies();
+        // The sign-in pages: the app's login, the auth app's /start, the issuer's login form, both callbacks.
+        await page.goto(app("/api/auth/login"));
+        await expect(page).toHaveURL(new RegExp(`^${stack.oauth.baseUrl}/`));
+        await page.locator('input[name="username"]').fill(person.sub);
+        await page.locator('textarea[name="claims"]').fill(JSON.stringify({ sub: person.sub, email: person.email, email_verified: true }));
+        await page.locator('input[type="submit"], button[type="submit"]').first().click();
+        await page.waitForURL((u) => u.origin === stack.appOrigin);
+        const cookies = await page.context().cookies(stack.appOrigin);
+        expect(cookies.find((c) => c.name === "__Host-session"), `${level}: the session cookie`).toMatchObject({ httpOnly: true, secure: true, sameSite: "Lax", path: "/" });
+        const me = await fetchIn({ method: "GET", path: "/api/auth/me" });
+        expect(me.body).toMatchObject({ level });
+        const outcomes: { call: Call; outcome: Outcome }[] = [];
+        for (const { call } of EXPECTED) outcomes.push({ call, outcome: await fetchIn(call) });
+        checkLevel(level, outcomes, (me.body as { id?: string }).id);
+      }
+      expect(stack.appResponses.length, "app responses were recorded").toBeGreaterThan(EXPECTED.length * 2);
+      const exposures: string[] = [];
+      for (const r of stack.appResponses) {
+        const seen = `${r.text}\n${r.headers}`;
+        for (const p of Object.values(people)) if (seen.includes(p.email) || seen.includes(p.sub)) exposures.push(`${new URL(r.url).pathname}: ${p.sub}'s address or subject`);
+        for (const label of providerExposures(seen)) exposures.push(`${new URL(r.url).pathname} (${String(r.status)}): ${label}`);
+      }
+      expect(exposures, `app responses exposing login-provider details:\n${exposures.join("\n")}`).toEqual([]);
+    } finally {
+      await stack.close();
+    }
+  });
+}

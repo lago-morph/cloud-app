@@ -216,6 +216,29 @@ The live run of the same steps is the owner's (SETUP-AC-011, SKILL-AC-006; plan-
 
 Pass: each step and each expected error behaves as stated. The everyday token holds exactly the four groups of plan-v0.2.0 §5.2 page 2, and `cloudflare-setup` with it finds the account set up and changes nothing. No bootstrap or everyday token value, OAuth token or client secret appears in any output, project file or admin-app response, except the everyday value, once, on its own page.
 
+#### E2E-018 — Sign-in through the auth app
+Verifies: SYS-REQ-017, SYS-REQ-018, SYS-REQ-019
+Where: Local
+Origin: ai-proposed
+
+Over HTTP, locally, with the reference app's production bundle, the auth app, mock-oauth2-server and the fake memberships API (preamble):
+1. Register the app's return URL with `deploy`'s own registry link, as a production deploy does.
+2. A member with no administrator role signs in through `/api/auth/login`, the auth app's `/start`, the issuer's login and both callbacks, and is level `user`. A member with an administrator role (PAR-413) is level `admin`.
+3. Sign out: the session ends.
+4. Clear the registration with `remove`'s registry link: the auth app refuses the app's sign-in again.
+
+Expected errors and edge cases:
+- a return URL not in the registry is refused with no redirect, including one that differs only by a trailing slash, case, port or percent-encoding, one on another origin, and one with a query;
+- an app ID that does not match the return URL is refused;
+- a code reused, or issued for another app, signs no one in. Of concurrent redemptions of one code, exactly one succeeds;
+- declined consent, and someone with no membership of the account, sign no one in;
+- an ID token with no `email` signs in through the `/user` fallback;
+- with the auth app unavailable, requests between role refreshes keep working. At the next role refresh the session ends and the request is handled as anonymous. A sign-in fails with the app's `authError=login_failed` and no session. Once the auth app is back, signing in works again.
+
+One UI test signs in through the sign-in pages in a browser (E2E-005's auth-app part). The transaction cookie's attributes are checked on the way (AUTH-AC-006).
+
+Pass: each step and each expected error behaves as stated, and no app response carries a provider token or the member's email address.
+
 ## Retired scenarios
 
 A retired scenario is kept here for the record, outside any `####` heading and with no `Where:` line, so the compliance catalogue no longer expects it. Its ID is never reused (CONVENTIONS §2, §4). No scenario is retired. v0.2.0 rewrote E2E-005…E2E-008 in place for sign-in through the auth app and removed their password, mail and `admins` clauses: E2E-005's mock-only cloud run, E2E-006's test-mail route and sign-in page, E2E-007's sign-up, `mail last` and `admins grant`/`revoke` steps on `prodcheck`, and E2E-008's eight password and mail steps of `check-login` (DEC-0753, DEC-0754).
