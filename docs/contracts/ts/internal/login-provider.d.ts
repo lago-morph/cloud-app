@@ -42,11 +42,11 @@ export type Role = "admin";
 /**
  * An account's current state, read by AUTH at a role refresh: once the role-refresh interval
  * has passed since the session's roles were last confirmed (AUTH-REQ-003 as amended by DEC-0690).
- * The level is `anonymous` unless `verified` is true; then it is `admin` when `roles` contains
- * "admin", and `user` otherwise.
+ * `verified` false, like `null`, ends the session; otherwise the level is `admin` when `roles`
+ * contains "admin", and `user` otherwise.
  */
 export interface AccountStatus {
-  /** Always true for the auth-app provider: the auth app refuses a sign-in without a verified email address. */
+  /** The auth-app provider always answers true (the auth app returns no unverified state). `false` ends the session at a refresh, like `null`. */
   readonly verified: boolean;
   /** The account's roles; empty for a user. */
   readonly roles: readonly string[];
