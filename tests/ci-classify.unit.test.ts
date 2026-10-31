@@ -222,7 +222,7 @@ describe("the CI plan (what the staged ci.yml runs)", () => {
 
   it("a framework-suite test tagged only with an unselected ID still runs, in the direct run (review finding)", () => {
     const p = plan("packages/framework/test/integration/auth/admin-role.test.ts");
-    expect(p.direct).toEqual(["packages/framework/test/integration/auth"]);
+    expect(p.direct).toEqual(["packages/framework/test/integration/auth", "packages/framework/test/integration/auth-app"]);
     expect(p.ids).not.toContain("E2E-007");
     const filter = new RegExp(directFilter(p.ids) as string);
     expect(filter.test("[E2E-007] the admin role reaches the app's admin pages")).toBe(true);
