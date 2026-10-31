@@ -61,8 +61,11 @@ const currentUser = (page: Page) => page.evaluate(() => (globalThis as unknown a
 async function loginTo(page: Page, returnTo?: string): Promise<URL> {
   // The next document the page commits after the call (the /api/auth/login redirect is not committed).
   const navigated = page.waitForEvent("framenavigated", { predicate: (f) => f === page.mainFrame(), timeout: 60_000 });
-  await page.evaluate((r) => (globalThis as unknown as { t3fw: ClientModule }).t3fw.login(r), returnTo);
-  await navigated;
+  // If the page commits the new document before evaluate returns, evaluate reports the lost context.
+  const call = page.evaluate((r) => (globalThis as unknown as { t3fw: ClientModule }).t3fw.login(r), returnTo).catch((e: unknown) => {
+    if (!/context was destroyed|navigat/i.test(String(e))) throw e;
+  });
+  await Promise.all([navigated, call]);
   await page.waitForLoadState("load");
   await page.addScriptTag({ content: clientBundle! });
   return new URL(page.url());
@@ -77,10 +80,11 @@ test("getCurrentUser: anonymous without a session, user after login, admin after
   const user = await currentUser(page);
   expect(user.level).toBe("user");
   expect(user.level !== "anonymous" && typeof user.id === "string" && user.id.length > 0).toBe(true);
+  expect(Object.keys(user).sort(), "exactly the fields of a logged-in CurrentUser").toEqual(["displayName", "id", "level"]);
 
   // The mock lets a test choose the level (AUTH-REQ-009); a same-origin POST from the page carries Origin.
   const status = await page.evaluate(async () => (await fetch("/api/auth/mock-login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ level: "admin", id: "u_admin_t3", displayName: "T3 Admin" }) })).status);
-  expect(status).toBeLessThan(300);
+  expect(status, "framework.openapi.yaml: mock-login answers 204").toBe(204);
   expect(await currentUser(page)).toEqual({ level: "admin", id: "u_admin_t3", displayName: "T3 Admin" });
 });
 
