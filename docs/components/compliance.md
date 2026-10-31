@@ -38,7 +38,7 @@ The suite MUST also deploy a production stage of the reference app on each cloud
 Amendment for release 1 (Origin: owner · Decision: DEC-0512, DEC-0513): the Google check is replaced. On the production stage the suite MUST check that the mock and the test-mail route are absent (AUTH-AC-009, MAIL-AC-006), that `/api/auth/login` redirects to the framework's sign-in page, and MUST run `check-login` (PWD-AC-009), on every cloud run.
 
 #### COMPL-REQ-006 — Definition of "works"
-Origin: owner-approved · Derives from: SYS-REQ-026, SYS-REQ-027 · Decision: DEC-0512, DEC-0513, DEC-0526, DEC-0560, DEC-0692, DEC-0693, DEC-0778
+Origin: owner-approved · Derives from: SYS-REQ-026, SYS-REQ-027 · Decision: DEC-0512, DEC-0513, DEC-0526, DEC-0560, DEC-0692, DEC-0693, DEC-0696, DEC-0778
 
 The framework works for a commit only when both of the following hold:
 - every automated acceptance criterion and end-to-end scenario has passed on every applicable target for that commit;
@@ -59,6 +59,8 @@ Amendment (Origin: ai-proposed · Decision: DEC-0778; root cause `ai/implementat
 Amendment for v0.2.0 (Origin: owner-approved · Decision: DEC-0692): the real login is sign-in with Cloudflare, and the real sign-in is checked once per release by the owner (SYS-REQ-027 as amended by DEC-0692). That real sign-in, the live parts of E2E-007 and E2E-008, joins the milestone list, and the mail check MAIL-AC-007 leaves it when its criterion row is retired (DEC-0693). The release report MUST list the commits that touched AUTH, auth-app or login-provider interface files since the latest passing real sign-in records (the live parts of E2E-007 and E2E-008); this replaces the rule that named PWD, MAIL and `check-login`'s record. The milestone items of release 1 are therefore E2E-007 (live part), E2E-008 (live part), E2E-015, E2E-016 (review part), SKILL-AC-006, and the stage-lifecycle and account criteria E2E-010, E2E-012, PROV-AC-002 (signing-credential clause), PROV-AC-003, PROV-AC-004, PROV-AC-006, MAIL-AC-007, COMPL-AC-008 and SETUP-AC-011.
 
 Note (Origin: ai-proposed · Decision: DEC-0693): MAIL-AC-007 stays in the list above until its criterion row is retired, and leaves the list in the same change, so that the list and the Where columns name the same items. E2E-007 and E2E-008 are named before their Where lines gain a milestone part for the live sign-in (plan-v0.2.0 §7.1); until then COMPL-AC-001 counts only named items that have a milestone Where.
+
+Amendment (Origin: ai-proposed · Decision: DEC-0693, DEC-0696): MAIL is retired (DEC-0696), so MAIL-AC-007 leaves the list, as DEC-0692 says. The milestone items of release 1 are therefore E2E-007 (live part), E2E-008 (live part), E2E-015, E2E-016 (review part), SKILL-AC-006, and the stage-lifecycle and account criteria E2E-010, E2E-012, PROV-AC-002 (signing-credential clause), PROV-AC-003, PROV-AC-004, PROV-AC-006, COMPL-AC-008 and SETUP-AC-011.
 
 ## 2. Design
 
