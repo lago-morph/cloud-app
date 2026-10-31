@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { D1Like } from "../../../mig/apply.js";
 import type { StageDatabase } from "../../core/operations.js";
-import { openFakeD1Api, type FakeD1Api } from "./fake-d1-api.js";
+import { openFakeD1Api, prepareAll, type FakeD1Api } from "./fake-d1-api.js";
 import { exportDump, importDump } from "./native-copy.js";
 import { d1Client } from "./client.js";
 import { d1DatabaseOperations, type D1DatabaseOperations } from "./operations.js";
@@ -21,9 +21,11 @@ const SAFE_SCHEMA = [
   `CREATE TABLE "x_seq" ("id" integer PRIMARY KEY AUTOINCREMENT, "v" text)`,
 ];
 
+// Seeds prepare through prepareAll, which lets the event loop turn between Miniflare's synchronous
+// proxy calls (root cause 2026-10-31-native-copy-fetch-failed.md).
 async function seedSafe(db: D1Like): Promise<void> {
-  const s = (sql: string, ...params: unknown[]) => db.prepare(sql).bind(...params);
-  await db.batch([
+  const s = (sql: string, ...params: unknown[]) => ({ sql, params });
+  await db.batch(await prepareAll(db, [
     ...SAFE_SCHEMA.map((sql) => s(sql)),
     s(`INSERT INTO "parents" VALUES ('p2', 'two', -2147483648, ?)`, 1 / 3),
     s(`INSERT INTO "parents" VALUES ('p1', '👩‍👩‍👧 ‮rtl é ''q''', 9007199254740991, 1e308)`),
@@ -32,7 +34,7 @@ async function seedSafe(db: D1Like): Promise<void> {
     s(`INSERT INTO "children" VALUES ('c2', 'p3', '; -- /* */', NULL)`),
     s(`INSERT INTO "x_seq" ("v") VALUES ('one'), ('two'), ('three')`),
     s(`DELETE FROM "x_seq" WHERE "id" = 3`),
-  ]);
+  ]));
 }
 
 async function fingerprint(db: D1Like): Promise<unknown> {
@@ -160,10 +162,12 @@ describe("D1 copyDatabase: native export/import when the pre-check allows it (DE
   it("the restore file keeps the dump's order, so rows referencing a lossy table stay within the import's ~4 KB foreign-key deferral (A-06)", async () => {
     const db = fake.database(source.id);
     await seedSafe(db);
-    await db.batch([
-      db.prepare(`INSERT INTO "parents" VALUES ('nul', ?, NULL, NULL)`).bind("a\u0000b"),
-      ...Array.from({ length: 60 }, (_, i) => db.prepare(`INSERT INTO "children" VALUES (?, 'nul', ?, NULL)`).bind(`k${i}`, "y".repeat(100))),
-    ]);
+    await db.batch(
+      await prepareAll(db, [
+        { sql: `INSERT INTO "parents" VALUES ('nul', ?, NULL, NULL)`, params: ["a\u0000b"] },
+        ...Array.from({ length: 60 }, (_, i) => ({ sql: `INSERT INTO "children" VALUES (?, 'nul', ?, NULL)`, params: [`k${i}`, "y".repeat(100)] })),
+      ]),
+    );
     const before = await fingerprint(db);
     const exported = await ops.exportDatabase(source);
     expect(exported.lossless?.tables).toEqual(["parents"]);
