@@ -3,7 +3,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ciPlan, classify, githubOutput, globToRegExp, loadMap, matches, UNTAGGED } from "../scripts/ci/classify.mjs";
+import { ciPlan, classify, duplicates, githubOutput, globToRegExp, loadMap, matches, UNTAGGED } from "../scripts/ci/classify.mjs";
 
 interface Result {
   docs: string[];
@@ -168,6 +168,30 @@ describe("the staged ci.yml (scripts/ci/workflows/ci.yml, DEC-0637)", () => {
     expect(secret).toBeGreaterThan(0);
     expect(secret).toBeLessThan(yml.indexOf("npm run compliance -- --target local --only"));
     expect(yml).toContain("randomBytes(24)");
+  });
+});
+
+describe("no duplicates (plan-v0.2.0 §7a.2.4)", () => {
+  it("names every file that two layers collect, with the layers", () => {
+    expect(duplicates({ unit: ["a.unit.test.ts", "b.unit.test.ts"], integration: ["c.test.ts", "b.unit.test.ts"], "playwright e2e-api": ["d.spec.ts", "d.spec.ts"] })).toEqual([{ file: "b.unit.test.ts", layers: ["unit", "integration"] }]);
+  });
+
+  it("the integration config leaves *.unit.test.ts files to the unit layer", () => {
+    expect(readFileSync(join(REPO, "vitest.integration.config.ts"), "utf8")).toContain('exclude: [...configDefaults.exclude, "**/*.unit.test.ts"]');
+  });
+
+  it("a config change runs the duplicate check; the release runs everything once and checks too", () => {
+    expect(run("vitest.unit.config.ts").linters).toContain("duplicates");
+    const all = ciPlan(classify([], map, { everything: true }), map, REPO) as { unit: string; direct: string[]; chromium: boolean };
+    expect(all).toMatchObject({ unit: "all", chromium: true });
+    expect(all.direct).toEqual(expect.arrayContaining(["packages/framework/test/integration/sql", "tests/skill", "packages/create-prototype-app/test"]));
+    const release = readFileSync(join(REPO, "scripts/ci/workflows/release.yml"), "utf8");
+    expect(release).toMatch(/\n {2}push:\n {4}tags: \["v\*\.\*\.\*"\]/);
+    for (const step of ["node scripts/ci/classify.mjs --check-duplicates", "npm run test:unit", "node scripts/ci/classify.mjs --all --github-output", `-t '${UNTAGGED as string}'`, "npm run secrets -- set apiKey --target local --stage local", 'npm run compliance -- --target local --out "$RUNNER_TEMP/compliance"', "npx playwright install --with-deps chromium"]) {
+      expect(release, step).toContain(step);
+    }
+    expect(release, "verify re-ran the unit layer and both apps' verify, which the harness and unit steps now run once").not.toContain("npm run verify");
+    expect(release).not.toMatch(/vitest run --config vitest\.integration\.config\.ts tests\/skill/);
   });
 });
 

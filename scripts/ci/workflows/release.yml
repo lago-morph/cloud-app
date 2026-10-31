@@ -1,0 +1,131 @@
+# STAGED COPY (DEC-0637): this file replaces .github/workflows/release.yml. The session that wrote
+# it had no `workflow` token scope; copy it over .github/workflows/release.yml, then delete this one.
+#
+# Release on a version tag (v<semver>): verify, publish both npm packages with trusted publishing
+# (OIDC, no npm token) and provenance, then create the GitHub release from CHANGELOG.md.
+# The npm trusted publisher for each package names this file: release.yml. See docs/RELEASING.md.
+# Actions are pinned to full commit SHAs.
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120 # the full local compliance run takes about 35 min
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.22.0
+          package-manager-cache: false # no cache in release builds
+
+      - name: Tag, versions and CHANGELOG agree
+        run: node scripts/release-check.mjs "$GITHUB_REF_NAME"
+
+      - run: npm ci
+      - name: Playwright browser (browser criteria, e2e-ui, the template-pages test)
+        run: npx playwright install --with-deps chromium
+
+      # Every test once (plan-v0.2.0 §7a.2.4 "Release", DEC-0642): linters, the unit layer, every
+      # integration test (Vitest and Playwright `integration`) and both local e2e projects.
+      # Tagged tests run only through the compliance harness (never bare, P0); untagged
+      # integration tests run directly. Cloud passes and milestone items keep their compliance
+      # tiers (compliance.md §2): GitHub Actions has no cloud credentials.
+      - name: Build, typecheck, lint
+        run: |
+          npm run build -w packages/framework
+          npm run typecheck
+          npm run lint
+      - name: No test file in two layers
+        run: node scripts/ci/classify.mjs --check-duplicates
+      - name: Unit tests
+        run: npm run test:unit
+      - name: Selection for a full run
+        id: all
+        run: node scripts/ci/classify.mjs --all --github-output "$GITHUB_OUTPUT"
+      - name: Untagged integration tests (the harness runs the tagged ones)
+        env:
+          DIRECT: ${{ steps.all.outputs.direct }}
+        run: npx vitest run --config vitest.integration.config.ts $DIRECT -t '^(?!.*\[(?:[A-Z]+-AC|E2E)-\d{3}\])' --passWithNoTests
+      # The runner sets the reference app's local test secret before a local compliance run
+      # (DEC-0277, DEC-0398; root cause ai/implementation/root-causes/2026-10-31-P0-apikey-local-runner-step.md).
+      # A fresh random value each run; it is never printed and never stored.
+      - name: Reference app's local test secret
+        working-directory: apps/reference
+        run: node -e "process.stdout.write(require('crypto').randomBytes(24).toString('hex'))" | npm run secrets -- set apiKey --target local --stage local
+      # Every expected local criterion and scenario (no --only): Vitest integration, Playwright
+      # integration, e2e-api and e2e-ui, and the unit-level IDs' unit tests (DEC-0643).
+      - name: Criteria and scenarios, all of them, through the compliance harness
+        run: npm run compliance -- --target local --out "$RUNNER_TEMP/compliance"
+      - name: Package contents
+        run: npm pack --dry-run --workspace packages/framework --workspace packages/create-prototype-app --workspace packages/prototype-framework-skill
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-24.04 # trusted publishing needs a GitHub-hosted runner
+    timeout-minutes: 30
+    permissions:
+      contents: write # gh release create
+      id-token: write # npm trusted publishing (OIDC) and provenance
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.22.0
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      # Trusted publishing needs npm 11.5.1 or later; Node 22.22.0 ships npm 10.
+      - run: npm install --global npm@11.21.0
+
+      - name: Release notes and dist-tag
+        id: meta
+        run: |
+          node scripts/release-check.mjs "$GITHUB_REF_NAME" --notes > "$RUNNER_TEMP/notes.md"
+          case "$GITHUB_REF_NAME" in
+            *-*) echo "npm_tag=next" >> "$GITHUB_OUTPUT"; echo "prerelease=--prerelease" >> "$GITHUB_OUTPUT" ;;
+            *) echo "npm_tag=latest" >> "$GITHUB_OUTPUT"; echo "prerelease=" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - run: npm ci
+
+      # prepack builds the framework and bundles the template and skill into the starter.
+      # A version already on npm is skipped, so the first release (published by hand to create
+      # the packages, docs/RELEASING.md) and a re-run after a failed later step both work.
+      - name: Publish @lago-morph/prototype-framework, @lago-morph/create-prototype-app and @lago-morph/prototype-framework-skill
+        env:
+          NPM_TAG: ${{ steps.meta.outputs.npm_tag }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for ws in packages/framework packages/create-prototype-app packages/prototype-framework-skill; do
+            name="$(node -p "require('./$ws/package.json').name")"
+            if [ "$(npm view "$name@$version" version 2>/dev/null)" = "$version" ]; then
+              echo "$name@$version is already on npm; skipping"
+            else
+              npm publish --workspace "$ws" --provenance --access public --tag "$NPM_TAG"
+            fi
+          done
+
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+        run: |
+          # shellcheck disable=SC2086 # PRERELEASE is empty or one flag
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" $PRERELEASE

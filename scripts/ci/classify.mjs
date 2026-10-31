@@ -3,11 +3,13 @@
 // files select, from the committed path map scripts/ci/path-map.json.
 // Usage: node scripts/ci/classify.mjs --base <rev> [--head <rev>]   classify `git diff --name-only base head`
 //        node scripts/ci/classify.mjs --files <path>…                classify the given paths
+//        node scripts/ci/classify.mjs --all                           everything (the release run)
+//        node scripts/ci/classify.mjs --check-duplicates              exit 1 if a test file is in two layers
 //        add --json to print the result as JSON instead of the readable report, and
 //        --github-output <file> to append the CI plan's outputs (githubOutput) to <file>.
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -49,7 +51,7 @@ export function loadMap(root = ROOT) {
 const componentGlobs = (c) => [...c.integration.map((d) => `${d}/**`), ...c.paths];
 
 /** The layers `files` select. `integration` maps each selected component to why it was selected. */
-export function classify(files, map) {
+export function classify(files, map, options = {}) {
   const r = { docs: [], testInputs: [], code: [], unit: { all: false, files: [] }, linters: [], build: false, integration: {}, e2e: { all: false, specs: [] }, chromium: false };
   const linters = new Set();
   const unitFiles = new Set();
@@ -57,7 +59,7 @@ export function classify(files, map) {
   const why = new Map();
   const select = (code, reason) => why.set(code, new Set([...(why.get(code) ?? []), reason]));
   const changedSource = new Set();
-  let everything = false;
+  let everything = options.everything === true;
   for (const f of files) {
     for (const [name, globs] of Object.entries(map.linters)) if (matches(f, globs)) linters.add(name);
     if (matches(f, map.docs)) {
@@ -189,6 +191,26 @@ function planReport(p) {
   ].join("\n");
 }
 
+/** Test files that more than one layer collects; `layers` maps a layer to the files it collects. */
+export function duplicates(layers) {
+  const owners = new Map();
+  for (const [layer, files] of Object.entries(layers)) for (const f of new Set(files)) owners.set(f, [...(owners.get(f) ?? []), layer]);
+  return [...owners].filter(([, ls]) => ls.length > 1).map(([file, ls]) => ({ file, layers: ls })).sort((a, b) => (a.file < b.file ? -1 : 1));
+}
+
+/** Every layer's files as its runner collects them: the two Vitest configs and each Playwright project. */
+function collectLayers() {
+  const json = (args) => JSON.parse(execFileSync("npx", args, { cwd: ROOT, encoding: "utf8", maxBuffer: 1 << 26, stdio: ["ignore", "pipe", "ignore"] }));
+  const vitest = (config) => json(["vitest", "list", "--config", config, "--filesOnly", "--json"]).map((e) => relative(ROOT, e.file));
+  const layers = { unit: vitest("vitest.unit.config.ts"), integration: vitest("vitest.integration.config.ts") };
+  const walk = (suite) => {
+    for (const spec of suite.specs ?? []) for (const t of spec.tests) (layers[`playwright ${t.projectName}`] ??= []).push(spec.file);
+    for (const child of suite.suites ?? []) walk(child);
+  };
+  for (const suite of json(["playwright", "test", "--list", "--reporter=json"]).suites) walk(suite);
+  return layers;
+}
+
 function changedFiles(base, head) {
   return execFileSync("git", ["diff", "--name-only", base, head], { cwd: ROOT, encoding: "utf8" }).split("\n").filter((l) => l !== "");
 }
@@ -196,14 +218,23 @@ function changedFiles(base, head) {
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const args = process.argv.slice(2);
   const value = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
+  if (args.includes("--check-duplicates")) {
+    const layers = collectLayers();
+    for (const [layer, files] of Object.entries(layers)) process.stdout.write(`${layer}: ${new Set(files).size} files\n`);
+    const dups = duplicates(layers);
+    for (const d of dups) process.stdout.write(`DUPLICATE ${d.file}: ${d.layers.join(", ")}\n`);
+    process.stdout.write(dups.length === 0 ? "No test file is collected by two layers.\n" : `${dups.length} test files are collected by more than one layer.\n`);
+    process.exit(dups.length === 0 ? 0 : 1);
+  }
   const base = value("--base");
-  const files = args.includes("--files") ? args.slice(args.indexOf("--files") + 1).filter((a, i, rest) => !rest.slice(0, i + 1).some((x) => x.startsWith("--"))) : base === undefined ? undefined : changedFiles(base, value("--head") ?? "HEAD");
+  const all = args.includes("--all");
+  const files = all ? [] : args.includes("--files") ? args.slice(args.indexOf("--files") + 1).filter((a, i, rest) => !rest.slice(0, i + 1).some((x) => x.startsWith("--"))) : base === undefined ? undefined : changedFiles(base, value("--head") ?? "HEAD");
   if (files === undefined) {
     process.stderr.write("usage: classify.mjs (--base <rev> [--head <rev>] | --files <path>…) [--json] [--github-output <file>]\n");
     process.exit(2);
   }
   const map = loadMap();
-  const result = classify(files, map);
+  const result = classify(files, map, { everything: all });
   const plan = ciPlan(result, map);
   process.stdout.write(`${args.includes("--json") ? JSON.stringify({ ...result, plan }, null, 2) : `${report(result)}\n${planReport(plan)}`}\n`);
   const out = value("--github-output");

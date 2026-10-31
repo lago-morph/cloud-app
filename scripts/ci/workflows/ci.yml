@@ -74,6 +74,9 @@ jobs:
       - name: Lint (eslint)
         if: contains(needs.classify.outputs.linters, 'eslint')
         run: npm run lint
+      - name: No test file in two layers
+        if: contains(needs.classify.outputs.linters, 'duplicates')
+        run: node scripts/ci/classify.mjs --check-duplicates
       - name: Unit tests (all)
         if: needs.classify.outputs.unit == 'all'
         run: npm run test:unit

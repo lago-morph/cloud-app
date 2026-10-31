@@ -18,11 +18,12 @@
  * The apps' `verify` runs themselves are in `examples.test.ts`, and the browser run of the
  * template's client pages is in `example-pages.test.ts`.
  *
- * Why `*.unit.test.ts` (E-T2, evaluation E flag F3): these checks read files only, so they run
- * in `npm run test:unit`, which root `npm run verify` (the framework's CI) runs. An example that
- * drifts from its source therefore fails CI, not only the integration and compliance runs. The
- * integration glob (`tests/skill/**\/*.test.ts`) still collects this file, so the compliance
- * driver's integration run evidences SKILL-AC-004 from it as before. No configuration changed.
+ * Layer (DEC-0640, superseding DEC-0405): integration only, collected once by
+ * `tests/skill/**\/*.test.ts`. The compliance driver's integration run evidences SKILL-AC-004
+ * from it, in a single run. CI runs it whenever SKILL is selected: on any change to the skill's
+ * text or examples, or to the template or reference app they are copied from
+ * (scripts/ci/path-map.json). An example that drifts from its source therefore fails CI. Root
+ * `npm run verify` runs it too, next to `example-pages.test.ts`.
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join, normalize } from "node:path";
@@ -133,11 +134,10 @@ describe("SKILL: examples are copies of verified template and reference code", (
     }
   });
 
-  it(tag("SKILL-AC-004", "CI wiring: the framework's root verify runs this byte-for-byte check (test:unit, whose include glob collects this file)"), () => {
+  it(tag("SKILL-AC-004", "CI wiring: the framework's root verify runs this byte-for-byte check (through the integration config, whose include glob collects this file)"), () => {
     const root = JSON.parse(read(join(REPO_ROOT, "package.json"))) as { scripts?: Record<string, string> };
-    expect(root.scripts?.["verify"] ?? "", "root verify runs test:unit").toMatch(/\bnpm run test:unit\b/);
-    expect(root.scripts?.["test:unit"] ?? "", "test:unit uses the unit config").toMatch(/--config vitest\.unit\.config\.ts\b/);
-    const config = read(join(REPO_ROOT, "vitest.unit.config.ts"));
-    expect(config, "the unit layer collects tests/**/*.unit.test.ts, which includes this file").toContain('"tests/**/*.unit.test.ts"');
+    expect(root.scripts?.["verify"] ?? "", "root verify runs this file with the integration config").toMatch(/vitest run --config vitest\.integration\.config\.ts [^&]*\btests\/skill\/example-copies\.test\.ts\b/);
+    const config = read(join(REPO_ROOT, "vitest.integration.config.ts"));
+    expect(config, "the integration layer collects tests/skill/**/*.test.ts, which includes this file").toContain('"tests/skill/**/*.test.ts"');
   });
 });

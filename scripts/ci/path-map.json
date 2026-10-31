@@ -87,6 +87,7 @@
   "linters": {
     "eslint": ["packages/framework/{src,bin,test}/**/*.{ts,js,mjs}", "eslint.config.js", "package.json", "package-lock.json"],
     "typecheck": ["**/*.{ts,tsx,mts,mjs,js}", "**/tsconfig*.json", "**/package.json", "package-lock.json", "docs/contracts/**"],
-    "pack": ["packages/**", "skill/**", "apps/template/**", "package-lock.json"]
+    "pack": ["packages/**", "skill/**", "apps/template/**", "package-lock.json"],
+    "duplicates": ["vitest.*.ts", "playwright.config.ts", "scripts/ci/**", "package.json"]
   }
 }
