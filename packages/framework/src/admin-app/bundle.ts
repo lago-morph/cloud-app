@@ -27,18 +27,26 @@ function frameworkVersion(): string {
   return version;
 }
 
+/** The esbuild options both Workers are built with. */
+export const BUNDLE_OPTIONS = Object.freeze({ bundle: true, format: "esm", platform: "neutral", target: "es2022", write: false, logLevel: "silent", legalComments: "none" } as const);
+
+/** The auth app's Worker module, exactly as account setup uploads it (`cloudflare:workers` external). */
+export async function bundleAuthApp(): Promise<string> {
+  const { build } = await import("esbuild");
+  const out = await build({ ...BUNDLE_OPTIONS, entryPoints: [entry(join(HERE, "..", "auth-app"), "worker")], external: ["cloudflare:workers"] });
+  return out.outputFiles[0]!.text;
+}
+
 let cached: Promise<string> | undefined;
 
 export function bundleAdminApp(): Promise<string> {
   cached ??= (async () => {
     const { build } = await import("esbuild");
-    const common = { bundle: true, format: "esm", platform: "neutral", target: "es2022", write: false, logLevel: "silent", legalComments: "none" } as const;
-    const auth = await build({ ...common, entryPoints: [entry(join(HERE, "..", "auth-app"), "worker")], external: ["cloudflare:workers"] });
     const out = await build({
-      ...common,
+      ...BUNDLE_OPTIONS,
       entryPoints: [entry(HERE, "worker")],
       external: [...ADMIN_APP_NODE_IMPORTS],
-      define: { __PF_AUTH_APP_SOURCE__: JSON.stringify(auth.outputFiles[0]!.text), __PF_FRAMEWORK_VERSION__: JSON.stringify(frameworkVersion()) },
+      define: { __PF_AUTH_APP_SOURCE__: JSON.stringify(await bundleAuthApp()), __PF_FRAMEWORK_VERSION__: JSON.stringify(frameworkVersion()) },
     });
     return out.outputFiles[0]!.text;
   })();
