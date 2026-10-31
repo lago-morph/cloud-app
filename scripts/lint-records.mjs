@@ -11,10 +11,12 @@
 // - level-2 sections Symptom, Evidence, Causal chain, Alternatives ruled out, Proposed fix, Verification
 //   plan and Review, each with content. A heading matches by prefix, case-insensitively, so
 //   "## Proposed fix (not applied)" counts.
-// - every "## Review…" section holds exactly one `Verdict: accepted | accepted-with-changes | rejected`,
-//   or `Status: awaiting review`, not both. A rejected or accepted-with-changes verdict has at least one
-//   reason marked **major** or **minor**.
+// - every "## Review…" section (one per review round, at most 3) holds exactly one
+//   `Verdict: accepted | accepted-with-changes | rejected`, or `Status: awaiting review`, not both. A rejected or
+//   accepted-with-changes verdict has at least one reason marked **major** or **minor**; an accepted verdict
+//   has no **major** one.
 // - a "Response" heading is "Response (round n)" and has content.
+// - a later attempt is a "## Attempt n" section (n = 2 or 3) holding the same sections at level 3.
 // Test-review records, ai/implementation/test-reviews/<yyyy-mm-dd>-<item-id>.md (§7a.1.9): the format
 // and its rules are in ai/implementation/test-reviews/README.md.
 import { execFileSync } from "node:child_process";
@@ -29,7 +31,7 @@ const NEEDS_CITATION = new Set(["code-removed", "component-removed", "behaviour-
 
 const RECORD_PATH = /(?:^|\/)ai\/implementation\/(root-causes|test-reviews)\/([^/]+\.md)$/;
 const DATE = "\\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\\d|3[01])";
-const ID = "[A-Za-z0-9]+";
+const ID = "[A-Za-z0-9_.]+";
 const ROOT_CAUSE_NAME = new RegExp(`^${DATE}-${ID}(?:-${ID})+\\.md$`);
 const TEST_REVIEW_NAME = new RegExp(`^${DATE}-${ID}(?:-${ID})*\\.md$`);
 
@@ -67,7 +69,7 @@ function sections(text) {
 /** Whether a heading title is `name`, optionally followed by a qualifier (not by more letters). */
 const titled = (title, name) => title.toLowerCase().startsWith(name.toLowerCase()) && !/^[\p{L}\p{N}]/u.test(title.slice(name.length));
 
-const VERDICT_LINE = /^\s*(?:[-*]\s+)?(?:\*\*)?Verdict(?:\*\*)?\s*:\s*(?:\*\*)?\s*`?([^`*.;,\n]*?)`?\s*(?:[.;,*]|$)/gim;
+const VERDICT_LINE = /^\s*(?:[-*]\s+)?(?:\*\*)?Verdict(?:\*\*)?\s*:\s*(?:\*\*)?\s*`?([^`*.;,(\n]*?)`?\s*(?:[.;,*(]|$)/gim;
 const AWAITING = /^\s*(?:[-*]\s+)?(?:\*\*)?Status(?:\*\*)?\s*:\s*(?:\*\*)?\s*`?awaiting review`?/im;
 const MARKED_REASON = /\*\*(?:major|minor)\b[^*\n]*\*\*/i;
 
@@ -75,39 +77,78 @@ function verdicts(body) {
   return [...body.matchAll(VERDICT_LINE)].map((m) => m[1].trim());
 }
 
-/** Problems in a root-cause record's text; [] when it passes. */
-export function lintRootCause(text) {
-  const problems = [];
-  const all = sections(text);
-  const top = all.filter((s) => s.level === 2);
-  for (const name of ROOT_CAUSE_SECTIONS) {
-    const found = top.filter((s) => titled(s.title, name));
-    if (found.length === 0) problems.push(`missing section: ## ${name}`);
-    else if (name !== "Review" && found.every((s) => s.empty)) problems.push(`section ## ${name} is empty`);
+const MAJOR_REASON = /\*\*major\b[^*\n]*\*\*/i;
+const ATTEMPT = /^Attempt ([1-9]\d*)\b/i;
+const MAX_ATTEMPTS = 3;
+const MAX_ROUNDS = 3;
+
+/**
+ * The record's attempts (§7a.1.8 step 7): the first is the level-2 sections outside any `## Attempt n`;
+ * each `## Attempt n` (n ≥ 2) holds its own sections at level 3.
+ */
+function attempts(text) {
+  const top = sections(text).filter((s) => s.level === 2);
+  const out = [{ n: 1, where: "", level: 2, list: top.filter((s) => !ATTEMPT.test(s.title)) }];
+  for (const a of top.filter((s) => ATTEMPT.test(s.title))) {
+    out.push({ n: Number(ATTEMPT.exec(a.title)[1]), where: `## ${a.title}: `, level: 3, list: sections(a.body).filter((s) => s.level === 3) });
   }
-  for (const s of top.filter((x) => titled(x.title, "Review"))) {
-    const where = `## ${s.title}`;
+  return out;
+}
+
+function checkAttempt({ where, level, list }, problems) {
+  const h = "#".repeat(level);
+  for (const name of ROOT_CAUSE_SECTIONS) {
+    const found = list.filter((s) => titled(s.title, name));
+    if (found.length === 0) problems.push(`${where}missing section: ${h} ${name}`);
+    else if (name !== "Review" && found.every((s) => s.empty)) problems.push(`${where}section ${h} ${name} is empty`);
+  }
+  const reviews = list.filter((x) => titled(x.title, "Review"));
+  if (reviews.length > MAX_ROUNDS) problems.push(`${where}more than ${MAX_ROUNDS} review rounds in one attempt (§7a.1.8 step 7)`);
+  for (const s of reviews) {
+    const at = `${where}${h} ${s.title}`;
     const v = verdicts(s.body);
     const awaiting = AWAITING.test(s.body);
     if (v.length === 0 && !awaiting) {
-      problems.push(`${where}: no verdict (Verdict: ${VERDICTS.slice(0, 2).join(", ")} or ${VERDICTS[2]}) and no \`Status: awaiting review\``);
+      problems.push(`${at}: no verdict (Verdict: ${VERDICTS.slice(0, 2).join(", ")} or ${VERDICTS[2]}) and no \`Status: awaiting review\``);
       continue;
     }
     if (v.length > 0 && awaiting) {
-      problems.push(`${where}: has both a verdict and \`Status: awaiting review\``);
+      problems.push(`${at}: has both a verdict and \`Status: awaiting review\``);
       continue;
     }
     if (v.length > 1) {
-      problems.push(`${where}: more than one verdict`);
+      problems.push(`${at}: more than one verdict`);
       continue;
     }
     if (v.length === 1) {
       const value = v[0].toLowerCase();
-      if (!VERDICTS.includes(value)) problems.push(`${where}: verdict "${v[0]}" is not one of ${VERDICTS.join(", ")}`);
-      else if (value !== "accepted" && !MARKED_REASON.test(s.body)) {
-        problems.push(`${where}: verdict ${value} needs at least one reason marked **major** or **minor**`);
+      if (!VERDICTS.includes(value)) problems.push(`${at}: verdict "${v[0]}" is not one of ${VERDICTS.join(", ")}`);
+      else if (value === "accepted" && MAJOR_REASON.test(s.body)) {
+        problems.push(`${at}: verdict accepted lists a **major** issue; a major issue needs a Response (round n) and another review round`);
+      } else if (value !== "accepted" && !MARKED_REASON.test(s.body)) {
+        problems.push(`${at}: verdict ${value} needs at least one reason marked **major** or **minor**`);
       }
     }
+  }
+}
+
+/** The verdict of the record's last Review section (lower case), or null when it has none. */
+export function finalVerdict(text) {
+  const reviews = attempts(text)
+    .sort((a, b) => a.n - b.n)
+    .flatMap((a) => a.list.filter((s) => titled(s.title, "Review")));
+  const last = reviews.at(-1);
+  if (!last || AWAITING.test(last.body)) return null;
+  return verdicts(last.body).at(-1)?.toLowerCase() ?? null;
+}
+
+/** Problems in a root-cause record's text; [] when it passes. */
+export function lintRootCause(text) {
+  const problems = [];
+  const all = sections(text);
+  for (const a of attempts(text)) {
+    if (a.n > MAX_ATTEMPTS) problems.push(`${a.where}more than ${MAX_ATTEMPTS} attempts (§7a.1.8 step 7)`);
+    else checkAttempt(a, problems);
   }
   for (const s of all.filter((x) => titled(x.title, "Response"))) {
     if (!/^Response \(round [1-9]\d*\)/i.test(s.title)) problems.push(`heading "${s.title}" must be "Response (round n)"`);
@@ -139,10 +180,11 @@ function fields(text) {
 const value = (map, name) => (map.get(name) ?? []).join("\n").trim();
 
 /**
- * Problems in a test-review record's text; [] when it passes. `exists(path)` (repository-relative) checks
- * a cited root-cause record; without it, that check is skipped.
+ * Problems in a test-review record's text; [] when it passes. `exists(path)` and `read(path)` (repository-
+ * relative; `read` returns the text or null) check a cited root-cause record: that it exists and that its last
+ * Review verdict is accepted or accepted-with-changes. Without them, those checks are skipped.
  */
-export function lintTestReview(text, { exists } = {}) {
+export function lintTestReview(text, { exists, read } = {}) {
   const problems = [];
   const all = sections(text);
   const groups = all.filter((s) => s.level === 2 && /^Group:/i.test(s.title));
@@ -170,6 +212,11 @@ export function lintTestReview(text, { exists } = {}) {
         const rec = /ai\/implementation\/root-causes\/[^\s`)'"]+\.md/.exec(cites);
         if (!rec) problems.push(`${where}: Cites: must name a record ai/implementation/root-causes/<file>.md`);
         else if (exists && !exists(rec[0])) problems.push(`${where}: cited record ${rec[0]} does not exist`);
+        else if (read) {
+          const cited = read(rec[0]);
+          const v = cited === null ? null : finalVerdict(cited);
+          if (cited !== null && v !== "accepted" && v !== "accepted-with-changes") problems.push(`${where}: cited record ${rec[0]} has no accepted Review verdict`);
+        }
       }
     }
     if (!value(f, "Tests")) problems.push(`${where}: missing Tests: (the changed tests)`);
@@ -212,22 +259,24 @@ export function stagedRecords(cwd) {
     .map((p) => ({ path: p, text: git(top, ["show", `:${p}`]), top }));
 }
 
-/** Whether a repository-relative path exists in the working tree or the index of `top`. */
-export function existsIn(top) {
+/** A repository-relative path's text in the index of `top`, else in its working tree, else null. */
+export function readIn(top) {
   return (p) => {
-    if (existsSync(join(top, p))) return true;
     try {
-      git(top, ["cat-file", "-e", `:${p}`]);
-      return true;
+      return git(top, ["show", `:${p}`]);
     } catch {
-      return false;
+      return existsSync(join(top, p)) ? readFileSync(join(top, p), "utf8") : null;
     }
   };
 }
 
 /** Lint `records` ({path, text, top?}); returns "<path>: <problem>" lines. */
 export function lintAll(records) {
-  return records.flatMap(({ path, text, top }) => lintRecord(path, text, top ? { exists: existsIn(top) } : {}).map((p) => `${path}: ${p}`));
+  return records.flatMap(({ path, text, top }) => {
+    const read = top ? readIn(top) : undefined;
+    const options = read ? { read, exists: (p) => read(p) !== null } : {};
+    return lintRecord(path, text, options).map((p) => `${path}: ${p}`);
+  });
 }
 
 function main(argv) {

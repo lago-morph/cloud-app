@@ -42,10 +42,10 @@ Never skip, delete or weaken a test to get a pass. A wrong test is a root-cause 
 
 ## What the lint checks
 
-- The file name is `<yyyy-mm-dd>-<item-id>[-<suffix>].md`.
+- The file name is `<yyyy-mm-dd>-<item-id>[-<suffix>].md`; ids and suffixes may hold letters, digits, `_` and `.`.
 - `Item:` and `Change set:` are present and not empty.
 - At least one `## Group: <reason-code>` section; each code is one of the six above.
-- Each group has a non-empty `Tests:`; `Cites:` where the table says required; for `test-was-wrong`, `Cites:` names an `ai/implementation/root-causes/…md` record that exists in the working tree or the index.
+- Each group has a non-empty `Tests:`; `Cites:` where the table says required; for `test-was-wrong`, `Cites:` names an `ai/implementation/root-causes/…md` record that exists in the index or the working tree, and whose last Review verdict is `accepted` or `accepted-with-changes`.
 - Either the record says `Status: awaiting review` and no group has a verdict, or every group has `Verdict:` (`accepted`, `accepted-with-changes` or `rejected`) and a non-empty `Reasons:`, and the record has `Reviewer:`.
 
 Field labels may be bold (`**Verdict:**`). Values of `Tests:` and `Reasons:` are the inline text plus the bullet lines that follow.
