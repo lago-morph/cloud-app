@@ -34,7 +34,8 @@ const dashboardPolicies = (gs: readonly PermissionGroup[], zoneRes: Record<strin
 describe("the permission list", () => {
   it("has plan §4.1's everyday groups, v0.2.0 plan §5.1's bootstrap groups, versions and names", () => {
     expect(PERMISSIONS_VERSION).toBe(2);
-    expect(ACCOUNT_SETUP_VERSION).toBe(1);
+    // 2: v0.2.0's account setup in the admin app (DEC-0719, PAR-332).
+    expect(ACCOUNT_SETUP_VERSION).toBe(2);
     expect(names(byScope(EVERYDAY, "account"))).toEqual(["Workers Scripts Write", "Workers R2 Storage Write", "D1 Write", "Email Sending Read"]);
     expect(names(byScope(EVERYDAY, "zone"))).toEqual(["Zone Read", "Analytics Read", "Email Routing Rules Read"]);
     expect(names(byScope(BOOTSTRAP, "account"))).toEqual(["Workers Scripts Write", "OAuth Client Write", "Secrets Store Write", "Account API Tokens Write"]);

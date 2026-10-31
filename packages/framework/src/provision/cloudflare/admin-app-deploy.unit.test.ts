@@ -10,6 +10,13 @@ const SUB = "pf-adminsub";
 type Loaded = { default: { fetch(request: Request, env: Record<string, unknown>): Promise<Response> } };
 
 describe("the uploaded admin app (E replaced C's stub)", () => {
+  it("compiles in the auth app that account setup uploads (DEC-0720)", async () => {
+    const source = await bundleAdminApp();
+    // The auth app's own module, kept as a string: its import of cloudflare:workers is text, not an import of the admin app.
+    expect(source).toContain("cloudflare:workers");
+    expect(source).toContain("AuthApp");
+  });
+
   it("is one ES module whose only import is node:crypto (DEC-0720)", async () => {
     const source = await bundleAdminApp();
     const imports = [...source.matchAll(/^\s*import\s[^;]*?from\s*["']([^"']+)["']/gm)].map((m) => m[1]);

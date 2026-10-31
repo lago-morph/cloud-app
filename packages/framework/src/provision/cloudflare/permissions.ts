@@ -36,8 +36,12 @@ export interface PermissionGroup {
 
 /** PAR-331: the version of `EVERYDAY` and `BOOTSTRAP`; raised whenever a release changes them (2: v0.2.0, DEC-0680). */
 export const PERMISSIONS_VERSION = 2;
-/** PAR-332: the version of the account setup this release expects (the setup record's `setupVersion`). */
-export const ACCOUNT_SETUP_VERSION = 1;
+/**
+ * PAR-332: the version of the account setup this release expects (the setup record's
+ * `setupVersion`). 2: v0.2.0's account setup in the admin app (the auth app, the signing credential
+ * in Secrets Store, no email; DEC-0719).
+ */
+export const ACCOUNT_SETUP_VERSION = 2;
 
 const group = (id: string, name: string, scope: PermissionScope): PermissionGroup => Object.freeze({ id, name, scope });
 
