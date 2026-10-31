@@ -17,6 +17,9 @@ Plan: `ai/implementation/plan-v0.2.0-testing-auth.md` ("plan §n"); governing pr
 ## Open items
 <!-- blocked items, cross-stack merge preconditions still pending, owner questions raised -->
 - From P0: (1) COMPL-AC-001: SETUP-AC-011 is missing from the COMPL-REQ-006 milestone list. The fix is a `compliance.md` amendment, and D 36 must keep SETUP-AC-011 when it rewrites the list. (2) MAIL-AC-005: three `@example.com` addresses in unit tests, `test-was-wrong`. A small fix, `08`, is proposed, even though B 46 retires the criterion. (3) The five blocked IDs are a runner step (local `apiKey`). S3 was told to add it to CI.
+- Process deviations to report: P0 skipped the separate similar-case search subagent of §7a.1.8 step 4 and relied on the reviewer's repo-wide scan; T6 should check this. In A, the implementer itself diagnosed `2026-10-31-A-workerd-fetch-redirect-error`, not a separate diagnoser; the review accepted the record and disclosed it.
+- Reviewer cloud session for P0's test review: `session_014mWQ6jKepuYeu9tYda2mJF` (archive at run end).
+- C 32 (#82) raises an owner question: print the admin app's workers.dev URL despite DEC-0590 (DEC-0686).
 - From S1: pointers to S2's test-reviews README, S3's path map and Playwright split, and S4's coverage file each carry a fallback until those files merge.
 - From S4 (#61): (1) T4 adds `fast-check` (PAR-410, exact pin) to framework devDependencies, plus the template if G 68 needs it. T4 is the lockfile editor in its batch. (2) F's exit check "criteria/prov and cf green against fakes" passes vacuously, because those tests are Cloud-only placeholders locally. F's brief must name real local checks. (3) The F4 fuzz target is expected to expose that `files/base64url.ts` accepts 4 spellings of each local ticket MAC. T4 routes it through §7a.1.8. (4) The decision draft is `v020-S4.md`; I1 should match case-insensitively.
 - Reviewer cloud sessions to archive at run end: S4 `session_014mWQ6k9PiPRJThvcqKpHAZ`, S1 `session_014mWQ6hMtDXz9kuyzneVQht`. The S4 reviewer ran as a separate cloud session, because subagents have no Agent tool. Archive it at the end of the run.
@@ -45,7 +48,7 @@ Format: **ID — title** · plan § · deps · status. Then Owns / PRs (`nn` bra
 - PRs: `00-run-records` ← `main` (records; opened first, kept open and updated through the run, merged last — nothing stacks on it).
 - Exit: files present and current at run end. Tests/E2E: none (docs). IDs: DEC-0620–0624 (orchestrator choices), no PAR.
 
-**P0 — local compliance baseline on main** · §7a.1.8, TS-3 · — · `running` (3 records accepted by an independent reviewer, ed6fc81; fix PR 08 in progress; COMPL-AC-001 fix applied in D 36)
+**P0 — local compliance baseline on main** · §7a.1.8, TS-3 · — · `done` (PR #80, CI green; MAIL-AC-005 red→green; test-change review accepted; COMPL-AC-001 fixed in D 36 #74)
 - Bare `npm run test:integration` / `npm run test:e2e` are not self-contained: 48 of 53 integration and 5 of 8 e2e failures on clean `1e0c289` are "COMPLIANCE_BASE_URL is not set" (criteria and scenarios must run through `npm run compliance -- --target local`). The baseline is `npm run compliance -- --target local`: 128 passed, 2 failed (COMPL-AC-001, MAIL-AC-005), 5 blocked (missing local test secret), §6. Any failure there gets a diagnoser + reviewer (§7a.1.8) before wave-1 exit checks rely on it; a fix is PR `08-fix-baseline-<slug>` ← main. S3 must make CI run criteria through the harness (or set the env), never bare.
 - Owns: its root-cause records; fix paths named by the accepted record. IDs: DEC-0778–0779 (from T7's range), PAR-480.
 
