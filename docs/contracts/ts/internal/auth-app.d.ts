@@ -2,7 +2,7 @@
  * The auth app's service binding: the framework-internal contract between an app Worker and the
  * account-level auth app (plan-v0.2.0-testing-auth.md §3, §4.1 steps 4–5; DEC-0650, DEC-0651).
  * An app reaches the auth app only through this binding, `env.AUTH` (service binding to the auth
- * app's Worker with `entrypoint: "AuthApp"`, DEC-0660); the auth app has no public "who is this
+ * app's Worker with `entrypoint: "AuthApp"`, DEC-0661); the auth app has no public "who is this
  * user" API. Never exported to app code.
  *
  * Implementation: packages/framework/src/auth/auth-app-binding.ts (types and the in-memory fake
