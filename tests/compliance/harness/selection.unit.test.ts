@@ -23,7 +23,7 @@ describe("[E2E-004] coverage is computed from the runners' listing with the driv
     expect(uncovered(["KV-AC-001", "KV-AC-004", "SQL-AC-003", "KV-AC-002"], listed)).toEqual(["KV-AC-002"]);
   });
 
-  it("local selection is the driver's: integration config, unit config for unit-level IDs only, the two Playwright projects", () => {
+  it("local selection is the driver's: integration config, unit config for unit-level IDs only, the three Playwright projects", () => {
     const local = runnerSelection({ target: "local" });
     expect(local.map((s) => [s.runner, s.label, s.args.join(" ")])).toEqual([
       ["vitest", "vitest", "vitest run --config vitest.integration.config.ts"],
