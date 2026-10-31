@@ -52,6 +52,12 @@ export const GROUP_SCOPE: Readonly<Record<string, string>> = {
   "Secrets Store Read": "secrets-store.read",
   "Secrets Store Write": "secrets-store.write",
   "Account Settings Read": "account-settings.read",
+  // The same groups by ID (permissions.ts), as a create or update body names them.
+  e086da7e2179491d91ee5f35b3ca210a: "workers-scripts.write",
+  bf7481a1826f439697cb59a20b22293e: "workers-r2.write",
+  "09b2857d1c31407795e75e3fed8617a1": "d1.write",
+  "5e33b7d77788455c9fdf18cbd38ee5a0": "secrets-store.read",
+  adc8fa2bc6124928a8b3314dc63a1235: "secrets-store.write",
 };
 
 export interface Member {
@@ -124,9 +130,9 @@ export async function fakeCloudflare(options: { account?: CloudflareApi; omitSco
       if (!t.requested.includes(needs) && needs === "workers-r2.write") return apiErr(403, 10000, "Authentication error");
       return apiErr(403, 9109, "Unauthorized to access requested resource");
     }
-    if (method === "POST" && /^\/accounts\/[^/]+\/tokens$/.test(p)) {
+    if ((method === "POST" && /^\/accounts\/[^/]+\/tokens$/.test(p)) || (method === "PUT" && /^\/accounts\/[^/]+\/tokens\/[^/]+$/.test(p))) {
       const groups = ((body as { policies?: { permission_groups?: { id?: string; name?: string }[] }[] } | undefined)?.policies ?? []).flatMap((x) => x.permission_groups ?? []);
-      const uncovered = groups.filter((g) => !t.scope.includes(GROUP_SCOPE[g.name ?? ""] ?? "-"));
+      const uncovered = groups.filter((g) => !t.scope.includes(GROUP_SCOPE[g.name ?? ""] ?? GROUP_SCOPE[g.id ?? ""] ?? "-"));
       if (uncovered.length > 0) return apiErr(400, 1001, "The OAuth session does not include the scopes required for the requested permission groups");
     }
     if (options.account === undefined) return apiErr(404, 7003, "No route for that URI");

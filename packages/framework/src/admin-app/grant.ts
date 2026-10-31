@@ -58,13 +58,21 @@ interface GrantState {
   readonly verifier: string;
   readonly nonce: string;
   readonly page: AdminPageId;
+  /** The page's sub-action (its form's `action`, checked by `isAction`), if any. */
+  readonly action?: string;
 }
 
+/** A page's sub-action: a lower-case verb, `:`, and 1–20 comma-separated 32-hex IDs. */
+export const isAction = (v: unknown): v is string => typeof v === "string" && v.length <= 800 && /^[a-z]{1,20}:[0-9a-f]{32}(,[0-9a-f]{32}){0,19}$/.test(v);
+
+/** The verb of a well-formed action. */
+export const actionVerb = (action: string): string => action.slice(0, action.indexOf(":"));
+
 /** The authorization URL for `page` and the sealed grant cookie value. */
-export async function startGrant(deps: GrantDeps, page: AdminPageId): Promise<{ location: string; cookie: string }> {
+export async function startGrant(deps: GrantDeps, page: AdminPageId, action?: string): Promise<{ location: string; cookie: string }> {
   const discovery = await loadDiscovery(deps.fetch, deps.config.discoveryUrl);
   const pkce = await createPkce();
-  const g: GrantState = { state: randomToken(32), verifier: pkce.verifier, nonce: randomToken(32), page };
+  const g: GrantState = { state: randomToken(32), verifier: pkce.verifier, nonce: randomToken(32), page, ...(action === undefined ? {} : { action }) };
   const target = new URL(discovery.authorizationEndpoint);
   const params: Record<string, string> = {
     response_type: "code",
@@ -84,7 +92,7 @@ export async function startGrant(deps: GrantDeps, page: AdminPageId): Promise<{ 
 export async function openGrant(deps: GrantDeps, cookie: string | undefined, state: string): Promise<GrantState | null> {
   if (cookie === undefined || state === "") return null;
   const g = (await open(deps.config.clientSecret, "grant", cookie, deps.now())) as Partial<GrantState> | null;
-  if (g === null || g.state !== state || typeof g.verifier !== "string" || typeof g.nonce !== "string" || !isPageId(g.page)) return null;
+  if (g === null || g.state !== state || typeof g.verifier !== "string" || typeof g.nonce !== "string" || !isPageId(g.page) || (g.action !== undefined && !isAction(g.action))) return null;
   return g as GrantState;
 }
 

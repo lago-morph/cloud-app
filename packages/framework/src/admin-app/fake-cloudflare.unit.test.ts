@@ -58,6 +58,14 @@ describe("fake Cloudflare", () => {
     expect(ok.status).toBe(200);
   });
 
+  it("applies the §2.1a rule to groups named by ID and to updates too", async () => {
+    const { call } = await tokenFor();
+    const zoneRead = { effect: "allow", resources: {}, permission_groups: [{ id: "c8fed203ed3043cba015a93ad1616f1f" }] };
+    expect((await call("PUT", `/accounts/${ACCOUNT}/tokens/${"a".repeat(32)}`, { name: "t", policies: [zoneRead] })).body.errors?.[0]?.code).toBe(1001);
+    const scripts = { effect: "allow", resources: {}, permission_groups: [{ id: "e086da7e2179491d91ee5f35b3ca210a" }] };
+    expect((await call("POST", `/accounts/${ACCOUNT}/tokens`, { name: "t", policies: [scripts] })).status).toBe(200);
+  });
+
   it("refuses a revoked token", async () => {
     const { cf, body, call } = await tokenFor();
     await cf.fetch(`${ISSUER}/oauth2/revoke`, { method: "POST", body: new URLSearchParams({ token: body.access_token, client_id: CLIENT_ID, client_secret: CLIENT_SECRET }) });
