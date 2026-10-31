@@ -141,7 +141,7 @@ export class FakeCloud {
   /** OAuth clients (`…/oauth_clients`) by client ID: the create body's name and the secret its create answer showed once. */
   readonly oauthClients = new Map<string, { id: string; name: string; body: Record<string, unknown>; secret: string }>();
   /** Secrets Store stores by ID (one by default, as on the live account), each with its secrets by name; values are write-only on the API. */
-  readonly secretStores = new Map<string, { name: string; secrets: Map<string, { id: string; value: string; scopes?: unknown }> }>([["store1", { name: "default_secrets_store", secrets: new Map() }]]);
+  readonly secretStores = new Map<string, { name: string; secrets: Map<string, { id: string; value: string; scopes?: unknown; comment?: string }> }>([["store1", { name: "default_secrets_store", secrets: new Map() }]]);
   private nextToken = 1;
   private nextZoneThing = 1;
   private nextClient = 1;
@@ -363,11 +363,11 @@ export class FakeCloud {
     const s = /^\/accounts\/[^/]+\/secrets_store\/stores\/([^/]+)\/secrets(?:\/([^/]+))?$/.exec(p);
     const store = s ? this.secretStores.get(s[1]!) : undefined;
     if (s === null || store === undefined) return err(404, 1003, "not found");
-    if (s[2] === undefined && method === "GET") return ok([...store.secrets].map(([name, x]) => ({ id: x.id, name })));
+    if (s[2] === undefined && method === "GET") return ok([...store.secrets].map(([name, x]) => ({ id: x.id, name, ...(x.comment === undefined ? {} : { comment: x.comment }) })));
     if (s[2] === undefined && method === "POST") {
-      const made = (body as { name: string; value: string; scopes?: unknown }[]).map((x) => {
+      const made = (body as { name: string; value: string; scopes?: unknown; comment?: string }[]).map((x) => {
         if (store.secrets.has(x.name)) return undefined;
-        const secret = { id: `sec${this.nextClient++}`, value: x.value, scopes: x.scopes };
+        const secret = { id: `sec${this.nextClient++}`, value: x.value, scopes: x.scopes, ...(x.comment === undefined ? {} : { comment: x.comment }) };
         store.secrets.set(x.name, secret);
         return { id: secret.id, name: x.name };
       });
@@ -376,6 +376,8 @@ export class FakeCloud {
     const entry = [...store.secrets.values()].find((x) => x.id === s[2]);
     if (entry !== undefined && method === "PATCH") {
       entry.value = String((body as { value?: unknown }).value);
+      const comment = (body as { comment?: unknown }).comment;
+      if (typeof comment === "string") entry.comment = comment;
       return ok({ id: entry.id });
     }
     return err(404, 1003, "not found");
