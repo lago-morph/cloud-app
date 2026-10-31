@@ -79,52 +79,60 @@ if (isLocal()) {
       const before = readEnvFile(dir);
       const r = await runSetup("v020 AC-002 current", world, dir);
       expect(r.status, r.all).toBe(0);
-      expect(r.all).toMatch(/already set up/i);
+      expect(r.all).toMatch(/already set up|setup is complete/i);
       expect(r.stdinReads).toBe(0);
       expect(writesOf(r.requests)).toEqual([]);
       expect(readEnvFile(dir)).toBe(before);
       const bare = await project();
       const e = await runSetup("v020 AC-002 environment only", world, bare, { env: { [EVERYDAY_SETTING]: everyday.value, CLOUDFLARE_ACCOUNT_ID: ACCOUNT } });
       expect(e.status, e.all).toBe(0);
+      expect(e.all).toMatch(/already set up|setup is complete/i);
       expect(e.stdinReads).toBe(0);
       expect(writesOf(e.requests)).toEqual([]);
+      expect(envFileExists(bare), "no .env.cloudflare: the project had none").toBe(false);
     });
 
     describe("SETUP-AC-003 bad pastes name the setting and give only that token's remedy", () => {
-      type Case = [string, "bootstrap" | "everyday", RegExp, (w: SetupWorld) => { boot?: string; everyday?: string }];
+      // Where each paste is made (review of PR #133, finding 1): an everyday-token paste into a project
+      // whose account is set up and whose admin app is deployed, so the only thing wrong is the paste; a
+      // bootstrap-token paste into a new account, where the bootstrap is what the run needs. Remedies
+      // (DEC-0750): the bootstrap token's is the bootstrap link and never the everyday link; the everyday
+      // token's is the admin app's Everyday token page and never the everyday link. The bootstrap link
+      // may appear beside the page, since SETUP-REQ-001 as amended gives it with anything missing.
+      type Case = [string, "bootstrap" | "everyday", RegExp, (w: SetupWorld, good: WorldToken) => { boot?: string; everyday?: string }];
       const cases: Case[] = [
-        ["a value that is not a token as the everyday token", "everyday", /not accept|not a valid|invalid|not .*token/i, (w) => ({ boot: addTokens(w, "v3a").bootstrap.value, everyday: tokenValue("v3a-junk") })],
-        ["a value that is not a token as the bootstrap token", "bootstrap", /not accept|not a valid|invalid|not .*token/i, (w) => ({ boot: tokenValue("v3b-junk"), everyday: addTokens(w, "v3b").everyday.value })],
-        ["an everyday token that is not active", "everyday", /not active|disabled/i, (w) => { const t = addTokens(w, "v3c"); t.everyday.status = "disabled"; return { everyday: t.everyday.value }; }],
-        ["the everyday token pasted as the bootstrap token", "bootstrap", /everyday|API tokens|bootstrap permission|Account API Tokens Write/i, (w) => { const t = addTokens(w, "v3e"); return { boot: t.everyday.value, everyday: w.addToken("everyday", tokenValue("v3e-2"), tokenId("v3e2")).value }; }],
-        ["a user token as the bootstrap token", "bootstrap", /user (API )?token/i, (w) => ({ boot: w.addUserToken(tokenValue("v3f-user"), tokenId("v3fu"), [ACCOUNT]).value, everyday: addTokens(w, "v3f").everyday.value })],
-        ["a bootstrap token of another account", "bootstrap", /account/i, (w) => { addSecondAccount(w); return { boot: addBootstrap(w, "v3g", SECOND_ACCOUNT).value, everyday: addTokens(w, "v3g").everyday.value }; }],
-        ["an everyday token with a permission denied", "everyday", new RegExp(EVERYDAY[0]!.name), (w) => {
-          const t = addTokens(w, "v3h");
+        ["a value that is not a token as the everyday token", "everyday", /not accept|not a valid|invalid|not .*token/i, () => ({ everyday: tokenValue("v3a-junk") })],
+        ["a value that is not a token as the bootstrap token", "bootstrap", /not accept|not a valid|invalid|not .*token/i, (_w, good) => ({ boot: tokenValue("v3b-junk"), everyday: good.value })],
+        ["an everyday token that is not active", "everyday", /not active|disabled/i, (_w, good) => { good.status = "disabled"; return { everyday: good.value }; }],
+        ["the everyday token pasted as the bootstrap token", "bootstrap", /everyday|API tokens|bootstrap permission|Account API Tokens Write/i, (w, good) => ({ boot: w.addToken("everyday", tokenValue("v3e-2"), tokenId("v3e2")).value, everyday: good.value })],
+        ["a user token as the bootstrap token", "bootstrap", /user (API )?token/i, (w, good) => ({ boot: w.addUserToken(tokenValue("v3f-user"), tokenId("v3fu"), [ACCOUNT]).value, everyday: good.value })],
+        ["a bootstrap token of another account", "bootstrap", /account/i, (w, good) => { addSecondAccount(w); return { boot: addBootstrap(w, "v3g", SECOND_ACCOUNT).value, everyday: good.value }; }],
+        ["an everyday token with a permission denied", "everyday", new RegExp(EVERYDAY[0]!.name), (_w, good) => {
           const g = EVERYDAY[0]!;
-          t.everyday.policies = [...t.everyday.policies, { id: "deny", effect: "deny", resources: { [`com.cloudflare.api.account.${ACCOUNT}`]: "*" }, permission_groups: [{ id: g.id, name: g.name }] }];
-          return { everyday: t.everyday.value };
+          good.policies = [...good.policies, { id: "deny", effect: "deny", resources: { [`com.cloudflare.api.account.${ACCOUNT}`]: "*" }, permission_groups: [{ id: g.id, name: g.name }] }];
+          return { everyday: good.value };
         }],
       ];
       for (const [name, which, what, make] of cases) {
         it(tag("SETUP-AC-003", `${name}: names the setting and what is wrong, only that token's remedy, exit 1, no token updated or deleted`), async () => {
-          const world = freshWorld();
-          const { boot, everyday } = make(world);
-          const dir = await project({ envFile: envFile({ ...(boot === undefined ? {} : { [BOOTSTRAP_SETTING]: boot }), ...(everyday === undefined ? {} : { [EVERYDAY_SETTING]: everyday }) }) });
+          const label = `v020-ac003-${name.replace(/\W+/g, "").slice(0, 24)}`;
+          const { world, everyday: good } = which === "everyday" ? await setUp(label) : (() => { const w = freshWorld(); return { world: w, everyday: addTokens(w, label).everyday }; })();
+          const { boot, everyday } = make(world, good);
+          const dir = await project({ envFile: envFile({ ...(boot === undefined ? {} : { [BOOTSTRAP_SETTING]: boot }), ...(everyday === undefined ? {} : { [EVERYDAY_SETTING]: everyday }), CLOUDFLARE_ACCOUNT_ID: ACCOUNT }) });
+          const deleted = world.tokens.filter((t) => t.deleted).length;
           const r = await runSetup(`v020 AC-003 ${name}`, world, dir);
           expect(r.status, r.all).toBe(1);
           expect(r.all).toContain(which === "bootstrap" ? BOOTSTRAP_SETTING : EVERYDAY_SETTING);
           expect(r.all).toMatch(what);
-          expect(remedy(r), r.all).toEqual(which === "bootstrap" ? { bootstrapLink: true, everydayLink: false, everydayPage: false } : { bootstrapLink: false, everydayLink: false, everydayPage: true });
+          expect(remedy(r), r.all).toMatchObject(which === "bootstrap" ? { bootstrapLink: true, everydayLink: false } : { everydayLink: false, everydayPage: true });
           expect(tokenWritesOf(r.requests)).toEqual([]);
-          expect(world.tokens.filter((t) => t.deleted)).toEqual([]);
+          expect(world.tokens.filter((t) => t.deleted)).toHaveLength(deleted);
         });
       }
 
       it(tag("SETUP-AC-003", "the same token in both settings: names a setting, says they are the same, gives that token's remedy only, exit 1, no token updated or deleted"), async () => {
-        const world = freshWorld();
-        const t = addTokens(world, "v3d");
-        const dir = await project({ envFile: envFile({ [BOOTSTRAP_SETTING]: t.everyday.value, [EVERYDAY_SETTING]: t.everyday.value }) });
+        const { world, everyday: t } = await setUp("v020-ac003-same");
+        const dir = await project({ envFile: envFile({ [BOOTSTRAP_SETTING]: t.value, [EVERYDAY_SETTING]: t.value, CLOUDFLARE_ACCOUNT_ID: ACCOUNT }) });
         const r = await runSetup("v020 AC-003 same token", world, dir);
         expect(r.status, r.all).toBe(1);
         expect(r.all).toMatch(/same/i);
@@ -138,10 +146,11 @@ if (isLocal()) {
   });
 
   describe("SETUP v0.2.0: the bootstrap", () => {
-    it(tag("SETUP-AC-004", "an everyday token lacking one permission, no bootstrap token: names it, the Everyday token page and the bootstrap link; nothing changed; exit 1. With a bootstrap token: the everyday token neither read nor updated, no new token, the bootstrap token deleted (401) and its line exactly PAR-342"), async () => {
+    it(tag("SETUP-AC-004", "an everyday token lacking one permission, no bootstrap token, the admin app not deployed: names it, the Everyday token page and the bootstrap link; nothing changed; exit 1. With a bootstrap token: the everyday token neither read nor updated, no new token, the bootstrap token deleted (401) and its line exactly PAR-342"), async () => {
       const { world, dir, everyday } = await setUp("v020-ac004");
       const missing = EVERYDAY[0]!.name;
       everyday.policies = everyday.policies.map((p) => ({ ...p, permission_groups: p.permission_groups.filter((g) => g.name !== missing) }));
+      world.cloud().workers.delete("prototype-admin"); // "with the bootstrap link while the admin app is not deployed"
       const before = readEnvFile(dir);
       const r = await runSetup("v020 AC-004 short", world, dir);
       expect(r.status, r.all).toBe(1);
@@ -155,7 +164,8 @@ if (isLocal()) {
       const policies = JSON.stringify(everyday.policies);
       const count = world.tokens.length;
       const b = await runSetup("v020 AC-004 short, with bootstrap", world, dir);
-      expect(b.requests.filter((q) => q.includes(everyday.id)), "the everyday token is neither read nor updated").toEqual([]);
+      // "Neither read nor updated": no request reads or writes the token itself (its details, policies or value).
+      expect(b.requests.filter((q) => q.includes(`/tokens/${everyday.id}`)), "the everyday token is neither read nor updated").toEqual([]);
       expect(JSON.stringify(everyday.policies)).toBe(policies);
       expect(b.requests.filter((q) => / POST \/(accounts\/[^/]+|user)\/tokens$/.test(q)), "no new token").toEqual([]);
       expect(world.tokens.length).toBe(count);
@@ -208,13 +218,16 @@ if (isLocal()) {
         expect(r.status, `${label}:\n${r.all}`).toBe(ok ? 0 : 1);
         expect(t.bootstrap.deleted, label).toBe(true);
         if (!ok) {
+          // "Used for nothing else": besides reading itself (to learn its account and expiry), its only request is its own DELETE.
           expect(writesOf(r.requests), label).toEqual([`${t.bootstrap.id} DELETE /accounts/${ACCOUNT}/tokens/${t.bootstrap.id}`]);
+          const own = r.requests.filter((q) => q.startsWith(`${t.bootstrap.id} `) && !/ DELETE /.test(q));
+          expect(own.filter((q) => !/ GET \/(accounts(\?[^/]*)?|accounts\/[^/]+\/tokens\/(verify|[^/]+))$/.test(q)), `${label}: only reads of itself`).toEqual([]);
           expect(r.all).toContain(BOOT_LINK);
         }
       }
     });
 
-    it(tag("SETUP-AC-005", "a bootstrap that stops before its end, or whose self-delete fails, keeps the token and its line and exits 1, naming the dashboard for the failed delete; a protected token (PAR-361) is neither updated nor deleted, its line kept, and the run says so"), async () => {
+    it(tag("SETUP-AC-005", "a bootstrap that stops before its end, or whose self-delete fails, keeps the token and its line and exits 1, naming the dashboard for the failed delete; a protected token (PAR-361) is neither updated nor deleted"), async () => {
       const cases = [
         ["stops", (b: WorldToken) => { b.policies = b.policies.map((p) => ({ ...p, permission_groups: p.permission_groups.filter((g) => g.name !== "Secrets Store Write") })); return {}; }],
         ["delete fails", (b: WorldToken, w: SetupWorld) => ({ apiFor: withReplies(w, (m, p) => (m === "DELETE" && p.endsWith(`/tokens/${b.id}`) ? SERVER_ERROR : undefined)) })],
@@ -229,10 +242,7 @@ if (isLocal()) {
         expect(t.bootstrap.deleted, label).toBe(false);
         expect(readEnvFile(dir), label).toContain(`${BOOTSTRAP_SETTING}=${t.bootstrap.value}`);
         if (label === "delete fails") expect(r.all).toMatch(/dashboard/i);
-        if (label === "protected") {
-          expect(r.all).toMatch(/protected[^\n]*not delete|not delete[^\n]*protected/i);
-          expect(tokenWritesOf(r.requests), "neither updated nor deleted").toEqual([]);
-        }
+        if (label === "protected") expect(tokenWritesOf(r.requests), "neither updated nor deleted").toEqual([]);
       }
     });
   });
@@ -257,6 +267,13 @@ if (isLocal()) {
       expect(t.bootstrap.deleted).toBe(true);
       expect(readEnvFile(dir).split("\n").filter((l) => l.startsWith("CLOUDFLARE_ACCOUNT_ID="))).toEqual([`CLOUDFLARE_ACCOUNT_ID=${SECOND_ACCOUNT}`]);
       expect(world.cloud().requests.slice(old), "requests to the old account").toEqual([]);
+
+      // "(or, when the value comes from the environment, says to change it there)"
+      const third = addTokens(world, "v020-ac006-env", SECOND_ACCOUNT);
+      const envDir = await project({ envFile: envFile({ [BOOTSTRAP_SETTING]: third.bootstrap.value, [EVERYDAY_SETTING]: third.everyday.value }) });
+      const fromEnv = await runSetup("v020 AC-006 --switch-account, environment", world, envDir, { env: { CLOUDFLARE_ACCOUNT_ID: ACCOUNT }, args: ["--switch-account"] });
+      expect(fromEnv.all.split("\n").filter((l) => l.includes("CLOUDFLARE_ACCOUNT_ID") && /environment/i.test(l)).length, fromEnv.all).toBeGreaterThan(0);
+      expect(world.cloud().requests.slice(old), "requests to the old account").toEqual([]);
     });
 
     it(tag("SETUP-AC-007", "a copy of the first project's .env.cloudflare (account filled in, the bootstrap line commented out, no email domain) completes with no bootstrap token and no write"), async () => {
@@ -277,6 +294,25 @@ if (isLocal()) {
       const r = await runSetup("v020 AC-008 free, no zone", world, dir);
       expect(r.status, r.all).toBe(0);
       expect(r.all).not.toMatch(/Workers Paid|email domain|no domain|--email-domain/i);
+    });
+
+    it(tag("SETUP-AC-008", "two accounts visible and CLOUDFLARE_ACCOUNT_ID unset: exit 1, the accounts by name with no ID, and how to set CLOUDFLARE_ACCOUNT_ID"), async () => {
+      const { world } = await setUp("v020-ac008-two");
+      addSecondAccount(world);
+      const user = world.addUserToken(tokenValue("v020-ac008-user"), tokenId("v8u"), [ACCOUNT, SECOND_ACCOUNT]);
+      const r = await runSetup("v020 AC-008 two accounts", world, await project({ envFile: envFile({ [EVERYDAY_SETTING]: user.value }) }));
+      expect(r.status, r.all).toBe(1);
+      for (const name of ["Main account", "Second account", "CLOUDFLARE_ACCOUNT_ID"]) expect(r.all).toContain(name);
+      expect(writesOf(r.requests)).toEqual([]);
+    });
+
+    it(tag("SETUP-AC-008", "a network host blocked: exit 1, named by kind, with the hosts to allow in the cloud environment's network access settings"), async () => {
+      const { world, dir } = await setUp("v020-ac008-net");
+      const r = await runSetup("v020 AC-008 blocked", world, dir, { blocked: (url) => new URL(url).hostname.endsWith(".r2.cloudflarestorage.com") });
+      expect(r.status, r.all).toBe(1);
+      expect(r.all).toMatch(/R2/);
+      expect(r.all).toMatch(/network/i);
+      for (const allow of ["api.cloudflare.com", "*.r2.cloudflarestorage.com", "*.workers.dev"]) expect(r.all).toContain(allow);
     });
   });
 
