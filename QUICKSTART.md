@@ -41,10 +41,7 @@ What the two links ask for:
 | Account | Workers Scripts Edit | Workers Scripts Write | `e086da7e2179491d91ee5f35b3ca210a` |
 | Account | Workers R2 Storage Edit | Workers R2 Storage Write | `bf7481a1826f439697cb59a20b22293e` |
 | Account | D1 Edit | D1 Write | `09b2857d1c31407795e75e3fed8617a1` |
-| Account | Email Sending Read | Email Sending Read | `2d5b4b1f6c89487bb7184c2c1dcd3bf1` |
-| Zone | Zone Read | Zone Read | `c8fed203ed3043cba015a93ad1616f1f` |
-| Zone | Analytics Read | Analytics Read | `9c88f9c5bce24ce7af9a958ba9c504db` |
-| Zone | Email Routing Rules Read | Email Routing Rules Read | `1b600d9d8062443e986a973f097e728a` |
+| Account | Secrets Store Read | Secrets Store Read | `5e33b7d77788455c9fdf18cbd38ee5a0` |
 <!-- /permission-table -->
 
 **Bootstrap token** `prototype-framework-bootstrap` (once; setup deletes it):

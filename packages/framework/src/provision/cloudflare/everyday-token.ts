@@ -16,7 +16,7 @@
  *   they saved the new value (`deleteOldEverydayTokens`, a second grant).
  */
 import { describeFailure, succeeded, type CloudflareApi } from "./api.js";
-import { EVERYDAY, EVERYDAY_V2, TOKEN_NAMES, type TokenDetails, type TokenPolicy } from "./permissions.js";
+import { EVERYDAY_V1, EVERYDAY_V2, TOKEN_NAMES, type TokenDetails, type TokenPolicy } from "./permissions.js";
 
 /** The set the token gets: plan §5.2 page 2's four groups. */
 const SET = EVERYDAY_V2;
@@ -75,7 +75,7 @@ async function create(api: CloudflareApi, accountId: string): Promise<{ tokenId:
 }
 
 /** Group names by ID, for the page's "added" and "removed" lists; unknown IDs as themselves. */
-const KNOWN_NAMES: Readonly<Record<string, string>> = Object.fromEntries([...EVERYDAY, ...EVERYDAY_V2].map((g) => [g.id, g.name]));
+const KNOWN_NAMES: Readonly<Record<string, string>> = Object.fromEntries([...EVERYDAY_V1, ...EVERYDAY_V2].map((g) => [g.id, g.name]));
 const nameOf = (id: string, given?: string): string => KNOWN_NAMES[id] ?? given ?? id;
 
 export async function ensureEverydayToken(api: CloudflareApi, accountId: string): Promise<EverydayOutcome> {

@@ -75,10 +75,7 @@ Amendment (Origin: owner, plan-setup-wizard §4.1, §4.2 · Decision: DEC-0563, 
 | Account | Workers Scripts Edit | Workers Scripts Write | `e086da7e2179491d91ee5f35b3ca210a` |
 | Account | Workers R2 Storage Edit | Workers R2 Storage Write | `bf7481a1826f439697cb59a20b22293e` |
 | Account | D1 Edit | D1 Write | `09b2857d1c31407795e75e3fed8617a1` |
-| Account | Email Sending Read | Email Sending Read | `2d5b4b1f6c89487bb7184c2c1dcd3bf1` |
-| Zone | Zone Read | Zone Read | `c8fed203ed3043cba015a93ad1616f1f` |
-| Zone | Analytics Read | Analytics Read | `9c88f9c5bce24ce7af9a958ba9c504db` |
-| Zone | Email Routing Rules Read | Email Routing Rules Read | `1b600d9d8062443e986a973f097e728a` |
+| Account | Secrets Store Read | Secrets Store Read | `5e33b7d77788455c9fdf18cbd38ee5a0` |
 <!-- /permission-table -->
 - the **bootstrap token** `prototype-framework-bootstrap`, in `CLOUDFLARE_BOOTSTRAP_TOKEN`, made in the dashboard because the API cannot create a token that holds "Account API Tokens Write". `cloudflare-setup` uses it only when the account setup is out of date or the everyday token lacks a permission, then the token deletes itself and its line in `.env.cloudflare` is commented out (PAR-342). `setup-account` run on its own takes it in `CLOUDFLARE_API_TOKEN`, as it took DEC-0551's setup token.
 <!-- permission-table: bootstrap -->
