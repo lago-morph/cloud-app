@@ -52,4 +52,19 @@ As in G's record, which ruled them out with evidence; the code is byte-identical
 `grep -rn "atob(" apps skill --include=*.ts` on this base: `apps/template/src/server/signing.ts:24` (G's, fixed in #147), `apps/demo/src/server/signing.ts:24` (this record), and `apps/reference/src/server/encoding.ts:10`, which decodes upload content, not a signature or identity (excluded in G's record and its Review). `skill/examples/secrets.md` copies the template, which #147 fixes. No other case.
 
 ## Review
-Status: awaiting review
+Reviewer: independent root-cause reviewer, Claude Code remote session `session_014mWQ6kcdKBDX4FQwVuu4Rm`. Date: 2026-10-31. Round 1. Branch `v0.2.0/95-fix-demo-signing` at `d365e29`, Node v22.23.4.
+
+**What I reproduced.** `npm ci` and `npm run build -w packages/framework` (both exit 0). A scratch Vitest file in `apps/demo/tests/` imported the real `../src/server/signing` and a scratch copy of G's fixed `signing.ts` (branch 69). It used 100 generated dummy keys (`dummy-<randomUUID>-<randomUUID>`) and UUID subjects, as the demo issues them. It tried all 64 values of the last signature character, and for 10 tokens a changed character at each of the other 42 positions. Output: `lens [[43,100]] low2bits [[0,100]] accepted real [[4,100]] accepted fixed [[1,100]] other-position accepts 0`. Scratch files deleted; `git status` clean.
+
+**Experiments for doubted hypotheses.**
+- (a) One-time copy: `grep -rn "apps/demo" scripts skill/scripts packages/create-prototype-app .github` finds only `scripts/ci/path-map.json:76,86` (path lists). `apps/demo/package.json` has no copy script. `BUILD-RECORD.md:7` records a one-time copy. Confirmed.
+- (b) SKILL-AC-004: with only the demo's `signing.ts` and `signing.test.ts` replaced by G's fixed files, `tests/skill/example-copies.test.ts` gave 6 passed. With the template and `secrets.md` from branch 69 as well (merged state), 6 passed. Green in either merge order.
+- (c) Zero low bits: 100/100 tokens with random keys (above).
+- Red/green: G's fixed test against the unfixed demo source fails (`AssertionError: rEt: expected 'note-1' to be null`, 1 failed | 3 passed). With the fix, `signing.test.ts` passes.
+
+Verdict: accepted
+
+1. **minor** — Every causal link is supported for `apps/demo/src/server/signing.ts`, and the alternatives are ruled out (byte-identical code, G's accepted evidence, and the reproduction above).
+2. **minor** — The fix addresses the cause (the decoder accepts non-canonical input), not the symptom. Make the demo's `signing.ts` and `signing.test.ts` byte-identical to G's fixed template files, so the DEC-0392 exemption plainly applies.
+3. **minor** — `npx vitest run` in `apps/demo` has a failure that is there before this fix and is unrelated to signing: `app.test.ts` "…the admin role, granted and revoked, decides who publishes" (`expected 'user' to be 'admin'`), red in 2/2 runs at `d365e29`. With the fix, the other 24 of 25 tests in `signing.test.ts` and `app.test.ts` pass. The fixer must not attribute it to this fix or change it. It needs its own §7a.1.8 record and item.
+4. **minor** — The record's probe used `post-N` subjects. The UUID-subject run above gives the same result.
