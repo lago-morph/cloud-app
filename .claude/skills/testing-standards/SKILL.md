@@ -23,7 +23,7 @@ These are the lasting text of the v0.2.0 testing standards (`ai/implementation/p
    - Use fakes only for external platforms that have no local stand-in, such as the fake Cloudflare APIs in `tests/compliance/criteria/_fakes/`. A run against fakes only is not evidence for a criterion whose Where column says Cloud.
    - Every framework component has a comprehensive integration suite, under `packages/framework/test/integration/<component>/` or in its compliance criteria. A missing suite is a gap, and the plan turns it into a test-author item.
 4. **E2E covers every user-facing and operator-facing flow**: its happy path, its expected errors, and its edge cases. A feature is not done until all three are covered end to end.
-   - Every new or changed flow adds or extends its e2e tests in the same work, and its E2E scenario in `docs/acceptance/e2e-scenarios.md`.
+   - Every new or changed flow adds or extends its e2e tests in the same work, and its E2E scenario in `docs/acceptance/e2e-scenarios.md`. Agents keep the scenarios current without owner approval, with a decision draft and an independent review (`resources/e2e-scenarios.md`).
    - E2E is API-first. Most e2e tests drive the HTTP API, the CLI, or both. They go in the Playwright project `e2e-api`.
    - Playwright UI tests, in project `e2e-ui`, cover only what a browser alone shows: page rendering, sign-in pages, file transfer in the page, and cookies. Each flow has at most a few of them, and the rest of its cases are API tests.
    - A test that uses only HTTP (Playwright's `request` fixture or a plain HTTP client) does not launch a browser.
@@ -62,5 +62,6 @@ Read only the file that matches your situation:
 | A test, build, deploy or spike failed outside red/green, or you diagnose, review or fix such a failure | `resources/failure-diagnosis.md` |
 | You change, remove, skip or re-tag a once-green test, or you review such a change | `resources/test-change-review.md` |
 | You are about to write the tests for a criterion, a scenario or a flow | `resources/edge-cases.md` |
+| You add, change or retire an E2E scenario, or you review such a change | `resources/e2e-scenarios.md` |
 | You consider, write or review a fuzz target, or fuzzing found a failure | `resources/fuzzing.md` |
 | You add, move or rename a test file, a component, or a doc that a test reads, or you need to know what CI runs for a change | `resources/ci-path-map.md` |
