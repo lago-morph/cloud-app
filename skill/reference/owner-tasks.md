@@ -123,7 +123,7 @@ The apps learn a role change when the person **next signs in**, to any app on th
 
 ## 10. Coming from 0.1.x
 
-`npm run upgrade` to 0.2.0 says Cloudflare setup needs re-running. Once per account, do §2 steps 2–6: a new bootstrap token, `npm run cloudflare-setup`, then the admin app's Account setup and Everyday token pages (the existing everyday token is updated to the new permissions). Password accounts and sessions are gone, so everyone signs in again with Cloudflare; the old sign-in and test-mail tables are dropped on the next `dev` or `deploy`, and the app's own data stays. Remove `framework.email` from values files if you like: it is no longer used. The admin app's **Clean up v0.1.x email** page optionally removes the old email resources (sending domain, routing rules, test mailbox); nothing is removed automatically.
+`npm run upgrade` to 0.2.0 says Cloudflare setup needs re-running. Once per account, do §2 steps 2–6: a new bootstrap token, `npm run cloudflare-setup`, then the admin app's Account setup and Everyday token pages (the existing everyday token is updated to the new permissions; if the page shows a new value instead, save it and delete the old token there). Password accounts and sessions are gone, so everyone signs in again with Cloudflare; the old sign-in and test-mail tables are dropped on the next `dev` or `deploy`, and the app's own data stays. Remove `framework.email` from values files if you like: it is no longer used. The admin app's **Clean up v0.1.x email** page optionally removes the old email resources (sending domain, routing rules, test mailbox); nothing is removed automatically.
 
 ## Examples
 

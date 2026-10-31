@@ -27,16 +27,16 @@ npm run cloudflare-setup
    - **Command line:** in `.env.cloudflare` in the app's folder, with your editor (or in the environment), then run `npm run cloudflare-setup` again.
    - **Cloud session:** in the environment's settings (environment menu → Edit → Environment variables), then start a new session and say **"continue prototype setup"**.
 3. Setup creates the account's sign-in clients, deploys the **admin app**, deletes the bootstrap token, and prints the admin app's address.
-4. **Open the admin app and sign in** with your Cloudflare account (you need an administrator role in it). On **Account setup**, set the account up: this deploys the **auth app**, which signs people in to every app, and the shared buckets. On **Everyday token**, make the token every command uses; the page shows it once. Put it in `CLOUDFLARE_API_TOKEN` the same way as step 2. The agent never sees it.
+4. **Open the admin app and sign in** with your Cloudflare account (you need the role "Super Administrator - All Privileges" or "Administrator" in it). On **Account setup**, set the account up: this deploys the **auth app**, which signs people in to every app, and the shared buckets. On **Everyday token**, make the token every command uses; the page shows it once. Put it in `CLOUDFLARE_API_TOKEN` the same way as step 2. The agent never sees it.
 5. Run `npm run cloudflare-setup` again (or say **"continue prototype setup"**). It checks everything and gives the next step, `npm run deploy -- --target cloudflare --stage test-first`.
 
-Setup never prints a token value or an account ID, and asks nothing on the keyboard: when it needs you it stops with exit status 1 and says what to do (`--switch-account` answers its one question). It does only what is missing: re-run it after a bad paste, after a framework release that needs more, or on another account. For a second app on the same account, copy `.env.cloudflare` into its folder: it needs no bootstrap token. Only members of your Cloudflare account can sign in to your apps; its administrators are the apps' admins. Every step, and what to do when setup stops: [skill/reference/owner-tasks.md](skill/reference/owner-tasks.md).
+Setup never prints a token value or an account ID, and asks nothing on the keyboard: when it needs you it stops with exit status 1 and says what to do (`--switch-account` answers its one question). It does only what is missing: re-run it after a bad paste, after a framework release that needs more, or on another account. For a second app on the same account, copy `.env.cloudflare` into its folder: it needs no bootstrap token. Only members of your Cloudflare account can sign in to your apps; members with those two roles are the apps' admins, from their next sign-in. Every step, and what to do when setup stops: [skill/reference/owner-tasks.md](skill/reference/owner-tasks.md).
 
 **Coming from 0.1.x?** `npm run upgrade` says that setup needs re-running: do steps 1–5 once per account. Password accounts and sessions are gone: everyone signs in again, with Cloudflare. The framework's old sign-in and test-mail tables are dropped on the next `dev` or `deploy`; the app's own data stays. The admin app offers an optional **Clean up v0.1.x email** page for the old email resources.
 
 What each token holds:
 
-**Everyday token** `prototype-framework` (every command; the admin app makes it with exactly these):
+**Everyday token** `prototype-framework` (every command; the admin app makes it):
 <!-- permission-table: everyday -->
 | Scope | On the dashboard | API name | Permission group ID |
 | --- | --- | --- | --- |
