@@ -20,6 +20,8 @@ Plan: `ai/implementation/plan-v0.2.0-testing-auth.md` ("plan §n"); governing pr
 - From P0: (1) COMPL-AC-001: SETUP-AC-011 is missing from the COMPL-REQ-006 milestone list. The fix is a `compliance.md` amendment, and D 36 must keep SETUP-AC-011 when it rewrites the list. (2) MAIL-AC-005: three `@example.com` addresses in unit tests, `test-was-wrong`. A small fix, `08`, is proposed, even though B 46 retires the criterion. (3) The five blocked IDs are a runner step (local `apiKey`). S3 was told to add it to CI.
 - **Blocked: no writes to `.github/workflows/*`.** `git push` and the GitHub MCP both refuse them ("refusing to allow an OAuth App to create or update workflow … without `workflow` scope"). S3 staged its workflows in `scripts/ci/workflows/`. A's CI step (DEC-0621, PR 29) must be staged the same way, on S3's top branch. CI on every PR still runs the old `ci.yml` until the owner applies the staged files.
 - S3 saw `native-copy.unit.test.ts` fail intermittently ("fetch failed") under load. A diagnoser is running (branch `91-fix-native-copy-fetch`).
+- T7 fixes running: `92-fix-mig-record-order` (MIG-AC-003 tie, record from C, accepted-with-changes); a diagnoser is on `91-fix-native-copy-fetch`.
+- Sign-out: plan §4.2 makes `end_session` optional and linked from the auth app; A did not implement it (DEC-0660). The app clearing its cookie is B's. T6 checks this.
 - Process deviations to report: P0 skipped the separate similar-case search subagent of §7a.1.8 step 4 and relied on the reviewer's repo-wide scan; T6 should check this. In A, the implementer itself diagnosed `2026-10-31-A-workerd-fetch-redirect-error`, not a separate diagnoser; the review accepted the record and disclosed it.
 - Reviewer cloud session for P0's test review: `session_014mWQ6jKepuYeu9tYda2mJF` (archive at run end).
 - C 32 (#82) raises an owner question: print the admin app's workers.dev URL despite DEC-0590 (DEC-0686).
@@ -86,7 +88,7 @@ Format: **ID — title** · plan § · deps · status. Then Owns / PRs (`nn` bra
 
 ### Wave 1 (batch 2, after batch 1 merged)
 
-**A — the auth app** · §3, §4.1 steps 1–3, §4.4, §2.1, D5/D6 · S1–S3 merged · `running`
+**A — the auth app** · §3, §4.1 steps 1–3, §4.4, §2.1, D5/D6 · S1–S3 merged · `done` (8 PRs #60 #62 #63 #64 #77 #78 #79 #84, all green; integration 11/11 vs mock-oauth2-server; all reviews accepted-with-changes, fixed; CI step → PR 29 on staged workflow)
 - Owns: `packages/framework/src/auth-app/**` (new: Worker entry, `/start`, `/callback`, OAuth/PKCE/JWKS, D1 store, codes, registry, `redeem`/`role` entrypoint, role mapping), `packages/framework/src/auth/auth-app-binding.ts` (new: interface + in-memory fake), `docs/contracts/ts/internal/auth-app.d.ts` (new), `packages/framework/test/integration/auth-app/**` (new), `tests/support/mock-oauth2/**` (new launcher: Java jar locally, Docker in CI), `.github/workflows/ci.yml` (mock-oauth2-server step only, PR 28), `scripts/ci/path-map.json` (auth-app entry only).
 - PRs: `24-auth-app-contract` ← main (binding interface `redeem({code,app})`/`role(sub)`, fake, contract doc; ~200) · `25-auth-app-oauth` ← 24 (PKCE S256, state, ID-token check vs JWKS: iss/aud/nonce/exp, `/user` fallback, `/memberships` pick, role mapping PAR; ~400) · `26-auth-app-store` ← 25 (D1 schema `users`, `codes`, registry; hashed 60 s single-use codes bound to app + return; exact-match registry; ~350) · `27-auth-app-worker` ← 26 (routes, revoke in callback, binding entrypoint; ~350) · `28-auth-app-integration` ← 27 (mock-oauth2-server launcher, integration suite, CI step; ~350).
 - Exit: unit tests in `packages/framework/src/auth-app/**/*.unit.test.ts` green; `npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/auth-app` green with mock-oauth2-server running locally (`java -jar …`; Java 21 present); full redirect → code → redeem path over plain HTTP, no browser.
@@ -124,14 +126,14 @@ Format: **ID — title** · plan § · deps · status. Then Owns / PRs (`nn` bra
 
 ### Wave 2 (batch 3, after batch 2 merged)
 
-**E — the admin app** · §5.2, §8 cleanup, D3/D4/D8/D10 · A, C merged · `todo`
+**E — the admin app** · §5.2, §8 cleanup, D3/D4/D8/D10 · A, C merged · `running` (based on #94)
 - Owns: `packages/framework/src/admin-app/**`, `packages/framework/src/provision/cloudflare/permissions.ts` (EVERYDAY + PERMISSIONS_VERSION), `packages/framework/src/provision/cloudflare/{auth-app-deploy.ts, everyday-token.ts}` (new), `ACCOUNT_SETUP_VERSION` in `setup-record.ts`, generated tables in `QUICKSTART.md`/`provisioning.md`, `packages/framework/test/integration/admin-app/**`, `scripts/ci/path-map.json` and ci.yml (batch-3 CI token).
 - PRs: `56-admin-app-signin` ← main (admin client sign-in reusing A's OAuth core, admin-only gate, short session; ~350) · `57-everyday-token-page` ← 56 (page 2: four-group EVERYDAY, show once, in-place PUT or create-new + delete-old fallback; tables regenerated; ~400) · `58-admin-status-page` ← 57 (page 3, read-only; ~200) · `59-account-setup-page` ← 58 (page 1: deploy auth app + D1, shared resources, setup record; uses F 54's signing-credential function, so starts after **54** merged; ~400) · `60-email-cleanup-offer` ← 59 (optional v0.1.x cleanup, §8; ~250) · `61-admin-app-integration` ← 60 (integration suite + CI entry; ~300).
 - Exit: unit + `npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/admin-app` green with mock-oauth2-server and the fake Cloudflare API enforcing scopes; anonymous and non-admin refused; un-granted optional scope shows a clear message; no token value in any output.
 - Tests: §7 "admin pages request only their own scopes", "everyday set exactly four groups", "0.1.x token update drops email/zone groups". E2E: feeds T2 add-item 1. Fuzz: none.
 - IDs: DEC-0710–0724, PAR-445–454.
 
-**F — Secrets Store adoption, deploy bindings** · §3 registry, D7, §5.2 page 1 signing credential, §10 fallback · A, B, C merged · `todo`
+**F — Secrets Store adoption, deploy bindings** · §3 registry, D7, §5.2 page 1 signing credential, §10 fallback · A, B, C merged · `running` (based on #94)
 - Owns: `packages/framework/src/provision/cloudflare/{target.ts, worker.ts, sst.ts, r2-token.ts, secrets-store.ts (bind/read parts), stage-record.ts}`, `packages/framework/src/provision/core/{deploy,remove}.ts`, `packages/framework/src/cli/commands/{deploy,remove,secrets-cloud}*.ts`, `tests/compliance/criteria/{prov,cf}/**` (except `setup-account.test.ts`).
 - PRs: `52-deploy-auth-binding` ← main (AUTH service binding on deploy; registry write on `deploy`, clear on `remove` — plan gap, assigned here; ~350) · `53-secrets-store-bindings` ← 52 (`secrets_store_secret` bindings at deploy, SST `transform.worker` or script-upload fallback, Worker-secret fallback; ~350) · `54-signing-credential-secrets-store` ← 53 (signing credential in Secrets Store, deploy stops copying it into Worker secrets; ~300).
 - Exit: unit for `provision/**` green; `npx vitest run --config vitest.integration.config.ts tests/compliance/criteria/prov tests/compliance/criteria/cf` green against fakes; Cloud deploy `not-run` (no token).
@@ -145,7 +147,7 @@ Format: **ID — title** · plan § · deps · status. Then Owns / PRs (`nn` bra
 - Tests: hard-rules/structure tests updated `behaviour-changed`; template e2e new. E2E: E2E-001 starter path (T2 add-item 3). Fuzz: template helper unit-tested.
 - IDs: DEC-0735–0744, PAR-460–464.
 
-**H — root README** · §9 (h) · B, C merged · `todo`
+**H — root README** · §9 (h) · B, C merged · `running`
 - Owns: `README.md`. PRs: `70-readme-v020` ← main (~150). Exit: no "Workers Paid", "domain", "password", "mail", "admins" mention except in the upgrade note (`grep -niE 'workers paid|password|mail|admins' README.md`). Tests: `tests/skill` link checks if any read README. E2E: none. IDs: DEC-0745–0747.
 
 ### Then (batch 4 unless noted)
