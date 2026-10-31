@@ -1,6 +1,6 @@
 /**
  * mock-oauth2-server (navikt) for the auth app's integration suite: the local stand-in for
- * Cloudflare's OAuth endpoints (plan-v0.2.0 §4.3, §7a.1.4; DEC-0661).
+ * Cloudflare's OAuth endpoints (plan-v0.2.0 §4.3, §7a.1.4; DEC-0662).
  *
  * - With `MOCK_OAUTH2_URL` set (CI: a Docker service `ghcr.io/navikt/mock-oauth2-server:6.1.4`),
  *   that server is used as is.
