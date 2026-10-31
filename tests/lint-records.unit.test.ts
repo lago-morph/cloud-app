@@ -179,6 +179,12 @@ describe("lintRootCause", () => {
     expect(lintRootCause(rootCause("Verdict: accepted\n\n**No major issues.**"))).toEqual([]);
   });
 
+  it("does not read a summary line that mentions major as a major issue", () => {
+    for (const line of ["**No findings, major or minor.**", "- **Checked links 1-3, major claims hold**", "Not a blocker (**major**). Fine."]) {
+      expect(lintRootCause(rootCause(`Verdict: accepted\n\n${line}`)), line).toEqual([]);
+    }
+  });
+
   it("rejects an accepted verdict that carries a **major** issue, which needs a Response first (§7a.1.8 step 3)", () => {
     expect(lintRootCause(rootCause("Verdict: accepted\n\n- **major** link 2 has no evidence"))).toEqual([
       "## Review: verdict accepted lists a **major** issue; a major issue needs a Response (round n) and another review round",
