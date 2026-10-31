@@ -93,27 +93,24 @@ Each code's meaning, HTTP status and whether it is retryable are in the framewor
 
 ## 3. Login failures
 
-Every stage signs people in with email and password. A failed attempt writes one `warn` entry from `AUTH`, `login failed: <reason>`, never the address (§1):
+Production stages sign people in with Cloudflare, through the account's auth app. A failed sign-in returns to `/?authError=login_failed&requestId=<id>` and writes one `warn` entry from `AUTH`, `login failed: <reason>`, never an address or code (§1):
 
-- `wrong credentials`: unknown address or wrong password (both get the same answer). Use "Forgot your password?" on the sign-in page.
-- `not verified`: the address is not confirmed yet. Open the link in the "Confirm your email address" mail, or use "Send a new confirmation link".
-- `rate limited`: too many attempts from one network address; wait a minute (sign-in) or five minutes (sign-up, forgot, resend).
-- `invalid token`: the mailed link was used already or expired (confirmation 24 hours, reset 1 hour). Ask for a new one.
-- `provider unavailable (<code>)`: the database was not reachable; retry.
+- `transaction missing or expired`: the sign-in took too long, or cookies are blocked. Sign in again.
+- `state mismatch`: two sign-ins ran at once in one browser. Sign in again.
+- `provider refused`: Cloudflare or the auth app refused. Most often the person is not a member of the owner's Cloudflare account: invite them (Manage Account → Members, [owner-tasks.md](owner-tasks.md) §6).
+- `code refused`: the one-time code was used, expired, or issued to another app or stage. Sign in again; if it repeats, deploy the stage again so the auth app knows its address.
+- `auth app unavailable`: the auth app or its database was not reachable; retry. If it repeats, check on the admin app's Status page that the auth app is set up.
 
-No mail arrives:
-- Locally nothing is sent: read `.mail/` with `npm run mail -- last --to '<address>'`. On a test stage the mail is captured, not sent.
-- On a production stage, look for a `MAIL` entry `mail send failed: <code>` (§1). The sender is `no-reply@<domain>`; if `deploy` or setup said the domain is not verified for sending, run `npm run cloudflare-setup` again.
-- A test address `sink+<tag>@t.<domain>`: read it with `npm run mail -- last --to '<address>' --target cloudflare`. Only `sink+…` addresses reach the test mailbox. Right after setup created the mailbox rule, a send may be rejected for a minute.
+Signed out after a while, with a `warn` entry `role refresh failed (<code>)`: the app could not confirm the person's role with the auth app, so it ended the session. Sign in again once the auth app answers.
 
-Signed in, but not admin: the `admin` role is granted per stage with `admins grant` ([owner-tasks.md](owner-tasks.md) §7); check with `admins list`.
+Signed in, but not admin (or still admin): the level comes from the person's role in the Cloudflare account ([owner-tasks.md](owner-tasks.md) §7), recorded when they last signed in. Log out and sign in again after the role changes.
 
 ## 4. Deploy, remove and setup failures
 
 `deploy` prints the failed step, the stage's state and the next action. Follow the next action. Common messages:
 
-- `run setup-account … first`: the account's shared resources are missing. Run `npm run cloudflare-setup` ([owner-tasks.md](owner-tasks.md) §2).
-- A missing `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID`, a missing permission, or "R2 signing credential … missing": run `npm run cloudflare-setup`, which says what to fix ([owner-tasks.md](owner-tasks.md) §2). "Account API Tokens Write" is the bootstrap token's only.
+- `run setup-account … first`, or the account's auth app is missing: do the admin app's Account setup page ([owner-tasks.md](owner-tasks.md) §2 step 5). `npm run cloudflare-setup` names what is missing.
+- A missing `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID`, a missing permission, or "R2 signing credential … missing": run `npm run cloudflare-setup`, which says what to fix ([owner-tasks.md](owner-tasks.md) §2). "Account API Tokens Write" is the bootstrap token's only; the everyday token is made and updated on the admin app's Everyday token page.
 - `NODE_USE_ENV_PROXY`: you are behind an HTTPS proxy. Put `NODE_USE_ENV_PROXY=1 ` in front of the command.
 - `required secrets are not set: …`: this happens on the first deploy of a stage. Set each named secret with `--target cloudflare`, then run `deploy` again.
 - An error about the number of D1 databases: an account holds at most 10, and a schema-changing deploy briefly holds two per stage. Remove unused test stages ([deploying.md](deploying.md)).
