@@ -23,7 +23,7 @@ const NOW = 1_800_000_000_000;
 
 const B64URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 /** Characters a mutation may put in: the alphabet, its `+/=` spellings, the separator, look-alikes. */
-const MUTANT_CHARS = [...B64URL, "+", "/", "=", ".", " ", "%", "А", "‐"];
+const MUTANT_CHARS = [...B64URL, "+", "/", "=", ".", " ", "%", "\u0410", "\u2010"];
 
 type Mutation =
   | { readonly kind: "substitute" | "insert"; readonly at: number; readonly ch: string }

@@ -20,7 +20,7 @@ const issuer = createLocalTicketIssuer({ key: async () => KEY });
 
 const B64URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 /** Characters a mutation may put in: the alphabet, its `+/=` spellings, the separator, look-alikes. */
-const MUTANT_CHARS = [...B64URL, "+", "/", "=", ".", " ", "%", "А", "‐"];
+const MUTANT_CHARS = [...B64URL, "+", "/", "=", ".", " ", "%", "\u0410", "\u2010"];
 
 type Mutation =
   | { readonly kind: "substitute" | "insert"; readonly at: number; readonly ch: string }
@@ -87,8 +87,10 @@ describe("F4: local transfer tickets fuzz (files.md §2 Local)", () => {
 
   it(`base64urlToBytes and base64urlToText return a value only for its canonical spelling (${RUNS} runs, seed ${SEED})`, () => {
     const b64 = fc.string({ unit: fc.constantFrom(...B64URL), maxLength: 48 });
+    // `77u_` is a UTF-8 byte order mark (review of the F4 record, round 1).
+    const withBom = b64.map((rest) => `77u_${rest}`);
     fc.assert(
-      fc.property(fc.oneof(b64, fc.string({ unit: "binary", maxLength: 16 })), (input) => {
+      fc.property(fc.oneof(b64, withBom, fc.string({ unit: "binary", maxLength: 16 })), (input) => {
         const bytes = base64urlToBytes(input);
         if (bytes !== undefined) expect(bytesToBase64url(bytes)).toBe(input);
         const text = base64urlToText(input);

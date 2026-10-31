@@ -65,12 +65,12 @@ const utf8 = new TextEncoder();
 const compareBytes = (a: string, b: string): number => Buffer.compare(Buffer.from(utf8.encode(a)), Buffer.from(utf8.encode(b)));
 
 const piece = fc.oneof(
-  fc.constantFrom("/", ".", "..", "./", "../", "/..", "a", "Z", "é", "😀", "\u0000", "\u0001", "\u001f", "\u007f", "\u0080", "\ud800", "\udc00", "￿", "\u{10ffff}", "%2e", "%2F", " ", "?", "#", "~"),
+  fc.constantFrom("/", ".", "..", "./", "../", "/..", "a", "Z", "\u00e9", "\u{1f600}", "\u0000", "\u0001", "\u001f", "\u007f", "\u0080", "\ud800", "\udc00", "\uffff", "\u{10ffff}", "%2e", "%2F", " ", "?", "#", "~"),
   fc.string({ unit: "binary", maxLength: 3 }),
 );
 /** Long names around the 1,024-byte boundary, in 1-, 2-, 3- and 4-byte characters. */
 const nearLimit = fc
-  .tuple(fc.constantFrom("a", "é", "€", "😀"), fc.integer({ min: -3, max: 3 }), fc.array(piece, { maxLength: 2 }))
+  .tuple(fc.constantFrom("a", "\u00e9", "\u20ac", "\u{1f600}"), fc.integer({ min: -3, max: 3 }), fc.array(piece, { maxLength: 2 }))
   .map(([ch, delta, tail]) => ch.repeat(Math.max(1, Math.floor(MAX_NAME_BYTES / utf8.encode(ch).length) + delta)) + tail.join(""));
 const name = fc.oneof(fc.array(piece, { maxLength: 8 }).map((p) => p.join("")), nearLimit, fc.string({ unit: "binary", maxLength: 12 }));
 const validName = name.filter((n) => !documentedInvalidName(n));
