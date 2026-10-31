@@ -20,6 +20,7 @@ Plan: `ai/implementation/plan-v0.2.0-testing-auth.md` ("plan §n"); governing pr
 - From P0: (1) COMPL-AC-001: SETUP-AC-011 is missing from the COMPL-REQ-006 milestone list. The fix is a `compliance.md` amendment, and D 36 must keep SETUP-AC-011 when it rewrites the list. (2) MAIL-AC-005: three `@example.com` addresses in unit tests, `test-was-wrong`. A small fix, `08`, is proposed, even though B 46 retires the criterion. (3) The five blocked IDs are a runner step (local `apiKey`). S3 was told to add it to CI.
 - **Blocked: no writes to `.github/workflows/*`.** `git push` and the GitHub MCP both refuse them ("refusing to allow an OAuth App to create or update workflow … without `workflow` scope"). S3 staged its workflows in `scripts/ci/workflows/`. A's CI step (DEC-0621, PR 29) must be staged the same way, on S3's top branch. CI on every PR still runs the old `ci.yml` until the owner applies the staged files.
 - S3 saw `native-copy.unit.test.ts` fail intermittently ("fetch failed") under load. A diagnoser is running (branch `91-fix-native-copy-fetch`).
+- T5 assignments: `criteria/compl/prodcheck.test.ts` (MAIL-AC-006, PWD-AC-009) → B; the mail parts of `sst.unit.test.ts` → F; the email parts of `target.unit.test.ts` → C 34a. T5's advisory notes: no test covers the `free` plan getting past the plan check (C), and no test covers the mock-oauth2 CI step (A 29). Both go to T6.
 - T5 queue (test-change records still to write): S3's PRs (G1–G3 are already in `2026-10-31-S3.md`; T5 reviews the coverage), C's #88 (pure removal), D's #83 (retirement), B's 43/45/46/47, and #95's classifier assertion (`behaviour-changed`).
 - T7 fixes running: `92-fix-mig-record-order` (MIG-AC-003 tie, record from C, accepted-with-changes); a diagnoser is on `91-fix-native-copy-fetch`.
 - Sign-out: plan §4.2 makes `end_session` optional and linked from the auth app; A did not implement it (DEC-0660). The app clearing its cookie is B's. T6 checks this.
@@ -117,7 +118,7 @@ Format: **ID — title** · plan § · deps · status. Then Owns / PRs (`nn` bra
 - Tests: none directly; new/rewritten AUTH and SETUP criteria are written as tests by T1. E2E: none (T2). Fuzz: none.
 - IDs: DEC-0690–0709 (three owner amendments + supersessions), PAR-440–444.
 
-**T5 — test-change review of v0.2.0 removals** · §7a.1.9, TS-10 · runs as each removal PR is ready · `todo`
+**T5 — test-change review of v0.2.0 removals** · §7a.1.9, TS-10 · runs as each removal PR is ready · `running` (batch 1 done: records on #88 accepted-with-changes, #83 accepted, #95 accepted, S3 coverage complete; batch 2 waits for B 43/45/46/47, C 34a, F)
 - Owns: `ai/implementation/test-reviews/2026-*-{b,c,d,s3}.md` (written onto PRs 17, 43, 45, 46, 47, 34, 38 before they merge). Exit: each record has groups by reason code, verdict per group, sampling notes; evaluator confirms coverage. IDs: none.
 
 **I1 — integrate decisions, waves 0–1** · `plan.md` §10.4 · batch 2 merged · `todo`
