@@ -6,8 +6,9 @@
  * in-process-only members refused, and a non-test stage refused before anything is sent.
  * Untagged: CLI-AC-005 is evidenced by `smoke` itself.
  */
+import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
-import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { connectTestStage, mockUsers, type TestApp } from "../../../src/testing/index.js";
 import { devFixtureFiles, makeTempApp, requireBuiltFramework, startDev, type DevServer, type TempApp } from "../core/harness/harness.js";
 
@@ -24,8 +25,13 @@ function server(): Promise<DevServer> {
   });
   return devStart;
 }
+let before: string | undefined;
+beforeAll(() => {
+  before = process.env[CONNECTION_ENV];
+});
 afterEach(() => {
-  delete process.env[CONNECTION_ENV];
+  if (before === undefined) delete process.env[CONNECTION_ENV];
+  else process.env[CONNECTION_ENV] = before;
 });
 afterAll(async () => {
   await devStart?.then((d) => d.stop(), () => undefined);
@@ -63,23 +69,25 @@ describe("connectTestStage against the local dev server", { timeout: 300_000 }, 
     expect(logout.status).toBeLessThan(400);
     expect(await json(user, "/api/whoami")).toEqual({ level: "anonymous" });
 
+    // dispose on a connected stage only logs that test app out; the stage and its other apps stay usable.
     const other = stage.as(mockUsers.user("u_disposed"));
     expect((await json(other, "/api/whoami")).id).toBe("u_disposed");
     await other.dispose();
-    await expect(other.request("/api/whoami")).rejects.toThrow(/disposed/);
+    expect(await json(stage, "/api/whoami")).toEqual({ level: "anonymous" });
+    expect((await json(stage.as(mockUsers.user("u_disposed")), "/api/whoami")).id, "the same user logs in again").toBe("u_disposed");
   });
 
   it("refuses the in-process-only members on a connected stage, and a path on another origin before sending", async () => {
     const dev = await server();
     const stage = await connect("local", "local", dev.baseUrl);
-    expect(() => stage.logs()).toThrow();
-    expect(() => stage.setUnavailable(["files"])).toThrow();
-    expect(() => stage.clock).toThrow();
-    expect(() => stage.authApp).toThrow();
-    await expect(stage.grantRole("u_x", "admin")).rejects.toThrow();
-    await expect(stage.loginWithStub("alice")).rejects.toThrow();
-    await expect(stage.request("//evil.example/api/whoami")).rejects.toThrow();
-    await expect(stage.request("https://evil.example/api/whoami")).rejects.toThrow();
+    expect(() => stage.logs()).toThrow(/connected stage/);
+    expect(() => stage.setUnavailable(["files"])).toThrow(/connected stage/);
+    expect(() => stage.clock).toThrow(/connected stage/);
+    expect(() => stage.authApp).toThrow(/connected stage/);
+    await expect(stage.grantRole("u_x", "admin")).rejects.toThrow(/connected stage/);
+    await expect(stage.loginWithStub("alice")).rejects.toThrow(/connected stage/);
+    await expect(stage.request("//evil.example/api/whoami")).rejects.toThrow(/evil\.example|origin/);
+    await expect(stage.request("https://evil.example/api/whoami")).rejects.toThrow(/evil\.example|origin/);
   });
 
   it("rejects a stage that is not a test stage before any request, and names method and path when nothing answers", async () => {
@@ -87,7 +95,26 @@ describe("connectTestStage against the local dev server", { timeout: 300_000 }, 
     // Nothing listens there: had a request been sent, the error would be "no response".
     await expect(connect("cloudflare", "prod", `http://127.0.0.1:${port}`)).rejects.toThrow(/not a test stage/);
     await expect(connect("local", "local", `http://127.0.0.1:${port}`)).rejects.toThrow(/GET .*\/api\/auth\/me/);
+    process.env[CONNECTION_ENV] = "{not json";
+    await expect(connectTestStage(), "a malformed connection").rejects.toThrow(/malformed/);
     delete process.env[CONNECTION_ENV];
     await expect(connectTestStage(), "outside a smoke run it says how to start one").rejects.toThrow(/smoke/);
+  });
+
+  it("an unexpected answer is named by method, path, status, error code and requestId", async () => {
+    const stub = createHttpServer((_req, res) => {
+      res.writeHead(500, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: { code: "CORE.INTERNAL", message: "boom", requestId: "req-t3-500" } }));
+    });
+    await new Promise<void>((r) => stub.listen(0, "127.0.0.1", () => r()));
+    try {
+      const port = (stub.address() as { port: number }).port;
+      const error = await connect("local", "local", `http://127.0.0.1:${port}`).then(() => undefined, (e: unknown) => e);
+      expect(error).toBeInstanceOf(Error);
+      const message = (error as Error).message;
+      for (const part of ["GET", "/api/auth/me", "500", "CORE.INTERNAL", "req-t3-500"]) expect(message).toContain(part);
+    } finally {
+      await new Promise<void>((r) => stub.close(() => r()));
+    }
   });
 });
