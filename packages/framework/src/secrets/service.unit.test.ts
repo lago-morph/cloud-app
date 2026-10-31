@@ -130,5 +130,7 @@ describe("a framework secret bound from Cloudflare Secrets Store (plan-v0.2.0 D7
     expect(e?.message).not.toContain("store detail");
     const empty = createFrameworkSecrets({ read: envSecretReader({ SECRET_FRAMEWORK_R2_ACCESS_KEY_ID: { get: async () => "" } }, "cloudflare") });
     await expect(empty.get("frameworkR2AccessKeyId")).rejects.toMatchObject({ code: "SEC.MISSING" });
+    const notText = createFrameworkSecrets({ read: envSecretReader({ SECRET_FRAMEWORK_R2_ACCESS_KEY_ID: { get: async () => 42 } }, "cloudflare") });
+    await expect(notText.get("frameworkR2AccessKeyId")).rejects.toMatchObject({ code: "SEC.MISSING" });
   });
 });

@@ -62,7 +62,12 @@ function account(authApp: "absent" | "no-registry" | "deployed") {
     cloud.workers.set("prototype-auth", worker);
   }
   // The auth app's registry database answers through the fake D1 HTTP API; everything else is the fake account.
-  const api: typeof cloud.api = (method, path, body) => (path.startsWith(`/accounts/${ACCOUNT}/d1/database/${registryId}/`) ? d1.api(method, path, body) : cloud.api(method, path, body));
+  const registryRequests: string[] = [];
+  const api: typeof cloud.api = (method, path, body) => {
+    if (!path.startsWith(`/accounts/${ACCOUNT}/d1/database/${registryId}/`)) return cloud.api(method, path, body);
+    registryRequests.push(`${method} ${path}`);
+    return d1.api(method, path, body);
+  };
   const target = createCloudflareTarget({
     api,
     bytes: cloud.bytes,
@@ -78,7 +83,7 @@ function account(authApp: "absent" | "no-registry" | "deployed") {
     randomKey: () => "generated-session-key",
     sleep: async () => {},
   });
-  return { cloud, target };
+  return { cloud, target, registryRequests };
 }
 
 describe("PROV-REQ-002 production sign-in prerequisite on the fake Cloudflare API (DEC-0725)", () => {
@@ -87,12 +92,13 @@ describe("PROV-REQ-002 production sign-in prerequisite on the fake Cloudflare AP
     ["no-registry", "the account's auth app (Worker prototype-auth) has no registry (its D1 binding DB)"],
   ] as const) {
     it(tag("PROV-AC-002", `fake API: with the auth app ${state === "absent" ? "absent" : "lacking its registry"}, a production deploy names it at step 1 and creates nothing`), async () => {
-      const { cloud, target } = account(state);
+      const { cloud, target, registryRequests } = account(state);
       const io = captureIo();
       expect((await runDeploy(target, REQUEST, io)).status, io.err).toBe(1);
       expect(io.err).toMatch(/deploy failed at step 1 \(preflight\)/);
       expect(io.err).toContain(named);
       expect(cloud.requests.filter((r) => !r.startsWith("GET ")), "requests that change anything").toEqual([]);
+      expect(registryRequests, "requests to the registry database").toEqual([]);
       expect((await target.listStageResources(PROD)).resources, "stage resources the stopped deploy created").toEqual([]);
     });
   }

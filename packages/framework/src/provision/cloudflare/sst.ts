@@ -32,8 +32,9 @@
  * Secrets are never declared: a binding with a secret's name would replace it (DEC-0087), so a
  * `SECRET_*` variable or binding name is refused, and `keepBindings` keeps the Worker's
  * secrets explicitly. The one exception is a Secrets Store secret (`secrets_store_secret` with
- * `storeId` and `secretName`, Pulumi Cloudflare 6.15.0, plan §2.1b), which is bound *as*
- * `SECRET_<NAME>` in place of a Worker secret the deploy deleted first (D7, DEC-0727). All inputs are embedded as JSON, never as code.
+ * `storeId` and `secretName`, Pulumi Cloudflare 6.15.0, plan §2.1b): a shared framework
+ * secret (D7) is bound *as* `SECRET_<NAME>`, in place of a Worker secret the deploy deleted
+ * first (DEC-0727). All inputs are embedded as JSON, never as code.
  *
  * Step 3 (long-lived infrastructure) runs `sst deploy --target Files` when the stage has a
  * database, and an untargeted `sst deploy` of the bucket-only program otherwise (SST 4.17.2
@@ -45,6 +46,8 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import { secretLocation } from "../../config/secret-locations.js";
+import { FRAMEWORK_SECRETS } from "../../secrets/names.js";
 import { BINDINGS } from "../../targets/cloudflare/bindings.js";
 import { cloudflareWorkerSettings } from "../../targets/cloudflare/settings.js";
 import type { Stage } from "../core/operations.js";
@@ -93,6 +96,10 @@ export interface SstInput {
 export const AUTH_BINDING = "AUTH";
 export const AUTH_APP_ORIGIN_VARIABLE = "FRAMEWORK_AUTH_APP_ORIGIN";
 export const AUTH_APP_ENTRYPOINT = "AuthApp";
+
+/** D7: the framework secrets every stage shares, the only ones a Worker may bind from Secrets Store (DEC-0727). */
+export const SHARED_FRAMEWORK_SECRETS: readonly string[] = Object.freeze([FRAMEWORK_SECRETS.r2AccessKeyId, FRAMEWORK_SECRETS.r2SecretAccessKey]);
+const SHARED_LOCATIONS: ReadonlySet<string> = new Set(SHARED_FRAMEWORK_SECRETS.map((name) => secretLocation("cloudflare", name)));
 
 /** A Secrets Store secret bound into the Worker: `binding` is the `SECRET_<NAME>` the runtime reads (DEC-0727). */
 export interface SecretsStoreBinding {
@@ -157,9 +164,14 @@ export function sstProgram(input: SstInput): string {
         }
       : undefined;
   if (worker) refuseSecretNames([...Object.keys(worker.environment), ...worker.bindings.map((b) => b.name)]);
-  // A Secrets Store binding stands in for the Worker secret of its name, so it must have one (DEC-0727).
+  // A Secrets Store binding stands in for the Worker secret of its name: only a shared framework
+  // secret's (D7), each once, never the name of another binding (DEC-0727).
+  const taken = new Set(worker?.bindings.map((b) => b.name) ?? []);
   const secretsStore = (w?.secretsStore ?? []).map((s) => {
-    if (!s.binding.startsWith("SECRET_")) throw new Error(`the Secrets Store binding ${s.binding} must be named SECRET_<NAME>, the location the runtime reads (DEC-0727)`);
+    if (!SHARED_LOCATIONS.has(s.binding)) throw new Error(`the Secrets Store binding ${s.binding} is not one of the shared framework secrets (${[...SHARED_LOCATIONS].join(", ")}); per-app secrets stay Worker secrets (D7, DEC-0727)`);
+    if (taken.has(s.binding)) throw new Error(`the Worker binding ${s.binding} is bound twice`);
+    if (s.storeId === "" || s.secretName === "") throw new Error(`the Secrets Store binding ${s.binding} names no store or secret`);
+    taken.add(s.binding);
     return { type: "secrets_store_secret", name: s.binding, storeId: s.storeId, secretName: s.secretName };
   });
   const declared = worker ? { ...worker, bindings: [...worker.bindings, ...secretsStore] } : undefined;
