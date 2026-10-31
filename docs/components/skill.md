@@ -68,6 +68,8 @@ No step may tell anyone to copy a user ID into configuration, to edit `framework
 
 Amendment (Origin: owner, plan-setup-wizard §4.7 · Decision: DEC-0563, DEC-0601; supersedes DEC-0551's amendment above): the Cloudflare steps are built around two pre-filled dashboard links and one command. The instructions MUST give `npm run cloudflare-setup` as the one setup step; describe the everyday token (`prototype-framework`, for every command) and the bootstrap token (`prototype-framework-bootstrap`, made in the dashboard, used once and deleted by setup); say where the values go in a cloud session and on the command line; and say what to do on each of the setup command's stop messages. A permission list they show MUST be generated from the framework's permission list (DEC-0602).
 
+Amendment for v0.2.0 (Origin: owner, plan-v0.2.0 §1 D9, D10, §5.3 · Decision: DEC-0697, DEC-0698): the Cloudflare steps are built around one pre-filled dashboard link, the bootstrap token's, with an expiry no more than PAR-435 away, and one command, `npm run cloudflare-setup`. The everyday token's link is replaced by the admin app: the instructions MUST say to open the admin app's URL that the command prints, sign in, do account setup, and make and save the everyday token there; the agent never sees its value. The rest of the amendment above is unchanged: where the values go, what to do on each stop message, and generated permission lists.
+
 #### SKILL-REQ-007 — Trigger phrases and first step
 Origin: owner · Derives from: SYS-REQ-029 · Decision: DEC-0594, DEC-0600, DEC-0616
 

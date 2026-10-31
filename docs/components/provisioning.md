@@ -53,6 +53,8 @@ Amendment (Origin: ai-proposed · Decision: DEC-0550, DEC-0551): on Cloudflare t
 
 Amendment (Origin: owner, plan-setup-wizard §4.3, §4.4 · Decision: DEC-0563, DEC-0577, DEC-0578): `setup-account` stays, for scripts and advanced users, as the account-setup step that `cloudflare-setup` calls with the bootstrap token (SETUP-REQ-001). It runs as named, idempotent steps, each inspected before it is applied, and writes the account setup record last; DEC-0551's setup token is replaced by the dashboard-made bootstrap token.
 
+Amendment for v0.2.0 (Origin: owner, plan-v0.2.0 §1 D10, §5.2 · Decision: DEC-0697, DEC-0698): `cloudflare-setup` no longer calls `setup-account`. On Cloudflare the account setup steps run from the admin app's Account setup page, through the signed-in admin's grant (setup.md §2). `setup-account` stays for scripts and advanced users, with the same named, idempotent steps and the same setup record.
+
 #### PROV-REQ-005 — Test stages
 Origin: owner · Derives from: SYS-REQ-020 · Decision: DEC-0081
 
