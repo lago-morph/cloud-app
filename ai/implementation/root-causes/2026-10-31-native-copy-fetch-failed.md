@@ -34,7 +34,9 @@ All on a detached `origin/main` (1e0c289), after `npm ci`. The machine had 4 CPU
 | the file alone, 4 times | none (load 12–19 from other agents) | 4/4 passed (21 tests, 31–44 s) |
 | `stress.sh s1 6 4 3` | 6 busy loops, 4 copies at once, 3 rounds | **5/12 failed**, each with 1 failed test (the one above) |
 | `bursts.sh b-load 6 4` | 6 busy loops, 4 copies at once | **4/4 failed**, same test |
-| full suite, see E6 | | |
+| `stress.sh offline 6 4 1` under `unshare -rn sh scripts/offline.sh` | 6 busy loops, 4 copies, no network | **4/4 failed**, same test, same cause |
+| `stress.sh threads 6 4 1 --pool threads` | 6 busy loops, 4 copies, Vitest `threads` pool | **2/4 failed**, same test, same cause |
+| full suite, see E6 | 4 busy loops | passed in this run |
 
 ### E2. The failing request: a platform-proxy call to the test's own `workerd`, on a socket idle for more than 5 s
 Every traced failure (9 of 9) has the same cause, written to the loopback runtime entry of the `workerd` that `openFakeD1Api` started:
@@ -97,7 +99,9 @@ So the failure needs only a run of synchronous proxy calls longer than about 5 s
 - When the main thread resumes, the second ingest's `batch` is issued in the same synchronous run as its prepares, before the poll phase reads the FIN, so undici writes the request to the closed connection. The request is a POST, which undici does not retry. (The earlier record's review measured the `ESTABLISHED` → `CLOSE_WAIT` transition 4.3–5.3 s after idle with `/proc`; I did not repeat that. The timing here is consistent with it: in all 9 failures the socket had been idle at least 5.07 s (E2), and in E4 4.5 s never fails while 6 s always does.)
 
 ### E6. The full unit suite
-See the **Full-suite runs** section at the end (filled in from the runs).
+`full.sh full-main-b4-2 4`: `npm run test:unit` on `origin/main` code (checked out at this branch's first commit, which adds only this record) with 4 busy loops, load average 16–30 (other agents' suites ran too), 15 min. `native-copy.unit.test.ts` **passed** in this run; 2526 of 2527 tests passed. The one failure is unrelated to this record (`tests/compliance/harness/selection.unit.test.ts`, E2E-004 cloud selection, an assertion on the selected criteria; I did not diagnose it). So in the full suite the failure is intermittent, as S3 saw (one pass, two failures): whether it happens depends on how slow the synchronous calls are while that one test runs. An earlier full run (`full-main-b4`) was stopped by my tool's 10-minute limit before it finished and proves nothing.
+
+The trace preload also caught one `UND_ERR_SOCKET other side closed` in another fork during that full run (`maxStall so far 16056ms`). It did not fail any test, and I could not tell which file it came from. It is the same signature; I did not diagnose it further (see the scope note under **Proposed fix**).
 
 ## Cause → symptom chain
 1. The fake D1 HTTP API prepares each statement of an import (and of a `query` batch) with `binding.prepare(...)` in one synchronous loop (`fake-d1-api.ts`, `importAction` and `query`) — code.
