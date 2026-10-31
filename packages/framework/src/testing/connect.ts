@@ -17,9 +17,6 @@
 import type { CurrentUser } from "../auth/public.js";
 import type { LogEntry } from "../log/entry.js";
 import type { TestApp } from "./test-app.js";
-import type { TestMail } from "../mail/outbox.js";
-import type { MailMessage } from "../mail/sender.js";
-import { asMailMessage, latestLocalMail } from "../mail/local-files.js";
 
 /** The environment variable through which `smoke` passes the connection to its test run. */
 export const SMOKE_CONNECTION_ENV = "PROTOTYPE_FRAMEWORK_SMOKE_CONNECTION";
@@ -39,6 +36,9 @@ type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Resp
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const TEST_STAGE_PREFIX = "test-";
+/** Where levels come from on a deployed stage (AUTH-REQ-003 as amended, DEC-0690; no `admins` command, DEC-0698). */
+const rolesOnAStage = (example: string): string =>
+  `a test stage signs in with the authentication mock, so choose the level with as(user), for example ${example}. On a production stage an admin is an administrator of the owner's Cloudflare account (PAR-413); the auth app reads that role at the next sign-in or role refresh`;
 
 /** Reads the connection `smoke` set; throws a message saying how to start a smoke run otherwise. */
 export function readSmokeConnection(env: Readonly<Record<string, string | undefined>>): SmokeConnection {
@@ -102,34 +102,6 @@ interface Connection {
   readonly connection: SmokeConnection;
   readonly origin: string;
   readonly fetch: Fetch;
-  /** The app directory whose `.mail/` a local connection reads. */
-  readonly appDir: string;
-}
-
-/**
- * The stage's mail capture (testing.d.ts `TestApp.mail`): on a cloud test stage through
- * `GET /api/__framework/test-mail?to=`; locally from the app's `.mail/`, which `dev` writes.
- */
-function connectedMail(c: Connection): TestMail {
-  return {
-    async lastTo(address) {
-      if (c.connection.target === "local") {
-        const file = latestLocalMail(c.appDir, address);
-        return file === undefined ? undefined : asMailMessage(file);
-      }
-      const path = `/api/__framework/test-mail?to=${encodeURIComponent(address)}`;
-      const res = await send(c, path);
-      if (res.status === 404) {
-        await res.body?.cancel();
-        return undefined;
-      }
-      if (res.status !== 200) throw new Error(`reading the stage's mail capture: ${await unexpected("GET", "/api/__framework/test-mail", res)}`);
-      return (await res.json()) as MailMessage;
-    },
-    all() {
-      return Promise.reject(new Error("mail.all() is not available on a connected stage: read one address at a time with mail.lastTo(address)"));
-    },
-  };
 }
 
 /** One request with the User-Agent and no redirects; no answer becomes a message naming the URL. */
@@ -203,7 +175,6 @@ function connectedApp(c: Connection, user: CurrentUser | undefined): TestApp {
       storeCookies(jar, res);
       return res;
     },
-    mail: connectedMail(c),
     as: (next) => connectedApp(c, next),
     logs(): readonly LogEntry[] {
       throw new Error("logs() is not available on a connected stage: its entries are in the stage's log location, which `smoke` prints");
@@ -211,14 +182,23 @@ function connectedApp(c: Connection, user: CurrentUser | undefined): TestApp {
     loginWithStub() {
       return Promise.reject(new Error("loginWithStub is not available on a connected stage: use as(user), which logs in through mock-login"));
     },
+    loginWithAuthApp() {
+      return Promise.reject(new Error("loginWithAuthApp is not available on a connected stage: test stages sign in with the mock only; use as(user)"));
+    },
+    get authApp(): never {
+      throw new Error("authApp is not available on a connected stage: it is the in-process fake auth app");
+    },
+    get clock(): never {
+      throw new Error("clock is not available on a connected stage: the stage keeps real time");
+    },
     grantRole() {
-      return Promise.reject(new Error("grantRole is not available on a connected stage: use the admins command (npm run admins -- grant <email> ...)"));
+      return Promise.reject(new Error(`grantRole is not available on a connected stage: ${rolesOnAStage("as(mockUsers.admin())")}`));
     },
     setUnavailable() {
       throw new Error("setUnavailable is not available on a connected stage: a deployed stage's storage cannot be made to fail from a test");
     },
     revokeRole() {
-      return Promise.reject(new Error("revokeRole is not available on a connected stage: use the admins command (npm run admins -- revoke <email> ...)"));
+      return Promise.reject(new Error(`revokeRole is not available on a connected stage: ${rolesOnAStage("as(mockUsers.user())")}`));
     },
     async dispose() {
       if (disposed) return;
@@ -233,11 +213,11 @@ function connectedApp(c: Connection, user: CurrentUser | undefined): TestApp {
 }
 
 /** `connectTestStage` with the connection and `fetch` given (unit tests; the command passes the environment). */
-export async function connectWith(connection: SmokeConnection, fetch: Fetch, appDir: string = process.cwd()): Promise<TestApp> {
+export async function connectWith(connection: SmokeConnection, fetch: Fetch): Promise<TestApp> {
   if (connection.target !== "local" && !connection.stage.startsWith(TEST_STAGE_PREFIX)) {
     throw new Error(`connectTestStage(): stage ${JSON.stringify(connection.stage)} is not a test stage; only stages whose names start with "${TEST_STAGE_PREFIX}" can be connected to`);
   }
-  const c: Connection = { connection, origin: new URL(connection.baseUrl).origin, fetch, appDir };
+  const c: Connection = { connection, origin: new URL(connection.baseUrl).origin, fetch };
   const path = "/api/auth/me";
   const probe = await send(c, path);
   if (probe.status !== 200) {

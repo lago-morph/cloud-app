@@ -1,6 +1,4 @@
 {
   "values": {},
-  "framework": {
-    "email": { "senderName": "REPLACE-WITH-THE-SENDER-NAME" }
-  }
+  "framework": {}
 }

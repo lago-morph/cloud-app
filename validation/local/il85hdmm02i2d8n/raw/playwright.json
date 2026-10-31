@@ -1,0 +1,143 @@
+{
+  "config": {
+    "argv": [
+      "/opt/node22/bin/node",
+      "/home/user/cloud-app/.claude/worktrees/agent-a1bb788ab321f1a94/node_modules/.bin/playwright",
+      "test",
+      "--project",
+      "integration",
+      "--project",
+      "e2e",
+      "--grep",
+      "\\[(?:MAIL-AC-005)\\]",
+      "--reporter=json",
+      "--pass-with-no-tests"
+    ],
+    "configFile": "/home/user/cloud-app/.claude/worktrees/agent-a1bb788ab321f1a94/playwright.config.ts",
+    "rootDir": "/home/user/cloud-app/.claude/worktrees/agent-a1bb788ab321f1a94",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 0
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-a1bb788ab321f1a94/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 0
+        },
+        "id": "integration",
+        "name": "integration",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-a1bb788ab321f1a94",
+        "testIgnore": [],
+        "testMatch": [
+          "packages/framework/test/integration/**/*.spec.ts",
+          "tests/compliance/criteria/**/*.spec.ts"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-a1bb788ab321f1a94/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 0
+        },
+        "id": "e2e",
+        "name": "e2e",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-a1bb788ab321f1a94/tests/compliance/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "filteredProjects": [
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-a1bb788ab321f1a94/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 0
+        },
+        "name": "integration",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-a1bb788ab321f1a94",
+        "snapshotDir": "/home/user/cloud-app/.claude/worktrees/agent-a1bb788ab321f1a94",
+        "testIgnore": [],
+        "testMatch": [
+          "packages/framework/test/integration/**/*.spec.ts",
+          "tests/compliance/criteria/**/*.spec.ts"
+        ],
+        "timeout": 30000,
+        "use": {
+          "browserName": "chromium"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "integration"
+      },
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/home/user/cloud-app/.claude/worktrees/agent-a1bb788ab321f1a94/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 0
+        },
+        "name": "e2e",
+        "testDir": "/home/user/cloud-app/.claude/worktrees/agent-a1bb788ab321f1a94/tests/compliance/e2e",
+        "snapshotDir": "/home/user/cloud-app/.claude/worktrees/agent-a1bb788ab321f1a94/tests/compliance/e2e",
+        "testIgnore": [],
+        "testMatch": "**/*.spec.ts",
+        "timeout": 30000,
+        "use": {
+          "browserName": "chromium"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "e2e"
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "default",
+    "updateSourceMethod": "patch",
+    "version": "1.64.1",
+    "workers": 2,
+    "webServer": null
+  },
+  "suites": [],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-31T08:09:24.400Z",
+    "duration": 3388.063,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

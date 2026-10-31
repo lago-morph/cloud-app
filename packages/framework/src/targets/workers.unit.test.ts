@@ -132,20 +132,4 @@ describe("createCloudflareWorker", () => {
     const worker = createCloudflareWorker(app, resolved("cloudflare", "prod"));
     expect((await call(worker, "/api/__framework/health")).status).toBe(204);
   });
-
-  it("the health check also requires frameworkAuthSecret, on production and test stages (PROV-REQ-002 step 7)", async () => {
-    const { SECRET_FRAMEWORK_AUTH_SECRET: _omitted, ...withoutAuthSecret } = bindings;
-    for (const stage of ["prod", "test-x"]) {
-      const worker = createCloudflareWorker(app, resolved("cloudflare", stage));
-      const res = await call(worker, "/api/__framework/health", undefined, withoutAuthSecret);
-      expect(res.status, stage).not.toBe(204);
-      expect(((await res.json()) as { error: { code: string } }).error.code, stage).toBe("SEC.MISSING");
-    }
-  });
-
-  it("the local health check requires frameworkAuthSecret too", async () => {
-    const { SECRET_FRAMEWORK_AUTH_SECRET: _omitted, ...withoutAuthSecret } = bindings;
-    const res = await call(createLocalWorker(app, resolved("local", "local")), "/api/__framework/health", undefined, withoutAuthSecret);
-    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("SEC.MISSING");
-  });
 });

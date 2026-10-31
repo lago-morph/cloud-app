@@ -19,56 +19,35 @@ describe("setup-account core (PROV-REQ-004)", () => {
     const before = t.calls.length;
     const io = captureIo();
     expect(await runSetupAccount(t, io)).toEqual({ status: 0, created: [] });
-    expect(t.calls.slice(before)).toEqual(["inspectAccount", "readAccountSettings", "emailSetupProblems example.test", "setUpEmail example.test"]);
+    expect(t.calls.slice(before)).toEqual(["inspectAccount", "setupProblems", "recordSetup"]);
     expect(io.out).toMatch(/nothing changed/);
   });
 
-  it("[PROV-AC-004] (core part) --email-domain is required while the record has none; nothing is changed without it", async () => {
-    const t = new FakeTarget({ sharedResources: { "log bucket": "absent" }, accountSettings: {} });
+  it("[PROV-AC-004] (core part) a missing prerequisite is named and nothing is changed", async () => {
+    const t = new FakeTarget({ sharedResources: { "log bucket": "absent" } });
+    t.missingSetup = ['the credentials lack "Account API Tokens Write"'];
     const io = captureIo();
     expect(await runSetupAccount(t, io)).toEqual({ status: 1, created: [] });
-    expect(io.err).toContain("the account settings record names no email domain; run setup-account --target fake --email-domain <domain>");
-    expect(t.calls).toEqual(["inspectAccount", "readAccountSettings"]);
+    expect(io.err).toContain('the credentials lack "Account API Tokens Write"; nothing was changed');
+    expect(t.calls).toEqual(["inspectAccount", "setupProblems"]);
     expect(t.shared.get("log bucket")).toBe("absent");
   });
 
-  it("records the domain after creating the shared resources, then sets up its email; a second run with or without the option changes nothing", async () => {
-    const t = new FakeTarget({ sharedResources: { "state home": "absent" }, accountSettings: {} });
-    t.emailToCreate = ["sending entry", "mail sink"];
+  it("records the setup after creating the shared resources, with no email domain (v0.2.0); a second run changes nothing", async () => {
+    const t = new FakeTarget({ sharedResources: { "state home": "absent" } });
+    t.recordToWrite = ["account setup record (setup version 2)"];
     const io = captureIo();
-    expect(await runSetupAccount(t, io, { emailDomain: "example.test" })).toEqual({
-      status: 0,
-      created: ["state home", "sending entry", "mail sink"],
-      recorded: "example.test",
-    });
-    expect(t.calls).toEqual(["inspectAccount", "readAccountSettings", "emailSetupProblems example.test", "createSharedResources state home", "writeAccountSettings example.test", "setUpEmail example.test"]);
-    expect(t.accountSettings).toEqual({ emailDomain: "example.test" });
-    expect(io.out).toContain("recorded the account's email domain: example.test");
-    for (const request of [{}, { emailDomain: "example.test" }]) {
-      const again = captureIo();
-      expect(await runSetupAccount(t, again, request)).toEqual({ status: 0, created: [] });
-      expect(again.out).toMatch(/nothing changed/);
-    }
-    expect(t.calls.filter((c) => c.startsWith("writeAccountSettings"))).toHaveLength(1);
+    expect(await runSetupAccount(t, io)).toEqual({ status: 0, created: ["state home", "account setup record (setup version 2)"] });
+    expect(t.calls).toEqual(["inspectAccount", "setupProblems", "createSharedResources state home", "recordSetup"]);
+    expect(io.out).toContain("recorded: account setup record (setup version 2)");
+    const again = captureIo();
+    expect(await runSetupAccount(t, again)).toEqual({ status: 0, created: [] });
+    expect(again.out).toMatch(/nothing changed/);
   });
 
-  it("another --email-domain changes the record and sets up the new domain, leaving the old one's setup", async () => {
+  it("on an account already set up, changes nothing (a 0.1.x email domain in the stored record is the target's to keep: cloudflare/target.unit.test.ts)", async () => {
     const t = new FakeTarget();
-    const io = captureIo();
-    expect(await runSetupAccount(t, io, { emailDomain: "other.test" })).toEqual({ status: 0, created: [], recorded: "other.test" });
-    expect(t.accountSettings).toEqual({ emailDomain: "other.test" });
-    expect(t.calls).toContain("setUpEmail other.test");
-    expect(io.out).toContain("the previous email domain example.test keeps its email setup");
-  });
-
-  it("an invalid --email-domain is refused before the target is asked anything", async () => {
-    for (const domain of ["example", "-a.test", "a..test", "a_b.test", "exa mple.test", "1.2.3.4", `${"a".repeat(64)}.test`, "Example.test"]) {
-      const t = new FakeTarget();
-      const io = captureIo();
-      expect((await runSetupAccount(t, io, { emailDomain: domain })).status, domain).toBe(1);
-      expect(io.err).toContain("--email-domain");
-      expect(t.calls).toEqual([]);
-    }
+    expect(await runSetupAccount(t, captureIo())).toEqual({ status: 0, created: [] });
   });
 
   it("[PROV-AC-007] (core part) a shared resource owned by another account stops setup-account with a message naming it and changes nothing", async () => {
@@ -77,7 +56,6 @@ describe("setup-account core (PROV-REQ-004)", () => {
     expect(await runSetupAccount(t, io)).toEqual({ status: 1, created: [] });
     expect(t.calls).toEqual(["inspectAccount"]);
     expect(t.shared.get("state home")).toBe("absent");
-    expect(t.calls.some((c) => c.startsWith("writeAccountSettings"))).toBe(false);
     expect(io.err).toMatch(/R2 bucket prototype-logs/);
     expect(io.err).toMatch(/another account/);
   });

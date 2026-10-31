@@ -175,12 +175,16 @@ if (isLocal()) {
       expect(packageJsonAfterUpgrade, "package.json after both upgrade runs").toBe(packageJsonBefore);
     });
 
-    it(tag("CLI-AC-001", "cloudflare-setup with no token prints its instructions (both links, continue prototype setup) and exits 1 in both forms"), () => {
+    it(tag("CLI-AC-001", "cloudflare-setup with no token prints its instructions (the bootstrap link, continue prototype setup) and exits 1 in both forms"), () => {
       for (const form of FORMS) {
         const r = results.get(`${form} cloudflare-setup`);
         expect(r?.status, `${form} cloudflare-setup:\n${r?.output.slice(-2000) ?? ""}`).toBe(1);
         expect(r?.output).toContain(BOOT_LINK);
-        expect(r?.output).toContain(EVERYDAY_LINK);
+        // Since v0.2.0 the everyday token comes from the admin app, never a dashboard link (DEC-0689, SETUP-AC-001).
+        expect(r?.output).not.toContain(EVERYDAY_LINK);
+        expect(r?.output).toContain(
+          "the admin app makes it on its Everyday token page once this setup has deployed the admin app. Open the admin app, sign in, make the token there and put it in CLOUDFLARE_API_TOKEN.",
+        );
         expect(r?.output).toContain("continue prototype setup");
       }
     });

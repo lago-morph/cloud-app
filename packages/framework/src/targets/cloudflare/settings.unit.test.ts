@@ -18,16 +18,13 @@ const input: StageWorkerInput = {
   publicOrigin: "https://notes-test-abc.example.workers.dev",
   database: { id: "1f2e3d4c-0000-4000-8000-000000000001", name: "notes-test-abc-db-1" },
   filesBucket: "notes-test-abc-files",
-  isTestStage: true,
 };
 
-/** A production stage of the same app, with the account's email domain from a stubbed account settings record. */
+/** A production stage of the same app; since v0.2.0 it needs no email domain (DEC-0698, DEC-0732). */
 const production: StageWorkerInput = {
   ...input,
   workerName: "notes-prod",
   publicOrigin: "https://notes-prod.example.workers.dev",
-  isTestStage: false,
-  emailDomain: "example.test",
 };
 
 describe("cloudflareWorkerSettings", () => {
@@ -52,27 +49,17 @@ describe("cloudflareWorkerSettings", () => {
   });
 
   it(tag("CF-AC-003", "every stage's Worker carries the compatibility flag nodejs_compat"), () => {
-    for (const stage of [input, production, { ...input, emailDomain: "example.test" }]) {
+    for (const stage of [input, production]) {
       expect(cloudflareWorkerSettings(stage).compatibilityFlags).toEqual(["nodejs_compat"]);
     }
   });
 
-  it(tag("MAIL-AC-004", "a production stage binds EMAIL (send_email) with exactly the allowed sender no-reply@<emailDomain> and sets FRAMEWORK_MAIL_FROM"), () => {
+  it("a production stage needs no email domain and gets the same bindings and variables as a test stage: no EMAIL, no FRAMEWORK_MAIL_FROM (cloudflare.md §2 v0.2.0 amendment, DEC-0698, DEC-0732)", () => {
     const settings = cloudflareWorkerSettings(production);
-    expect(settings.sendEmail).toEqual([{ binding: "EMAIL", allowedSenderAddresses: ["no-reply@example.test"] }]);
-    expect(settings.vars).toEqual({ FRAMEWORK_PUBLIC_ORIGIN: "https://notes-prod.example.workers.dev", FRAMEWORK_MAIL_FROM: "no-reply@example.test" });
-  });
-
-  it(tag("MAIL-AC-004", "a test stage binds no EMAIL, with or without a recorded email domain; with one it sets FRAMEWORK_MAIL_FROM"), () => {
-    expect(cloudflareWorkerSettings(input).sendEmail).toEqual([]);
-    const recorded = cloudflareWorkerSettings({ ...input, emailDomain: "example.test" });
-    expect(recorded.sendEmail).toEqual([]);
-    expect(recorded.vars["FRAMEWORK_MAIL_FROM"]).toBe("no-reply@example.test");
-  });
-
-  it("a production stage without the account's email domain is CORE.MISCONFIGURED naming setup-account", () => {
-    const { emailDomain: _omitted, ...withoutDomain } = production;
-    expect(() => cloudflareWorkerSettings(withoutDomain)).toThrow(/setup-account --target cloudflare --email-domain/);
+    expect(settings.d1Databases.map((d) => d.binding)).toEqual(["DB"]);
+    expect(settings.r2Buckets.map((b) => b.binding)).toEqual(["FILES", "LOGS"]);
+    expect(settings.vars).toEqual({ FRAMEWORK_PUBLIC_ORIGIN: "https://notes-prod.example.workers.dev" });
+    expect(JSON.stringify(settings)).not.toMatch(/EMAIL|MAIL_FROM|send_email|no-reply/);
   });
 
   it("refuses a public origin that is not an https origin", () => {
@@ -86,8 +73,8 @@ describe("cloudflareWorkerSettings", () => {
     expect(() => checkWorkerSettings(settings)).not.toThrow();
     const withVar = { ...settings, vars: { ...settings.vars, SECRET_API_KEY: "x" } };
     const withBinding = { ...settings, r2Buckets: [...settings.r2Buckets, { binding: "SECRET_FILES", bucketName: "b" }] };
-    const withEmail = { ...settings, sendEmail: [{ binding: "SECRET_FILES", allowedSenderAddresses: ["no-reply@example.test"] }] };
-    for (const bad of [withVar, withBinding, withEmail]) {
+    const withD1 = { ...settings, d1Databases: [...settings.d1Databases, { binding: "SECRET_FILES", databaseId: "d", databaseName: "n" }] };
+    for (const bad of [withVar, withBinding, withD1]) {
       let thrown: unknown;
       try {
         checkWorkerSettings(bad);
@@ -119,9 +106,9 @@ describe("wranglerWorkerConfig", () => {
     });
   });
 
-  it("writes a production stage's EMAIL binding as Wrangler's send_email", () => {
+  it("writes no send_email and no FRAMEWORK_MAIL_FROM for a production stage (v0.2.0, DEC-0698, DEC-0732)", () => {
     const config = wranglerWorkerConfig(cloudflareWorkerSettings(production));
-    expect(config["send_email"]).toEqual([{ name: "EMAIL", allowed_sender_addresses: ["no-reply@example.test"] }]);
-    expect(config["vars"]).toMatchObject({ FRAMEWORK_MAIL_FROM: "no-reply@example.test" });
+    expect(config).not.toHaveProperty("send_email");
+    expect(config["vars"]).toEqual({ FRAMEWORK_PUBLIC_ORIGIN: "https://notes-prod.example.workers.dev" });
   });
 });

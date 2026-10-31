@@ -14,14 +14,14 @@ paths:
   /api/auth/login:
     get:
       summary: Start login
-      description: Redirects to the framework's sign-in page, or to the login provider when the stage's provider is a redirect provider. Starting a new login abandons any login in progress in this browser. The sign-in pages are framework-internal (docs/components/password.md).
+      description: Redirects to the login provider. On a production deployment that is the account's auth app (`<auth app>/start`, docs/components/auth.md). On a stage with only the authentication mock (local, `test-` stages), it sets a mock session for the default user and redirects to the sanitized returnTo. Starting a new login abandons any login in progress in this browser.
       parameters:
         - name: returnTo
           in: query
           description: Same-origin path to return to after login. Anything else is replaced by "/".
           schema: { type: string }
       responses:
-        "302": { description: Redirect to the sign-in page or the login provider. }
+        "302": { description: Redirect to the login provider, or to returnTo with a mock session. }
         default: { $ref: "#/components/responses/Error" }
   /api/auth/callback:
     get:
@@ -43,11 +43,11 @@ paths:
     get:
       summary: Current user
       description: |
-        The current user: the level evaluated for this request from the account's
-        verification and roles (docs/components/auth.md, AUTH-REQ-003), and for a
-        logged-in user the user ID and display name (AUTH-REQ-005). There is no
-        `unlistedId`: configuration holds no users list (DEC-0522), and admins are
-        granted with the `admins` command, by email (SYS-REQ-018, CLI-REQ-005).
+        The current user: the level evaluated for this request from the session's roles,
+        as last confirmed by the auth app (docs/components/auth.md, AUTH-REQ-003), and for
+        a logged-in user the user ID and display name (AUTH-REQ-005). There is no
+        `unlistedId`: configuration holds no users list, and admins are the members with
+        an administrator role in the account the auth app serves (the owner's) (SYS-REQ-018, DEC-0690).
         Responses are never cached.
       responses:
         "200":

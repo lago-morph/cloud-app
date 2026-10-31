@@ -10,25 +10,24 @@
  *   `<app>-<stage>`, `url: true` for its `workers.dev` route) running the framework's built
  *   bundle, with the static assets, the framework variables plus `FRAMEWORK_PUBLIC_ORIGIN`, and
  *   the bindings `DB` (the current D1 database, an input never in SST's state), `FILES` (the
- *   stage bucket) and the shared log bucket; the compatibility flag `nodejs_compat`; and, on a
- *   production stage, the Email Service binding `EMAIL` restricted to `no-reply@<emailDomain>`,
- *   with the variable `FRAMEWORK_MAIL_FROM` (also set on a test stage when the account settings
- *   record names a domain). All of these come from `cloudflareWorkerSettings` (CF §2).
+ *   stage bucket) and the shared log bucket; and the compatibility flag `nodejs_compat`. All of
+ *   these come from `cloudflareWorkerSettings` (CF §2). A production stage also gets the service
+ *   binding `AUTH` to the auth app's `AuthApp` entrypoint and the variable
+ *   `FRAMEWORK_AUTH_APP_ORIGIN` (DEC-0667; Pulumi's `service` binding with `entrypoint` is
+ *   *unverified* live, DEC-0726). Since v0.2.0 no stage binds `EMAIL` or gets `FRAMEWORK_MAIL_FROM`
+ *   (cloudflare.md §2's v0.2.0 amendment, DEC-0698, DEC-0732).
  *
- * The `send_email` binding (spike S5's first question, DEC-0518): SST 4.17.2 has no component or
- * `link` for Email Service, but its `sst.cloudflare.Worker` creates a `cloudflare.WorkersScript`
- * (Pulumi Cloudflare 6.15.0, PAR-108) and the program appends its own bindings to that script's
- * `bindings` in the `transform.worker` hook, as for D1 and R2. Pulumi Cloudflare 6.15.0's
- * `types/input.d.ts` (`WorkersScriptBinding`) lists `send_email` among the binding types and has
- * `allowedSenderAddresses?: string[]` (with `destinationAddress` and
- * `allowedDestinationAddresses`), so the binding is
- * `{ type: "send_email", name: "EMAIL", allowedSenderAddresses: ["no-reply@<emailDomain>"] }`.
- * Read from the type definitions of the platform `sst install` puts in `.sst/platform/`; no
- * fallback is needed. Not yet deployed live (with DEC-0336's list).
+ * The program appends its own bindings to the `cloudflare.WorkersScript` that SST 4.17.2's
+ * `sst.cloudflare.Worker` creates (Pulumi Cloudflare 6.15.0, PAR-108), in the `transform.worker`
+ * hook. The upload carries exactly these bindings plus the kept secrets (`keepBindings`), so a
+ * binding an earlier deploy declared and this one does not (a 0.1.x stage's `EMAIL`) is dropped.
  * `removal: "remove"` so nothing is retained; `home: "cloudflare"` keeps state in `sst-state`.
  * Secrets are never declared: a binding with a secret's name would replace it (DEC-0087), so a
  * `SECRET_*` variable or binding name is refused, and `keepBindings` keeps the Worker's
- * secrets explicitly. All inputs are embedded as JSON, never as code.
+ * secrets explicitly. The one exception is a Secrets Store secret (`secrets_store_secret` with
+ * `storeId` and `secretName`, Pulumi Cloudflare 6.15.0, plan §2.1b): a shared framework
+ * secret (D7) is bound *as* `SECRET_<NAME>`, in place of a Worker secret the deploy deleted
+ * first (DEC-0727). All inputs are embedded as JSON, never as code.
  *
  * Step 3 (long-lived infrastructure) runs `sst deploy --target Files` when the stage has a
  * database, and an untargeted `sst deploy` of the bucket-only program otherwise (SST 4.17.2
@@ -40,6 +39,8 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import { secretLocation } from "../../config/secret-locations.js";
+import { FRAMEWORK_SECRETS } from "../../secrets/names.js";
 import { BINDINGS } from "../../targets/cloudflare/bindings.js";
 import { cloudflareWorkerSettings } from "../../targets/cloudflare/settings.js";
 import type { Stage } from "../core/operations.js";
@@ -71,9 +72,31 @@ export interface SstInput {
     /** The current database: an input, never in SST's state. */
     readonly database: { readonly id: string; readonly name: string };
     readonly code: WorkerCode;
-    /** The account settings record's email domain (DEC-0514); required for a production stage. */
-    readonly emailDomain?: string;
+    /** Secrets Store secrets bound in place of Worker secrets of the same `SECRET_<NAME>` (D7, DEC-0727). */
+    readonly secretsStore?: readonly SecretsStoreBinding[];
+    /** A production stage's auth app (DEC-0667): its Worker, bound as `AUTH`, and its public origin. */
+    readonly authApp?: { readonly service: string; readonly origin: string };
   };
+}
+
+/**
+ * The auth app's service binding and origin variable on a production stage's Worker (DEC-0667):
+ * the names B's runtime reads (`targets/cloudflare/bindings.ts` `BINDINGS.authApp`,
+ * `BINDINGS.authAppOrigin`), and the auth app's binding entrypoint (DEC-0661).
+ */
+export const AUTH_BINDING = "AUTH";
+export const AUTH_APP_ORIGIN_VARIABLE = "FRAMEWORK_AUTH_APP_ORIGIN";
+export const AUTH_APP_ENTRYPOINT = "AuthApp";
+
+/** D7: the framework secrets every stage shares, the only ones a Worker may bind from Secrets Store (DEC-0727). */
+export const SHARED_FRAMEWORK_SECRETS: readonly string[] = Object.freeze([FRAMEWORK_SECRETS.r2AccessKeyId, FRAMEWORK_SECRETS.r2SecretAccessKey]);
+const SHARED_LOCATIONS: ReadonlySet<string> = new Set(SHARED_FRAMEWORK_SECRETS.map((name) => secretLocation("cloudflare", name)));
+
+/** A Secrets Store secret bound into the Worker: `binding` is the `SECRET_<NAME>` the runtime reads (DEC-0727). */
+export interface SecretsStoreBinding {
+  readonly binding: string;
+  readonly storeId: string;
+  readonly secretName: string;
 }
 
 /** The SST component that holds the long-lived infrastructure (step 3's `--target`). */
@@ -94,8 +117,6 @@ function workerSettings(stage: Stage, w: NonNullable<SstInput["worker"]>) {
     publicOrigin: w.publicOrigin,
     database: w.database,
     filesBucket: filesBucketName(stage),
-    isTestStage: stage.stage.startsWith("test-"),
-    ...(w.emailDomain === undefined ? {} : { emailDomain: w.emailDomain }),
   });
 }
 
@@ -121,17 +142,28 @@ export function sstProgram(input: SstInput): string {
           ...(w.code.assetsDirectory === undefined ? {} : { assets: workerAssets(settings) }),
           compatibilityDate: w.code.compatibilityDate,
           compatibilityFlags: [...settings.compatibilityFlags],
-          environment: { ...w.code.variables, ...settings.vars },
+          environment: { ...w.code.variables, ...settings.vars, ...(w.authApp === undefined ? {} : { [AUTH_APP_ORIGIN_VARIABLE]: w.authApp.origin }) },
           bindings: [
             { type: "d1", name: BINDINGS.database, id: w.database.id },
             { type: "r2_bucket", name: BINDINGS.files, bucketName: filesBucketName(input.stage) },
             { type: "r2_bucket", name: w.code.logBucketBinding, bucketName: LOG_BUCKET },
-            ...settings.sendEmail.map((e) => ({ type: "send_email", name: e.binding, allowedSenderAddresses: [...e.allowedSenderAddresses] })),
+            ...(w.authApp === undefined ? [] : [{ type: "service", name: AUTH_BINDING, service: w.authApp.service, entrypoint: AUTH_APP_ENTRYPOINT }]),
           ],
         }
       : undefined;
   if (worker) refuseSecretNames([...Object.keys(worker.environment), ...worker.bindings.map((b) => b.name)]);
-  const data = { app: input.stage.app, provider: CLOUDFLARE_PROVIDER, filesBucket: filesBucketName(input.stage), worker };
+  // A Secrets Store binding stands in for the Worker secret of its name: only a shared framework
+  // secret's (D7), each once, never the name of another binding (DEC-0727).
+  const taken = new Set(worker?.bindings.map((b) => b.name) ?? []);
+  const secretsStore = (w?.secretsStore ?? []).map((s) => {
+    if (!SHARED_LOCATIONS.has(s.binding)) throw new Error(`the Secrets Store binding ${s.binding} is not one of the shared framework secrets (${[...SHARED_LOCATIONS].join(", ")}); per-app secrets stay Worker secrets (D7, DEC-0727)`);
+    if (taken.has(s.binding)) throw new Error(`the Worker binding ${s.binding} is bound twice`);
+    if (s.storeId === "" || s.secretName === "") throw new Error(`the Secrets Store binding ${s.binding} names no store or secret`);
+    taken.add(s.binding);
+    return { type: "secrets_store_secret", name: s.binding, storeId: s.storeId, secretName: s.secretName };
+  });
+  const declared = worker ? { ...worker, bindings: [...worker.bindings, ...secretsStore] } : undefined;
+  const data = { app: input.stage.app, provider: CLOUDFLARE_PROVIDER, filesBucket: filesBucketName(input.stage), worker: declared };
   return `/// <reference path="./.sst/platform/config.d.ts" />
 // Generated by @lago-morph/prototype-framework (PROV) for stage ${input.stage.stage}. Do not edit: rewritten on every deploy and remove.
 const input = ${JSON.stringify(data, null, 2)} as const;

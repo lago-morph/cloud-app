@@ -20,6 +20,14 @@
  * stage's framework-internal Worker secrets `frameworkR2AccessKeyId` / `frameworkR2SecretAccessKey`
  * (step 5). So `deploy` needs no permission on API tokens. Messages never contain the values.
  *
+ * **In Secrets Store (plan-v0.2.0 §5.2 page 1, D7; DEC-0729).** The admin app's account setup
+ * (`{ secretsStore: true }`) puts both S3 credentials into the account's Secrets Store under
+ * `SIGNING_SECRET_NAMES` (PAR-455), each tagged with the token's id in its comment, and the record
+ * then names the store instead of holding the secret (`secretsStore: { storeId }`). `deploy` binds
+ * them from the store and no longer copies them into Worker secrets. When Secrets Store is
+ * unavailable (a beta, plan §10) the record holds the credentials as before: the Worker-secret
+ * fallback. `setup-account` without the option keeps the record form.
+ *
  * Stages deployed before DEC-0550 have a per-stage token `<app>-<stage>-files-signing`
  * (`legacySigningTokenName`). Their next deploy switches them to the account credential; `remove`
  * deletes the legacy token when the credential may list tokens, and otherwise leaves it (it is
@@ -28,7 +36,8 @@
 import { createHash } from "node:crypto";
 import type { Stage } from "../core/operations.js";
 import { describeFailure, resultOf, succeeded, type CloudflareApi } from "./api.js";
-import { missingPermissions, tokenPolicies } from "./email-permissions.js";
+import { ensureStore, putSecret, storedSecrets } from "./secrets-store.js";
+import { missingPermissions, tokenPolicies } from "./token-policies.js";
 import { ACCOUNT_BUCKETS, legacySigningTokenName, STATE_BUCKET } from "./names.js";
 
 export const ITEM_WRITE_PERMISSION = "Workers R2 Storage Bucket Item Write";
@@ -41,6 +50,14 @@ export const SIGNING_TOKEN_NAME = "prototype-r2-signing";
 export const SIGNING_RECORD_KEY = "framework/r2-signing.json";
 /** The shared resource as printed to the owner. */
 export const SIGNING_RESOURCE = `R2 signing credential ${SIGNING_TOKEN_NAME}`;
+
+/** PAR-455: the Secrets Store names of the S3 credentials (access key ID, secret access key). */
+export const SIGNING_SECRET_NAMES = Object.freeze({ accessKeyId: "PROTOTYPE_R2_ACCESS_KEY_ID", secretAccessKey: "PROTOTYPE_R2_SECRET_ACCESS_KEY" });
+
+/** Where a deploy finds the credential (DEC-0729): bound from Secrets Store, or copied into Worker secrets. */
+export type SigningPlacement =
+  | { readonly kind: "secrets-store"; readonly tokenId: string; readonly storeId: string }
+  | { readonly kind: "worker-secrets"; readonly credentials: SigningCredentials };
 
 /** Whether a stored record's token denies every current account bucket. */
 export function signingRecordIsCurrent(body: unknown): boolean {
@@ -116,17 +133,35 @@ export function parseSigningRecord(body: unknown): SigningCredentials {
   return { id: tokenId, accessKeyId, secretAccessKey };
 }
 
+/** A record of either form (DEC-0729); throws naming the record, never a value, when it is neither. */
+function parsePlacement(body: unknown): SigningPlacement {
+  const r = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
+  const storeId = (r["secretsStore"] as { storeId?: unknown } | undefined)?.storeId;
+  if (storeId === undefined) return { kind: "worker-secrets", credentials: parseSigningRecord(body) };
+  const { tokenId, accessKeyId } = r;
+  if (typeof storeId !== "string" || storeId === "" || typeof tokenId !== "string" || tokenId === "" || typeof accessKeyId !== "string" || accessKeyId === "" || "secretAccessKey" in r) {
+    throw new Error(`the ${recordResource} is not a valid signing record; run account setup again to replace it`);
+  }
+  return { kind: "secrets-store", tokenId, storeId };
+}
+
 /** The stored record; undefined when the record (or the state home) does not exist. Reads only. */
-async function readSigningRecord(api: CloudflareApi, accountId: string): Promise<{ credentials: SigningCredentials; current: boolean } | undefined> {
+async function readSigningRecord(api: CloudflareApi, accountId: string): Promise<{ placement: SigningPlacement; current: boolean } | undefined> {
   const r = await api("GET", recordPath(accountId));
   if (r.status === 404) return undefined;
   if (r.status < 200 || r.status >= 300) throw new Error(`reading the ${recordResource} failed: ${describeFailure(r)}`);
-  return { credentials: parseSigningRecord(r.body), current: signingRecordIsCurrent(r.body) };
+  return { placement: parsePlacement(r.body), current: signingRecordIsCurrent(r.body) };
 }
 
-/** The account's signing credentials; undefined when the record (or the state home) does not exist. Reads only. */
+/** The account's signing credentials when the record holds them (not in Secrets Store); undefined without a record. Reads only. */
 export async function readSigningCredentials(api: CloudflareApi, accountId: string): Promise<SigningCredentials | undefined> {
-  return (await readSigningRecord(api, accountId))?.credentials;
+  const placement = (await readSigningRecord(api, accountId))?.placement;
+  return placement?.kind === "worker-secrets" ? placement.credentials : undefined;
+}
+
+/** Where the deploy finds the credential; undefined when the record (or the state home) does not exist. Reads only. */
+export async function readSigningPlacement(api: CloudflareApi, accountId: string): Promise<SigningPlacement | undefined> {
+  return (await readSigningRecord(api, accountId))?.placement;
 }
 
 /**
@@ -134,11 +169,51 @@ export async function readSigningCredentials(api: CloudflareApi, accountId: stri
  * account bucket; absent otherwise, so `setup-account` (re)creates it. Reads only.
  */
 export async function signingCredentialState(api: CloudflareApi, accountId: string): Promise<"owned" | "absent"> {
-  return (await readSigningRecord(api, accountId))?.current === true ? "owned" : "absent";
+  const record = await readSigningRecord(api, accountId);
+  if (record?.current !== true) return "absent";
+  if (record.placement.kind === "worker-secrets") return "owned";
+  // Held in Secrets Store: both secrets must be there, tagged with this record's token (DEC-0729).
+  const { tokenId, storeId } = record.placement;
+  let stored: Awaited<ReturnType<typeof storedSecrets>>;
+  try {
+    stored = await storedSecrets(api, accountId, storeId);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    // Only a refusal names the permission; another failure is reported as it is.
+    if (/HTTP 40[13]/.test(detail)) throw new Error(`checking the ${SIGNING_RESOURCE} in Secrets Store needs "Secrets Store Read": ${detail}`);
+    throw error;
+  }
+  return Object.values(SIGNING_SECRET_NAMES).every((name) => stored.get(name)?.comment === tokenId) ? "owned" : "absent";
 }
 
-async function writeSigningRecord(api: CloudflareApi, accountId: string, credentials: SigningCredentials): Promise<void> {
-  const r = await api("PUT", recordPath(accountId), { tokenId: credentials.id, accessKeyId: credentials.accessKeyId, secretAccessKey: credentials.secretAccessKey, deniedBuckets: [...ACCOUNT_BUCKETS] });
+/** Puts both S3 credentials into Secrets Store; the store's ID, or undefined when Secrets Store is unavailable (plan §10). */
+/** Statuses of the store listing that mean Secrets Store is not available to this credential (not entitled, or not permitted). */
+const STORE_REFUSED = new Set([401, 403, 404]);
+
+/**
+ * Puts both S3 credentials into Secrets Store (DEC-0729). Falls back (`unavailable`, with the
+ * reason) only when the store listing is refused, before anything is written; any other failure
+ * throws. `onWrite` is called before the first put, from which point the store may hold the new key.
+ */
+async function putInSecretsStore(api: CloudflareApi, accountId: string, credentials: SigningCredentials, onWrite: () => void): Promise<{ storeId: string } | { unavailable: string }> {
+  const probe = await api("GET", `/accounts/${accountId}/secrets_store/stores?per_page=50`);
+  if (STORE_REFUSED.has(probe.status)) return { unavailable: `Secrets Store refused the listing: ${describeFailure(probe)}` };
+  if (!succeeded(probe)) throw new Error(`listing the account's Secrets Store stores failed: ${describeFailure(probe)}`);
+  const storeId = await ensureStore(api, accountId);
+  const existing = await storedSecrets(api, accountId, storeId);
+  onWrite();
+  for (const [field, name] of Object.entries(SIGNING_SECRET_NAMES) as [keyof typeof SIGNING_SECRET_NAMES, string][]) {
+    await putSecret(api, accountId, storeId, name, credentials[field], existing.get(name)?.id, credentials.id);
+  }
+  return { storeId };
+}
+
+async function writeSigningRecord(api: CloudflareApi, accountId: string, credentials: SigningCredentials, storeId?: string): Promise<void> {
+  const body =
+    storeId === undefined
+      ? { tokenId: credentials.id, accessKeyId: credentials.accessKeyId, secretAccessKey: credentials.secretAccessKey, deniedBuckets: [...ACCOUNT_BUCKETS] }
+      : { tokenId: credentials.id, accessKeyId: credentials.accessKeyId, deniedBuckets: [...ACCOUNT_BUCKETS], secretsStore: { storeId } };
+  const r = await api("PUT", recordPath(accountId), body);
   if (r.status < 200 || r.status >= 300 || (r.body as { success?: unknown } | null)?.success === false) throw new Error(`writing the ${recordResource} failed: ${describeFailure(r)}`);
 }
 
@@ -148,14 +223,39 @@ async function writeSigningRecord(api: CloudflareApi, accountId: string, credent
  * is replaced: the new token is created and its record written first, and only then are the old
  * ones deleted, so a failure on the way leaves the old key (the one every deployed stage holds)
  * working. `replaced`: the ids of the old tokens deleted; each deployed stage still holds the old
- * key in its Worker secrets until it is redeployed.
+ * key in its Worker secrets until it is redeployed (a stage bound to Secrets Store reads the new key
+ * at once).
+ *
+ * `secretsStore` (the admin app's account setup, DEC-0729): put the credentials into Secrets Store
+ * and write the record naming the store; `where` says whether that worked or the record holds them
+ * because Secrets Store refused access (`reason`). Any other Secrets Store failure throws. Once a
+ * put may have reached the store, a failure keeps the new token (stages bound to the store may
+ * already read its key) and every old one, and says to run account setup again.
  */
-export async function createAccountSigningCredential(api: CloudflareApi, accountId: string): Promise<{ readonly replaced: readonly string[] }> {
+export async function createAccountSigningCredential(
+  api: CloudflareApi,
+  accountId: string,
+  options: { readonly secretsStore?: boolean } = {},
+): Promise<{ readonly replaced: readonly string[]; readonly where?: "secrets-store" | "record"; readonly reason?: string }> {
   const old = (await listTokens(api, accountId)).filter((x) => x.name === SIGNING_TOKEN_NAME);
   const credentials = await createSigningToken(api, accountId);
+  let storeId: string | undefined;
+  let reason: string | undefined;
+  let written = false;
   try {
-    await writeSigningRecord(api, accountId, credentials);
+    if (options.secretsStore === true) {
+      const put = await putInSecretsStore(api, accountId, credentials, () => (written = true));
+      if ("storeId" in put) storeId = put.storeId;
+      else reason = put.unavailable;
+    }
+    await writeSigningRecord(api, accountId, credentials, storeId);
   } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    if (written) {
+      throw new Error(
+        `Secrets Store may hold part of the new ${SIGNING_RESOURCE} (its key ID beside the old secret), but ${detail}; the new and the old tokens were kept: run account setup again; stages bound to the store cannot sign R2 transfers until then`,
+      );
+    }
     await deleteSigningToken(api, accountId, credentials.id).catch(() => undefined);
     throw error;
   }
@@ -171,7 +271,8 @@ export async function createAccountSigningCredential(api: CloudflareApi, account
     }
     replaced.push(t.id);
   }
-  return { replaced };
+  if (options.secretsStore !== true) return { replaced };
+  return storeId === undefined ? { replaced, where: "record", ...(reason === undefined ? {} : { reason }) } : { replaced, where: "secrets-store" };
 }
 
 /** `setup-account`, before anything changes: the token permission by name when the credential lacks it. Reads only. */

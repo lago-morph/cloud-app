@@ -3,7 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { transformSync } from "esbuild";
 import { describe, expect, it } from "vitest";
-import { processSstExec, runSst, sstBinary, sstProgram, writeSstApp, type SstExec, type SstInput } from "./sst.js";
+import { secretLocation } from "../../config/secret-locations.js";
+import { processSstExec, runSst, SHARED_FRAMEWORK_SECRETS, sstBinary, sstProgram, writeSstApp, type SstExec, type SstInput } from "./sst.js";
+import { logicalSecretName } from "./worker.js";
 
 const stage = { app: "notes", stage: "test-abc" };
 
@@ -98,9 +100,9 @@ describe("the SST app built from the app definition (PROV-REQ-001; cloudflare.md
     }
   });
 
-  it("[MAIL-AC-004] a production stage binds EMAIL as a send_email binding allowed to send only as no-reply@<emailDomain>, with FRAMEWORK_MAIL_FROM", async () => {
+  it("a production stage needs no email domain and binds exactly DB, FILES and LOGS: no EMAIL send_email binding and no FRAMEWORK_MAIL_FROM (cloudflare.md §2 v0.2.0 amendment, DEC-0698, DEC-0732)", async () => {
     const prodStage = { app: "notes", stage: "prod" };
-    const prodWorker = { ...worker, publicOrigin: "https://notes-prod.example.workers.dev", emailDomain: "example.test" };
+    const prodWorker = { ...worker, publicOrigin: "https://notes-prod.example.workers.dev" };
     const { config, components } = evaluate(sstProgram({ stage: prodStage, worker: prodWorker }));
     await config.run();
     const w = components[1]!;
@@ -109,24 +111,51 @@ describe("the SST app built from the app definition (PROV-REQ-001; cloudflare.md
       { type: "d1", name: "DB", id: "d1-uuid" },
       { type: "r2_bucket", name: "FILES", bucketName: "notes-prod-files" },
       { type: "r2_bucket", name: "LOGS", bucketName: "prototype-logs" },
-      { type: "send_email", name: "EMAIL", allowedSenderAddresses: ["no-reply@example.test"] },
     ]);
     expect(w.args.environment).toEqual({
       FRAMEWORK_DEPLOYMENT: "notes/test-abc",
       FRAMEWORK_PUBLIC_ORIGIN: "https://notes-prod.example.workers.dev",
-      FRAMEWORK_MAIL_FROM: "no-reply@example.test",
     });
-    expect(() => sstProgram({ stage: prodStage, worker: { ...prodWorker, emailDomain: undefined as never } })).toThrow(/email domain/);
   });
 
-  it("[MAIL-AC-004] a test stage binds no EMAIL; with a recorded domain it still gets FRAMEWORK_MAIL_FROM", async () => {
-    for (const w of [worker, { ...worker, emailDomain: "example.test" }]) {
-      const { config, components } = evaluate(sstProgram({ stage, worker: w }));
-      await config.run();
-      const bindings = components[1]!.transformed.bindings as { type: string; name: string }[];
-      expect(bindings.filter((b) => b.type === "send_email" || b.name === "EMAIL")).toEqual([]);
-      expect("FRAMEWORK_MAIL_FROM" in (components[1]!.args.environment as object)).toBe("emailDomain" in w);
+  it("binds each Secrets Store secret under its SECRET_<NAME> name as a secrets_store_secret binding; only that binding type may take a SECRET_* name (DEC-0727)", async () => {
+    const secretsStore = [{ binding: "SECRET_FRAMEWORK_R2_ACCESS_KEY_ID", storeId: "store1", secretName: "PROTOTYPE_R2_ACCESS_KEY_ID" }];
+    const { config, components } = evaluate(sstProgram({ stage, worker: { ...worker, secretsStore } }));
+    await config.run();
+    expect(components[1]!.transformed.bindings).toContainEqual({ type: "secrets_store_secret", name: "SECRET_FRAMEWORK_R2_ACCESS_KEY_ID", storeId: "store1", secretName: "PROTOTYPE_R2_ACCESS_KEY_ID" });
+    expect(components[1]!.transformed.keepBindings).toEqual(["secret_text", "secret_key"]);
+    expect(() => sstProgram({ stage, worker: { ...worker, secretsStore: [{ ...secretsStore[0]!, binding: "R2_KEY" }] } })).toThrow(/Secrets Store binding R2_KEY.*SECRET_/);
+    expect(() => sstProgram({ stage, worker: { ...worker, secretsStore, code: { ...code, variables: { SECRET_FRAMEWORK_R2_ACCESS_KEY_ID: "x" } } } })).toThrow(/would replace the Worker secret/);
+  });
+
+  it("every shared framework secret's binding name maps back to its logical name (deploy deletes the Worker secret of that name)", () => {
+    expect(SHARED_FRAMEWORK_SECRETS.map((name) => logicalSecretName(secretLocation("cloudflare", name)))).toEqual([...SHARED_FRAMEWORK_SECRETS]);
+  });
+
+  it("only the shared framework secrets may come from Secrets Store (D7: per-app secrets stay Worker secrets), each once, with a store and a secret name (DEC-0727)", () => {
+    const one = { binding: "SECRET_FRAMEWORK_R2_ACCESS_KEY_ID", storeId: "store1", secretName: "PROTOTYPE_R2_ACCESS_KEY_ID" };
+    const program = (secretsStore: { binding: string; storeId: string; secretName: string }[]) => () => sstProgram({ stage, worker: { ...worker, secretsStore } });
+    for (const binding of ["SECRET_API_KEY", "SECRET_FRAMEWORK_SESSION_KEY", "SECRET_", "SECRET_framework_r2_access_key_id"]) {
+      expect(program([{ ...one, binding }])).toThrow(new RegExp(`Secrets Store binding ${binding} is not one of the shared framework secrets`));
     }
+    expect(program([one, { ...one, secretName: "OTHER" }])).toThrow(/SECRET_FRAMEWORK_R2_ACCESS_KEY_ID is bound twice/);
+    expect(program([{ ...one, storeId: "" }])).toThrow(/names no store or secret/);
+    expect(program([{ ...one, secretName: "" }])).toThrow(/names no store or secret/);
+    expect(program([one, { ...one, binding: "SECRET_FRAMEWORK_R2_SECRET_ACCESS_KEY", secretName: "PROTOTYPE_R2_SECRET_ACCESS_KEY" }])).not.toThrow();
+  });
+
+  it("with the auth app given, the Worker binds AUTH to its AuthApp entrypoint and gets FRAMEWORK_AUTH_APP_ORIGIN (DEC-0667, DEC-0661); without it neither", async () => {
+    const authApp = { service: "prototype-auth", origin: "https://prototype-auth.example.workers.dev" };
+    const { config, components } = evaluate(sstProgram({ stage, worker: { ...worker, authApp } }));
+    await config.run();
+    const w = components[1]!;
+    expect(w.transformed.bindings).toContainEqual({ type: "service", name: "AUTH", service: "prototype-auth", entrypoint: "AuthApp" });
+    expect((w.args.environment as Record<string, string>)["FRAMEWORK_AUTH_APP_ORIGIN"]).toBe("https://prototype-auth.example.workers.dev");
+
+    const plain = evaluate(sstProgram(full));
+    await plain.config.run();
+    expect((plain.components[1]!.transformed.bindings as { name: string }[]).some((b) => b.name === "AUTH")).toBe(false);
+    expect("FRAMEWORK_AUTH_APP_ORIGIN" in (plain.components[1]!.args.environment as object)).toBe(false);
   });
 
   it("without a Worker (step 3 of a first deploy; remove) declares only the long-lived bucket", async () => {

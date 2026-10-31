@@ -69,6 +69,15 @@ export async function runRemove(ops: TargetOperations, stage: Stage, io: Provisi
   }
   const withBackup = backup === undefined ? {} : { backup };
 
+  // Before anything is deleted, so nobody new signs in to a stage being removed (DEC-0725, DEC-0730).
+  if (ops.unregisterStage !== undefined) {
+    try {
+      await ops.unregisterStage(stage);
+    } catch (error) {
+      record("clearing the stage's sign-in registration", error);
+    }
+  }
+
   try {
     const databases = matchStageDatabases(stage, (await ops.listStageResources(stage)).databases);
     for (const db of databases) {

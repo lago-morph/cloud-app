@@ -1,8 +1,9 @@
 /**
  * Test helpers (`<package>/testing`). Importable only from app test files.
- * Owners: CORE (test app), AUTH (mock identities, role helpers), PWD (password login provider), MAIL (outbox).
- * Behavior: docs/components/core.md, docs/components/auth.md, docs/components/password.md,
- * docs/components/mail.md.
+ * Owners: CORE (test app), AUTH (mock identities, role helpers, the fake auth app).
+ * Behavior: docs/components/core.md, docs/components/auth.md.
+ * Application concepts only (CORE-REQ-005, AUTH-REQ-001): a person is a subject and a role here,
+ * never an email address; v0.2.0 removed MAIL and its test outbox (DEC-0734).
  */
 import type { DefinedApp } from "./core";
 import type { ConfigDeclaration } from "./config";
@@ -21,26 +22,6 @@ export interface LogEntry {
   readonly message: string;
   /** Present when written during an HTTP request. */
   readonly requestId?: string;
-}
-
-/** One email the framework sent (verification, reset, or "someone tried to register"). */
-export interface MailMessage {
-  readonly to: string;
-  /** `"<sender name> <no-reply@...>"`. */
-  readonly from: string;
-  readonly subject: string;
-  readonly text: string;
-  readonly html: string;
-  /** ISO 8601 time the message was handed to the sender. */
-  readonly sentAt: string;
-}
-
-/** The framework's outgoing email as a test sees it. Nothing is ever delivered. */
-export interface TestMail {
-  /** The latest message sent to `address`, or undefined when there is none. */
-  lastTo(address: string): Promise<MailMessage | undefined>;
-  /** Every message sent so far, in order. On a connected stage this throws: read one address at a time. */
-  all(): Promise<readonly MailMessage[]>;
 }
 
 /**
@@ -73,17 +54,14 @@ export interface TestAppOptions {
    */
   readonly stubLoginProvider?: boolean;
   /**
-   * Use the real email-and-password login provider (docs/components/password.md) with an
-   * in-memory outbox (`TestApp.mail`), instead of the authentication mock. Sign-up, verification,
-   * sign-in and reset then go through the provider's routes, with its rate limits and request
-   * forgery check on. Mutually exclusive with `stubLoginProvider`. Default false.
+   * Use the auth-app provider (sign-in through the account's auth app) over the
+   * in-memory fake auth-app binding (internal/auth-app.d.ts, `TestApp.authApp`), instead of the
+   * authentication mock. Logins then go through `/api/auth/login`, the fake auth app's `/start`,
+   * the callback's code redemption, the user-ID derivation and the role refresh
+   * (docs/components/auth.md; plan-v0.2.0 §4.1). Mutually exclusive with `stubLoginProvider` and
+   * with `user`. Default false.
    */
-  readonly passwordLoginProvider?: boolean;
-  /**
-   * For the framework's own MAIL tests: an outgoing-mail sender whose every send fails, or
-   * whose sends never complete. Default: the in-memory outbox.
-   */
-  readonly mailSender?: "failing" | "never-completing";
+  readonly authAppLoginProvider?: boolean;
   /**
    * For the framework's own LOG tests (LOG-AC-001): a log writer whose every write fails, or
    * whose writes never complete. `logs()` then returns no entries. Default: the in-memory log.
@@ -93,6 +71,29 @@ export interface TestAppOptions {
 
 /** A capability that `unavailable` and `TestApp.setUnavailable` can make fail. */
 export type TestCapability = "sql" | "kv" | "files" | "secrets";
+
+/**
+ * The fake auth app as a test sees it (`TestApp.authApp`; internal/auth-app.d.ts, the in-memory
+ * fake). An identity is the subject and the role; the fake's internal record gets an address the
+ * test app makes up from the subject on the reserved `auth-app.test` domain, so a test can check
+ * that no response carries it (AUTH-AC-013, DEC-0734).
+ */
+export interface TestAuthApp {
+  issueCode(identity: { readonly sub: string; readonly role: "admin" | "user" }, options: { readonly app: string; readonly returnUrl?: string }): string;
+  setRole(sub: string, role: "admin" | "user" | null): void;
+  unregisterApp(app: string): void;
+  failNext(n: number): void;
+  setUnavailable(unavailable: boolean): void;
+  readonly calls: { readonly redeem: number; readonly role: number };
+}
+
+/** A test app's clock (`TestApp.clock`). */
+export interface TestClock {
+  /** The current time, in ms since the epoch. */
+  now(): number;
+  /** Moves the clock forward by `ms`. */
+  advance(ms: number): void;
+}
 
 export interface TestApp {
   /**
@@ -107,11 +108,6 @@ export interface TestApp {
    * `CF-Connecting-IP` header, so login rate limits apply per test client.
    */
   request(path: string, init?: RequestInit): Promise<Response>;
-  /**
-   * The framework's outgoing email: in-process, the in-memory outbox of this test app; on a
-   * connected test stage, the stage's mail capture. Messages never leave the test.
-   */
-  readonly mail: TestMail;
   /**
    * Returns a test app that sends subsequent requests as `user`. It shares storage with
    * the original. On a connected stage it logs in as `user` through mock-login. A test app
@@ -131,14 +127,35 @@ export interface TestApp {
    */
   loginWithStub(subject: string, options?: { readonly displayName?: string; readonly stubFailure?: "refused" | "replayed" }): Promise<void>;
   /**
-   * With `passwordLoginProvider` or `stubLoginProvider`: adds `role` to the roles of the account
-   * whose user ID (as `/api/auth/me` shows it) is `userId`. It writes what the `admins` command
-   * writes (the password provider's `role` column, or the stub's in-memory account), so the
-   * change shows on the next request of any session for that account, with no new login
-   * (AUTH-REQ-003, DEC-0525). Granting a role already held changes nothing.
+   * With `authAppLoginProvider`: signs in as the user `identity` (its `sub` and the
+   * role the fake auth app records for it) through `/api/auth/login`, the fake auth app and the
+   * callback, and keeps the resulting session for later requests. Throws otherwise and on a
+   * connected stage.
+   */
+  loginWithAuthApp(identity: { readonly sub: string; readonly role: "admin" | "user" }): Promise<void>;
+  /**
+   * With `authAppLoginProvider`: the fake auth app. `setRole(sub, role | null)` changes (or, with
+   * `null`, removes) the user record the next role refresh reads; `failNext(n)` and
+   * `setUnavailable(b)` make binding calls fail as an outage would; `calls` counts `redeem` and
+   * `role` calls, failed ones included; `issueCode` and `unregisterApp` are as in the fake.
+   * Throws otherwise and on a connected stage.
+   */
+  readonly authApp: TestAuthApp;
+  /**
+   * In-process: the clock AUTH reads for session times and the role refresh (PAR-425), and the
+   * fake auth app for code lifetimes. `advance(ms)` moves it forward; a role-refresh retry delay
+   * (PAR-427) moves it instead of waiting. Throws on a connected stage.
+   */
+  readonly clock: TestClock;
+  /**
+   * With `stubLoginProvider` or `authAppLoginProvider`: adds `role` to the roles of the account
+   * whose user ID (as `/api/auth/me` shows it) is `userId`: the stub's in-memory account, or the
+   * fake auth app's record (`admin`). A session keeps the level it has until its next role refresh (PAR-425; move
+   * `clock` past it), so the change shows then, with no new login (AUTH-REQ-003, DEC-0525,
+   * DEC-0672). Granting a role already held changes nothing.
    * Rejects when no account has that user ID. Throws on a test app with the authentication mock
-   * (choose the level with `user` or `as` instead) and on a connected stage (use the `admins`
-   * command there).
+   * (choose the level with `user` or `as` instead) and on a connected stage (test stages sign in
+   * with the mock only: use `as`).
    */
   grantRole(userId: string, role: TestRole): Promise<void>;
   /**

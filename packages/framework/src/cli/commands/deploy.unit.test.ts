@@ -128,21 +128,20 @@ describe("deploy (CLI-REQ-001, PROV-REQ-002, CLI-REQ-003)", () => {
     expect(io.err).toContain("secrets set --target fake --stage test-abc");
   });
 
-  it("for a production stage, prints the sign-in page and the sender address, and nothing to register (provisioning.md §2)", async () => {
+  it("for a production stage, prints its public origin only: no sign-in page, no sender address and nothing to register (provisioning.md §2, cli.md; DEC-0698)", async () => {
     const fake = new FakeTarget();
     const h = harness({ fake });
     const io = captureIo();
     expect(await deployCommand(h.deps)(["--target", "cloudflare", "--stage", "prod"], io)).toBe(0);
-    expect(io.out).toContain("sign-in page: https://notes-prod.fake.example/api/auth/sign-in");
-    expect(io.out).toContain("sender address: no-reply@example.test");
-    expect(io.out).not.toMatch(/callback|google/i);
+    expect(io.out).toContain("public origin: https://notes-prod.fake.example");
+    expect(io.out).not.toMatch(/sign-in page|sender address|callback|google/i);
   });
 
-  it("a production stage without the account's email domain stops at the preflight", async () => {
-    const fake = new FakeTarget({ accountSettings: {} });
+  it("a production stage deploys with no email domain anywhere (an account set up by v0.2.0; DEC-0698, DEC-0732)", async () => {
+    const fake = new FakeTarget();
     const io = captureIo();
-    expect(await deployCommand(harness({ fake }).deps)(["--target", "cloudflare", "--stage", "prod"], io)).toBe(1);
-    expect(io.err).toContain("--email-domain <domain>");
+    expect(await deployCommand(harness({ fake }).deps)(["--target", "cloudflare", "--stage", "prod"], io)).toBe(0);
+    expect(io.err).not.toMatch(/email/i);
   });
 
   it("a test stage prints no sign-in page or sender", async () => {

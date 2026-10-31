@@ -1,8 +1,11 @@
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { EvidenceRecord } from "../../../packages/framework/src/evidence/public.js";
 import { parseWhere, readCatalogue, type CatalogueEntry } from "../harness/catalogue.js";
-import { LOGIN_PROVIDER_PATHS, parseInvalidations, releaseReport, renderRelease } from "./release.js";
+import { CHECK_LOGIN_IDS as COMMAND_CHECK_LOGIN_IDS } from "../../../packages/framework/src/cli/commands/check-login.js";
+import { CHECK_LOGIN_IDS } from "../harness/prodcheck.js";
+import { LOGIN_PROVIDER_PATHS, REAL_SIGN_IN, parseInvalidations, releaseReport, renderRelease } from "./release.js";
 
 const entry = (id: string, where: string, source = "components/x.md"): CatalogueEntry => ({ id, where, source, applies: parseWhere(where, source) });
 const catalogue = [entry("KV-AC-001", "Local, cloud", "components/kv.md"), entry("PROV-AC-003", "Cloud (milestone)", "components/cloudflare.md")];
@@ -88,48 +91,70 @@ describe("[COMPL-AC-006] release report", () => {
     expect(releaseReport({ commit: "c1", catalogue, records, invalidations: [], loginCommits: noLoginCommits }).problems).toEqual(["PROV-AC-003 on cloudflare (milestone): no record"]);
   });
 
-  it("lists the commits touching PWD, MAIL or login-provider interface files since the last passing check-login record (PWD-AC-009)", () => {
-    const asked: (string | undefined)[] = [];
-    const checkLogin = (commit: string, status: "passed" | "failed", finishedAt: string): EvidenceRecord => ({
-      ...rec("cloudflare", commit, [{ id: "PWD-AC-009", status }, { id: "AUTH-AC-011", status }, { id: "E2E-008", status }], { finishedAt }),
+  // COMPL-AC-006 as amended (DEC-0692; DEC-0780). Root cause 2026-10-31-T7-release-login-check: the tool kept
+  // DEC-0512's PWD-AC-009 rule, and its fixtures a PWD-AC-009 `passed` record no command writes any more.
+  it("lists the commits touching AUTH, auth-app or login-provider interface files since the latest passing real sign-in records (live parts of E2E-007 and E2E-008)", () => {
+    const live = (commit: string, status: "passed" | "failed", finishedAt: string, ids: readonly string[] = REAL_SIGN_IN): EvidenceRecord =>
+      rec("cloudflare", commit, ids.map((id) => ({ id, status })), { milestone: true, finishedAt });
+    // The record check-login writes since B's #115 (DEC-0670): the automated sign-in path check, not a real sign-in.
+    const checkLogin: EvidenceRecord = {
+      ...rec("cloudflare", "c-auto", [{ id: "PWD-AC-009", status: "not-run", detail: "retired with the password provider (plan-v0.2.0 §6)" }, { id: "AUTH-AC-011", status: "passed" }, { id: "E2E-008", status: "passed" }], { finishedAt: "2026-10-22T08:00:00Z" }),
       command: "check-login --target cloudflare --stage prodcheck",
-    });
-    const records = [...allPassed("c1"), checkLogin("c-pass", "passed", "2026-10-21T08:00:00Z"), checkLogin("c-fail", "failed", "2026-10-21T09:00:00Z")];
-    const report = releaseReport({ commit: "c1", catalogue, records, invalidations: [], loginCommits: (since) => (asked.push(since), ["abc1234 PWD: change the reset mail"]) });
-    // The newest passing record decides, not the newer failing one.
+    };
+    const asked: (string | undefined)[] = [];
+    const records = [...allPassed("c1"), live("c-pass", "passed", "2026-10-21T08:00:00Z"), live("c-fail", "failed", "2026-10-21T09:00:00Z"), checkLogin];
+    const report = releaseReport({ commit: "c1", catalogue, records, invalidations: [], loginCommits: (since) => (asked.push(since), ["abc1234 AUTH: change the role refresh"]) });
+    // The newest passing live record decides: not the newer failing one, nor check-login's automated record.
     expect(asked).toEqual(["c-pass"]);
-    expect(report.lastLoginCheck).toMatchObject({ commit: "c-pass", command: "check-login --target cloudflare --stage prodcheck" });
-    expect(report.loginCommits).toEqual(["abc1234 PWD: change the reset mail"]);
+    expect(report.lastRealSignIn).toMatchObject({ commit: "c-pass", command: "npm run compliance -- --target cloudflare --milestone" });
+    expect(report.loginCommits).toEqual(["abc1234 AUTH: change the role refresh"]);
     const text = renderRelease(report);
-    expect(text).toContain("## Commits touching PWD, MAIL or login-provider interface files since the last passing check-login record");
-    expect(text).toContain("- abc1234 PWD: change the reset mail");
-    // A cloud run that folded check-login's results in counts too; a dry run never does.
-    const folded = { ...rec("cloudflare", "c-run", [{ id: "PWD-AC-009", status: "passed" as const }], { finishedAt: "2026-10-22T08:00:00Z" }) };
-    expect(releaseReport({ commit: "c1", catalogue, records: [...records, folded], invalidations: [], loginCommits: () => [] }).lastLoginCheck?.commit).toBe("c-run");
-    expect(releaseReport({ commit: "c1", catalogue, records: [...records, { ...folded, dryRun: "fake" }], invalidations: [], loginCommits: () => [] }).lastLoginCheck?.commit).toBe("c-pass");
-    const none = releaseReport({ commit: "c1", catalogue, records: allPassed("c1"), invalidations: [], loginCommits: (since) => (asked.push(since), []) });
-    expect(asked.at(-1)).toBeUndefined();
-    expect(renderRelease(none)).toContain("No passing check-login record (PWD-AC-009): all commits since the start");
+    expect(text).toContain("## Commits touching AUTH, auth-app or login-provider interface files since the latest passing real sign-in records");
+    expect(text).toContain("- abc1234 AUTH: change the role refresh");
+    // Separate records: the older of the two latest is the reference point; a dry run never counts.
+    const split = [...records, live("c-007", "passed", "2026-10-23T08:00:00Z", ["E2E-007"]), live("c-008", "passed", "2026-10-23T09:00:00Z", ["E2E-008"])];
+    expect(releaseReport({ commit: "c1", catalogue, records: split, invalidations: [], loginCommits: () => [] }).lastRealSignIn?.commit).toBe("c-007");
+    const dry = [...records, { ...live("c-dry", "passed", "2026-10-24T08:00:00Z"), dryRun: "fake" }];
+    expect(releaseReport({ commit: "c1", catalogue, records: dry, invalidations: [], loginCommits: () => [] }).lastRealSignIn?.commit).toBe("c-pass");
+    // Only check-login's records, or a live record of one of the two: no reference point, all of history.
+    for (const only of [[checkLogin], [live("c-008", "passed", "2026-10-23T09:00:00Z", ["E2E-008"])]]) {
+      const none = releaseReport({ commit: "c1", catalogue, records: [...allPassed("c1"), ...only], invalidations: [], loginCommits: (since) => (asked.push(since), []) });
+      expect(none.lastRealSignIn).toBeUndefined();
+      expect(asked.at(-1)).toBeUndefined();
+      expect(renderRelease(none)).toContain("No passing real sign-in records (live parts of E2E-007 and E2E-008, milestone): all commits since the start");
+    }
     expect(LOGIN_PROVIDER_PATHS).toEqual([
-      "packages/framework/src/auth/password/",
-      "packages/framework/src/mail/",
-      "packages/framework/src/auth/login-provider.ts",
+      "packages/framework/src/auth/",
+      "packages/framework/src/auth-app/",
+      "packages/framework/src/targets/cloudflare/auth-app.ts",
+      "packages/framework/src/provision/cloudflare/auth-app-deploy.ts",
+      "docs/contracts/ts/auth.d.ts",
+      "docs/contracts/ts/internal/auth-app.d.ts",
       "docs/contracts/ts/internal/login-provider.d.ts",
-      "docs/contracts/http/internal/auth-password.openapi.yaml",
     ]);
   });
 
-  // plan-auth.md T3, with the documents' own catalogue: the provider check (PWD-AC-009, AUTH-AC-011, E2E-008)
-  // is automated on Cloudflare, so a commit is working only when its cloud run recorded check-login's results.
-  it("with the documents' catalogue, a commit whose cloud run lacks check-login's PWD-AC-009 result is not working, and no GOOGLE criterion or milestone item is demanded", () => {
+  // Root cause 2026-10-31-T7-release-login-check: IDs and paths drifted from the command and the tree with no failing test.
+  it("the harness folds every ID check-login records that the documents' catalogue has, and the release tool names only paths that exist", () => {
+    const ids = new Set(readCatalogue(fileURLToPath(new URL("../../../docs", import.meta.url))).map((e) => e.id));
+    expect(CHECK_LOGIN_IDS).toEqual(COMMAND_CHECK_LOGIN_IDS.filter((id) => ids.has(id)));
+    for (const id of REAL_SIGN_IN) expect(ids, id).toContain(id);
+    for (const path of LOGIN_PROVIDER_PATHS) expect(existsSync(fileURLToPath(new URL(`../../../${path}`, import.meta.url))), path).toBe(true);
+  });
+
+  // plan-auth.md T3, with the documents' own catalogue: the provider check's automated part (AUTH-AC-011, E2E-008)
+  // is automated on Cloudflare, so a commit is working only when its cloud run recorded its results.
+  // PWD-AC-009 is retired with PWD (v0.2.0, DEC-0696); AUTH-AC-011 is the automated `/start` check that stays (DEC-0692).
+  it("with the documents' catalogue, a commit whose cloud run lacks the provider check's AUTH-AC-011 result is not working, and no GOOGLE or PWD criterion or milestone item is demanded", () => {
     const real = readCatalogue(fileURLToPath(new URL("../../../docs", import.meta.url)));
     const ids = (target: "local" | "cloudflare", mode: "automated" | "milestone"): string[] =>
       real.filter((e) => (mode === "automated" ? e.applies[target]?.automated === true : (e.applies[target]?.milestone.length ?? 0) > 0)).map((e) => e.id);
-    for (const id of ["PWD-AC-009", "AUTH-AC-011", "E2E-008"]) {
-      expect(ids("cloudflare", "automated"), id).toContain(id);
-      expect(ids("cloudflare", "milestone"), `${id} is not a milestone item`).not.toContain(id);
-    }
+    for (const id of ["AUTH-AC-011", "E2E-008"]) expect(ids("cloudflare", "automated"), id).toContain(id);
+    expect(ids("cloudflare", "milestone"), "AUTH-AC-011 is not a milestone item").not.toContain("AUTH-AC-011");
+    // DEC-0692, DEC-0755: E2E-008's live sign-in is a milestone part beside its automated part.
+    expect(ids("cloudflare", "milestone"), "E2E-008's live sign-in part").toContain("E2E-008");
     expect(real.filter((e) => e.id.startsWith("GOOGLE-")), "the retired GOOGLE criteria are not in the catalogue").toEqual([]);
+    expect(real.filter((e) => e.id.startsWith("PWD-") || e.id.startsWith("MAIL-")), "the retired PWD and MAIL criteria are not in the catalogue").toEqual([]);
     const passed = (list: string[]): EvidenceRecord["results"] => list.map((id) => ({ id, status: "passed" as const }));
     const records = (cloud: string[]): EvidenceRecord[] => [
       rec("local", "c1", passed(ids("local", "automated"))),
@@ -140,9 +165,9 @@ describe("[COMPL-AC-006] release report", () => {
     const works = releaseReport({ commit: "c1", catalogue: real, records: records(ids("cloudflare", "automated")), invalidations: [], loginCommits: () => [] });
     expect(works.problems).toEqual([]);
     expect(works.works).toBe(true);
-    const without = releaseReport({ commit: "c1", catalogue: real, records: records(ids("cloudflare", "automated").filter((id) => id !== "PWD-AC-009")), invalidations: [], loginCommits: () => [] });
+    const without = releaseReport({ commit: "c1", catalogue: real, records: records(ids("cloudflare", "automated").filter((id) => id !== "AUTH-AC-011")), invalidations: [], loginCommits: () => [] });
     expect(without.works).toBe(false);
-    expect(without.problems).toEqual(["PWD-AC-009 on cloudflare: no record for commit c1"]);
+    expect(without.problems).toEqual(["AUTH-AC-011 on cloudflare: no record for commit c1"]);
     expect(renderRelease(without)).not.toContain("GOOGLE");
   });
 

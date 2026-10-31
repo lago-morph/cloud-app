@@ -1,0 +1,103 @@
+{
+  "$comment": "CI change classification (plan-v0.2.0 §7a.2.4, TS-11/16/19). Read by scripts/ci/classify.mjs; checked by tests/ci-classify.unit.test.ts. Globs: ** any depth, * one segment, {a,b} alternatives, a leading ! excludes. Component codes and dependsOn follow docs/architecture/component-map.md §3. A testInputs entry may name `direct` integration directories (never criteria) whose tests read its paths; CI runs them directly.",
+  "docs": ["docs/**", "ai/**", "retrospective/**", "**/*.md"],
+  "testInputs": [
+    {
+      "paths": ["docs/contracts/**"],
+      "reads": "schemas and .d.ts contracts: unit schema/error tests, the criteria's type imports, the core harness, the SQL suite's error list, FILES app-facing types, COMPL evidence",
+      "unit": ["packages/framework/src/core/errors.unit.test.ts", "packages/framework/src/config/schema.unit.test.ts", "packages/framework/src/evidence/schema.unit.test.ts", "packages/framework/src/log/entry.unit.test.ts"],
+      "typecheck": true,
+      "integration": ["CORE", "CFG", "LOG", "SQL", "FILES", "COMPL"]
+    },
+    {
+      "paths": ["docs/components/*.md", "docs/acceptance/*.md", "docs/demo/*.md"],
+      "reads": "criteria tables and E2E scenarios: the compliance catalogue (harness and tools unit tests) and COMPL's where-sets and milestone checks",
+      "unit": ["tests/compliance/harness/catalogue.unit.test.ts", "tests/compliance/harness/expected.unit.test.ts", "tests/compliance/tools/traceability.unit.test.ts", "tests/compliance/tools/release.unit.test.ts"],
+      "integration": ["COMPL"]
+    },
+    {
+      "paths": ["docs/parameters/parameters.md"],
+      "reads": "PAR values: the sign-up budget, the core harness and PWD support",
+      "unit": ["tests/compliance/harness/sign-up-budget.unit.test.ts"],
+      "integration": ["CORE", "PWD"]
+    },
+    {
+      "paths": ["QUICKSTART.md", "docs/components/provisioning.md"],
+      "reads": "generated permission tables (scripts/permission-tables.mjs TABLE_FILES)",
+      "unit": ["tests/permission-tables.unit.test.ts"]
+    },
+    {
+      "paths": ["QUICKSTART.md", "packages/*/README.md"],
+      "reads": "owner-facing setup text that tests/skill/cloudflare-setup.test.ts checks (the package READMEs are also packed)",
+      "integration": ["SKILL"]
+    },
+    {
+      "paths": ["skill/**", "apps/template/**/*.md"],
+      "reads": "skill text and examples: tests/skill and the starter's copy of the skill and template",
+      "unit": ["packages/create-prototype-app/test/create.unit.test.ts"],
+      "integration": ["SKILL"]
+    },
+    {
+      "paths": ["docs/architecture/component-map.md"],
+      "reads": "component dependencies, mirrored in this file's dependsOn",
+      "unit": ["tests/ci-classify.unit.test.ts"]
+    },
+    {
+      "paths": ["tests/compliance/criteria/**", "tests/compliance/e2e/**"],
+      "reads": "every criterion and scenario test, as the runners list them: E2E-004's offline Cloudflare coverage test lists the driver's Cloudflare selection, so a tag changed or removed there must run it (DEC-0783)",
+      "direct": ["tests/compliance/coverage"]
+    }
+  ],
+  "unitTests": ["**/*.unit.test.ts"],
+  "everything": [".github/workflows/**"],
+  "shared": [
+    "package.json", "package-lock.json", "tsconfig*.json", "vitest.*.ts", "playwright.config.ts", "eslint.config.js",
+    "packages/framework/package.json", "packages/framework/tsconfig*.json", "packages/framework/scripts/**",
+    "packages/framework/src/index.ts", "packages/framework/src/core/**", "packages/framework/src/config/**", "packages/framework/src/testing/**", "packages/framework/src/build/**",
+    "tests/compliance/harness/**", "tests/compliance/criteria/_*/**", "tests/compliance/package.json", "tests/support/**",
+    "apps/reference/**"
+  ],
+  "components": {
+    "CORE": { "dependsOn": [], "paths": ["packages/framework/src/core/**", "packages/framework/src/index.ts"], "integration": ["packages/framework/test/integration/core", "packages/framework/test/integration/testing", "tests/compliance/criteria/core"] },
+    "HTTP": { "dependsOn": ["LOG"], "paths": ["packages/framework/src/http/**", "packages/framework/src/client/**"], "integration": ["packages/framework/test/integration/http", "packages/framework/test/integration/client", "tests/compliance/criteria/http"], "browser": true },
+    "SQL": { "dependsOn": [], "paths": ["packages/framework/src/sql/**"], "integration": ["packages/framework/test/integration/sql", "tests/compliance/criteria/sql"] },
+    "MIG": { "dependsOn": ["SQL"], "paths": ["packages/framework/src/mig/**", "packages/framework/migrations/**"], "integration": ["packages/framework/test/integration/mig", "tests/compliance/criteria/mig"] },
+    "KV": { "dependsOn": [], "paths": ["packages/framework/src/kv/**"], "integration": ["packages/framework/test/integration/kv", "tests/compliance/criteria/kv"] },
+    "FILES": { "dependsOn": ["HTTP"], "paths": ["packages/framework/src/files/**", "packages/framework/src/client/**"], "integration": ["packages/framework/test/integration/files", "tests/compliance/criteria/files"], "browser": true },
+    "CFG": { "dependsOn": [], "paths": ["packages/framework/src/config/**"], "integration": ["packages/framework/test/integration/config", "tests/compliance/criteria/config"] },
+    "SEC": { "dependsOn": ["CFG"], "paths": ["packages/framework/src/secrets/**"], "integration": ["packages/framework/test/integration/secrets", "tests/compliance/criteria/secrets"] },
+    "LOG": { "dependsOn": [], "paths": ["packages/framework/src/log/**"], "integration": ["packages/framework/test/integration/log", "tests/compliance/criteria/log"] },
+    "AUTH": { "dependsOn": ["HTTP", "CFG"], "paths": ["packages/framework/src/auth/**", "!packages/framework/src/auth/password/**", "packages/framework/src/auth-app/**", "tests/support/mock-oauth2/**"], "integration": ["packages/framework/test/integration/auth", "packages/framework/test/integration/auth-app", "tests/compliance/criteria/auth"] },
+    "PWD": { "dependsOn": ["AUTH", "MAIL"], "paths": ["packages/framework/src/auth/password/**"], "integration": [] },
+    "MAIL": { "dependsOn": ["LOG", "CFG"], "paths": ["packages/framework/src/mail/**"], "integration": [] },
+    "LOCAL": { "dependsOn": ["SQL", "MIG", "KV", "FILES", "CFG", "SEC", "LOG", "AUTH", "PWD", "MAIL"], "paths": ["packages/framework/src/targets/local/**", "packages/framework/src/targets/*.ts"], "integration": ["packages/framework/test/integration/local"] },
+    "CF": { "dependsOn": ["SQL", "MIG", "KV", "FILES", "CFG", "SEC", "LOG", "AUTH", "PWD", "MAIL"], "paths": ["packages/framework/src/targets/cloudflare/**", "packages/framework/src/targets/*.ts"], "integration": ["tests/compliance/criteria/cf"] },
+    "PROV": { "dependsOn": ["CFG", "SEC", "MIG", "LOG", "CF", "HTTP", "AUTH"], "paths": ["packages/framework/src/provision/**"], "integration": ["packages/framework/test/integration/provision", "tests/compliance/criteria/prov"] },
+    "SETUP": { "dependsOn": ["PROV", "CF", "CLI"], "paths": ["packages/framework/src/admin-app/**", "tests/support/mock-oauth2/**"], "integration": ["packages/framework/test/integration/admin-app", "tests/compliance/criteria/setup"] },
+    "CHECK": { "dependsOn": ["SQL", "MIG"], "paths": ["packages/framework/src/check/**"], "integration": ["packages/framework/test/integration/check", "tests/compliance/criteria/check"] },
+    "CLI": { "dependsOn": ["LOCAL", "CHECK", "PROV", "MIG", "SEC", "AUTH", "CORE", "COMPL"], "paths": ["packages/framework/src/cli/**", "packages/framework/bin/**"], "integration": ["packages/framework/test/integration/cli", "packages/framework/test/integration/build", "packages/framework/test/integration/testing", "tests/compliance/criteria/cli"] },
+    "COMPL": { "dependsOn": ["SQL", "MIG", "KV", "FILES", "CFG", "SEC", "LOG", "AUTH", "PWD", "MAIL", "LOCAL", "CF"], "paths": ["packages/framework/src/evidence/**", "tests/compliance/tools/**"], "integration": ["tests/compliance/criteria/compl", "tests/compliance/coverage"] },
+    "SKILL": { "dependsOn": ["CORE", "CLI", "CFG", "PROV", "SETUP"], "paths": ["skill/**", "apps/template/**", "packages/create-prototype-app/**", "packages/prototype-framework-skill/**"], "integration": ["tests/skill", "tests/compliance/criteria/skill", "packages/create-prototype-app/test"], "browser": true },
+    "DEMO": { "dependsOn": ["SKILL"], "paths": ["apps/demo/**"], "integration": [] }
+  },
+  "e2e": {
+    "specs": ["tests/compliance/e2e/*.spec.ts"],
+    "ui": [
+      "tests/compliance/e2e/E2E-001-E2E-003.spec.ts", "tests/compliance/e2e/E2E-005.spec.ts", "tests/compliance/e2e/E2E-009-large-photos.spec.ts",
+      "tests/compliance/e2e/demo-criteria.spec.ts", "tests/compliance/e2e/demo-local.spec.ts", "tests/compliance/e2e/demo-pages.spec.ts"
+    ],
+    "app": [
+      "packages/framework/src/**", "packages/framework/bin/**", "packages/framework/migrations/**", "packages/framework/package.json",
+      "apps/template/**", "apps/reference/**", "apps/demo/**",
+      "packages/create-prototype-app/bin/**", "packages/create-prototype-app/lib/**", "packages/create-prototype-app/scripts/**", "packages/create-prototype-app/package.json",
+      "skill/scripts/**", "package-lock.json", "playwright.config.ts", "tests/compliance/harness/playwright.ts", "tests/compliance/e2e/support/**", "tests/support/**", "tests/compliance/e2e/*.txt",
+      "!**/*.test.ts", "!apps/*/tests/**"
+    ]
+  },
+  "linters": {
+    "eslint": ["packages/framework/{src,bin,test}/**/*.{ts,js,mjs}", "eslint.config.js", "package.json", "package-lock.json"],
+    "typecheck": ["**/*.{ts,tsx,mts,mjs,js}", "**/tsconfig*.json", "**/package.json", "package-lock.json", "docs/contracts/**"],
+    "pack": ["packages/**", "skill/**", "apps/template/**", "package-lock.json"],
+    "duplicates": ["vitest.*.ts", "playwright.config.ts", "scripts/ci/**", "package.json"]
+  }
+}

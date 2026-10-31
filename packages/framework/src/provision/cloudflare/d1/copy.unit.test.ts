@@ -3,15 +3,9 @@
  * "Cloudflare") against the fake D1 HTTP API. Fixture: tens of rows covering the A-06 cases
  * (reference order, cycles, value types and edge values, rowids, indexes, sequence).
  */
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { betterAuth } from "better-auth/minimal";
-import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { tag } from "../../../../../../tests/support/tags.js";
-import { AUTH_MODEL_NAMES, authSchema } from "../../../auth/password/tables.js";
-import { applyMigrations, type D1Like } from "../../../mig/apply.js";
-import { readHistory } from "../../../mig/history.js";
-import { FRAMEWORK_MIGRATIONS_DIR } from "../../../mig/migrations-dir.js";
+import type { D1Like } from "../../../mig/apply.js";
 import { openFakeD1Api, type FakeD1Api, type FakeRequest } from "./fake-d1-api.js";
 import { d1DatabaseOperations, type D1DatabaseOperations } from "./operations.js";
 import type { StageDatabase } from "../../core/operations.js";
@@ -163,69 +157,5 @@ describe("D1 copyDatabase (fallback page-by-page copy)", { timeout: 60_000 }, ()
     await fake.database(source.id).prepare(`CREATE TABLE "wide" (${cols})`).run();
     const ops = d1DatabaseOperations({ api: fake.api, accountId: ACCOUNT });
     await expect(copy(ops)).rejects.toThrow(/table wide has 101 columns including rowid; the copy binds at most 100 values per statement/);
-  });
-});
-
-// Better Auth's tables (password.md §2 "Tables"; plan-auth.md item I-A): the copy copies them
-// like any other table, so accounts survive a schema-changing deploy.
-describe("D1 copyDatabase with the framework history, Better Auth's tables included", { timeout: 60_000 }, () => {
-  const ORIGIN = "http://localhost:8787";
-  const auth = (binding: D1Like) =>
-    betterAuth({
-      baseURL: ORIGIN,
-      basePath: "/api/auth/password",
-      secret: "copy-unit-test-secret-0123456789abcdef0123",
-      trustedOrigins: [ORIGIN],
-      telemetry: { enabled: false },
-      logger: { level: "error" },
-      database: drizzleAdapter(drizzleD1(binding as never), { provider: "sqlite", schema: authSchema("sqlite") }),
-      user: { modelName: AUTH_MODEL_NAMES.user },
-      account: { modelName: AUTH_MODEL_NAMES.account },
-      session: { modelName: AUTH_MODEL_NAMES.session },
-      verification: { modelName: AUTH_MODEL_NAMES.verification },
-      rateLimit: { enabled: true, storage: "database", modelName: AUTH_MODEL_NAMES.rateLimit, window: 60, max: 100 },
-      advanced: { disableOriginCheck: false, ipAddress: { ipAddressHeaders: ["cf-connecting-ip"] } },
-      emailAndPassword: { enabled: true, requireEmailVerification: false, autoSignIn: false, minPasswordLength: 12, maxPasswordLength: 128 },
-    });
-  const post = (path: string, body: unknown) =>
-    new Request(`${ORIGIN}/api/auth/password${path}`, {
-      method: "POST",
-      headers: { "content-type": "application/json", origin: ORIGIN, "cf-connecting-ip": "192.0.2.20" },
-      body: JSON.stringify(body),
-    });
-  const credentials = { email: "dora@example.test", password: "a long enough password" };
-
-  let fake: FakeD1Api;
-  afterEach(async () => {
-    await fake?.close();
-  });
-
-  it(tag("MIG-AC-003", "every Better Auth table and row is copied identically, and an account made before the copy signs in on the copy"), async () => {
-    fake = await openFakeD1Api({ accountId: ACCOUNT });
-    const ops = d1DatabaseOperations({ api: fake.api, accountId: ACCOUNT });
-    const source = await ops.createDatabase(stage, "notes-test-abc-db-1");
-    const framework = readHistory(FRAMEWORK_MIGRATIONS_DIR, "sqlite", "framework");
-    await applyMigrations(ops.migrationDatabase(source), { framework, app: [] });
-
-    const before = auth(fake.database(source.id));
-    expect((await before.handler(post("/sign-up/email", { ...credentials, name: "Dora" }))).status).toBe(200);
-    expect((await before.handler(post("/sign-in/email", credentials))).status).toBe(200);
-    const ctx = await before.$context;
-    await ctx.internalAdapter.createVerificationValue({ identifier: "reset-password:copy", value: "v", expiresAt: new Date(Date.now() + 3_600_000) });
-    const db = fake.database(source.id);
-    for (const table of Object.values(AUTH_MODEL_NAMES)) {
-      const n = (await db.prepare(`SELECT count(*) AS n FROM "${table}"`).all<{ n: number }>()).results[0]?.n;
-      expect(n, table).toBeGreaterThan(0);
-    }
-
-    const print = await fingerprint(db);
-    const copied = await ops.copyDatabase(stage, source, "notes-test-abc-db-2");
-    expect(await fingerprint(fake.database(copied.id))).toEqual(print);
-    await ops.checkMigratedDatabase({ stage, previous: source, next: copied, applied: [], migrations: { framework, app: [] } });
-
-    const after = auth(fake.database(copied.id));
-    const signIn = await after.handler(post("/sign-in/email", credentials));
-    expect(signIn.status).toBe(200);
-    expect(((await signIn.json()) as { user: { name: string } }).user.name).toBe("Dora");
   });
 });

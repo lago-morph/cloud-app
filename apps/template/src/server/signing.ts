@@ -20,11 +20,14 @@ function toBase64url(bytes: Uint8Array): string {
 function fromBase64url(text: string): Uint8Array<ArrayBuffer> | null {
   if (!/^[A-Za-z0-9_-]+$/.test(text)) return null;
   const base64 = text.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(text.length / 4) * 4, "=");
+  let bytes: Uint8Array<ArrayBuffer>;
   try {
-    return Uint8Array.from(atob(base64), (ch) => ch.charCodeAt(0));
+    bytes = Uint8Array.from(atob(base64), (ch) => ch.charCodeAt(0));
   } catch {
     return null;
   }
+  // atob ignores the unused low bits of the last character, so accept only the canonical spelling.
+  return toBase64url(bytes) === text ? bytes : null;
 }
 
 /** A token for `subject` that verifies until `expiresAt` (milliseconds since the epoch). */

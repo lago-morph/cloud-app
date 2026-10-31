@@ -13,6 +13,12 @@ import { configString, defineApp, defineTable, FrameworkError, id, newId, text }
 import { generateAppMigrations } from "../mig/generate.js";
 import { mockUsers } from "../auth/testing.js";
 import { createTestApp, type TestApp } from "./test-app.js";
+import { authAppIdentity } from "./auth-app-adapter.js";
+import { deriveUserId } from "../auth/user-id.js";
+import { ROLE_REFRESH_INTERVAL_SECONDS } from "../auth/role-refresh.js";
+
+/** Moves the test clock just past PAR-425. */
+const REFRESH_DUE_MS = (ROLE_REFRESH_INTERVAL_SECONDS + 1) * 1000;
 
 const notes = defineTable("notes", { id: id(), title: text() });
 
@@ -196,21 +202,91 @@ describe("createTestApp", { timeout: 60_000 }, () => {
     }
   });
 
-  it(tag("AUTH-AC-003", "loginWithStub keeps the session; grantRole and revokeRole change the level on the next request"), async () => {
+  it(tag("AUTH-AC-003", "loginWithStub keeps the session; grantRole and revokeRole change the level at the next role refresh"), async () => {
     const t = await open({ ...base, stubLoginProvider: true });
     await t.loginWithStub("person-1", { displayName: "P" });
+    const level = async () => ((await (await t.request("/api/auth/me")).json()) as { level: string }).level;
     const me = (await (await t.request("/api/auth/me")).json()) as { level: string; id: string; displayName: string };
     expect(me.level).toBe("user");
     expect(me.id).toMatch(/^u_[A-Z2-7]{26}$/i);
     expect(me.displayName).toBe("P");
     await t.grantRole(me.id, "admin");
-    expect(((await (await t.request("/api/auth/me")).json()) as { level: string }).level).toBe("admin");
+    expect(await level(), "within PAR-425 the session keeps its level").toBe("user");
+    t.clock.advance(REFRESH_DUE_MS);
+    expect(await level()).toBe("admin");
     await t.grantRole(me.id, "admin"); // already held: no change
-    expect(((await (await t.request("/api/auth/me")).json()) as { level: string }).level).toBe("admin");
+    t.clock.advance(REFRESH_DUE_MS);
+    expect(await level()).toBe("admin");
     await t.revokeRole(me.id, "admin");
-    expect(((await (await t.request("/api/auth/me")).json()) as { level: string }).level).toBe("user");
+    t.clock.advance(REFRESH_DUE_MS);
+    expect(await level()).toBe("user");
     await t.revokeRole(me.id, "admin"); // not held: no change
     await expect(t.grantRole("u_NOBODY", "admin")).rejects.toThrow(/no account has the user ID/);
+  });
+
+  describe("authAppLoginProvider (plan-v0.2.0 §4.1, the fake auth-app binding)", () => {
+    const alice = { sub: "cf-sub-alice", role: "user" } as const;
+    /** The address the fake auth app holds for alice (made up by TestApp.authApp, DEC-0734). */
+    const aliceEmail = authAppIdentity(alice).email;
+    const me = async (t: TestApp) => (await (await t.request("/api/auth/me")).json()) as { level: string; id?: string; displayName?: string | null };
+
+    it(tag("AUTH-AC-013", "loginWithAuthApp signs in through /start and the callback as a cf-account user, with no display name and no email"), async () => {
+      const t = await open({ ...base, authAppLoginProvider: true });
+      const login = await t.request("/api/auth/login");
+      const start = new URL(login.headers.get("location") ?? "");
+      expect(`${start.origin}${start.pathname}`).toBe("https://auth-app.test/start");
+      expect(start.searchParams.get("app")).toBe(`${app.definition.name}-local`);
+      expect(start.searchParams.get("return")).toBe("http://localhost:8787/api/auth/callback");
+      await t.loginWithAuthApp(alice);
+      const body = await (await t.request("/api/auth/me")).text();
+      expect(JSON.parse(body)).toStrictEqual({ level: "user", id: await deriveUserId("cf-account", alice.sub), displayName: null });
+      expect(aliceEmail).toMatch(/@/);
+      expect(body).not.toContain(aliceEmail);
+      expect(body).not.toContain("@");
+      expect(t.authApp.calls.redeem).toBe(1);
+    });
+
+    it(tag("AUTH-AC-015", "within PAR-425 no role call; after it exactly one; grantRole, revokeRole and the fake's setRole show at the refresh"), async () => {
+      const t = await open({ ...base, authAppLoginProvider: true });
+      await t.loginWithAuthApp(alice);
+      const { id } = await me(t);
+      await t.grantRole(id ?? "", "admin");
+      expect((await me(t)).level).toBe("user");
+      expect(t.authApp.calls.role).toBe(0);
+      t.clock.advance(REFRESH_DUE_MS);
+      expect((await me(t)).level).toBe("admin");
+      expect(t.authApp.calls.role).toBe(1);
+      expect((await me(t)).level).toBe("admin");
+      expect(t.authApp.calls.role, "the refreshed session is kept").toBe(1);
+      await t.revokeRole(id ?? "", "admin");
+      t.authApp.setRole(alice.sub, null);
+      t.clock.advance(REFRESH_DUE_MS);
+      expect(await me(t)).toStrictEqual({ level: "anonymous" });
+    });
+
+    it(tag("AUTH-AC-012", "when every try fails the session ends; the retry delays elapse on the test's clock"), async () => {
+      const t = await open({ ...base, authAppLoginProvider: true });
+      await t.loginWithAuthApp({ ...alice, role: "admin" });
+      t.clock.advance(REFRESH_DUE_MS);
+      t.authApp.setUnavailable(true);
+      const before = t.clock.now();
+      expect(await me(t)).toStrictEqual({ level: "anonymous" });
+      expect(t.authApp.calls.role).toBe(3);
+      expect(t.clock.now() - before).toBeGreaterThanOrEqual(400);
+      t.authApp.setUnavailable(false);
+      expect(await me(t), "the cleared session stays ended").toStrictEqual({ level: "anonymous" });
+      expect(t.logs().filter((e) => e.component === "AUTH").map((e) => e.message)).toStrictEqual(["role refresh failed (unknown); session ended"]);
+    });
+
+    it("cannot be combined with the stub or the user option, and has no mock", async () => {
+      await expect(createTestApp(app, { ...base, authAppLoginProvider: true, stubLoginProvider: true })).rejects.toThrow(/cannot be combined/);
+      await expect(createTestApp(app, { ...base, authAppLoginProvider: true, user: mockUsers.user() })).rejects.toThrow(/cannot be combined/);
+      const t = await open({ ...base, authAppLoginProvider: true });
+      expect(() => t.as(mockUsers.user())).toThrow(/auth-app login provider/);
+      const mock = await open();
+      expect(() => mock.authApp).toThrow(/authAppLoginProvider/);
+      await expect(mock.loginWithAuthApp(alice)).rejects.toThrow(/authAppLoginProvider/);
+    });
   });
 
   it("grantRole and revokeRole throw with the authentication mock", async () => {
@@ -225,59 +301,21 @@ describe("createTestApp", { timeout: 60_000 }, () => {
     }
   });
 
-  it(tag("AUTH-AC-003", "with the password provider, grantRole and revokeRole change the signed-in account's level on its next request"), async () => {
-    const t = await open({ ...base, passwordLoginProvider: true, secrets: { apiKey: "k" } });
-    const post = (path: string, body: unknown) =>
-      t.request(`/api/auth/password/${path}`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(body) });
-    const email = "role@example.test";
-    const password = "correct horse battery staple";
-    expect((await post("sign-up", { email, password, displayName: "Role" })).status).toBeLessThan(300);
-    let message = await t.mail.lastTo(email);
-    for (let i = 0; message === undefined && i < 50; i++) {
-      await new Promise((r) => setTimeout(r, 20));
-      message = await t.mail.lastTo(email);
-    }
-    const token = /[?&]token=([^&\s"<]+)/.exec(message?.text ?? "")?.[1] ?? "";
-    expect(token).not.toBe("");
-    expect((await post("verify", { token: decodeURIComponent(token) })).status).toBeLessThan(300);
-    const signIn = await post("sign-in", { email, password });
-    expect(signIn.status).toBeLessThan(300);
-    const pair = signIn.headers.getSetCookie().map((line) => line.split(";")[0] ?? "").find((p) => p.startsWith("session_local=") && p !== "session_local=");
-    expect(pair).toBeDefined();
-    const cookie = { headers: { cookie: pair ?? "" } };
-    const level = async () => ((await (await t.request("/api/auth/me", cookie)).json()) as { level: string; id: string });
-    const me = await level();
-    expect(me.level).toBe("user");
-    await t.grantRole(me.id, "admin");
-    expect((await level()).level).toBe("admin");
-    await t.revokeRole(me.id, "admin");
-    expect((await level()).level).toBe("user");
-  });
-
-  it("keeps only the loginWithStub session (local.md, DEC-0193): a password sign-in's cookie is not sent on later requests", async () => {
-    const t = await open({ ...base, passwordLoginProvider: true, secrets: { apiKey: "k" } });
-    const post = (path: string, body: unknown) =>
-      t.request(`/api/auth/password/${path}`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(body) });
-    const email = "kept@example.test";
-    const password = "correct horse battery staple";
-    await post("sign-up", { email, password, displayName: "Kept" });
-    let message = await t.mail.lastTo(email);
-    for (let i = 0; message === undefined && i < 50; i++) {
-      await new Promise((r) => setTimeout(r, 20));
-      message = await t.mail.lastTo(email);
-    }
-    const token = /[?&]token=([^&\s"<]+)/.exec(message?.text ?? "")?.[1] ?? "";
-    await post("verify", { token: decodeURIComponent(token) });
-    const signIn = await post("sign-in", { email, password });
-    expect(signIn.status).toBeLessThan(300);
-    expect(signIn.headers.getSetCookie().some((line) => line.startsWith("session_local=") && !line.startsWith("session_local=;"))).toBe(true);
-    expect(await (await t.request("/api/auth/me")).json()).toEqual({ level: "anonymous" });
-  });
-
   it("loginWithStub with a stub failure leaves no session", async () => {
     const t = await open({ ...base, stubLoginProvider: true });
     await t.loginWithStub("person-2", { stubFailure: "refused" }).catch(() => undefined);
     expect(await (await t.request("/api/auth/me")).json()).toEqual({ level: "anonymous" });
+  });
+
+  it("keeps only a loginWithStub or loginWithAuthApp session (local.md, DEC-0193): a mock-login response's session cookie is not sent on later requests", async () => {
+    const t = await open();
+    const login = await t.request("/api/auth/mock-login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ level: "user" }) });
+    expect(login.status).toBe(204);
+    const session = login.headers.getSetCookie().find((line) => line.startsWith("session_local=") && !line.startsWith("session_local=;"))?.split(";")[0];
+    expect(session, "mock-login set a session cookie").toBeDefined();
+    expect(await (await t.request("/api/auth/me")).json()).toEqual({ level: "anonymous" });
+    // The cookie itself is a valid session: sent explicitly, it is used.
+    expect(await (await t.request("/api/auth/me", { headers: { cookie: session as string } })).json()).toMatchObject({ level: "user" });
   });
 
   it("without the stub, the mock-login route is installed; with the stub it is not", async () => {
@@ -287,19 +325,6 @@ describe("createTestApp", { timeout: 60_000 }, () => {
     const stub = await open({ ...base, stubLoginProvider: true });
     const none = await stub.request("/api/auth/mock-login", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
     expect(none.status).toBe(404);
-  });
-
-  it("passwordLoginProvider installs the password provider instead of the mock, with an empty outbox and its secret", async () => {
-    const t = await open({ ...base, passwordLoginProvider: true, secrets: { apiKey: "k" } });
-    expect(() => t.as(mockUsers.user())).toThrow(/password login provider/);
-    const none = await t.request("/api/auth/mock-login", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-    expect(none.status).toBe(404);
-    expect(await t.mail.all()).toEqual([]);
-    expect(await t.mail.lastTo("nobody@example.test")).toBeUndefined();
-    // The health check finds frameworkAuthSecret.
-    expect((await t.request("/api/__framework/health")).status).toBe(204);
-    await expect(createTestApp(app, { ...base, passwordLoginProvider: true, stubLoginProvider: true })).rejects.toThrow(/cannot be combined/);
-    await expect(createTestApp(app, { ...base, passwordLoginProvider: true, user: mockUsers.user() })).rejects.toThrow(/cannot be combined/);
   });
 
   it("refuses URLs on any other origin or protocol before the app sees them (root cause F-02 entry 2 revised)", async () => {

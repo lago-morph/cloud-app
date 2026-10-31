@@ -24,6 +24,16 @@
  * differently there (TEXT remotely), so the fake refuses them. `intercept` lets a test answer
  * after or instead of the real effect (A-05 E8/E9: a 502 after a committed batch). Never
  * contacts the network. Not part of the package's public surface.
+ *
+ * Through getPlatformProxy, Miniflare's `prepare` and `bind` are synchronous proxy calls: each
+ * blocks the main thread (`Atomics.wait`) for a round trip to workerd. A long run of them inside
+ * one I/O callback's continuation lets workerd close an idle pooled keep-alive socket (its 5 s idle
+ * timeout): undici's own 1 s keep-alive is a native timer, armed only from a `setImmediate` after a
+ * response, so it is armed late and cannot fire during the block; and undici's idle-socket check
+ * yields only to the check phase, which runs before the poll phase reads the FIN, so the next
+ * proxy call in the same continuation is written to the closed socket ("fetch failed", root cause
+ * 2026-10-31-native-copy-fetch-failed.md). So statements are prepared through `prepareAll`, which
+ * lets the event loop turn after each one; tests that seed many statements use it too.
  */
 import { createHash, randomUUID } from "node:crypto";
 import type { D1Like, D1StatementLike } from "../../../mig/apply.js";
@@ -66,6 +76,22 @@ const fail = (status: number, code: number, message: string): FakeResponse => ({
   body: { success: false, errors: [{ code, message }], messages: [], result: status === 400 ? [] : null },
 });
 const ok = (result: unknown, extra: Record<string, unknown> = {}): FakeResponse => ({ status: 200, body: { success: true, errors: [], messages: [], result, ...extra } });
+
+/**
+ * Prepares (and, when `params` is given, binds) each statement, letting the event loop turn after
+ * each one, so no run of synchronous proxy calls outlasts one statement's round trips and a turn
+ * comes before the caller's `batch` (header comment; root cause 2026-10-31-native-copy-fetch-failed.md).
+ * Test support: use it wherever a test or the fake prepares many statements for one batch.
+ */
+export async function prepareAll(binding: D1Like, items: readonly { readonly sql: string; readonly params?: readonly unknown[] }[]): Promise<D1StatementLike[]> {
+  const statements: D1StatementLike[] = [];
+  for (const item of items) {
+    const prepared = binding.prepare(item.sql);
+    statements.push(item.params === undefined ? prepared : prepared.bind(...item.params));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  return statements;
+}
 
 /** A-06: an import's foreign-key deferral spans only about 4 KB of the dump. */
 export const FK_DEFERRAL_BYTES = 4096;
@@ -113,7 +139,7 @@ export async function openFakeD1Api(options: { accountId: string; maxDatabases?:
       if ((item.params ?? []).some((p) => typeof p === "boolean")) throw new Error("fake D1: remote D1 binds booleans as TEXT; send 0/1");
     }
     try {
-      const results = await binding.batch(items.map((i) => binding.prepare(i.sql).bind(...(i.params ?? []))));
+      const results = await binding.batch(await prepareAll(binding, items.map((i) => ({ sql: i.sql, params: i.params ?? [] }))));
       return ok(results.map((r) => ({ results: r.results ?? [], success: true, meta: r.meta ?? {} })));
     } catch (error) {
       return fail(400, 7500, error instanceof Error ? error.message.replace(/^D1_ERROR: /, "") : String(error));
@@ -169,7 +195,10 @@ export async function openFakeD1Api(options: { accountId: string; maxDatabases?:
         .decode(upload[1])
         .split("\n")
         .filter((l) => l.trim() !== "");
-      const statements = withDeferralLimit(lines).map((l) => binding.prepare(l.replace(/^PRAGMA defer_foreign_keys=TRUE;$/, "PRAGMA defer_foreign_keys = on")));
+      const statements = await prepareAll(
+        binding,
+        withDeferralLimit(lines).map((l) => ({ sql: l.replace(/^PRAGMA defer_foreign_keys=TRUE;$/, "PRAGMA defer_foreign_keys = on") })),
+      );
       const bookmark = `import-${nextUrl++}`;
       try {
         await binding.batch(statements);

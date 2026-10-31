@@ -52,7 +52,7 @@ if (isLocal()) {
     const npm = (args: string[], cwd: string): string => execFileSync("npm", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: childEnv() });
 
     it(
-      tag(["SETUP-AC-001", "SETUP-AC-009", "SKILL-AC-008"], "an app made by the packed starter, installed offline: cloudflare-setup with no tokens runs the local setup first, prints exactly both links and the four template lines, writes the template, sends no Cloudflare request and exits 1; the app has the template's .claude/settings.json"),
+      tag(["SETUP-AC-001", "SETUP-AC-009", "SKILL-AC-008"], "an app made by the packed starter, installed offline: cloudflare-setup with no tokens runs the local setup first, prints exactly the bootstrap link (no everyday link) and the three template lines, writes the template, sends no Cloudflare request and exits 1; the app has the template's .claude/settings.json"),
       async () => {
         expect(existsSync(join(FRAMEWORK, "dist", "index.js")), "build the framework first").toBe(true);
         const [packed] = JSON.parse(npm(["pack", "--json", "--ignore-scripts", "--pack-destination", root], FRAMEWORK)) as { filename: string }[];
@@ -88,14 +88,13 @@ if (isLocal()) {
         const all = `${run.stdout}\n${run.stderr}`;
         expect(run.status, all).toBe(1);
 
-        // The exact links, each on a line of its own, and the template's four lines in order.
+        // The exact bootstrap link on a line of its own (no everyday link since v0.2.0, DEC-0697), and the template's three lines in order.
         expect(linesEqual(out, BOOT_LINK), `the bootstrap link:\n${out}`).toBe(1);
-        expect(linesEqual(out, EVERYDAY_LINK), "the everyday link").toBe(1);
+        expect(out, "no everyday link").not.toContain(EVERYDAY_LINK);
         const lines = out.split("\n");
         const at = lines.indexOf(TEMPLATE_LINES[0]);
         expect(lines.slice(at, at + TEMPLATE_LINES.length), "the template").toEqual([...TEMPLATE_LINES]);
-        expect(out).toContain("Workers Paid");
-        expect(out).toMatch(/Cloudflare DNS/);
+        expect(out, "no domain requirement").not.toMatch(/Cloudflare DNS/);
         expect(out).toMatch(/Environment variables/);
         expect(out).toMatch(/new session/i);
         expect(out).toContain(NEXT_PROMPT_PHRASE);

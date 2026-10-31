@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { UsageError } from "../args.js";
 import { captureIo } from "../io.test-support.js";
@@ -83,6 +83,22 @@ describe("upgrade (plan-setup-wizard §4.8a)", () => {
     expect(r.out).toContain("upgraded to 0.2.0");
   });
 
+  it("never creates or changes the app's CI (plan-v0.2.0 §7a.3, TS-14)", async () => {
+    const dir = app();
+    mkdirSync(join(dir, ".github", "workflows"), { recursive: true });
+    writeFileSync(join(dir, ".github", "workflows", "ci.yml"), "name: the user's own CI\n");
+    const outside = (): string[] =>
+      (readdirSync(dir, { recursive: true, encoding: "utf8" }) as string[])
+        .map((f) => f.split(sep).join("/"))
+        .filter((f) => !/^(?:node_modules|\.claude\/skills)(?:\/|$)/.test(f) && f !== "package.json")
+        .sort()
+        .map((f) => (statSync(join(dir, f)).isFile() ? `${f}: ${readFileSync(join(dir, f), "utf8")}` : `${f}/`));
+    const before = outside();
+    const d = fakes(dir, { before: { permissions: 1, accountSetup: 1 }, after: { permissions: 2, accountSetup: 2 } });
+    expect((await upgrade(dir, d)).code).toBe(0);
+    expect(outside()).toEqual(before);
+  });
+
   it("takes a named version", async () => {
     const dir = app();
     const d = fakes(dir);
@@ -134,10 +150,23 @@ describe("upgrade (plan-setup-wizard §4.8a)", () => {
 describe("whether Cloudflare setup needs re-running", () => {
   it("compares the versions the app had with the new release's", () => {
     expect(cloudflareVerdict({ permissions: 1, accountSetup: 1 }, { permissions: 2, accountSetup: 1 })).toBe(
-      "Cloudflare setup needs re-running (token permissions 1 → 2): run `npm run cloudflare-setup`. It needs the bootstrap token once.",
+      "Cloudflare setup needs re-running (token permissions 1 → 2): make a new bootstrap token with an expiry of 1 day or less and run `npm run cloudflare-setup`, which deploys the admin app. Then open the admin app it prints, sign in, and use its Account setup and Everyday token pages.",
     );
     expect(cloudflareVerdict({ permissions: 1, accountSetup: 1 }, { permissions: 2, accountSetup: 3 })).toContain("token permissions 1 → 2, account setup 1 → 3");
     expect(cloudflareVerdict({ permissions: 2, accountSetup: 2 }, { permissions: 2, accountSetup: 2 })).toContain("nothing new is needed");
+  });
+
+  it("points a 0.1.x app moving to v0.2.0 to the bootstrap and then the admin app (plan-v0.2.0 §8)", () => {
+    // 0.1.x exported PERMISSIONS_VERSION 1; v0.2.0 raises it (DEC-0680) and ACCOUNT_SETUP_VERSION (E).
+    const verdict = cloudflareVerdict({ permissions: 1, accountSetup: 1 }, { permissions: 2, accountSetup: 2 });
+    expect(verdict).toContain("bootstrap token");
+    expect(verdict).toContain("1 day or less");
+    expect(verdict).toContain("npm run cloudflare-setup");
+    expect(verdict).toContain("admin app");
+    expect(verdict).toContain("Account setup");
+    expect(verdict).toContain("Everyday token");
+    expect(verdict.indexOf("npm run cloudflare-setup")).toBeLessThan(verdict.indexOf("Account setup"));
+    expect(verdict).not.toMatch(/needs the bootstrap token once/);
   });
 
   it("is unknown when either release does not export the versions", () => {

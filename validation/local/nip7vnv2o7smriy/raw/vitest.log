@@ -1,0 +1,341 @@
+
+ RUN  v5.0.5 /home/user/cloud-app/.claude/worktrees/agent-a1bb788ab321f1a94
+
+ ↓ tests/compliance/criteria/prov/deploy-sequence.test.ts (1 test | 1 skipped)
+(node:7568) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/prov/removal.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/setup/cloudflare-setup.test.ts (44 tests | 44 skipped)
+ ↓ tests/compliance/criteria/prov/setup-account.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/cli/admins.test.ts (1 test | 1 skipped)
+(node:7964) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:8081) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ tests/compliance/criteria/mail/mail.test.ts (8 tests | 1 failed | 6 skipped) 463ms
+   ↓ MAIL in-process (3)
+     ↓ [MAIL-AC-001] a sign-up with a forged Host puts one message in the outbox whose links are on the public origin, with the display name and no password, secret or user ID
+     ↓ [MAIL-AC-001] with a sender that never completes, the sign-up response still arrives
+     ↓ [MAIL-AC-002] with a sender whose every send fails, sign-up, forgot and resend answer exactly as with a working sender, and each failed send writes one MAIL entry naming the code and no address
+   ↓ MAIL under dev (2)
+     ↓ [MAIL-AC-003] under dev a sign-up writes one .mail/<timestamp>-<id>.json, .mail/ is git-ignored, and mail last --to prints that message
+     ↓ [MAIL-AC-003] reset-local clears .mail/
+   ↓ MAIL builds (1)
+     ↓ [MAIL-AC-004] Cloudflare builds for prod, prodcheck and mytest-1 contain no test-mail route or capture sender; a test-<id> build contains them
+   ❯ MAIL-AC-005 (2)
+     × [MAIL-AC-005] a scan of packages/, apps/, skill/ and tests/ finds no email address whose domain is not a reserved name 457ms
+     ✓ [MAIL-AC-005] the stage-config schema allows only senderName in framework.email 1ms
+(node:8223) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | packages/framework/test/integration/sql/schema-identical.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/sql/schema-identical.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/cli/git-warnings.test.ts (5 tests | 5 skipped)
+ ↓ tests/compliance/criteria/mig/deploys.test.ts (6 tests | 6 skipped)
+ ↓ tests/compliance/criteria/pwd/flow.test.ts (6 tests | 6 skipped)
+(node:8410) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/skill/cloudflare-setup.test.ts (8 tests | 8 skipped)
+ ↓ tests/compliance/criteria/prov/test-stages.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/cli/commands.test.ts (5 tests | 5 skipped)
+ ↓ tests/compliance/criteria/secrets/further-stage.test.ts (1 test | 1 skipped)
+ ↓ packages/framework/test/integration/local/dev.test.ts (5 tests | 5 skipped)
+ ↓ tests/compliance/criteria/files/app-facing-types.test.ts (3 tests | 3 skipped)
+ ↓ packages/framework/test/integration/mig/deploy-local.test.ts (3 tests | 3 skipped)
+(node:8680) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/cf/stage-resources.test.ts (1 test | 1 skipped)
+stderr | packages/framework/test/integration/http/errors.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/http/errors.test.ts (11 tests | 11 skipped)
+ ↓ packages/framework/test/integration/cli/verify.test.ts (12 tests | 12 skipped)
+ ↓ packages/framework/test/integration/core/types.test.ts (4 tests | 4 skipped)
+ ↓ tests/compliance/criteria/secrets/no-leak.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/pwd/test-stage.test.ts (1 test | 1 skipped)
+(node:8768) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ packages/framework/test/integration/config/build.test.ts (12 tests | 12 skipped)
+ ↓ tests/compliance/criteria/pwd/enumeration.test.ts (4 tests | 4 skipped)
+(node:8775) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/compl/prodcheck.test.ts (1 test | 1 skipped)
+stderr | tests/compliance/criteria/auth/sessions.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+(node:8490) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/auth/sessions.test.ts (8 tests | 8 skipped)
+ ↓ tests/compliance/criteria/mail/sink.test.ts (1 test | 1 skipped)
+(node:8832) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ packages/framework/test/integration/check/migration-diagnostics.test.ts (5 tests | 5 skipped)
+ ↓ packages/framework/test/integration/files/app-facing-types.test.ts (4 tests | 4 skipped)
+ ↓ tests/compliance/criteria/setup/starter-offline.test.ts (1 test | 1 skipped)
+ ↓ packages/framework/test/integration/check/portability-rules.test.ts (106 tests | 106 skipped)
+ ↓ tests/compliance/criteria/cf/bundle-sdks.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/http/errors.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/mig/support/stage.unit.test.ts (11 tests | 11 skipped)
+(node:8891) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ packages/framework/test/integration/secrets/cli.test.ts (4 tests | 4 skipped)
+ ↓ tests/compliance/criteria/files/server-operations.test.ts (6 tests | 6 skipped)
+stderr | packages/framework/test/integration/auth/login-flow.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ tests/skill/example-copies.unit.test.ts (6 tests | 6 skipped)
+ ↓ packages/framework/test/integration/auth/login-flow.test.ts (13 tests | 13 skipped)
+ ↓ tests/skill/plugin-manifest.test.ts (11 tests | 11 skipped)
+ ↓ packages/framework/test/integration/check/migration-checker.test.ts (6 tests | 6 skipped)
+ ↓ tests/compliance/criteria/auth/contract.test.ts (6 tests | 6 skipped)
+ ↓ tests/compliance/criteria/compl/evidence.test.ts (5 tests | 5 skipped)
+ ↓ packages/framework/test/integration/build/cloudflare-bundles.test.ts (16 tests | 16 skipped)
+stderr | packages/framework/test/integration/secrets/secrets.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/secrets/secrets.test.ts (5 tests | 5 skipped)
+ ↓ tests/compliance/criteria/pwd/hardening.test.ts (3 tests | 3 skipped)
+(node:8993) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/pwd/policy.test.ts (2 tests | 2 skipped)
+(node:9019) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/prov/preflight-fake.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/pwd/support.unit.test.ts (8 tests | 8 skipped)
+(node:9048) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/auth/login-forgery.test.ts (2 tests | 2 skipped)
+(node:9056) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/skill/example-pages.test.ts (2 tests | 2 skipped)
+stderr | packages/framework/test/integration/auth/current-user.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/auth/current-user.test.ts (7 tests | 7 skipped)
+ ↓ tests/skill/budgets-and-links.test.ts (9 tests | 9 skipped)
+ ↓ tests/compliance/criteria/prov/support/stage.unit.test.ts (10 tests | 10 skipped)
+ ↓ tests/compliance/criteria/compl/support.unit.test.ts (10 tests | 10 skipped)
+ ↓ tests/compliance/criteria/config/lists.test.ts (4 tests | 4 skipped)
+stderr | packages/framework/test/integration/auth/routes-contract.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/auth/routes-contract.test.ts (4 tests | 4 skipped)
+ ↓ tests/compliance/criteria/auth/password-login.test.ts (2 tests | 2 skipped)
+(node:9183) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/check/dependency-tree.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/prov/template-deploy.test.ts (1 test | 1 skipped)
+(node:9214) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/compliance/criteria/auth/admin-role.test.ts (0 test) 1ms
+ ↓ tests/compliance/criteria/core/support/secrets.unit.test.ts (10 tests | 10 skipped)
+stderr | packages/framework/test/integration/auth/sessions.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/auth/sessions.test.ts (7 tests | 7 skipped)
+ ↓ tests/compliance/criteria/auth/session-version.test.ts (1 test | 1 skipped)
+(node:9227) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/compl/targets.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/prov/clean-machine.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/cf/one-origin.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/cli/smoke.test.ts (1 test | 1 skipped)
+ ↓ tests/skill/structure.test.ts (3 tests | 3 skipped)
+ ↓ tests/skill/hard-rules.test.ts (9 tests | 9 skipped)
+ ↓ packages/create-prototype-app/test/create.offline.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/core/deployment.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/skill/scaffold.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/secrets/password-no-leak.test.ts (2 tests | 2 skipped)
+(node:9325) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ packages/framework/test/integration/log/dev-files.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/log/entries.test.ts (3 tests | 3 skipped)
+stderr | packages/framework/test/integration/log/log.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/log/log.test.ts (5 tests | 5 skipped)
+ ↓ tests/compliance/criteria/prov/deploy-recovery.test.ts (1 test | 1 skipped)
+stderr | packages/framework/test/integration/core/runtime.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/core/runtime.test.ts (4 tests | 4 skipped)
+ ↓ tests/compliance/criteria/http/input.test.ts (2 tests | 2 skipped)
+ ↓ packages/framework/test/integration/mig/generate.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/_cloud/r2.unit.test.ts (2 tests | 2 skipped)
+stderr | tests/compliance/criteria/auth/forgery.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ tests/compliance/criteria/auth/forgery.test.ts (4 tests | 4 skipped)
+ ↓ packages/framework/test/integration/check/rules-not-switchable.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/files/private-storage.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/core/support/stages.unit.test.ts (4 tests | 4 skipped)
+ ↓ tests/compliance/criteria/log/keys.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/pwd/limits.test.ts (5 tests | 5 skipped)
+(node:9782) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/log/writer.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/config/values.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/auth/access.test.ts (4 tests | 4 skipped)
+ ↓ packages/framework/test/integration/core/package.test.ts (2 tests | 2 skipped)
+ ✓ tests/compliance/criteria/config/email-schema.test.ts (1 test) 5700ms
+   ✓ CFG: framework.email and the retired framework.google (1)
+     ✓ [CFG-AC-006][MAIL-AC-005] a values file with framework.google, or with a framework.email field other than senderName, fails the build naming the field; senderName alone builds 5697ms
+ ↓ tests/compliance/criteria/auth/mock-login.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/secrets/read.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/http/no-store.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/secrets/storage.test.ts (2 tests | 2 skipped)
+stderr | packages/framework/test/integration/auth/admin-role.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/auth/admin-role.test.ts (3 tests | 3 skipped)
+stderr | packages/framework/test/integration/auth/forgery.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/auth/forgery.test.ts (3 tests | 3 skipped)
+stderr | packages/framework/test/integration/auth/user-id.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/auth/user-id.test.ts (3 tests | 3 skipped)
+ ↓ packages/framework/test/integration/http/dev-paths.test.ts (2 tests | 2 skipped)
+ ↓ packages/framework/test/integration/core/build.test.ts (3 tests | 3 skipped)
+stderr | tests/compliance/criteria/files/unavailable.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ tests/compliance/criteria/files/unavailable.test.ts (1 test | 1 skipped)
+ ↓ packages/framework/test/integration/config/dev.test.ts (1 test | 1 skipped)
+ ↓ tests/skill/examples.test.ts (2 tests | 2 skipped)
+ ↓ tests/compliance/criteria/config/secret-locations.test.ts (1 test | 1 skipped)
+ ↓ tests/compliance/criteria/mig/support/failure-output.unit.test.ts (3 tests | 3 skipped)
+(node:10646) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/http/paths.test.ts (1 test | 1 skipped)
+stderr | packages/framework/test/integration/files/server-operations.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/files/server-operations.test.ts (20 tests | 20 skipped)
+ ↓ tests/compliance/criteria/prov/support/restricted-token.unit.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/_cloud/api.unit.test.ts (3 tests | 3 skipped)
+ ↓ tests/compliance/criteria/kv/kv.d1.test.ts (8 tests | 8 skipped)
+ ↓ tests/compliance/criteria/kv/kv.pglite.test.ts (8 tests | 8 skipped)
+ ↓ tests/compliance/criteria/sql/sql.d1.test.ts (13 tests | 13 skipped)
+ ↓ tests/compliance/criteria/sql/sql.pglite.test.ts (13 tests | 13 skipped)
+stderr | packages/framework/test/integration/config/config.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/config/config.test.ts (3 tests | 3 skipped)
+(node:10893) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/auth/roles.d1.test.ts (14 tests | 14 skipped)
+(node:10879) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ↓ tests/compliance/criteria/auth/roles.pglite.test.ts (14 tests | 14 skipped)
+stderr | packages/framework/test/integration/mig/auth-tables.postgres.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/mig/auth-tables.postgres.test.ts (3 tests | 3 skipped)
+stderr | packages/framework/test/integration/mig/auth-tables.sqlite.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+stderr | packages/framework/test/integration/kv/kv.postgres.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/mig/auth-tables.sqlite.test.ts (3 tests | 3 skipped)
+ ↓ packages/framework/test/integration/kv/kv.postgres.test.ts (9 tests | 9 skipped)
+stderr | packages/framework/test/integration/kv/kv.sqlite.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/kv/kv.sqlite.test.ts (9 tests | 9 skipped)
+ ↓ tests/compliance/criteria/kv/kv.http.test.ts (6 tests | 6 skipped)
+stderr | packages/framework/test/integration/sql/sql.postgres.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ tests/compliance/criteria/sql/sql.http.test.ts (13 tests | 13 skipped)
+stderr | packages/framework/test/integration/sql/sql.sqlite.test.ts
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ ↓ packages/framework/test/integration/sql/sql.postgres.test.ts (46 tests | 46 skipped)
+ ↓ packages/framework/test/integration/sql/sql.sqlite.test.ts (46 tests | 46 skipped)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/compliance/criteria/mail/mail.test.ts > MAIL-AC-005 > [MAIL-AC-005] a scan of packages/, apps/, skill/ and tests/ finds no email address whose domain is not a reserved name
+AssertionError: addresses on a non-reserved domain: expected [ …(3) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "packages/create-prototype-app/test/create.unit.test.ts: test@example.com",
++   "packages/create-prototype-app/test/create.unit.test.ts: test@example.com",
++   "packages/framework/src/cli/cloudflare-settings.unit.test.ts: a@example.com",
++ ]
+
+ ❯ tests/compliance/criteria/mail/mail.test.ts:245:56
+    243|       for (const m of bytes.toString("utf8").matchAll(ADDRESS)) if (!r…
+    244|     }
+    245|     expect(hits, "addresses on a non-reserved domain").toEqual([]);
+       |                                                        ^
+    246|   });
+    247|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed | 123 skipped (126)
+      Tests  1 failed | 2 passed | 792 skipped (795)
+   Start at  08:05:19
+   Duration  82.62s (import 87%, transform 9%, tests 3%, worker 1%)
+
+     Import  505 modules were evaluated 1291 times · 180.03s total, 87% of tracked time
+             ~19.99s faster with isolate: false — shared modules are evaluated once per worker instead of once per file
+             learn more: https://vitest.dev/guide/improving-performance#test-isolation
+
+JSON report written to /tmp/compliance-a3EhWn/vitest.json

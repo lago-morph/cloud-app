@@ -60,6 +60,20 @@ const RULES: readonly Rule[] = [
   },
 ];
 
+/**
+ * plan-v0.2.0 §7a.3 widens two hard rules beyond SKILL-REQ-003's wording, so these carry no
+ * criterion tag (plan.md §10.3): rule 3 covers the app's e2e projects, and rule 5's pins include Playwright.
+ */
+const PLAN_RULES: readonly Rule[] = [
+  // plan-v0.2.0 §7a.3: "Hard rule 3 (`verify` before done) widens to cover the app's e2e projects."
+  {
+    name: "pass verify before declaring work done, covering the app's e2e projects",
+    clauses: [new RegExp(`\\bpass\\w*\\b[^.]*${PACKAGE_COMMAND.source}`, "i"), /\be2e-api\b/i, /\be2e[:-]ui\b/i],
+  },
+  // plan-v0.2.0 §7a.3: "pinned Playwright, added to the hard-rule-5 pins".
+  { name: "the framework version pins include Playwright", clauses: [new RegExp(`\\b${NOT}\\b[^.]*\\bchange\\w*\\b[^.]*\\bframework\\b[^.]*\\bversion pins?\\b`, "i"), /@playwright\/test/] },
+];
+
 describe("SKILL: the router's hard rules", () => {
   const items = hardRuleItems();
 
@@ -77,6 +91,15 @@ describe("SKILL: the router's hard rules", () => {
           .sort((a, b) => a.missing.length - b.missing.length)[0];
         expect.fail(`no hard rule states "${rule.name}"; closest item misses ${JSON.stringify(best?.missing ?? [])}: ${best?.item.slice(0, 200) ?? "(none)"}`);
       }
+    });
+  }
+});
+
+describe("SKILL: hard rules widened by plan-v0.2.0 §7a.3", () => {
+  const items = hardRuleItems().map(collapse);
+  for (const rule of PLAN_RULES) {
+    it(`the router's hard rules state: ${rule.name}`, () => {
+      expect(items.some((item) => rule.clauses.every((c) => c.test(item))), rule.name).toBe(true);
     });
   }
 });

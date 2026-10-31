@@ -114,3 +114,23 @@ describe("[SEC-AC-001] SecretsService reads declared secrets by logical name", (
     await expect(secrets.get("frameworkSessionKey")).rejects.toMatchObject({ code: "SEC.UNDECLARED" });
   });
 });
+
+describe("a framework secret bound from Cloudflare Secrets Store (plan-v0.2.0 D7; DEC-0727)", () => {
+  it("a Secrets Store binding under SECRET_<NAME> is read through its get()", async () => {
+    const value = dummy("r2");
+    const framework = createFrameworkSecrets({ read: envSecretReader({ SECRET_FRAMEWORK_R2_ACCESS_KEY_ID: { get: async () => value } }, "cloudflare") });
+    await expect(framework.get("frameworkR2AccessKeyId")).resolves.toBe(value);
+  });
+
+  it("a binding whose get() rejects is SEC.UNAVAILABLE, without the store's error; one that answers empty is SEC.MISSING", async () => {
+    const failing = { get: async () => Promise.reject(new Error("store detail that must not leak")) };
+    const unavailable = createFrameworkSecrets({ read: envSecretReader({ SECRET_FRAMEWORK_R2_ACCESS_KEY_ID: failing }, "cloudflare") });
+    const e = await unavailable.get("frameworkR2AccessKeyId").then(() => undefined, (x: unknown) => x as Error);
+    expect(e).toMatchObject({ code: "SEC.UNAVAILABLE" });
+    expect(e?.message).not.toContain("store detail");
+    const empty = createFrameworkSecrets({ read: envSecretReader({ SECRET_FRAMEWORK_R2_ACCESS_KEY_ID: { get: async () => "" } }, "cloudflare") });
+    await expect(empty.get("frameworkR2AccessKeyId")).rejects.toMatchObject({ code: "SEC.MISSING" });
+    const notText = createFrameworkSecrets({ read: envSecretReader({ SECRET_FRAMEWORK_R2_ACCESS_KEY_ID: { get: async () => 42 } }, "cloudflare") });
+    await expect(notText.get("frameworkR2AccessKeyId")).rejects.toMatchObject({ code: "SEC.MISSING" });
+  });
+});

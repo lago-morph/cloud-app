@@ -10,7 +10,7 @@
  */
 import type { ApiReply, CloudflareApi } from "./api.js";
 import { ACCOUNT, FakeCloud } from "./fake-cloud.test-support.js";
-import { BOOTSTRAP, comparePolicies, EVERYDAY, TOKEN_NAMES, type PermissionGroup, type TokenPolicy } from "./permissions.js";
+import { BOOTSTRAP, comparePolicies, EVERYDAY, EVERYDAY_V2, TOKEN_NAMES, type PermissionGroup, type TokenPolicy } from "./permissions.js";
 
 export const OTHER_ACCOUNT = "fedcba9876543210fedcba9876543210";
 
@@ -19,9 +19,9 @@ const err = (status: number, code: number, message: string): ApiReply => ({ stat
 const INVALID = err(401, 1000, "Invalid API Token");
 const UNAUTHORIZED = err(403, 9109, "Unauthorized to access requested resource");
 
-/** A group of either list, by name. */
+/** A group of the lists, by name (`EVERYDAY_V2` too: its Secrets Store Read, root cause 2026-10-31-C-34a-fake-secrets-store-read). */
 export function groupNamed(name: string): PermissionGroup {
-  const found = [...EVERYDAY, ...BOOTSTRAP].find((x) => x.name === name);
+  const found = [...EVERYDAY, ...EVERYDAY_V2, ...BOOTSTRAP].find((x) => x.name === name);
   if (found === undefined) throw new Error(`no permission group ${name}`);
   return found;
 }
@@ -162,6 +162,20 @@ export class SetupWorld {
         return ok([{ id: "sub", rate_plan: { id: acct.plan === "paid" ? "workers_paid" : "workers_free", scope: "account" }, state: "Paid" }]);
       }
       const reads: Record<string, string> = { "/workers/scripts": "Workers Scripts Write", "/r2/buckets": "Workers R2 Storage Write", "/d1/database": "D1 Write" };
+      // The bootstrap's own resources (v0.2.0 plan §2.1b): any request needs its group. Secrets
+      // Store goes by method: a read needs Secrets Store Read, as the everyday token's quick check
+      // reads the stores (plan §5.2; Write implies Read), a write needs Secrets Store Write
+      // (root cause 2026-10-31-C-34a-fake-secrets-store-read).
+      const bootstrapNeeds = rest.startsWith("/oauth_clients")
+        ? "OAuth Client Write"
+        : rest.startsWith("/secrets_store")
+          ? method === "GET"
+            ? "Secrets Store Read"
+            : "Secrets Store Write"
+          : rest === "/workers/subdomain"
+            ? "Workers Scripts Write"
+            : undefined;
+      if (bootstrapNeeds !== undefined && !this.has(t, bootstrapNeeds, a)) return UNAUTHORIZED;
       const needs = method === "GET" ? reads[rest] : undefined;
       if (needs !== undefined && !this.has(t, needs, a)) return UNAUTHORIZED;
       return this.route(t, acct.cloud, method, path.replace(`/accounts/${a}`, `/accounts/${ACCOUNT}`), body);

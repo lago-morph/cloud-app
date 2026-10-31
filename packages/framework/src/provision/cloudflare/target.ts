@@ -2,22 +2,23 @@
  * The Cloudflare `TargetOperations` (PROV §2 "Per-target operations"; cloudflare.md "Deploy
  * mechanics"; DEC-0267). It owns every Cloudflare call; the target-neutral core sequences them.
  *
- * - `preflight`: the credential variables by name and the token's usability. Reads only. It needs
- *   no permission on API tokens: the stages' R2 signing credential is an account resource that
- *   `setup-account` creates (DEC-0550), checked by `inspectAccount` like the other shared resources.
+ * - `preflight`: the credential variables by name and the token's usability, and on a production
+ *   stage the account's auth app and its registry (PROV-REQ-002's sign-in prerequisite, DEC-0725).
+ *   Reads only. It needs no permission on API tokens: the stages' R2 signing credential is an
+ *   account resource that `setup-account` creates (DEC-0550), checked by `inspectAccount` like the
+ *   other shared resources.
  * - `inspectAccount` / `createSharedResources`: the account steps of `account.ts` (DEC-0578).
- * - `readAccountSettings` / `writeAccountSettings`: the account settings record
- *   `framework/account.json` in `sst-state` (`account-settings.ts`, DEC-0514). A changed domain is
- *   written as `{ "emailDomain" }` alone, so the record has no setup fields until `setUpEmail`
- *   has set the new domain up.
- * - `emailSetupProblems` / `setUpEmail` / `emailPrerequisites`: `email.ts`'s email steps (Email
- *   Sending, the mail sink's bucket, Worker and Email Routing on `t.<emailDomain>`, the permission
- *   check). `setUpEmail`, the last operation of `setup-account`, then writes the setup record
- *   (`setup-record.ts`, DEC-0577) with every step completed, at `setupVersion` (default
- *   `FIRST_SETUP_VERSION`) and the framework's version; it writes nothing when the stored record
- *   already says so.
- * - The mail sink (`prototype-mailsink`) is an account resource: a stage whose fixed names would
- *   be an account resource's is refused by deploy, the stage listing and removal (`names.ts`).
+ * - No `EMAIL` binding and no email domain: since v0.2.0 a production stage's Worker binds no
+ *   `EMAIL` and gets no `FRAMEWORK_MAIL_FROM`, so `deploy` reads nothing from the account settings
+ *   record; a 0.1.x stage's binding goes with its next deploy's upload (DEC-0698, DEC-0732).
+ * - `setupProblems` / `recordSetup`: `setup-account`'s check (the permission to create the
+ *   signing credential while it is absent, DEC-0551) and its last operation, which writes the
+ *   setup record (`setup-record.ts`, DEC-0577) with every step completed, at `setupVersion`
+ *   (default `FIRST_SETUP_VERSION`) and the framework's version; it writes nothing when the stored
+ *   record already says so. Since v0.2.0 there is no email setup (DEC-0689).
+ * - The 0.1.x mail sink (`prototype-mailsink`) is still an account resource until the admin app's
+ *   cleanup removes it: a stage whose fixed names would be an account resource's is refused by
+ *   deploy, the stage listing and removal (`names.ts`).
  * - `deployInfrastructure` (step 3): the stage bucket only, then the bucket's CORS policy for
  *   the stage's public origin (FILES' policy, DEC-0099). With a database, the program declares
  *   the Worker and the run is `sst deploy --target Files`; without one (a first deploy), the
@@ -26,7 +27,13 @@
  * - `deployCode` (step 5): a full `sst deploy` with the current database as an input, then the
  *   framework-internal secrets the CLI creates: the session key and the password provider's
  *   secret `frameworkAuthSecret` (each generated when absent, PAR-253), and the account's R2
- *   signing credential as S3 credentials, copied from its record on every deploy (DEC-0550).
+ *   signing credential as S3 credentials, copied from its record on every deploy (DEC-0550) or,
+ *   when the record says it is in Secrets Store, bound from there under the same `SECRET_*` names
+ *   in the upload itself, after deleting any copies (DEC-0727, DEC-0729; step 3's targeted run
+ *   declares the Worker without them, which it does not deploy). On a
+ *   production stage the Worker also binds `AUTH` to the auth app (with its origin), and once the
+ *   code is deployed the stage's return URL `<public origin>/api/auth/callback` is registered with
+ *   the auth app under the app ID `<app>-<stage>` (DEC-0667, DEC-0725; `worker.ts`).
  * - `setSecret`, `listSetSecrets`, `stopApp`, `startApp`: `worker.ts`.
  * - `readStageRecord`, `writeStageRecord`: the stage record in `sst-state` (`stage-record.ts`,
  *   DEC-0544); `removeStage` deletes it with the stage's state objects.
@@ -37,9 +44,8 @@
  * - `listStageResources`: the Worker, the bucket, a legacy per-stage signing token (when the
  *   credential may list tokens) and the SST state objects, each by its exact identifier, plus
  *   every D1 database.
- * - `emailSetupProblems` also names "Account API Tokens Write" when the account's signing
- *   credential is absent, since `setup-account` then creates it (DEC-0551).
- * - `removeStage`: every step attempted: empty the bucket, delete a legacy token, `sst remove` (skipped
+ * - `removeStage`: every step attempted: on a production stage clear its return URLs from the auth
+ *   app's registry (DEC-0725), empty the bucket, delete a legacy token, `sst remove` (skipped
  *   when `sst-state` has no `app/<app>/<stage>`; its leftover `app/` object deleted after), then
  *   delete the Worker and the bucket by exact name if they are still there (e.g. when SST's
  *   removal failed or its state was lost), then the stage's SST state objects (DEC-0084).
@@ -48,11 +54,10 @@
  */
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
+import { secretLocation } from "../../config/secret-locations.js";
 import { FRAMEWORK_SECRETS } from "../../secrets/names.js";
 import type { DeployedCode, DeployInput, HealthOutcome, Stage, StageDatabase, StageResource, StageResources, TargetOperations } from "../core/operations.js";
 import { accountSubdomain, createSharedResources, inspectSharedResources, type SharedResourceOptions } from "./account.js";
-import { readAccountSettings, writeAccountSettings } from "./account-settings.js";
-import { createCloudflareEmailSetup, type CloudflareEmailSetup } from "./email.js";
 import { describeFailure, succeeded, type CloudflareApi, type CloudflareBytesApi } from "./api.js";
 import { backupStage, IN_FLIGHT_DRAIN_MS, listStageBackups } from "./backup.js";
 import { FIRST_SETUP_VERSION, frameworkVersion, SETUP_STEPS, writeSetupRecord } from "./setup-record.js";
@@ -62,9 +67,10 @@ import { missingCredentials, type Environment } from "./environment.js";
 import { checkStageHealth } from "./health.js";
 import { accountResourceClash, filesBucketName, isStageStateObject, legacySigningTokenName, publicOrigin, STATE_BUCKET, workerName } from "./names.js";
 import { deleteObjects, listObjectKeys } from "./objects.js";
-import { deleteSigningToken, findLegacySigningToken, readSigningCredentials, SIGNING_RESOURCE, signingCredentialState, tokenWriteProblems } from "./r2-token.js";
-import { INFRASTRUCTURE_COMPONENT, processSstExec, runSst, writeSstApp, type SstExec, type WorkerCode } from "./sst.js";
-import { listSetSecrets, setRoute, setSecret } from "./worker.js";
+import { deleteSigningToken, findLegacySigningToken, readSigningPlacement, SIGNING_RESOURCE, SIGNING_SECRET_NAMES, signingCredentialState, tokenWriteProblems, type SigningPlacement } from "./r2-token.js";
+import { INFRASTRUCTURE_COMPONENT, processSstExec, runSst, writeSstApp, type SecretsStoreBinding, type SstExec, type WorkerCode } from "./sst.js";
+import { appOrigin } from "./oauth-clients.js";
+import { AUTH_APP_SCRIPT, AUTH_CALLBACK_PATH, cloudflareAuthAppLink, deleteSecret, listSetSecrets, logicalSecretName, setRoute, setSecret, type AuthAppLink } from "./worker.js";
 
 /** What FILES (D-02) supplies to provisioning. */
 export interface CloudflareFilesProvisioning {
@@ -94,14 +100,14 @@ export interface CloudflareTargetOptions {
   readonly fetch?: typeof fetch;
   /** A new generated framework key: the session key or the auth secret (PAR-253: 32 random bytes, base64url). */
   readonly randomKey?: () => string;
-  /** The email setup's Cloudflare calls; default `createCloudflareEmailSetup` over `api`. */
-  readonly email?: CloudflareEmailSetup;
   /** The subdomain `setup-account` registers on an account without one (default random, DEC-0552). */
   readonly newSubdomain?: SharedResourceOptions["newSubdomain"];
   /** The account setup version `setup-account` records: the release's `ACCOUNT_SETUP_VERSION` (DEC-0577); default `FIRST_SETUP_VERSION`. */
   readonly setupVersion?: number;
   /** The framework version `setup-account` records; default this package's (`frameworkVersion()`). */
   readonly frameworkVersion?: string;
+  /** A production stage's link to the account's auth app (DEC-0725); default `cloudflareAuthAppLink` over `api`. */
+  readonly authApp?: AuthAppLink;
   readonly healthTimeoutMs?: number;
   readonly now?: () => number;
   readonly sleep?: (ms: number) => Promise<void>;
@@ -115,12 +121,17 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
   const sst = options.sst ?? processSstExec();
   const dir = sstAppDir(options.appDir);
   const randomKey = options.randomKey ?? (() => randomBytes(32).toString("base64url"));
-  const email =
-    options.email ??
-    createCloudflareEmailSetup({ api, accountId, ...(options.now === undefined ? {} : { now: options.now }), ...(options.sleep === undefined ? {} : { sleep: options.sleep }) });
   const origin = async (stage: Stage) => publicOrigin(stage, await accountSubdomain(api, accountId));
+  const authApp = options.authApp ?? cloudflareAuthAppLink(api, accountId);
+  /** Production stages sign in through the auth app; test stages use the mock only (plan §4.3, DEC-0667). */
+  const production = (stage: Stage) => !stage.stage.startsWith("test-");
+  /** The stage Worker as SST declares it: on a production stage with the auth app's binding and origin (DEC-0667). */
+  async function workerInput(input: DeployInput, database: StageDatabase, code: WorkerCode) {
+    const subdomain = await accountSubdomain(api, accountId);
+    const authAppSettings = production(input.stage) ? { authApp: { service: AUTH_APP_SCRIPT, origin: appOrigin("signin", subdomain) } } : {};
+    return { publicOrigin: publicOrigin(input.stage, subdomain), database, code, ...authAppSettings };
+  }
   const sstRun = (stage: Stage) => ({ dir, env: options.env, stage });
-  const mail = (input: DeployInput) => (input.emailDomain === undefined ? {} : { emailDomain: input.emailDomain });
   /** Whether this setup-account run created a shared resource, so the setup record's time is renewed. */
   let setupChanged = false;
 
@@ -133,15 +144,29 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
   const workerPath = (stage: Stage) => `/accounts/${accountId}/workers/scripts/${workerName(stage)}`;
   const bucketPath = (stage: Stage) => `/accounts/${accountId}/r2/buckets/${filesBucketName(stage)}`;
 
-  async function ensureFrameworkSecrets(stage: Stage): Promise<void> {
+  /** Where this deploy takes the signing credential from (DEC-0729); throws when the account has none. */
+  async function signingPlacement(): Promise<SigningPlacement> {
+    const placement = await readSigningPlacement(api, accountId);
+    if (!placement) throw new Error(`the account's ${SIGNING_RESOURCE} is missing; run setup-account --target cloudflare with the setup token (DEC-0551)`);
+    return placement;
+  }
+
+  /** The signing credential's Secrets Store bindings, under the names of the Worker secrets they replace (DEC-0727). */
+  const signingBindings = (storeId: string): SecretsStoreBinding[] => [
+    { binding: secretLocation("cloudflare", FRAMEWORK_SECRETS.r2AccessKeyId), storeId, secretName: SIGNING_SECRET_NAMES.accessKeyId },
+    { binding: secretLocation("cloudflare", FRAMEWORK_SECRETS.r2SecretAccessKey), storeId, secretName: SIGNING_SECRET_NAMES.secretAccessKey },
+  ];
+
+  async function ensureFrameworkSecrets(stage: Stage, placement: SigningPlacement): Promise<void> {
     const set = (await listSetSecrets(api, accountId, stage)) ?? new Set<string>();
     for (const name of [FRAMEWORK_SECRETS.sessionKey, FRAMEWORK_SECRETS.authSecret]) {
       if (!set.has(name)) await setSecret(api, accountId, stage, name, randomKey());
     }
+    // Bound from Secrets Store by the upload itself (DEC-0729); otherwise the Worker-secret fallback.
+    if (placement.kind === "secrets-store") return;
     // Written on every deploy, so a stage with a legacy per-stage token, or one deployed before the
     // credential was replaced, signs with the account's current credential (DEC-0550).
-    const credentials = await readSigningCredentials(api, accountId);
-    if (!credentials) throw new Error(`the account's ${SIGNING_RESOURCE} is missing; run setup-account --target cloudflare with the setup token (DEC-0551)`);
+    const { credentials } = placement;
     await setSecret(api, accountId, stage, FRAMEWORK_SECRETS.r2AccessKeyId, credentials.accessKeyId);
     await setSecret(api, accountId, stage, FRAMEWORK_SECRETS.r2SecretAccessKey, credentials.secretAccessKey);
   }
@@ -168,7 +193,8 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       if (missing.length > 0) return missing;
       const verify = await api("GET", `/accounts/${accountId}/tokens/verify`);
       if (!succeeded(verify)) return [`CLOUDFLARE_API_TOKEN is not usable: ${describeFailure(verify)}`];
-      return [];
+      // PROV-REQ-002 step 1, a production stage's sign-in prerequisite: the auth app and its registry (DEC-0725).
+      return production(stage) ? await authApp.problems() : [];
     },
 
     inspectAccount: () => inspectSharedResources(api, accountId),
@@ -176,34 +202,28 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       if (absent.length > 0) setupChanged = true;
       await createSharedResources(api, accountId, absent, options.newSubdomain === undefined ? {} : { newSubdomain: options.newSubdomain }, note);
     },
-    readAccountSettings: () => readAccountSettings(api, accountId),
-    writeAccountSettings: (settings) => writeAccountSettings(api, accountId, settings),
-    async emailSetupProblems(emailDomain) {
-      const problems = [...(await email.setupProblems(emailDomain))];
-      if ((await signingCredentialState(api, accountId)) === "absent") problems.push(...(await tokenWriteProblems(api, accountId)));
-      return problems;
+    async setupProblems() {
+      return (await signingCredentialState(api, accountId)) === "absent" ? [...(await tokenWriteProblems(api, accountId))] : [];
     },
-    async setUpEmail(emailDomain) {
-      const created = [...(await email.setUp(emailDomain))];
+    async recordSetup() {
+      const written: string[] = [];
       // The last step of setup-account: every step is done now, so the setup record is written (DEC-0577).
-      // A write is reported with what was created, so a run that only records a new version does not say "nothing changed".
+      // A write is reported, so a run that only records a new version does not say "nothing changed".
       await writeSetupRecord(
         api,
         accountId,
         {
-          emailDomain,
           completedSteps: SETUP_STEPS,
           setupVersion: options.setupVersion ?? FIRST_SETUP_VERSION,
           frameworkVersion: options.frameworkVersion ?? frameworkVersion(),
           now: () => new Date((options.now ?? Date.now)()),
         },
-        setupChanged || created.length > 0,
-        (record) => created.push(`account setup record (setup version ${String(record.setupVersion)})`),
+        setupChanged,
+        (record) => written.push(`account setup record (setup version ${String(record.setupVersion)})`),
       );
       setupChanged = false;
-      return created;
+      return written;
     },
-    emailPrerequisites: (_stage, emailDomain) => email.productionPrerequisites(emailDomain),
 
     async deployInfrastructure(input: DeployInput) {
       // SST 4.17.2 resolves `--target` only in the stage's previous state (run.go:348-360), so
@@ -221,7 +241,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       }
       const stageOrigin = await origin(input.stage);
       if (database && options.code) {
-        writeSstApp(dir, { stage: input.stage, worker: { publicOrigin: stageOrigin, database, code: options.code, ...mail(input) } });
+        writeSstApp(dir, { stage: input.stage, worker: await workerInput(input, database, options.code) });
         await runSst(sst, sstRun(input.stage), "deploy", { target: INFRASTRUCTURE_COMPONENT });
       } else {
         writeSstApp(dir, { stage: input.stage });
@@ -234,11 +254,20 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
     async deployCode(input: DeployInput & { readonly database: StageDatabase }): Promise<DeployedCode> {
       if (!options.code) throw new Error("no built Worker code; build --target cloudflare must run before deploy");
       refuseAccountResourceClash(input.stage);
-      const stageOrigin = await origin(input.stage);
-      writeSstApp(dir, { stage: input.stage, worker: { publicOrigin: stageOrigin, database: input.database, code: options.code, ...mail(input) } });
+      const placement = await signingPlacement();
+      const fromStore = placement.kind === "secrets-store" ? { secretsStore: signingBindings(placement.storeId) } : {};
+      const worker = { ...(await workerInput(input, input.database, options.code)), ...fromStore };
+      // Written (and so validated) before anything is deleted.
+      writeSstApp(dir, { stage: input.stage, worker });
+      // A Worker cannot hold a secret and a binding of one name: copies an earlier deploy made go first,
+      // exactly the names bound (DEC-0727). Should the upload then fail, the stage has neither until the
+      // next successful deploy, which the step's failure already asks for.
+      for (const b of fromStore.secretsStore ?? []) await deleteSecret(api, accountId, input.stage, logicalSecretName(b.binding)!);
       await runSst(sst, sstRun(input.stage), "deploy");
-      await ensureFrameworkSecrets(input.stage);
-      return { publicOrigin: stageOrigin };
+      await ensureFrameworkSecrets(input.stage, placement);
+      // The return URL is registered once the Worker that answers it exists, before step 6 starts it (DEC-0725).
+      if (production(input.stage)) await authApp.register(workerName(input.stage), `${worker.publicOrigin}${AUTH_CALLBACK_PATH}`);
+      return { publicOrigin: worker.publicOrigin };
     },
 
     setSecret: (stage, name, value) => setSecret(api, accountId, stage, name, value),
@@ -295,6 +324,12 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       if (token) resources.push({ kind: "R2 API token", id: token.id });
       for (const key of await stateObjects(stage)) resources.push({ kind: key.startsWith("framework/") ? "stage record" : "SST state object", id: key });
       return { resources, databases: await databases.listDatabases() };
+    },
+
+    // The core calls this before it deletes anything of the stage: nobody new signs in to a stage
+    // being removed, and its outstanding codes go too (DEC-0725, DEC-0730). Test stages are not registered.
+    async unregisterStage(stage) {
+      if (production(stage)) await authApp.unregister(workerName(stage));
     },
 
     async removeStage(stage) {

@@ -35,11 +35,9 @@ afterEach(() => {
 });
 
 describe(".env.cloudflare and the environment (plan-setup-wizard §4.2; DEC-0570, DEC-0571, DEC-0573)", () => {
-  it("names the four settings and writes plan §3.2's template exactly", () => {
-    expect(SETTING_NAMES).toEqual(["CLOUDFLARE_BOOTSTRAP_TOKEN", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_EMAIL_DOMAIN", "CLOUDFLARE_ACCOUNT_ID"]);
-    expect(ENV_CLOUDFLARE_TEMPLATE).toBe(
-      "CLOUDFLARE_BOOTSTRAP_TOKEN=\nCLOUDFLARE_API_TOKEN=\nCLOUDFLARE_EMAIL_DOMAIN=\n# CLOUDFLARE_ACCOUNT_ID=        (only if your tokens see more than one account)\n",
-    );
+  it("names the three settings and writes the template exactly (no email domain since v0.2.0, DEC-0697)", () => {
+    expect(SETTING_NAMES).toEqual(["CLOUDFLARE_BOOTSTRAP_TOKEN", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"]);
+    expect(ENV_CLOUDFLARE_TEMPLATE).toBe("CLOUDFLARE_BOOTSTRAP_TOKEN=\nCLOUDFLARE_API_TOKEN=\n# CLOUDFLARE_ACCOUNT_ID=        (only if your tokens see more than one account)\n");
     expect(writeTemplateIfAbsent(dir)).toBe(true);
     expect(read()).toBe(ENV_CLOUDFLARE_TEMPLATE);
     if (isPosix) expect(mode()).toBe(0o600);
@@ -53,15 +51,23 @@ describe(".env.cloudflare and the environment (plan-setup-wizard §4.2; DEC-0570
   });
 
   it("reads the environment first, then the file; empty values count as absent in either", () => {
-    write(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_ACCOUNT_ID=file-account\nCLOUDFLARE_EMAIL_DOMAIN=\nCLOUDFLARE_BOOTSTRAP_TOKEN=file-bootstrap\n`);
-    const settings = readCloudflareSettings(dir, { CLOUDFLARE_API_TOKEN: "", CLOUDFLARE_ACCOUNT_ID: "env-account", CLOUDFLARE_EMAIL_DOMAIN: "env.example" });
+    write(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_ACCOUNT_ID=\nCLOUDFLARE_BOOTSTRAP_TOKEN=file-bootstrap\n`);
+    const settings = readCloudflareSettings(dir, { CLOUDFLARE_API_TOKEN: "", CLOUDFLARE_ACCOUNT_ID: "env-account" });
     expect(settings.fileExists).toBe(true);
-    expect(settings.values).toEqual({ CLOUDFLARE_API_TOKEN: FILE_TOKEN, CLOUDFLARE_ACCOUNT_ID: "env-account", CLOUDFLARE_EMAIL_DOMAIN: "env.example", CLOUDFLARE_BOOTSTRAP_TOKEN: "file-bootstrap" });
-    expect(settings.sources).toEqual({ CLOUDFLARE_API_TOKEN: "file", CLOUDFLARE_ACCOUNT_ID: "environment", CLOUDFLARE_EMAIL_DOMAIN: "environment", CLOUDFLARE_BOOTSTRAP_TOKEN: "file" });
+    expect(settings.values).toEqual({ CLOUDFLARE_API_TOKEN: FILE_TOKEN, CLOUDFLARE_ACCOUNT_ID: "env-account", CLOUDFLARE_BOOTSTRAP_TOKEN: "file-bootstrap" });
+    expect(settings.sources).toEqual({ CLOUDFLARE_API_TOKEN: "file", CLOUDFLARE_ACCOUNT_ID: "environment", CLOUDFLARE_BOOTSTRAP_TOKEN: "file" });
 
-    const none = readCloudflareSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "" });
-    expect(none.values.CLOUDFLARE_EMAIL_DOMAIN).toBeUndefined();
-    expect(none.sources.CLOUDFLARE_EMAIL_DOMAIN).toBeUndefined();
+    const none = readCloudflareSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "" });
+    expect(none.values.CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
+    expect(none.sources.CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
+  });
+
+  it("CLOUDFLARE_EMAIL_DOMAIN is no longer a setting (v0.2.0, DEC-0697): ignored in the environment and in the file, with no notice", () => {
+    write(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_EMAIL_DOMAIN=file.example\n`);
+    const settings = readCloudflareSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "env.example" });
+    expect(settings.values).toEqual({ CLOUDFLARE_API_TOKEN: FILE_TOKEN });
+    expect(settings.sources).toEqual({ CLOUDFLARE_API_TOKEN: "file" });
+    expect(settings.notices).toEqual([]);
   });
 
   it("without a file, the environment alone, and no notices", () => {
@@ -93,7 +99,7 @@ describe(".env.cloudflare and the environment (plan-setup-wizard §4.2; DEC-0570
       ].join("\r\n"),
     );
     const settings = readCloudflareSettings(dir, {});
-    expect(settings.values).toEqual({ CLOUDFLARE_API_TOKEN: FILE_TOKEN, CLOUDFLARE_ACCOUNT_ID: "acc-quoted", CLOUDFLARE_EMAIL_DOMAIN: "mail.example" });
+    expect(settings.values).toEqual({ CLOUDFLARE_API_TOKEN: FILE_TOKEN, CLOUDFLARE_ACCOUNT_ID: "acc-quoted" });
     expect(settings.notices).toEqual([
       "line 6 of .env.cloudflare is not a NAME=value line and was ignored",
       "line 7 of .env.cloudflare is not a NAME=value line and was ignored",
@@ -134,22 +140,23 @@ describe(".env.cloudflare and the environment (plan-setup-wizard §4.2; DEC-0570
     expect(commentOutBootstrap(dir)).toBe(false);
   });
 
-  it("fills in an empty account ID and email domain, uncommenting the template's account line, at mode 600", () => {
+  it("fills in an empty account ID, uncommenting the template's account line, at mode 600", () => {
     writeTemplateIfAbsent(dir);
     chmodSync(file(), 0o664);
-    expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account", CLOUDFLARE_EMAIL_DOMAIN: "mail.example" })).toEqual(["CLOUDFLARE_EMAIL_DOMAIN", "CLOUDFLARE_ACCOUNT_ID"]);
-    expect(read()).toBe("CLOUDFLARE_BOOTSTRAP_TOKEN=\nCLOUDFLARE_API_TOKEN=\nCLOUDFLARE_EMAIL_DOMAIN=mail.example\nCLOUDFLARE_ACCOUNT_ID=fake-account\n");
+    expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account" })).toEqual(["CLOUDFLARE_ACCOUNT_ID"]);
+    expect(read()).toBe("CLOUDFLARE_BOOTSTRAP_TOKEN=\nCLOUDFLARE_API_TOKEN=\nCLOUDFLARE_ACCOUNT_ID=fake-account\n");
     if (isPosix) expect(mode()).toBe(0o600);
   });
 
   it("never changes a value already in the file; adds a missing line; never creates an absent file (plan §3.4, SETUP-AC-002)", () => {
+    // A 0.1.x email domain line is kept as it is.
     write(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_EMAIL_DOMAIN=kept.example\n`);
-    expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account", CLOUDFLARE_EMAIL_DOMAIN: "other.example" })).toEqual(["CLOUDFLARE_ACCOUNT_ID"]);
+    expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account" })).toEqual(["CLOUDFLARE_ACCOUNT_ID"]);
     expect(read()).toBe(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_EMAIL_DOMAIN=kept.example\nCLOUDFLARE_ACCOUNT_ID=fake-account\n`);
     expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "another" })).toEqual([]);
 
     rmSync(file());
-    expect(fillInSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "mail.example" })).toEqual([]);
+    expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account" })).toEqual([]);
     expect(existsSync(file())).toBe(false);
   });
 
@@ -162,7 +169,6 @@ describe(".env.cloudflare and the environment (plan-setup-wizard §4.2; DEC-0570
   it.runIf(isPosix)("every write leaves the file at mode 600, also when it was wider before", () => {
     const writes: (() => unknown)[] = [
       () => writeTemplateIfAbsent(dir),
-      () => fillInSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "mail.example" }),
       () => commentOutBootstrap(dir),
       () => fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account" }),
     ];
@@ -171,7 +177,7 @@ describe(".env.cloudflare and the environment (plan-setup-wizard §4.2; DEC-0570
       expect(step()).toBeTruthy();
       expect(mode()).toBe(0o600);
     }
-    expect(read()).toBe(`${BOOTSTRAP_DELETED_LINE}\nCLOUDFLARE_API_TOKEN=\nCLOUDFLARE_EMAIL_DOMAIN=mail.example\nCLOUDFLARE_ACCOUNT_ID=fake-account\n`);
+    expect(read()).toBe(`${BOOTSTRAP_DELETED_LINE}\nCLOUDFLARE_API_TOKEN=\nCLOUDFLARE_ACCOUNT_ID=fake-account\n`);
   });
 
   it("the template's hint is not part of a value: a hint-only line reads as empty and is filled; a value typed before the hint is the value", () => {
@@ -182,7 +188,7 @@ describe(".env.cloudflare and the environment (plan-setup-wizard §4.2; DEC-0570
     expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account" })).toEqual(["CLOUDFLARE_ACCOUNT_ID"]);
     expect(read()).toBe("CLOUDFLARE_API_TOKEN=t\nCLOUDFLARE_ACCOUNT_ID=fake-account\n");
 
-    write(`CLOUDFLARE_ACCOUNT_ID=typed-account        ${hint}\nCLOUDFLARE_EMAIL_DOMAIN=${hint}\n`);
+    write(`CLOUDFLARE_ACCOUNT_ID=typed-account        ${hint}\nCLOUDFLARE_API_TOKEN=${hint}\n`);
     expect(readCloudflareSettings(dir, {}).values).toEqual({ CLOUDFLARE_ACCOUNT_ID: "typed-account" });
   });
 
@@ -206,7 +212,7 @@ describe(".env.cloudflare and the environment (plan-setup-wizard §4.2; DEC-0570
     expect(merged.CLOUDFLARE_API_TOKEN).toBeUndefined();
     expect(merged.CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
     expect(merged.PATH).toBe("/bin");
-    expect(mergeCloudflareSettings({ CLOUDFLARE_EMAIL_DOMAIN: "\t" }, readCloudflareSettings(dir, {})).CLOUDFLARE_EMAIL_DOMAIN).toBeUndefined();
+    expect(mergeCloudflareSettings({ CLOUDFLARE_ACCOUNT_ID: "\t" }, readCloudflareSettings(dir, {})).CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
   });
 
   it.runIf(isPosix)("a .env.cloudflare that is a symbolic link is written through to its target, which stays at mode 600; the link stays a link", () => {
@@ -220,9 +226,9 @@ describe(".env.cloudflare and the environment (plan-setup-wizard §4.2; DEC-0570
     expect(lstatSync(file()).isSymbolicLink()).toBe(true);
     expect(readFileSync(target, "utf8")).toBe(`${BOOTSTRAP_DELETED_LINE}\nCLOUDFLARE_API_TOKEN=x\n`);
     expect(statSync(target).mode & 0o777).toBe(0o600);
-    expect(fillInSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "example.test" })).toEqual(["CLOUDFLARE_EMAIL_DOMAIN"]);
+    expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account" })).toEqual(["CLOUDFLARE_ACCOUNT_ID"]);
     expect(lstatSync(file()).isSymbolicLink()).toBe(true);
-    expect(readFileSync(target, "utf8")).toContain("CLOUDFLARE_EMAIL_DOMAIN=example.test\n");
+    expect(readFileSync(target, "utf8")).toContain("CLOUDFLARE_ACCOUNT_ID=fake-account\n");
     expect(readdirSync(shared)).toEqual(["cloudflare.env"]);
   });
 
@@ -241,15 +247,15 @@ describe(".env.cloudflare and the environment (plan-setup-wizard §4.2; DEC-0570
     expect(readdirSync(shared)).toEqual(["cloudflare.env"]);
     // A rewrite of the existing target through the links (a new file renamed over it in its own folder).
     chmodSync(target, 0o644);
-    expect(fillInSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "example.test" })).toEqual(["CLOUDFLARE_EMAIL_DOMAIN"]);
+    expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account" })).toEqual(["CLOUDFLARE_ACCOUNT_ID"]);
     expect(lstatSync(file()).isSymbolicLink()).toBe(true);
     expect(lstatSync(join(dir, "hop")).isSymbolicLink()).toBe(true);
-    expect(readFileSync(target, "utf8")).toContain("CLOUDFLARE_EMAIL_DOMAIN=example.test\n");
+    expect(readFileSync(target, "utf8")).toContain("CLOUDFLARE_ACCOUNT_ID=fake-account\n");
     expect(statSync(target).mode & 0o777).toBe(0o600);
     expect(readdirSync(shared)).toEqual(["cloudflare.env"]);
     // fillInSettings never creates a missing file (SETUP-AC-002, DEC-0587): a dangling link counts as missing.
     rmSync(target);
-    expect(fillInSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "example.test" })).toEqual([]);
+    expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account" })).toEqual([]);
     expect(readdirSync(shared)).toEqual([]);
     expect(lstatSync(file()).isSymbolicLink()).toBe(true);
   });
@@ -262,14 +268,14 @@ describe(".env.cloudflare and the environment (plan-setup-wizard §4.2; DEC-0570
   });
 
   it.runIf(isPosix)("a rewrite replaces the file atomically (a new file renamed over it), at mode 600, leaving no temporary file", () => {
-    write("CLOUDFLARE_BOOTSTRAP_TOKEN=b\nCLOUDFLARE_EMAIL_DOMAIN=\n");
+    write("CLOUDFLARE_BOOTSTRAP_TOKEN=b\nCLOUDFLARE_ACCOUNT_ID=\n");
     chmodSync(file(), 0o644);
     const before = statSync(file()).ino;
     expect(commentOutBootstrap(dir)).toBe(true);
     expect(statSync(file()).ino).not.toBe(before);
     expect(mode()).toBe(0o600);
     const again = statSync(file()).ino;
-    expect(fillInSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "mail.example" })).toEqual(["CLOUDFLARE_EMAIL_DOMAIN"]);
+    expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account" })).toEqual(["CLOUDFLARE_ACCOUNT_ID"]);
     expect(statSync(file()).ino).not.toBe(again);
     expect(mode()).toBe(0o600);
     expect(readdirSync(dir)).toEqual([ENV_CLOUDFLARE_FILE]);

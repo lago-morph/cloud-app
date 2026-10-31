@@ -71,7 +71,7 @@ describe("every Cloudflare command reads the environment and .env.cloudflare (pl
     const io = captureIo(dir);
     const env = { PATH: "/bin" };
     await withCloudflareSettings("admins", load, env)(["list", "--target", "local", "--stage", "s"], io);
-    await withCloudflareSettings("mail", load, env)(["last", "--to", "a@example.com"], io);
+    await withCloudflareSettings("mail", load, env)(["last", "--to", "a@example.invalid"], io);
     expect(seen).toEqual([env, env]);
     expect(io.err).toBe("");
   });

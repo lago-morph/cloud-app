@@ -110,17 +110,9 @@ try {
     await page.getByRole("heading", { level: 1, name: greeting, exact: true }).waitFor(T);
   });
   await check("AUTH: log in through the account page", async () => {
-    // "Log in" opens the framework's sign-in page (DEC-0516); the test then chooses its identity
-    // with mock-login, as every test does, and returns to the app.
+    // Locally the mock is the only login (plan-v0.2.0 §4.3): "Log in" signs in as the mock's
+    // default user and returns to the app.
     await page.getByRole("button", { name: "Log in" }).click();
-    await page.getByRole("heading", { level: 1, name: "Sign in", exact: true }).waitFor(T);
-    if (new URL(page.url()).pathname !== "/api/auth/sign-in") throw new Error(`"Log in" opened ${page.url()}, not the sign-in page`);
-    const status = await page.evaluate(async () => {
-      const r = await fetch("/api/auth/mock-login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ level: "user" }) });
-      return r.status;
-    });
-    if (status !== 204) throw new Error(`mock-login as user answered ${String(status)}`);
-    await page.goto(dev.origin);
     await page.getByText(/Logged in as .* \(user\)\./).waitFor(T);
   });
   const note = `note ${Date.now().toString(36)}`;

@@ -1,6 +1,6 @@
 # Quickstart
 
-Build a small web app on [`@lago-morph/prototype-framework`](packages/framework/README.md), run it on your computer, then put it on Cloudflare. Release 1 runs apps locally and on Cloudflare.
+Build a small web app on [`@lago-morph/prototype-framework`](packages/framework/README.md), run it on your computer, then put it on Cloudflare. Apps run locally and on Cloudflare.
 
 ## Run it locally: one line
 
@@ -14,37 +14,36 @@ This makes the folder `my-app` from the template app, with the Claude Code skill
 
 **In a Claude Code cloud session**, start the session on a repository made this way (push `my-app` to an empty repository), or on an empty repository with the setup script below, and ask Claude to make the app.
 
-## Put it on Cloudflare: one command
+## Put it on Cloudflare: one link, one command, then the admin app
 
-You need:
-- a Cloudflare account on the **Workers Paid** plan: sign-in sends email, which needs it;
-- a **domain on that account, with Cloudflare DNS active**. Its mail can stay where it is.
-
-Then run, in the app's folder (in Claude Code, say **"set up Cloudflare"**):
+Any Cloudflare account works, on the free Workers plan too. No domain is needed. In the app's folder run (in Claude Code, say **"set up Cloudflare"**):
 
 ```sh
 npm run cloudflare-setup
 ```
 
-It prints two pre-filled dashboard links, one for each token, and a template of four lines. Open each link, pick your account if asked, keep the email domain's zone included and, for the bootstrap token, set an end date under TTL 7 days away or sooner (PAR-380); then create the token and copy it. Then:
-- **Command line:** paste the values into `.env.cloudflare` in the app's folder with your editor (or set them in the environment), and run `npm run cloudflare-setup` again.
-- **Cloud session:** paste the four lines into the environment's settings (environment menu → Edit → Environment variables), start a new session, and say **"continue prototype setup"**.
+1. It prints one pre-filled dashboard link, for the **bootstrap token**, and a template of three lines. Open the link, pick your account if asked, and under TTL set an end date **no more than 1 day away** (setup deletes a longer-lived token at once); then create the token and copy it.
+2. Put it in `CLOUDFLARE_BOOTSTRAP_TOKEN`:
+   - **Command line:** in `.env.cloudflare` in the app's folder, with your editor (or in the environment), then run `npm run cloudflare-setup` again.
+   - **Cloud session:** in the environment's settings (environment menu → Edit → Environment variables), then start a new session and say **"continue prototype setup"**.
+3. Setup creates the account's sign-in clients, deploys the **admin app**, deletes the bootstrap token, and prints the admin app's address.
+4. **Open the admin app and sign in** with your Cloudflare account (you need the role "Super Administrator - All Privileges" or "Administrator" in it). On **Account setup**, set the account up: this deploys the **auth app**, which signs people in to every app, and the shared buckets. On **Everyday token**, make the token every command uses; the page shows it once. Put it in `CLOUDFLARE_API_TOKEN` the same way as step 2. The agent never sees it.
+5. Run `npm run cloudflare-setup` again (or say **"continue prototype setup"**). It checks everything and gives the next step, `npm run deploy -- --target cloudflare --stage test-first`.
 
-Setup never prints a token value or an account ID, and asks nothing on the keyboard: when it needs you it stops with exit status 1 and says what to do (`--email-domain <domain>` and `--switch-account` answer its two questions). It does only what is missing: re-run it after a bad paste, after a framework release that needs more permissions, or on another account; it says exactly what to fix. When it is done it deletes the bootstrap token, and the next step is `npm run deploy -- --target cloudflare --stage test-first`. For a second app on the same account, copy `.env.cloudflare` into its folder. Every step, and what to do when setup stops: [skill/reference/owner-tasks.md](skill/reference/owner-tasks.md).
+Setup never prints a token value or an account ID, and asks nothing on the keyboard: when it needs you it stops with exit status 1 and says what to do (`--switch-account` answers its one question). It does only what is missing: re-run it after a bad paste, after a framework release that needs more, or on another account. For a second app on the same account, copy `.env.cloudflare` into its folder: it needs no bootstrap token. Only members of your Cloudflare account can sign in to your apps; members with those two roles are the apps' admins, from their next sign-in. Every step, and what to do when setup stops: [skill/reference/owner-tasks.md](skill/reference/owner-tasks.md).
 
-What the two links ask for:
+**Coming from 0.1.x?** `npm run upgrade` says that setup needs re-running: do steps 1–5 once per account. Password accounts and sessions are gone: everyone signs in again, with Cloudflare. The framework's old sign-in and test-mail tables are dropped on the next `dev` or `deploy`; the app's own data stays. The admin app offers an optional **Clean up v0.1.x email** page for the old email resources.
 
-**Everyday token** `prototype-framework` (every command):
+What each token holds:
+
+**Everyday token** `prototype-framework` (every command; the admin app makes it):
 <!-- permission-table: everyday -->
 | Scope | On the dashboard | API name | Permission group ID |
 | --- | --- | --- | --- |
 | Account | Workers Scripts Edit | Workers Scripts Write | `e086da7e2179491d91ee5f35b3ca210a` |
 | Account | Workers R2 Storage Edit | Workers R2 Storage Write | `bf7481a1826f439697cb59a20b22293e` |
 | Account | D1 Edit | D1 Write | `09b2857d1c31407795e75e3fed8617a1` |
-| Account | Email Sending Read | Email Sending Read | `2d5b4b1f6c89487bb7184c2c1dcd3bf1` |
-| Zone | Zone Read | Zone Read | `c8fed203ed3043cba015a93ad1616f1f` |
-| Zone | Analytics Read | Analytics Read | `9c88f9c5bce24ce7af9a958ba9c504db` |
-| Zone | Email Routing Rules Read | Email Routing Rules Read | `1b600d9d8062443e986a973f097e728a` |
+| Account | Secrets Store Read | Secrets Store Read | `5e33b7d77788455c9fdf18cbd38ee5a0` |
 <!-- /permission-table -->
 
 **Bootstrap token** `prototype-framework-bootstrap` (once; setup deletes it):
@@ -52,22 +51,14 @@ What the two links ask for:
 | Scope | On the dashboard | API name | Permission group ID |
 | --- | --- | --- | --- |
 | Account | Workers Scripts Edit | Workers Scripts Write | `e086da7e2179491d91ee5f35b3ca210a` |
-| Account | Workers R2 Storage Edit | Workers R2 Storage Write | `bf7481a1826f439697cb59a20b22293e` |
+| Account | OAuth Client Edit | OAuth Client Write | `50fc2f43318f40e4855a35d8de5bf643` |
+| Account | Secrets Store Edit | Secrets Store Write | `adc8fa2bc6124928a8b3314dc63a1235` |
 | Account | Account API Tokens Edit | Account API Tokens Write | `5bc3f8b21c554832afc660159ab75fa4` |
-| Account | Email Sending Edit | Email Sending Write | `5df633d6b41c42bcaf5b4a62b9d14b64` |
-| Account | Email Routing Addresses Edit | Email Routing Addresses Write | `e4589eb09e63436686cd64252a3aebeb` |
-| Account | Billing Read | Billing Read | `7cf72faf220841aabcfdfab81c43c4f6` |
-| Account | D1 Edit | D1 Write | `09b2857d1c31407795e75e3fed8617a1` |
-| Zone | Email Routing Rules Edit | Email Routing Rules Write | `79b3ec0d10ce4148a8f8bdc0cc5f97f2` |
-| Zone | DNS Edit | DNS Write | `4755a26eedb94da69e1066d98aa820be` |
-| Zone | Zone Settings Edit | Zone Settings Write | `3030687196b94b638145a3953da2b699` |
-| Zone | Zone Read | Zone Read | `c8fed203ed3043cba015a93ad1616f1f` |
-| Zone | Analytics Read | Analytics Read | `9c88f9c5bce24ce7af9a958ba9c504db` |
 <!-- /permission-table -->
 
 ## The skill in every cloud session: the setup script
 
-Add this to your cloud environment's **Setup script** (environment menu → Edit → Setup script). Replace `<version>` with the exact framework version your apps use, for example `0.1.1`, never `latest`: the script never upgrades by itself. `npm pack` only downloads the archive, so nothing is installed and no package scripts run.
+Add this to your cloud environment's **Setup script** (environment menu → Edit → Setup script). Replace `<version>` with the exact framework version your apps use, for example `0.2.0`, never `latest`: the script never upgrades by itself. `npm pack` only downloads the archive, so nothing is installed and no package scripts run.
 
 ```sh
 set -euo pipefail
