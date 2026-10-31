@@ -1,13 +1,13 @@
 // Unit tests for the record linters scripts/lint-records.mjs (plan v0.2.0 §7a.2.5, TS-12): the
-// root-cause record lint (§7a.1.8, plan.md §10.5) and the test-review record lint (§7a.1.9,
-// ai/implementation/test-reviews/README.md). They run only in the Claude Code commit hook, never in CI.
+// root-cause record lint (§7a.1.8, plan.md §10.5). It runs only in the Claude Code commit hook, never in CI.
+// The test-review record lint and the review-round rules were withdrawn with plan v0.2.0 TS-4/TS-10 (#161).
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { lintRecord, lintRootCause, lintTestReview, recordKind } from "../scripts/lint-records.mjs";
+import { lintRecord, lintRootCause, recordKind } from "../scripts/lint-records.mjs";
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), "..", "scripts", "lint-records.mjs");
 
@@ -35,10 +35,10 @@ Re-run X-AC-001.
 const rootCause = (review: string) => `${ROOT_CAUSE_BODY}\n## Review\n${review}\n`;
 
 describe("recordKind", () => {
-  it("classifies root-cause and test-review records by path, and nothing else", () => {
+  it("classifies root-cause records by path, and nothing else", () => {
     expect(recordKind("ai/implementation/root-causes/2026-10-31-S2-x.md")).toBe("root-cause");
     expect(recordKind("/abs/repo/ai/implementation/root-causes/2026-10-31-S2-x.md")).toBe("root-cause");
-    expect(recordKind("ai/implementation/test-reviews/2026-10-31-S2.md")).toBe("test-review");
+    expect(recordKind("ai/implementation/test-reviews/2026-10-31-S2.md")).toBeNull();
     expect(recordKind("ai/implementation/test-reviews/README.md")).toBeNull();
     expect(recordKind("ai/implementation/root-causes/README.md")).toBeNull();
     expect(recordKind("ai/implementation/root-causes/2026-10-20-E2E-004-coverage-and-not-run.scan.mjs")).toBeNull();
@@ -124,17 +124,6 @@ describe("lintRootCause", () => {
     expect(lintRootCause(rootCause("Verdict: accepted\n\nVerdict: rejected\n- **major** x"))).toEqual(["## Review: more than one verdict"]);
   });
 
-  it("requires reasons marked **major** or **minor** for rejected and accepted-with-changes", () => {
-    expect(lintRootCause(rootCause("Verdict: rejected\n\n- The chain skips a link."))).toEqual([
-      "## Review: verdict rejected needs at least one reason marked **major** or **minor**",
-    ]);
-    expect(lintRootCause(rootCause("Verdict: accepted-with-changes\n\n- change the fix"))).toEqual([
-      "## Review: verdict accepted-with-changes needs at least one reason marked **major** or **minor**",
-    ]);
-    expect(lintRootCause(rootCause("Verdict: rejected\n\n1. **major** Link 2 has no evidence."))).toEqual([]);
-    expect(lintRootCause(rootCause("Verdict: accepted-with-changes\n\n- **Minor (R1):** rename the test."))).toEqual([]);
-  });
-
   it("checks every Review round, including one after a Response", () => {
     const text = `${rootCause("Verdict: rejected\n- **major** link 2 unproven")}\n## Response (round 1)\nMore evidence: E7.\n\n## Review (round 2)\nnothing yet\n`;
     expect(lintRootCause(text)).toEqual([
@@ -143,59 +132,8 @@ describe("lintRootCause", () => {
     expect(lintRootCause(text.replace("nothing yet", "Verdict: accepted"))).toEqual([]);
   });
 
-  it("requires Response sections to be named `Response (round n)` and not empty", () => {
-    const base = rootCause("Verdict: rejected\n- **major** link 2 unproven");
-    expect(lintRootCause(`${base}\n## Response\nE7.\n`)).toEqual(['heading "Response" must be "Response (round n)"']);
-    expect(lintRootCause(`${base}\n## Response (round 1)\n\n## Review (round 2)\nStatus: awaiting review\n`)).toEqual([
-      "section ## Response (round 1) is empty",
-    ]);
-  });
-
   it("allows a qualifier after the verdict", () => {
     expect(lintRootCause(rootCause("**Verdict: accepted-with-changes (binding on the fixer).**\n- **minor** rename"))).toEqual([]);
-  });
-
-  it("counts a **major** marking only where it opens a reason, not in prose", () => {
-    expect(lintRootCause(rootCause("Verdict: accepted. No **major** or **minor** issues."))).toEqual([]);
-    expect(lintRootCause(rootCause("Verdict: accepted\n\n**Major (M1):** link 2 has no evidence"))).toEqual([
-      "## Review: verdict accepted lists a **major** issue; a major issue needs a Response (round n) and another review round",
-    ]);
-  });
-
-  it("counts a marking at the end of a reason, in a blockquote and in a table cell", () => {
-    const flagged = "## Review: verdict accepted lists a **major** issue; a major issue needs a Response (round n) and another review round";
-    for (const reason of ["- Link 2 has no evidence (**major**)", "> - **major** x", "| M1 | **major** | x |", "- M1 — **major**: x"]) {
-      expect(lintRootCause(rootCause(`Verdict: accepted\n\n${reason}`)), reason).toEqual([flagged]);
-    }
-    expect(lintRootCause(rootCause("Verdict: rejected\n\n- rename the test (**minor**)"))).toEqual([]);
-  });
-
-  it("counts `R1 (**major**):` and `**R1, major**` markings, but not a bold sentence that only mentions major", () => {
-    const flagged = "## Review: verdict accepted lists a **major** issue; a major issue needs a Response (round n) and another review round";
-    for (const reason of ["- R1 (**major**): x", "- **R1, major** (file:1): x"]) {
-      expect(lintRootCause(rootCause(`Verdict: accepted\n\n${reason}`)), reason).toEqual([flagged]);
-    }
-    expect(lintRootCause(rootCause("Verdict: rejected\n\n- R2 (**minor**): x"))).toEqual([]);
-    expect(lintRootCause(rootCause("Verdict: accepted\n\n**No major issues.**"))).toEqual([]);
-  });
-
-  it("does not read a summary line that mentions major as a major issue", () => {
-    for (const line of ["**No findings, major or minor.**", "- **Checked links 1-3, major claims hold**", "Not a blocker (**major**). Fine."]) {
-      expect(lintRootCause(rootCause(`Verdict: accepted\n\n${line}`)), line).toEqual([]);
-    }
-  });
-
-  it("rejects an accepted verdict that carries a **major** issue, which needs a Response first (§7a.1.8 step 3)", () => {
-    expect(lintRootCause(rootCause("Verdict: accepted\n\n- **major** link 2 has no evidence"))).toEqual([
-      "## Review: verdict accepted lists a **major** issue; a major issue needs a Response (round n) and another review round",
-    ]);
-    expect(lintRootCause(rootCause("Verdict: accepted\n\n- **minor** typo"))).toEqual([]);
-  });
-
-  it("allows at most 3 review rounds per attempt", () => {
-    let text = rootCause("Verdict: rejected\n- **major** a");
-    for (const n of [1, 2, 3]) text += `\n## Response (round ${n})\nr\n\n## Review (round ${n + 1})\n${n === 3 ? "Verdict: accepted" : "Verdict: rejected\n- **major** a"}\n`;
-    expect(lintRootCause(text)).toEqual(["more than 3 review rounds in one attempt (§7a.1.8 step 7)"]);
   });
 
   const ATTEMPT = (n: number, review: string) =>
@@ -223,118 +161,8 @@ describe("lintRootCause", () => {
   });
 });
 
-const REVIEW_HEAD = `# Test-change review: S2, 2026-10-31
-
-Item: S2
-Change set: v0.2.0/10-record-linters
-Author: S2 implementer
-Reviewer: independent test-change reviewer subagent
-`;
-
-const GROUP_RC = `## Group: code-removed — the email setup module
-Cites: plan v0.2.0 §6, DEC-0601
-Tests:
-- \`packages/framework/src/x.unit.test.ts\` — whole file removed
-Verdict: accepted
-Reasons:
-- The module is removed by the cited decision; no remaining code is uncovered.
-`;
-
-describe("lintTestReview", () => {
-  it("accepts a reviewed record", () => {
-    expect(lintTestReview(`${REVIEW_HEAD}\n${GROUP_RC}`)).toEqual([]);
-  });
-
-  it("accepts a record awaiting review with no verdicts", () => {
-    const text = `${REVIEW_HEAD.replace("Reviewer: independent test-change reviewer subagent\n", "")}Status: awaiting review\n\n${GROUP_RC.replace(/Verdict:[\s\S]*$/, "")}`;
-    expect(lintTestReview(text)).toEqual([]);
-  });
-
-  it("requires the Item and Change set fields", () => {
-    const text = `${REVIEW_HEAD.replace("Item: S2\n", "").replace("Change set: v0.2.0/10-record-linters\n", "Change set:\n")}\n${GROUP_RC}`;
-    expect(lintTestReview(text)).toEqual(["missing field: Item:", "missing field: Change set:"]);
-  });
-
-  it("requires at least one group", () => {
-    expect(lintTestReview(REVIEW_HEAD)).toEqual(["no ## Group: <reason-code> section"]);
-  });
-
-  it("rejects a reason code that is not one of the six", () => {
-    const text = `${REVIEW_HEAD}\n${GROUP_RC.replace("code-removed", "flaky")}`;
-    expect(lintTestReview(text)).toEqual([
-      '## Group: flaky: reason code "flaky" is not one of code-removed, component-removed, behaviour-changed, test-was-wrong, strengthened, refactor-only',
-    ]);
-  });
-
-  it("requires a citation for code-removed, component-removed, behaviour-changed and test-was-wrong, not for the others", () => {
-    for (const code of ["code-removed", "component-removed", "behaviour-changed"]) {
-      const text = `${REVIEW_HEAD}\n${GROUP_RC.replace("code-removed", code).replace("Cites: plan v0.2.0 §6, DEC-0601\n", "")}`;
-      expect(lintTestReview(text)).toEqual([`## Group: ${code}: missing Cites: (the requirement, decision or plan section)`]);
-    }
-    for (const code of ["strengthened", "refactor-only"]) {
-      const text = `${REVIEW_HEAD}\n${GROUP_RC.replace("code-removed", code).replace("Cites: plan v0.2.0 §6, DEC-0601\n", "")}`;
-      expect(lintTestReview(text)).toEqual([]);
-    }
-  });
-
-  it("requires test-was-wrong to cite a root-cause record that exists", () => {
-    const group = (cites: string) => `${REVIEW_HEAD}\n${GROUP_RC.replace("code-removed", "test-was-wrong").replace("Cites: plan v0.2.0 §6, DEC-0601", `Cites: ${cites}`)}`;
-    expect(lintTestReview(group("DEC-0601"))).toEqual(["## Group: test-was-wrong: Cites: must name a record ai/implementation/root-causes/<file>.md"]);
-    const path = "ai/implementation/root-causes/2026-10-31-S2-wrong-expectation.md";
-    expect(lintTestReview(group(`\`${path}\``), { exists: (p: string) => p === path })).toEqual([]);
-    expect(lintTestReview(group(path), { exists: () => false })).toEqual([`## Group: test-was-wrong: cited record ${path} does not exist`]);
-  });
-
-  it("requires the cited root-cause record of test-was-wrong to be accepted", () => {
-    const path = "ai/implementation/root-causes/2026-10-31-S2-wrong-expectation.md";
-    const text = `${REVIEW_HEAD}\n${GROUP_RC.replace("code-removed", "test-was-wrong").replace("Cites: plan v0.2.0 §6, DEC-0601", `Cites: ${path}`)}`;
-    const opts = (record: string) => ({ exists: () => true, read: (p: string) => (p === path ? record : null) });
-    expect(lintTestReview(text, opts(rootCause("Verdict: accepted")))).toEqual([]);
-    expect(lintTestReview(text, opts(rootCause("Verdict: accepted-with-changes\n- **minor** x")))).toEqual([]);
-    expect(lintTestReview(text, opts(rootCause("Status: awaiting review")))).toEqual([
-      `## Group: test-was-wrong: cited record ${path} has no accepted Review verdict`,
-    ]);
-    expect(lintTestReview(text, opts(`${rootCause("Verdict: rejected\n- **major** x")}\n## Response (round 1)\nr\n\n## Review (round 2)\nVerdict: accepted\n`))).toEqual([]);
-    expect(lintTestReview(text, opts(`${rootCause("Verdict: accepted")}\n## Response (round 1)\nr\n\n## Review (round 2)\nVerdict: rejected\n- **major** y\n`))).toEqual([
-      `## Group: test-was-wrong: cited record ${path} has no accepted Review verdict`,
-    ]);
-  });
-
-  it("requires each group to list its tests", () => {
-    const text = `${REVIEW_HEAD}\n${GROUP_RC.replace(/Tests:\n- [^\n]*\n/, "Tests:\n")}`;
-    expect(lintTestReview(text)).toEqual(["## Group: code-removed: missing Tests: (the changed tests)"]);
-  });
-
-  it("requires a verdict, its reasons and the reviewer once the record is not awaiting review", () => {
-    expect(lintTestReview(`${REVIEW_HEAD}\n${GROUP_RC.replace("Verdict: accepted\n", "")}`)).toEqual([
-      "## Group: code-removed: missing Verdict: (accepted, accepted-with-changes or rejected), or `Status: awaiting review` for the record",
-    ]);
-    expect(lintTestReview(`${REVIEW_HEAD}\n${GROUP_RC.replace(/Reasons:[\s\S]*$/, "Reasons:\n")}`)).toEqual(["## Group: code-removed: missing Reasons:"]);
-    expect(lintTestReview(`${REVIEW_HEAD.replace(/Reviewer:.*\n/, "")}\n${GROUP_RC}`)).toEqual(["missing field: Reviewer:"]);
-  });
-
-  it("rejects a verdict that is not one of the three", () => {
-    expect(lintTestReview(`${REVIEW_HEAD}\n${GROUP_RC.replace("Verdict: accepted", "Verdict: ok")}`)).toEqual([
-      '## Group: code-removed: verdict "ok" is not one of accepted, accepted-with-changes, rejected',
-    ]);
-  });
-
-  it("rejects a record awaiting review that already has a verdict", () => {
-    expect(lintTestReview(`${REVIEW_HEAD}Status: awaiting review\n\n${GROUP_RC}`)).toEqual([
-      "## Group: code-removed: has a verdict while the record says `Status: awaiting review`",
-    ]);
-  });
-
-  it("checks every group", () => {
-    const second = GROUP_RC.replace("code-removed — the email setup module", "refactor-only — moved helpers").replace("Verdict: accepted\n", "");
-    expect(lintTestReview(`${REVIEW_HEAD}\n${GROUP_RC}\n${second}`)).toEqual([
-      "## Group: refactor-only: missing Verdict: (accepted, accepted-with-changes or rejected), or `Status: awaiting review` for the record",
-    ]);
-  });
-});
-
 describe("lintRecord", () => {
-  it("checks the file name of each kind", () => {
+  it("checks the file name of a root-cause record, and ignores test-review files", () => {
     expect(lintRecord("ai/implementation/root-causes/2026-10-31-S2-x.md", rootCause("Verdict: accepted"))).toEqual([]);
     expect(lintRecord("ai/implementation/root-causes/S2-x.md", rootCause("Verdict: accepted"))).toEqual([
       "file name must be <yyyy-mm-dd>-<item-id>-<slug>.md",
@@ -345,13 +173,11 @@ describe("lintRecord", () => {
     expect(lintRecord("ai/implementation/root-causes/2026-10-31-S2.md", rootCause("Verdict: accepted"))).toEqual([
       "file name must be <yyyy-mm-dd>-<item-id>-<slug>.md",
     ]);
-    expect(lintRecord("ai/implementation/test-reviews/2026-10-31-S2.md", `${REVIEW_HEAD}\n${GROUP_RC}`)).toEqual([]);
-    expect(lintRecord("ai/implementation/test-reviews/S2.md", `${REVIEW_HEAD}\n${GROUP_RC}`)).toEqual(["file name must be <yyyy-mm-dd>-<item-id>.md"]);
+    expect(lintRecord("ai/implementation/test-reviews/2026-10-31-S2.md", "anything")).toEqual([]);
   });
 
   it("allows underscores and dots in an item id or slug", () => {
     expect(lintRecord("ai/implementation/root-causes/2026-10-31-S2-fix_flaky.v2.md", rootCause("Verdict: accepted"))).toEqual([]);
-    expect(lintRecord("ai/implementation/test-reviews/2026-10-31-T_7.md", `${REVIEW_HEAD}\n${GROUP_RC}`)).toEqual([]);
   });
 
   it("returns nothing for a file that is not a record", () => {

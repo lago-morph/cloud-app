@@ -1,6 +1,6 @@
 # Changing E2E scenarios
 
-Read this when you add, change or retire a scenario in `docs/acceptance/e2e-scenarios.md`, or when you review such a change.
+Read this when you add, change or retire a scenario in `docs/acceptance/e2e-scenarios.md`.
 
 Source: `ai/implementation/plan-v0.2.0-testing-auth.md` §7a.2.3 (TS-15); `docs/CONVENTIONS.md` §2–§4.
 
@@ -8,8 +8,7 @@ Source: `ai/implementation/plan-v0.2.0-testing-auth.md` §7a.2.3 (TS-15); `docs/
 
 Agents keep the scenarios current with the framework's intent: whenever a flow is added or changes, its scenario changes in the same work (`SKILL.md`, rule 4). Agents may add, change and retire scenarios of any origin, with no owner approval. Each change needs:
 - a decision-log entry (a draft in the item's decision file);
-- a review by an independent subagent, which wrote neither the scenario text nor its tests. It checks that the text matches the framework's current intent and requirements, and that the tests carry the scenario out;
-- a test-change review for every once-green test that the change or retirement changes, removes, skips or re-tags (`resources/test-change-review.md`).
+- every once-green test that the change or retirement changes, removes, skips or re-tags listed in the PR by reason (`SKILL.md`, rule 8).
 
 ## A new scenario
 
@@ -32,8 +31,8 @@ Agents keep the scenarios current with the framework's intent: whenever a flow i
 
 1. Remove its `#### E2E-nnn` heading and its body from the list of scenarios.
 2. Add a row to the "Retired scenarios" table at the end of the file: retired ID, former scenario (its title and a one-line summary), former Where, and the reason or the replacement. The row has no `Where:` line. The catalogue adds every entry that has one, so a retired scenario left with a `Where:` line would stay expected.
-3. Remove or re-tag its tests, through the test-change review.
+3. Remove or re-tag its tests, and list them in the PR by reason (`SKILL.md`, rule 8).
 
 ## Done
 
-You can stop reading when the scenario text, its `Where:` and `Origin:` lines, its tagged tests, its decision draft and its review are all in the same change, and the catalogue unit tests pass.
+You can stop reading when the scenario text, its `Where:` and `Origin:` lines, its tagged tests and its decision draft are all in the same change, and the catalogue unit tests pass.

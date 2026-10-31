@@ -7,7 +7,7 @@
 // - typecheck: the projects of `npm run typecheck` that hold a TypeScript file (all three when a root
 //   tsconfig changes; the harness project also when framework source changes), building the framework first
 //   for the harness project, which reads its dist;
-// - the record lints (scripts/lint-records.mjs) on root-cause and test-review records.
+// - the record lint (scripts/lint-records.mjs) on root-cause records.
 // The files: the staged ones (records read from the index), plus those the command adds before committing
 // (`git add <paths>`, `-A`, `-u`, `-f`, `--pathspec-from-file`) and those `git commit -a` or
 // `git commit <paths>` takes (read from the working tree). Committed files are never linted unless they are
@@ -593,7 +593,7 @@ function lintRepo(top, files, run, deadline) {
 
   const records = paths.filter((p) => recordKind(p)).map((p) => ({ path: p, text: files.get(p) === "index" ? git(top, ["show", `:${p}`]) : readFileSync(join(top, p), "utf8"), top }));
   const recordProblems = lintAll(records);
-  if (recordProblems.length) problems.push(`record lint failed (plan v0.2.0 §7a.1.8, §7a.1.9; ai/implementation/test-reviews/README.md):\n${recordProblems.map((p) => `  ${p}`).join("\n")}`);
+  if (recordProblems.length) problems.push(`record lint failed (plan v0.2.0 §7a.1.8):\n${recordProblems.map((p) => `  ${p}`).join("\n")}`);
   return problems;
 }
 

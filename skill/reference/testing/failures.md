@@ -13,7 +13,7 @@ Each role is its own subagent. None of them wrote the code that failed, and the 
 One record per failure, in the app's repository: `test-records/root-causes/<yyyy-mm-dd>-<slug>.md`. Its sections, in this order:
 
 1. **Symptom**: the exact command and output.
-2. **Evidence**: logs (`.logs/`, or the stage's log entry for the `requestId`, [troubleshooting.md](../troubleshooting.md)), requests and responses, state, a debugger session (`node inspect`, or Vitest `--inspect-brk`), variations of the test that confirm or rule out each hypothesis, and a minimal reproduction.
+2. **Evidence**: logs (`.logs/`, or the stage's log entry for the `requestId`, [troubleshooting.md](../troubleshooting.md)), requests and responses, state, variations of the test that confirm or rule out each hypothesis, and a minimal reproduction.
 3. **Causal chain**, with the evidence for each link.
 4. **Alternatives ruled out.**
 5. **Proposed fix.**
@@ -25,17 +25,14 @@ An unproven link means more evidence, never a guess.
 ## Steps
 
 1. **Diagnose.** The diagnoser reproduces the failure, gathers the evidence and writes the record.
-2. **Review.** The reviewer first decides whether the evidence supports every link and rules out the alternatives; only then does it judge the fix (the cause, not the symptom). It reproduces once, plus one experiment per hypothesis it doubts. Its verdict is `accepted`, `accepted-with-changes` (binding on the fixer) or `rejected`, with each reason marked **major** or **minor**.
-3. **Respond.** On `rejected` or any major reason, the diagnoser answers each one point by point in a `Response (round n)` section (more evidence, a corrected chain, a revised fix, or a rebuttal with evidence), Minor reasons are fixed or answered in the same section. The record then goes back to step 2.
-4. **Similar cases.** After acceptance and before the fix, a subagent searches the app for the same pattern: other routes, other call sites, the other SQL dialect, local versus cloud. It lists what it found in a `Similar cases` section and adds a failing test for each.
-5. **Fix, red then green.** A fixer adds the reproduction test (and the similar-case tests), sees them fail, then fixes the code as the accepted record says, and sees them pass.
-6. **Re-check.** A subagent that changed nothing re-runs the affected tests and `npm run verify`, and checks that the record's Review came before the fix and that no test was skipped or weakened. Its verdict is the only pass.
+2. **Review.** The reviewer checks that the evidence supports every link, that the alternatives are ruled out, and that the fix addresses the cause, not the symptom. Its verdict is `accepted` or `rejected`, with reasons. A rejected record goes back to step 1.
+3. **Fix, red then green.** A fixer adds the reproduction test, sees it fail, then fixes the code as the accepted record says, and sees it pass. Where the same defect is plainly in other code it is changing, it fixes and tests that too.
+4. **Re-check.** A subagent that changed nothing re-runs the affected tests and `npm run verify`, and checks that no test was skipped or weakened. Its verdict is the only pass.
 
 ## Limits
 
-- At most **3 attempts** (steps 1–6) per failure, and **3 review rounds** per attempt. A failed re-check starts the next attempt in the same record.
-- A failure that needed a second attempt or round gets a short `Non-convergence note`, written by another subagent: why the first try failed. If the note shows this skill was not specific enough, add a `FRAMEWORK-ISSUE.md` entry citing the note.
-- Still open after the limits: stop and tell the user, in plain words, what fails, what was tried, and the record's path.
+- At most **3 attempts** (steps 1–4) per failure.
+- Still open after 3 attempts: stop and tell the user, in plain words, what fails, what was tried, and the record's path.
 - A suspected framework defect goes to `FRAMEWORK-ISSUE.md` (`SKILL.md` hard rules 6 and 7), with the record as its evidence.
 
 ## Examples
@@ -44,4 +41,4 @@ An unproven link means more evidence, never a guess.
 
 ## Stopping condition
 
-Stop reading when the failure has an accepted record, its fix passed the re-check, and every similar case is tested and fixed; or when it stopped at the limits and you told the user.
+Stop reading when the failure has an accepted record and its fix passed the re-check, or when it stopped at the limits and you told the user.

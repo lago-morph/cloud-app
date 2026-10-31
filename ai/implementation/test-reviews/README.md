@@ -1,5 +1,7 @@
 # Test-change review records
 
+> **Withdrawn (plan v0.2.0 TS-10, #161).** No new records are written here and nothing lints them. Changes to once-green tests are now listed by reason in the PR (`.claude/skills/testing-standards/SKILL.md`, rule 8). The records below are kept as the history of the v0.2.0 run.
+
 One record per change set that changes once-green tests (plan v0.2.0 §7a.1.9, TS-10). A test is once-green if it passed in the current session or is on `main`, in any layer: unit, integration, compliance criteria, e2e, smoke and fuzz. A change is any change to its expected results or assertions, its removal, a skip, a widened tolerance or timeout, or a changed tag.
 
 - **Path:** `ai/implementation/test-reviews/<yyyy-mm-dd>-<item-id>.md`. A second change set of the same item on the same day adds a suffix: `<yyyy-mm-dd>-<item-id>-2.md`.
