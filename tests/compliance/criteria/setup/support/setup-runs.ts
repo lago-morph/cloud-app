@@ -131,7 +131,9 @@ export function sensitiveHits(runs: readonly RecordedRun[] = RUNS): string[] {
   const values = sensitiveValues();
   const hits: string[] = [];
   for (const r of runs) {
-    const texts: [string, string][] = [["stdout", r.out], ["stderr", r.err], ...Object.entries(r.files).map(([p, t]): [string, string] => [`file ${p}`, t])];
+    // The bootstrap prints the admin app's URL, which holds the subdomain (v0.2.0 plan §5.1 step 5; DEC-0686): that URL alone is allowed, on standard output.
+    const out = [...values].filter(([, label]) => label.startsWith("workers.dev subdomain")).reduce((text, [sub]) => text.split(`https://prototype-admin.${sub}.workers.dev`).join("<admin app URL>"), r.out);
+    const texts: [string, string][] = [["stdout", out], ["stderr", r.err], ...Object.entries(r.files).map(([p, t]): [string, string] => [`file ${p}`, t])];
     for (const [where, text] of texts) {
       // A zone ID such as `zone1` is matched as a whole word only.
       for (const [value, label] of values) {

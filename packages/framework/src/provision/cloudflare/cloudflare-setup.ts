@@ -54,7 +54,9 @@ import { zoneCandidates } from "./email.js";
 import type { Environment } from "./environment.js";
 import { ensureEnvCloudflareIgnored, gitSafetyWarnings, inspectGitSafety } from "./git-safety.js";
 import { ACCOUNT_SETUP_VERSION, BOOTSTRAP, comparePolicies, deepLink, PERMISSIONS_VERSION, probeEveryday, TOKEN_NAMES, type PermissionGroup, type TokenDetails, type TokenKind } from "./permissions.js";
-import { CLIENT_NAMES, ensureOAuthClients, ensureSubdomain, type ClientKind } from "./oauth-clients.js";
+import { deployAdminApp } from "./admin-app-deploy.js";
+import { APP_SCRIPTS, CLIENT_NAMES, ensureOAuthClients, ensureSubdomain, type ClientKind } from "./oauth-clients.js";
+import { ensureStore } from "./secrets-store.js";
 import { workersPlanReader } from "./plan.js";
 import { SIGNING_TOKEN_NAME } from "./r2-token.js";
 import { checkAccountSetup, type SetupStepOptions } from "./setup-steps.js";
@@ -656,12 +658,16 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
 
       // Step 2: both OAuth clients, each secret straight into Secrets Store (DEC-0684, DEC-0685).
       // A failure throws: the run fails before the self-delete, so the token stays for the next run.
+      // The subdomain is not redacted here: the admin app's URL holds it, and step 5 prints it (DEC-0686).
       const subdomain = await ensureSubdomain(api, to.id, deps.stepOptions?.newSubdomain);
-      hidden.add(subdomain);
       const clients = await ensureOAuthClients(api, to.id, { subdomain, onSecret: (value) => hidden.add(value) });
       const both = (kinds: readonly ClientKind[]) => kinds.map((k) => CLIENT_NAMES[k]).join(" and ");
       if (clients.created.length > 0) say(`OAuth clients: created ${both(clients.created)}; their IDs and secrets are in Secrets Store`);
       if (clients.kept.length > 0) say(`OAuth clients: ${both(clients.kept)} already exist${clients.kept.length === 1 ? "s" : ""}, with their secrets in Secrets Store`);
+
+      // Step 3: the admin app, deployed and bound to the admin client (DEC-0686).
+      const adminUrl = await deployAdminApp(api, to.id, { storeId: await ensureStore(api, to.id), subdomain });
+      say(`admin app: deployed (Worker ${APP_SCRIPTS.admin}), bound to the admin client's ID and secret in Secrets Store`);
 
       // The bootstrap token deletes itself last: its own ID, from its own verify call, never another.
       // A protected one does not: no DELETE is sent (the guard would refuse it) and its line stays.
@@ -677,8 +683,11 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       }
       fillIn({ CLOUDFLARE_ACCOUNT_ID: to.id }, to, switchedTo);
       say();
+      // Step 5: the admin app's URL and the next step.
       say("The Cloudflare bootstrap is complete.");
       say(`  account: ${to.name}`);
+      say(`  admin app: ${adminUrl}`);
+      say(`\nNext step: open the admin app and sign in: ${adminUrl}`);
       return EXIT.ok;
     }
 
