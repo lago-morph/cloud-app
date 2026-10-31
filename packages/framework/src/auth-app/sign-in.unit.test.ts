@@ -134,6 +134,19 @@ describe("completeSignIn", () => {
     expect(up.revoked().sort()).toEqual([ACCESS_TOKEN, REFRESH_TOKEN].sort());
   });
 
+  it("refuses a 200 without an access_token and still revokes the refresh token it did get", async () => {
+    const { up, run, deps } = setup();
+    const inner = deps.fetch;
+    (deps as { fetch: typeof fetch }).fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const res = await inner(input, init);
+      if (!String(input).endsWith("/oauth2/token") || res.status !== 200) return res;
+      const { access_token: _drop, ...rest } = (await res.json()) as Record<string, unknown>;
+      return Response.json(rest);
+    }) as typeof fetch;
+    expect(await refused(run())).toBe("token exchange: no access token");
+    expect(up.revoked()).toEqual([REFRESH_TOKEN]);
+  });
+
   it("revokes on every later failure: JWKS, expired token, /user, /memberships unreachable", async () => {
     const now = Math.floor(Date.now() / 1000);
     const cases: [Partial<FakeUpstreamOptions>, string, ((u: string) => boolean)?][] = [
