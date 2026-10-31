@@ -6,12 +6,68 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { D1StatementLike } from "../../../mig/apply.js";
 import { d1Client } from "./client.js";
 import { openFakeD1Api, type FakeD1Api } from "./fake-d1-api.js";
 import { importDump } from "./native-copy.js";
 
 const ACCOUNT = "acct";
 const BASE = `/accounts/${ACCOUNT}/d1/database`;
+
+/**
+ * Root cause 2026-10-31-native-copy-fetch-failed.md: through getPlatformProxy, Miniflare's
+ * `prepare` and `bind` are synchronous proxy calls that block the main thread. While `turns.on`
+ * is set, the fake's bindings are wrapped (they still reach real local D1) so that each proxy call
+ * records whether the event loop turned since the previous one: every call clears a flag and
+ * schedules a `setImmediate` that sets it. Deterministic; no timing.
+ */
+const turns = vi.hoisted(() => ({ on: false, log: [] as { op: "prepare" | "bind" | "batch"; turned: boolean }[] }));
+vi.mock("../../../targets/local/platform-proxy.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../../../targets/local/platform-proxy.js")>();
+  let turned = true;
+  const call = (op: "prepare" | "bind" | "batch") => {
+    turns.log.push({ op, turned });
+    turned = false;
+    setImmediate(() => {
+      turned = true;
+    });
+  };
+  const unwrap = new WeakMap<object, D1StatementLike>();
+  const statement = (st: D1StatementLike): D1StatementLike => {
+    const wrapped = new Proxy(st, {
+      get(target, prop) {
+        if (prop === "bind")
+          return (...values: unknown[]) => {
+            call("bind");
+            return statement(target.bind(...values));
+          };
+        const v = Reflect.get(target, prop) as unknown;
+        return typeof v === "function" ? (...a: unknown[]) => (v as (...x: unknown[]) => unknown).apply(target, a) : v;
+      },
+    });
+    unwrap.set(wrapped, st);
+    return wrapped;
+  };
+  type Binding = { prepare(sql: string): D1StatementLike; batch(s: D1StatementLike[]): Promise<unknown> };
+  const binding = (b: Binding): Binding => ({
+    prepare: (sql) => {
+      call("prepare");
+      return statement(b.prepare(sql));
+    },
+    batch: (list) => {
+      call("batch");
+      return b.batch(list.map((s) => unwrap.get(s) ?? s));
+    },
+  });
+  return {
+    ...real,
+    startPlatformProxy: ((configPath: string) => {
+      const started = real.startPlatformProxy<Record<string, Binding>>(configPath);
+      if (!turns.on) return started;
+      return started.then((proxy) => ({ ...proxy, env: Object.fromEntries(Object.entries(proxy.env).map(([k, b]) => [k, binding(b)])) }));
+    }) as typeof real.startPlatformProxy,
+  };
+});
 
 describe("fake D1 HTTP API", { timeout: 60_000 }, () => {
   let fake: FakeD1Api;
@@ -80,6 +136,53 @@ describe("fake D1 HTTP API", { timeout: 60_000 }, () => {
     const r = await fake.api("POST", `${BASE}/${uuid}/query`, { sql: "SELECT name FROM sqlite_master WHERE name = 't'" });
     expect(r).toMatchObject({ body: { result: [{ results: [{ name: "t" }] }] } });
     expect(fake.requests.map((q) => q.method)).toEqual(["POST", "POST", "POST"]);
+  });
+});
+
+// Root cause 2026-10-31-native-copy-fetch-failed.md: a long run of synchronous proxy calls inside
+// one I/O continuation lets workerd close an idle pooled socket that the next call is written to
+// ("fetch failed"). The fake must let the event loop turn after every statement it prepares (and
+// binds), and before the batch that runs them.
+describe("fake D1 HTTP API yields to the event loop between synchronous proxy calls", { timeout: 60_000 }, () => {
+  let fake: FakeD1Api;
+  beforeEach(async () => {
+    turns.on = true;
+    try {
+      fake = await openFakeD1Api({ accountId: ACCOUNT });
+    } finally {
+      turns.on = false;
+    }
+  }, 60_000);
+  afterEach(async () => {
+    await fake?.close();
+  });
+
+  const create = async (name: string) => ((await fake.api("POST", BASE, { name })).body as { result: { uuid: string } }).result.uuid;
+  const unturned = (op: "prepare" | "bind" | "batch", skipFirst: boolean) => turns.log.filter((e) => e.op === op).slice(skipFirst ? 1 : 0).filter((e) => !e.turned).length;
+
+  it("an import's ingest: a turn before every prepare after the first, and before the batch", async () => {
+    const uuid = await create("ingest");
+    const lines = [`PRAGMA defer_foreign_keys=TRUE;`, `CREATE TABLE "t" ("id" integer PRIMARY KEY, "v" text);`, ...Array.from({ length: 60 }, (_, i) => `INSERT INTO "t" ("id","v") VALUES(${i},'v${i}');`)];
+    turns.log.length = 0;
+    await importDump(d1Client(fake.api, ACCOUNT), uuid, new TextEncoder().encode(lines.join("\n")), { transfer: fake.transfer, sleep: async () => undefined });
+    expect((await fake.database(uuid).prepare(`SELECT count(*) AS "n" FROM "t"`).all<{ n: number }>()).results[0]?.n).toBe(60);
+    const ingest = turns.log.slice(0, turns.log.findIndex((e) => e.op === "batch") + 1);
+    turns.log.splice(0, turns.log.length, ...ingest);
+    expect(turns.log.filter((e) => e.op === "prepare").length).toBeGreaterThan(60 * 4);
+    expect.soft(unturned("prepare", true), "prepares with no event-loop turn since the previous proxy call").toBe(0);
+    expect(turns.log.at(-1)?.op).toBe("batch");
+    expect.soft(unturned("batch", false), "no event-loop turn between the last prepare and the batch").toBe(0);
+  });
+
+  it("a query batch with params: a turn after every statement's prepare and bind, and before the batch", async () => {
+    const uuid = await create("query");
+    await fake.api("POST", `${BASE}/${uuid}/query`, { sql: `CREATE TABLE "t" ("id" integer, "v" text)` });
+    turns.log.length = 0;
+    const r = await fake.api("POST", `${BASE}/${uuid}/query`, { batch: Array.from({ length: 8 }, (_, i) => ({ sql: `INSERT INTO "t" VALUES (?, ?)`, params: [i, `v${i}`] })) });
+    expect(r).toMatchObject({ status: 200, body: { success: true } });
+    expect(turns.log.map((e) => e.op)).toEqual([...Array.from({ length: 8 }, () => ["prepare", "bind"]).flat(), "batch"]);
+    expect.soft(unturned("prepare", true), "prepares with no event-loop turn since the previous statement's bind").toBe(0);
+    expect.soft(unturned("batch", false), "no event-loop turn between the last bind and the batch").toBe(0);
   });
 });
 
