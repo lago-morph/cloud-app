@@ -310,6 +310,51 @@ function commandStart(words) {
   return k;
 }
 
+/** The bodies of the unescaped `$( … )` and backtick spans in a word. */
+function substitutions(word) {
+  const out = [];
+  for (let i = 0; i < word.length; i++) {
+    if (word[i] === "\\") i++;
+    else if (word[i] === "$" && word[i + 1] === "(") {
+      const stop = substitutionEnd(word, i + 1);
+      out.push(word.slice(i + 2, Math.max(i + 2, stop - 1)));
+      i = stop - 1;
+    } else if (word[i] === "`") {
+      const j = word.indexOf("`", i + 1);
+      if (j < 0) break;
+      out.push(word.slice(i + 1, j));
+      i = j;
+    }
+  }
+  return out;
+}
+
+/** Splits `git` arguments into the global options (directory, inline aliases), the subcommand and its arguments. */
+function gitWords(rest, cwd, env) {
+  let j = 0;
+  const inline = {};
+  while (j < rest.length && rest[j].startsWith("-")) {
+    if (rest[j] === "-C") {
+      cwd = at(cwd, rest[j + 1] ?? ".", env);
+      j += 2;
+    } else if (GIT_GLOBAL_WITH_VALUE.has(rest[j])) {
+      const a = rest[j] === "-c" ? /^alias\.([^=]+)=(.*)$/s.exec(rest[j + 1] ?? "") : null;
+      if (a) inline[a[1]] = a[2];
+      j += 2;
+    } else j++;
+  }
+  return { cwd, inline, sub: rest[j], args: rest.slice(j + 1) };
+}
+
+function gitCommand(rest, state) {
+  const { cwd, inline, sub, args } = gitWords(rest, state.cwd, state.env);
+  if (sub === undefined) return;
+  // A subcommand that cannot be resolved (`git "$(echo commit)"`) is read as commit.
+  if (sub === "commit" || dynamic(sub)) state.events.push({ kind: "commit", cwd, ...commitArgs(args, cwd, state.env) });
+  else if (sub === "add" || sub === "stage") state.events.push({ kind: "add", cwd, ...addArgs(args, cwd, state.env) });
+  else if (!GIT_BUILTINS.has(sub)) state.events.push({ kind: "other", cwd, sub, args, inline });
+}
+
 function walk(src, state) {
   const subshells = [];
   for (const item of commands(src)) {
@@ -321,6 +366,8 @@ function walk(src, state) {
       if (subshells.length) state.cwd = subshells.pop();
       continue;
     }
+    // Command substitutions run first, in a subshell: walk them with their own directory.
+    for (const body of item.flatMap(substitutions)) walk(body, { ...state, dirs: [] });
     const k = commandStart(item);
     const cmd = item[k];
     if (cmd === undefined) continue;
@@ -343,24 +390,11 @@ function walk(src, state) {
       const inner = { ...state, dirs: [] };
       walk(rest[1], inner);
     } else if (name === "git") {
-      let cwd = state.cwd;
-      let j = 0;
-      const inline = {};
-      while (j < rest.length && rest[j].startsWith("-")) {
-        if (rest[j] === "-C") {
-          cwd = at(cwd, rest[j + 1] ?? ".", state.env);
-          j += 2;
-        } else if (GIT_GLOBAL_WITH_VALUE.has(rest[j])) {
-          const a = rest[j] === "-c" ? /^alias\.([^=]+)=(.*)$/s.exec(rest[j + 1] ?? "") : null;
-          if (a) inline[a[1]] = a[2];
-          j += 2;
-        } else j++;
-      }
-      const sub = rest[j];
-      const args = rest.slice(j + 1);
-      if (sub === "commit") state.events.push({ kind: "commit", cwd, ...commitArgs(args, cwd, state.env) });
-      else if (sub === "add" || sub === "stage") state.events.push({ kind: "add", cwd, ...addArgs(args, cwd, state.env) });
-      else if (sub !== undefined && !GIT_BUILTINS.has(sub)) state.events.push({ kind: "other", cwd, sub, args, inline });
+      gitCommand(rest, state);
+    } else {
+      // git as an argument of another command (`watch git commit`, `find -exec git commit`, `parallel git commit`).
+      const g = rest.findIndex((w) => basename(w) === "git");
+      if (g >= 0) gitCommand(rest.slice(g + 1), state);
     }
   }
 }
@@ -385,8 +419,11 @@ export function commitPlan(command, cwd, env = process.env) {
   };
 }
 
-/** The commit a git alias stands for, or null. A shell alias (`!…`) that mentions commit counts as `commit -a`. */
-function aliasCommit(o, top) {
+/**
+ * The commit a git alias stands for, or null. An alias may set options before its subcommand and may name
+ * another alias (followed up to 3 levels). A shell alias (`!…`) that mentions commit counts as `commit -a`.
+ */
+function aliasCommit(o, top, depth = 0) {
   let value = o.inline[o.sub];
   if (value === undefined && top) {
     try {
@@ -397,8 +434,10 @@ function aliasCommit(o, top) {
   }
   if (!value) return null;
   if (value.startsWith("!")) return /\bcommit\b/.test(value) ? { cwd: o.cwd, all: true, pathspecs: [] } : null;
-  const words = value.split(/\s+/).filter(Boolean);
-  return words[0] === "commit" ? { cwd: o.cwd, ...commitArgs([...words.slice(1), ...o.args], o.cwd, {}) } : null;
+  const { sub, args } = gitWords(value.split(/\s+/).filter(Boolean), o.cwd, {});
+  if (sub === "commit") return { cwd: o.cwd, ...commitArgs([...args, ...o.args], o.cwd, {}) };
+  if (sub === undefined || GIT_BUILTINS.has(sub) || sub === "add" || depth >= 2) return null;
+  return aliasCommit({ ...o, sub, args: [...args, ...o.args] }, top, depth + 1);
 }
 
 // ---- What the commit holds, and the linters ----

@@ -111,6 +111,16 @@ describe("commitPlan: which commands commit, and what they add first", () => {
     expect(plan("git status").others).toEqual([]);
   });
 
+  it("walks command substitutions, a dynamic git subcommand, and git behind any other command word", () => {
+    for (const c of ["echo $(git commit -m x)", "x=$(git commit -m x)", "echo `git commit -m x`", 'echo "$(git commit -m x)"', 'git "$(echo commit)" -m x', "watch git commit -m x", "find . -exec git commit -m x \\;", "parallel git commit -m x ::: 1"]) {
+      expect(plan(c).commits, c).toHaveLength(1);
+    }
+    expect(plan("(cd /tmp; echo $(cd /x)) ; git commit -m x").commits[0]?.cwd).toBe("/base");
+    for (const c of ['git log --oneline | grep "commit"', 'gh pr create --body "fix git commit hook"', 'echo "\\$(git commit)"']) {
+      expect(plan(c).commits, c).toEqual([]);
+    }
+  });
+
   it("marks a --pathspec-from-file it cannot locate as null", () => {
     expect(commitPlan('git commit --pathspec-from-file="$(pwd)/l" -m x', "/base", {}).commits[0]?.pathspecFile).toBeNull();
   });
@@ -325,6 +335,28 @@ describe("runHook", () => {
     expect(runHook(input("git ci -m x", dir), { run }).code).toBe(2);
     expect(runHook(input("git -c alias.cm=commit cm -m x", dir), { run }).code).toBe(2);
     expect(runHook(input("git st", dir), { run }).code).toBe(0);
+  });
+
+  it("follows chained aliases and aliases with options before commit", () => {
+    const dir = repo();
+    write(dir, REC, NO_REVIEW);
+    stage(dir, REC);
+    execFileSync("git", ["config", "alias.ci", "commit"], { cwd: dir });
+    execFileSync("git", ["config", "alias.cm", "ci"], { cwd: dir });
+    execFileSync("git", ["config", "alias.cx", "-c core.quotepath=off commit -v"], { cwd: dir });
+    const run = recorder().run;
+    expect(runHook(input("git cm -m x", dir), { run }).code).toBe(2);
+    expect(runHook(input("git cx -m x", dir), { run }).code).toBe(2);
+  });
+
+  it("blocks a commit run inside a command substitution or behind another command", () => {
+    const dir = repo();
+    write(dir, REC, NO_REVIEW);
+    stage(dir, REC);
+    const run = recorder().run;
+    for (const c of ["echo $(git commit -m x)", 'git "$(echo commit)" -m x', "watch git commit -m x"]) {
+      expect(runHook(input(c, dir), { run }).code, c).toBe(2);
+    }
   });
 
   it("does not check commands that only mention commit", () => {
