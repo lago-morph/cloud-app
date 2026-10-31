@@ -70,9 +70,17 @@ describe("auth-app login provider", () => {
     const { binding, provider, back } = setup();
     const { transactionState } = await provider.beginLogin(ctx);
     const code = binding.issueCode(alice, { app: APP, returnUrl: CALLBACK });
-    expect(await provider.completeLogin(ctx, back(transactionState, { code }), transactionState)).toStrictEqual({ subject: alice.sub, displayName: null });
+    expect(await provider.completeLogin(ctx, back(transactionState, { code }), transactionState)).toStrictEqual({ subject: alice.sub, displayName: null, roles: [] });
     expect(binding.calls.redeem).toBe(1);
     expect(await failure(provider.completeLogin(ctx, back(transactionState, { code }), transactionState))).toBe("code refused");
+  });
+
+  it("the identity carries the role at redemption, not at code issue (plan §4.1 step 5)", async () => {
+    const { binding, provider, back } = setup();
+    const { transactionState: s } = await provider.beginLogin(ctx);
+    const code = binding.issueCode(alice, { app: APP, returnUrl: CALLBACK });
+    binding.setRole(alice.sub, "admin");
+    expect(await provider.completeLogin(ctx, back(s, { code }), s)).toMatchObject({ roles: ["admin"] });
   });
 
   it("a state mismatch fails before any redemption", async () => {

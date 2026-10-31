@@ -24,6 +24,13 @@ export interface ProviderIdentity {
   /** Provider's stable identifier for the person. Never exposed to app code. */
   readonly subject: string;
   readonly displayName: string | null;
+  /**
+   * The roles the provider confirmed at sign-in, when it has them (the auth-app provider:
+   * the role at redemption). Then AUTH keeps the level in the session and asks
+   * `accountStatus` again only every PAR-425, failing closed (plan-v0.2.0 §4.1 step 5,
+   * DEC-0668). Absent: the level is read on every request.
+   */
+  readonly roles?: readonly string[];
 }
 
 /**
