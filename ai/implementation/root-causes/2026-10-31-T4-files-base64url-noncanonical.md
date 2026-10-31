@@ -74,7 +74,43 @@ Search: `grep -rn "atob(" packages apps skill --include=*.ts`, plus the callers 
 Item T4 had no subagent tool, so it diagnosed its own finding. The review is by a fresh, independent Claude Code remote session that did not write the test or the code (plan §7a.1.8 step 2).
 
 ## Review
-_Pending: the independent reviewer's verdict goes here before the fix commit._
+Reviewer: an independent Claude Code remote session (`session_014mWQ6iUAmPMoYo2DWNgSsL`), 2026-10-31, round 1, read-only, on commit `f5de06d`. It reproduced the three failures and the Appendix output. It then applied both proposed fixes as uncommitted experiments and reverted them:
+- the fuzz files passed at the fixed seeds, and at seeds 1–3 with 5,000 runs (F4) and 20,000 runs (F6);
+- `auth`, `files` and `kv` passed (50 files, 596 tests);
+- the full unit suite had 1 unrelated failure: MIG-AC-003, the known tie in `2026-10-31-C-mig-record-order-tie.md`, which passes alone.
+
+**Verdict: accepted-with-changes.**
+1. **minor:** Every link reproduces, and the alternatives are ruled out (the same 32 bytes reach `crypto.subtle.verify`; the ticket body is signed as text).
+2. **major:** The fix misses a case the cited property covers. `base64urlToText` decodes with `TextDecoder("utf-8", { fatal: true })`, and `ignoreBOM` defaults to false, so a leading UTF-8 BOM is dropped. With the proposed fix applied, `base64urlToText("77u_")` is `""`, which re-encodes to `""`. A FILES cursor with a BOM in front (`77u_eyJwIjoiYS8iLCJhIjoiYS94In0`) still decodes to `a/x`. Required: `ignoreBOM: true` (or a text re-encode check), a regression test for `77u_…`, and BOM-prefixed inputs in F4's and F6's generators. The generators never produced this input.
+3. **major:** "Similar cases" wrongly calls `kv/cursor.ts` canonical. It has the same BOM gap (`kv/cursor.ts:36`): `77u_WyJhLyIsImEveCJd` decodes to `a/x`. F6's KV property passes only because it compares the base64 re-encoding of the bytes, which keep the BOM. Required: count it as a similar case, give it a failing test, and fix it the same way. It is in F6's scope.
+4. **minor:** The fuzz properties are faithful to S4, neither weaker nor stronger. The canonical-bytes check on the FILES cursor comes from F4's decoder rule.
+5. **minor:** The reviewer did not re-run the template case, but confirmed that `apps/template/src/server/signing.ts:24` and `apps/demo/src/server/signing.ts:24` decode the same way. Sending it out as a new item is correct. Leaving out `reference/encoding.ts` and `mail/mime.ts` is reasonable.
+
+## Response (round 1)
+- **To 2 (major).**
+  - **Reproduced** on `f5de06d`'s build (script `evidence-bom.mjs`, added to the Appendix):
+    - `base64urlToText("77u_")` is `""`, which re-encodes to `""`;
+    - `files cursor with BOM 77u_eyJwIjoiYS8iLCJhIjoiYS94In0 -> "a/x"`.
+  - **Revised fix.** `base64urlToText` decodes with `{ fatal: true, ignoreBOM: true }`. A leading BOM then stays in the text: `"77u_"` decodes to `"﻿"` and re-encodes to `"77u_"`. Together with the canonical byte check, decoding then returns a value only for its one spelling. A FILES cursor with a BOM then fails `JSON.parse` (a BOM is not JSON whitespace), so it is FILES.INVALID_CURSOR.
+  - **Tests.**
+    - F4's decoder property gets BOM-prefixed constants (`77u_`, `77u_YQ`).
+    - Both cursor properties get BOM-prefixed issued cursors and a stronger check: the cursor's bytes are exactly the UTF-8 JSON of the requested prefix and the returned key or name. This check is kv.md §2's "exactly that form"; JSON whitespace is allowed, since neither decoder documents a canonical JSON spelling.
+    - These generator changes go into the fuzz files on `88`, where they are red, and are merged forward.
+    - Plain regression tests for `77u_…` go in `files/cursor.unit.test.ts` and `kv/cursor.unit.test.ts`.
+- **To 3 (major).** Reproduced: `kv cursor with BOM 77u_WyJhLyIsImEveCJd -> "a/x"`. `kv/cursor.ts` is now counted as a similar case with the same cause (a `TextDecoder` that drops a BOM). It gets the same one-line fix (`ignoreBOM: true`) and is added to this record's fix files. Its failing test is F6's strengthened KV property plus the regression test.
+- **Further similar cases, from a search for `new TextDecoder("utf-8", { fatal: true })`.**
+  - `auth/signing.ts:78` decodes a session or login token's payload.
+  - `auth-app/id-token.ts:35` decodes an ID token's payload.
+
+  Both have the same decoder settings, but in both the MAC or signature covers the *encoded* text. So a BOM cannot be added without the key, and no extra spelling is accepted: F4's auth properties pass with the `respell-end` and insertion mutations. No change there.
+- **To 4 and 5.** Agreed; no change.
+- **Revised fix files:**
+  - `packages/framework/src/files/base64url.ts` (the canonical byte check and `ignoreBOM: true`);
+  - `packages/framework/src/kv/cursor.ts` (`ignoreBOM: true`);
+  - the regression tests in `files/local/tickets.unit.test.ts`, `files/cursor.unit.test.ts` and `kv/cursor.unit.test.ts`.
+- **Revised verification plan.** Red: on `88`, F4's files properties and both F6 cursor properties fail. Green: on `89`, they pass, along with the regression tests. Only F1 fails until `89b`.
+
+**Status:** accepted-with-changes; the binding changes are made above, before the fix commit.
 
 ## Appendix: reproduction script
 Run as `D=$PWD/packages/framework/dist node repro.mjs` from the repo root, after `npm run build -w packages/framework`.
@@ -112,3 +148,22 @@ for (const s of spellings(kvEncode("a/", "a/b"))) {
 ```
 
 The template case (Similar cases) was reproduced by running `fromBase64url`, `toBase64url` and `verifyToken`'s HMAC check copied from `apps/template/src/server/signing.ts` on a fresh signature and its 3 re-spellings: all 4 verified.
+
+`evidence-bom.mjs` (Response, round 1), run the same way:
+
+```js
+// BOM spellings (review round 1 of the F4 record). Runs against the built dist.
+const D = process.env.D;
+const { base64urlToText, textToBase64url } = await import(`${D}/files/base64url.js`);
+const { decodeCursor: filesDecode, encodeCursor: filesEncode } = await import(`${D}/files/cursor.js`);
+const { decodeCursor: kvDecode, encodeCursor: kvEncode } = await import(`${D}/kv/cursor.js`);
+const bom = (c) => Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(c, "base64url")]).toString("base64url");
+console.log('base64urlToText("77u_") =', JSON.stringify(base64urlToText("77u_")), "re-encodes to", JSON.stringify(textToBase64url(base64urlToText("77u_") ?? "")));
+const run = (label, f) => {
+  try { console.log(label, "->", JSON.stringify(f())); } catch (e) { console.log(label, "->", e.code); }
+};
+const fc = bom(filesEncode("a/", "a/x"));
+const kc = bom(kvEncode("a/", "a/x"));
+run(`files cursor with BOM ${fc}`, () => filesDecode("a/", fc));
+run(`kv cursor with BOM ${kc}`, () => kvDecode(kc, "a/"));
+```
