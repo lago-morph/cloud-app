@@ -1,0 +1,5 @@
+# Owner questions — v0.2.0 (plan-v0.2.0-testing-auth.md)
+
+Decisions the orchestrator took while the owner was away during the v0.2.0 run. Each is recorded as a decision with "Origin: orchestrator, pending owner review" where it changes the product. Format: question — choice — how to reverse.
+
+1. (run start, 2026-10-31) No Cloudflare API token is injected in this sandbox: `GET /accounts/$CLOUDFLARE_ACCOUNT_ID/tokens/verify` returns "Missing Authorization header", and `CLOUDFLARE_API_TOKEN` is not set. How should the cloud and `test-` stage passes run? — They are not run: every Cloud pass, `test-` stage pass and `prodcheck` pass is recorded `not-run` (reason: no token), and only local work (unit, integration, local e2e, fakes, mock-oauth2-server) is done. The once-per-release live pass is replaced by the runbook `ai/implementation/live-pass-v0.2.0.md`. — Re-run the cloud passes (`npm run compliance -- --target cloudflare …`, the `test-` stage and `prodcheck` passes) in a session with the token, then do the live pass from the runbook.
