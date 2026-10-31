@@ -82,12 +82,6 @@ export const verifyBinding: Command = lazy(async () => {
 
 export const devBinding: Command = lazy(async () => (await import("./commands/dev.js")).devBinding());
 
-/** `mail last`: locally from `.mail/`, on Cloudflare from the account's mail sink. */
-export const mailBinding: Command = cloud("mail", async (env) => {
-  const { cloudflareSinkReader, mailCommand } = await import("./commands/mail.js");
-  return mailCommand({ cloud: cloudflareSinkReader(env) });
-});
-
 /** `version-check` and `upgrade` (plan-setup-wizard §4.8a; DEC-0594, DEC-0595). */
 export const versionCheckBinding: Command = lazy(async () => (await import("./commands/version-check.js")).versionCheckBinding());
 export const upgradeBinding: Command = lazy(async () => (await import("./commands/upgrade.js")).upgradeBinding());

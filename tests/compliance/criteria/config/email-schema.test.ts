@@ -31,7 +31,7 @@ async function buildWith(copy: ScratchApp, framework: Record<string, unknown>): 
 if (isLocal()) {
   describe("CFG: framework.email and the retired framework.google", () => {
     it(
-      tag(["CFG-AC-006", "MAIL-AC-005"], "a values file with framework.google, or with a framework.email field other than senderName, fails the build naming the field; senderName alone builds"),
+      tag("CFG-AC-006", "a values file with framework.google, or with a framework.email field other than senderName, fails the build naming the field; senderName alone builds"),
       async () => {
         const copy = await scratchCopy(REFERENCE_DIR, "cfg-email");
         try {

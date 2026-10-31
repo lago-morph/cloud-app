@@ -68,26 +68,6 @@ describe("AUTH-AC-005 /api/auth/* against the HTTP contract, on the target", () 
     }
   });
 
-  it(tag("AUTH-AC-005", "contract part: GET /api/auth/login redirects (302) to the framework's sign-in page on the public origin with the sanitised returnTo, and logs nobody in"), async () => {
-    for (const [returnTo, expected] of [
-      ["/after", "/after"],
-      ["//evil.example", "/"],
-      ["https://evil.example/x", "/"],
-    ] as const) {
-      const c = client();
-      const res = c.expectStatus(await c.get(`/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`), 302);
-      const location = locationOf(c, res);
-      expect(location.origin, `returnTo ${returnTo}: the redirect stays on the public origin`).toBe(c.baseUrl);
-      expect(location.pathname, `returnTo ${returnTo}: the framework's sign-in page`).toBe("/api/auth/sign-in");
-      expect(location.searchParams.get("returnTo") ?? "/", `returnTo ${returnTo}: carried sanitised`).toBe(expected);
-      // The mock is reached only through mock-login (DEC-0516): login sets no session.
-      expect(setCookies(res.headers).filter((k) => k.name === sessionCookieName() && !clears(k)), "no session cookie").toEqual([]);
-      expect(c.expectStatus(await c.get("/api/auth/me"), 200).json()).toStrictEqual({ level: "anonymous" });
-      const page = c.expectStatus(await c.get(`${location.pathname}${location.search}`), 200);
-      expect(page.headers.get("content-type") ?? "", "the sign-in page is HTML").toMatch(/^text\/html/);
-    }
-  });
-
   it(tag("AUTH-AC-005", "contract part: GET /api/auth/callback without a transaction is 302 to / with authError=login_failed and creates no session"), async () => {
     const c = client();
     const res = c.expectStatus(await c.get("/api/auth/callback?code=fix-auth005&state=fix-auth005"), 302);

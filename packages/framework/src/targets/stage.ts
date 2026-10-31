@@ -20,7 +20,7 @@ import { createHttpParts, type HealthCheck } from "../http/runtime.js";
 import { createAuthParts } from "../auth/runtime.js";
 import type { AuthMock } from "../auth/mock.js";
 import type { CookieSettings } from "../auth/cookies.js";
-import type { CredentialProvider, LoginProvider } from "../auth/login-provider.js";
+import type { LoginProvider } from "../auth/login-provider.js";
 import { createKv } from "../kv/service.js";
 import { createFilesService, type FilesStore, type TicketIssuer } from "../files/service.js";
 import { createFrameworkSecrets, createSecretsService, type SecretReader } from "../secrets/service.js";
@@ -28,8 +28,6 @@ import type { FrameworkSecretName } from "../secrets/names.js";
 import { requestLogFactory } from "../log/request.js";
 import type { LogSink } from "../log/writer.js";
 import type { LogService } from "../log/public.js";
-import type { MailSender } from "../mail/sender.js";
-import { bindRequestMail } from "../mail/request.js";
 import { adapterOf } from "../sql/handle.js";
 import type { PortableDb } from "../sql/types.js";
 import { frameworkTables } from "../mig/framework.js";
@@ -74,18 +72,12 @@ export interface StageOptions {
   readonly cookies?: CookieSettings;
   /** The authentication mock: only locally and on test stages. */
   readonly mock?: AuthMock;
-  /** The stage's real login provider, or the stub in tests. */
-  readonly provider?: LoginProvider;
-  /** The stage's credential provider (PWD), built per request over the request's database (password.md §2). */
-  readonly credentialProvider?: (c: RuntimeContext) => CredentialProvider;
-  /** Further framework routes under `/api` (the local file-transfer route, the test-stage test-mail route). */
+  /** AUTH's clock and retry wait (`createTestApp`'s test clock); default the real ones. */
+  readonly authClock?: { readonly now: () => number; readonly sleep: (ms: number) => Promise<void> };
+  /** The stage's real login provider (the auth-app provider, built per request), or the stub in tests. */
+  readonly provider?: LoginProvider | ((c: RuntimeContext) => LoginProvider);
+  /** Further framework routes under `/api` (the local file-transfer route). */
   readonly routes?: (api: Hono<RuntimeEnv>) => void;
-  /**
-   * The stage's outgoing-mail sender for one request (MAIL §2): Email Service on production
-   * stages, a capture everywhere else. It is bound to each request; the password provider (PWD)
-   * sends through it with `sendRequestMail` (mail/request.ts), after the response.
-   */
-  readonly mail?: (c: RuntimeContext) => MailSender;
 }
 
 function requestLog(deployment: ResolvedConfig["deployment"], options: StageOptions): (c: RuntimeContext) => LogService {
@@ -126,9 +118,9 @@ export function assembleStage<C extends ConfigDeclaration, S extends string>(def
     framework: resolved.email === undefined ? {} : { email: resolved.email },
     secret: (c, name) => frameworkSecrets(c.env, c.var.log).get(name as FrameworkSecretName),
     ...(options.provider === undefined ? {} : { provider: options.provider }),
-    ...(options.credentialProvider === undefined ? {} : { credentialProvider: options.credentialProvider }),
     ...(options.mock === undefined ? {} : { mock: options.mock }),
     ...(options.cookies === undefined ? {} : { cookies: options.cookies }),
+    ...(options.authClock === undefined ? {} : { now: options.authClock.now, sleep: options.authClock.sleep }),
   });
 
   const app = assembleApp(defined, {
@@ -149,14 +141,6 @@ export function assembleStage<C extends ConfigDeclaration, S extends string>(def
     forgeryCheck: auth.forgeryCheck,
     ...http.parts,
     frameworkRoutes: (api) => {
-      const { mail } = options;
-      if (mail !== undefined) {
-        // Framework code sends through `requestMail`/`sendRequestMail` (mail/request.ts); the sender is made on first use.
-        api.use(async (c, next) => {
-          bindRequestMail(c, mail);
-          await next();
-        });
-      }
       http.parts.frameworkRoutes?.(api);
       auth.routes(api);
       options.routes?.(api);
