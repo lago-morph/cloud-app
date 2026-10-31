@@ -28,7 +28,10 @@
  * - `deployCode` (step 5): a full `sst deploy` with the current database as an input, then the
  *   framework-internal secrets the CLI creates: the session key and the password provider's
  *   secret `frameworkAuthSecret` (each generated when absent, PAR-253), and the account's R2
- *   signing credential as S3 credentials, copied from its record on every deploy (DEC-0550). On a
+ *   signing credential as S3 credentials, copied from its record on every deploy (DEC-0550) or,
+ *   when the record says it is in Secrets Store, bound from there under the same `SECRET_*` names
+ *   in the upload itself, after deleting any copies (DEC-0727, DEC-0729; step 3's targeted run
+ *   declares the Worker without them, which it does not deploy). On a
  *   production stage the Worker also binds `AUTH` to the auth app (with its origin), and once the
  *   code is deployed the stage's return URL `<public origin>/api/auth/callback` is registered with
  *   the auth app under the app ID `<app>-<stage>` (DEC-0667, DEC-0725; `worker.ts`).
@@ -54,6 +57,7 @@
  */
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
+import { secretLocation } from "../../config/secret-locations.js";
 import { FRAMEWORK_SECRETS } from "../../secrets/names.js";
 import type { DeployedCode, DeployInput, HealthOutcome, Stage, StageDatabase, StageResource, StageResources, TargetOperations } from "../core/operations.js";
 import { accountSubdomain, createSharedResources, inspectSharedResources, type SharedResourceOptions } from "./account.js";
@@ -68,10 +72,10 @@ import { missingCredentials, type Environment } from "./environment.js";
 import { checkStageHealth } from "./health.js";
 import { accountResourceClash, filesBucketName, isStageStateObject, legacySigningTokenName, publicOrigin, STATE_BUCKET, workerName } from "./names.js";
 import { deleteObjects, listObjectKeys } from "./objects.js";
-import { deleteSigningToken, findLegacySigningToken, readSigningCredentials, SIGNING_RESOURCE, signingCredentialState, tokenWriteProblems } from "./r2-token.js";
-import { INFRASTRUCTURE_COMPONENT, processSstExec, runSst, writeSstApp, type SstExec, type WorkerCode } from "./sst.js";
+import { deleteSigningToken, findLegacySigningToken, readSigningPlacement, SIGNING_RESOURCE, SIGNING_SECRET_NAMES, signingCredentialState, tokenWriteProblems, type SigningPlacement } from "./r2-token.js";
+import { INFRASTRUCTURE_COMPONENT, processSstExec, runSst, writeSstApp, type SecretsStoreBinding, type SstExec, type WorkerCode } from "./sst.js";
 import { appOrigin } from "./oauth-clients.js";
-import { AUTH_APP_SCRIPT, AUTH_CALLBACK_PATH, cloudflareAuthAppLink, listSetSecrets, setRoute, setSecret, type AuthAppLink } from "./worker.js";
+import { AUTH_APP_SCRIPT, AUTH_CALLBACK_PATH, cloudflareAuthAppLink, deleteSecret, listSetSecrets, setRoute, setSecret, type AuthAppLink } from "./worker.js";
 
 /** What FILES (D-02) supplies to provisioning. */
 export interface CloudflareFilesProvisioning {
@@ -151,15 +155,29 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
   const workerPath = (stage: Stage) => `/accounts/${accountId}/workers/scripts/${workerName(stage)}`;
   const bucketPath = (stage: Stage) => `/accounts/${accountId}/r2/buckets/${filesBucketName(stage)}`;
 
-  async function ensureFrameworkSecrets(stage: Stage): Promise<void> {
+  /** Where this deploy takes the signing credential from (DEC-0729); throws when the account has none. */
+  async function signingPlacement(): Promise<SigningPlacement> {
+    const placement = await readSigningPlacement(api, accountId);
+    if (!placement) throw new Error(`the account's ${SIGNING_RESOURCE} is missing; run setup-account --target cloudflare with the setup token (DEC-0551)`);
+    return placement;
+  }
+
+  /** The signing credential's Secrets Store bindings, under the names of the Worker secrets they replace (DEC-0727). */
+  const signingBindings = (storeId: string): SecretsStoreBinding[] => [
+    { binding: secretLocation("cloudflare", FRAMEWORK_SECRETS.r2AccessKeyId), storeId, secretName: SIGNING_SECRET_NAMES.accessKeyId },
+    { binding: secretLocation("cloudflare", FRAMEWORK_SECRETS.r2SecretAccessKey), storeId, secretName: SIGNING_SECRET_NAMES.secretAccessKey },
+  ];
+
+  async function ensureFrameworkSecrets(stage: Stage, placement: SigningPlacement): Promise<void> {
     const set = (await listSetSecrets(api, accountId, stage)) ?? new Set<string>();
     for (const name of [FRAMEWORK_SECRETS.sessionKey, FRAMEWORK_SECRETS.authSecret]) {
       if (!set.has(name)) await setSecret(api, accountId, stage, name, randomKey());
     }
+    // Bound from Secrets Store by the upload itself (DEC-0729); otherwise the Worker-secret fallback.
+    if (placement.kind === "secrets-store") return;
     // Written on every deploy, so a stage with a legacy per-stage token, or one deployed before the
     // credential was replaced, signs with the account's current credential (DEC-0550).
-    const credentials = await readSigningCredentials(api, accountId);
-    if (!credentials) throw new Error(`the account's ${SIGNING_RESOURCE} is missing; run setup-account --target cloudflare with the setup token (DEC-0551)`);
+    const { credentials } = placement;
     await setSecret(api, accountId, stage, FRAMEWORK_SECRETS.r2AccessKeyId, credentials.accessKeyId);
     await setSecret(api, accountId, stage, FRAMEWORK_SECRETS.r2SecretAccessKey, credentials.secretAccessKey);
   }
@@ -253,10 +271,14 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
     async deployCode(input: DeployInput & { readonly database: StageDatabase }): Promise<DeployedCode> {
       if (!options.code) throw new Error("no built Worker code; build --target cloudflare must run before deploy");
       refuseAccountResourceClash(input.stage);
-      const worker = await workerInput(input, input.database, options.code);
+      const placement = await signingPlacement();
+      const fromStore = placement.kind === "secrets-store" ? { secretsStore: signingBindings(placement.storeId) } : {};
+      const worker = { ...(await workerInput(input, input.database, options.code)), ...fromStore };
+      // A Worker cannot hold a secret and a binding of one name: copies an earlier deploy made go first (DEC-0727).
+      if (placement.kind === "secrets-store") for (const name of [FRAMEWORK_SECRETS.r2AccessKeyId, FRAMEWORK_SECRETS.r2SecretAccessKey]) await deleteSecret(api, accountId, input.stage, name);
       writeSstApp(dir, { stage: input.stage, worker });
       await runSst(sst, sstRun(input.stage), "deploy");
-      await ensureFrameworkSecrets(input.stage);
+      await ensureFrameworkSecrets(input.stage, placement);
       // The return URL is registered once the Worker that answers it exists, before step 6 starts it (DEC-0725).
       if (production(input.stage)) await authApp.register(workerName(input.stage), `${worker.publicOrigin}${AUTH_CALLBACK_PATH}`);
       return { publicOrigin: worker.publicOrigin };
