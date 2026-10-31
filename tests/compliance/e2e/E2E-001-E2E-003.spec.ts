@@ -1,10 +1,14 @@
 /**
  * E2E-001 — New app, no cloud, and E2E-003 — Portability is enforced (both Where: Local).
- * One scaffolded app serves both (scaffolding packs and installs the framework once).
+ * One scaffolded app serves both (scaffolding packs and installs the framework once). Since v0.2.0
+ * (plan-v0.2.0 §7.1 "Add" item 3, DEC-0767) the app is made the way a user makes one: by the packed
+ * `npm create` starter (`@lago-morph/create-prototype-app`, packed as `npm publish` would pack it,
+ * with its template and skill bundled), given the packed framework with `--framework file:<tarball>`.
  *
  * E2E-001: "On a machine with no cloud credentials and networking to cloud providers blocked:
- * 1. Scaffold a new app from the template. It installs the framework from an npm pack tarball
- * at an exact version, and imports every public subpath. 2. Run dev; use each capability
+ * 1. Scaffold a new app with the npm create starter (@lago-morph/create-prototype-app), packed as
+ * it is published, with the template and the skill bundled. Give it the framework as an npm pack
+ * tarball at an exact version. The app imports every public subpath. 2. Run dev; use each capability
  * through the template's pages. 3. Run verify. Pass: the app works locally and verify passes."
  * - Scaffolding needs the npm registry for the template's other pinned dependencies (C-05), so
  *   it runs with the cloud credentials removed from the environment but with the proxy; every
@@ -25,6 +29,7 @@ import { join } from "node:path";
 import { tag } from "../harness/index.js";
 import { expect, test } from "../harness/playwright.js";
 import { REPO_ROOT, TEMPLATE_DIR, run, tail, type RunResult } from "./support/process.js";
+import { packFramework, packStarter } from "./support/packs.js";
 
 const OFFLINE = join(REPO_ROOT, "scripts", "offline.sh");
 const PAGES_SCRIPT = join(REPO_ROOT, "tests", "compliance", "e2e", "support", "template-pages.ts");
@@ -44,6 +49,8 @@ function noCredentials(home: string | undefined): Record<string, string> {
 }
 
 let root: string;
+/** The packed framework the starter was given. */
+let framework: string;
 let appDir: string;
 let offlineHome: string;
 let verifiedClean = false;
@@ -65,8 +72,12 @@ test.beforeAll(async () => {
   appDir = join(root, "app");
   offlineHome = join(root, "home");
   mkdirSync(offlineHome);
-  const scaffold = await run(process.execPath, [join(REPO_ROOT, "skill", "scripts", "scaffold"), appDir], { cwd: root, env: noCredentials(undefined), timeoutMs: 15 * 60_000 });
-  expect(scaffold.status, `scaffold failed:\n${tail(scaffold.output)}`).toBe(0);
+  framework = await packFramework(root);
+  const starter = await packStarter(root);
+  // The starter's own bin, as `npm create @lago-morph/prototype-app` runs it: copy, name, pin, skill, npm install, local setup, git.
+  const scaffold = await run(process.execPath, [join(starter, "bin", "create-prototype-app.js"), appDir, "--framework", `file:${framework}`], { cwd: root, env: noCredentials(undefined), timeoutMs: 15 * 60_000 });
+  expect(scaffold.status, `npm create failed:\n${tail(scaffold.output)}`).toBe(0);
+  expect(existsSync(join(appDir, ".claude", "skills", "prototype-framework", "SKILL.md")), "the starter added the skill").toBe(true);
 });
 
 test.afterAll(() => {
@@ -81,8 +92,8 @@ test(tag(["E2E-001", "LOCAL-AC-001"], "a scaffolded app installs the framework f
   expect(pinned, "the template pins an exact version").toMatch(/^\d+\.\d+\.\d+$/);
   const appPkg = JSON.parse(readFileSync(join(appDir, "package.json"), "utf8")) as { dependencies: Record<string, string> };
   const spec = appPkg.dependencies[PACKAGE] ?? "";
-  expect(spec).toMatch(/^file:vendor\/[^/]+\.tgz$/);
-  expect(existsSync(join(appDir, spec.slice("file:".length))), "the tarball is in the app").toBe(true);
+  expect(spec, "the starter pins exactly the packed tarball it was given").toBe(`file:${framework}`);
+  expect(existsSync(framework), "the packed tarball").toBe(true);
   const installed = JSON.parse(readFileSync(join(appDir, "node_modules", ...PACKAGE.split("/"), "package.json"), "utf8")) as { version: string; exports: Record<string, unknown> };
   expect(installed.version).toBe(pinned);
 
@@ -130,7 +141,7 @@ test(tag(["E2E-001", "LOCAL-AC-001"], "a scaffolded app installs the framework f
     .flatMap((f) => readFileSync(join(logDir, f), "utf8").split("\n"))
     .filter((l) => l.trim() !== "")
     .map((l) => JSON.parse(l) as { app: string; component: string; message: string; requestId?: string });
-  expect(entries.filter((e) => e.app === "template" && e.component === "notes" && /^note \S+ created$/.test(e.message) && typeof e.requestId === "string"), "the note's log entry").toHaveLength(1);
+  expect(entries.filter((e) => e.app === "app" && e.component === "notes" && /^note \S+ created$/.test(e.message) && typeof e.requestId === "string"), "the note's log entry").toHaveLength(1);
 
   // 3. verify.
   const verified = await verify();

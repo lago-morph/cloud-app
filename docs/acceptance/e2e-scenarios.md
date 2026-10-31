@@ -17,7 +17,7 @@ Where: Local
 Origin: ai-proposed (reviewed by the owner before 2026-10-31)
 
 On a machine with no cloud credentials and networking to cloud providers blocked:
-1. Scaffold a new app from the template. It installs the framework from an `npm pack` tarball at an exact version, and imports every public subpath.
+1. Scaffold a new app with the `npm create` starter (`@lago-morph/create-prototype-app`), packed as it is published, with the template and the skill bundled. Give it the framework as an `npm pack` tarball at an exact version. The app imports every public subpath.
 2. Run `dev`; use each capability through the template's pages.
 3. Run `verify`.
 
@@ -239,6 +239,20 @@ Expected errors and edge cases:
 One UI test signs in through the sign-in pages in a browser (E2E-005's auth-app part). The transaction cookie's attributes are checked on the way (AUTH-AC-006).
 
 Pass: each step and each expected error behaves as stated, and no app response carries a provider token or the member's email address.
+
+#### E2E-019 — Upgrade from 0.1.x
+Verifies: SYS-REQ-012
+Where: Local
+Origin: ai-proposed
+
+Make an app the way a 0.1.x user did: with the published 0.1.1 `npm create` starter and framework. Use it under `dev` and store some of the app's own data. Then upgrade it with its own `npm run upgrade -- 0.2.0`, from a local 0.2.0 package tarball (served for the framework's scope by a local registry until 0.2.0 is published), and run `dev` again (plan-v0.2.0 §8).
+
+Expected error: an upgrade to a version the registry does not have stops before changing anything.
+
+Pass:
+- the app's own data survives the upgrade and the next `dev`;
+- the upgrade prints the pointer to re-run Cloudflare setup (0.1.x's own upgrade command prints it, naming `cloudflare-setup` and the bootstrap token);
+- the next `dev` drops the Better Auth, sign-in rate-limit and test-mail tables through the framework's migrations.
 
 ## Retired scenarios
 
