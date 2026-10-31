@@ -8,6 +8,15 @@ Plan: `ai/implementation/plan-v0.2.0-testing-auth.md` ("plan §n"); governing pr
 
 **Owner unavailable for the whole run.** Nothing waits on the owner. §6.1 wording goes in its own spec PR marked "owner approval of wording needed"; implementation proceeds on the proposed wording.
 
+## RUN STOPPED BY THE OWNER — 2026-10-31 ~15:00 UTC
+
+The owner stopped the run because it was using too many tokens. Every agent is stopped, and this session is unsubscribed from PR notifications for #59–#160. Nothing is merged, tagged or released.
+
+- **Stopped mid-work:** C 34c, the bootstrap token rules (branch `v0.2.0/34c-fix-bootstrap-token-rules`). Its root-cause and test-change reviews were accepted, and the fix was pushed (7e52ca5). Its PR may be open with CI pending; check before you continue.
+- **Done but not yet in the sections above:** the T7 harness diagnoser. It opened PRs #157 (`97-fix-testing-type-exports`, CORE-AC-001), #158 (`98-fix-demo-role-refresh`, CHECK-AC-005 and the demo admin-role test) and #159 (`99-records-harness-failures`, records only); CI is green on all three. E2E-016 is covered by #141 and SEC-AC-002 by #150. CLI-AC-008 failed when the shared cgroup ran out of memory, not because of code. E2E-003 and E2E-009 failed from a full disk (ENOSPC) in that run and need a clean re-run. Open for D: amend SEC-AC-002 at `secrets.md:73` to drop the password clause; `secrets.md:58` still lists `frameworkAuthSecret`. #157 and #155 edit the same lines of `test-app.ts`.
+- **Not started:** T6 (independent review), I2 (integrate the wave-2 and Then decisions), the live-pass runbook additions listed in Open items, V (version bump and CHANGELOG), FR (final report), the records-only merge-up into 71m and above, and archiving the reviewer sessions.
+- **Release blockers still open:** owner question 56 (E2E-007, roles in existing sessions) and the open owner-approval PRs (#74, #136, #151). C 34c (above) has not merged. Merge order matters; see `v0.2.0-pr-stack.md` and the merge notes in Open items.
+
 ## 1. Decisions taken
 <!-- one line each: date · ID · item · decision · where recorded -->
 - 2026-10-31 · DEC-0620 · R · Nothing merges during the run, so "after X merged" in §3/§4 means "after X is pushed on its branch". Stacks still base on `main` unless they edit a file or import code that a lower PR changes; then they stack on that PR's branch. A and C start in batch 1 alongside wave 0 (their owned paths do not overlap S1–S4). · owner-questions 2
