@@ -33,19 +33,21 @@ async function deleteWorker(api: CloudflareApi, a: string): Promise<string> {
 async function deleteBucket(api: CloudflareApi, a: string): Promise<string> {
   const base = `/accounts/${a}/r2/buckets/${MAIL_SINK_NAME}`;
   let removed = 0;
-  for (let page = 0; page < CLEANUP_MAX_PAGES; page++) {
+  // Each pass lists from the start (deleted keys are gone); one more listing than PAR-449 pages
+  // tells "empty" from "more remain".
+  for (let page = 0; ; page++) {
     const r = await api("GET", `${base}/objects?per_page=1000`);
-    if (gone(r.status)) return removed === 0 ? `The R2 bucket <code>${MAIL_SINK_NAME}</code> was already gone.` : `Deleted the R2 bucket <code>${MAIL_SINK_NAME}</code>.`;
+    if (gone(r.status)) return removed === 0 ? `The R2 bucket <code>${MAIL_SINK_NAME}</code> was already gone.` : `Deleted ${String(removed)} stored test messages; the R2 bucket <code>${MAIL_SINK_NAME}</code> itself was already gone.`;
     const list = (r.body as { result?: { key?: unknown }[] } | null)?.result;
     if (!succeeded(r) || !Array.isArray(list)) throw new Error(`listing the R2 bucket ${MAIL_SINK_NAME} failed: ${describeFailure(r)}`);
     if (list.length === 0) break;
+    if (page === CLEANUP_MAX_PAGES) return `Deleted ${String(removed)} stored test messages; more remain in <code>${MAIL_SINK_NAME}</code>. Run the cleanup again to finish.`;
     for (const o of list) {
-      if (typeof o.key !== "string") continue;
+      if (typeof o.key !== "string") throw new Error(`listing the R2 bucket ${MAIL_SINK_NAME}: an entry has no key; nothing more was deleted`);
       const d = await api("DELETE", `${base}/objects/${encodeURIComponent(o.key)}`);
       if (!succeeded(d) && !gone(d.status)) throw new Error(`emptying the R2 bucket ${MAIL_SINK_NAME} failed: ${describeFailure(d)}`);
       removed++;
     }
-    if (page === CLEANUP_MAX_PAGES - 1) return `Deleted ${String(removed)} stored test messages; more remain in <code>${MAIL_SINK_NAME}</code>. Run the cleanup again to finish.`;
   }
   const d = await api("DELETE", base);
   if (gone(d.status)) return `The R2 bucket <code>${MAIL_SINK_NAME}</code> was already gone.`;

@@ -121,6 +121,34 @@ describe("cleanup of v0.1.x email resources", () => {
     expect(world.bucket).toHaveLength(5);
   });
 
+  it("exactly PAR-449 full pages: the bucket ends empty and is deleted, not reported as having more", async () => {
+    world.bucket = Array.from({ length: CLEANUP_MAX_PAGES * 1000 }, (_, i) => `k${String(i)}`);
+    const html = await (await cleanup()).text();
+    expect(world.bucket).toBeNull();
+    expect(html).toContain(`and its ${String(CLEANUP_MAX_PAGES * 1000)} stored test messages`);
+  });
+
+  it("a listing entry without a key is an error, not an endless re-list", async () => {
+    cf.override.set(`GET ${A}/r2/buckets/prototype-mailsink/objects?per_page=1000`, { status: 200, body: { success: true, errors: [], result: [{ size: 1 }] } });
+    const r = await cleanup();
+    expect(r.status).toBe(502);
+    expect(await r.text()).toContain("prototype-mailsink");
+    expect(calls.filter((c) => c.startsWith("GET ") && c.includes("/objects?"))).toHaveLength(0);
+  });
+
+  it("a failed Worker delete names it and touches nothing else; a refused bucket delete names the bucket", async () => {
+    cf.override.set(`DELETE ${A}/workers/scripts/prototype-mailsink`, { status: 500, body: { success: false, errors: [{ code: 10013, message: "Internal" }] } });
+    let r = await cleanup();
+    expect(r.status).toBe(502);
+    expect(await r.text()).toContain("deleting the Worker prototype-mailsink failed: HTTP 500: Internal (code 10013)");
+    expect(world.bucket).toHaveLength(2);
+    cf.override.clear();
+    cf.override.set(`DELETE ${A}/r2/buckets/prototype-mailsink`, { status: 409, body: { success: false, errors: [{ code: 10008, message: "The bucket you tried to delete is not empty" }] } });
+    r = await cleanup();
+    expect(r.status).toBe(502);
+    expect(await r.text()).toContain("deleting the R2 bucket prototype-mailsink failed: HTTP 409");
+  });
+
   it("without a v0.1.x record the dashboard steps name no domain", async () => {
     delete world.domain;
     const html = await (await cleanup()).text();
