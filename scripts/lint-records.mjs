@@ -71,13 +71,13 @@ const titled = (title, name) => title.toLowerCase().startsWith(name.toLowerCase(
 
 const VERDICT_LINE = /^\s*(?:[-*]\s+)?(?:\*\*)?Verdict(?:\*\*)?\s*:\s*(?:\*\*)?\s*`?([^`*.;,(\n]*?)`?\s*(?:[.;,*(]|$)/gim;
 const AWAITING = /^\s*(?:[-*]\s+)?(?:\*\*)?Status(?:\*\*)?\s*:\s*(?:\*\*)?\s*`?awaiting review`?/im;
-const MARKED_REASON = /\*\*(?:major|minor)\b[^*\n]*\*\*/i;
+const MARKED_REASON = /^\s*(?:[-*+]\s+|\d+[.)]\s+)?\*\*(?:major|minor)\b[^*\n]*\*\*/im; // opens a line or bullet
 
 function verdicts(body) {
   return [...body.matchAll(VERDICT_LINE)].map((m) => m[1].trim());
 }
 
-const MAJOR_REASON = /\*\*major\b[^*\n]*\*\*/i;
+const MAJOR_REASON = /^\s*(?:[-*+]\s+|\d+[.)]\s+)?\*\*major\b[^*\n]*\*\*/im;
 const ATTEMPT = /^Attempt ([1-9]\d*)\b/i;
 const MAX_ATTEMPTS = 3;
 const MAX_ROUNDS = 3;

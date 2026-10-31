@@ -155,6 +155,13 @@ describe("lintRootCause", () => {
     expect(lintRootCause(rootCause("**Verdict: accepted-with-changes (binding on the fixer).**\n- **minor** rename"))).toEqual([]);
   });
 
+  it("counts a **major** marking only where it opens a reason, not in prose", () => {
+    expect(lintRootCause(rootCause("Verdict: accepted. No **major** or **minor** issues."))).toEqual([]);
+    expect(lintRootCause(rootCause("Verdict: accepted\n\n**Major (M1):** link 2 has no evidence"))).toEqual([
+      "## Review: verdict accepted lists a **major** issue; a major issue needs a Response (round n) and another review round",
+    ]);
+  });
+
   it("rejects an accepted verdict that carries a **major** issue, which needs a Response first (§7a.1.8 step 3)", () => {
     expect(lintRootCause(rootCause("Verdict: accepted\n\n- **major** link 2 has no evidence"))).toEqual([
       "## Review: verdict accepted lists a **major** issue; a major issue needs a Response (round n) and another review round",
