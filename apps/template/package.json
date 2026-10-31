@@ -18,7 +18,6 @@
     "cloudflare-setup": "prototype-framework cloudflare-setup",
     "check-login": "prototype-framework check-login",
     "reset-local": "prototype-framework reset-local",
-    "admins": "prototype-framework admins",
     "version-check": "prototype-framework version-check",
     "upgrade": "prototype-framework upgrade"
   },
