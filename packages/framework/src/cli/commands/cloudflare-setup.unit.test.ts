@@ -725,7 +725,7 @@ describe("cloudflare-setup: the token write guard (DEC-0589)", () => {
     }
   });
 
-  it("a protected everyday ID is never updated or deleted, also when it lacks permissions; the environment variable protects too", async () => {
+  it("the bootstrap leaves the everyday token alone (no update, no delete), also one that lacks a permission and whose ID is protected", async () => {
     const world = freshWorld();
     await setUpAccount(world);
     world.addToken("everyday", EVERYDAY_VALUE, "everyday-id", { groups: EVERYDAY.filter((g) => g.name !== "D1 Write") });
@@ -736,7 +736,7 @@ describe("cloudflare-setup: the token write guard (DEC-0589)", () => {
     expect(world.token("everyday-id").deleted).toBe(false);
   });
 
-  it("guardTokenWrites refuses every write but the bootstrap self-delete and the everyday update, before sending", async () => {
+  it("guardTokenWrites refuses every write but the bootstrap self-delete, before sending; since v0.2.0 no token is updated (DEC-0682)", async () => {
     const sent: string[] = [];
     const api = guardTokenWrites(async (method, path) => (sent.push(`${method} ${path}`), { status: 200, body: { success: true, result: {} } }), {
       protectedIds: new Set(["owner"]),
@@ -753,6 +753,7 @@ describe("cloudflare-setup: the token write guard (DEC-0589)", () => {
       ["DELETE", "/accounts/a/tokens/boot"],
       ["PUT", "/accounts/a/tokens/boot"],
       ["PUT", "/accounts/a/tokens/signing"],
+      ["PUT", "/accounts/a/tokens/every"],
       ["DELETE", "/accounts/a/tokens/tok0"],
       ["DELETE", "/user/tokens/tok0"],
     ] as const) {
@@ -761,10 +762,10 @@ describe("cloudflare-setup: the token write guard (DEC-0589)", () => {
     expect(sent).toEqual([]);
     armed = true;
     await expect(api("DELETE", "/accounts/a/tokens/tok0"), "an ID setup did not learn as a signing token").rejects.toThrow(/setup refused to delete/);
+    await expect(api("PUT", "/accounts/a/tokens/every", {}), "the everyday token, also while the self-delete is armed").rejects.toThrow(/setup refused to update/);
     await api("DELETE", "/accounts/a/tokens/boot");
-    await api("PUT", "/accounts/a/tokens/every", {});
     await api("GET", "/accounts/a/tokens/owner");
-    expect(sent).toEqual(["DELETE /accounts/a/tokens/boot", "PUT /accounts/a/tokens/every", "GET /accounts/a/tokens/owner"]);
+    expect(sent).toEqual(["DELETE /accounts/a/tokens/boot", "GET /accounts/a/tokens/owner"]);
   });
 
   it("guardTokenWrites deletes only the signing tokens it saw by name: listed or just created as prototype-r2-signing (DEC-0618)", async () => {
@@ -880,14 +881,14 @@ describe("cloudflare-setup: the token write guard (DEC-0589)", () => {
       ["PATCH", "/accounts/a/tokens\\every"],
       ["POST", "/user/tokens/x/%2e%2e/owner/value"],
       ["DELETE", "/accounts/a/tokens/x/../tok0"],
+      ["PUT", "/accounts/a/tokens/./every"],
     ] as const) {
       await expect(api(method, path), JSON.stringify(`${method} ${path}`)).rejects.toThrow(/setup refused to/);
     }
     expect(sent).toEqual([]);
-    // The everyday update reached by another spelling is still the everyday update; a create is not a write of an ID.
-    await api("PUT", "/accounts/a/tokens/./every", {});
+    // A create is not a write of an ID.
     await api("POST", "/accounts/a/tokens/x/..", {});
-    expect(sent).toEqual(["PUT /accounts/a/tokens/./every", "POST /accounts/a/tokens/x/.."]);
+    expect(sent).toEqual(["POST /accounts/a/tokens/x/.."]);
   });
 });
 
