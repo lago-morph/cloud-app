@@ -152,6 +152,9 @@ describe("the CI plan (what the staged ci.yml runs)", () => {
     const COVERAGE = "tests/compliance/coverage";
     const TITLE = "[E2E-004] the Cloudflare selection covers every criterion expected there > every criterion expected on Cloudflare has a tagged test in the cloud selection (AUTH-AC-005's contract part included)";
     /** Whether CI runs the coverage test for `files`: in the direct run, and not filtered out of it; or by the harness. */
+    // With E2E-004 among the harness's IDs, the direct filter leaves the test out of the direct run and the harness
+    // runs it instead: its local Vitest selection is the whole integration config (no path filter, harness/selection.ts),
+    // which collects tests/compliance/coverage.
     const runs = (...files: string[]): boolean => {
       const p = plan(...files);
       if (p.ids.includes("E2E-004")) return p.alsoIntegration.includes(`${COVERAGE}/cloudflare-selection.test.ts`) || p.direct.includes(COVERAGE);

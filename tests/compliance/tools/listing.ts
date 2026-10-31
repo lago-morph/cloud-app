@@ -78,7 +78,8 @@ export class FrameworkBuildMissingError extends Error {
 }
 
 // The child runs in its own process group under run-bounded.mjs, which kills the whole group at the limit
-// and exits with BOUNDED_TIMED_OUT. execFileSync's own timeout is only a backstop for the wrapper itself.
+// and exits with BOUNDED_TIMED_OUT. execFileSync's own timeout is only a backstop for the wrapper itself; it
+// sends SIGTERM, which the wrapper handles by killing the whole group first (SIGKILL would orphan the group).
 const BOUNDED = fileURLToPath(new URL("./run-bounded.mjs", import.meta.url));
 const BOUNDED_TIMED_OUT = 124;
 const BACKSTOP_MS = 15_000;
@@ -86,7 +87,7 @@ const BACKSTOP_MS = 15_000;
 function exec(label: string, command: string, args: readonly string[], options: ListOptions, env: NodeJS.ProcessEnv, errors: string[]): void {
   const timeoutMs = options.timeoutMs ?? LISTING_CHILD_TIMEOUT_MS;
   try {
-    execFileSync(process.execPath, [BOUNDED, String(timeoutMs), command, ...args], { cwd: options.root, env, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"], timeout: timeoutMs + BACKSTOP_MS, killSignal: "SIGKILL" });
+    execFileSync(process.execPath, [BOUNDED, String(timeoutMs), command, ...args], { cwd: options.root, env, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"], timeout: timeoutMs + BACKSTOP_MS, killSignal: "SIGTERM" });
   } catch (error) {
     const { status, code, stderr } = error as { status?: number | null; code?: string; stderr?: unknown };
     if (status === BOUNDED_TIMED_OUT || code === "ETIMEDOUT") throw new ListingTimeoutError(label, [command, ...args], timeoutMs);

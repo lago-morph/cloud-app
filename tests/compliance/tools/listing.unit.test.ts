@@ -69,19 +69,20 @@ describe("listing child processes are bounded", () => {
     const started = Date.now();
     let thrown: unknown;
     try {
-      listSelection(selection, { root, timeoutMs: 4_000 });
+      // 10 s leaves npx's start-up (about 0.3 s idle) room under heavy load before the stub records its pids.
+      listSelection(selection, { root, timeoutMs: 10_000 });
     } catch (error) {
       thrown = error;
     }
     expect(thrown).toBeInstanceOf(ListingTimeoutError);
     expect((thrown as Error).name).toBe("ListingTimeoutError");
-    expect((thrown as Error).message).toMatch(/^stub: `npx hang-runner --list --reporter=json` timed out after 4 s; listing incomplete/);
-    expect(Date.now() - started).toBeLessThan(20_000);
+    expect((thrown as Error).message).toMatch(/^stub: `npx hang-runner --list --reporter=json` timed out after 10 s; listing incomplete/);
+    expect(Date.now() - started).toBeLessThan(25_000);
     // The stub ran (it recorded its pids) and nothing it started is left.
     const pids = JSON.parse(readFileSync(join(root, "pids.json"), "utf8")) as number[];
     expect(pids).toHaveLength(3);
     expect(survivors(pids)).toEqual([]);
-  }, 30_000);
+  }, 40_000);
 });
 
 describe("a listing test's own limit (binding fix 4)", () => {
