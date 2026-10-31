@@ -53,22 +53,59 @@ The same mutations of the auth tokens (`auth/signing.fuzz.unit.test.ts`, the sam
 - **The ticket payload or cursor JSON:** they are signed as text (tickets) or compared after parsing (cursor); the extra spellings come only from the byte decoding.
 
 ## Proposed fix
-In `packages/framework/src/files/base64url.ts`, `base64urlToBytes` returns the bytes only when they re-encode to the input: `return bytesToBase64url(bytes) === text ? bytes : undefined;`. This matches the other two copies. `base64urlToText` goes through it, so it gets the same check. No caller changes. The tokens and cursors the framework issues are canonical (`bytesToBase64url`), so no issued value stops working.
+As amended by the review (Response, round 1; accepted in round 2):
+- **`packages/framework/src/files/base64url.ts`.**
+  - `base64urlToBytes` returns the bytes only when they re-encode to the input: `return bytesToBase64url(bytes) === text ? bytes : undefined;`. This matches `auth/signing.ts` and `kv/cursor.ts`.
+  - `base64urlToText` goes through `base64urlToBytes`, and now decodes with `{ fatal: true, ignoreBOM: true }`. A leading BOM therefore stays in the text, and re-encoding gives the input back.
+- **`packages/framework/src/kv/cursor.ts`.** The same `ignoreBOM: true`. A cursor with a BOM then fails `JSON.parse` and is KV.INVALID_CURSOR.
+- **No caller changes.** The tokens and cursors the framework issues are canonical and never start with a BOM, so no issued value stops working.
 
-Files: `packages/framework/src/files/base64url.ts`. The fuzz tests are the red tests and need no change. The shrunk counterexamples become plain regression tests (plan §7a.1.7) in `packages/framework/src/files/local/tickets.unit.test.ts` (a re-spelled MAC is refused) and `packages/framework/src/files/cursor.unit.test.ts` (a re-spelled cursor is FILES.INVALID_CURSOR).
+The red tests:
+- the F4 files properties and both F6 cursor properties. The fuzz generators gained BOM-prefixed inputs, and the cursor properties gained the "exactly the UTF-8 JSON" check (Response, round 1);
+- the shrunk counterexamples as plain regression tests (plan §7a.1.7):
+  - `files/local/tickets.unit.test.ts`: a MAC re-spelled in its last character is refused;
+  - `files/cursor.unit.test.ts`: a re-spelled cursor and a BOM-prefixed cursor are FILES.INVALID_CURSOR;
+  - `kv/cursor.unit.test.ts`: a BOM-prefixed cursor is KV.INVALID_CURSOR.
 
 ## Similar cases (plan §7a.1.8 step 4)
 Search: `grep -rn "atob(" packages apps skill --include=*.ts`, plus the callers of each decoder found.
-- **`apps/template/src/server/signing.ts` `fromBase64url`, copied verbatim into `apps/demo/src/server/signing.ts`.** The app template's share-link signatures (`verifyToken`) have the same defect: it pads and `atob`s with no canonical check. Reproduced with the template's code (Node v22.23.4): all 4 spellings of a signature verify. This is **outside T4's owned paths**, so it is not fixed here. It is reported as a new item, for G (the template owner) or T7: the template, its tests and the demo copy (plan §1 ownership).
-- **`kv/cursor.ts`:** canonical, rejects the spellings (reproduction above; F6's KV property passes).
+- **`apps/template/src/server/signing.ts` `fromBase64url`, copied verbatim into `apps/demo/src/server/signing.ts`.** The app template's share-link signatures (`verifyToken`) have the same defect: it pads and `atob`s with no canonical check. Reproduced with the template's code (Node v22.23.4): all 4 spellings of a signature verify. This is **outside T4's owned paths**, so it is not fixed here. The evidence is in its own stub, `2026-10-31-T4-template-signing-noncanonical.md`; the orchestrator schedules the fix with item G.
+- **`kv/cursor.ts`:** its base64 decoding is canonical (it rejects the re-spellings above). But it has the same BOM gap as `base64urlToText` (review round 1, major 3). It is fixed here, because it is in F6's scope.
 - **`auth/signing.ts` `base64urlDecode`:** canonical (F4's auth properties pass).
 - **Not the same case:** `apps/reference/src/server/encoding.ts` `fromBase64` decodes upload *content* sent by the reference app's own client (`routes/files.ts:33`); no signature or identity depends on its spelling. `mail/mime.ts` `base64Bytes` decodes test mail bodies in the MAIL reader that B 45/46 retire.
 - The FILES cursor case (link 4) is fixed by the same change, and its failing test is F6's FILES property.
 
 ## Verification plan
-- **Red (now, on `88`):** the three properties above fail with the counterexamples shown.
-- **Green (on `89`):** after the fix, `packages/framework/src/files/local/tickets.fuzz.unit.test.ts`, `packages/framework/src/files/cursor.fuzz.unit.test.ts` and the two new regression tests pass. `npm run build -w packages/framework && npm run typecheck && npm run lint && npm run test:unit` passes, except for F1 (`auth/return-to.fuzz.unit.test.ts`), which is a separate finding (`2026-10-31-T4-return-to-decoded-tab-newline.md`) fixed in `89b`.
-- **CI:** the unit job on `89` shows only F1 failing; on `89b`, nothing fails.
+- **Red.** Branch `89` at `46e5650`, plus the re-added fuzz files and the regression tests, without the source fix. Command: `npx vitest run --config vitest.unit.config.ts` on the four fuzz files and the three unit files; Node v22.23.4. Result: 7 failed, 26 passed. The exact output, trimmed to the failure lines:
+
+  ```
+  FAIL  files/cursor.fuzz.unit.test.ts > F6: FILES list cursors fuzz (FILES-REQ-001) > decoding any string gives a name inside the prefix, or FILES.INVALID_CURSOR (1000 runs, seed 2026103106)
+  Error: Property failed after 28 tests
+  Counterexample: ["77u_eyJwIjoiIiwiYSI6IiJ9",""]
+  Caused by: SyntaxError: Unexpected token '\ufeff', "\ufeff{"p":"","a":""}" is not valid JSON
+  FAIL  files/cursor.unit.test.ts > [FILES-AC-001] list cursors … > only the issued spelling of a cursor decodes: not a re-spelled last character, not a byte order mark in front (fuzz F6)
+  AssertionError: expected undefined to be 'FILES.INVALID_CURSOR'
+  FAIL  kv/cursor.fuzz.unit.test.ts > F6: KV list cursors and prefix ranges fuzz (KV-REQ-003, kv.md §2) > decoding any string gives a valid key inside the prefix, or KV.INVALID_CURSOR (1000 runs, seed 2026103106)
+  Error: Property failed after 212 tests
+  Counterexample: ["77u_WyIiLCJhIl0",""]
+  Caused by: SyntaxError: Unexpected token '\ufeff', "\ufeff["","a"]" is not valid JSON
+  FAIL  kv/cursor.unit.test.ts > cursor > [KV-AC-003] a cursor with a byte order mark in front of its JSON is rejected with KV.INVALID_CURSOR (fuzz F6)
+  AssertionError: expected undefined to be 'KV.INVALID_CURSOR'
+  FAIL  files/local/tickets.fuzz.unit.test.ts > F4: local transfer tickets fuzz (files.md §2 Local) > no mutation of a valid ticket verifies (250 runs, seed 2026103104)
+  Error: Property failed after 3 tests
+  Counterexample: [{"op":"download","name":"\u0000"},{"kind":"respell-end","part":1,"flip":1}]
+  Caused by: AssertionError: expected { op: 'download', name: '\u0000' } to be undefined
+  FAIL  files/local/tickets.fuzz.unit.test.ts > F4: local transfer tickets fuzz (files.md §2 Local) > base64urlToBytes and base64urlToText return a value only for its canonical spelling (500 runs, seed 2026103104)
+  Error: Property failed after 2 tests
+  Counterexample: ["Ao"]
+  Caused by: AssertionError: expected 'Ag' to be 'Ao'
+  FAIL  files/local/tickets.unit.test.ts > local tickets … > a ticket whose signature is re-spelled in its last character is refused (fuzz F4)
+  AssertionError: eyJvIjoiZG93bmxvYWQiLCJuIjoiYS5wbmciLCJlIjoxNzkzNDQyNTQyODExfQ.NIww85ykZoE3P8ozy_dXV6-Ou4LQv0kXkjQrNDZBiip: expected { op: 'download', name: 'a.png' } to be undefined
+  ```
+
+  (In the two SyntaxError lines, `\ufeff` stands for the BOM that Node prints as an invisible character. The ticket in the last line was signed with the test's generated dummy key.)
+- **Green (on `89`, with the fix).** `vitest run` over `packages/framework/src/{auth,files,kv}`: 49 files, 598 tests passed. `npm run build -w packages/framework && npm run typecheck && npm run lint && npm run test:unit` and CI pass on the PR.
+- **The structure changed after the review** (orchestrator; DEC-0776, amended): no PR may be red in CI. So the F4 and F6 fuzz files were removed from `88` and land in `89` together with the fix. The red above is the evidence of red-green: anyone can reproduce it by reverting the two source files of the fix commit.
 
 ## Process
 Item T4 had no subagent tool, so it diagnosed its own finding. The review is by a fresh, independent Claude Code remote session that did not write the test or the code (plan §7a.1.8 step 2).
@@ -110,7 +147,22 @@ Reviewer: an independent Claude Code remote session (`session_014mWQ6iUAmPMoYo2D
   - the regression tests in `files/local/tickets.unit.test.ts`, `files/cursor.unit.test.ts` and `kv/cursor.unit.test.ts`.
 - **Revised verification plan.** Red: on `88`, F4's files properties and both F6 cursor properties fail. Green: on `89`, they pass, along with the regression tests. Only F1 fails until `89b`.
 
-**Status:** accepted-with-changes; the binding changes are made above, before the fix commit.
+
+## Review (round 2)
+Same reviewer session, 2026-10-31, on commit `6227b36`. It applied the revised fix as an experiment and reverted it. Without the fix, the strengthened properties fail as stated: FILES `["77u_eyJwIjoiIiwiYSI6IiJ9",""]`, KV `["77u_WyIiLCJhIl0",""]`, and F4's decoder `["Ao"]`. With it:
+- `base64urlToText("77u_")` is `"\uFEFF"`;
+- a FILES cursor with a BOM is FILES.INVALID_CURSOR, and `base64urlToText("AB")` is `undefined`;
+- `vitest run` over `src/{files,kv,auth}` passes 595 of 596. The one failure is F1, which is record 2's and is fixed on `89b`;
+- the full unit suite passes 2,744 of 2,745, again failing only F1.
+
+**Verdict (round 2): accepted.**
+1. **minor:** Major 2 is resolved: `ignoreBOM: true` plus the canonical byte check.
+2. **minor:** Major 3 is resolved: `kv/cursor.ts` is counted as a similar case and gets the same one-line fix. With it, `77u_WyJhLyIsImEveCJd` is KV.INVALID_CURSOR.
+3. **minor:** `auth/signing.ts:78` and `auth-app/id-token.ts:35` are treated correctly. Their MAC or signature covers the encoded text, and their bodies also go through the canonical `base64urlDecode`.
+4. **minor:** The strengthened properties are faithful. They require exactly `{p, a}` or `[prefix, key]`, allow JSON whitespace and refuse a BOM, which is no stronger than kv.md §2 documents. The `\uXXXX` escapes change only how characters are written.
+5. **minor:** No regressions.
+6. **minor:** `## Proposed fix` was stale. *Done:* it is rewritten above.
+7. **minor:** The diagnoser's own status line should go. *Done:* removed.
 
 ## Appendix: reproduction script
 Run as `D=$PWD/packages/framework/dist node repro.mjs` from the repo root, after `npm run build -w packages/framework`.
