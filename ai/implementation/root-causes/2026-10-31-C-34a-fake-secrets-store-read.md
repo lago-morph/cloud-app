@@ -91,9 +91,26 @@ Reviewer: an independent cloud session that did not write this record (`session_
 - **`fake-cloud.test-support.ts` `everydayApi`:** it refuses only token paths and zone writes, and never refuses a Secrets Store read. No case.
 - **E's admin-app fake:** already method-based. No case.
 - **Production reads by the everyday token beyond the quick check.**
-  - F's deploy-time binding and `readSigningPlacement` (`r2-token.ts`) read the store list or a store's secrets.
+  - `readSigningPlacement` (`r2-token.ts:163`) reads only the signing record (corrected after review round 2).
+  - The code that reads a store's secrets is `signingCredentialState` through `storedSecrets` (`r2-token.ts:170–178`), along with `putInSecretsStore`. Both run with the setup page's sign-in token, not the everyday token.
   - Their tests run against `FakeCloud.api` (`fake-cloud.test-support.ts`), which checks no group, so no test hides the same assumption.
   - The live question is the same open item for L.
 
 ## Review (round 2)
-Status: awaiting review
+
+Reviewer: the same independent cloud session as round 1 (`session_014mWQ6jgCbDDUrS6CFmp5o3`), 2026-10-31. It read the amended record and checked its claims against 57z and 34b. It committed and pushed nothing.
+
+**Verdict: accepted**
+
+1. **major (resolved)**: Round-1 item 4. Evidence 6 and the alternative now call the store list with Read alone the plan's design assumption, not verified live. Handing the live check to L's runbook is acceptable; track it until it is filed.
+2. **major (resolved)**: Round-1 item 5. The fix is method-based, matching E's fake. This also settles item 6.
+3. **minor**: The planned red test covers item 8. State the observed red result on 34b before the fix is pushed.
+4. **minor**: `readSigningPlacement` reads only the signing record. The Secrets Store reads are `storedSecrets` and `putInSecretsStore`, which run with the setup page's sign-in token. Correct the bullet; the conclusion stands.
+5. **minor**: The `oauth_clients` note checks out.
+6. **minor**: The verification order is fine.
+
+## Fix (attempt 1)
+
+- **Red, on 34b (`7d03868`) before the fix:** `setup-world.unit.test.ts` gave 1 failed and 1 passed. The Read-only case failed on its first assertion: `GET …/secrets_store/stores?per_page=1` answered **403** where 200 was expected. The Write-only case passed (`IMPLIED`).
+- **Fix:** in `setup-world.test-support.ts`, a `GET` under `/secrets_store` needs "Secrets Store Read" and any other method needs "Secrets Store Write". `groupNamed` also searches `EVERYDAY_V2`.
+- **Green:** reported in the fix commit and the PR. Order: 34b, then 34a, then the 57z merge.
