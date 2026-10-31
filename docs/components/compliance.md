@@ -64,17 +64,17 @@ Amendment (Origin: ai-proposed · Decision: DEC-0560): no automated pass changes
 
 **Two layers of tests.** HTTP-level tests run from the driver in `tests/compliance/` against a base URL. Browser-level tests (file transfers, cookies) use Playwright. SQL dialect tests also run in-process against local D1 and PGlite.
 
-**Playwright projects.** Browser criteria of the framework suites and the compliance criteria are in the project `integration`. The E2E scenarios' tests are in two projects:
+**Playwright projects.** Browser criteria of the framework suites and the compliance criteria are in the project `integration`. The E2E scenarios' tests are in two projects (from item S3, which replaces the single `e2e` project):
 - `e2e-api`: tests that drive the HTTP API, the CLI or both, through Playwright's `request` fixture or a plain HTTP client. They launch no browser. Most scenario tests are here.
 - `e2e-ui`: the few tests of what only a browser shows, such as page rendering, sign-in pages, file transfer in the page, and cookies.
 
-Of these projects, only `e2e-ui` and `integration` launch a browser. Chromium is installed only for a run that selects a test that needs one.
+Of these projects, only `e2e-ui` and `integration` launch a browser; outside Playwright, so does the template-pages browser test `tests/skill/example-pages.test.ts`. Chromium is installed only for a run that selects a test that needs one.
 
 **Comparisons.** Query results without a total ordering are compared as multisets. Floating-point comparisons use PAR-280.
 
 **Time limits.** Each cloud wait has a bounded timeout derived from the platform behavior it waits for, such as database resume (PAR-210).
 
-**Tiers.** Automated criteria and scenarios form the automated tier. Where they run:
+**Tiers.** Automated criteria and scenarios form the automated tier. Where they run (CI selection from item S3):
 - **Pull requests:** framework CI (`.github/workflows/ci.yml`) runs the local integration and e2e layers when the change selects them, by the committed path map `scripts/ci/path-map.json`. A component's integration suite and criteria run when the component, or a component it depends on, changes. The e2e projects run when application behaviour changes. A PR that changes only docs or specs runs neither layer. The one exception is the short list of docs that tests read: the path map names the tests for each, and only those run, never an e2e test.
 - **Release:** `.github/workflows/release.yml` runs every test once on the version tag, including all integration tests and both e2e projects.
 - **Cloud passes:** the compliance driver runs the automated tier on Cloudflare, outside GitHub Actions, which holds no cloud credentials.
