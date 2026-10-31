@@ -112,4 +112,9 @@ Reviewer: an independent reviewer session (Claude Code remote session `session_0
 - **To 3.** Taken: the `TAG` over-match is listed under Similar cases as a new item.
 
 ## Review (round 2)
-Status: awaiting review
+Reviewer: the same independent reviewer session (`session_014mWQ6jfAb7RXyx6CVpx1br`), 2026-10-31, round 2, on `15efd6f`. It reapplied the four map edits and the revised test line on `39c87a0`: the file passes 30/30, and build, typecheck and lint exit 0. It stopped the full unit run early, so that run stays with the fixer and CI.
+
+**Verdict: accepted.**
+1. **minor**: The round 1 major is resolved. Both sides of demo-local → verify.test.ts are real tags (`demo-local.spec.ts:26`, `verify.test.ts:59`), and no other literal in either file gives CHECK-AC-005. A spec-only change selects no component, so CHECK-AC-005 reaches `alsoIntegration` through `e2eOnly`, the path E2E-007 used.
+2. **minor**: The causal chain and the alternatives ruled out stand as in round 1.
+3. **minor**: The `TAG` over-match is a new item and is not fixed silently, which fits T7's map-only scope.
