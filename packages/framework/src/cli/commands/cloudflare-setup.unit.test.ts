@@ -343,7 +343,8 @@ describe("cloudflare-setup: the bootstrap's OAuth clients (v0.2.0 plan §5.1 ste
     expect(io.err).toBe("");
     expect(status).toBe(0);
     const admin = world.cloud().workers.get("prototype-admin")!;
-    expect(admin.bindings.map((b) => b.name)).toEqual(["ADMIN_CLIENT_ID", "ADMIN_CLIENT_SECRET"]);
+    // The admin client's ID and secret (PAR-439), then its account and origin (DEC-0711).
+    expect(admin.bindings.map((b) => b.name)).toEqual(["ADMIN_CLIENT_ID", "ADMIN_CLIENT_SECRET", "ADMIN_ACCOUNT_ID", "ADMIN_APP_ORIGIN"]);
     expect(admin.enabled).toBe(true);
     const writes = world.writes();
     expect(writes.indexOf(`boot-id PUT /accounts/${ACCOUNT}/workers/scripts/prototype-admin`)).toBeLessThan(writes.indexOf(`boot-id DELETE /accounts/${ACCOUNT}/tokens/boot-id`));
