@@ -62,6 +62,16 @@ describe("TestApp.authApp over the fake auth app (DEC-0734)", () => {
     expect((await fake.redeem({ code, app: "a" }))?.email).toBe("cf-sub-bob@auth-app.test");
   });
 
+  it("passes issueCode's returnUrl to the fake", async () => {
+    const fake = createFakeAuthAppBinding();
+    const code = testAuthApp(fake).issueCode({ sub: "s", role: "user" }, { app: "a", returnUrl: "https://a.example/api/auth/callback" });
+    fake.unregisterApp("a");
+    // Registers only the default return URL again; a code bound to it would now pass.
+    const control = testAuthApp(fake).issueCode({ sub: "s", role: "user" }, { app: "a" });
+    expect(await fake.redeem({ code, app: "a" }), "the code is bound to the given return URL, no longer registered").toBeNull();
+    expect(await fake.redeem({ code: control, app: "a" })).not.toBeNull();
+  });
+
   it("forwards setRole, unregisterApp, failNext, setUnavailable and calls to the fake", async () => {
     const fake = createFakeAuthAppBinding();
     const app = testAuthApp(fake);

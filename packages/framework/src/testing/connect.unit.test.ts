@@ -240,7 +240,7 @@ describe("connectTestStage (testing.d.ts; CLI-AC-005 local part)", () => {
       );
       expect(error).toBeInstanceOf(Error);
       const message = (error as Error).message;
-      expect(message).toMatch(/not available on a connected stage.*as\(mockUsers\.admin\(\)\)/);
+      expect(message).toMatch(/not available on a connected stage.*as\(mockUsers\.(admin|user)\(\)\)/);
       expect(message).not.toMatch(/admins|email/);
     }
   });

@@ -4,7 +4,7 @@
  * (DEC-0105), or PGlite for SQL when the process runs the Postgres dialect
  * (`PROTOTYPE_FRAMEWORK_DIALECT=postgres`) — with migrations applied and the local target's
  * runtime (the same stage runtime the local Worker uses), the authentication mock, the stub
- * login provider or the auth-app provider over the fake binding, MAIL's in-memory outbox, and an in-memory log.
+ * login provider or the auth-app provider over the fake binding, and an in-memory log.
  * Node only; never part of a Worker bundle.
  */
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -22,7 +22,8 @@ import { secretLocation } from "../config/secret-locations.js";
 import { createAuthMock } from "../auth/mock.js";
 import { LOCAL_COOKIES } from "../auth/local-cookies.js";
 import { createStubLoginProvider, stubCallbackUrl, type StubFailure } from "../auth/stub-provider.js";
-import { createFakeAuthAppBinding, type AuthAppIdentity, type FakeAuthAppBinding } from "../auth/auth-app-binding.js";
+import { createFakeAuthAppBinding } from "../auth/auth-app-binding.js";
+import { testAuthApp } from "./auth-app-adapter.js";
 import { AUTH_APP_PROVIDER_ID, createAuthAppProvider } from "../auth/auth-app-provider.js";
 import { deriveUserId } from "../auth/user-id.js";
 import type { Role } from "../auth/roles.js";
@@ -77,8 +78,11 @@ export interface TestApp {
   as(user: CurrentUser): TestApp;
   logs(): readonly LogEntry[];
   loginWithStub(subject: string, options?: { readonly displayName?: string; readonly stubFailure?: "refused" | "replayed" }): Promise<void>;
-  /** With `authAppLoginProvider`: signs in through `/api/auth/login`, the fake auth app and the callback as `identity`, and keeps the session. */
-  loginWithAuthApp(identity: AuthAppIdentity): Promise<void>;
+  /**
+   * With `authAppLoginProvider`: signs in through `/api/auth/login`, the fake auth app and the callback as `identity`
+   * (a subject and the role the fake records for it; no email address, DEC-0734), and keeps the session.
+   */
+  loginWithAuthApp(identity: { readonly sub: string; readonly role: "admin" | "user" }): Promise<void>;
   /** With `authAppLoginProvider`: the fake auth app (its records, failures and call counts); throws otherwise. */
   readonly authApp: TestAuthApp;
   /** AUTH's clock (session times, role refresh; the fake auth app's too). Retry delays move it instead of waiting. In-process only. */
@@ -103,8 +107,24 @@ export interface TestApp {
 /** The roles a test can grant (testing.d.ts): `admin` only; "user" is a level, not a role. */
 export type TestRole = "admin";
 
-/** The fake auth app as a test sees it (`TestApp.authApp`). */
-export type TestAuthApp = Pick<FakeAuthAppBinding, "issueCode" | "setRole" | "unregisterApp" | "failNext" | "setUnavailable" | "calls">;
+/**
+ * The fake auth app as a test sees it (`TestApp.authApp`), in `./testing`'s own terms: no internal
+ * binding type and no email address (DEC-0734). The identity types are inline, as in testing.d.ts.
+ */
+export interface TestAuthApp {
+  /** Records the user, registers `returnUrl` for `app` and returns a fresh one-time code bound to both. */
+  issueCode(identity: { readonly sub: string; readonly role: "admin" | "user" }, options: { readonly app: string; readonly returnUrl?: string }): string;
+  /** Sets the stored role for `sub`; `null` removes the user. */
+  setRole(sub: string, role: "admin" | "user" | null): void;
+  /** Clears every return URL of `app`: its outstanding codes are then refused. */
+  unregisterApp(app: string): void;
+  /** The next `n` binding calls throw, as an unavailable auth app would. */
+  failNext(n: number): void;
+  /** While true, every binding call throws. */
+  setUnavailable(unavailable: boolean): void;
+  /** Binding calls made so far, failed ones included. */
+  readonly calls: { readonly redeem: number; readonly role: number };
+}
 
 /** A test app's clock (`TestApp.clock`). */
 export interface TestClock {
@@ -206,8 +226,8 @@ interface Shared {
   /** The app has no authentication mock (the stub or the auth-app provider): `as` throws. */
   readonly noMock: "stub" | "auth-app" | undefined;
   readonly stub: boolean;
-  /** Present with `authAppLoginProvider`. */
-  readonly authApp: FakeAuthAppBinding | undefined;
+  /** Present with `authAppLoginProvider`: the fake auth app, through `testAuthApp` (DEC-0734). */
+  readonly authApp: TestAuthApp | undefined;
   readonly authAppId: string;
   /** User IDs of the subjects signed in with `loginWithAuthApp`. */
   readonly authAppSubjects: Map<string, string>;
@@ -430,7 +450,7 @@ export async function createTestApp<C extends ConfigDeclaration, S extends strin
     logs: () => memory.entries(),
     noMock: stub ? "stub" : authApp !== undefined ? "auth-app" : undefined,
     stub,
-    authApp,
+    authApp: authApp === undefined ? undefined : testAuthApp(authApp),
     authAppId,
     authAppSubjects,
     clock,

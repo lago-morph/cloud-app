@@ -13,6 +13,7 @@ import { configString, defineApp, defineTable, FrameworkError, id, newId, text }
 import { generateAppMigrations } from "../mig/generate.js";
 import { mockUsers } from "../auth/testing.js";
 import { createTestApp, type TestApp } from "./test-app.js";
+import { authAppIdentity } from "./auth-app-adapter.js";
 import { deriveUserId } from "../auth/user-id.js";
 import { ROLE_REFRESH_INTERVAL_SECONDS } from "../auth/role-refresh.js";
 
@@ -224,7 +225,9 @@ describe("createTestApp", { timeout: 60_000 }, () => {
   });
 
   describe("authAppLoginProvider (plan-v0.2.0 §4.1, the fake auth-app binding)", () => {
-    const alice = { sub: "cf-sub-alice", email: "alice@example.test", role: "user" } as const;
+    const alice = { sub: "cf-sub-alice", role: "user" } as const;
+    /** The address the fake auth app holds for alice (made up by TestApp.authApp, DEC-0734). */
+    const aliceEmail = authAppIdentity(alice).email;
     const me = async (t: TestApp) => (await (await t.request("/api/auth/me")).json()) as { level: string; id?: string; displayName?: string | null };
 
     it(tag("AUTH-AC-013", "loginWithAuthApp signs in through /start and the callback as a cf-account user, with no display name and no email"), async () => {
@@ -237,7 +240,9 @@ describe("createTestApp", { timeout: 60_000 }, () => {
       await t.loginWithAuthApp(alice);
       const body = await (await t.request("/api/auth/me")).text();
       expect(JSON.parse(body)).toStrictEqual({ level: "user", id: await deriveUserId("cf-account", alice.sub), displayName: null });
-      expect(body).not.toContain(alice.email);
+      expect(aliceEmail).toMatch(/@/);
+      expect(body).not.toContain(aliceEmail);
+      expect(body).not.toContain("@");
       expect(t.authApp.calls.redeem).toBe(1);
     });
 

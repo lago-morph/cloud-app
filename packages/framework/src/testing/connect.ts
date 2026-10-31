@@ -189,13 +189,13 @@ function connectedApp(c: Connection, user: CurrentUser | undefined): TestApp {
       throw new Error("clock is not available on a connected stage: the stage keeps real time");
     },
     grantRole() {
-      return Promise.reject(new Error("grantRole is not available on a connected stage: use the admins command (npm run admins -- grant <email> ...)"));
+      return Promise.reject(new Error("grantRole is not available on a connected stage: test stages sign in with the mock only; use as(mockUsers.admin())"));
     },
     setUnavailable() {
       throw new Error("setUnavailable is not available on a connected stage: a deployed stage's storage cannot be made to fail from a test");
     },
     revokeRole() {
-      return Promise.reject(new Error("revokeRole is not available on a connected stage: use the admins command (npm run admins -- revoke <email> ...)"));
+      return Promise.reject(new Error("revokeRole is not available on a connected stage: test stages sign in with the mock only; use as(mockUsers.user())"));
     },
     async dispose() {
       if (disposed) return;
