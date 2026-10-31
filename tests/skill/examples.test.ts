@@ -3,9 +3,9 @@
  * §4, SKILL-REQ-004; Where: Local.) The examples' code is type-checked and tested where it lives,
  * by each app's `verify` (skill.md §2 "Implementation"), so this runs both apps' `verify` and
  * requires exit 0. The file-only checks (byte-for-byte copies, no `apps/demo/`, sources inside
- * what `verify` covers, root `verify` wiring) are in `example-copies.unit.test.ts`, which root
- * `npm run verify` also runs (E-T2, flag F3). This file stays integration-only: root `verify`
- * runs the apps' `verify` itself, and these runs take minutes.
+ * what `verify` covers, root `verify` wiring) are in `example-copies.test.ts`. This file is the
+ * only place CI and release run the apps' `verify` (DEC-0641): ci.yml selects it with SKILL and
+ * no longer runs them itself. Root `npm run verify`, a developer command, runs them directly.
  */
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
