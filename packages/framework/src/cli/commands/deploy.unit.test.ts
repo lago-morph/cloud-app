@@ -142,7 +142,7 @@ describe("deploy (CLI-REQ-001, PROV-REQ-002, CLI-REQ-003)", () => {
     const fake = new FakeTarget({ accountSettings: {} });
     const io = captureIo();
     expect(await deployCommand(harness({ fake }).deps)(["--target", "cloudflare", "--stage", "prod"], io)).toBe(1);
-    expect(io.err).toContain("--email-domain <domain>");
+    expect(io.err).toContain("the account settings record names no email domain");
   });
 
   it("a test stage prints no sign-in page or sender", async () => {

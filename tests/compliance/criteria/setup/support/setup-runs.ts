@@ -51,11 +51,10 @@ export const KEEP_TRACKED_MARKER = "# keep-env-cloudflare-tracked";
 /** PAR-361: the setting naming token IDs setup never updates or deletes. */
 export const PROTECTED_IDS_SETTING = "PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS";
 
-/** Plan §3.2's template, exactly its four lines (SETUP-REQ-003). */
+/** The template, exactly its three lines (SETUP-REQ-003 as amended: no email domain since v0.2.0, DEC-0697). */
 export const TEMPLATE_LINES = [
   "CLOUDFLARE_BOOTSTRAP_TOKEN=",
   "CLOUDFLARE_API_TOKEN=",
-  "CLOUDFLARE_EMAIL_DOMAIN=",
   "# CLOUDFLARE_ACCOUNT_ID=        (only if your tokens see more than one account)",
 ] as const;
 
@@ -317,7 +316,7 @@ export async function runSetup(label: string, world: SetupWorld, dir: string, op
       if (options.blocked?.(url) === true) throw new Error("blocked");
     },
     localSetup: options.localSetup ?? ((d, o) => runLocalSetup(d, { ...o, declaredSecrets: async () => DECLARED_SECRETS, npmInstall: () => Promise.reject(new Error("no install expected")) })),
-    stepOptions: { newSubdomain: () => SUB, email: { sleep: async () => {} } },
+    stepOptions: { newSubdomain: () => SUB },
   })([...(options.args ?? [])], io);
   const requests = world.requests.slice(before);
   RUNS.push({ label, out: io.out, err: io.err, files: projectFiles(dir) });
@@ -331,13 +330,11 @@ export async function runSetup(label: string, world: SetupWorld, dir: string, op
 export async function setUpAccount(world: SetupWorld, account = ACCOUNT): Promise<void> {
   // `ACCOUNT` is right for every account: each `FakeCloud` answers under the fake's own account ID (the world maps the real one to it).
   await applySetupSteps(world.cloud(account).api, ACCOUNT, {
-    emailDomain: DOMAIN,
     steps: SETUP_STEPS,
     setupVersion: ACCOUNT_SETUP_VERSION,
     frameworkVersion: "0.0.0-test",
     now: () => new Date(),
     newSubdomain: () => SUB,
-    email: { sleep: async () => {} },
   });
 }
 

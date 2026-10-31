@@ -63,7 +63,6 @@ function setup(overrides: Partial<CloudflareTargetOptions> = {}) {
     randomKey: () => "generated-key",
     now: () => NOW,
     sleep: async () => {},
-    email: { setupProblems: async () => [], setUp: async () => [], productionPrerequisites: async () => [] },
     authApp,
     ...overrides,
   };

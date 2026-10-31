@@ -10,7 +10,7 @@
  *    the bootstrap token: DEC-0574's filter is for the everyday commands). Each is checked: valid and
  *    active (`GET /accounts/<a>/tokens/verify`, or `/user/tokens/verify` for a user token), its
  *    account (`GET /accounts`), and, for the everyday token, one read per permission
- *    (`probeEveryday`) once the zone is known. A bootstrap token with no expiry, or one more than
+ *    (`probeEveryday`, account reads only). A bootstrap token with no expiry, or one more than
  *    1 day away (PAR-435), deletes itself at once and the run stops with its link (v0.2.0 plan §5.1
  *    step 1; DEC-0681).
  * 3. **No token to work with** (no everyday token and no usable bootstrap token): the requirements,
@@ -24,16 +24,17 @@
  *    protected (`protectedTokenIds`) is not deleted: no DELETE is sent, its line is kept and a note
  *    says so. The bootstrap token does no account setup and never reads or changes the everyday
  *    token: both are the admin app's (plan §5.2; DEC-0682).
- * 5. **Without it, the email domain**: `--email-domain`, else `CLOUDFLARE_EMAIL_DOMAIN`, else the
- *    account's zone names, and stop.
+ *    Without it there is no email domain to ask for and no zone to look up (v0.2.0 plan §5.3;
+ *    DEC-0689): the everyday token needs no zone permission.
  * 6. **The setup record**, with the everyday token (`checkAccountSetup`): current and the quick check
  *    passes: done. Otherwise what is missing, and the admin app (or, before it is deployed, the
  *    bootstrap link); stop.
  * 8. **Network**: `api.cloudflare.com`, the account's R2 storage host and its `workers.dev`
  *    subdomain, each named by its kind only.
- * 9. **Summary** and the next step; `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_EMAIL_DOMAIN` filled in.
+ * 9. **Summary** and the next step; `CLOUDFLARE_ACCOUNT_ID` filled in (`CLOUDFLARE_EMAIL_DOMAIN` is
+ *    neither read nor written since v0.2.0, DEC-0697).
  *
- * Output never holds a token value, an account ID, a zone ID or the `workers.dev` subdomain
+ * Output never holds a token value, an account ID or the `workers.dev` subdomain
  * (DEC-0573, DEC-0590): messages are written without them, and every line is also passed through a
  * redaction of each such value known to the run. Token writes go through a guard (DEC-0589, DEC-0618),
  * an allow-list: a DELETE only of the bootstrap token's own ID (in its last step, or at once for a
@@ -45,15 +46,13 @@
  * user must do or failed (DEC-0588).
  */
 import { formatGitWarning } from "../../cli/cloudflare-settings.js";
-import { emailDomainProblem } from "../core/account-settings.js";
 import { describeLocalSetup, runLocalSetup, type EnsureIgnoredResult, type LocalSetupDeps, type LocalSetupOutcome } from "../core/local-setup.js";
 import { EXIT, messageOf, type ProvisionIo, type ProvisionStatus } from "../core/output.js";
 import { accountSubdomain } from "./account.js";
 import { CloudflareRequestsStopped, describeFailure, sentPath, succeeded, type ApiReply, type CloudflareApi } from "./api.js";
-import { zoneCandidates } from "./email.js";
 import type { Environment } from "./environment.js";
 import { ensureEnvCloudflareIgnored, gitSafetyWarnings, inspectGitSafety } from "./git-safety.js";
-import { ACCOUNT_SETUP_VERSION, BOOTSTRAP, comparePolicies, deepLink, PERMISSIONS_VERSION, probeEveryday, TOKEN_NAMES, type PermissionGroup, type TokenDetails, type TokenKind } from "./permissions.js";
+import { ACCOUNT_SETUP_VERSION, BOOTSTRAP, comparePolicies, deepLink, PERMISSIONS_VERSION, probeEveryday, TOKEN_NAMES, type PermissionGroup, type TokenDetails } from "./permissions.js";
 import { deployAdminApp } from "./admin-app-deploy.js";
 import { APP_SCRIPTS, CLIENT_NAMES, ensureOAuthClients, ensureSubdomain, type ClientKind } from "./oauth-clients.js";
 import { ensureStore } from "./secrets-store.js";
@@ -107,8 +106,6 @@ export interface CloudflareSetupDeps {
 }
 
 export interface CloudflareSetupRequest {
-  /** `--email-domain`: the answer to step 5's question. */
-  readonly emailDomain?: string;
   /** `--switch-account`: go on with the tokens' account after the account-switch explanation. */
   readonly switchAccount?: boolean;
 }
@@ -132,19 +129,20 @@ interface Token {
   readonly accounts: readonly Account[];
 }
 
-const KIND: Readonly<Record<Slot, TokenKind>> = { [BOOTSTRAP_SETTING]: "bootstrap", [EVERYDAY_SETTING]: "everyday" };
 const TITLE: Readonly<Record<Slot, string>> = {
   [BOOTSTRAP_SETTING]: `${BOOTSTRAP_SETTING} (the bootstrap token)`,
   [EVERYDAY_SETTING]: `${EVERYDAY_SETTING} (the everyday token)`,
 };
 
-/** What to choose on each link's page (plan §2, §3.2): the link cannot set the account, the zone or the expiry. */
-const PAGE_CHOICES: Readonly<Record<TokenKind, string>> = {
-  bootstrap:
-    "On the page: pick your account if the dashboard asks; under TTL, set an end date no more than 1 day away (setup deletes a bootstrap token that lives longer, or has no end date, at once). Then choose Continue to summary, then Create Token, and copy the token.",
-  everyday:
-    "On the page: pick your account if the dashboard asks; keep your email domain's zone included (the link covers all the account's zones); no TTL (expiry) is needed. Then choose Continue to summary, then Create Token, and copy the token.",
-};
+/** What to choose on the bootstrap link's page (plan §2, §3.2): the link cannot set the account or the expiry. */
+const BOOTSTRAP_PAGE_CHOICES =
+  "On the page: pick your account if the dashboard asks; under TTL, set an end date no more than 1 day away (setup deletes a bootstrap token that lives longer, or has no end date, at once). Then choose Continue to summary, then Create Token, and copy the token.";
+
+/**
+ * The everyday token's remedy since v0.2.0: the admin app's Everyday token page, never a dashboard
+ * link (SETUP-REQ-003 as amended, DEC-0697; plan-v0.2.0 §5.2 page 2).
+ */
+export const EVERYDAY_PAGE = "Make it, or update it, on the Everyday token page of the admin app (open the admin app and sign in), then put it in CLOUDFLARE_API_TOKEN.";
 
 /** PAR-435: the longest a bootstrap token may still have to live when setup reads it, in milliseconds (1 day; supersedes PAR-380's 7 days). */
 export const BOOTSTRAP_MAX_LIFETIME_MS = 86_400_000;
@@ -166,10 +164,9 @@ export function bootstrapExpiryProblem(expiresOn: string | undefined, now: Date)
 export const ADMIN_APP_NEXT =
   "Open the admin app and sign in: its Account setup page sets the account up, and its Everyday token page makes or updates the everyday token. If the admin app is not deployed yet, run this setup once with a bootstrap token first:";
 
-/** One token's link with what to choose on its page. */
-export function linkBlock(kind: TokenKind): string {
-  const what = kind === "bootstrap" ? "The bootstrap token (used once by this setup, which then deletes it)" : "The everyday token (used by deploy and the other commands)";
-  return `${what}, named ${TOKEN_NAMES[kind]}:\n  ${deepLink(kind)}\n  ${PAGE_CHOICES[kind]}\n`;
+/** The bootstrap token's link with what to choose on its page. The everyday token has no link since v0.2.0 (`EVERYDAY_PAGE`). */
+export function bootstrapLinkBlock(): string {
+  return `The bootstrap token (used once by this setup, which then deletes it), named ${TOKEN_NAMES.bootstrap}:\n  ${deepLink("bootstrap")}\n  ${BOOTSTRAP_PAGE_CHOICES}\n`;
 }
 
 /** Where the values go (plan §3.2): the cloud session's environment settings, or the command line's file or environment. */
@@ -179,20 +176,13 @@ export const WHERE_IT_GOES = [
   `  - On the command line: in the file ${ENV_CLOUDFLARE_FILE} in the project folder (which holds the template), or in the environment.`,
 ].join("\n") + "\n";
 
-/** Plan §3.2's requirements. */
-export const REQUIREMENTS = [
-  "Requirements:",
-  "  - a domain on Cloudflare DNS in that account, which the sign-in emails are sent from.",
-].join("\n") + "\n";
-
 /** The whole no-token output (plan §3.2, §4.3 step 3). */
 export function noTokensText(): string {
   return [
-    "Cloudflare setup needs two API tokens, both made from pre-filled dashboard links. Setup never prints a token.\n",
-    REQUIREMENTS,
-    `1. ${linkBlock("bootstrap")}`,
-    `2. ${linkBlock("everyday")}`,
-    `Fill in this template (leave CLOUDFLARE_EMAIL_DOMAIN empty to choose from your domains next time):\n${ENV_CLOUDFLARE_TEMPLATE}`,
+    "Cloudflare setup starts with a bootstrap token, made from a pre-filled dashboard link. Setup never prints a token.\n",
+    `1. ${bootstrapLinkBlock()}`,
+    `2. The everyday token (used by deploy and the other commands), named ${TOKEN_NAMES.everyday}: the admin app makes it on its Everyday token page once this setup has deployed the admin app. Open the admin app, sign in, make the token there and put it in CLOUDFLARE_API_TOKEN.\n`,
+    `Fill in this template:\n${ENV_CLOUDFLARE_TEMPLATE}`,
     WHERE_IT_GOES,
     `${NEXT_PROMPT}\n`,
   ].join("\n");
@@ -328,22 +318,6 @@ async function identify(slot: Slot, value: string, api: CloudflareApi, preferred
   };
 }
 
-interface Zone {
-  readonly id: string;
-  readonly name: string;
-  readonly status?: string;
-}
-
-async function listZones(api: CloudflareApi, accountId: string, name?: string): Promise<Zone[] | ApiReply> {
-  const r = await api("GET", `/zones?${name === undefined ? "" : `name=${encodeURIComponent(name)}&`}account.id=${accountId}&per_page=50`);
-  const list = resultOf<unknown[]>(r);
-  if (!Array.isArray(list)) return r;
-  return list.flatMap((z) => {
-    const { id, name: n, status } = (z ?? {}) as { id?: unknown; name?: unknown; status?: unknown };
-    return typeof id === "string" && typeof n === "string" ? [{ id, name: n, ...(typeof status === "string" ? { status } : {}) }] : [];
-  });
-}
-
 const groupNames = (groups: readonly PermissionGroup[]) => groups.map((g) => `"${g.name}"`).join(", ");
 
 /**
@@ -387,7 +361,7 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     } catch (error) {
       settings = { values: {}, sources: {}, notices: [`${ENV_CLOUDFLARE_FILE} could not be read (${messageOf(error)})`], fileExists: false };
     }
-    // The tokens and the account ID are never printed; the email domain is.
+    // The tokens and the account ID are never printed.
     for (const name of [BOOTSTRAP_SETTING, EVERYDAY_SETTING, "CLOUDFLARE_ACCOUNT_ID"] as const) hidden.add(settings.values[name]);
     for (const notice of settings.notices) warn(`note: ${notice}`);
     try {
@@ -479,9 +453,10 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
 
     // 3. No token to work with: no everyday token, and no usable bootstrap token. Its link, the template and where it goes.
     if (everydayValue === undefined && boot === undefined) {
-      const lines = [`${EVERYDAY_SETTING} is not set. Setup needs the everyday token too.\n`, linkBlock("everyday")];
+      const lines = [`${EVERYDAY_SETTING} is not set. Setup needs the everyday token too.`, `${EVERYDAY_PAGE}\n`];
       for (const p of problems) lines.push(problemText(p.slot, p.text));
       if (unusableBootstrap !== undefined) lines.push(problemText(BOOTSTRAP_SETTING, unusableBootstrap));
+      else if (problems.length === 0) lines.push(`If the admin app is not deployed yet, run this setup once with a bootstrap token first:\n${bootstrapLinkBlock()}`);
       lines.push(`Fill in this template:\n${ENV_CLOUDFLARE_TEMPLATE}`, WHERE_IT_GOES, NEXT_PROMPT);
       return stop(lines.join("\n"));
     }
@@ -523,40 +498,8 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     if (everyday === undefined) return stop(NEXT_PROMPT);
     const everydayApi = guard(everyday.api);
 
-    // 5. The email domain.
-    const zoneApi = everydayApi;
-    const given = request.emailDomain?.trim().toLowerCase();
-    const fromSettings = settings.values.CLOUDFLARE_EMAIL_DOMAIN?.trim().toLowerCase();
-    if (given !== undefined && fromSettings !== undefined && given !== fromSettings) warn(`note: using --email-domain ${given} instead of CLOUDFLARE_EMAIL_DOMAIN (${fromSettings})`);
-    const domain = given ?? fromSettings;
-    if (domain === undefined) {
-      const zones = await listZones(zoneApi, accountId);
-      if (!Array.isArray(zones)) return stop([problemText(EVERYDAY_SETTING, `it could not list the account's domains (${describeFailure(zones)}); it needs "Zone Read"`), NEXT_PROMPT].join("\n"));
-      for (const z of zones) hidden.add(z.id);
-      return stop(chooseDomainText(account, zones));
-    }
-    const domainProblem = emailDomainProblem(domain);
-    if (domainProblem !== undefined) return stop(`The email domain ${domainProblem}. Set CLOUDFLARE_EMAIL_DOMAIN to a domain name such as example.com, or run: npm run cloudflare-setup -- --email-domain <domain>`);
-    let zone: Zone | undefined;
-    for (const name of zoneCandidates(domain)) {
-      const found = await listZones(zoneApi, accountId, name);
-      if (!Array.isArray(found)) {
-        return stop([`Looking up the zone of ${domain} failed (${describeFailure(found)}).`, problemText(EVERYDAY_SETTING, 'it needs "Zone Read" on the email domain\'s zone'), NEXT_PROMPT].join("\n"));
-      }
-      zone = found.find((z) => z.name === name);
-      if (zone !== undefined) break;
-    }
-    if (zone === undefined) {
-      const zones = await listZones(zoneApi, accountId);
-      return stop(`The email domain ${domain} is not a domain of the account "${account.name}" on Cloudflare DNS.\n${Array.isArray(zones) ? chooseDomainText(account, zones) : NEXT_PROMPT}`);
-    }
-    hidden.add(zone.id);
-    if (zone.status !== undefined && zone.status !== "active") return stop(`The zone ${zone.name} is ${zone.status}, not active: finish adding it to Cloudflare DNS in the dashboard, then run setup again.\n${NEXT_PROMPT}`);
-    say(`email domain: ${domain}`);
-    const scope = { accountId, zoneId: zone.id };
-
-    // 2 (cont.). The everyday token's quick check, now that the zone is known.
-    const probe = await probeEveryday(everydayApi, scope);
+    // 2 (cont.). The everyday token's quick check: account reads only, no zone (DEC-0689).
+    const probe = await probeEveryday(everydayApi, { accountId });
     const failedProbe = probe.filter((r) => !r.ok);
     const probeText = failedProbe.map((r) => `"${r.group.name}" (HTTP ${String(r.status)})`).join(", ");
 
@@ -566,11 +509,10 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     // token's permissions are the admin app's (plan §5.2), not the bootstrap token's (DEC-0682).
     let reasons: string[];
     try {
-      const status = await checkAccountSetup(everydayApi, accountId, domain, ACCOUNT_SETUP_VERSION, deps.stepOptions ?? {});
+      const status = await checkAccountSetup(everydayApi, accountId, ACCOUNT_SETUP_VERSION, deps.stepOptions ?? {});
       reasons = [];
       if (status.record === undefined) reasons.push("the account has not been set up by this setup yet");
       else if (status.record.setupVersion < ACCOUNT_SETUP_VERSION) reasons.push(`the account's setup is at version ${String(status.record.setupVersion)}, and this release needs version ${String(ACCOUNT_SETUP_VERSION)}`);
-      else if (status.record.emailDomain !== domain) reasons.push(`the account was set up for another email domain (${status.record.emailDomain})`);
       if (status.missing.length > 0) reasons.push(`these setup steps are missing: ${status.missing.join(", ")}`);
       if (reasons.length === 0 && !status.current) reasons.push("the account's setup is not current");
     } catch (error) {
@@ -583,8 +525,8 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       return stop(
         [
           `This needs the admin app:\n${reasons.map((r) => `  - ${r}`).join("\n")}\n`,
-          ADMIN_APP_NEXT,
-          unusableBootstrap === undefined ? linkBlock("bootstrap") : problemText(BOOTSTRAP_SETTING, unusableBootstrap),
+          // A bootstrap token set but not accepted is a bad paste: only its remedy (SETUP-AC-003).
+          ...(unusableBootstrap === undefined ? [ADMIN_APP_NEXT, bootstrapLinkBlock()] : [problemText(BOOTSTRAP_SETTING, unusableBootstrap)]),
           WHERE_IT_GOES,
           NEXT_PROMPT,
         ].join("\n"),
@@ -596,8 +538,8 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       warn(`note: ${BOOTSTRAP_SETTING} is no longer a valid token (setup deletes it when it is done). Nothing needs it now: remove it from ${where}.`);
     }
 
-    // 9 (record). CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_EMAIL_DOMAIN filled in, so copying the file starts the next project.
-    if (fillIn({ CLOUDFLARE_ACCOUNT_ID: accountId, CLOUDFLARE_EMAIL_DOMAIN: domain }, account, switched)) changed = true;
+    // 9 (record). CLOUDFLARE_ACCOUNT_ID filled in, so copying the file starts the next project.
+    if (fillIn({ CLOUDFLARE_ACCOUNT_ID: accountId }, account, switched)) changed = true;
 
     // 8. Network.
     const blocked = await networkProblems(accountId, everydayApi);
@@ -606,7 +548,6 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     say();
     say(changed ? "Cloudflare setup is complete." : "Everything is already set up and current: nothing to do.");
     say(`  account: ${account.name}`);
-    say(`  email domain: ${domain}`);
     say(`  account setup: ${setupState}`);
     say(`  everyday token: ${everydayState}`);
     if (blocked.length > 0) {
@@ -621,7 +562,7 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     return EXIT.ok;
 
     /** Records the values in `.env.cloudflare` (an account switch replaces the account ID there); true when the file changed. */
-    function fillIn(values: Partial<Record<"CLOUDFLARE_ACCOUNT_ID" | "CLOUDFLARE_EMAIL_DOMAIN", string>>, to: Account, switchedTo: boolean): boolean {
+    function fillIn(values: Partial<Record<"CLOUDFLARE_ACCOUNT_ID", string>>, to: Account, switchedTo: boolean): boolean {
       if (switchedTo && settings.sources.CLOUDFLARE_ACCOUNT_ID === "environment") {
         say(`Change CLOUDFLARE_ACCOUNT_ID in the environment to the account "${to.name}"'s ID (environment settings in a cloud session); it still names the old account.`);
       }
@@ -688,7 +629,7 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
      * neither deleted nor used.
      */
     async function refuseLongLived(token: Token, api: CloudflareApi, why: string): Promise<ProvisionStatus> {
-      const remake = `Make a new bootstrap token with an expiry of 1 day or less from this link, put it in ${BOOTSTRAP_SETTING} and run setup again:\n  ${deepLink("bootstrap")}\n  ${PAGE_CHOICES.bootstrap}\n`;
+      const remake = `Make a new bootstrap token with an expiry of 1 day or less from this link, put it in ${BOOTSTRAP_SETTING} and run setup again:\n  ${deepLink("bootstrap")}\n  ${BOOTSTRAP_PAGE_CHOICES}\n`;
       const head = `${TITLE[BOOTSTRAP_SETTING]}: ${why}, and a bootstrap token may live 1 day at most.`;
       if (isProtected(token.id)) return stop(`${head} Its ID is protected, so setup neither deleted nor used it.\n${remake}\n${NEXT_PROMPT}`);
       const deleted = await selfDelete(token, api);
@@ -761,9 +702,13 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
   }
 }
 
-/** One token's problem (bad paste, plan §3.4): which token, what is wrong, and only that token's link. */
+/**
+ * One token's problem (bad paste, plan §3.4): which token, what is wrong, and only that token's
+ * remedy: the bootstrap link, or the admin app's Everyday token page (SETUP-AC-003, DEC-0697).
+ */
 function problemText(slot: Slot, text: string): string {
-  return `${TITLE[slot]}: ${text}.\nReplace it with a new token from this link:\n  ${deepLink(KIND[slot])}\n  ${PAGE_CHOICES[KIND[slot]]}\n`;
+  if (slot === EVERYDAY_SETTING) return `${TITLE[slot]}: ${text}.\n${EVERYDAY_PAGE}\n`;
+  return `${TITLE[slot]}: ${text}.\nReplace it with a new token from this link:\n  ${deepLink("bootstrap")}\n  ${BOOTSTRAP_PAGE_CHOICES}\n`;
 }
 
 /** Several accounts: their names only, never their IDs (DEC-0585). */
@@ -786,18 +731,5 @@ function accountSwitchText(account: Account): string {
     "for each stage (a production stage also needs --confirm-production <stage>).",
     `To switch this project to "${account.name}", run: npm run cloudflare-setup -- --switch-account`,
     "Setup then sets the new account up as needed and records its ID in CLOUDFLARE_ACCOUNT_ID.",
-  ].join("\n");
-}
-
-/** The email domain question (step 5): the account's zone names. */
-function chooseDomainText(account: Account, zones: readonly Zone[]): string {
-  if (zones.length === 0) {
-    return `The account "${account.name}" has no domain on Cloudflare DNS. The sign-in emails need one: add a domain in the dashboard (https://dash.cloudflare.com, Add a domain), wait until it is active, then run setup again.\n${NEXT_PROMPT}`;
-  }
-  return [
-    `Which domain should the sign-in emails come from? The account "${account.name}" has these domains on Cloudflare DNS:`,
-    ...zones.map((z, i) => `  ${String(i + 1)}. ${z.name}${z.status !== undefined && z.status !== "active" ? ` (${z.status})` : ""}`),
-    `Set CLOUDFLARE_EMAIL_DOMAIN to one of them in ${ENV_CLOUDFLARE_FILE} (or in the environment), or run: npm run cloudflare-setup -- --email-domain <domain>`,
-    NEXT_PROMPT,
   ].join("\n");
 }
