@@ -13,9 +13,8 @@
 import { Miniflare } from "miniflare";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { bundleAdminApp } from "../../../src/admin-app/bundle.js";
-import { PAGE_SCOPES } from "../../../src/admin-app/scopes.js";
 import { ADMIN_APP_COMPATIBILITY_DATE, ADMIN_APP_COMPATIBILITY_FLAGS } from "../../../src/provision/cloudflare/admin-app-deploy.js";
-import { EVERYDAY_V2, TOKEN_NAMES } from "../../../src/provision/cloudflare/permissions.js";
+import { TOKEN_NAMES } from "../../../src/provision/cloudflare/permissions.js";
 import { startMockOAuth2, type MockOAuth2 } from "../../../../../tests/support/mock-oauth2/launcher.js";
 import { ACCOUNT_ID, startEdge, type Edge } from "./support.js";
 
@@ -23,17 +22,38 @@ const ORIGIN = "http://localhost:8790";
 const CLIENT_ID = "admin-client";
 const CLIENT_SECRET = "admin-client-secret-for-integration-0123456789";
 
+/**
+ * Plan §5.2's expectations, written out here rather than imported from the code under test: the
+ * everyday set's four groups (Workers Scripts Write, Workers R2 Storage Write, D1 Write, Secrets
+ * Store Read) and each page's optional scopes (PAR-447).
+ */
+const FOUR_GROUPS = ["e086da7e2179491d91ee5f35b3ca210a", "bf7481a1826f439697cb59a20b22293e", "09b2857d1c31407795e75e3fed8617a1", "5e33b7d77788455c9fdf18cbd38ee5a0"];
+const SCOPES = {
+  setup: ["workers-scripts.write", "d1.write", "workers-r2.write", "secrets-store.write", "account-api-tokens.write"],
+  everyday: ["account-api-tokens.write", "workers-scripts.write", "workers-r2.write", "d1.write", "secrets-store.read"],
+  status: ["workers-scripts.write", "workers-r2.write", "d1.write"],
+  cleanup: ["workers-scripts.write", "workers-r2.write"],
+} as const;
+
 let oauth: MockOAuth2;
 let edge: Edge;
 let mf: Miniflare;
-/** Every response body and header the browser saw, for the no-leak check. */
+/** Every response body and header the browser saw, and the Worker's console output, for the no-leak check. */
 const seen: string[] = [];
+/** The everyday token value page 2 created and showed. */
+let createdValue = "";
+/** How many Worker log lines were captured (the admin app logs each sign-in). */
+let workerLogs = 0;
 
 beforeAll(async () => {
   oauth = await startMockOAuth2();
   edge = await startEdge(oauth.baseUrl);
   const text = (value: string) => ({ type: "text" as const, value });
   mf = new Miniflare({
+    handleStructuredLogs: (log) => {
+      seen.push(JSON.stringify(log));
+      workerLogs += 1;
+    },
     workers: [
       {
         config: {
@@ -111,7 +131,9 @@ describe("the admin app against mock-oauth2-server", () => {
     expect(home.status).toBe(200);
     expect(home.text).toContain('action="/signin"');
     expect(home.text).not.toContain('href="/everyday"');
-    expect((await b.go("/everyday")).status).toBe(303);
+    const page = await b.go("/everyday");
+    expect(page.status).toBe(303);
+    expect(page.location).toBe("/");
     const post = await b.go("/everyday", "POST");
     expect(post.status).toBe(401);
     expect(post.location).toBeNull();
@@ -147,9 +169,12 @@ describe("the admin app against mock-oauth2-server", () => {
     await b.grant("/signin", "owner");
     const r = await b.grant("/everyday", "owner");
     expect(r.status, r.text).toBe(200);
-    expect(optional(r.scope)).toEqual([...PAGE_SCOPES.everyday]);
+    expect(optional(r.scope)).toEqual(SCOPES.everyday);
     const created = [...edge.tokens.tokens.values()].find((t) => t.name === TOKEN_NAMES.everyday)!;
-    expect(created.policies.flatMap((p) => p.permission_groups.map((g) => g.id))).toEqual(EVERYDAY_V2.map((g) => g.id));
+    const groups = created.policies.flatMap((p) => p.permission_groups.map((g) => g.id));
+    expect(groups).toHaveLength(4);
+    expect(groups).toEqual(FOUR_GROUPS);
+    createdValue = created.value;
     expect(r.text.split(created.value)).toHaveLength(2);
     for (const t of edge.issued) expect(t.revoked.has(t.access)).toBe(true);
   });
@@ -171,7 +196,8 @@ describe("the admin app against mock-oauth2-server", () => {
     expect(r.status, r.text).toBe(200);
     expect(r.text).toContain("updated in place");
     const t = edge.tokens.tokens.get(old.id)!;
-    expect(t.policies.flatMap((p) => p.permission_groups.map((g) => g.id))).toEqual(EVERYDAY_V2.map((g) => g.id));
+    expect(t.policies.flatMap((p) => p.permission_groups.map((g) => g.id))).toEqual(FOUR_GROUPS);
+    expect(edge.tokens.tokens.size).toBe(1);
     expect(JSON.stringify(t.policies)).not.toContain("zone");
     expect(t.value).toBe("old-everyday-value");
     expect(r.text).not.toContain("old-everyday-value");
@@ -187,6 +213,8 @@ describe("the admin app against mock-oauth2-server", () => {
     expect(r.text).toContain("secrets-store.read");
     expect(r.text).toContain("keep every permission");
     expect(edge.tokens.tokens.size).toBe(0);
+    const refused = edge.issued.at(-1)!;
+    expect(refused.revoked.has(refused.access) && refused.revoked.has(refused.refresh)).toBe(true);
   });
 
   it("each page's grant asks for that page's scopes only", async () => {
@@ -195,12 +223,15 @@ describe("the admin app against mock-oauth2-server", () => {
     for (const page of ["setup", "status", "cleanup"] as const) {
       const start = await b.go(`/${page}`, "POST");
       expect(start.status).toBe(302);
-      expect(optional(new URL(start.location!).searchParams.get("scope")!)).toEqual([...PAGE_SCOPES[page]]);
+      expect(optional(new URL(start.location!).searchParams.get("scope")!)).toEqual(SCOPES[page]);
     }
   });
 
-  it("no access or refresh token, and no client secret, appears in any response the browser saw", () => {
+  it("no access or refresh token or client secret appears in any response or Worker log; the everyday value only on its own page", () => {
     const all = seen.join("\n");
+    expect(createdValue).not.toBe("");
+    expect(workerLogs).toBeGreaterThan(0);
+    expect(all.split(createdValue)).toHaveLength(2);
     expect(edge.issued.length).toBeGreaterThan(0);
     for (const t of edge.issued) {
       expect(all).not.toContain(t.access);
