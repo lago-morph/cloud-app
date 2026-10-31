@@ -52,6 +52,7 @@ async function start(): Promise<{ authorize: URL; cookie: string }> {
   const authorize = new URL(res.headers.get("location")!);
   const cookie = /^([^;]+)/.exec(res.headers.get("set-cookie") ?? "")![1]!;
   up.options.claims = { ...up.options.claims, nonce: authorize.searchParams.get("nonce") };
+  up.options.expect = { challenge: authorize.searchParams.get("code_challenge")!, redirectUri: `${ORIGIN}/callback`, code: "upstream-code" };
   return { authorize, cookie };
 }
 
