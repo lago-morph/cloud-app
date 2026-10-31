@@ -54,11 +54,13 @@ export async function verifyIdToken(token: string, check: IdTokenCheck): Promise
   const claims = decodeJson(p);
   if (header.alg !== "RS256") refuse("unsupported alg");
   const jwk = chooseKey(check.keys, header.kid);
-  const signature = base64urlDecode(s) ?? refuse("bad signature");
+  const signature = new Uint8Array(base64urlDecode(s) ?? refuse("bad signature"));
+  if (typeof jwk.n !== "string" || typeof jwk.e !== "string") refuse("unknown key");
+  const publicJwk: JsonWebKey = { kty: "RSA", n: jwk.n as string, e: jwk.e as string, alg: "RS256", ext: true };
 
   let ok = false;
   try {
-    const key = await crypto.subtle.importKey("jwk", { kty: "RSA", n: jwk.n, e: jwk.e, alg: "RS256", ext: true }, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+    const key = await crypto.subtle.importKey("jwk", publicJwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
     ok = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, signature, new TextEncoder().encode(`${h}.${p}`));
   } catch {
     ok = false;

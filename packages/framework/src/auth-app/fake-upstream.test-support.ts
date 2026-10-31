@@ -12,7 +12,7 @@ export const FAKE_DISCOVERY = `${FAKE_ISSUER}/.well-known/openid-configuration`;
 export const FAKE_CLIENT_ID = "signin-client";
 export const FAKE_ACCOUNT = "acct-0123";
 
-const text = (s: string): Uint8Array => new TextEncoder().encode(s);
+const text = (s: string) => new TextEncoder().encode(s);
 const b64json = (v: unknown): string => base64urlEncode(text(JSON.stringify(v)));
 
 export interface SignedKey {
@@ -30,7 +30,7 @@ export async function makeSigningKey(kid = "k1"): Promise<SignedKey> {
   const pub = (await crypto.subtle.exportKey("jwk", pair.publicKey)) as JsonWebKey;
   return {
     kid,
-    jwk: { kty: pub.kty, n: pub.n, e: pub.e, kid, alg: "RS256", use: "sig" },
+    jwk: { kty: pub.kty as string, n: pub.n as string, e: pub.e as string, kid, alg: "RS256", use: "sig" },
     async sign(claims, header = {}) {
       const input = `${b64json({ alg: "RS256", typ: "JWT", kid, ...header })}.${b64json(claims)}`;
       const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", pair.privateKey, text(input));
