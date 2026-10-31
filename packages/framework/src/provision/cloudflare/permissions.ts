@@ -22,7 +22,7 @@
  * "Edit").
  */
 import type { CloudflareApi } from "./api.js";
-import { policyCovers } from "./email-permissions.js";
+import { policyCovers } from "./token-policies.js";
 
 export type PermissionScope = "account" | "zone";
 
@@ -78,7 +78,7 @@ export const BOOTSTRAP: readonly PermissionGroup[] = Object.freeze([GROUPS.worke
 
 /**
  * Stronger groups that also grant a read group: a token made by hand with the write group passes
- * the check, as `email-permissions.ts`'s `alsoSatisfiedBy` ("Zone Write" for "Zone Read").
+ * the check, as `token-policies.ts`'s `alsoSatisfiedBy` ("Zone Write" for "Zone Read").
  */
 const SATISFIED_BY: Readonly<Record<string, readonly { readonly id: string; readonly name: string }[]>> = Object.freeze({
   [GROUPS.zoneRead.id]: [{ id: "e6d2666161e84845a636613608cee8d5", name: "Zone Write" }],
@@ -149,7 +149,7 @@ const accountsNamed = (p: TokenPolicy): string[] => Object.keys(p.resources).fil
 
 /**
  * Compares a token's policies with a required list (the plan's step 7 check of the everyday token,
- * read with the bootstrap token). Scopes are read as `email-permissions.ts`'s `policyCovers` reads
+ * read with the bootstrap token). Scopes are read as `token-policies.ts`'s `policyCovers` reads
  * them: an account group needs the account (or `*`), a zone group the zone, all zones, or the whole
  * account.
  */

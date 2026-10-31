@@ -48,7 +48,8 @@ import { MAIL_SINK_BINDING, MAIL_SINK_COMPATIBILITY_DATE, MAIL_SINK_MODULE, MAIL
 import { testMailDomain } from "../core/account-settings.js";
 import { createBucket, inspectBucket } from "./account.js";
 import { describeFailure, resultOf, type ApiReply, type CloudflareApi } from "./api.js";
-import { EMAIL_PERMISSIONS, MAIL_SINK_PERMISSIONS, missingPermissions, permissionProblem, tokenPolicies, type RequiredPermission } from "./email-permissions.js";
+import { EMAIL_PERMISSIONS, MAIL_SINK_PERMISSIONS, permissionProblem } from "./email-permissions.js";
+import { missingPermissions, tokenPolicies, type RequiredPermission } from "./token-policies.js";
 import { MAIL_SINK_NAME } from "./names.js";
 
 export interface CloudflareEmailSetup {
