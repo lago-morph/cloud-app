@@ -61,7 +61,20 @@ Search: `grep -rn 'startsWith("//")\|decodeURIComponent(' packages apps skill --
 - No similar case outside T4's owned paths.
 
 ## Verification plan
-- **Red (on `88` and `89`):** F1 fails with the counterexample above. `sanitizeReturnTo("/%09/evil.example")` returns the input.
+- **Red.** Branch `89b` at `8ed5d42`, with F1's fuzz file and with `return-to.ts` put back to its state before the fix (`a0d814f^`). Command: `npx vitest run --config vitest.unit.config.ts packages/framework/src/auth/return-to`; Node v22.23.4. Result: 2 failed, 2 passed. The exact output, trimmed to the failure lines:
+
+  ```
+  FAIL  auth/return-to.fuzz.unit.test.ts > F1: sanitizeReturnTo (AUTH-AC-010, DEC-0173) fuzz > keeps only same-origin paths, also after one more percent-decode (1000 runs, seed 2026103101)
+  Error: Property failed after 270 tests
+  Counterexample: ["/%0a/","https://a.aa"]
+  Caused by: TypeError: Invalid URL
+  Serialized Error: { code: 'ERR_INVALID_URL', input: '/\n/', base: 'https://a.aa' }
+  FAIL  auth/return-to.unit.test.ts > returnTo sanitising > [AUTH-AC-010] replaces a path whose decoded form leaves the origin once tab, LF or CR is stripped (fuzz F1)
+  AssertionError: /%0a/: expected '/%0a/' to be '/' // Object.is equality
+  ```
+
+  (Node prints the `input` value with a real line break; it is shown here as `\n`.)
+- **The structure changed after the review** (orchestrator; DEC-0776, amended): no PR may be red in CI. So F1's fuzz file was removed from `88` and lands in `89b` beside its fix (`a0d814f`). The red above is the evidence of red-green: anyone can reproduce it by reverting `return-to.ts` from that commit.
 - **Green (on `89b`):** F1 and the new `return-to.unit.test.ts` cases pass. The existing AUTH-AC-010 cases (`return-to.unit.test.ts`, `test/integration/auth/login-flow.test.ts`'s fixed values) still pass. `npm run build -w packages/framework && npm run typecheck && npm run lint && npm run test:unit` passes.
 - **CI:** the unit job on `89b` passes.
 
