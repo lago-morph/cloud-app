@@ -230,4 +230,18 @@ describe("connectTestStage (testing.d.ts; CLI-AC-005 local part)", () => {
     const app = await connectWith(LOCAL, fakeStage().fetch);
     await expect(app.loginWithStub("s")).rejects.toThrow(/not available on a connected stage/);
   });
+
+  it("grantRole and revokeRole are not available on a connected stage and point to as(), not the removed admins command or an email address (DEC-0734)", async () => {
+    const app = await connectWith(LOCAL, fakeStage().fetch);
+    for (const change of [() => app.grantRole("u_X", "admin"), () => app.revokeRole("u_X", "admin")]) {
+      const error = await change().then(
+        () => undefined,
+        (e: unknown) => e,
+      );
+      expect(error).toBeInstanceOf(Error);
+      const message = (error as Error).message;
+      expect(message).toMatch(/not available on a connected stage.*as\(mockUsers\.admin\(\)\)/);
+      expect(message).not.toMatch(/admins|email/);
+    }
+  });
 });
