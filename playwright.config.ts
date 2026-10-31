@@ -1,9 +1,16 @@
+import { readFileSync } from "node:fs";
 import { defineConfig } from "@playwright/test";
 
-// Playwright layers (plan §10.1, PAR-114, PAR-116): `*.spec.ts` only.
+// Playwright layers (plan §10.1, PAR-114, PAR-116; plan-v0.2.0 §7a.2.4): `*.spec.ts` only.
 // - "integration": browser criteria of the framework suites and the compliance criteria.
-// - "e2e": the E2E scenarios (browser and API-only; API-only specs use the `request` fixture).
-// Web servers and base URLs are added by the items that write the first specs (C-02).
+// - "e2e-api": the E2E scenarios that use no browser (the `request` fixture, processes, files).
+// - "e2e-ui": the E2E scenarios that drive a browser, directly or through a child process
+//   (tests/compliance/e2e/support/template-pages.ts). The list is `e2e.ui` in
+//   scripts/ci/path-map.json, so CI installs Chromium only when an e2e-ui spec is selected;
+//   tests/ci-classify.unit.test.ts fails when a spec that uses a browser is missing from it.
+// Each spec belongs to exactly one project. Run them through `npm run compliance` (they need its environment).
+const E2E_UI: string[] = (JSON.parse(readFileSync(new URL("./scripts/ci/path-map.json", import.meta.url), "utf8")) as { e2e: { ui: string[] } }).e2e.ui.map((p) => p.replace(/^tests\/compliance\/e2e\//, ""));
+
 export default defineConfig({
   outputDir: "test-results",
   projects: [
@@ -14,9 +21,15 @@ export default defineConfig({
       use: { browserName: "chromium" },
     },
     {
-      name: "e2e",
+      name: "e2e-api",
       testDir: "tests/compliance/e2e",
       testMatch: "**/*.spec.ts",
+      testIgnore: E2E_UI,
+    },
+    {
+      name: "e2e-ui",
+      testDir: "tests/compliance/e2e",
+      testMatch: E2E_UI,
       use: { browserName: "chromium" },
     },
   ],
