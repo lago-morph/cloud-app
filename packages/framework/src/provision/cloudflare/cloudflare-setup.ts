@@ -54,6 +54,7 @@ import { zoneCandidates } from "./email.js";
 import type { Environment } from "./environment.js";
 import { ensureEnvCloudflareIgnored, gitSafetyWarnings, inspectGitSafety } from "./git-safety.js";
 import { ACCOUNT_SETUP_VERSION, BOOTSTRAP, comparePolicies, deepLink, PERMISSIONS_VERSION, probeEveryday, TOKEN_NAMES, type PermissionGroup, type TokenDetails, type TokenKind } from "./permissions.js";
+import { CLIENT_NAMES, ensureOAuthClients, ensureSubdomain, type ClientKind } from "./oauth-clients.js";
 import { workersPlanReader } from "./plan.js";
 import { SIGNING_TOKEN_NAME } from "./r2-token.js";
 import { checkAccountSetup, type SetupStepOptions } from "./setup-steps.js";
@@ -652,6 +653,15 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     async function bootstrap(token: Token, api: CloudflareApi, to: Account, switchedTo: boolean): Promise<ProvisionStatus> {
       const missing = comparePolicies(bootPolicies, BOOTSTRAP, { accountId: to.id, zoneId: "*" }).missing;
       if (missing.length > 0) return stop([problemText(BOOTSTRAP_SETTING, `it lacks ${groupNames(missing)} on this account`), NEXT_PROMPT].join("\n"));
+
+      // Step 2: both OAuth clients, each secret straight into Secrets Store (DEC-0684, DEC-0685).
+      // A failure throws: the run fails before the self-delete, so the token stays for the next run.
+      const subdomain = await ensureSubdomain(api, to.id, deps.stepOptions?.newSubdomain);
+      hidden.add(subdomain);
+      const clients = await ensureOAuthClients(api, to.id, { subdomain, onSecret: (value) => hidden.add(value) });
+      const both = (kinds: readonly ClientKind[]) => kinds.map((k) => CLIENT_NAMES[k]).join(" and ");
+      if (clients.created.length > 0) say(`OAuth clients: created ${both(clients.created)}; their IDs and secrets are in Secrets Store`);
+      if (clients.kept.length > 0) say(`OAuth clients: ${both(clients.kept)} already exist${clients.kept.length === 1 ? "s" : ""}, with their secrets in Secrets Store`);
 
       // The bootstrap token deletes itself last: its own ID, from its own verify call, never another.
       // A protected one does not: no DELETE is sent (the guard would refuse it) and its line stays.

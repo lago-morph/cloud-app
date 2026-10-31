@@ -121,6 +121,8 @@ const worlds = new Set<SetupWorld>();
 export function sensitiveValues(): Map<string, string> {
   const all = new Map(sensitive);
   for (const w of worlds) for (const id of zoneIds(w)) all.set(id, "a zone ID");
+  // The OAuth client secrets the bootstrap's creates showed once (v0.2.0 plan §5.1 step 2).
+  for (const w of worlds) for (const a of w.accounts.values()) for (const c of a.cloud.oauthClients.values()) all.set(c.secret, "an OAuth client secret");
   return all;
 }
 
