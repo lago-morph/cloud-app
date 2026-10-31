@@ -20,6 +20,20 @@ Plan: `ai/implementation/plan-v0.2.0-testing-auth.md` ("plan §n"); governing pr
 - From P0: (1) COMPL-AC-001: SETUP-AC-011 is missing from the COMPL-REQ-006 milestone list. The fix is a `compliance.md` amendment, and D 36 must keep SETUP-AC-011 when it rewrites the list. (2) MAIL-AC-005: three `@example.com` addresses in unit tests, `test-was-wrong`. A small fix, `08`, is proposed, even though B 46 retires the criterion. (3) The five blocked IDs are a runner step (local `apiKey`). S3 was told to add it to CI.
 - **Blocked: no writes to `.github/workflows/*`.** `git push` and the GitHub MCP both refuse them ("refusing to allow an OAuth App to create or update workflow … without `workflow` scope"). S3 staged its workflows in `scripts/ci/workflows/`. A's CI step (DEC-0621, PR 29) must be staged the same way, on S3's top branch. CI on every PR still runs the old `ci.yml` until the owner applies the staged files.
 - S3 saw `native-copy.unit.test.ts` fail intermittently ("fetch failed") under load. A diagnoser is running (branch `91-fix-native-copy-fetch`).
+- **Live-pass items collected so far** (for L's runbook):
+  - **A:** the "Administrator" role string (PAR-413).
+  - **C:** the dashboard TTL picker's `expires_on` (is "tomorrow" more than 24 h?); the field names when an OAuth client is created and in its answer; the Secrets Store comment and store-create; script upload with `secrets_store_secret` bindings made with the bootstrap token.
+  - **E:** the three unverified points on plan §5.2 page 2; the mapping of "Workers R2 Storage Bucket Item Write" to `workers-r2.write` (release-blocking for page 1).
+  - **F:**
+    - Pulumi `service` binding with `entrypoint`;
+    - Pulumi `secrets_store_secret` upload made with the everyday token (does it need Secrets Store Read?);
+    - the script settings' D1 field, `id` or `database_id`;
+    - D1 `/query` on the auth app's DB with the everyday token;
+    - delete-then-bind, and falling back to Worker secrets, on a live Worker;
+    - whether Secrets Store `comment` round-trips;
+    - the status a store listing returns without Secrets Store;
+    - whether a store-bound stage signs R2 tickets.
+- D follow-up (one small spec PR, after B 43): the PROV-AC-002 text from F (*"For a production stage, without the account's auth app or its registry, deploy names it and stops before creating anything; a production deploy registers `<public origin>/api/auth/callback` for `<app>-<stage>` with the auth app, and `remove` clears it."*), plus the COMPL-REQ-005, COMPL-AC-005 and prodcheck paragraph amendments (owner-questions 19).
 - New finding from T4: `apps/template/src/server/signing.ts`, copied into `apps/demo`, accepts 4 spellings of each share-link signature. The fix goes with G (template owner) through §7a.1.8; the record stub is on T4's 89.
 - T5 assignments: `criteria/compl/prodcheck.test.ts` (MAIL-AC-006, PWD-AC-009) → B; the mail parts of `sst.unit.test.ts` → F; the email parts of `target.unit.test.ts` → C 34a. T5's advisory notes: no test covers the `free` plan getting past the plan check (C), and no test covers the mock-oauth2 CI step (A 29). Both go to T6.
 - T5 queue (test-change records still to write): S3's PRs (G1–G3 are already in `2026-10-31-S3.md`; T5 reviews the coverage), C's #88 (pure removal), D's #83 (retirement), B's 43/45/46/47, #95's classifier assertion (`behaviour-changed`, done), and #97's `record()` helper (`test-was-wrong`).
@@ -30,7 +44,7 @@ Plan: `ai/implementation/plan-v0.2.0-testing-auth.md` ("plan §n"); governing pr
 - C 32 (#82) raises an owner question: print the admin app's workers.dev URL despite DEC-0590 (DEC-0686).
 - From S1: pointers to S2's test-reviews README, S3's path map and Playwright split, and S4's coverage file each carry a fallback until those files merge.
 - From S4 (#61): (1) T4 adds `fast-check` (PAR-410, exact pin) to framework devDependencies, plus the template if G 68 needs it. T4 is the lockfile editor in its batch. (2) F's exit check "criteria/prov and cf green against fakes" passes vacuously, because those tests are Cloud-only placeholders locally. F's brief must name real local checks. (3) The F4 fuzz target is expected to expose that `files/base64url.ts` accepts 4 spellings of each local ticket MAC. T4 routes it through §7a.1.8. (4) The decision draft is `v020-S4.md`; I1 should match case-insensitively.
-- Reviewer cloud sessions to archive at run end: S4 `session_014mWQ6k9PiPRJThvcqKpHAZ`, S1 `session_014mWQ6hMtDXz9kuyzneVQht`, H `session_014mWQ6kHRQG8NWqkKFQBcHn`. The S4 reviewer ran as a separate cloud session, because subagents have no Agent tool. Archive it at the end of the run.
+- Reviewer cloud sessions to archive at run end: S4 `session_014mWQ6k9PiPRJThvcqKpHAZ`, S1 `session_014mWQ6hMtDXz9kuyzneVQht`, H `session_014mWQ6kHRQG8NWqkKFQBcHn`, F `session_014mWQ6maJwGjBSMPhgwdafz` `session_014mWQ6iF3V1aHbQiquDwTzj` `session_014mWQ6kjez1KKbg1QE2iP2z`, P0 `session_014mWQ6jKepuYeu9tYda2mJF`, T4 `session_014mWQ6iUAmPMoYo2DWNgSsL`. The S4 reviewer ran as a separate cloud session, because subagents have no Agent tool. Archive it at the end of the run.
 - **The local `main` branch is stale** (`deae62b`, PR #54) while `origin/main` is `1e0c289`. Create every worktree and branch from `origin/main` (or `git fetch && git branch -f main origin/main` first).
 - `00-run-records` is numbered 00 because it opens first; it is kept open and merged last (nothing stacks on it).
 - Plan gaps found while planning (handled in §3): deploy-side AUTH service binding and registry write/clear have no named item (assigned to F); `email-permissions.ts` holds generic token-policy helpers (assigned a refactor in C before its removal); §7.1 "own PR" vs §7a.2.3 "tagged tests land in the same change" (split as T2 below).
@@ -136,7 +150,7 @@ Format: **ID — title** · plan § · deps · status. Then Owns / PRs (`nn` bra
 - Tests: §7 "admin pages request only their own scopes", "everyday set exactly four groups", "0.1.x token update drops email/zone groups". E2E: feeds T2 add-item 1. Fuzz: none.
 - IDs: DEC-0710–0724, PAR-445–454.
 
-**F — Secrets Store adoption, deploy bindings** · §3 registry, D7, §5.2 page 1 signing credential, §10 fallback · A, B, C merged · `running` (based on #94)
+**F — Secrets Store adoption, deploy bindings** · §3 registry, D7, §5.2 page 1 signing credential, §10 fallback · A, B, C merged · `done` (PRs #101 #102 #103, CI green, all reviews accepted; DEC-0725–0729, PAR-455; cloud deploy not-run)
 - Owns: `packages/framework/src/provision/cloudflare/{target.ts, worker.ts, sst.ts, r2-token.ts, secrets-store.ts (bind/read parts), stage-record.ts}`, `packages/framework/src/provision/core/{deploy,remove}.ts`, `packages/framework/src/cli/commands/{deploy,remove,secrets-cloud}*.ts`, `tests/compliance/criteria/{prov,cf}/**` (except `setup-account.test.ts`).
 - PRs: `52-deploy-auth-binding` ← main (AUTH service binding on deploy; registry write on `deploy`, clear on `remove` — plan gap, assigned here; ~350) · `53-secrets-store-bindings` ← 52 (`secrets_store_secret` bindings at deploy, SST `transform.worker` or script-upload fallback, Worker-secret fallback; ~350) · `54-signing-credential-secrets-store` ← 53 (signing credential in Secrets Store, deploy stops copying it into Worker secrets; ~300).
 - Exit: unit for `provision/**` green; `npx vitest run --config vitest.integration.config.ts tests/compliance/criteria/prov tests/compliance/criteria/cf` green against fakes; Cloud deploy `not-run` (no token).
