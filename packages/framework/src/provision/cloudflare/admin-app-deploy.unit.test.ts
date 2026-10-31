@@ -21,7 +21,8 @@ describe("the admin app stub (E replaces it)", () => {
     const loaded = (await import(`data:text/javascript,${encodeURIComponent(ADMIN_APP_SOURCE)}`)) as { default: typeof adminApp };
     const [a, b] = [await loaded.default.fetch(), await adminApp.fetch()];
     expect(await a.text()).toBe(await b.text());
-    expect(a.headers.get("content-type")).toBe(b.headers.get("content-type"));
+    expect(a.status).toBe(b.status);
+    expect([...a.headers]).toEqual([...b.headers]);
   });
 });
 
@@ -42,11 +43,18 @@ describe("deployAdminApp", () => {
     expect(cloud.requests.filter((r) => !r.startsWith("GET "))).toEqual([`PUT /accounts/${ACCOUNT}/workers/scripts/prototype-admin`, `POST /accounts/${ACCOUNT}/workers/scripts/prototype-admin/subdomain`]);
   });
 
-  it("run again: uploads again (the framework's current admin app), the same bindings", async () => {
+  it("run again: uploads again (the framework's current admin app), the same bindings, and the route is set again (on, previews off)", async () => {
     const cloud = new FakeCloud();
     await deployAdminApp(cloud.api, ACCOUNT, { storeId: "store1", subdomain: SUB });
+    const w = cloud.workers.get("prototype-admin")!;
+    // Turned off by hand in between: only the route request turns it back on (an upload keeps the route as it was).
+    w.enabled = false;
+    w.previews = true;
     await deployAdminApp(cloud.api, ACCOUNT, { storeId: "store1", subdomain: SUB });
-    expect(cloud.workers.get("prototype-admin")!.bindings).toHaveLength(2);
+    const again = cloud.workers.get("prototype-admin")!;
+    expect(again.bindings).toHaveLength(2);
+    expect(again.enabled).toBe(true);
+    expect(again.previews).toBe(false);
   });
 
   it("a refused upload or route names the Worker and the answer", async () => {
