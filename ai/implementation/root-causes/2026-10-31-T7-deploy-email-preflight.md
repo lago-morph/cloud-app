@@ -122,4 +122,28 @@ Search: `git grep -niE 'email|EMAIL' packages/framework/src/provision packages/f
 - **Gate:** `npm run build -w packages/framework && npm run typecheck && npm run lint && npm run test:unit`, plus `npx vitest run --config vitest.integration.config.ts tests/compliance/criteria/prov tests/compliance/criteria/cf packages/framework/test/integration/provision`. That last directory does not exist on this base: T3's #138 adds it on another stack. Then CI on the PR.
 
 ## Review (round 1)
-Status: awaiting review
+Reviewer: an independent reviewer session (Claude Code remote session `session_014mWQ6hMWPAx4BapghHhdcV`), 2026-10-31, on `15f6d6f`, before any fix commit.
+- **Reproduction:** after `npm ci`, `auth-app-fake.test.ts` gives 3 failed / 3 passed.
+- **Experiments**, each reverted afterwards:
+  - with only the `deploy.ts:232` check removed, the same 3 tests fail at "step 5 (code)" with the `settings.ts:87` error;
+  - with that check and the `settings.ts:87` check both removed, 5 pass and the 0.1.x test fails (`EMAIL` and `FRAMEWORK_MAIL_FROM` are still bound).
+- **Code reading:** it checked the cited code and spec, DEC-0689 "What stays", `sst.ts:191` and `target.ts:359`.
+
+Verdict: accepted-with-changes
+1. **minor**: Evidence and Alternatives say that without gate 1 the stop moves to step 3. On a first production deploy (no database yet) it is step 5, because `deployInfrastructure` builds Worker settings only for a stage with a database. Write "step 3 for a stage with a database, otherwise step 5".
+2. **minor**: provisioning.md §2 "Account settings record" (line 135) says that in v0.2.0 "only `deploy` and the setup check read the record", which the fix makes false. File the D spec change as a named item with this fix and list it in the PR. PROV-REQ-002 step 1 needs no record read, so dropping the read is right.
+3. **minor**: Keeping `FakeTarget.accountSettings` rests on a weak argument. After the fix no fake operation reads or writes it, so the `t.accountSettings` assertions in `core/setup-account.unit.test.ts:42,52` and `cli/commands/setup-account.unit.test.ts:39` can never fail. Binding: either remove the field and those assertions (`code-removed`), or keep it with default `{}` and a comment that no operation reads or writes it.
+4. **minor**: The fix also changes behaviour for a 0.1.x record with an invalid `emailDomain`: the preflight now ignores it instead of failing. This matches the spec; state it in the Proposed fix and the test review, so the retired `readAccountSettings` tests are not read as lost coverage.
+5. **minor**: Nothing is needed for 0.1.x stages, `remove` or upgrade. That an upload replaces the binding list is checked only in code, so add it to the verification plan as an open live check.
+6. **minor**: The Similar cases are complete for the deploy path. The `framework.email.senderName` new item and the T6 comments are right. The removals and the output change are minimal and match the spec.
+
+## Response (round 1)
+Each point below is applied in the fix. All six reasons are minor, so no second round is needed (§7a.1.8 step 3).
+- **To 1.** Corrected. Without gate 1, `cloudflareWorkerSettings` stops the deploy at step 3 for a stage that has a database, or at step 5 on a first deploy. The Evidence bullet "Gate 2" and the Alternatives bullet "Only the preflight line is wrong" should be read with this correction.
+- **To 2.** Filed as a named item: **D follow-up "provisioning.md §2 Account settings record"**. In v0.2.0 the record is read only by the setup check (the admin app's Account setup page and status page); `deploy` does not read it (DEC-0732). It is listed in DEC-0732, in the PR body and in the return report.
+- **To 3.** Taken, first option. `FakeTarget.accountSettings` (option and field) is removed. The `t.accountSettings` assertions that could no longer fail go as `code-removed`: `core/setup-account.unit.test.ts:42,52` and `cli/commands/setup-account.unit.test.ts:39`. The tests keep every other assertion. The 0.1.x test "leaves an email domain a 0.1.x setup recorded as it is" in `core/setup-account.unit.test.ts` keeps its `runSetupAccount` result assertion (status 0, nothing created). The real record's preservation stays covered against the fake Cloudflare API by `target.unit.test.ts` ("a 0.1.x email domain in it is kept"), by `cloudflare-setup.unit.test.ts:538-544` and by `criteria/setup/cloudflare-setup.test.ts:337-343`. `AccountSettings` leaves `operations.ts`'s re-exports, since nothing imports it from there.
+- **To 4.** Added to the Proposed fix: a record with an invalid stored `emailDomain` no longer stops a deploy, because deploy does not read the record. `target.unit.test.ts` gets the test "an invalid email domain a stored record holds no longer stops a deploy", and `parseAccountSettings`'s validation is still covered by `cloudflare/account-settings.unit.test.ts`. The test review states it.
+- **To 5.** Added to the Verification plan as an open live check: on a 0.1.x production stage that has `EMAIL`, a v0.2.0 deploy removes the `send_email` binding and `FRAMEWORK_MAIL_FROM` (Worker settings read after the deploy). It goes to the live-pass list.
+- **To 6.** No change.
+
+Addendum to the Proposed fix (from this response): `FakeTarget.accountSettings` is removed, not kept (3). A stored invalid `emailDomain` no longer stops a deploy (4). Addendum to the Verification plan: the live check of point 5, `not-run` here (no token).
