@@ -127,7 +127,7 @@ export interface TestApp {
    */
   loginWithStub(subject: string, options?: { readonly displayName?: string; readonly stubFailure?: "refused" | "replayed" }): Promise<void>;
   /**
-   * With `authAppLoginProvider`: signs in as the Cloudflare user `identity` (its `sub` and the
+   * With `authAppLoginProvider`: signs in as the user `identity` (its `sub` and the
    * role the fake auth app records for it) through `/api/auth/login`, the fake auth app and the
    * callback, and keeps the resulting session for later requests. Throws otherwise and on a
    * connected stage.
