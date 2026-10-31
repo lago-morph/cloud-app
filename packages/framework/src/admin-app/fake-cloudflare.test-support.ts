@@ -8,7 +8,9 @@
  *   opaque access token, a refresh token and an RS256 ID token carrying the request's nonce.
  * - **The API, enforcing scopes** (plan §2.1, §2.1a): every API call needs a live access token.
  *   `/user` and `/memberships` need only the required scopes; any other call needs the scope
- *   `scopeFor` names, else 403 code 9109, as live. A token created through the grant
+ *   `scopeFor` names. Without it the fake answers as §2.1's unticked sign-in recorded: the Workers
+ *   list is 200 and empty (filtered, not refused), D1 and R2 never asked for are 401 / 403 code
+ *   10000, and anything else is 403 code 9109. A token created through the grant
  *   (`POST /accounts/<a>/tokens`) may hold only groups its granted scopes cover, else 400 code
  *   1001 (§2.1a). Calls that pass are answered by `account` (C's in-memory FakeCloud), if given.
  * - **Revoke** ends a token: the API refuses it afterwards (403), as live.
@@ -63,6 +65,7 @@ export interface Member {
 interface Pending {
   readonly sub: string;
   readonly scope: string[];
+  readonly requested: string[];
   readonly nonce: string;
   readonly challenge: string;
   readonly redirectUri: string;
@@ -75,9 +78,11 @@ export interface FakeCloudflare {
   /** Every request: `<METHOD> <url>` (never a body). */
   readonly requests: string[];
   /** Each access and refresh token issued, with whether it was revoked. */
-  readonly issued: { readonly access: string; readonly refresh: string; revokedAccess: boolean; revokedRefresh: boolean; readonly scope: string[] }[];
+  readonly issued: { readonly access: string; readonly refresh: string; revokedAccess: boolean; revokedRefresh: boolean; readonly scope: string[]; readonly requested: string[] }[];
   /** Replies that replace the fake's for `<METHOD> <api path>`. */
   readonly override: Map<string, ApiReply>;
+  /** Claims that replace the ID token's (a wrong `nonce`, `aud`, `exp`, …), for refusal tests. */
+  idTokenClaims: Record<string, unknown>;
   /** The person at the consent screen approves (or declines) the request; the callback URL. */
   consent(authorizeUrl: string, as: { sub: string; untick?: readonly string[]; decline?: boolean }): string;
 }
@@ -111,7 +116,14 @@ export async function fakeCloudflare(options: { account?: CloudflareApi; omitSco
       return { status: 200, body: { success: true, result, result_info: { page: 1, total_pages: 1 } } };
     }
     const needs = scopeFor(method, path)!;
-    if (!t.scope.includes(needs) && !(ALSO[needs] !== undefined && t.scope.includes(ALSO[needs]))) return apiErr(403, 9109, "Unauthorized to access requested resource");
+    if (!t.scope.includes(needs) && !(ALSO[needs] !== undefined && t.scope.includes(ALSO[needs]))) {
+      // §2.1, third sign-in: the Workers list without its scope is filtered, not refused; D1 and
+      // R2 never asked for answer code 10000; anything else asked for but unticked, 9109.
+      if (method === "GET" && /^\/accounts\/[^/]+\/workers\/scripts$/.test(p)) return { status: 200, body: { success: true, errors: [], messages: [], result: [] } };
+      if (!t.requested.includes(needs) && needs === "d1.write") return apiErr(401, 10000, "Authentication error");
+      if (!t.requested.includes(needs) && needs === "workers-r2.write") return apiErr(403, 10000, "Authentication error");
+      return apiErr(403, 9109, "Unauthorized to access requested resource");
+    }
     if (method === "POST" && /^\/accounts\/[^/]+\/tokens$/.test(p)) {
       const groups = ((body as { policies?: { permission_groups?: { id?: string; name?: string }[] }[] } | undefined)?.policies ?? []).flatMap((x) => x.permission_groups ?? []);
       const uncovered = groups.filter((g) => !t.scope.includes(GROUP_SCOPE[g.name ?? ""] ?? "-"));
@@ -152,13 +164,13 @@ export async function fakeCloudflare(options: { account?: CloudflareApi; omitSco
       if (!ok) return json({ error: "invalid_grant" }, 400);
       const access = `at-${String(next++)}-${random()}`;
       const refresh = `rt-${String(next++)}-${random()}`;
-      issued.push({ access, refresh, revokedAccess: false, revokedRefresh: false, scope: [...p.scope, "offline_access"] });
+      issued.push({ access, refresh, revokedAccess: false, revokedRefresh: false, scope: [...p.scope, "offline_access"], requested: p.requested });
       issuedSub.set(access, p.sub);
       const m = members.get(p.sub);
       const now = Math.floor(Date.now() / 1000);
       const claims: Record<string, unknown> = { iss: ISSUER, aud: CLIENT_ID, iat: now, exp: now + 3600, sub: p.sub, nonce: p.nonce };
       if (m?.email !== undefined) Object.assign(claims, { email: m.email, email_verified: m.emailVerified ?? true });
-      const idToken = await key.sign(claims);
+      const idToken = await key.sign({ ...claims, ...self.idTokenClaims });
       return json({ access_token: access, refresh_token: refresh, id_token: idToken, token_type: "bearer", expires_in: 3600, ...(options.omitScope === true ? {} : { scope: [...p.scope, "offline_access"].join(" ") }) });
     }
     if (req.method === "POST" && req.url === `${ISSUER}/oauth2/revoke`) {
@@ -183,13 +195,14 @@ export async function fakeCloudflare(options: { account?: CloudflareApi; omitSco
     return new Response("not found", { status: 404 });
   };
 
-  return {
+  const self: FakeCloudflare = {
     fetch: handler as typeof fetch,
     key,
     members,
     requests,
     issued,
     override,
+    idTokenClaims: {},
     consent(authorizeUrl, as) {
       const u = new URL(authorizeUrl);
       const redirect = new URL(u.searchParams.get("redirect_uri") ?? "");
@@ -200,9 +213,11 @@ export async function fakeCloudflare(options: { account?: CloudflareApi; omitSco
       }
       const scope = (u.searchParams.get("scope") ?? "").split(" ").filter((s) => s !== "" && !(as.untick ?? []).includes(s));
       const code = `code-${String(next++)}-${random()}`;
-      pending.set(code, { sub: as.sub, scope, nonce: u.searchParams.get("nonce") ?? "", challenge: u.searchParams.get("code_challenge") ?? "", redirectUri: redirect.origin + redirect.pathname });
+      const requested = (u.searchParams.get("scope") ?? "").split(" ").filter((s) => s !== "");
+      pending.set(code, { sub: as.sub, scope, requested, nonce: u.searchParams.get("nonce") ?? "", challenge: u.searchParams.get("code_challenge") ?? "", redirectUri: redirect.origin + redirect.pathname });
       redirect.searchParams.set("code", code);
       return redirect.toString();
     },
   };
+  return self;
 }
