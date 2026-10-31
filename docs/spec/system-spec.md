@@ -143,7 +143,7 @@ Amendment for v0.2.0 (Origin: owner-approved · Decision: DEC-0690; when a role 
 - Anyone who is not a member of the owner's Cloudflare account MUST NOT be able to sign in.
 - A member whose account role is an administrator role MUST be level `admin`. Any other member MUST be level `user`. Anyone not signed in is `anonymous`.
 - The role names that count as administrator are a parameter.
-- A role change in the Cloudflare account MUST take effect at the person's next sign-in, not necessarily on the next request. A role refresh MUST keep each session's level in step with the role recorded at the person's latest sign-in. The refresh interval is a parameter (DEC-0703).
+- A role change in the Cloudflare account MUST take effect at the person's next sign-in. A role refresh MUST keep each of their sessions in step with the role recorded at that sign-in, so other sessions follow at their next refresh, not necessarily on their next request. The refresh interval is a parameter (DEC-0703).
 - If a refresh cannot confirm the role after its retries, the person MUST be signed out. The number of retries and the delay between them are parameters.
 - Configuration MUST NOT hold admin or user lists.
 
