@@ -45,7 +45,8 @@ function fakeProvider(accounts: Map<string, AccountStatus | Error> = new Map([["
 }
 
 /** A real-provider session of the fake provider. */
-const real = (id: string, displayName: string | null, subject = "s-user") => ({ id, displayName, provider: "fake", subject });
+// Confirmed at time 0: every request is past PAR-425, so each one reads the account (DEC-0672).
+const real = (id: string, displayName: string | null, subject = "s-user") => ({ id, displayName, provider: "fake", subject, role: { level: "user" as const, checkedAt: 0 } });
 
 function harness(options: Partial<AuthOptions> = {}, target: Target = "local", stage = "dev") {
   const written: Written[] = [];
@@ -57,6 +58,8 @@ function harness(options: Partial<AuthOptions> = {}, target: Target = "local", s
       if (name === FRAMEWORK_SECRETS.sessionKey) return KEY;
       throw new Error(`unexpected secret ${name}`);
     },
+    // Retries wait no real time here (PAR-427 is tested in role-refresh.unit.test.ts).
+    sleep: async () => undefined,
     // The local runtime passes the local settings (DEC-0195).
     ...(target === "local" ? { cookies: LOCAL_COOKIES } : {}),
     ...options,
@@ -135,15 +138,15 @@ describe("current user", () => {
       expect(await res.json(), subject).toStrictEqual({ level: "anonymous" });
     }
     expect(written).toStrictEqual([
-      { component: "AUTH", severity: "warn", message: "role lookup failed (SQLITE_ERROR)" },
-      { component: "AUTH", severity: "warn", message: "role lookup failed (unknown)" },
+      { component: "AUTH", severity: "warn", message: "role refresh failed (SQLITE_ERROR); session ended" },
+      { component: "AUTH", severity: "warn", message: "role refresh failed (unknown); session ended" },
     ]);
   });
 
   it("a session of a provider the stage does not install is anonymous with no read", async () => {
     const fake = fakeProvider();
     const { request } = harness({ provider: fake.provider });
-    const other = await session({ id: "u_X", displayName: null, provider: "other", subject: "s-user" });
+    const other = await session({ id: "u_X", displayName: null, provider: "other", subject: "s-user", role: { level: "user", checkedAt: 0 } });
     expect(await (await request("/api/whoami", { headers: { cookie: other } })).json()).toStrictEqual({ level: "anonymous" });
     expect(fake.reads).toEqual([]);
   });

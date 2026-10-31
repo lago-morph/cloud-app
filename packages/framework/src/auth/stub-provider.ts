@@ -78,7 +78,8 @@ export function createStubLoginProvider(): StubLoginProvider {
       usedCodes.add(code);
       const subject = query.get("subject") ?? STUB_DEFAULT_SUBJECT;
       if (!accounts.has(subject)) accounts.set(subject, { roles: [] });
-      return { subject, displayName: query.get("name") };
+      // The roles at sign-in are the session's until its first refresh (DEC-0672).
+      return { subject, displayName: query.get("name"), roles: [...(accounts.get(subject)?.roles ?? [])] };
     },
     async accountStatus(subject: string): Promise<AccountStatus | null> {
       const account = accounts.get(subject);
