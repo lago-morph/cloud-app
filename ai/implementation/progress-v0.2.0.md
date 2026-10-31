@@ -10,7 +10,9 @@ Plan: `ai/implementation/plan-v0.2.0-testing-auth.md` ("plan §n"); governing pr
 
 ## 1. Decisions taken
 <!-- one line each: date · ID · item · decision · where recorded -->
-- (none yet)
+- 2026-10-31 · DEC-0620 · R · Nothing merges during the run, so "after X merged" in §3/§4 means "after X is pushed on its branch". Stacks still base on `main` unless they edit a file or import code that a lower PR changes; then they stack on that PR's branch. A and C start in batch 1 alongside wave 0 (their owned paths do not overlap S1–S4). · owner-questions 2
+- 2026-10-31 · DEC-0621 · R · A's CI step and path-map entry move out of PR 28 into a separate small PR `29-auth-app-ci` based on S3's top branch (`17-ci-no-duplicates`), merged after 28 and 17. This avoids two stacks editing `ci.yml`. · owner-questions 3
+- 2026-10-31 · DEC-0622 · R · C's pure-removal PR 34 is opened by C. T5 adds its test-change review record onto the branch before merge. · progress §3 T5
 
 ## Open items
 <!-- blocked items, cross-stack merge preconditions still pending, owner questions raised -->
@@ -34,39 +36,39 @@ Format: **ID — title** · plan § · deps · status. Then Owns / PRs (`nn` bra
 
 ### Run records
 
-**R — run records** · prompt §1 · — · `running`
+**R — run records** · prompt §1 · — · `running` · PR #59
 - Owns: `ai/implementation/{progress-v0.2.0.md, owner-questions-v0.2.0.md, v0.2.0-pr-stack.md, live-pass-v0.2.0.md, final-report-v0.2.0.md}`.
 - PRs: `00-run-records` ← `main` (records; opened first, kept open and updated through the run, merged last — nothing stacks on it).
 - Exit: files present and current at run end. Tests/E2E: none (docs). IDs: DEC-0620–0624 (orchestrator choices), no PAR.
 
-**P0 — local compliance baseline on main** · §7a.1.8, TS-3 · — · `todo`
+**P0 — local compliance baseline on main** · §7a.1.8, TS-3 · — · `running`
 - Bare `npm run test:integration` / `npm run test:e2e` are not self-contained: 48 of 53 integration and 5 of 8 e2e failures on clean `1e0c289` are "COMPLIANCE_BASE_URL is not set" (criteria and scenarios must run through `npm run compliance -- --target local`). The baseline is `npm run compliance -- --target local`: 128 passed, 2 failed (COMPL-AC-001, MAIL-AC-005), 5 blocked (missing local test secret), §6. Any failure there gets a diagnoser + reviewer (§7a.1.8) before wave-1 exit checks rely on it; a fix is PR `08-fix-baseline-<slug>` ← main. S3 must make CI run criteria through the harness (or set the env), never bare.
 - Owns: its root-cause records; fix paths named by the accepted record. IDs: DEC-0778–0779 (from T7's range), PAR-480.
 
 ### Wave 0 (batch 1, all parallel)
 
-**S1 — standards text** · §6.2, §7a.1, §7a.2.3, §7a.2.6, TS-1/17/21 · — · `todo`
+**S1 — standards text** · §6.2, §7a.1, §7a.2.3, §7a.2.6, TS-1/17/21 · — · `running`
 - Owns: `.claude/skills/testing-standards/**` (new), `CLAUDE.md`, `ai/implementation/plan.md` (§1/§10 pointer only), `docs/CONVENTIONS.md`, `docs/acceptance/e2e-scenarios.md` (Origin lines, empty "Retired scenarios" table, preamble untouched), `docs/README.md` (status-row note only), `docs/components/compliance.md` ("Tiers", two e2e projects; not COMPL-REQ-006).
 - PRs: `02-standards-skill-core` ← main (SKILL.md + resources: diagnosis §7a.1.8, test-change review §7a.1.9; ~350) · `03-standards-skill-refs` ← 02 (resources: fuzzing §7a.1.7, edge cases §7a.1.6, CI path map pointer to `scripts/ci/path-map.json` §7a.2.4; ~300) · `04-claude-md-standards` ← 03 (CLAUDE.md TS-1, TS-17 hard rule, TS-21 line; plan.md pointer; ~40) · `05-e2e-governance` ← 04 (CONVENTIONS §4 + pointer, Origin lines on E2E-001…016, Retired table, README note; ~120) · `06-compliance-tiers` ← 05 (compliance.md Tiers per TS-19/§7a.2.4, e2e-api/e2e-ui; ~60).
 - Exit: skill-reviewer verdict (§7a.2.6) in each PR description; `npx vitest run --config vitest.integration.config.ts tests/skill` green; `grep -c '^Origin:' docs/acceptance/e2e-scenarios.md` ≥ 16; catalogue unit tests green (`npx vitest run --config vitest.unit.config.ts tests/compliance/harness/catalogue.unit.test.ts`).
 - Tests: none added (docs); catalogue must still parse the scenarios (Origin lines must not break `catalogue.ts`). E2E: no scenario change in meaning; E2E-004 unaffected. Fuzz: none.
 - IDs: DEC-0625–0629, PAR-400–402.
 
-**S2 — commit hook and record linters** · §7a.2.5, TS-12, TS-18 · — · `todo`
+**S2 — commit hook and record linters** · §7a.2.5, TS-12, TS-18 · — · `running`
 - Owns: `.claude/settings.json` (new), `scripts/lint-records.mjs`, `scripts/claude-commit-hook.mjs` (new), `tests/lint-records.unit.test.ts`, `tests/claude-commit-hook.unit.test.ts`, `ai/implementation/test-reviews/README.md` (new, record format). Must not edit root `package.json` (S3 owns it in batch 1): scripts are run as `node scripts/…`.
 - PRs: `10-record-linters` ← main (root-cause + test-review lint, unit tests; ~300) · `11-claude-commit-hook` ← 10 (PreToolUse hook on `git commit`: eslint + typecheck + record lints on staged files; ~150).
 - Exit: `npx vitest run --config vitest.unit.config.ts tests/lint-records.unit.test.ts tests/claude-commit-hook.unit.test.ts` green; a scratch commit with a record missing "Review" is blocked by the hook (transcript in PR); existing records not linted unless staged; no `.git/hooks` file written; template has no hook (`git diff main -- apps/template` empty).
 - Tests: new unit tests (red/green). E2E: none. Fuzz: none.
 - IDs: DEC-0630–0634, PAR-403–405.
 
-**S3 — CI and release restructuring** · §7a.2.4, TS-11/16/19 · — · `todo`
+**S3 — CI and release restructuring** · §7a.2.4, TS-11/16/19 · — · `running`
 - Owns: `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `scripts/ci/path-map.json`, `scripts/ci/classify.mjs` (new), `tests/ci-classify.unit.test.ts`, `playwright.config.ts`, `vitest.unit.config.ts`, `vitest.integration.config.ts`, `vitest.config.ts`, root `package.json` (scripts only), `tests/compliance/harness/playwright.ts` (project names), `tests/skill/examples.test.ts`, `tests/skill/example-copies.unit.test.ts` (layer only). The path map pre-declares planned paths: `packages/framework/src/auth-app/**`, `packages/framework/src/admin-app/**`, `tests/support/mock-oauth2/**`.
 - PRs: `14-ci-classifier` ← main (path map + classifier + unit tests, incl. the short docs-that-are-test-inputs list; ~350) · `15-playwright-projects` ← 14 (`e2e-api`/`e2e-ui` split of `tests/compliance/e2e/*.spec.ts`, `test:e2e`, `test:e2e:api`, `test:e2e:ui` scripts; ~150) · `16-ci-pr-selection` ← 15 (ci.yml: `pull_request` only, classify step, per-layer selection, Chromium only when selected, linters per change; ~250) · `17-ci-no-duplicates` ← 16 (integration glob drops `*.unit.test.ts`, DEC-0405 superseded keeping SKILL-AC-004 single-run evidence, `examples.test.ts` vs ci.yml, release.yml runs every test once with Chromium; ~200).
 - Exit: `npx vitest run --config vitest.unit.config.ts tests/ci-classify.unit.test.ts` green; each PR's CI log prints the classification and selected layers matching the path map (`gh run view <id> --log | grep -A20 'Classification'`); a docs-only PR (S1's 05) runs linters only; `npx playwright test --list --project e2e-api` lists no spec that opens a page; no test file collected by two layers (`node scripts/ci/classify.mjs --check-duplicates`).
 - Tests: unit tests for the classifier; once-green test moves (`example-copies`) reviewed per §7a.1.9 (`refactor-only`). E2E: project split only, no scenario change. Fuzz: the classifier's path matcher is a candidate for S4's list.
 - IDs: DEC-0635–0644, PAR-406–409.
 
-**S4 — integration coverage list and fuzz target list** · §7a.2.2, §7a.1.7 · — · `todo`
+**S4 — integration coverage list and fuzz target list** · §7a.2.2, §7a.1.7 · — · `running`
 - Owns: `ai/implementation/v0.2.0-coverage-fuzz.md` (new). Read-only otherwise.
 - PRs: `20-coverage-fuzz-list` ← main (~150, doc).
 - Exit: lists every v0.2.0-end-state component (`docs/architecture/component-map.md`) with its suite path or "gap" (today none under `packages/framework/test/integration/` for provision, evidence, testing, targets, client; confirm against `tests/compliance/criteria/`); ≤ 8 fuzz targets, each with trust boundary, root-cause evidence, run count and seed; recommends a fuzz tool that runs offline in Node; an independent reviewer's per-target verdict appended in the file.
@@ -74,7 +76,7 @@ Format: **ID — title** · plan § · deps · status. Then Owns / PRs (`nn` bra
 
 ### Wave 1 (batch 2, after batch 1 merged)
 
-**A — the auth app** · §3, §4.1 steps 1–3, §4.4, §2.1, D5/D6 · S1–S3 merged · `todo`
+**A — the auth app** · §3, §4.1 steps 1–3, §4.4, §2.1, D5/D6 · S1–S3 merged · `running`
 - Owns: `packages/framework/src/auth-app/**` (new: Worker entry, `/start`, `/callback`, OAuth/PKCE/JWKS, D1 store, codes, registry, `redeem`/`role` entrypoint, role mapping), `packages/framework/src/auth/auth-app-binding.ts` (new: interface + in-memory fake), `docs/contracts/ts/internal/auth-app.d.ts` (new), `packages/framework/test/integration/auth-app/**` (new), `tests/support/mock-oauth2/**` (new launcher: Java jar locally, Docker in CI), `.github/workflows/ci.yml` (mock-oauth2-server step only, PR 28), `scripts/ci/path-map.json` (auth-app entry only).
 - PRs: `24-auth-app-contract` ← main (binding interface `redeem({code,app})`/`role(sub)`, fake, contract doc; ~200) · `25-auth-app-oauth` ← 24 (PKCE S256, state, ID-token check vs JWKS: iss/aud/nonce/exp, `/user` fallback, `/memberships` pick, role mapping PAR; ~400) · `26-auth-app-store` ← 25 (D1 schema `users`, `codes`, registry; hashed 60 s single-use codes bound to app + return; exact-match registry; ~350) · `27-auth-app-worker` ← 26 (routes, revoke in callback, binding entrypoint; ~350) · `28-auth-app-integration` ← 27 (mock-oauth2-server launcher, integration suite, CI step; ~350).
 - Exit: unit tests in `packages/framework/src/auth-app/**/*.unit.test.ts` green; `npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/auth-app` green with mock-oauth2-server running locally (`java -jar …`; Java 21 present); full redirect → code → redeem path over plain HTTP, no browser.
@@ -88,7 +90,7 @@ Format: **ID — title** · plan § · deps · status. Then Owns / PRs (`nn` bra
 - Tests: unit per §7 role refresh (retry twice, fail closed, retry success keeps session); provider/redeem tests against the fake binding; removals grouped `code-removed`/`component-removed` (T5 reviews). E2E: E2E-005/006/007 specs' password clauses removed in 45/46 (`code-removed`); scenario text left to T2. Fuzz: session cookie parse unchanged.
 - IDs: DEC-0665–0679, PAR-425–434 (refresh interval, retries, delay).
 
-**C — bootstrap command** · §5.1, §2.1a/b, D9 · S1–S3 merged · `todo`
+**C — bootstrap command** · §5.1, §2.1a/b, D9 · S1–S3 merged · `running`
 - Owns: `packages/framework/src/provision/cloudflare/{cloudflare-setup.ts, setup-steps.ts, setup-record.ts, permissions.ts (BOOTSTRAP, PERMISSIONS_VERSION), plan.ts, email.ts, email-permissions.ts, mail-sink.ts, token-policies.ts (new), r2-token.ts (import only), target.ts (email-domain check only), oauth-clients.ts (new), secrets-store.ts (new, create/put only), admin-app-deploy.ts (new), fake-cloud.test-support.ts, setup-world.test-support.ts}` and their unit tests, `packages/framework/src/cli/commands/{cloudflare-setup,setup-account}*.ts`, `packages/framework/src/admin-app/worker.ts` (new stub: "sign in" placeholder; E takes over in batch 3), `tests/compliance/criteria/setup/**`, `tests/compliance/criteria/prov/setup-account.test.ts`, `tests/compliance/criteria/_fakes/cloud-fakes.ts`, generated tables in `QUICKSTART.md` and `docs/components/provisioning.md` (via `node scripts/permission-tables.mjs` only).
 - PRs: `30-bootstrap-token-rules` ← main (expiry ≤ 1 day else DELETE at once, delete at end, never written; BOOTSTRAP set of §5.1; tables regenerated; ~350) · `31-oauth-clients` ← 30 (create admin + sign-in clients, `response_types ["code","id_token"]`, secrets straight to Secrets Store; fake API; ~350) · `32-admin-app-deploy` ← 31 (stub Worker deployed and bound, URL printed; ~250) · `33-token-policies-move` ← 32 (`refactor-only`: `policyCovers`/`missingPermissions`/`tokenPolicies` from `email-permissions.ts` to `token-policies.ts`; ~150) · `34-remove-email-setup` ← 33 (pure removal: `email.ts`, `email-permissions.ts`, `mail-sink.ts`, email steps, Workers Paid stop; + record).
 - Exit: unit tests for `provision/cloudflare/**` and `cli/commands/cloudflare-setup*` green; `npx vitest run --config vitest.integration.config.ts tests/compliance/criteria/setup` green with `CLOUDFLARE_*` unset; `node scripts/permission-tables.mjs --check` clean; a scan of all output and written files finds no token value (fake token sentinel).
