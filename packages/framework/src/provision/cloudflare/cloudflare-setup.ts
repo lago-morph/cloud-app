@@ -25,8 +25,7 @@
  *    says so. The bootstrap token does no account setup and never reads or changes the everyday
  *    token: both are the admin app's (plan §5.2; DEC-0682).
  * 5. **Without it, the email domain**: `--email-domain`, else `CLOUDFLARE_EMAIL_DOMAIN`, else the
- *    account's zone names, and stop; the plan (only the `PROTOTYPE_FRAMEWORK_CLOUDFLARE_PLAN` setting
- *    can say Workers Free now): Workers Free stops.
+ *    account's zone names, and stop.
  * 6. **The setup record**, with the everyday token (`checkAccountSetup`): current and the quick check
  *    passes: done. Otherwise what is missing, and the admin app (or, before it is deployed, the
  *    bootstrap link); stop.
@@ -58,7 +57,6 @@ import { ACCOUNT_SETUP_VERSION, BOOTSTRAP, comparePolicies, deepLink, PERMISSION
 import { deployAdminApp } from "./admin-app-deploy.js";
 import { APP_SCRIPTS, CLIENT_NAMES, ensureOAuthClients, ensureSubdomain, type ClientKind } from "./oauth-clients.js";
 import { ensureStore } from "./secrets-store.js";
-import { workersPlanReader } from "./plan.js";
 import { SIGNING_TOKEN_NAME } from "./r2-token.js";
 import { checkAccountSetup, type SetupStepOptions } from "./setup-steps.js";
 import { commentOutBootstrap, ENV_CLOUDFLARE_FILE, ENV_CLOUDFLARE_TEMPLATE, fillInSettings, readCloudflareSettings, writeTemplateIfAbsent, type CloudflareSettings } from "./token-sources.js";
@@ -184,7 +182,6 @@ export const WHERE_IT_GOES = [
 /** Plan §3.2's requirements. */
 export const REQUIREMENTS = [
   "Requirements:",
-  "  - a Cloudflare account on the Workers Paid plan: sign-in by email (Better Auth with Cloudflare Email Sending) needs it;",
   "  - a domain on Cloudflare DNS in that account, which the sign-in emails are sent from.",
 ].join("\n") + "\n";
 
@@ -526,15 +523,6 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     if (everyday === undefined) return stop(NEXT_PROMPT);
     const everydayApi = guard(everyday.api);
 
-    // 4 (cont.). The plan, before the email domain is asked for: neither token holds Billing Read, so only the setting decides (plan.ts).
-    const plan = await workersPlanReader(everydayApi, accountId, deps.env)();
-    if (plan.plan === "free") {
-      return stop(
-        `The account "${account.name}" is on the Workers Free plan. Sign-in by email (Better Auth with Cloudflare Email Sending) needs Workers Paid: upgrade it in the dashboard (Workers & Pages, Plans), then run setup again.\n${NEXT_PROMPT}`,
-      );
-    }
-    const planText = plan.plan === "paid" ? "Workers Paid" : 'not checked (reading it needs "Billing Read")';
-
     // 5. The email domain.
     const zoneApi = everydayApi;
     const given = request.emailDomain?.trim().toLowerCase();
@@ -621,7 +609,6 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     say(`  email domain: ${domain}`);
     say(`  account setup: ${setupState}`);
     say(`  everyday token: ${everydayState}`);
-    say(`  plan: ${planText}`);
     if (blocked.length > 0) {
       return stop(
         [
@@ -651,7 +638,7 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     /**
      * The bootstrap (v0.2.0 plan §5.1): the token's own permissions, then (DEC-0683) it deletes
      * itself at the end of the run, its line is commented out and its value is never written. The
-     * everyday token, the account setup and the plan are not the bootstrap token's (DEC-0682).
+     * everyday token and the account setup are not the bootstrap token's (DEC-0682).
      */
     async function bootstrap(token: Token, api: CloudflareApi, to: Account, switchedTo: boolean): Promise<ProvisionStatus> {
       const missing = comparePolicies(bootPolicies, BOOTSTRAP, { accountId: to.id, zoneId: "*" }).missing;

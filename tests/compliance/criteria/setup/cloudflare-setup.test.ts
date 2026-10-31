@@ -111,8 +111,7 @@ if (isLocal()) {
       const at = outLines.indexOf(TEMPLATE_LINES[0]);
       expect(at, "the template's first line").toBeGreaterThanOrEqual(0);
       expect(outLines.slice(at, at + TEMPLATE_LINES.length), "the template's four lines, in order").toEqual([...TEMPLATE_LINES]);
-      // Plan §3.2: the plan and domain requirements.
-      expect(r.out).toContain("Workers Paid");
+      // Plan §3.2: the domain requirement.
       expect(r.out).toMatch(/Cloudflare DNS/);
       // Where they go: a cloud session's environment settings, then a new session; on the command line the environment or the file.
       expect(r.out).toMatch(/cloud session/i);
@@ -155,7 +154,7 @@ if (isLocal()) {
   });
 
   describe("SETUP: everything current (SETUP-AC-002)", () => {
-    it(tag("SETUP-AC-002", "a valid everyday token, a current setup record and every permission: already set up, asks for nothing, no write request, .env.cloudflare byte for byte, plan not checked, exit 0"), async () => {
+    it(tag("SETUP-AC-002", "a valid everyday token, a current setup record and every permission: already set up, asks for nothing, no write request, .env.cloudflare byte for byte, exit 0"), async () => {
       const { world, dir } = await setUpFirstProject("ac002");
       const before = readEnvFile(dir);
       const record = world.cloud().objectBodies.get(RECORD_KEY) as { setupVersion?: number; emailDomain?: string } | undefined;
@@ -169,7 +168,6 @@ if (isLocal()) {
       expect(r.all).not.toContain(NEXT_PROMPT_PHRASE);
       expect(writesOf(r.requests), "write requests").toEqual([]);
       expect(readEnvFile(dir), ".env.cloudflare unchanged").toBe(before);
-      expect(r.all).toMatch(/plan[^\n]*not checked/i);
     });
 
     it(tag("SETUP-AC-002", "the same with the values in the environment only: no .env.cloudflare is written, no write request, exit 0"), async () => {
@@ -184,7 +182,6 @@ if (isLocal()) {
       expect(writesOf(r.requests)).toEqual([]);
       expect(envFileExists(second), `with every value in the environment, setup changes nothing: no .env.cloudflare is created:\n${r.all}`).toBe(false);
       expect(r.all).toMatch(/already set up|nothing to do/i);
-      expect(r.all).toMatch(/plan[^\n]*not checked/i);
     });
   });
 
@@ -542,17 +539,6 @@ if (isLocal()) {
       expect(r.all).toContain("Second account");
       expect(r.all).toContain("CLOUDFLARE_ACCOUNT_ID");
       expect(r.all).toContain("https://dash.cloudflare.com");
-      expect(writesOf(r.requests)).toEqual([]);
-    });
-
-    it(tag("SETUP-AC-008", "Workers Free (since v0.2.0 neither token reads the plan: the PROTOTYPE_FRAMEWORK_CLOUDFLARE_PLAN setting says it): Better Auth needs Workers Paid; no write request; exit 1"), async () => {
-      const world = freshWorld();
-      const t = addTokens(world, "ac008b");
-      const dir = await project({ envFile: envFile({ [EVERYDAY_SETTING]: t.everyday.value, CLOUDFLARE_EMAIL_DOMAIN: DOMAIN }) });
-      const r = await runSetup("AC-008 Workers Free", world, dir, { env: { PROTOTYPE_FRAMEWORK_CLOUDFLARE_PLAN: "free" } });
-      expect(r.status, r.all).toBe(1);
-      expect(r.all).toContain("Workers Paid");
-      expect(r.all).toContain("Better Auth");
       expect(writesOf(r.requests)).toEqual([]);
     });
 
