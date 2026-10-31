@@ -53,7 +53,7 @@
     "apps/reference/**"
   ],
   "components": {
-    "CORE": { "dependsOn": [], "paths": ["packages/framework/src/core/**", "packages/framework/src/index.ts"], "integration": ["packages/framework/test/integration/core", "tests/compliance/criteria/core"] },
+    "CORE": { "dependsOn": [], "paths": ["packages/framework/src/core/**", "packages/framework/src/index.ts"], "integration": ["packages/framework/test/integration/core", "packages/framework/test/integration/testing", "tests/compliance/criteria/core"] },
     "HTTP": { "dependsOn": ["LOG"], "paths": ["packages/framework/src/http/**", "packages/framework/src/client/**"], "integration": ["packages/framework/test/integration/http", "tests/compliance/criteria/http"], "browser": true },
     "SQL": { "dependsOn": [], "paths": ["packages/framework/src/sql/**"], "integration": ["packages/framework/test/integration/sql", "tests/compliance/criteria/sql"] },
     "MIG": { "dependsOn": ["SQL"], "paths": ["packages/framework/src/mig/**", "packages/framework/migrations/**"], "integration": ["packages/framework/test/integration/mig", "tests/compliance/criteria/mig"] },
