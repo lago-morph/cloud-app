@@ -71,13 +71,28 @@ const titled = (title, name) => title.toLowerCase().startsWith(name.toLowerCase(
 
 const VERDICT_LINE = /^\s*(?:[-*]\s+)?(?:\*\*)?Verdict(?:\*\*)?\s*:\s*(?:\*\*)?\s*`?([^`*.;,(\n]*?)`?\s*(?:[.;,*(]|$)/gim;
 const AWAITING = /^\s*(?:[-*]\s+)?(?:\*\*)?Status(?:\*\*)?\s*:\s*(?:\*\*)?\s*`?awaiting review`?/im;
-const MARKED_REASON = /^\s*(?:[-*+]\s+|\d+[.)]\s+)?\*\*(?:major|minor)\b[^*\n]*\*\*/im; // opens a line or bullet
+/**
+ * A reason marked `kind`: the bold marking opens a line or bullet (also in a blockquote), ends it in
+ * parentheses, fills a table cell, or follows a label and dash ("M1 — **major**: …"). Prose such as
+ * "no **major** issues" does not count.
+ */
+const marking = (kind) =>
+  new RegExp(
+    [
+      `^\\s*(?:>\\s*)*(?:[-*+]\\s+|\\d+[.)]\\s+)?\\*\\*${kind}\\b[^*\\n]*\\*\\*`,
+      `\\(\\*\\*${kind}\\*\\*\\)\\s*[.;]?\\s*$`,
+      `\\|\\s*\\*\\*${kind}\\*\\*\\s*\\|`,
+      `\\s[—–-]\\s+\\*\\*${kind}\\*\\*\\s*:`,
+    ].join("|"),
+    "im",
+  );
+const MARKED_REASON = marking("(?:major|minor)");
 
 function verdicts(body) {
   return [...body.matchAll(VERDICT_LINE)].map((m) => m[1].trim());
 }
 
-const MAJOR_REASON = /^\s*(?:[-*+]\s+|\d+[.)]\s+)?\*\*major\b[^*\n]*\*\*/im;
+const MAJOR_REASON = marking("major");
 const ATTEMPT = /^Attempt ([1-9]\d*)\b/i;
 const MAX_ATTEMPTS = 3;
 const MAX_ROUNDS = 3;
