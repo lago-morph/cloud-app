@@ -13,6 +13,7 @@
  *   scopes cover (§2.1a).
  * - `status` (page 3): reads the Workers, the setup record in R2 and the auth app's D1. The client
  *   offers no read variants of these (DEC-0713), so the write scopes are asked for; the page only reads.
+ * - `cleanup` (v0.1.x email cleanup, plan §8): deletes the mail-sink Worker and its R2 bucket.
  */
 /**
  * The admin client's required scopes, as `REQUIRED_SCOPES` in oauth-clients.ts (a unit test keeps
@@ -26,6 +27,7 @@ export const PAGE_SCOPES = Object.freeze({
   setup: Object.freeze(["workers-scripts.write", "d1.write", "workers-r2.write", "secrets-store.write", "account-api-tokens.write"]),
   everyday: Object.freeze(["account-api-tokens.write", "workers-scripts.write", "workers-r2.write", "d1.write", "secrets-store.read"]),
   status: Object.freeze(["workers-scripts.write", "workers-r2.write", "d1.write"]),
+  cleanup: Object.freeze(["workers-scripts.write", "workers-r2.write"]),
 });
 
 export type AdminPageId = keyof typeof PAGE_SCOPES;
