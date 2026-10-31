@@ -87,10 +87,11 @@ describe("PROV production stage and F's bindings on the Cloudflare target with l
     // The backup is complete, and written before anything was deleted (DEC-0543).
     const events = world.events.slice(mark);
     const firstDelete = events.findIndex((e) => (/^(api|d1|bytes) DELETE /.test(e) && !e.includes("/prototype-backups/")) || e.startsWith("sst remove"));
-    // DEC-0725 also puts the registry clear before anything is deleted: that order fails on this
-    // base and is the red test of its own fix PR (root cause 2026-10-31-T3-remove-registry-order).
+    // DEC-0725: clearing the registry entry is removal's first step after the backup, before
+    // anything is deleted (root cause 2026-10-31-T3-remove-registry-order).
     const registryClear = events.findIndex((e) => e.startsWith(`d1 POST /accounts/${ACCOUNT}/d1/database/${registryId}/query`));
     expect(registryClear, "the registry entry is cleared").toBeGreaterThan(-1);
+    expect(registryClear, `the registry entry is cleared before anything is deleted:\n${events.join("\n")}`).toBeLessThan(firstDelete);
     const lastBackupWrite = events.map((e) => e.startsWith("bytes PUT /accounts/") && e.includes("/prototype-backups/")).lastIndexOf(true);
     expect(lastBackupWrite, "the backup was written").toBeGreaterThan(-1);
     expect(firstDelete, "nothing is deleted before the backup is complete").toBeGreaterThan(lastBackupWrite);
