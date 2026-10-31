@@ -33,13 +33,26 @@ This makes the folder `my-app` from the template app and installs its dependenci
 
 ### Put it on Cloudflare
 
-You need a Cloudflare account on the Workers Paid plan, and a domain on that account with Cloudflare DNS active. In the app's folder, run:
+You need a Cloudflare account. The Workers Free plan is enough. Setup has two parts: a short command with a one-time bootstrap token, then the admin app in your browser.
 
-```sh
-npm run cloudflare-setup
-```
+1. In the app's folder, run:
 
-In Claude Code, say "set up Cloudflare" instead. Setup prints two pre-filled dashboard links for the tokens it needs and tells you where to put them. Run it again after pasting them. [QUICKSTART.md](QUICKSTART.md) has every step, including the cloud session variant.
+   ```sh
+   npm run cloudflare-setup
+   ```
+
+   In Claude Code, say "set up Cloudflare" instead. Setup prints a pre-filled dashboard link for the bootstrap token and tells you where to put it (`CLOUDFLARE_BOOTSTRAP_TOKEN`). Give the token an expiry of 1 day or less: setup deletes a token that lives longer, or has no expiry, at once.
+2. Run setup again with the bootstrap token. It creates the account's two OAuth clients, keeps their secrets in Cloudflare Secrets Store, deploys the admin app and prints its address. Then the token deletes itself. It is used once and never stored.
+3. Open the admin app and sign in with Cloudflare, as an administrator of the account. Its Account setup page deploys the auth app and creates the account's shared resources. Its Everyday token page makes the everyday token, which every other command uses, and shows it once, to you and not to the agent. Save it as `CLOUDFLARE_API_TOKEN`.
+4. Say "continue prototype setup", or run `npm run cloudflare-setup` again, to check that everything works.
+
+[QUICKSTART.md](QUICKSTART.md) has every step, including the cloud session variant.
+
+### Sign-in
+
+On Cloudflare, people sign in with their Cloudflare account, through the account's auth app. One auth app signs people in for all your apps, and the apps themselves hold no Cloudflare credential. Only members of your Cloudflare account can sign in. A member whose account role is an administrator role is the app's admin; any other member is a user. To make someone an admin, change their role in the Cloudflare account: it takes effect at their next sign-in or role refresh.
+
+Locally and on `test-` stages, the authentication mock signs people in instead, so development and tests need no real sign-in.
 
 ### The Claude Code skill
 
@@ -54,6 +67,15 @@ npm run upgrade
 ```
 
 This moves the app to the latest framework release, refreshes its skill copy and runs `npm run verify`. `npm run version-check` only reports whether a newer release exists. See [CHANGELOG.md](CHANGELOG.md) for what each release changes.
+
+### Upgrade from 0.1.x
+
+0.2.0 replaces sign-in by email and password with sign-in with Cloudflare. It is a breaking release (before 1.0.0, a minor version may make breaking changes):
+
+- **Password accounts and sessions are dropped.** Everyone signs in again with Cloudflare. New framework migrations drop the old sign-in and test-mail tables; they run with the app's migrations (locally, on the next `npm run dev`).
+- **Removed:** the password pages and endpoints, the `mail` command and the mail sink, the email domain and Email Service setup, and the `admins` command, with the template's `mail` and `admins` scripts. Admins are now the account's administrators (see [Sign-in](#sign-in)). Cloudflare setup no longer needs Workers Paid or a domain on Cloudflare DNS.
+- **Set up again.** `npm run upgrade` to 0.2.0 points you to setup: a new bootstrap token, then the admin app ([Put it on Cloudflare](#put-it-on-cloudflare)). The Everyday token page brings your existing everyday token to the new permission list, without the email and zone permissions.
+- **Cleanup is optional.** The admin app offers to remove the 0.1.x email resources (routing rules, test mailbox, the `prototype-mailsink` Worker and bucket, the sending domain). It never does so on its own.
 
 ## Working on the framework
 
