@@ -315,6 +315,19 @@ describe("cloudflare-setup: the bootstrap's OAuth clients (v0.2.0 plan §5.1 ste
     expect(world.writes().filter((w) => w.startsWith("boot-2 "))).toEqual([`boot-2 DELETE /accounts/${ACCOUNT}/tokens/boot-2`]);
   });
 
+  it("a failed Secrets Store put after a create stops the run: the token and its line are kept, and the client secret is printed nowhere; exit 1", async () => {
+    const world = freshWorld();
+    world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
+    world.cloud().override.set(`POST /accounts/${ACCOUNT}/secrets_store/stores/store1/secrets`, { status: 500, body: { success: false, errors: [{ code: 1, message: "Internal" }], result: null } });
+    const dir = project({ env: envFile({ CLOUDFLARE_BOOTSTRAP_TOKEN: BOOT_VALUE }) });
+    const { status, io } = await run(world, dir);
+    expect(status).toBe(1);
+    expect(io.err).toContain("putting the secret PROTOTYPE_ADMIN_CLIENT_SECRET into Secrets Store failed");
+    expect(io.out + io.err).not.toContain("fake-oauth-client-secret");
+    expect(world.requests.filter((r) => / DELETE .*\/tokens\//.test(r))).toEqual([]);
+    expect(readEnvFile(dir)).toBe(`CLOUDFLARE_BOOTSTRAP_TOKEN=${BOOT_VALUE}\n`);
+  });
+
   it("a failed client create stops the run: the bootstrap token is kept (no DELETE) and its line too; exit 1", async () => {
     const world = freshWorld();
     world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });

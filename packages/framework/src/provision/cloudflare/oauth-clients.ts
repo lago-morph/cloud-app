@@ -13,8 +13,9 @@
  * (plan §2.1), and the authorization-code grant only (no refresh: the auth app revokes its tokens).
  * A client's secret appears only in its create answer (§2.1), so it goes straight into Secrets Store
  * (DEC-0685), with the client's ID beside it, under the names of `CLIENT_SECRET_NAMES` (PAR-436):
- * the admin app and the auth app read both from their bindings. A client found by name whose
- * secret is not in the store is useless (its secret cannot be read again): it is deleted and made
+ * the admin app and the auth app read both from their bindings. Each entry's comment holds the
+ * client's ID, so a client is kept only when both entries name a client listed under its name. Any
+ * other client of that name is useless (its secret cannot be read again): it is deleted and made
  * anew. The secret is never printed or returned; `onSecret` hands it to the run's redaction.
  *
  * *Unverified* (DEC-0684; the live pass checks them): the create body's field names other than
@@ -24,7 +25,10 @@
  */
 import { randomSubdomain } from "./account.js";
 import { describeFailure, succeeded, type CloudflareApi } from "./api.js";
-import { ensureStore, putSecret, secretIds } from "./secrets-store.js";
+import { ensureStore, putSecret, storedSecrets } from "./secrets-store.js";
+
+/** The page size of the client list; one page is read (review of PR 31). */
+const CLIENTS_PAGE = 100;
 
 export type ClientKind = "admin" | "signin";
 
@@ -88,17 +92,24 @@ export interface OAuthClientsOptions {
 
 /** Makes sure both clients exist with their ID and secret in Secrets Store; which were created and which kept. */
 export async function ensureOAuthClients(api: CloudflareApi, accountId: string, options: OAuthClientsOptions): Promise<{ readonly created: ClientKind[]; readonly kept: ClientKind[] }> {
-  const listed = await api("GET", `/accounts/${accountId}/oauth_clients`);
-  const list = (listed.body as { result?: unknown } | null)?.result;
+  const listed = await api("GET", `/accounts/${accountId}/oauth_clients?per_page=${String(CLIENTS_PAGE)}`);
+  const body = listed.body as { result?: unknown; result_info?: { total_count?: unknown } } | null;
+  const list = body?.result;
   if (!succeeded(listed) || !Array.isArray(list)) throw new Error(`listing the account's OAuth clients failed: ${describeFailure(listed)}`);
+  // One page only: a client missed on a later page would be made twice (review of PR 31).
+  const total = body?.result_info?.total_count;
+  if (typeof total === "number" && total > list.length) throw new Error(`the account has ${String(total)} OAuth clients, more than one page of ${String(CLIENTS_PAGE)}; setup reads one page only`);
   const storeId = await ensureStore(api, accountId);
-  const stored = await secretIds(api, accountId, storeId);
+  const stored = await storedSecrets(api, accountId, storeId);
   const created: ClientKind[] = [];
   const kept: ClientKind[] = [];
   for (const kind of ["admin", "signin"] as const) {
     const names = CLIENT_SECRET_NAMES[kind];
     const existing = (list as { client_id?: unknown; id?: unknown; name?: unknown }[]).filter((c) => c.name === CLIENT_NAMES[kind]);
-    if (existing.length > 0 && stored.has(names.id) && stored.has(names.secret)) {
+    // Kept only when both entries name, in their comment, a client listed under this name (DEC-0685):
+    // an entry left by a deleted client or by a part-done replacement does not count.
+    const owner = stored.get(names.id)?.comment;
+    if (owner !== undefined && stored.get(names.secret)?.comment === owner && existing.some((c) => (c.client_id ?? c.id) === owner)) {
       kept.push(kind);
       continue;
     }
@@ -117,8 +128,8 @@ export async function ensureOAuthClients(api: CloudflareApi, accountId: string, 
     options.onSecret?.(secret);
     if (typeof clientId !== "string" || clientId === "") throw new Error(`creating the OAuth client ${CLIENT_NAMES[kind]}: Cloudflare's answer held no client ID`);
     try {
-      await putSecret(api, accountId, storeId, names.secret, secret, stored.get(names.secret));
-      await putSecret(api, accountId, storeId, names.id, clientId, stored.get(names.id));
+      await putSecret(api, accountId, storeId, names.secret, secret, stored.get(names.secret)?.id, clientId);
+      await putSecret(api, accountId, storeId, names.id, clientId, stored.get(names.id)?.id, clientId);
     } catch (error) {
       throw new Error(`${error instanceof Error ? error.message : String(error)}; the client ${CLIENT_NAMES[kind]} was created, and the next setup run replaces the client`);
     }
