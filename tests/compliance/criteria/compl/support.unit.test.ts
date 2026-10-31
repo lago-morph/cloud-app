@@ -119,8 +119,9 @@ describe("[COMPL-AC-001] milestoneItemsNamed reads COMPL-REQ-006's list as last 
     expect(sorted(milestoneItemsNamed(docs(["#### COMPL-REQ-006", "", original, "", amendment])))).toEqual(["COMPL-AC-008", "E2E-015", "MAIL-AC-007"]);
   });
 
-  // DEC-0526 and DEC-0560's list, plus SETUP-AC-011 (DEC-0778, P0) and the real sign-in, E2E-007's and E2E-008's live parts (DEC-0692).
+  // DEC-0526 and DEC-0560's list, plus SETUP-AC-011 (DEC-0778, P0) and the real sign-in, E2E-007's and E2E-008's live parts (DEC-0692),
+  // less MAIL-AC-007, retired with MAIL (DEC-0693, DEC-0696).
   it("on the real compliance.md, gives the release 1 list as last amended (DEC-0692, DEC-0778)", () => {
-    expect(sorted(milestoneItemsNamed())).toEqual(["COMPL-AC-008", "E2E-007", "E2E-008", "E2E-010", "E2E-012", "E2E-015", "E2E-016", "MAIL-AC-007", "PROV-AC-002", "PROV-AC-003", "PROV-AC-004", "PROV-AC-006", "SETUP-AC-011", "SKILL-AC-006"]);
+    expect(sorted(milestoneItemsNamed())).toEqual(["COMPL-AC-008", "E2E-007", "E2E-008", "E2E-010", "E2E-012", "E2E-015", "E2E-016", "PROV-AC-002", "PROV-AC-003", "PROV-AC-004", "PROV-AC-006", "SETUP-AC-011", "SKILL-AC-006"]);
   });
 });
