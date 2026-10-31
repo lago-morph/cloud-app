@@ -1,6 +1,6 @@
 // CI change classification (plan-v0.2.0 §7a.2.4): scripts/ci/classify.mjs against the committed
 // scripts/ci/path-map.json. Each case is a PR's changed files and the layers it must select.
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { classify, globToRegExp, loadMap, matches } from "../scripts/ci/classify.mjs";
@@ -128,6 +128,17 @@ describe("the path map", () => {
     }
     for (const f of [...map.testInputs.flatMap((t) => t.unit ?? []), ...map.e2e.ui]) expect(existsSync(join(REPO, f)), f).toBe(true);
     for (const f of map.e2e.ui) expect(matches(f, map.e2e.specs), f).toBe(true);
+  });
+
+  it("e2e.ui (the Playwright e2e-ui project) is exactly the specs that drive a browser", () => {
+    // A browser fixture in a test's arguments, a Chromium launch, a new page, or the template-pages
+    // driver (which E2E-001 runs as a child process with Chromium).
+    const BROWSER = /\(\{[^})]*\b(?:page|browser|context)\b[^})]*\}\)|\bchromium\b|\.newPage\(|template-pages/;
+    const dir = join(REPO, "tests/compliance/e2e");
+    const specs = readdirSync(dir).filter((f) => f.endsWith(".spec.ts")).map((f) => `tests/compliance/e2e/${f}`);
+    const browser = specs.filter((f) => BROWSER.test(readFileSync(join(REPO, f), "utf8")));
+    expect(browser.length).toBeGreaterThan(0);
+    expect(map.e2e.ui.slice().sort()).toEqual(browser.sort());
   });
 
   it("dependsOn mirrors docs/architecture/component-map.md §3", () => {
