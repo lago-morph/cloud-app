@@ -8,7 +8,7 @@ Every user-facing flow, on its **happy path**, its **expected errors** and its *
 
 ## API first, a few UI tests
 
-The template ships two Playwright projects (`playwright.config.ts`), against a local `dev` server that `playwright.global-setup.mjs` starts and stops:
+The template ships two Playwright projects (`playwright.config.ts`), against a local `dev` server that Playwright starts and stops:
 
 - **`e2e-api`** (`tests/e2e/api/*.spec.ts`): most e2e tests. They drive the app's HTTP API with Playwright's `request` fixture, which needs no browser. `npm run verify` runs this project after the unit tests; `npm run test:e2e:api` runs it alone.
 - **`e2e-ui`** (`tests/e2e/ui/*.spec.ts`): only what a browser alone shows: a page renders the data, the login button signs in, a file uploads or downloads from the page, a cookie is set. At most a few per flow; every other case of the flow is an API test. `npm run test:e2e:ui` runs it; only this project needs Chromium (`npm exec --no -- playwright install chromium` once, when the user agrees).

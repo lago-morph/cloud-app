@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { UsageError } from "../args.js";
 import { captureIo } from "../io.test-support.js";
@@ -81,6 +81,22 @@ describe("upgrade (plan-setup-wizard §4.8a)", () => {
     expect(r.out).toContain("4. Cloudflare setup: nothing new is needed");
     expect(r.out).toContain("npm pack -q @lago-morph/prototype-framework-skill@0.2.0");
     expect(r.out).toContain("upgraded to 0.2.0");
+  });
+
+  it("never creates or changes the app's CI (plan-v0.2.0 §7a.3, TS-14)", async () => {
+    const dir = app();
+    mkdirSync(join(dir, ".github", "workflows"), { recursive: true });
+    writeFileSync(join(dir, ".github", "workflows", "ci.yml"), "name: the user's own CI\n");
+    const outside = (): string[] =>
+      (readdirSync(dir, { recursive: true, encoding: "utf8" }) as string[])
+        .map((f) => f.split(sep).join("/"))
+        .filter((f) => !/^(?:node_modules|\.claude\/skills)(?:\/|$)/.test(f) && f !== "package.json")
+        .sort()
+        .map((f) => (statSync(join(dir, f)).isFile() ? `${f}: ${readFileSync(join(dir, f), "utf8")}` : `${f}/`));
+    const before = outside();
+    const d = fakes(dir, { before: { permissions: 1, accountSetup: 1 }, after: { permissions: 2, accountSetup: 2 } });
+    expect((await upgrade(dir, d)).code).toBe(0);
+    expect(outside()).toEqual(before);
   });
 
   it("takes a named version", async () => {
