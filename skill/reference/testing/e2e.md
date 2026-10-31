@@ -4,7 +4,7 @@ Read this when you add or change a flow (something a person or an operator does 
 
 ## What e2e covers
 
-Every user-facing flow, on its **happy path**, its **expected errors** and its **edge cases**. A flow is not done until all three are covered end to end. When a flow changes, change its e2e tests in the same work; after `npm run upgrade`, run them and fix what the release changed. A change to an e2e test that passed before is reviewed like any other ([test-changes.md](test-changes.md)).
+Every user-facing flow, on its **happy path**, its **expected errors** and its **edge cases**. A flow is not done until all three are covered end to end. When a flow changes, change its e2e tests in the same work; after `npm run upgrade`, run them and fix what the release changed. A change to an e2e test that passed before is listed with its reason like any other ([test-changes.md](test-changes.md)).
 
 ## API first, a few UI tests
 
@@ -22,7 +22,7 @@ Write a spec from the flow, not from the code:
 - Check status codes and `(await res.json()).error.code`, never messages.
 - In UI specs, find elements by role and visible text (`page.getByRole("button", { name: "Log in" })`).
 - Never wait in real time, and never test expiry here: use fake timers in-process ([../testing.md](../testing.md)).
-- `playwright.config.ts` is part of the gate: a change to it that could run fewer tests or pass more easily (projects, `testIgnore`, `retries`, timeouts) is reviewed like a change to a once-green test ([test-changes.md](test-changes.md)).
+- `playwright.config.ts` is part of the gate: a change to it that could run fewer tests or pass more easily (projects, `testIgnore`, `retries`, timeouts) is listed like a change to a once-green test ([test-changes.md](test-changes.md)).
 
 ## Edge cases
 

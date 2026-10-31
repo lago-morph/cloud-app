@@ -4,7 +4,7 @@
  * with the same seed.
  * Reason: list cursors come back from clients (apps forward them from query parameters);
  * DEC-0150, DEC-0162 (amended by DEC-0430). `cursor.ts` decodes with `base64url.ts`, so the
- * canonical-spelling check is also the similar-case test of F4's finding (plan §7a.1.8 step 4).
+ * canonical-spelling check also covers the same defect class as F4's finding.
  * Runs: 1,000 per property (PAR-412). Seed: 2026103106 (DEC-0647).
  */
 import fc from "fast-check";
