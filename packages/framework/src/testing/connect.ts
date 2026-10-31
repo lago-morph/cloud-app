@@ -39,6 +39,9 @@ type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Resp
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const TEST_STAGE_PREFIX = "test-";
+/** Where levels come from on a deployed stage (AUTH-REQ-003 as amended, DEC-0690; no `admins` command, DEC-0698). */
+const ROLES_ON_A_STAGE =
+  "a test stage signs in with the authentication mock, so choose the level with as(user). On a production stage an admin is an administrator of the owner's Cloudflare account (PAR-413); the auth app reads that role at the next sign-in or role refresh";
 
 /** Reads the connection `smoke` set; throws a message saying how to start a smoke run otherwise. */
 export function readSmokeConnection(env: Readonly<Record<string, string | undefined>>): SmokeConnection {
@@ -221,13 +224,13 @@ function connectedApp(c: Connection, user: CurrentUser | undefined): TestApp {
       throw new Error("clock is not available on a connected stage: the stage keeps real time");
     },
     grantRole() {
-      return Promise.reject(new Error("grantRole is not available on a connected stage: use the admins command (npm run admins -- grant <email> ...)"));
+      return Promise.reject(new Error(`grantRole is not available on a connected stage: ${ROLES_ON_A_STAGE}`));
     },
     setUnavailable() {
       throw new Error("setUnavailable is not available on a connected stage: a deployed stage's storage cannot be made to fail from a test");
     },
     revokeRole() {
-      return Promise.reject(new Error("revokeRole is not available on a connected stage: use the admins command (npm run admins -- revoke <email> ...)"));
+      return Promise.reject(new Error(`revokeRole is not available on a connected stage: ${ROLES_ON_A_STAGE}`));
     },
     async dispose() {
       if (disposed) return;

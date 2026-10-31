@@ -12,7 +12,7 @@
  * a further one, a retry, or the next run within PAR-259's window waits instead of getting 429.
  *
  * `check-login` writes its own evidence record; the driver folds that record's results for
- * PWD-AC-009, AUTH-AC-011 and E2E-008 into the run's record as outcomes of one driver check per
+ * AUTH-AC-011 and E2E-008 into the run's record as outcomes of one driver check per
  * ID, titled `DRIVER_CHECK_TITLE`, so they are tagged like any test (and listed as such:
  * `driverChecks`, used by the coverage listing).
  */
@@ -23,11 +23,15 @@ import type { TestOutcome } from "./results.js";
 
 export const PRODCHECK_STAGE = "prodcheck";
 
-/** The results `check-login` records (password.md §2; `CHECK_LOGIN_IDS` of the command). */
-export const CHECK_LOGIN_IDS: readonly string[] = ["PWD-AC-009", "AUTH-AC-011", "E2E-008"];
+/**
+ * The results of `check-login` the driver folds: the command's `CHECK_LOGIN_IDS` that the catalogue
+ * has (DEC-0670, DEC-0787; `release.unit.test.ts` compares them). The command also writes the retired
+ * PWD-AC-009 as `not-run` until COMPL-AC-005 is amended; the driver never folds a retired ID.
+ */
+export const CHECK_LOGIN_IDS: readonly string[] = ["AUTH-AC-011", "E2E-008"];
 
 /** The criteria whose cloud part runs on `prodcheck` (compliance.md §2): the driver redeploys it when one of them runs. */
-export const PRODCHECK_IDS: readonly string[] = [...CHECK_LOGIN_IDS, "COMPL-AC-005", "E2E-006", "E2E-007", "AUTH-AC-005", "AUTH-AC-009", "MAIL-AC-006", "CLI-AC-007"];
+export const PRODCHECK_IDS: readonly string[] = [...CHECK_LOGIN_IDS, "COMPL-AC-005", "E2E-006", "E2E-007", "AUTH-AC-005", "AUTH-AC-009"];
 
 export const DRIVER_CHECK_TITLE = "check-login --stage prodcheck, run by the compliance driver after the test layers (COMPL-REQ-005)";
 export const DRIVER_CHECK_FILE = "tests/compliance/harness/prodcheck.ts";

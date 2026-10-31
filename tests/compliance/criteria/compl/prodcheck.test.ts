@@ -17,7 +17,7 @@
  *   PWD-AC-009 result is present." This test is the record's result for the three HTTP checks,
  *   made after the redeploy (the stage's recorded deploy output is newer than the run stage's).
  *   `check-login` runs after the test layers, so a test cannot read its result; the test checks
- *   that this run is one in which the driver runs it and folds PWD-AC-009 in (the expected list,
+ *   that this run is one in which the driver runs it and folds E2E-008 in (the expected list,
  *   PRODCHECK_IDS, CHECK_LOGIN_IDS), and the driver's unit tests show the folding itself.
  *
  * The deployed bundle is the Worker script `reference-prodcheck` (CF §2, DEC-0331), downloaded

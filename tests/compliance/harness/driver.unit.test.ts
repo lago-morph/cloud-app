@@ -632,7 +632,7 @@ describe("[CLI-AC-003] compliance runner exit status under injected failures", (
 // COMPL-REQ-005 as amended (DEC-0512): on a cloud run the driver redeploys prodcheck before the
 // test layers and runs check-login on it after them, folding its record's results in (prodcheck.ts).
 describe("[COMPL-AC-005] the production checks on prodcheck", () => {
-  const catalogue = [entry("KV-AC-001", "Local, cloud"), entry("PWD-AC-009", "Cloud"), entry("AUTH-AC-011", "Cloud"), entry("E2E-008", "Cloud")];
+  const catalogue = [entry("KV-AC-001", "Local, cloud"), entry("AUTH-AC-011", "Cloud"), entry("E2E-008", "Cloud")];
   const checkLoginRecord = (results: EvidenceRecord["results"]): EvidenceRecord => ({
     runId: "cl1",
     commit: "c0ffee",
@@ -655,7 +655,7 @@ describe("[COMPL-AC-005] the production checks on prodcheck", () => {
         remove: (stage) => (events.push(`remove ${stage}`), Promise.resolve("removed")),
         checkLogin: (stage) => (
           events.push(`check-login ${stage}`),
-          Promise.resolve({ status: 0, output: "check-login passed", record: checkLoginRecord([{ id: "PWD-AC-009", status: "passed" }, { id: "AUTH-AC-011", status: "passed" }, { id: "E2E-008", status: "passed" }]) })
+          Promise.resolve({ status: 0, output: "check-login passed", record: checkLoginRecord([{ id: "AUTH-AC-011", status: "passed" }, { id: "E2E-008", status: "passed" }]) })
         ),
       },
     });
@@ -673,7 +673,7 @@ describe("[COMPL-AC-005] the production checks on prodcheck", () => {
     ]);
     expect(result.exitStatus).toBe(0);
     const results = recordOf(h).results;
-    for (const id of ["PWD-AC-009", "AUTH-AC-011", "E2E-008"]) expect(results.filter((r) => r.id === id), id).toEqual([{ id, status: "passed" }]);
+    for (const id of ["AUTH-AC-011", "E2E-008"]) expect(results.filter((r) => r.id === id), id).toEqual([{ id, status: "passed" }]);
     expect(h.written[0]?.raw?.["prodcheck-deploy.log"]).toBe("deployed prodcheck");
     expect(h.written[0]?.raw?.["check-login.log"]).toBe("check-login passed");
     expect(h.events).not.toContain("pending+ prodcheck");
@@ -688,9 +688,8 @@ describe("[COMPL-AC-005] the production checks on prodcheck", () => {
             status: 1,
             output: "check-login failed",
             record: checkLoginRecord([
-              { id: "PWD-AC-009", status: "failed", detail: "step 1: sign-up with a forged host: expected 200, got status 500" },
               { id: "AUTH-AC-011", status: "not-run", detail: "check-login stopped before its checks" },
-              { id: "E2E-008", status: "failed", detail: "step 1: sign-up with a forged host: expected 200, got status 500" },
+              { id: "E2E-008", status: "failed", detail: "step 1: login: expected a 302 redirect, got status 500" },
             ]),
           }),
       },
@@ -698,7 +697,7 @@ describe("[COMPL-AC-005] the production checks on prodcheck", () => {
     const result = await runCompliance(parseArgs(["--target", "cloudflare"]), [], h.deps);
     expect(result.exitStatus).toBe(1);
     const byId = (id: string) => recordOf(h).results.filter((r) => r.id === id);
-    expect(byId("PWD-AC-009")).toEqual([{ id: "PWD-AC-009", status: "failed", detail: expect.stringMatching(/check-login failed: step 1: sign-up with a forged host.*\(record cl1\)/) }]);
+    expect(byId("E2E-008")).toEqual([{ id: "E2E-008", status: "failed", detail: expect.stringMatching(/check-login failed: step 1: login: expected a 302 redirect.*\(record cl1\)/) }]);
     expect(byId("AUTH-AC-011")).toEqual([{ id: "AUTH-AC-011", status: "not-run", detail: "check-login stopped before its checks" }]);
   });
 
@@ -721,7 +720,7 @@ describe("[COMPL-AC-005] the production checks on prodcheck", () => {
     const result = await runCompliance(parseArgs(["--target", "cloudflare"]), [], h.deps);
     expect(events).toEqual(["deploy test-abcdefghij12345", "secret apiKey test-abcdefghij12345", "deploy test-abcdefghij12345", "deploy prodcheck", "secret apiKey prodcheck", "deploy prodcheck"]);
     expect(result.exitStatus).toBe(1);
-    for (const id of ["PWD-AC-009", "AUTH-AC-011", "E2E-008"]) {
+    for (const id of ["AUTH-AC-011", "E2E-008"]) {
       expect(recordOf(h).results.filter((r) => r.id === id), id).toEqual([{ id, status: "failed", detail: expect.stringContaining("not checked: redeploying prodcheck failed: deploy --target cloudflare --stage prodcheck failed with status 1") }]);
     }
     expect(h.written[0]?.redactions).toContainEqual({ value: SECRET, replacement: "<test-secret>" });
@@ -749,7 +748,7 @@ describe("[COMPL-AC-005] the production checks on prodcheck", () => {
       recordDeployOutput(appDir, "cloudflare", stage, baseUrl);
       return { baseUrl, output: `deployed ${stage}` };
     };
-    const ok = checkLoginRecord([{ id: "PWD-AC-009", status: "passed" }, { id: "AUTH-AC-011", status: "passed" }, { id: "E2E-008", status: "passed" }]);
+    const ok = checkLoginRecord([{ id: "AUTH-AC-011", status: "passed" }, { id: "E2E-008", status: "passed" }]);
     try {
       const h = harness({
         catalogue,
@@ -768,7 +767,7 @@ describe("[COMPL-AC-005] the production checks on prodcheck", () => {
       // A test layer deploys a stage of its own from the same app directory (as the cloud tests do).
       const deps: DriverDeps = { ...h.deps, run: async (c) => (c.args[0] === "vitest" ? (secrets.add("test-layer1"), await deploy("test-layer1")) : undefined, run(c)) };
       const result = await runCompliance(parseArgs(["--target", "cloudflare"]), [], deps);
-      for (const id of ["PWD-AC-009", "AUTH-AC-011", "E2E-008"]) expect(recordOf(h).results.filter((r) => r.id === id), id).toEqual([{ id, status: "passed" }]);
+      for (const id of ["AUTH-AC-011", "E2E-008"]) expect(recordOf(h).results.filter((r) => r.id === id), id).toEqual([{ id, status: "passed" }]);
       expect(result.exitStatus).toBe(0);
       expect(readDeployedOrigin(appDir, "cloudflare", "test-abcdefghij12345"), "the run stage's record outlives prodcheck's deploy (COMPL-AC-005 orders the two)").toBeDefined();
     } finally {

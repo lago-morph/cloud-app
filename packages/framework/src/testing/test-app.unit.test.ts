@@ -302,6 +302,17 @@ describe("createTestApp", { timeout: 60_000 }, () => {
     expect(await (await t.request("/api/auth/me")).json()).toEqual({ level: "anonymous" });
   });
 
+  it("keeps only a loginWithStub or loginWithAuthApp session (local.md, DEC-0193): a mock-login response's session cookie is not sent on later requests", async () => {
+    const t = await open();
+    const login = await t.request("/api/auth/mock-login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ level: "user" }) });
+    expect(login.status).toBe(204);
+    const session = login.headers.getSetCookie().find((line) => line.startsWith("session_local=") && !line.startsWith("session_local=;"))?.split(";")[0];
+    expect(session, "mock-login set a session cookie").toBeDefined();
+    expect(await (await t.request("/api/auth/me")).json()).toEqual({ level: "anonymous" });
+    // The cookie itself is a valid session: sent explicitly, it is used.
+    expect(await (await t.request("/api/auth/me", { headers: { cookie: session as string } })).json()).toMatchObject({ level: "user" });
+  });
+
   it("without the stub, the mock-login route is installed; with the stub it is not", async () => {
     const mock = await open();
     const res = await mock.request("/api/auth/mock-login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ level: "user" }) });

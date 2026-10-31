@@ -34,6 +34,7 @@ type Fault =
   | "unreachable"
   | "bogus-code-signs-in"
   | "bogus-code-not-redirected"
+  | "me-not-anonymous"
   | "unregistered"
   | "start-404"
   | "authorize-http"
@@ -61,6 +62,7 @@ function world(fault?: Fault) {
     const response = await worker.fetch(request, env, { waitUntil: () => undefined, passThroughOnException: () => undefined, props: {} });
     const path = new URL(request.url).pathname;
     if (path === "/api/auth/callback" && fault === "bogus-code-not-redirected") return Response.json({ ok: true });
+    if (path === "/api/auth/me" && fault === "me-not-anonymous") return Response.json({ level: "user", id: "u_forged" });
     if (path === "/api/auth/callback" && fault === "bogus-code-signs-in") {
       const headers = new Headers(response.headers);
       headers.append("set-cookie", "__Host-session=forged; Path=/; HttpOnly; Secure; SameSite=Lax");
@@ -184,6 +186,12 @@ describe("check-login: the steps (E2E-008, automated part)", () => {
     // Every request went over the one dispatcher, and the account's subdomain is redacted (DEC-0086).
     expect(h.seen.every((s) => s.dispatcher === h.dispatcher)).toBe(true);
     expect((h.records[0]!.redactions ?? []).map((x) => x.value)).toContain("owner-sub");
+    // It prints and records no token (cli.md): not the transaction cookie, nor the app's or the auth app's state.
+    const start = new URL(h.seen.find((s) => s.url.startsWith(`${AUTH_ORIGIN}/start?`))?.url ?? "https://x.test");
+    const transaction = h.seen.find((s) => s.url.startsWith(`${ORIGIN}/api/auth/callback?`))?.headers.get("cookie")?.split("=")[1] ?? "";
+    const secrets = [start.searchParams.get("state") ?? "", transaction, "auth-app-state"];
+    for (const secret of secrets) expect(secret.length, "each secret was seen").toBeGreaterThan(8);
+    for (const secret of secrets) expect(r.out + JSON.stringify(h.record())).not.toContain(secret);
   });
 
   it.each<[Fault, number, RegExp]>([
@@ -199,6 +207,7 @@ describe("check-login: the steps (E2E-008, automated part)", () => {
     ["http-start", 1, /login: the redirect is not https/],
     ["bogus-code-not-redirected", 2, /callback with a bogus code: expected a 302 to \/\?authError=login_failed&requestId=<id>, got status 200/],
     ["bogus-code-signs-in", 2, /callback with a bogus code: a session cookie was set/],
+    ["me-not-anonymous", 2, /after the bogus callback: \/api\/auth\/me is not anonymous \(status 200\)/],
     ["unregistered", 3, /the auth app refused the sign-in \(400\): the return URL is not registered for this app ID/],
     ["start-404", 3, /auth app \/start: expected a 302 redirect, got status 404/],
     ["authorize-http", 3, /auth app \/start: the redirect is not https/],
