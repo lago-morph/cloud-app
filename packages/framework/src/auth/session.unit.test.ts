@@ -38,6 +38,39 @@ describe("session tokens", () => {
     expect(await verifyToken(KEY, "session", mock)).not.toHaveProperty("sub");
   });
 
+  describe("a session with a confirmed role (plan §4.1 step 5)", () => {
+    const CF = { id: "u_CF", displayName: null, provider: "cf-account", subject: "cf-sub" } as const;
+    const iat = T0 / 1000;
+
+    it("carries the level and when it was confirmed, and reads back with its expiry", async () => {
+      const token = await issueSession(KEY, { ...CF, role: { level: "admin", checkedAt: iat } }, T0);
+      expect(await verifyToken(KEY, "session", token)).toStrictEqual({ v: 2, id: "u_CF", name: null, iat, exp: iat + SESSION_LIFETIME_SECONDS, prv: "cf-account", sub: "cf-sub", rol: "admin", rat: iat });
+      expect(await readSession(KEY, token, T0)).toStrictEqual({ ...CF, role: { level: "admin", checkedAt: iat }, expiresAt: iat + SESSION_LIFETIME_SECONDS });
+    });
+
+    it("re-issued with its expiry, it keeps that expiry instead of starting a new lifetime", async () => {
+      const exp = iat + 3600;
+      const later = T0 + 600_000;
+      const token = await issueSession(KEY, { ...CF, role: { level: "user", checkedAt: later / 1000 }, expiresAt: exp }, later);
+      expect(await verifyToken(KEY, "session", token)).toMatchObject({ iat: later / 1000, exp, rol: "user", rat: later / 1000 });
+      expect(await readSession(KEY, token, exp * 1000)).toBeUndefined();
+    });
+
+    it("a malformed role, or a role on a mock session, is no session", async () => {
+      const exp = iat + 100;
+      const real = { v: 2, id: "x", name: null, iat, exp, prv: "p", sub: "s" };
+      for (const payload of [
+        { ...real, rol: "admin" },
+        { ...real, rat: iat },
+        { ...real, rol: "owner", rat: iat },
+        { ...real, rol: "admin", rat: "now" },
+        { v: 2, id: "x", name: null, iat, exp, lvl: "user", rol: "user", rat: iat },
+      ]) {
+        expect(await readSession(KEY, await signToken(KEY, "session", payload), T0), JSON.stringify(payload)).toBeUndefined();
+      }
+    });
+  });
+
   it(tag("AUTH-AC-012", "a version 1 cookie, and well-signed payloads of another shape, are no session"), async () => {
     const iat = Math.floor(T0 / 1000);
     const exp = iat + 100;

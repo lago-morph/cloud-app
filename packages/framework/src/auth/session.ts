@@ -28,6 +28,23 @@ export interface ProviderSessionData {
   readonly displayName: string | null;
   readonly provider: string;
   readonly subject: string;
+  /**
+   * The level the provider confirmed, and when (seconds), for a provider whose roles are
+   * refreshed every PAR-425 instead of on each request (the auth-app provider, plan §4.1
+   * step 5; DEC-0668). Absent for a session whose level is read per request.
+   */
+  readonly role?: SessionRole;
+  /**
+   * The session's expiry (seconds). `readSession` sets it on a session with a role; given to
+   * `issueSession`, the new token keeps it, so a role refresh never extends a session.
+   */
+  readonly expiresAt?: number;
+}
+
+export interface SessionRole {
+  readonly level: "user" | "admin";
+  /** When the provider last confirmed the level, in seconds since the epoch. */
+  readonly checkedAt: number;
 }
 
 /** A session created by the authentication mock: carries the level the test chose. */
@@ -48,6 +65,9 @@ interface SessionPayload {
   readonly lvl?: "user" | "admin";
   readonly prv?: string;
   readonly sub?: string;
+  /** A real-provider session's confirmed level and when it was confirmed (DEC-0668): both or neither. */
+  readonly rol?: "user" | "admin";
+  readonly rat?: number;
 }
 
 export function isMockSession(data: SessionData): data is MockSessionData {
@@ -61,10 +81,15 @@ export async function issueSession(key: string, data: SessionData, nowMs: number
     id: data.id,
     name: data.displayName,
     iat,
-    exp: iat + SESSION_LIFETIME_SECONDS,
-    ...(isMockSession(data) ? { lvl: data.mockLevel } : { prv: data.provider, sub: data.subject }),
+    exp: isMockSession(data) || data.expiresAt === undefined ? iat + SESSION_LIFETIME_SECONDS : data.expiresAt,
+    ...(isMockSession(data) ? { lvl: data.mockLevel } : providerFields(data)),
   };
   return signToken(key, "session", payload);
+}
+
+function providerFields(data: ProviderSessionData): Pick<SessionPayload, "prv" | "sub" | "rol" | "rat"> {
+  const fields = { prv: data.provider, sub: data.subject };
+  return data.role === undefined ? fields : { ...fields, rol: data.role.level, rat: data.role.checkedAt };
 }
 
 /** The session in a valid, current token; undefined for a tampered, expired, future-dated, malformed or older-format one. */
@@ -74,7 +99,9 @@ export async function readSession(key: string, token: string, nowMs: number): Pr
   const now = nowMs / 1000;
   if (now >= payload.exp || payload.iat > now + CLOCK_SKEW_SECONDS) return undefined;
   if (payload.lvl !== undefined) return { id: payload.id, displayName: payload.name, mockLevel: payload.lvl };
-  return { id: payload.id, displayName: payload.name, provider: payload.prv as string, subject: payload.sub as string };
+  const real = { id: payload.id, displayName: payload.name, provider: payload.prv as string, subject: payload.sub as string };
+  if (payload.rol === undefined) return real;
+  return { ...real, role: { level: payload.rol, checkedAt: payload.rat as number }, expiresAt: payload.exp };
 }
 
 const nonEmpty = (value: unknown): value is string => typeof value === "string" && value !== "";
@@ -92,6 +119,8 @@ function isSessionPayload(value: unknown): value is SessionPayload {
   const mock = p["lvl"] !== undefined;
   const real = p["prv"] !== undefined || p["sub"] !== undefined;
   if (mock === real) return false; // exactly one kind
-  if (mock) return p["lvl"] === "user" || p["lvl"] === "admin";
+  const role = p["rol"] !== undefined || p["rat"] !== undefined;
+  if (mock) return !role && (p["lvl"] === "user" || p["lvl"] === "admin");
+  if (role && !((p["rol"] === "user" || p["rol"] === "admin") && Number.isFinite(p["rat"]))) return false;
   return nonEmpty(p["prv"]) && nonEmpty(p["sub"]);
 }

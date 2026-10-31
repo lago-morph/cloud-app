@@ -19,7 +19,9 @@ import { registerPasswordRoutes } from "./password/routes.js";
 import type { AuthMock } from "./mock.js";
 import type { CurrentUser } from "./public.js";
 import { sanitizeReturnTo } from "./return-to.js";
-import { SESSION_LIFETIME_SECONDS, isMockSession, issueSession, readSession, type ProviderSessionData, type SessionData } from "./session.js";
+import { readWithRetries, refreshDue } from "./role-refresh.js";
+import { ADMIN_ROLE } from "./roles.js";
+import { SESSION_LIFETIME_SECONDS, isMockSession, issueSession, readSession, type ProviderSessionData, type SessionData, type SessionRole } from "./session.js";
 import { LOGIN_LIFETIME_SECONDS, issueTransaction, readTransaction } from "./transaction.js";
 import { deriveUserId } from "./user-id.js";
 
@@ -49,6 +51,10 @@ export interface AuthOptions {
   readonly mock?: AuthMock;
   /** Cookie settings; default: the cloud settings. The local runtime passes `LOCAL_COOKIES`; non-Secure settings on a cloud target are CORE.MISCONFIGURED. */
   readonly cookies?: CookieSettings;
+  /** The clock, in ms; default `Date.now` (tests move it). */
+  readonly now?: () => number;
+  /** Waits before a role-refresh retry (PAR-427); default a timer (tests record the delays). */
+  readonly sleep?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -122,6 +128,13 @@ export function checkAuthSettings(options: Pick<AuthOptions, "deployment" | "moc
 export function createAuthParts(options: AuthOptions): AuthParts {
   const cookies = deferredCheck(() => checkAuthSettings(options));
   const { mock } = options;
+  const now = options.now ?? (() => Date.now());
+
+  /** The session's role fields for an identity whose provider confirmed its roles at sign-in (DEC-0668). */
+  function confirmedRole(identity: ProviderIdentity): Pick<ProviderSessionData, "role"> {
+    if (identity.roles === undefined) return {};
+    return { role: { level: identity.roles.includes(ADMIN_ROLE) ? "admin" : "user", checkedAt: Math.floor(now() / 1000) } };
+  }
 
   function originOf(c: RuntimeContext): string {
     const configured = typeof options.publicOrigin === "string" ? options.publicOrigin : options.publicOrigin(c);
@@ -139,8 +152,17 @@ export function createAuthParts(options: AuthOptions): AuthParts {
   }
 
   async function issueSessionCookie(c: RuntimeContext, data: SessionData): Promise<string> {
-    const token = await issueSession(await sessionKey(c), data, Date.now());
-    return setCookie(cookies(), cookies().session, token, SESSION_LIFETIME_SECONDS);
+    const at = now();
+    const token = await issueSession(await sessionKey(c), data, at);
+    // A re-issued session keeps its expiry (role refresh), so the cookie lives only as long.
+    const expiresAt = isMockSession(data) ? undefined : data.expiresAt;
+    const maxAge = expiresAt === undefined ? SESSION_LIFETIME_SECONDS : Math.max(0, expiresAt - Math.floor(at / 1000));
+    return setCookie(cookies(), cookies().session, token, maxAge);
+  }
+
+  /** Ends the request's session: the cookie is cleared before the route runs, so a route's own Set-Cookie still comes last. */
+  function endSession(c: RuntimeContext): void {
+    c.header("Set-Cookie", clearCookie(cookies(), cookies().session), { append: true });
   }
 
   /** AUTH-REQ-008: the callback URL comes from the resolved public origin, never from request headers. */
@@ -198,7 +220,7 @@ export function createAuthParts(options: AuthOptions): AuthParts {
     const token = readCookie(c.req.header("cookie"), cookies().session);
     if (token === undefined) return ANONYMOUS;
     const key = await options.secret(c, FRAMEWORK_SECRETS.sessionKey);
-    const data = await readSession(key, token, Date.now());
+    const data = await readSession(key, token, now());
     if (data === undefined) return ANONYMOUS;
     if (isMockSession(data)) {
       // AUTH-REQ-009: the mock's level is used directly, with no read; only where the mock is installed.
@@ -220,6 +242,7 @@ export function createAuthParts(options: AuthOptions): AuthParts {
       if (provider !== undefined && provider.id === session.provider) read = (subject) => provider.accountStatus(subject);
     }
     if (read === undefined) return ANONYMOUS;
+    if (session.role !== undefined) return refreshedLevel(c, session, session.role, read);
     let status: AccountStatus | null;
     try {
       status = await read(session.subject);
@@ -228,6 +251,31 @@ export function createAuthParts(options: AuthOptions): AuthParts {
       return ANONYMOUS;
     }
     return levelFromAccount(session, status);
+  }
+
+  /**
+   * Plan §4.1 step 5, DEC-0668, DEC-0669: a session with a confirmed level keeps it for PAR-425.
+   * After that, one read with up to PAR-426 retries: an answer re-issues the session with the new
+   * level (same expiry); no account, an unverified one, or every try failing ends the session,
+   * and the request is anonymous. It never keeps a level it could not confirm.
+   */
+  async function refreshedLevel(c: RuntimeContext, session: ProviderSessionData, role: SessionRole, read: (subject: string) => Promise<AccountStatus | null>): Promise<CurrentUser> {
+    const nowSeconds = Math.floor(now() / 1000);
+    if (!refreshDue(role, nowSeconds)) return { level: role.level, id: session.id, displayName: session.displayName };
+    const result = await readWithRetries(() => read(session.subject), options.sleep === undefined ? {} : { sleep: options.sleep });
+    if (!result.ok) {
+      c.var.log.write("AUTH", "warn", `role refresh failed (${lookupErrorCode(result.error)}); session ended`);
+      endSession(c);
+      return ANONYMOUS;
+    }
+    const user = levelFromAccount(session, result.value);
+    if (user.level === "anonymous") {
+      endSession(c);
+      return ANONYMOUS;
+    }
+    const renewed: ProviderSessionData = { ...session, role: { level: user.level, checkedAt: nowSeconds } };
+    c.header("Set-Cookie", await issueSessionCookie(c, renewed), { append: true });
+    return user;
   }
 
   const credentials = options.credentialProvider === undefined ? undefined : credentialOperations(options.credentialProvider);
@@ -279,7 +327,7 @@ export function createAuthParts(options: AuthOptions): AuthParts {
         }
         const begun = await provider.beginLogin(providerContext(c));
         const key = await sessionKey(c);
-        const tx = await issueTransaction(key, { state: begun.transactionState, returnTo }, Date.now());
+        const tx = await issueTransaction(key, { state: begun.transactionState, returnTo }, now());
         // A new login replaces any login in progress (same cookie name).
         c.header("Set-Cookie", setCookie(cookies(), cookies().login, tx, LOGIN_LIFETIME_SECONDS), { append: true });
         return c.redirect(begun.redirectUrl, 302);
@@ -295,7 +343,7 @@ export function createAuthParts(options: AuthOptions): AuthParts {
         };
         const token = readCookie(c.req.header("cookie"), cookies().login);
         const key = await sessionKey(c);
-        const tx = token === undefined ? undefined : await readTransaction(key, token, Date.now());
+        const tx = token === undefined ? undefined : await readTransaction(key, token, now());
         const provider = providerFor(c);
         if (tx === undefined || provider === undefined) return failed("transaction missing or expired");
         let identity: ProviderIdentity;
@@ -306,7 +354,7 @@ export function createAuthParts(options: AuthOptions): AuthParts {
           throw thrown;
         }
         const id = await deriveUserId(provider.id, identity.subject);
-        const session = { id, displayName: identity.displayName, provider: provider.id, subject: identity.subject };
+        const session: ProviderSessionData = { id, displayName: identity.displayName, provider: provider.id, subject: identity.subject, ...confirmedRole(identity) };
         c.header("Set-Cookie", await issueSessionCookie(c, session), { append: true });
         return c.redirect(tx.returnTo, 302);
       });

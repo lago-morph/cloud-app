@@ -74,7 +74,8 @@ export function createAuthAppProvider(options: AuthAppProviderOptions): LoginPro
         throw failed("auth app unavailable");
       }
       if (identity === null) throw failed("code refused");
-      return { subject: identity.sub, displayName: null };
+      // The role at redemption is the session's until its first refresh (plan §4.1 step 5).
+      return { subject: identity.sub, displayName: null, roles: rolesOf(identity.role) };
     },
     async accountStatus(subject): Promise<AccountStatus | null> {
       const role = await binding.role(subject);
