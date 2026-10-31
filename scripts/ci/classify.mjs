@@ -3,9 +3,10 @@
 // files select, from the committed path map scripts/ci/path-map.json.
 // Usage: node scripts/ci/classify.mjs --base <rev> [--head <rev>]   classify `git diff --name-only base head`
 //        node scripts/ci/classify.mjs --files <path>…                classify the given paths
-//        add --json to print the result as JSON instead of the readable report.
+//        add --json to print the result as JSON instead of the readable report, and
+//        --github-output <file> to append the CI plan's outputs (githubOutput) to <file>.
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { appendFileSync, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -123,6 +124,82 @@ export function report(r) {
   return lines.join("\n");
 }
 
+// A criterion or scenario ID as a test tags it: `tag("KV-AC-001", …)`, `tag([…, "E2E-002"], …)` or `[KV-AC-001]`.
+const TAG = /"((?:[A-Z]+-AC|E2E)-\d{3})"|\[((?:[A-Z]+-AC|E2E)-\d{3})\]/g;
+const CRITERIA = "tests/compliance/criteria/";
+
+function sourcesUnder(root, rel) {
+  const abs = join(root, rel);
+  if (!existsSync(abs)) return [];
+  if (!statSync(abs).isDirectory()) return [rel];
+  return readdirSync(abs, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? (e.name === "node_modules" ? [] : sourcesUnder(root, `${rel}/${e.name}`)) : /\.(?:ts|mts|mjs)$/.test(e.name) ? [`${rel}/${e.name}`] : []));
+}
+
+/** The IDs tagged in the test sources under `paths`; unit tests are skipped (their IDs are data, not tags of this layer). */
+export function tagsIn(root, paths) {
+  const ids = new Set();
+  for (const f of paths.flatMap((p) => sourcesUnder(root, p)).filter((f) => !f.endsWith(".unit.test.ts"))) {
+    for (const m of readFileSync(join(root, f), "utf8").matchAll(TAG)) ids.add(m[1] ?? m[2]);
+  }
+  return ids;
+}
+
+/**
+ * What the CI jobs run for a classification. The compliance harness (`npm run compliance -- --target local --only <ids>`)
+ * runs every test tagged with `ids`, once, across the integration config and the Playwright projects: the criteria IDs
+ * tagged under the selected components' integration directories plus every ID tagged in the selected e2e specs.
+ * `direct` are the selected non-criteria integration directories. CI runs their tests with Vitest directly, except the
+ * tests tagged with one of `ids` (`directFilter`), which the harness runs; so a test tagged only with an ID that is not
+ * selected (for example an `E2E-nnn` tag on a framework suite) still runs once. Criteria always go through the
+ * harness (P0). The harness selects by ID in every layer, so it also runs `alsoE2e` (unselected specs that carry a
+ * selected integration ID) and `alsoIntegration` (integration test files that carry a selected e2e ID); DEC-0639.
+ */
+export function ciPlan(r, map, root = ROOT) {
+  const dirs = Object.keys(r.integration).flatMap((code) => map.components[code]?.integration ?? []);
+  const integrationIds = [...tagsIn(root, dirs)].filter((id) => id.includes("-AC-"));
+  const allSpecs = sourcesUnder(root, "tests/compliance/e2e").filter((f) => matches(f, map.e2e.specs));
+  const specs = r.e2e.all ? allSpecs : r.e2e.specs;
+  const e2eIds = [...tagsIn(root, specs)];
+  const ids = [...new Set([...integrationIds, ...e2eIds])].sort();
+  const alsoE2e = allSpecs.filter((s) => !specs.includes(s) && [...tagsIn(root, [s])].some((id) => integrationIds.includes(id))).sort();
+  const e2eOnly = e2eIds.filter((id) => !integrationIds.includes(id));
+  const allDirs = Object.values(map.components).flatMap((c) => c.integration);
+  const tests = allDirs.flatMap((d) => sourcesUnder(root, d)).filter((f) => /\.(?:test|spec)\.ts$/.test(f) && !f.endsWith(".unit.test.ts") && !dirs.some((d) => f.startsWith(`${d}/`)));
+  const alsoIntegration = e2eOnly.length === 0 ? [] : tests.filter((f) => [...tagsIn(root, [f])].some((id) => e2eOnly.includes(id))).sort();
+  return {
+    unit: r.unit.all ? "all" : r.unit.files.length > 0 ? "files" : "none",
+    unitFiles: r.unit.files,
+    ids,
+    direct: [...new Set(dirs.filter((d) => !d.startsWith(CRITERIA)))].sort(),
+    alsoE2e,
+    alsoIntegration,
+    chromium: r.chromium || alsoE2e.some((s) => map.e2e.ui.includes(s)),
+  };
+}
+
+/** Vitest `-t` pattern for the direct run: every test except those tagged with one of `ids` (the harness runs those). */
+export function directFilter(ids) {
+  return ids.length === 0 ? "" : `^(?!.*\\[(?:${ids.join("|")})\\])`;
+}
+
+/** The `$GITHUB_OUTPUT` lines of the classify job. */
+export function githubOutput(p, r) {
+  const lines = { build: r.build || p.ids.length > 0, linters: r.linters.join(" "), unit: p.unit, unit_files: p.unitFiles.join(" "), ids: p.ids.join(","), direct: p.direct.join(" "), direct_filter: directFilter(p.ids), chromium: p.chromium };
+  return Object.entries(lines).map(([k, v]) => `${k}=${String(v)}`).join("\n") + "\n";
+}
+
+function planReport(p) {
+  const list = (xs) => (xs.length === 0 ? "none" : xs.join(" "));
+  return [
+    "CI plan",
+    `  compliance harness --only (${p.ids.length} IDs): ${list(p.ids)}`,
+    `  integration tests run directly (all but those tagged with an --only ID): ${list(p.direct)}`,
+    `  e2e specs the harness also runs for shared IDs: ${list(p.alsoE2e)}`,
+    `  integration tests the harness also runs for e2e IDs: ${list(p.alsoIntegration)}`,
+    `  chromium: ${p.chromium ? "yes" : "no"}`,
+  ].join("\n");
+}
+
 function changedFiles(base, head) {
   return execFileSync("git", ["diff", "--name-only", base, head], { cwd: ROOT, encoding: "utf8" }).split("\n").filter((l) => l !== "");
 }
@@ -131,11 +208,15 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const args = process.argv.slice(2);
   const value = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
   const base = value("--base");
-  const files = args.includes("--files") ? args.slice(args.indexOf("--files") + 1).filter((a) => !a.startsWith("--")) : base === undefined ? undefined : changedFiles(base, value("--head") ?? "HEAD");
+  const files = args.includes("--files") ? args.slice(args.indexOf("--files") + 1).filter((a, i, rest) => !rest.slice(0, i + 1).some((x) => x.startsWith("--"))) : base === undefined ? undefined : changedFiles(base, value("--head") ?? "HEAD");
   if (files === undefined) {
-    process.stderr.write("usage: classify.mjs --base <rev> [--head <rev>] [--json] | --files <path>… [--json]\n");
+    process.stderr.write("usage: classify.mjs (--base <rev> [--head <rev>] | --files <path>…) [--json] [--github-output <file>]\n");
     process.exit(2);
   }
-  const result = classify(files, loadMap());
-  process.stdout.write(`${args.includes("--json") ? JSON.stringify(result, null, 2) : report(result)}\n`);
+  const map = loadMap();
+  const result = classify(files, map);
+  const plan = ciPlan(result, map);
+  process.stdout.write(`${args.includes("--json") ? JSON.stringify({ ...result, plan }, null, 2) : `${report(result)}\n${planReport(plan)}`}\n`);
+  const out = value("--github-output");
+  if (out !== undefined) appendFileSync(out, githubOutput(plan, result));
 }

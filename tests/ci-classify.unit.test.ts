@@ -3,7 +3,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { classify, globToRegExp, loadMap, matches } from "../scripts/ci/classify.mjs";
+import { ciPlan, classify, directFilter, githubOutput, globToRegExp, loadMap, matches } from "../scripts/ci/classify.mjs";
 
 interface Result {
   docs: string[];
@@ -116,6 +116,84 @@ describe("classification", () => {
     expect(components(run("packages/framework/src/auth-app/worker.ts"))).toContain("AUTH");
     expect(components(run("packages/framework/src/admin-app/pages.ts"))).toContain("SETUP");
     expect(components(run("tests/support/mock-oauth2/server.ts"))).toContain("AUTH");
+  });
+});
+
+describe("the CI plan (what the staged ci.yml runs)", () => {
+  interface Plan { unit: string; unitFiles: string[]; ids: string[]; direct: string[]; alsoE2e: string[]; alsoIntegration: string[]; chromium: boolean }
+  const plan = (...files: string[]): Plan => ciPlan(run(...files), map, REPO) as Plan;
+
+  it("a criteria doc runs COMPL's tagged criteria through the harness and the catalogue unit tests; no e2e ID", () => {
+    const p = plan("docs/acceptance/e2e-scenarios.md");
+    expect(p.unit).toBe("files");
+    expect(p.unitFiles).toContain("tests/compliance/harness/catalogue.unit.test.ts");
+    expect(p.ids).toContain("COMPL-AC-001");
+    expect(p.ids.filter((id) => id.startsWith("E2E-"))).toEqual([]);
+    expect(p.direct).toEqual([]);
+  });
+
+  it("framework source: criteria IDs of the component and its dependents, e2e IDs of every spec, untagged framework suites run directly", () => {
+    const p = plan("packages/framework/src/kv/store.ts");
+    expect(p.unit).toBe("all");
+    expect(p.ids).toEqual(expect.arrayContaining(["KV-AC-001", "E2E-001", "E2E-016", "DEMO-AC-001"]));
+    expect(p.direct).toEqual(["packages/framework/test/integration/kv", "packages/framework/test/integration/local"]);
+    expect(p.chromium).toBe(true);
+  });
+
+  it("an e2e spec change runs only that spec's IDs", () => {
+    const p = plan("tests/compliance/e2e/E2E-002.spec.ts");
+    expect(p).toMatchObject({ unit: "none", ids: ["DEMO-AC-010", "E2E-002"], direct: [], alsoE2e: [], chromium: false });
+  });
+
+  it("an integration ID also tagged in an e2e spec names that spec, which the harness runs too", () => {
+    const p = plan("packages/framework/test/integration/cli/verify.test.ts");
+    expect(p.ids).toContain("CHECK-AC-005");
+    expect(p.alsoE2e).toEqual(["tests/compliance/e2e/demo-local.spec.ts"]);
+    expect(p.chromium).toBe(true);
+  });
+
+  it("a framework-suite test tagged only with an unselected ID still runs, in the direct run (review finding)", () => {
+    const p = plan("packages/framework/test/integration/auth/admin-role.test.ts");
+    expect(p.direct).toEqual(["packages/framework/test/integration/auth"]);
+    expect(p.ids).not.toContain("E2E-007");
+    const filter = new RegExp(directFilter(p.ids) as string);
+    expect(filter.test("[E2E-007] the admin role reaches the app's admin pages")).toBe(true);
+    expect(filter.test(`[${p.ids[0] ?? ""}] a test the harness runs`)).toBe(false);
+    expect(filter.test("an untagged test")).toBe(true);
+    expect(directFilter([])).toBe("");
+  });
+
+  it("an e2e spec change names the integration tests the harness also runs for its IDs", () => {
+    expect(plan("tests/compliance/e2e/E2E-007.spec.ts").alsoIntegration).toEqual(expect.arrayContaining(["packages/framework/test/integration/auth/admin-role.test.ts"]));
+  });
+
+  it("docs off the test-input list: nothing to run", () => {
+    expect(githubOutput(plan("docs/README.md"), run("docs/README.md"))).toBe(["build=false", "linters=", "unit=none", "unit_files=", "ids=", "direct=", "direct_filter=", "chromium=false"].join("\n") + "\n");
+  });
+});
+
+describe("the staged ci.yml (scripts/ci/workflows/ci.yml, DEC-0637)", () => {
+  const yml = readFileSync(join(REPO, "scripts/ci/workflows/ci.yml"), "utf8");
+
+  it("runs on pull requests only and prints the classification first", () => {
+    expect(yml).toMatch(/\non:\n {2}pull_request:\n\n/);
+    expect(yml).not.toMatch(/\n {2}push:/);
+    expect(yml).toContain('node scripts/ci/classify.mjs --base "$PR_BASE" --github-output "$GITHUB_OUTPUT"');
+  });
+
+  it("reads every classify output it uses, and selects criteria only through the harness", () => {
+    const keys = githubOutput({ unit: "none", unitFiles: [], ids: [], direct: [], alsoE2e: [], alsoIntegration: [], chromium: false }, run()).split("\n").filter(Boolean).map((l: string) => l.split("=")[0]);
+    for (const k of keys) expect(yml, k).toContain(`${k}: \${{ steps.classify.outputs.${k} }}`);
+    expect(yml).toContain('npm run compliance -- --target local --only "$IDS"');
+    expect(yml).toContain('$DIRECT ${DIRECT_FILTER:+-t "$DIRECT_FILTER"}');
+    expect(yml).not.toMatch(/test:integration|test:e2e/);
+  });
+
+  it("sets the reference app's local test secret before the harness runs, from a fresh random value", () => {
+    const secret = yml.indexOf("npm run secrets -- set apiKey --target local --stage local");
+    expect(secret).toBeGreaterThan(0);
+    expect(secret).toBeLessThan(yml.indexOf("npm run compliance -- --target local --only"));
+    expect(yml).toContain("randomBytes(24)");
   });
 });
 
