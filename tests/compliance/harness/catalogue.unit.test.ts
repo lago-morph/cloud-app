@@ -133,7 +133,8 @@ describe("[COMPL-AC-002] the real documents", () => {
   const catalogue = readCatalogue(docs);
   it("define every component criterion and scenario once", () => {
     const ids = catalogue.map((e) => e.id);
-    expect(ids.filter((id) => id.startsWith("E2E-"))).toHaveLength(16);
+    // 16, plus E2E-017 (v0.2.0 setup, DEC-0763).
+    expect(ids.filter((id) => id.startsWith("E2E-"))).toHaveLength(17);
     // 124, less the four retired GOOGLE criteria, plus AUTH-AC-013/014, PWD-AC-001…009 and MAIL-AC-001…007 (DEC-0513);
     // then less the retired DEMO-AC-011, plus AUTH-AC-015, PWD-AC-010, CLI-AC-006 and CLI-AC-007 (DEC-0522, DEC-0526).
     // Then plus SETUP-AC-001…011, CLI-AC-008, SKILL-AC-007 and SKILL-AC-008 (DEC-0603): 155.

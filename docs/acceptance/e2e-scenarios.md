@@ -194,6 +194,28 @@ An automated scan of every app-facing contract (`docs/contracts/ts/` excluding `
 
 Pass: the scan finds nothing, and the review is recorded with its findings resolved.
 
+#### E2E-017 — Setup: the bootstrap, then the admin app
+Verifies: SYS-REQ-015, SYS-REQ-018, SYS-REQ-023
+Where: Local
+Origin: ai-proposed
+
+From a new project and an account with nothing set up, follow the setup flow (plan-v0.2.0 §5), locally, against the fake Cloudflare API, which accepts mock-oauth2-server's access tokens and enforces each grant's scopes:
+1. Run `cloudflare-setup` with a bootstrap token. It makes both OAuth clients, deploys the admin app, deletes the token and comments out its line.
+2. Run the admin app that the bootstrap uploaded, with its bindings, under local workerd. An administrator signs in through mock-oauth2-server.
+3. On the account setup page, set the account up: the auth app with its D1 database, the shared resources, the signing credential in Secrets Store and the setup record.
+4. On the everyday token page, make the everyday token. Save it, as the person would, and run `cloudflare-setup` again with it.
+
+Expected errors and edge cases:
+- a bootstrap token with no expiry, or one expiring 1 day and 1 second away, is deleted at once and used for nothing else; one expiring exactly 1 day away is accepted;
+- a bootstrap token missing a permission is named, writes nothing and is kept;
+- a bootstrap interrupted while deploying the admin app, and an account setup interrupted before its record, each complete when run again, making nothing twice;
+- an anonymous visitor, a member with no administrator role and someone outside the account are refused by the admin app;
+- a page whose optional scope was unticked names it and writes nothing.
+
+The live run of the same steps is the owner's (SETUP-AC-011, SKILL-AC-006; plan-v0.2.0 §7 "Live" steps 1 and 2).
+
+Pass: each step and each expected error behaves as stated. The everyday token holds exactly the four groups of plan-v0.2.0 §5.2 page 2, and `cloudflare-setup` with it finds the account set up and changes nothing. No bootstrap or everyday token value, OAuth token or client secret appears in any output, project file or admin-app response, except the everyday value, once, on its own page.
+
 ## Retired scenarios
 
 A retired scenario is kept here for the record, outside any `####` heading and with no `Where:` line, so the compliance catalogue no longer expects it. Its ID is never reused (CONVENTIONS §2, §4). No scenario is retired. v0.2.0 rewrote E2E-005…E2E-008 in place for sign-in through the auth app and removed their password, mail and `admins` clauses: E2E-005's mock-only cloud run, E2E-006's test-mail route and sign-in page, E2E-007's sign-up, `mail last` and `admins grant`/`revoke` steps on `prodcheck`, and E2E-008's eight password and mail steps of `check-login` (DEC-0753, DEC-0754).
