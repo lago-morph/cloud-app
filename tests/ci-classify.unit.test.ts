@@ -3,7 +3,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ciPlan, classify, githubOutput, globToRegExp, loadMap, matches, UNTAGGED } from "../scripts/ci/classify.mjs";
+import { ciPlan, classify, directFilter, githubOutput, globToRegExp, loadMap, matches } from "../scripts/ci/classify.mjs";
 
 interface Result {
   docs: string[];
@@ -120,7 +120,7 @@ describe("classification", () => {
 });
 
 describe("the CI plan (what the staged ci.yml runs)", () => {
-  interface Plan { unit: string; unitFiles: string[]; ids: string[]; direct: string[]; alsoE2e: string[]; chromium: boolean }
+  interface Plan { unit: string; unitFiles: string[]; ids: string[]; direct: string[]; alsoE2e: string[]; alsoIntegration: string[]; chromium: boolean }
   const plan = (...files: string[]): Plan => ciPlan(run(...files), map, REPO) as Plan;
 
   it("a criteria doc runs COMPL's tagged criteria through the harness and the catalogue unit tests; no e2e ID", () => {
@@ -152,8 +152,23 @@ describe("the CI plan (what the staged ci.yml runs)", () => {
     expect(p.chromium).toBe(true);
   });
 
+  it("a framework-suite test tagged only with an unselected ID still runs, in the direct run (review finding)", () => {
+    const p = plan("packages/framework/test/integration/auth/admin-role.test.ts");
+    expect(p.direct).toEqual(["packages/framework/test/integration/auth"]);
+    expect(p.ids).not.toContain("E2E-007");
+    const filter = new RegExp(directFilter(p.ids) as string);
+    expect(filter.test("[E2E-007] the admin role reaches the app's admin pages")).toBe(true);
+    expect(filter.test(`[${p.ids[0] ?? ""}] a test the harness runs`)).toBe(false);
+    expect(filter.test("an untagged test")).toBe(true);
+    expect(directFilter([])).toBe("");
+  });
+
+  it("an e2e spec change names the integration tests the harness also runs for its IDs", () => {
+    expect(plan("tests/compliance/e2e/E2E-007.spec.ts").alsoIntegration).toEqual(expect.arrayContaining(["packages/framework/test/integration/auth/admin-role.test.ts"]));
+  });
+
   it("docs off the test-input list: nothing to run", () => {
-    expect(githubOutput(plan("docs/README.md"), run("docs/README.md"))).toBe(["build=false", "linters=", "unit=none", "unit_files=", "ids=", "direct=", "chromium=false"].join("\n") + "\n");
+    expect(githubOutput(plan("docs/README.md"), run("docs/README.md"))).toBe(["build=false", "linters=", "unit=none", "unit_files=", "ids=", "direct=", "direct_filter=", "chromium=false"].join("\n") + "\n");
   });
 });
 
@@ -167,10 +182,10 @@ describe("the staged ci.yml (scripts/ci/workflows/ci.yml, DEC-0637)", () => {
   });
 
   it("reads every classify output it uses, and selects criteria only through the harness", () => {
-    const keys = githubOutput({ unit: "none", unitFiles: [], ids: [], direct: [], alsoE2e: [], chromium: false }, run()).split("\n").filter(Boolean).map((l: string) => l.split("=")[0]);
+    const keys = githubOutput({ unit: "none", unitFiles: [], ids: [], direct: [], alsoE2e: [], alsoIntegration: [], chromium: false }, run()).split("\n").filter(Boolean).map((l: string) => l.split("=")[0]);
     for (const k of keys) expect(yml, k).toContain(`${k}: \${{ steps.classify.outputs.${k} }}`);
     expect(yml).toContain('npm run compliance -- --target local --only "$IDS"');
-    expect(yml).toContain(`-t '${UNTAGGED as string}'`);
+    expect(yml).toContain('$DIRECT ${DIRECT_FILTER:+-t "$DIRECT_FILTER"}');
     expect(yml).not.toMatch(/test:integration|test:e2e/);
   });
 
