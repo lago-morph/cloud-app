@@ -9,7 +9,7 @@ import type { AuthAppIdentity } from "../auth/auth-app-binding.js";
 import { SignInError } from "./errors.js";
 import { verifyIdToken } from "./id-token.js";
 import { mapRole, pickMembership } from "./roles.js";
-import { exchangeCode, fetchMemberships, fetchUserEmail, loadDiscovery, loadJwks, revokeTokens } from "./upstream.js";
+import { exchangeCode, fetchMemberships, fetchUserEmail, loadDiscovery, loadJwks, revokeTokens, type TokenKind } from "./upstream.js";
 
 export interface AuthAppConfig {
   /** The sign-in OAuth client (plan §5.1 creates it). */
@@ -40,17 +40,23 @@ export async function completeSignIn(deps: SignInDeps, input: { code: string; ve
   const client = { clientId: config.clientId, clientSecret: config.clientSecret };
   const tokens = await exchangeCode(f, discovery, { ...client, code: input.code, verifier: input.verifier, redirectUri: config.callbackUrl });
   try {
+    const { accessToken, idToken } = tokens;
+    if (accessToken === null) throw new SignInError("token exchange: no access token");
+    if (idToken === null) throw new SignInError("token exchange: no id token");
     const keys = await loadJwks(f, discovery);
     const now = deps.nowSeconds?.() ?? Math.floor(Date.now() / 1000);
-    const id = await verifyIdToken(tokens.idToken, { keys, issuer: discovery.issuer, clientId: config.clientId, nonce: input.nonce, nowSeconds: now });
+    const id = await verifyIdToken(idToken, { keys, issuer: discovery.issuer, clientId: config.clientId, nonce: input.nonce, nowSeconds: now });
     if (id.email !== null && id.emailVerified === false) throw new SignInError("email not verified");
-    const email = id.email ?? (await fetchUserEmail(f, config.apiBase, tokens.accessToken));
+    const email = id.email ?? (await fetchUserEmail(f, config.apiBase, accessToken));
     if (email === null) throw new SignInError("no email");
-    const membership = pickMembership(await fetchMemberships(f, config.apiBase, tokens.accessToken), config.accountId);
+    const membership = pickMembership(await fetchMemberships(f, config.apiBase, accessToken), config.accountId);
     if (membership === null) throw new SignInError("no accepted membership in this account");
     return { sub: id.sub, email, role: mapRole(membership.roles) };
   } finally {
-    const all = [{ token: tokens.accessToken, hint: "access_token" as const }, ...(tokens.refreshToken === null ? [] : [{ token: tokens.refreshToken, hint: "refresh_token" as const }])];
+    // Every token the exchange returned is revoked, on success and on every refusal (step 3.6).
+    const all: { token: string; hint: TokenKind }[] = [];
+    if (tokens.accessToken !== null) all.push({ token: tokens.accessToken, hint: "access_token" });
+    if (tokens.refreshToken !== null) all.push({ token: tokens.refreshToken, hint: "refresh_token" });
     const failed = await revokeTokens(f, discovery, client, all);
     if (failed.length > 0) deps.log(logLine("warn", `token revocation failed (${failed.join(", ")})`));
   }

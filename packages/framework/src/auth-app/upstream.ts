@@ -16,10 +16,15 @@ export interface Discovery {
   readonly jwksUri: string;
 }
 
+/**
+ * The tokens of a successful exchange, each null when absent. The caller refuses a response
+ * without an access or ID token, and revokes what it did get (§2.1: a client without
+ * `response_types ["code","id_token"]` gets no ID token).
+ */
 export interface UpstreamTokens {
-  readonly accessToken: string;
+  readonly accessToken: string | null;
   readonly refreshToken: string | null;
-  readonly idToken: string;
+  readonly idToken: string | null;
 }
 
 export interface ClientCredentials {
@@ -95,8 +100,8 @@ export async function exchangeCode(f: typeof fetch, d: Discovery, p: ClientCrede
     form({ grant_type: "authorization_code", code: p.code, code_verifier: p.verifier, redirect_uri: p.redirectUri, client_id: p.clientId, client_secret: p.clientSecret }),
   );
   const { access_token: access, refresh_token: refresh, id_token: id } = body;
-  if (typeof access !== "string" || typeof id !== "string") throw new SignInError("token exchange: no access or id token");
-  return { accessToken: access, refreshToken: typeof refresh === "string" ? refresh : null, idToken: id };
+  const str = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
+  return { accessToken: str(access), refreshToken: str(refresh), idToken: str(id) };
 }
 
 export async function loadJwks(f: typeof fetch, d: Discovery): Promise<JsonWebKey[]> {

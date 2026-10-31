@@ -81,14 +81,21 @@ async function callback(request: Request, url: URL, deps: AuthAppDeps): Promise<
   const clear = { "set-cookie": cookie("", 0) };
   const refuse = (reason: string): void => deps.log(logLine("warn", `sign-in refused: ${reason}`));
   const state = url.searchParams.get("state") ?? "";
+  // A mismatched or unknown callback leaves the cookie alone: any site can send a browser here,
+  // and must not be able to cancel a sign-in in progress.
   if (state === "" || readCookie(request) !== state) {
     refuse("state mismatch");
-    return page(400, "Sign-in failed. Return to the app and try again.", clear);
+    return page(400, "Sign-in failed. Return to the app and try again.");
   }
   const signIn = await takeSignIn(deps.db, state, deps.now());
   if (signIn === null) {
     refuse("unknown or expired sign-in");
-    return page(400, "Sign-in failed. Return to the app and try again.", clear);
+    return page(400, "Sign-in failed. Return to the app and try again.");
+  }
+  // The return URL is checked again: `remove` may have run while the person was at Cloudflare.
+  if (!(await isRegistered(deps.db, signIn.app, signIn.returnUrl))) {
+    refuse("return URL not registered");
+    return page(400, "This sign-in link is no longer approved for this app.", clear);
   }
   const failed = (): Response => redirect(withParams(signIn.returnUrl, { error: "login_failed", state: signIn.appState }), clear);
 
