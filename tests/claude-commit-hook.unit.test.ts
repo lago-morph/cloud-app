@@ -134,6 +134,12 @@ describe("commitPlan: which commands commit, and what they add first", () => {
     }
   });
 
+  it("reads git run by awk system() or sed's e command, and echoed text piped into a shell", () => {
+    for (const c of ["awk 'BEGIN{system(\"git commit -m x\")}'", "sed -e 'e git commit -m x' f", "echo git commit -m x | sh", "echo 'git commit -m x' | bash -s"]) {
+      expect(plan(c).commits.length, c).toBeGreaterThanOrEqual(1);
+    }
+  });
+
   it("marks a --pathspec-from-file it cannot locate as null", () => {
     expect(commitPlan('git commit --pathspec-from-file="$(pwd)/l" -m x', "/base", {}).commits[0]?.pathspecFile).toBeNull();
   });

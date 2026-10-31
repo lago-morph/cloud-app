@@ -155,7 +155,7 @@ function commands(src) {
     if (!t.op) cur.push(t.v);
     else {
       flush();
-      if (t.v === "(" || t.v === ")") out.push(t.v);
+      if (t.v === "(" || t.v === ")" || t.v === "|") out.push(t.v);
     }
   }
   flush();
@@ -189,8 +189,8 @@ const WRAPPERS = new Map([
   ["xargs", { values: ["-I", "-i", "-n", "-L", "-P", "-d", "-E", "-s", "-a", "--arg-file", "--delimiter", "--max-args", "--max-procs"], args: 0 }],
 ]);
 /** Commands whose arguments are text or patterns, never a command to run. */
-const TEXT_TOOLS = new Set(["echo", "printf", "grep", "egrep", "fgrep", "rg", "ag", "ack", "cat", "less", "more", "head", "tail", "man", "wc", "sed", "awk"]);
-const GIT_GLOBAL_WITH_VALUE =new Set(["-c", "--git-dir", "--work-tree", "--namespace", "--config-env"]);
+const TEXT_TOOLS = new Set(["echo", "printf", "grep", "egrep", "fgrep", "rg", "ag", "ack", "cat", "less", "more", "head", "tail", "man", "wc"]);
+const GIT_GLOBAL_WITH_VALUE = new Set(["-c", "--git-dir", "--work-tree", "--namespace", "--config-env"]);
 /** git's own subcommands (never aliases, which git does not allow to shadow them): no alias lookup for these. */
 const GIT_BUILTINS = new Set(
   ("add am annotate apply archive bisect blame branch bundle cat-file check-ignore checkout cherry cherry-pick clean clone commit-tree config " +
@@ -359,7 +359,16 @@ function gitCommand(rest, state) {
 
 function walk(src, state) {
   const subshells = [];
+  let previous = null; // the simple command before a `|`, while it is the left side of a pipe
+  let piped = false;
   for (const item of commands(src)) {
+    if (item === "|") {
+      piped = true;
+      continue;
+    }
+    const left = piped ? previous : null;
+    piped = false;
+    previous = typeof item === "string" ? null : item;
     if (item === "(") {
       subshells.push(state.cwd);
       continue;
@@ -373,6 +382,12 @@ function walk(src, state) {
     const k = commandStart(item);
     const cmd = item[k];
     const name = cmd === undefined ? undefined : basename(cmd);
+    // Text piped into a shell that reads its script from stdin (`echo git commit | sh`): walk the text.
+    if (left && ["bash", "sh", "zsh", "dash"].includes(name) && !item.includes("-c")) {
+      walk(left.slice(commandStart(left) + 1).join(" "), { ...state, dirs: [] });
+    }
+    // sed's `e` command runs the rest of its script as a shell command.
+    if (name === "sed") for (const w of item.slice(k + 1)) if (/^e\s/.test(w)) walk(w.slice(2), { ...state, dirs: [] });
     // A quoted command string given to another program (`watch 'git commit'`, `su -c '…'`, `env -S '…'`):
     // walk it too, strictly (only commands it runs itself, so prose such as a PR body is not a commit). Not
     // git's own arguments (a message), text tools' text, or what eval and `sh -c` already walk.
