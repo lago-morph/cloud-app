@@ -86,7 +86,10 @@ test(tag(["E2E-018", "AUTH-AC-006"], "a member signs in as user and an administr
   expect((await user.api("/api/levels/user")).status).toBe(401);
 });
 
-test(tag("E2E-018", "a return URL not in the registry is refused with no redirect: trailing slash, case, port, percent-encoding, another origin, and another app's ID"), async () => {
+test(tag("E2E-018", "a return URL not in the registry is refused with no redirect: trailing slash, case, port, percent-encoding, another origin, a query; and an app ID with another app's registered return URL"), async () => {
+  // Two registered apps, so the mismatch cases pair a registered app with the other's registered return URL.
+  const otherReturn = `${stack.appOrigin}/api/auth/other-app-callback`;
+  await stack.registry.register("reference-other", otherReturn);
   const u = new URL(callback);
   const otherPort = `${u.protocol}//${u.hostname}:${String(Number(u.port) + 1)}${u.pathname}`;
   const cases: [string, string][] = [
@@ -98,12 +101,19 @@ test(tag("E2E-018", "a return URL not in the registry is refused with no redirec
     [APP_ID, `${callback}?next=https://evil.example`],
     [APP_ID, "https://evil.example/api/auth/callback"],
     ["reference-other", callback],
+    [APP_ID, otherReturn],
   ];
   for (const [app, ret] of cases) {
     const r = await new Browser(stack).go(`${stack.authOrigin}/start?${new URLSearchParams({ app, return: ret, state: "s" }).toString()}`);
     expect(r.status, `${app} ${ret}`).toBe(400);
     expect(r.location, `${app} ${ret}`).toBeNull();
   }
+  // Positive control: each registered pair is accepted.
+  for (const [app, ret] of [[APP_ID, callback], ["reference-other", otherReturn]]) {
+    const ok = await new Browser(stack).go(`${stack.authOrigin}/start?${new URLSearchParams({ app: app!, return: ret!, state: "s" }).toString()}`);
+    expect(ok.status, `${app!} ${ret!}`).toBe(302);
+  }
+  await stack.registry.unregister("reference-other");
 });
 
 test(tag("E2E-018", "a code is single use, bound to its app, and of concurrent redemptions exactly one signs in"), async () => {
@@ -127,7 +137,10 @@ test(tag("E2E-018", "a code is single use, bound to its app, and of concurrent r
   const { login: mine } = await thief.start();
   const foreign = await thief.go(`${stack.authOrigin}/start?${new URLSearchParams({ app: "reference-other", return: otherReturn, state: "o" }).toString()}`);
   const back = new URL((await thief.go(await thief.atIssuer(foreign.location!, "e2e018-code", { email: "c@example.com", email_verified: true }))).location!);
+  // A real code, issued for the other app (its own return URL and state).
   expect(`${back.origin}${back.pathname}`).toBe(otherReturn);
+  expect(back.searchParams.get("state")).toBe("o");
+  expect(back.searchParams.get("code")).toMatch(/^[A-Za-z0-9_-]{43}$/);
   const stolen = await thief.go(`${callback}?${new URLSearchParams({ code: back.searchParams.get("code")!, state: new URL(mine.location!).searchParams.get("state")! }).toString()}`);
   expect(stolen.location).toMatch(/authError=login_failed/);
   expect(await thief.me()).toEqual({ level: "anonymous" });
@@ -143,7 +156,7 @@ test(tag("E2E-018", "a code is single use, bound to its app, and of concurrent r
   expect(results.filter((r) => r.location?.includes("authError=login_failed"))).toHaveLength(5);
 });
 
-test(tag("E2E-018", "consent denied, and someone outside the account, sign no one in; an ID token with no email signs in through the /user fallback"), async () => {
+test(tag("E2E-018", "consent denied, someone outside the account and a pending member sign no one in; an ID token with no email signs in through the /user fallback, and with no email anywhere is refused"), async () => {
   const denied = new Browser(stack);
   const { start } = await denied.start();
   const state = new URL(start.location!).searchParams.get("state")!;
@@ -153,15 +166,27 @@ test(tag("E2E-018", "consent denied, and someone outside the account, sign no on
   expect(app.location).toMatch(/authError=login_failed/);
   expect(await denied.me()).toEqual({ level: "anonymous" });
 
+  // Outside the account: a membership of another account, and a membership of this one still pending.
   stack.members.set("e2e018-outsider", { memberships: [{ account: { id: "another-account" }, status: "accepted", roles: ADMIN }] });
-  const outsider = new Browser(stack);
-  expect((await outsider.signIn("e2e018-outsider")).appCallback.location).toMatch(/authError=login_failed/);
-  expect(await outsider.me()).toEqual({ level: "anonymous" });
+  stack.members.set("e2e018-pending", { memberships: [{ account: { id: ACCOUNT_ID }, status: "pending", roles: ADMIN }] });
+  for (const sub of ["e2e018-outsider", "e2e018-pending"]) {
+    const outsider = new Browser(stack);
+    expect((await outsider.signIn(sub)).appCallback.location, sub).toMatch(/authError=login_failed/);
+    expect(await outsider.me(), sub).toEqual({ level: "anonymous" });
+  }
 
+  // No email in the ID token: the auth app reads it from /user, and stores that one.
   member("e2e018-noemail", USER, "from-user-api@example.com");
   const noEmail = new Browser(stack);
   await noEmail.signIn("e2e018-noemail", {});
   expect(await noEmail.me()).toMatchObject({ level: "user" });
+  const db = await stack.authDb();
+  expect(await db.prepare("SELECT email FROM users WHERE sub = ?1").bind("e2e018-noemail").first()).toEqual({ email: "from-user-api@example.com" });
+  // No email from the token or /user: refused.
+  member("e2e018-noemail-anywhere", USER);
+  const none = new Browser(stack);
+  expect((await none.signIn("e2e018-noemail-anywhere", {})).appCallback.location).toMatch(/authError=login_failed/);
+  expect(await none.me()).toEqual({ level: "anonymous" });
 });
 
 // The role-refresh window, shared by E2E-007 and E2E-018: sessions made, the account changed, then one real

@@ -231,10 +231,10 @@ Over HTTP, locally, with the reference app's production bundle, the auth app, mo
 Expected errors and edge cases:
 - a return URL not in the registry is refused with no redirect, including one that differs only by a trailing slash, case, port or percent-encoding, one on another origin, and one with a query;
 - an app ID that does not match the return URL is refused;
-- a code reused, or issued for another app, signs no one in. Of concurrent redemptions of one code, exactly one succeeds;
-- declined consent, and someone with no membership of the account, sign no one in;
-- an ID token with no `email` signs in through the `/user` fallback;
-- with the auth app unavailable, requests between role refreshes keep working. At the next role refresh the session ends and the request is handled as anonymous. A sign-in fails with the app's `authError=login_failed` and no session. Once the auth app is back, signing in works again.
+- a code reused, or issued for another app, signs no one in. Of concurrent redemptions of one code, exactly one succeeds. A code past its 60-second lifetime (PAR-414) is the auth app's unit tests' case, with a fake clock (DEC-0765);
+- declined consent, someone with no membership of the account, and a pending member sign no one in;
+- an ID token with no `email` signs in through the `/user` fallback, which is the email the auth app stores; with no email from either, the sign-in is refused;
+- with the auth app unavailable, requests between role refreshes keep working. At the next role refresh the session ends and the request is handled as anonymous; the two retries before that are AUTH-AC-012's (`createTestApp`, counting calls). A sign-in in flight fails with the app's `authError=login_failed` and no session. A sign-in started then stops at the unavailable auth app's own pages. Once the auth app is back, signing in works again.
 
 One UI test signs in through the sign-in pages in a browser (E2E-005's auth-app part). The transaction cookie's attributes are checked on the way (AUTH-AC-006).
 

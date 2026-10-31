@@ -25,6 +25,7 @@ import { bundleAuthAppWorker } from "../../../../packages/framework/src/auth-app
 import { COMPATIBILITY_DATE, COMPATIBILITY_FLAGS } from "../../../../packages/framework/src/build/build.js";
 import { d1MigrationDatabase, migrateLocal, type D1Like } from "../../../../packages/framework/src/mig/apply.js";
 import type { ApiReply, CloudflareApi } from "../../../../packages/framework/src/provision/cloudflare/api.js";
+import type { D1Like as AuthAppDb } from "../../../../packages/framework/src/auth-app/store.js";
 import { cloudflareAuthAppLink, type AuthAppLink } from "../../../../packages/framework/src/provision/cloudflare/worker.js";
 import { ACCOUNT_ID, startEdge, type Edge } from "../../../../packages/framework/test/integration/auth-app/support.js";
 import { startMockOAuth2, type MockOAuth2 } from "../../../support/mock-oauth2/launcher.js";
@@ -54,6 +55,8 @@ export interface SignInStack {
   readonly members: Edge["members"];
   /** `deploy`'s and `remove`'s registry link, against the local auth app's database. */
   readonly registry: AuthAppLink;
+  /** The auth app's own database (its `users` table, for what a sign-in stored). */
+  authDb(): Promise<AuthAppDb>;
   /** Every app response's body and headers, for the no-provider-detail checks. */
   readonly appResponses: { url: string; status: number; text: string; headers: string }[];
   setAuthAppDown(down: boolean): Promise<void>;
@@ -192,6 +195,7 @@ export async function startSignInStack(): Promise<SignInStack> {
     edge,
     members: edge.members,
     registry,
+    authDb: async () => (await mf.getD1Database("DB", "auth")) as unknown as AuthAppDb,
     appResponses,
     async setAuthAppDown(down) {
       const flag = await mf.getKVNamespace("FLAG", "gate");
