@@ -164,31 +164,35 @@ test(tag("E2E-018", "consent denied, and someone outside the account, sign no on
   expect(await noEmail.me()).toMatchObject({ level: "user" });
 });
 
-test(tag(["E2E-007", "E2E-018"], "role from membership: promote, demote and removal show at the role refresh and not before; the auth app down keeps sessions between refreshes, signs out at a refresh, fails a sign-in clearly, and sign-in works once it is back"), async () => {
+// The role-refresh window, shared by E2E-007 and E2E-018: sessions made, the account changed, then one real
+// wait past PAR-425 (workerd's clock cannot be moved, DEC-0765). The outcomes are separate tests, so each
+// scenario's result is its own; E2E-007's comes last, as it is red until its root cause is fixed.
+const people = {} as Record<"promoted" | "demoted" | "removed" | "outage", Browser>;
+
+test(tag(["E2E-007", "E2E-018"], "until the role refresh: a promote, a demote and a removal change no session's level; with the auth app down, sessions keep working and a sign-in in flight fails with the app's message; then the interval passes"), async () => {
   test.setTimeout(REFRESH_WAIT_MS + 180_000);
   member("e2e007-promoted", USER);
   member("e2e007-demoted", ADMIN);
   member("e2e007-removed", USER);
   member("e2e018-outage", USER);
-  const people = { promoted: new Browser(stack), demoted: new Browser(stack), removed: new Browser(stack), outage: new Browser(stack) };
-  await people.promoted.signIn("e2e007-promoted");
-  await people.demoted.signIn("e2e007-demoted");
-  await people.removed.signIn("e2e007-removed");
-  await people.outage.signIn("e2e018-outage");
+  for (const [key, sub] of [["promoted", "e2e007-promoted"], ["demoted", "e2e007-demoted"], ["removed", "e2e007-removed"], ["outage", "e2e018-outage"]] as const) {
+    people[key] = new Browser(stack);
+    await people[key].signIn(sub);
+  }
   expect(await people.promoted.me()).toMatchObject({ level: "user" });
   expect(await people.demoted.me()).toMatchObject({ level: "admin" });
 
-  // E2E-007 step 3: the changes, made in the account; until the refresh each session keeps its level.
+  // E2E-007 step 3: the changes, made in the account.
   member("e2e007-promoted", ADMIN);
   member("e2e007-demoted", USER);
   stack.members.delete("e2e007-removed");
-  // E2E-018: the auth app down between refreshes changes nothing.
+  // E2E-018: the auth app down between refreshes changes nothing; nor do the account's changes before the refresh.
   await stack.setAuthAppDown(true);
   expect(await people.promoted.me()).toMatchObject({ level: "user" });
   expect(await people.demoted.me()).toMatchObject({ level: "admin" });
   expect(await people.removed.me()).toMatchObject({ level: "user" });
   expect(await people.outage.me()).toMatchObject({ level: "user" });
-  // A sign-in in flight when the auth app is down fails with the app's message, and no session.
+  // A sign-in in flight when the auth app goes down fails with the app's message, and no session.
   await stack.setAuthAppDown(false);
   member("e2e018-late", USER);
   const late = new Browser(stack);
@@ -200,26 +204,30 @@ test(tag(["E2E-007", "E2E-018"], "role from membership: promote, demote and remo
   expect(await late.me()).toEqual({ level: "anonymous" });
   await stack.setAuthAppDown(false);
 
-  // A role refresh needs the auth app: a membership is a user's only after it confirms them again.
-  // The wait is real time: workerd's clock cannot be moved (PAR-425, DEC-0765).
   await new Promise((resolve) => setTimeout(resolve, REFRESH_WAIT_MS));
-  // The outage at the refresh: the request is handled as anonymous and the session ends.
+});
+
+test(tag("E2E-018", "at the role refresh with the auth app down, the request is anonymous and the session ends; once it is back, signing in works again"), async () => {
+  expect(people.outage, "the refresh-window test ran first").toBeDefined();
   await stack.setAuthAppDown(true);
   const out = await people.outage.api("/api/levels/user");
   expect(out.status).toBe(401);
   expect(out.setCookies.some((c) => c.startsWith("__Host-session=") && /Max-Age=0/i.test(c)), "the session cookie is cleared").toBe(true);
   expect(await people.outage.me()).toEqual({ level: "anonymous" });
   await stack.setAuthAppDown(false);
-
-  expect(await people.promoted.me()).toMatchObject({ level: "admin" });
-  expect((await people.promoted.api("/api/levels/admin")).status).toBe(200);
-  expect(await people.demoted.me()).toMatchObject({ level: "user" });
-  expect((await people.demoted.api("/api/levels/admin")).status).toBe(403);
-  expect((await people.removed.api("/api/levels/user")).status).toBe(401);
-  expect(await people.removed.me()).toEqual({ level: "anonymous" });
-
-  // Back up: signing in works again.
   const back = new Browser(stack);
   await back.signIn("e2e018-late");
   expect(await back.me()).toMatchObject({ level: "user" });
+});
+
+// Red until the auth app's role(sub) reflects the account's current membership (root cause
+// 2026-10-31-T2-E2E-007-role-refresh-reads-stored-role): today it answers the role stored at the person's last sign-in.
+test(tag("E2E-007", "at the role refresh: the promoted member is admin, the demoted one user, and the removed one's session ends"), async () => {
+  expect(people.promoted, "the refresh-window test ran first").toBeDefined();
+  expect.soft(await people.promoted.me(), "promoted").toMatchObject({ level: "admin" });
+  expect.soft((await people.promoted.api("/api/levels/admin")).status, "promoted: admin route").toBe(200);
+  expect.soft(await people.demoted.me(), "demoted").toMatchObject({ level: "user" });
+  expect.soft((await people.demoted.api("/api/levels/admin")).status, "demoted: admin route").toBe(403);
+  expect.soft((await people.removed.api("/api/levels/user")).status, "removed: user route").toBe(401);
+  expect.soft(await people.removed.me(), "removed").toEqual({ level: "anonymous" });
 });
