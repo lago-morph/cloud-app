@@ -6,7 +6,9 @@
  *
  * Readings recorded here: "has passed" means more than PAR-425 (300 s exactly is still inside);
  * "the retry delay elapses before each retry" is shown by the clock moving exactly one delay for
- * one retry and two delays for two.
+ * one retry and two delays for two; "a session cookie in the format before v0.2.0" is the current
+ * payload re-signed with version 1 or 2 and without the v0.2.0 fields `rol`/`rat` (no real 0.1.x
+ * cookie is at hand), so it shows the version gate, not every older layout.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { tag, target } from "../../harness/index.js";
@@ -61,13 +63,34 @@ if (target().target === "local") {
       expect((await browser.json("/api/auth/me")).level).toBe("user");
     });
 
-    it(tag("AUTH-AC-003", "the same holds with stubLoginProvider, loginWithStub-style sign-in, grantRole and revokeRole"), async () => {
+    it(tag("AUTH-AC-003", "the same holds with stubLoginProvider, loginWithStub, grantRole and revokeRole (levels on /api/auth/me and the c.var.user route; the re-issued cookie keeps its expiry)"), async () => {
       const app = await openReference({ stubLoginProvider: true });
+      // Through the testing interface itself: loginWithStub keeps the session for app.request.
+      const level = async (path: string): Promise<string> => {
+        const body = (await (await app.request(path)).json()) as { level?: string; user?: { level: string } };
+        return body.user?.level ?? body.level ?? "";
+      };
+      await app.loginWithStub("t1-ac003-kept");
+      const kept = (await (await app.request("/api/auth/me")).json()) as { level: string; id: string };
+      expect(kept.level).toBe("user");
+      await app.grantRole(kept.id, "admin");
+      app.clock.advance(REFRESH_MS);
+      expect(await level("/api/ref/me"), "inside the interval").toBe("user");
+      app.clock.advance(1000);
+      expect((await app.request("/api/levels/admin")).status).toBe(200);
+      expect(await level("/api/auth/me")).toBe("admin");
+      await app.revokeRole(kept.id, "admin");
+      app.clock.advance(REFRESH_MS + 1000);
+      expect((await app.request("/api/levels/admin")).status).toBe(403);
+      expect(await level("/api/ref/me")).toBe("user");
+
+      // The same flow driven by hand, so the re-issued Set-Cookie's expiry is visible.
       const { browser, session } = await signInWithStub(app, "t1-ac003-stub");
       const expiry = expiryOf(session, app.clock.now());
       const me = await browser.json("/api/auth/me");
       expect(me.level).toBe("user");
       expectUserId(me.id, "stub", "t1-ac003-stub");
+      expect((await browser.json("/api/ref/me")).user).toMatchObject({ level: "user", id: me.id });
 
       await app.grantRole(String(me.id), "admin");
       app.clock.advance(REFRESH_MS);
@@ -76,12 +99,14 @@ if (target().target === "local") {
       const first = await browser.get("/api/levels/admin");
       expect(first.status).toBe(200);
       expect(expiryOf(browser.sessionCookies(first)[0]!, app.clock.now())).toBe(expiry);
+      expect((await browser.json("/api/auth/me")).level).toBe("admin");
 
       await app.revokeRole(String(me.id), "admin");
       app.clock.advance(REFRESH_MS + 1000);
       const back = await browser.get("/api/levels/admin");
       expect(back.status).toBe(403);
       expect(await errorCode(back)).toBe("AUTH.FORBIDDEN");
+      expect((await browser.json("/api/auth/me")).level).toBe("user");
     });
 
     it(tag("AUTH-AC-012", "a binding that fails once (or twice) is retried within the request and shows admin; one retry delay before each retry"), async () => {
@@ -104,6 +129,7 @@ if (target().target === "local") {
       const app = await openReference({ authAppLoginProvider: true });
       const sub = "t1-ac012-down";
       const { browser } = await signInWithAuthApp(app, { sub, email: "t1-ac012-down@example.com", role: "admin" });
+      const stale = browser.session ?? "";
       app.clock.advance(REFRESH_MS + 1000);
       app.authApp.setUnavailable(true);
       const calls = app.authApp.calls.role;
@@ -117,9 +143,12 @@ if (target().target === "local") {
       expect(browser.session, "the session cookie is cleared").toBeUndefined();
       const warnings = authWarnings(app, logs);
       expect(warnings.map((e) => e.message)).toHaveLength(1);
-      expect(warnings[0]?.message).toMatch(/role refresh failed \([^)]+\)/);
+      expect(warnings[0]?.message).toMatch(/^role refresh failed \([A-Za-z0-9_.]+\)/);
       expect(warnings[0]?.message).not.toContain(sub);
-      expect(await browser.json("/api/auth/me")).toStrictEqual({ level: "anonymous" });
+      expect(await browser.json("/api/auth/me"), "after the cookie was cleared").toStrictEqual({ level: "anonymous" });
+      // The pre-failure cookie replayed while the auth app is still down: anonymous, never the old admin role.
+      const replay = await new Browser(app).get("/api/auth/me", { headers: { cookie: stale } });
+      expect(await replay.json(), "the replayed pre-failure cookie").toStrictEqual({ level: "anonymous" });
     });
 
     it(tag("AUTH-AC-012", "no record for the sub: the session ends at the first refresh with one call and no retry"), async () => {
@@ -176,6 +205,7 @@ if (target().target === "local") {
         expect(await (await anon(cookie)).json(), what).toStrictEqual({ user: { level: "anonymous" } });
         expect(calls(), what).toBe(0);
       }
+      // /api/levels/user reads c.var.user in requireUser() and twice in its handler (apps/reference/src/server/routes/levels.ts).
       const first = await browser.get("/api/levels/user");
       expect(first.status).toBe(200);
       expect(calls(), "the first request after the interval, on a route reading c.var.user several times").toBe(1);
