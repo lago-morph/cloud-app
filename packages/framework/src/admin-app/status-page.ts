@@ -79,7 +79,7 @@ async function authData(api: CloudflareApi, a: string): Promise<{ apps: Part; si
         html:
           users.length === 0
             ? "<p>Nobody has signed in through the auth app yet.</p>"
-            : `<ul>${users.map((u) => `<li>${esc(String(u.email))} (${esc(String(u.role))}), last signed in ${typeof u.updated_at === "number" ? esc(new Date(u.updated_at).toISOString()) : "at an unknown time"}</li>`).join("")}</ul>`,
+            : `<ul>${users.map((u) => `<li>${esc(String(u.email))} (${esc(String(u.role))}), last signed in ${typeof u.updated_at === "number" && Math.abs(u.updated_at) <= 8.64e15 ? esc(new Date(u.updated_at).toISOString()) : "at an unknown time"}</li>`).join("")}</ul>`,
       }
     : fail("reading recent sign-ins", users);
   return { apps: appsPart, signIns: usersPart };
@@ -89,7 +89,13 @@ const section = (title: string, p: Part): string => `<h2>${esc(title)}</h2>${p.o
 
 async function run(ctx: GrantContext): Promise<string> {
   const a = ctx.accountId;
-  const [w, s, d] = await Promise.all([workers(ctx.api, a), setupRecord(ctx.api, a), authData(ctx.api, a)]);
+  // A part whose request throws becomes that part's failure; the other parts are still shown.
+  const safe = <T>(what: string, f: () => Promise<T>, onError: (p: Part) => T): Promise<T> => f().catch((e: unknown) => onError({ ok: false, why: `${what} failed: ${e instanceof Error ? e.message : String(e)}` }));
+  const [w, s, d] = await Promise.all([
+    safe("listing the Workers", () => workers(ctx.api, a), (p) => p),
+    safe("reading the setup record", () => setupRecord(ctx.api, a), (p) => p),
+    safe("reading the auth app's database", () => authData(ctx.api, a), (p) => ({ apps: p, signIns: p })),
+  ]);
   return [section("Workers", w), section("Account setup", s), section("Registered apps", d.apps), section("Recent sign-ins", d.signIns)].join("\n");
 }
 

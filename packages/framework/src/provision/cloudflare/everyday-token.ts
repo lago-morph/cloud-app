@@ -39,19 +39,22 @@ export function everydayPolicies(accountId: string): TokenPolicy[] {
   return [{ effect: "allow", resources: { [`com.cloudflare.api.account.${accountId}`]: "*" }, permission_groups: SET.map((g) => ({ id: g.id })) }];
 }
 
-/** The IDs of the account's tokens named `name`, across pages. */
+/** The IDs of the account's tokens named `name`, across pages; throws rather than read a partial list. */
 async function tokensNamed(api: CloudflareApi, accountId: string, name: string): Promise<string[]> {
   const ids: string[] = [];
-  for (let page = 1; page <= MAX_PAGES; page++) {
+  for (let page = 1; ; page++) {
     const r = await api("GET", `/accounts/${accountId}/tokens?per_page=${String(PAGE)}&page=${String(page)}`);
     const body = r.body as { result?: { id?: unknown; name?: unknown }[]; result_info?: { total_pages?: unknown } } | null;
     if (!succeeded(r) || !Array.isArray(body?.result)) throw new Error(`listing the account's API tokens failed: ${describeFailure(r)}`);
-    for (const t of body.result) if (t.name === name && typeof t.id === "string") ids.push(t.id);
     const total = typeof body.result_info?.total_pages === "number" ? body.result_info.total_pages : 1;
-    if (page >= total) break;
+    if (total > MAX_PAGES) throw new Error(`the account has more than ${String(MAX_PAGES)} pages of API tokens; delete unused tokens in the dashboard first`);
+    for (const t of body.result) if (t.name === name && typeof t.id === "string") ids.push(t.id);
+    if (page >= total) return ids;
   }
-  return ids;
 }
+
+/** A refusal of the grant (403): the case the fallback is for. Anything else is an error. */
+const refused = (r: { status: number }): boolean => r.status === 403;
 
 const groupsOf = (policies: readonly TokenPolicy[]): Set<string> => new Set(policies.filter((p) => p.effect === "allow").flatMap((p) => p.permission_groups.map((g) => g.id)));
 
@@ -78,22 +81,30 @@ const nameOf = (id: string, given?: string): string => KNOWN_NAMES[id] ?? given 
 export async function ensureEverydayToken(api: CloudflareApi, accountId: string): Promise<EverydayOutcome> {
   const ids = await tokensNamed(api, accountId, NAME);
   if (ids.length === 0) return { kind: "created", ...(await create(api, accountId)) };
+  const path = (id: string) => `/accounts/${accountId}/tokens/${encodeURIComponent(id)}`;
+  // Every token is read before any is written, so a refusal changes none of them.
+  const tokens: { id: string; token: TokenDetails }[] = [];
+  for (const id of ids) {
+    const got = await api("GET", path(id));
+    const token = (got.body as { result?: TokenDetails } | null)?.result;
+    if (refused(got)) return { kind: "replaced", ...(await create(api, accountId)), oldIds: ids };
+    if (!succeeded(got) || token === undefined || !Array.isArray(token.policies)) throw new Error(`reading the everyday token ${id} failed: ${describeFailure(got)}`);
+    tokens.push({ id, token });
+  }
   const updated: string[] = [];
   const added = new Set<string>();
   const removed = new Set<string>();
-  for (const id of ids) {
-    const path = `/accounts/${accountId}/tokens/${encodeURIComponent(id)}`;
-    const got = await api("GET", path);
-    const token = (got.body as { result?: TokenDetails } | null)?.result;
-    if (!succeeded(got) || token === undefined || !Array.isArray(token.policies)) return { kind: "replaced", ...(await create(api, accountId)), oldIds: ids };
+  for (const { id, token } of tokens) {
     if (isExact(token.policies, accountId)) continue;
-    const have = groupsOf(token.policies);
     const body: Record<string, unknown> = { name: token.name };
     for (const key of ["status", "expires_on", "not_before", "condition"] as const) if (token[key] !== undefined && token[key] !== null) body[key] = token[key];
     body.policies = everydayPolicies(accountId);
-    const put = await api("PUT", path, body);
-    if (!succeeded(put)) return { kind: "replaced", ...(await create(api, accountId)), oldIds: ids };
+    const put = await api("PUT", path(id), body);
+    // Refused: a new token replaces the ones not yet updated; those already updated stay valid.
+    if (refused(put)) return { kind: "replaced", ...(await create(api, accountId)), oldIds: ids.filter((x) => !updated.includes(x)) };
+    if (!succeeded(put)) throw new Error(`updating the everyday token ${id} failed: ${describeFailure(put)}`);
     updated.push(id);
+    const have = groupsOf(token.policies);
     for (const g of SET) if (!have.has(g.id)) added.add(g.name);
     for (const p of token.policies) for (const g of p.permission_groups) if (!SET.some((e) => e.id === g.id)) removed.add(nameOf(g.id, g.name));
   }
@@ -102,15 +113,16 @@ export async function ensureEverydayToken(api: CloudflareApi, accountId: string)
 }
 
 /**
- * Deletes those of `ids` that are listed as everyday tokens (`prototype-framework`); any other ID,
- * or one not shaped like a token ID, is skipped and never sent.
+ * Deletes those of `ids` that are listed as everyday tokens (`prototype-framework`), never the last
+ * one; any other ID, or one not shaped like a token ID, is skipped and never sent.
  */
 export async function deleteOldEverydayTokens(api: CloudflareApi, accountId: string, ids: readonly string[]): Promise<{ deleted: string[]; skipped: string[] }> {
   const everyday = new Set(await tokensNamed(api, accountId, NAME));
   const deleted: string[] = [];
   const skipped: string[] = [];
   for (const id of ids) {
-    if (!TOKEN_ID.test(id) || !everyday.has(id)) {
+    // Never the last everyday token: the one the person just saved must survive.
+    if (!TOKEN_ID.test(id) || !everyday.has(id) || everyday.size - deleted.length <= 1) {
       skipped.push(id);
       continue;
     }

@@ -20,9 +20,11 @@ const groupList = (): string => `<ul>${EVERYDAY_V2.map((g) => `<li>${esc(g.name)
 const COPY_SCRIPT = `document.getElementById("copy").addEventListener("click",function(){navigator.clipboard.writeText(document.getElementById("everyday-token").textContent).then(function(){document.getElementById("copied").textContent="Copied."})});`;
 
 function showValue(value: string, lead: string): PageResult {
+  // `lead` is a paragraph's text; the group list follows it, outside the paragraph.
   return {
     html: [
       `<p>${lead}</p>`,
+      groupList(),
       `<p><strong>This is the only time the value is shown.</strong> Copy it now:</p>`,
       `<pre id="everyday-token">${esc(value)}</pre>`,
       `<p><button type="button" id="copy">Copy</button> <span id="copied"></span></p>`,
@@ -44,14 +46,14 @@ async function run(ctx: GrantContext): Promise<PageResult> {
   if (ctx.action?.startsWith("delete:") === true) {
     const ids = ctx.action.slice("delete:".length).split(",").filter((s) => s !== "");
     const out = await deleteOldEverydayTokens(ctx.api, ctx.accountId, ids);
-    return `<p>Deleted ${String(out.deleted.length)} old everyday token(s).${out.skipped.length > 0 ? ` ${String(out.skipped.length)} was not an everyday token and was left alone.` : ""}</p>`;
+    return `<p>Deleted ${String(out.deleted.length)} old everyday token(s).${out.skipped.length > 0 ? ` ${String(out.skipped.length)} ID(s) were left alone: not an everyday token, or the last one.` : ""}</p>`;
   }
   const out = await ensureEverydayToken(ctx.api, ctx.accountId);
   switch (out.kind) {
     case "created":
-      return showValue(out.value, "The everyday token <code>prototype-framework</code> was created with exactly these permissions:" + groupList());
+      return showValue(out.value, "The everyday token <code>prototype-framework</code> was created with exactly these permissions:");
     case "replaced": {
-      const r = showValue(out.value, "Cloudflare did not let this sign-in change the existing everyday token, so a new one was created with exactly these permissions:" + groupList());
+      const r = showValue(out.value, "Cloudflare did not let this sign-in change the existing everyday token, so a new one was created with exactly these permissions:");
       return typeof r === "string" ? r : { ...r, html: `${r.html}\n<p>Once the new value is saved where it goes, delete the old token:</p>${deleteForm(out.oldIds)}` };
     }
     case "updated":
@@ -68,6 +70,7 @@ async function run(ctx: GrantContext): Promise<PageResult> {
 export const everydayPage: AdminPage = {
   id: "everyday",
   title: "Everyday token",
+  actions: ["delete"],
   view: () =>
     [
       "<p>The everyday token is what the agent uses for deploys and checks. This step creates it, or updates an existing one (from 0.1.x too) in place to exactly these permissions on this account:</p>",
