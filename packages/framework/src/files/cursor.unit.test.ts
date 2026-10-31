@@ -32,4 +32,12 @@ describe("[FILES-AC-001] list cursors (FILES-REQ-001, like KV-REQ-003)", () => {
   ])("a cursor that is %s is rejected with FILES.INVALID_CURSOR", (_label, cursor) => {
     expect(codeOf(() => decodeCursor("c/", cursor))).toBe("FILES.INVALID_CURSOR");
   });
+
+  it("only the issued spelling of a cursor decodes: not a re-spelled last character, not a byte order mark in front (fuzz F6)", () => {
+    // Root cause 2026-10-31-T4-files-base64url-noncanonical; F6's shrunk counterexamples.
+    expect(decodeCursor("a/", "eyJwIjoiYS8iLCJhIjoiYS8ifQ")).toBe("a/");
+    expect(codeOf(() => decodeCursor("a/", "eyJwIjoiYS8iLCJhIjoiYS8ifR"))).toBe("FILES.INVALID_CURSOR");
+    expect(codeOf(() => decodeCursor("", "77u_eyJwIjoiIiwiYSI6IiJ9"))).toBe("FILES.INVALID_CURSOR");
+    expect(codeOf(() => decodeCursor("a/", "77u_eyJwIjoiYS8iLCJhIjoiYS94In0"))).toBe("FILES.INVALID_CURSOR");
+  });
 });

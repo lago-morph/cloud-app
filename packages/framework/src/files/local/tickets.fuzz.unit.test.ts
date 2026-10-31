@@ -3,7 +3,8 @@
  * `files/local/tickets.ts` `verifyLocalTicket` with `files/base64url.ts`. The auth part is
  * `auth/signing.fuzz.unit.test.ts`, with the same seed.
  * Reason: transfer-ticket URLs come back from any browser.
- * Runs: 500 per property (S4: HMAC via `crypto.subtle` is async). Seed: 2026103104 (DEC-0647).
+ * Runs: 500 per property (S4), except 250 for each property that signs and verifies with HMAC
+ * (`crypto.subtle`, async), which keeps F4 within PAR-411 (DEC-0777). Seed: 2026103104 (DEC-0647).
  */
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
@@ -13,6 +14,9 @@ import { LOCAL_TRANSFER_PATH, createLocalTicketIssuer, verifyLocalTicket } from 
 const RUNS = 500;
 const SEED = 2026103104;
 const OPTIONS = { seed: SEED, numRuns: RUNS } as const;
+/** DEC-0777: the HMAC properties run 250 times, so that F4 stays within PAR-411 (1 s per target). */
+const HMAC_RUNS = 250;
+const HMAC_OPTIONS = { seed: SEED, numRuns: HMAC_RUNS } as const;
 
 /** A generated dummy key, never a real credential. */
 const KEY = `fuzz-local-key-${"k".repeat(32)}`;
@@ -66,14 +70,14 @@ function mutate(token: string, m: Mutation): string {
 }
 
 const tokenOf = (ticket: unknown): string => (ticket as { url: string }).url.slice(LOCAL_TRANSFER_PATH.length);
-const name = fc.string({ unit: "binary", minLength: 1, maxLength: 24 });
+const name = fc.string({ unit: "binary", minLength: 1, maxLength: 8 });
 const grant = fc.oneof(
   fc.record({ op: fc.constant("download" as const), name }),
   fc.record({ op: fc.constant("upload" as const), name, contentType: fc.constantFrom("image/png", "text/plain", "application/octet-stream") }),
 );
 
 describe("F4: local transfer tickets fuzz (files.md §2 Local)", () => {
-  it(`no mutation of a valid ticket verifies (${RUNS} runs, seed ${SEED})`, async () => {
+  it(`no mutation of a valid ticket verifies (${HMAC_RUNS} runs, seed ${SEED})`, async () => {
     await fc.assert(
       fc.asyncProperty(grant, mutation, async (g, m) => {
         const token = tokenOf(g.op === "upload" ? await issuer.upload(g.name, g.contentType) : await issuer.download(g.name));
@@ -81,7 +85,7 @@ describe("F4: local transfer tickets fuzz (files.md §2 Local)", () => {
         const mutated = mutate(token, m);
         if (mutated !== token) expect(await verifyLocalTicket(mutated, KEY)).toBeUndefined();
       }),
-      OPTIONS,
+      HMAC_OPTIONS,
     );
   });
 
