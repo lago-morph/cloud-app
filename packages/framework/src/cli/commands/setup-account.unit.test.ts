@@ -32,11 +32,10 @@ describe("setup-account (CLI-REQ-001, PROV-REQ-004)", () => {
   });
 
   it("[PROV-AC-004] needs no email domain: an account without one is set up (v0.2.0, DEC-0698)", async () => {
-    const fake = new FakeTarget({ accountSettings: {} });
+    const fake = new FakeTarget();
     const io = captureIo();
     expect(await setupAccountCommand(harness(fake).deps)(["--target", "cloudflare"], io)).toBe(0);
     expect(io.err).toBe("");
-    expect(fake.accountSettings).toEqual({});
   });
 
   it("takes no --email-domain any more (v0.2.0, DEC-0698): it is a usage error, for every target", async () => {

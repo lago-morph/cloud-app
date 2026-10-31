@@ -8,8 +8,8 @@
  *   expecting version N when its `setupVersion` is N or more.
  * - `frameworkVersion`: the framework package's version that applied it; `appliedAt`: when (ISO).
  * - `emailDomain` is not a setup field since v0.2.0 (no email steps; DEC-0689): a record need not
- *   have one, and one a 0.1.x setup stored is kept as it is (`deploy` still reads it,
- *   `parseAccountSettings`).
+ *   have one, and one a 0.1.x setup stored is kept as it is (`parseAccountSettings` validates it;
+ *   `deploy` no longer reads it, DEC-0732).
  * - `completedSteps`: the setup steps (`setup-steps.ts`) found done or applied by that run.
  *
  * Read through the R2 object endpoints of `api.cloudflare.com`, which the everyday token's

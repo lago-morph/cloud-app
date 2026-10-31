@@ -61,7 +61,6 @@ beforeAll(async () => {
     publicOrigin: ORIGIN,
     database: { id: "00000000-0000-0000-0000-000000000000", name: "cfroute-test-x-db-1" },
     filesBucket: "cfroute-test-x-files",
-    isTestStage: true,
   });
   configPath = join(dir, "wrangler.json");
   writeFileSync(configPath, JSON.stringify(wranglerWorkerConfig(settings)));

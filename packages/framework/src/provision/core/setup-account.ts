@@ -24,11 +24,6 @@ export function foreignResourcesMessage(names: readonly string[]): string {
   return `${names.join(", ")} already exist${names.length === 1 ? "s" : ""} but belong${names.length === 1 ? "s" : ""} to another account (or this account's credentials cannot see ${names.length === 1 ? "it" : "them"}); nothing was changed. Use an account that owns ${names.length === 1 ? "it" : "them"}, or remove ${names.length === 1 ? "it" : "them"} there first.`;
 }
 
-/** The message for an account settings record without an email domain, which a production stage's `EMAIL` binding still needs (0.1.x recorded one). */
-export function noEmailDomainMessage(): string {
-  return "the account settings record names no email domain, which a production stage's EMAIL binding still needs (only a 0.1.x setup recorded one)";
-}
-
 export async function runSetupAccount(ops: TargetOperations, io: ProvisionIo): Promise<SetupAccountResult> {
   const failed = (message: string): SetupAccountResult => {
     errorLine(io, `setup-account failed: ${message}`);

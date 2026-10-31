@@ -279,37 +279,26 @@ describe("deploy step 1: preflight (PROV-REQ-002, PROV-REQ-004)", () => {
     expect(changingCalls(t)).toEqual([]);
   });
 
-  it("[PROV-AC-004] (core part) a production stage needs the account's email domain (its EMAIL binding); its email setup is not checked (v0.2.0); a test stage needs neither", async () => {
+  it("[PROV-AC-004] (core part) an account set up by v0.2.0 (no email domain) is enough for a production deploy: the preflight passes and asks for no email domain (DEC-0698, DEC-0732)", async () => {
     const prod = { app: "notes", stage: "prod" };
-    const t = new FakeTarget({ accountSettings: {} });
+    const t = new FakeTarget();
     t.stageState(prod).secrets = new Set();
     const io = captureIo();
-    expect((await runDeploy(t, request({ stage: prod }), io)).status).toBe(1);
-    expect(io.err).toContain("the account settings record names no email domain, which a production stage's EMAIL binding still needs");
-    expect(io.err).not.toContain("--email-domain");
-    expect(changingCalls(t)).toEqual([]);
-
-    // A test stage deploys without one, and its steps get no email domain.
-    const test = new FakeTarget({ accountSettings: {} });
-    expect((await runDeploy(test, request(), captureIo())).status).toBe(0);
-    expect(test.deployedEmailDomains).toEqual([undefined, undefined]);
-
-    // With a domain (a 0.1.x record), the domain reaches steps 3 and 5, and the result names the sign-in page and the sender.
-    const u = new FakeTarget();
-    u.stageState(prod).secrets = new Set();
-    const io3 = captureIo();
-    expect((await runDeploy(u, request({ stage: prod }), io3)).status).toBe(0);
-    expect(u.deployedEmailDomains).toEqual(["example.test", "example.test"]);
-    expect(io3.out).toContain("sign-in page: https://notes-prod.fake.example/api/auth/sign-in");
-    expect(io3.out).toContain("sender address: no-reply@example.test");
+    expect((await runDeploy(t, request({ stage: prod }), io)).status, io.err).toBe(0);
+    expect(io.err).toBe("");
+    expect(t.calls.some((c) => c.startsWith("deployCode notes/prod"))).toBe(true);
   });
 
-  it("a test stage's result names no sign-in page or sender; its steps still get the recorded email domain", async () => {
-    const t = new FakeTarget();
-    const io = captureIo();
-    expect((await runDeploy(t, request(), io)).status).toBe(0);
-    expect(io.out).not.toMatch(/sign-in page|sender address/);
-    expect(t.deployedEmailDomains).toEqual(["example.test", "example.test"]);
+  it("the result names the public origin only, for a production and a test stage: no sign-in page and no sender address (provisioning.md §2 'Publishing the result', DEC-0698)", async () => {
+    const prod = { app: "notes", stage: "prod" };
+    for (const s of [prod, stage]) {
+      const t = new FakeTarget();
+      t.stageState(s).secrets = new Set();
+      const io = captureIo();
+      expect((await runDeploy(t, request({ stage: s }), io)).status, io.err).toBe(0);
+      expect(io.out).toContain(`public origin: https://${s.app}-${s.stage}.fake.example`);
+      expect(io.out).not.toMatch(/sign-in page|sender address/);
+    }
   });
 
   it("a production stage needs no retired Google setting or secret (DEC-0513)", async () => {

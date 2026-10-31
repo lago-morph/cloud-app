@@ -10,24 +10,17 @@
  *   `<app>-<stage>`, `url: true` for its `workers.dev` route) running the framework's built
  *   bundle, with the static assets, the framework variables plus `FRAMEWORK_PUBLIC_ORIGIN`, and
  *   the bindings `DB` (the current D1 database, an input never in SST's state), `FILES` (the
- *   stage bucket) and the shared log bucket; the compatibility flag `nodejs_compat`; and, on a
- *   production stage, the Email Service binding `EMAIL` restricted to `no-reply@<emailDomain>`,
- *   with the variable `FRAMEWORK_MAIL_FROM` (also set on a test stage when the account settings
- *   record names a domain). All of these come from `cloudflareWorkerSettings` (CF §2). A
- *   production stage also gets the service binding `AUTH` to the auth app's `AuthApp`
- *   entrypoint and the variable `FRAMEWORK_AUTH_APP_ORIGIN` (DEC-0667; Pulumi's `service`
- *   binding with `entrypoint` is *unverified* live, DEC-0726).
+ *   stage bucket) and the shared log bucket; and the compatibility flag `nodejs_compat`. All of
+ *   these come from `cloudflareWorkerSettings` (CF §2). A production stage also gets the service
+ *   binding `AUTH` to the auth app's `AuthApp` entrypoint and the variable
+ *   `FRAMEWORK_AUTH_APP_ORIGIN` (DEC-0667; Pulumi's `service` binding with `entrypoint` is
+ *   *unverified* live, DEC-0726). Since v0.2.0 no stage binds `EMAIL` or gets `FRAMEWORK_MAIL_FROM`
+ *   (cloudflare.md §2's v0.2.0 amendment, DEC-0698, DEC-0732).
  *
- * The `send_email` binding (spike S5's first question, DEC-0518): SST 4.17.2 has no component or
- * `link` for Email Service, but its `sst.cloudflare.Worker` creates a `cloudflare.WorkersScript`
- * (Pulumi Cloudflare 6.15.0, PAR-108) and the program appends its own bindings to that script's
- * `bindings` in the `transform.worker` hook, as for D1 and R2. Pulumi Cloudflare 6.15.0's
- * `types/input.d.ts` (`WorkersScriptBinding`) lists `send_email` among the binding types and has
- * `allowedSenderAddresses?: string[]` (with `destinationAddress` and
- * `allowedDestinationAddresses`), so the binding is
- * `{ type: "send_email", name: "EMAIL", allowedSenderAddresses: ["no-reply@<emailDomain>"] }`.
- * Read from the type definitions of the platform `sst install` puts in `.sst/platform/`; no
- * fallback is needed. Not yet deployed live (with DEC-0336's list).
+ * The program appends its own bindings to the `cloudflare.WorkersScript` that SST 4.17.2's
+ * `sst.cloudflare.Worker` creates (Pulumi Cloudflare 6.15.0, PAR-108), in the `transform.worker`
+ * hook. The upload carries exactly these bindings plus the kept secrets (`keepBindings`), so a
+ * binding an earlier deploy declared and this one does not (a 0.1.x stage's `EMAIL`) is dropped.
  * `removal: "remove"` so nothing is retained; `home: "cloudflare"` keeps state in `sst-state`.
  * Secrets are never declared: a binding with a secret's name would replace it (DEC-0087), so a
  * `SECRET_*` variable or binding name is refused, and `keepBindings` keeps the Worker's
@@ -76,8 +69,6 @@ export interface SstInput {
     /** The current database: an input, never in SST's state. */
     readonly database: { readonly id: string; readonly name: string };
     readonly code: WorkerCode;
-    /** The account settings record's email domain (DEC-0514); required for a production stage. */
-    readonly emailDomain?: string;
     /** Secrets Store secrets bound in place of Worker secrets of the same `SECRET_<NAME>` (D7, DEC-0727). */
     readonly secretsStore?: readonly SecretsStoreBinding[];
     /** A production stage's auth app (DEC-0667): its Worker, bound as `AUTH`, and its public origin. */
@@ -119,8 +110,6 @@ function workerSettings(stage: Stage, w: NonNullable<SstInput["worker"]>) {
     publicOrigin: w.publicOrigin,
     database: w.database,
     filesBucket: filesBucketName(stage),
-    isTestStage: stage.stage.startsWith("test-"),
-    ...(w.emailDomain === undefined ? {} : { emailDomain: w.emailDomain }),
   });
 }
 
@@ -151,7 +140,6 @@ export function sstProgram(input: SstInput): string {
             { type: "d1", name: BINDINGS.database, id: w.database.id },
             { type: "r2_bucket", name: BINDINGS.files, bucketName: filesBucketName(input.stage) },
             { type: "r2_bucket", name: w.code.logBucketBinding, bucketName: LOG_BUCKET },
-            ...settings.sendEmail.map((e) => ({ type: "send_email", name: e.binding, allowedSenderAddresses: [...e.allowedSenderAddresses] })),
             ...(w.authApp === undefined ? [] : [{ type: "service", name: AUTH_BINDING, service: w.authApp.service, entrypoint: AUTH_APP_ENTRYPOINT }]),
           ],
         }

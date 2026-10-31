@@ -31,6 +31,8 @@ import type { HealthOutcome } from "../../../../packages/framework/src/provision
 import { runRemove } from "../../../../packages/framework/src/provision/core/remove.js";
 import { openFakeD1Api, type FakeD1Api } from "../../../../packages/framework/src/provision/cloudflare/d1/fake-d1-api.js";
 import { ACCOUNT, FakeCloud, FakeDatabases, type FakeWorker } from "../../../../packages/framework/src/provision/cloudflare/fake-cloud.test-support.js";
+import { ACCOUNT_SETUP_VERSION } from "../../../../packages/framework/src/provision/cloudflare/permissions.js";
+import { SETUP_STEPS } from "../../../../packages/framework/src/provision/cloudflare/setup-record.js";
 import { createCloudflareTarget } from "../../../../packages/framework/src/provision/cloudflare/target.js";
 
 const PROD = { app: "reference", stage: "prod" };
@@ -51,10 +53,19 @@ afterAll(async () => {
   await d1?.close();
 });
 
-/** A fake account set up for production deploys (a 0.1.x email domain recorded for the EMAIL binding), with the auth app's Worker as `authApp` gives it. */
-function account(authApp: "absent" | "no-registry" | "deployed") {
+/**
+ * The account's setup record `framework/account.json` as each release leaves it: v0.2.0's admin
+ * app writes the setup fields only (no email domain, DEC-0698); a 0.1.x setup stored `emailDomain`.
+ */
+const SETUP_RECORD = {
+  "0.2.0": { setupVersion: ACCOUNT_SETUP_VERSION, frameworkVersion: "0.2.0", appliedAt: "2026-10-31T08:00:00.000Z", completedSteps: [...SETUP_STEPS] },
+  "0.1.x": { emailDomain: "example.test" },
+} as const;
+
+/** A fake account whose setup record `setupBy` wrote, with the auth app's Worker as `authApp` gives it. */
+function account(authApp: "absent" | "no-registry" | "deployed", setupBy: keyof typeof SETUP_RECORD = "0.1.x") {
   const cloud = FakeCloud.withSharedResources();
-  cloud.objectBodies.set("sst-state/framework/account.json", { emailDomain: "example.test" });
+  cloud.objectBodies.set("sst-state/framework/account.json", SETUP_RECORD[setupBy]);
   cloud.buckets.get("sst-state")!.add("framework/account.json");
   if (authApp !== "absent") {
     const bindings = authApp === "deployed" ? [{ type: "d1", name: "DB", id: registryId }] : [];
@@ -107,5 +118,40 @@ describe("PROV-REQ-002 production sign-in prerequisite on the fake Cloudflare AP
     expect((await runRemove(target, PROD, captureIo())).status).toBe(0);
     expect(await isRegistered(registry, APP_ID, RETURN_URL)).toBe(false);
     expect(cloud.workers.has("prototype-auth"), "the auth app itself stays").toBe(true);
+  });
+
+  it(tag("PROV-AC-002", "fake API: on an account set up only by v0.2.0 (its setup record names no email domain), a clean production deploy passes the preflight and the health check"), async () => {
+    const { cloud, target } = account("deployed", "0.2.0");
+    const io = captureIo();
+    expect((await runDeploy(target, REQUEST, io)).status, io.err).toBe(0);
+    expect(io.err).not.toMatch(/email/i);
+    expect(cloud.workers.get(APP_ID)!.bindings).toContainEqual({ type: "service", name: "AUTH", service: "prototype-auth", entrypoint: "AuthApp" });
+    expect(await isRegistered(d1.database(registryId) as unknown as D1Like, APP_ID, RETURN_URL)).toBe(true);
+    expect(cloud.objectBodies.get("sst-state/framework/account.json"), "the deploy leaves the setup record as it is").toEqual(SETUP_RECORD["0.2.0"]);
+  });
+
+  // cloudflare.md §2's v0.2.0 amendment (DEC-0698): production stages bind no EMAIL. Untagged: no
+  // criterion names the binding since MAIL-AC-004 was retired (DEC-0696).
+  for (const setupBy of ["0.2.0", "0.1.x"] as const) {
+    it(`fake API: a production deploy on an account set up by ${setupBy} binds no EMAIL and sets no FRAMEWORK_MAIL_FROM`, async () => {
+      const { cloud, target } = account("deployed", setupBy);
+      const io = captureIo();
+      expect((await runDeploy(target, REQUEST, io)).status, io.err).toBe(0);
+      expect(cloud.workers.get(APP_ID)!.bindings.filter((b) => b.type === "send_email" || b.name === "EMAIL")).toEqual([]);
+      expect(cloud.programs.at(-1)).not.toContain("FRAMEWORK_MAIL_FROM");
+      expect(io.out).not.toMatch(/sender address/);
+    });
+  }
+
+  it("fake API: redeploying a stage whose Worker still has a 0.1.x EMAIL binding drops it (the upload carries exactly the declared bindings)", async () => {
+    const { cloud, target } = account("deployed", "0.1.x");
+    expect((await runDeploy(target, REQUEST, captureIo())).status).toBe(0);
+    const worker = cloud.workers.get(APP_ID)!;
+    // The stage as 0.1.x left it: an EMAIL send_email binding on the Worker.
+    worker.bindings = [...worker.bindings, { type: "send_email", name: "EMAIL" }];
+    const io = captureIo();
+    expect((await runDeploy(target, REQUEST, io)).status, io.err).toBe(0);
+    expect(cloud.workers.get(APP_ID)!.bindings.filter((b) => b.type === "send_email" || b.name === "EMAIL")).toEqual([]);
+    expect(cloud.workers.get(APP_ID)!.bindings).toContainEqual({ type: "service", name: "AUTH", service: "prototype-auth", entrypoint: "AuthApp" });
   });
 });
