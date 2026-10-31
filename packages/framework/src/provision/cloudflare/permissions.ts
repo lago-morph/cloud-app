@@ -4,9 +4,11 @@
  * links, the token checks, the in-place upgrade of the everyday token and the docs' permission
  * tables are all generated from it.
  *
- * - `EVERYDAY` (`prototype-framework`): DEC-0551's minimal set for every command but the account
- *   setup, plus "Email Routing Rules Read" (owner, 2026-10-26), so the everyday token can check the
- *   whole account setup on its own. It cannot create tokens and has no zone write permission.
+ * - `EVERYDAY` (`prototype-framework`): v0.2.0 plan §5.2 page 2's four account groups (DEC-0715,
+ *   DEC-0716), the same list as `EVERYDAY_V2`: Workers Scripts Write, Workers R2 Storage Write, D1
+ *   Write and Secrets Store Read. No zone group: v0.2.0 has no email domain. It cannot create tokens.
+ * - `EVERYDAY_V1`: the 0.1.x everyday set (DEC-0551 plus "Email Routing Rules Read"), kept only to
+ *   name the groups an update removes from an old token.
  * - `BOOTSTRAP` (`prototype-framework-bootstrap`): v0.2.0 plan §5.1's four groups (DEC-0680),
  *   what `cloudflare-setup` needs to create the OAuth clients, store their secrets and deploy the
  *   admin app. The account setup itself moved to the admin app. The API cannot create a token that
@@ -62,8 +64,8 @@ const GROUPS = {
   emailRoutingRulesWrite: group("79b3ec0d10ce4148a8f8bdc0cc5f97f2", "Email Routing Rules Write", "zone"),
 } as const;
 
-/** The everyday token's 7 groups (account first, then zone). */
-export const EVERYDAY: readonly PermissionGroup[] = Object.freeze([
+/** The 0.1.x everyday token's 7 groups (account first, then zone): only to name what an update removes. */
+export const EVERYDAY_V1: readonly PermissionGroup[] = Object.freeze([
   GROUPS.workersScriptsWrite,
   GROUPS.r2StorageWrite,
   GROUPS.d1Write,
@@ -77,11 +79,12 @@ export const EVERYDAY: readonly PermissionGroup[] = Object.freeze([
  * v0.2.0 plan §5.2 page 2's everyday set (DEC-0715): 4 account groups and no zone group, because
  * v0.2.0 has no email domain. Each is covered by one admin-client scope (`workers-scripts.write`,
  * `workers-r2.write`, `d1.write`, `secrets-store.read`; PAR-447). The admin app's everyday-token
- * page creates or updates the token with exactly these (`everyday-token.ts`). It becomes `EVERYDAY`
- * (with the tables and the quick check) once `cloudflare-setup`'s check no longer looks up the
- * email domain's zone with the everyday token (DEC-0716).
+ * page creates or updates the token with exactly these (`everyday-token.ts`).
  */
 export const EVERYDAY_V2: readonly PermissionGroup[] = Object.freeze([GROUPS.workersScriptsWrite, GROUPS.r2StorageWrite, GROUPS.d1Write, GROUPS.secretsStoreRead]);
+
+/** The everyday token's groups: plan §5.2 page 2's four (DEC-0716: switched once `cloudflare-setup` no longer needs Zone Read). */
+export const EVERYDAY: readonly PermissionGroup[] = EVERYDAY_V2;
 
 /**
  * The bootstrap token's 4 groups (v0.2.0 plan §5.1, IDs from §2.1b; DEC-0680), all account-scoped:
@@ -237,45 +240,24 @@ export interface ProbeResult {
   readonly status: number;
 }
 
-/** A GraphQL Analytics read on the zone: the dataset `check-login` reads (email-delivery.ts), one row at most. */
-const ANALYTICS_PROBE = `query AnalyticsProbe($zoneTag: string, $since: Time) {
-  viewer {
-    zones(filter: { zoneTag: $zoneTag }) {
-      emailSendingAdaptive(limit: 1, filter: { datetime_geq: $since }) {
-        datetime
-      }
-    }
-  }
-}`;
-
 /**
- * The quick check of the everyday token (plan §4.3 step 2): one cheap read for each `EVERYDAY`
- * group, with the token the `api` carries. A read passes when it answers 2xx (and, for GraphQL,
- * without errors), so a read-or-write group shows only that it can read. The zone groups, and
- * "Email Sending Read" (read on the zone's sending listing, as a production deploy reads it), need
- * the zone and are read only when `zoneId` is given; without it the result lists only the other
- * account groups. Reads only; the replies' bodies are never returned.
+ * The quick check of the everyday token (plan §4.3 step 2): one cheap read on the account for each
+ * `EVERYDAY` group, with the token the `api` carries. A read passes when it answers 2xx, so a
+ * read-or-write group shows only that it can read. No group is zone-scoped since v0.2.0, so
+ * `zoneId` is not used. Reads only; the replies' bodies are never returned.
  */
 export async function probeEveryday(api: CloudflareApi, scope: { readonly accountId: string; readonly zoneId?: string }): Promise<ProbeResult[]> {
   const a = `/accounts/${scope.accountId}`;
-  const z = scope.zoneId;
-  const reads: Record<string, (() => ReturnType<CloudflareApi>) | undefined> = {
+  const reads: Record<string, () => ReturnType<CloudflareApi>> = {
     [GROUPS.workersScriptsWrite.id]: () => api("GET", `${a}/workers/scripts`),
     [GROUPS.r2StorageWrite.id]: () => api("GET", `${a}/r2/buckets?per_page=1`),
     [GROUPS.d1Write.id]: () => api("GET", `${a}/d1/database?per_page=1`),
-    [GROUPS.emailSendingRead.id]: z === undefined ? undefined : () => api("GET", `/zones/${z}/email/sending/subdomains`),
-    [GROUPS.zoneRead.id]: z === undefined ? undefined : () => api("GET", `/zones/${z}`),
-    [GROUPS.analyticsRead.id]: z === undefined ? undefined : () => api("POST", "/graphql", { query: ANALYTICS_PROBE, variables: { zoneTag: z, since: new Date(Date.now() - 3_600_000).toISOString() } }),
-    [GROUPS.emailRoutingRulesRead.id]: z === undefined ? undefined : () => api("GET", `/zones/${z}/email/routing/rules?per_page=1`),
+    [GROUPS.secretsStoreRead.id]: () => api("GET", `${a}/secrets_store/stores?per_page=1`),
   };
   const results: ProbeResult[] = [];
   for (const g of EVERYDAY) {
-    const read = reads[g.id];
-    if (read === undefined) continue;
-    const r = await read();
-    const errors = (r.body as { errors?: unknown } | null | undefined)?.errors;
-    const graphqlFailed = g.id === GROUPS.analyticsRead.id && Array.isArray(errors) && errors.length > 0;
-    results.push({ group: g, ok: r.status >= 200 && r.status < 300 && !graphqlFailed, status: r.status });
+    const r = await reads[g.id]!();
+    results.push({ group: g, ok: r.status >= 200 && r.status < 300, status: r.status });
   }
   return results;
 }
