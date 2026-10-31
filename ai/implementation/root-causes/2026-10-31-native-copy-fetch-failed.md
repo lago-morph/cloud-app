@@ -200,3 +200,24 @@ The record's list holds, with the correction above. I also weighed the ones the 
 Not binding:
 - The record's scope note (`mig/apply.ts`, `check/migrations/databases.ts`) still applies, and per link 3 it is broader than proxy calls: any block of more than 5 s inside an I/O continuation, with a proxy socket idle, is exposed.
 - The stray `UND_ERR_SOCKET` in E6's full run remains undiagnosed.
+
+## Fix and re-check (attempt 1)
+
+Fixer subagent, 2026-10-31 (plan §7a.1.8 step 5), after the Review above. Local only. Every binding change is applied: (1) E5, the one-line finding, chain links 4–5 and the proposed fix are corrected (`b08b3fc`); (2) `prepareAll` is exported from `fake-d1-api.ts`, yields after each item's `prepare` and `bind`, and is used in `importAction`, `query`, the A-06 test's 61-statement seed and `seedSafe` (`e9ff320` and the commit before it); (3) and (4) below. No retries, no timeout changes.
+
+**Red** (`0e28d03`, `fake-d1-api.unit.test.ts`, "fake D1 HTTP API yields to the event loop between synchronous proxy calls"). A `vi.mock` of `startPlatformProxy` wraps the fake's bindings (still real local D1) so that every `prepare`, `bind` and `batch` records whether a `setImmediate` set since the previous call has run. Deterministic, no timing. On the unfixed fake:
+- ingest: `prepares with no event-loop turn since the previous proxy call: expected 243 to be +0`; `no event-loop turn between the last prepare and the batch: expected 1 to be +0`
+- query with params: `prepares with no event-loop turn since the previous statement's bind: expected 7 to be +0`; `no event-loop turn between the last bind and the batch: expected 1 to be +0`
+
+**Green.** `fake-d1-api.unit.test.ts` 8/8; `native-copy.unit.test.ts` alone 21/21; the d1 directory offline (`unshare -rn sh scripts/offline.sh`, step 4) 8 files, 53/53; `npm run build -w packages/framework && npm run typecheck && npm run lint && npm run test:unit` 237 files, 2529/2529.
+
+**Stress, with a same-load control** (step 3). Each round runs 6 busy loops, 4 copies of the file on the fixed code **and** 4 copies on the unfixed code (`0e28d03`, an `npm ci`'d copy) at the same time, all with `trace.cjs` and `sync-bursts.cjs`; the machine's load average was 14–49 (other agents too). Scratchpad `nc-stress.sh`, `nc-stress2.sh` (adds `nc-burst-sites.cjs`, which logs each burst's first call site).
+
+| file, runs | fixed | unfixed control |
+|---|---|---|
+| `native-copy.unit.test.ts`, 3 rounds + 1 round (16 runs per side) | **0/16** runs failed; **0** `UND_ERR_SOCKET` | **2/16** runs failed (the A-06 test, `fetch failed`); **15** `UND_ERR_SOCKET other side closed` |
+| `check.unit.test.ts`, 3 rounds (12 runs per side) | **0/12** failed; **0** `UND_ERR_SOCKET` | **4/12** failed (3 × "a copied and migrated database passes", 1 × "a lost row fails the check"; `D1 query was refused: HTTP 400: fetch failed`); **5** `UND_ERR_SOCKET` |
+
+Under this load most control socket errors in `native-copy` (12 of 15, `bytesWritten` 6219) hit the *first* ("wrong") ingest's `batch`, whose rejection the test expects, so the test still passed; the failing runs are the record's signature (`bytesWritten` 8603, second ingest). Bursts: control 287-call ingests up to 15.3 s and 183-call seeds up to 9.5 s; fixed, no burst from the fake's statements or the d1 tests' seeding over 1 s. The only fixed bursts over 1 s (9–23 calls, ≤ 1.6 s in `native-copy`; 9 calls, 1.06 s in `check`) start in the continuation of `await startPlatformProxy(...)` in `openFakeD1Api`, that is, Miniflare's own start-up, before any database exists or any pooled socket is idle.
+
+**Similar case: `check.unit.test.ts` "a lost row…"** (reported by item F under full-suite load). Same cause: its bursts on the unfixed code are all in the fake's `query` (`fake-d1-api.ts:116` on the control, 33–129 synchronous calls, up to 4.2 s under load, from `applyMigrations`, the copy and the check through the HTTP API), and its failures carry the same `UND_ERR_SOCKET other side closed` cause. The test's own seeding is one batch of 3 `prepare`s, which never formed a burst over 1 s, so the test file is unchanged; the fake's `query` going through `prepareAll` covers it (table above).
