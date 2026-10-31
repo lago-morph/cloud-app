@@ -42,3 +42,7 @@ Decisions the orchestrator took while the owner was away during the v0.2.0 run. 
 32. (F, DEC-0726) Which binding names should F use before B merges? — Local constants in `sst.ts`, with the same strings as B's `BINDINGS`. — To reverse: import `BINDINGS` once B merges.
 33. (F, DEC-0727) How does a shared secret move to Secrets Store? — It keeps its `SECRET_<NAME>`: deploy deletes the Worker secret, then binds the store secret, through SST `transform.worker`. — To reverse: use a separate binding name, or change it with a settings PATCH.
 34. (F, DEC-0729) Where is the signing credential stored? — In Secrets Store, but only when called with `{secretsStore:true}` (the admin app does this); the CLI `setup-account` keeps it in the record. — To reverse: make Secrets Store the default, or drop the record path.
+35. (T4, DEC-0773) Is a fuzz target's run count (PAR-412) per property or per target? — Per property. — To reverse: divide the runs across the target's properties.
+36. (T4, DEC-0775) Is in-process SQLite an acceptable stand-in for D1 in the F2/F3 fuzz targets? Local D1 costs about 10 ms per query. — Yes. — To reverse: use local D1 with about 50 and 30 runs.
+37. (T4, DEC-0777) F4's three HMAC properties run 250 times instead of 500, to stay within PAR-411's 1 s per target. — Yes. — To reverse: go back to 500 runs and raise PAR-411 for F4 to 1.5 s.
+38. (T4, DEC-0774) Is `prefixEnd` defined for lone surrogates? — No; they are excluded from the property. — To reverse: add them to the property.
