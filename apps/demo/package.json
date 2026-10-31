@@ -16,9 +16,7 @@
     "secrets": "prototype-framework secrets",
     "setup-account": "prototype-framework setup-account",
     "check-login": "prototype-framework check-login",
-    "reset-local": "prototype-framework reset-local",
-    "mail": "prototype-framework mail",
-    "admins": "prototype-framework admins"
+    "reset-local": "prototype-framework reset-local"
   },
   "dependencies": {
     "@lago-morph/prototype-framework": "0.1.1",
