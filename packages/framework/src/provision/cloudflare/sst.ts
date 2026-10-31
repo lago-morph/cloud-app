@@ -13,7 +13,10 @@
  *   stage bucket) and the shared log bucket; the compatibility flag `nodejs_compat`; and, on a
  *   production stage, the Email Service binding `EMAIL` restricted to `no-reply@<emailDomain>`,
  *   with the variable `FRAMEWORK_MAIL_FROM` (also set on a test stage when the account settings
- *   record names a domain). All of these come from `cloudflareWorkerSettings` (CF §2).
+ *   record names a domain). All of these come from `cloudflareWorkerSettings` (CF §2). A
+ *   production stage also gets the service binding `AUTH` to the auth app's `AuthApp`
+ *   entrypoint and the variable `FRAMEWORK_AUTH_APP_ORIGIN` (DEC-0667; Pulumi's `service`
+ *   binding with `entrypoint` is *unverified* live, DEC-0726).
  *
  * The `send_email` binding (spike S5's first question, DEC-0518): SST 4.17.2 has no component or
  * `link` for Email Service, but its `sst.cloudflare.Worker` creates a `cloudflare.WorkersScript`
@@ -73,8 +76,19 @@ export interface SstInput {
     readonly code: WorkerCode;
     /** The account settings record's email domain (DEC-0514); required for a production stage. */
     readonly emailDomain?: string;
+    /** A production stage's auth app (DEC-0667): its Worker, bound as `AUTH`, and its public origin. */
+    readonly authApp?: { readonly service: string; readonly origin: string };
   };
 }
+
+/**
+ * The auth app's service binding and origin variable on a production stage's Worker (DEC-0667):
+ * the names B's runtime reads (`targets/cloudflare/bindings.ts` `BINDINGS.authApp`,
+ * `BINDINGS.authAppOrigin`), and the auth app's binding entrypoint (DEC-0661).
+ */
+export const AUTH_BINDING = "AUTH";
+export const AUTH_APP_ORIGIN_VARIABLE = "FRAMEWORK_AUTH_APP_ORIGIN";
+export const AUTH_APP_ENTRYPOINT = "AuthApp";
 
 /** The SST component that holds the long-lived infrastructure (step 3's `--target`). */
 export const INFRASTRUCTURE_COMPONENT = "Files";
@@ -121,12 +135,13 @@ export function sstProgram(input: SstInput): string {
           ...(w.code.assetsDirectory === undefined ? {} : { assets: workerAssets(settings) }),
           compatibilityDate: w.code.compatibilityDate,
           compatibilityFlags: [...settings.compatibilityFlags],
-          environment: { ...w.code.variables, ...settings.vars },
+          environment: { ...w.code.variables, ...settings.vars, ...(w.authApp === undefined ? {} : { [AUTH_APP_ORIGIN_VARIABLE]: w.authApp.origin }) },
           bindings: [
             { type: "d1", name: BINDINGS.database, id: w.database.id },
             { type: "r2_bucket", name: BINDINGS.files, bucketName: filesBucketName(input.stage) },
             { type: "r2_bucket", name: w.code.logBucketBinding, bucketName: LOG_BUCKET },
             ...settings.sendEmail.map((e) => ({ type: "send_email", name: e.binding, allowedSenderAddresses: [...e.allowedSenderAddresses] })),
+            ...(w.authApp === undefined ? [] : [{ type: "service", name: AUTH_BINDING, service: w.authApp.service, entrypoint: AUTH_APP_ENTRYPOINT }]),
           ],
         }
       : undefined;

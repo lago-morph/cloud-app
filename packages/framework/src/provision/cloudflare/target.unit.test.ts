@@ -51,6 +51,22 @@ function setup(overrides: Partial<CloudflareTargetOptions> = {}) {
 
 const request = (s = stage): DeployRequest => ({ stage: s, migrations: MIGRATIONS, requiredSecrets: [] });
 
+/** The auth app link as a recording stand-in (the real one, over D1, is `worker.unit.test.ts`'s). */
+function fakeAuthApp(problems: string[] = [], registerError?: Error) {
+  const link = {
+    calls: [] as string[],
+    onRegister: undefined as (() => void) | undefined,
+    problems: async () => (link.calls.push("problems"), problems),
+    register: async (app: string, url: string) => {
+      link.calls.push(`register ${app} ${url}`);
+      link.onRegister?.();
+      if (registerError) throw registerError;
+    },
+    unregister: async (app: string) => void link.calls.push(`unregister ${app}`),
+  };
+  return link;
+}
+
 describe("Cloudflare preflight (PROV-REQ-002 step 1)", () => {
   it("[PROV-AC-002] credential part: names each missing credential variable and sends nothing", async () => {
     const { target, cloud } = setup({ env: { PATH: "/usr/bin" } });
@@ -283,7 +299,8 @@ describe("a production stage's mail settings on Cloudflare (MAIL-AC-004, CF §2)
   });
 
   it("deploys the EMAIL send_email binding restricted to no-reply@<emailDomain>, FRAMEWORK_MAIL_FROM and nodejs_compat; a test stage binds no EMAIL", async () => {
-    const { cloud, target } = setup();
+    // A production stage also needs the account's auth app (DEC-0725).
+    const { cloud, target } = setup({ authApp: fakeAuthApp() });
     await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
     const io = captureIo();
     expect((await runDeploy(target, request(prod), io)).status).toBe(0);
@@ -298,6 +315,67 @@ describe("a production stage's mail settings on Cloudflare (MAIL-AC-004, CF §2)
     const testWorker = cloud.workers.get("notes-test-abc")!;
     expect(testWorker.bindings.some((b) => b.type === "send_email" || b.name === "EMAIL")).toBe(false);
     expect(cloud.programs.at(-1)).toContain('"FRAMEWORK_MAIL_FROM": "no-reply@example.test"');
+  });
+});
+
+describe("a production stage signs in through the account's auth app (plan-v0.2.0 §3, §4.1; DEC-0667, DEC-0725)", () => {
+  const prod = { app: "notes", stage: "prod" };
+
+  it("[PROV-AC-002] the preflight of a production stage names a missing auth app or registry and stops before creating anything; a test stage does not ask", async () => {
+    const authApp = fakeAuthApp(["the account's auth app (Worker prototype-auth) is not deployed; …"]);
+    const { cloud, target } = setup({ authApp });
+    await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
+    const io = captureIo();
+    expect((await runDeploy(target, request(prod), io)).status).toBe(1);
+    expect(io.err).toMatch(/deploy failed at step 1 \(preflight\)[\s\S]*the account's auth app \(Worker prototype-auth\) is not deployed/);
+    expect(cloud.sstRuns).toEqual([]);
+    expect(authApp.calls).toEqual(["problems"]);
+
+    expect((await runDeploy(target, request(), captureIo())).status).toBe(0);
+    expect(authApp.calls).toEqual(["problems"]);
+  });
+
+  it("a production deploy binds AUTH, sets the auth app's origin and registers <app>-<stage> with <origin>/api/auth/callback after the code; a test stage gets none of it", async () => {
+    const authApp = fakeAuthApp();
+    const { cloud, target } = setup({ authApp });
+    let seen: unknown;
+    // Registered once the code and its framework secrets are deployed, and before step 6 starts the app.
+    authApp.onRegister = () => (seen = { worker: cloud.workers.has("notes-prod"), secrets: cloud.workers.get("notes-prod")?.secrets.size, started: cloud.requests.includes(`POST /accounts/${ACCOUNT}/workers/scripts/notes-prod/subdomain`) });
+    await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
+    expect((await runDeploy(target, request(prod), captureIo())).status).toBe(0);
+    const worker = cloud.workers.get("notes-prod")!;
+    expect(worker.bindings).toContainEqual({ type: "service", name: "AUTH", service: "prototype-auth", entrypoint: "AuthApp" });
+    expect(cloud.programs.at(-1)).toContain('"FRAMEWORK_AUTH_APP_ORIGIN": "https://prototype-auth.example.workers.dev"');
+    expect(authApp.calls).toEqual(["problems", "register notes-prod https://notes-prod.example.workers.dev/api/auth/callback"]);
+    expect(seen).toEqual({ worker: true, secrets: 4, started: false });
+
+    expect((await runDeploy(target, request(), captureIo())).status).toBe(0);
+    expect(cloud.workers.get("notes-test-abc")!.bindings.some((b) => b.name === "AUTH")).toBe(false);
+    expect(cloud.programs.at(-1)).not.toContain("FRAMEWORK_AUTH_APP_ORIGIN");
+    expect(authApp.calls).toHaveLength(2);
+  });
+
+  it("step 3 of a production stage with a database declares the same AUTH binding as step 5", async () => {
+    const authApp = fakeAuthApp();
+    const { cloud, target } = setup({ authApp });
+    await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
+    await runDeploy(target, request(prod), captureIo());
+    const before = cloud.programs.length;
+    expect((await runDeploy(target, request(prod), captureIo())).status).toBe(0);
+    expect(cloud.sstRuns.at(-2)).toBe("deploy --stage prod --target Files");
+    for (const program of cloud.programs.slice(before)) expect(program).toContain('"name": "AUTH"');
+  });
+
+  it("a failed registration fails the deploy at step 5, naming the auth app, and the app is not started", async () => {
+    const authApp = fakeAuthApp([], new Error("the account's auth app (Worker prototype-auth) has no registry (its D1 binding DB); run account setup in the admin app again"));
+    const { cloud, target } = setup({ authApp });
+    await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
+    const io = captureIo();
+    const result = await runDeploy(target, request(prod), io);
+    expect(result.status).toBe(1);
+    expect(result.failure?.step).toBe("code");
+    expect(io.err).toContain("has no registry (its D1 binding DB)");
+    expect(cloud.requests.filter((r) => r.startsWith("POST ") && r.endsWith("/workers/scripts/notes-prod/subdomain"))).toEqual([]);
   });
 });
 
