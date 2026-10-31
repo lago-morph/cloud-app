@@ -119,6 +119,16 @@ describe("the SST app built from the app definition (PROV-REQ-001; cloudflare.md
     expect(() => sstProgram({ stage: prodStage, worker: { ...prodWorker, emailDomain: undefined as never } })).toThrow(/email domain/);
   });
 
+  it("binds each Secrets Store secret under its SECRET_<NAME> name as a secrets_store_secret binding; only that binding type may take a SECRET_* name (DEC-0727)", async () => {
+    const secretsStore = [{ binding: "SECRET_FRAMEWORK_R2_ACCESS_KEY_ID", storeId: "store1", secretName: "PROTOTYPE_R2_ACCESS_KEY_ID" }];
+    const { config, components } = evaluate(sstProgram({ stage, worker: { ...worker, secretsStore } }));
+    await config.run();
+    expect(components[1]!.transformed.bindings).toContainEqual({ type: "secrets_store_secret", name: "SECRET_FRAMEWORK_R2_ACCESS_KEY_ID", storeId: "store1", secretName: "PROTOTYPE_R2_ACCESS_KEY_ID" });
+    expect(components[1]!.transformed.keepBindings).toEqual(["secret_text", "secret_key"]);
+    expect(() => sstProgram({ stage, worker: { ...worker, secretsStore: [{ ...secretsStore[0]!, binding: "R2_KEY" }] } })).toThrow(/Secrets Store binding R2_KEY.*SECRET_/);
+    expect(() => sstProgram({ stage, worker: { ...worker, secretsStore, code: { ...code, variables: { SECRET_FRAMEWORK_R2_ACCESS_KEY_ID: "x" } } } })).toThrow(/would replace the Worker secret/);
+  });
+
   it("with the auth app given, the Worker binds AUTH to its AuthApp entrypoint and gets FRAMEWORK_AUTH_APP_ORIGIN (DEC-0667, DEC-0661); without it neither", async () => {
     const authApp = { service: "prototype-auth", origin: "https://prototype-auth.example.workers.dev" };
     const { config, components } = evaluate(sstProgram({ stage, worker: { ...worker, authApp } }));

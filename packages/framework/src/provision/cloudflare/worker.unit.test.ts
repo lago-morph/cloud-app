@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isRegistered, type D1Like } from "../../auth-app/store.js";
 import type { CloudflareApi } from "./api.js";
 import { openFakeD1Api, type FakeD1Api } from "./d1/fake-d1-api.js";
-import { cloudflareAuthAppLink, listSetSecrets, logicalSecretName, setRoute, setSecret } from "./worker.js";
+import { cloudflareAuthAppLink, deleteSecret, listSetSecrets, logicalSecretName, setRoute, setSecret } from "./worker.js";
 
 const ACCOUNT = "0123456789abcdef0123456789abcdef";
 const stage = { app: "notes", stage: "test-abc" };
@@ -50,6 +50,16 @@ describe("Worker secrets on Cloudflare (SEC-REQ-003; cloudflare.md `setSecret`)"
     expect(await listSetSecrets(api, ACCOUNT, stage)).toEqual(new Set(["apiKey", "frameworkR2AccessKeyId"]));
     expect(await listSetSecrets(stubApi({ [`GET ${SCRIPT}/secrets`]: err(404, 10007, "This Worker does not exist on your account.") }), ACCOUNT, stage)).toBeNull();
     await expect(listSetSecrets(stubApi({ [`GET ${SCRIPT}/secrets`]: err(403, 10000, "Authentication error") }), ACCOUNT, stage)).rejects.toThrow(/HTTP 403/);
+  });
+
+  it("deleteSecret removes the Worker secret SECRET_<NAME>; an absent secret or Worker counts as deleted; a failure names the secret (DEC-0727)", async () => {
+    const api = stubApi({ [`DELETE ${SCRIPT}/secrets/SECRET_FRAMEWORK_R2_ACCESS_KEY_ID`]: ok(null) });
+    await deleteSecret(api, ACCOUNT, stage, "frameworkR2AccessKeyId");
+    expect(api.requests).toEqual([`DELETE ${SCRIPT}/secrets/SECRET_FRAMEWORK_R2_ACCESS_KEY_ID`]);
+    await deleteSecret(stubApi({ [`DELETE ${SCRIPT}/secrets/SECRET_API_KEY`]: err(404, 10056, "secret not found") }), ACCOUNT, stage, "apiKey");
+    await expect(deleteSecret(stubApi({ [`DELETE ${SCRIPT}/secrets/SECRET_API_KEY`]: err(500, 1, "internal") }), ACCOUNT, stage, "apiKey")).rejects.toThrow(
+      /deleting secret apiKey from Worker notes-test-abc failed: HTTP 500/,
+    );
   });
 
   it("logical names round-trip through the SECRET_<UPPER_SNAKE> location", () => {
