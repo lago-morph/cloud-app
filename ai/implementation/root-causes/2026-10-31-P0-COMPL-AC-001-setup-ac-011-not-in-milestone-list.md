@@ -83,4 +83,42 @@ The same comparison finds no other ID whose Where marks it as a milestone item b
 - `npm run test:unit` is unchanged. The catalogue counts do not change, because no Where column changes.
 
 ## Review
-(pending: independent root-cause reviewer)
+Reviewer: independent subagent, 2026-10-31 (plan-v0.2.0 §7a.1.8 step 2, prompt §8 step 2). I did not diagnose this failure or write COMPL-AC-001's test, the driver, the SETUP spec or COMPL-REQ-006. Base: `origin/v0.2.0/08-baseline-root-causes` at `26d69a2` (= `1e0c289` plus the three P0 records). Node 22.23.4, Chromium shim per progress §6. No Cloudflare call. The only file I changed is this record.
+
+**Verdict: accepted.** The cause is confirmed, and the proposed spec amendment is the right fix.
+
+**Re-ran:**
+- `npm run compliance -- --target local --only COMPL-AC-001,MAIL-AC-005 --out <scratchpad>` gave `133 not-run, 2 failed`, exit 1 (record `tiv2ckvgyc21tja`). The COMPL-AC-001 automated tier passed. The milestone tier failed with the same diff as in Symptom: the received list has one extra element, `+ "SETUP-AC-011"`.
+- I wrote my own script (scratchpad `rv/milestone.ts`, `node --experimental-strip-types`). It imports `whereSets` and `milestoneItemsNamed` from `support.ts` unchanged and compares the two sets. Results:
+
+  | docs tree | named | Where milestone union (local ∪ cloudflare) | difference |
+  | --- | --- | --- | --- |
+  | HEAD | 11 | 12 (local `E2E-015 E2E-016`; cloudflare 11 IDs) | in Where but not named: `SETUP-AC-011`; none the other way |
+  | `2a13e5f^` (`git archive`) | 11 | 11 | none |
+  | HEAD plus the record's proposed amendment text, inserted after compliance.md:55 in a scratch copy | 12 | 12 | none |
+
+  So the "12 vs 11" correction in Symptom is right: Vitest's `…(n)` counts the elements it does not print.
+
+**Each link is supported by evidence:**
+1. `git show 2a13e5f:docs/components/setup.md` shows SETUP-AC-011 with Where `Cloud (milestone)` from the commit that added it.
+2. compliance.md:55 (DEC-0560) is the last sentence that matches `milestoneItemsNamed`'s regex (support.ts:240–246), and it does not name SETUP-AC-011. `2a13e5f` did edit compliance.md: it added the "Tokens the harness is given" paragraph (line 83), which already calls SETUP-AC-011's live clause "a milestone clause". So the author treated SETUP-AC-011 as a milestone item, but did not restate COMPL-REQ-006's list. This supports the record's reading that the sentence was missed, not that the Where column is wrong.
+3. The driver's union equals the oracle's Where union (my script), so the driver and the test read the Where texts the same way.
+4. `targets.test.ts:70–74` compares that union against the filtered `named` set, which is exactly DEC-0322's milestone clause (decision-log.md:2541).
+5. It was green before: `validation/local/htth52fbl34gzk7.json` (commit `2855407`) has COMPL-AC-001 `passed`. `git log 2855407..HEAD -- tests/compliance/criteria/compl/` is empty, so only the docs changed.
+
+**Alternatives are ruled out:**
+- **Driver wrong:** ruled out by link 3.
+- **Flaky:** ruled out. The result is a pure function of the docs tree (bisection table).
+- **SETUP-AC-011's Where wrong:** ruled out by DEC-0603/DEC-0604, compliance.md:83 and DEC-0560 ("no automated pass changes the account's shared resources").
+
+**Is the spec amendment the right fix, rather than changing the test or the driver? Yes.**
+- The release gate already treats SETUP-AC-011 as a milestone item. `tests/compliance/tools/release.ts:112–121` takes milestone membership from the catalogue's Where texts (`applies.milestone`), not from the sentence. So COMPL-REQ-006's owner-approved list is the one text out of step with both the gate and the Where column.
+- Changing the test to derive `named` from the Where columns would delete the independent cross-check that DEC-0322 specifies. That would weaken a once-green test to get a pass (§7a.1.9 "Never weaken to pass").
+- Restating the full list in a new last amendment follows the precedent of DEC-0526 and DEC-0560, and `milestoneItemsNamed` is written for exactly that pattern.
+- DEC-0778 is inside P0's allocated range (progress §3 P0: "DEC-0778–0779").
+- The automated tier is unaffected. SETUP-AC-011 has no automated Where on any target, so adding it to `named` keeps `milestoneOnly ∩ everyAutomated` empty.
+
+**Remarks (not required changes):**
+- When the fix lands, insert the amendment so that it is the last matching sentence, with the list sentence ending in `.` followed by a newline. The proposed text meets both conditions; my scratch copy used it verbatim.
+- The requirement placed on item D (keep SETUP-AC-011 in the list, and drop MAIL-AC-007 in the same change that retires it) is correct and should go into D's brief. Without it, COMPL-AC-001 goes red again.
+- The verification plan's note that the docs change must be committed before re-running is correct: `cloneAtHead()` clones HEAD.

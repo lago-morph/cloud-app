@@ -63,4 +63,48 @@ Plan-v0.2.0 §6 "Spec" retires `mail.md` and all MAIL-* criteria. Item B's PR `4
 - **If the alternative is chosen:** after B 46, MAIL-AC-005 no longer appears in the catalogue, and `git grep -n 'MAIL-AC-005' tests` is empty.
 
 ## Review
-(pending: independent root-cause reviewer)
+Reviewer: independent subagent, 2026-10-31 (plan-v0.2.0 §7a.1.8 step 2, prompt §8 step 2). I did not diagnose this failure or write any of the files involved. Base: `origin/v0.2.0/08-baseline-root-causes` at `26d69a2` (= `1e0c289` plus the P0 records). Node 22.23.4, Chromium shim per progress §6. No Cloudflare call. The only file I changed is this record: the trial fix below was reverted, and `git status --short` was empty afterwards.
+
+**Verdict: accepted.** The cause is confirmed. I choose the recommended small fix now, not the "retired by B" alternative. `test-was-wrong` is the correct reason code.
+
+**Re-ran:**
+- `npm run compliance -- --target local --only COMPL-AC-001,MAIL-AC-005 --out <scratchpad>` gave `133 not-run, 2 failed`, exit 1 (record `tiv2ckvgyc21tja`). MAIL-AC-005's scan test failed with exactly the three hits in Symptom. Its schema test passed. CFG-AC-006, which is also tagged MAIL-AC-005, passed.
+- I ran my own scan, independent of `mail.test.ts`: `git ls-files -- packages apps skill tests | xargs grep -IoP '<the same address shape>'`, filtered by the criterion's four reserved forms. It found the same three addresses and nothing else.
+- I applied the trial fix in the working tree (`test@example.com` → `test@example.invalid` twice, `a@example.com` → `a@example.invalid`):
+  - my scan then found 0 hits;
+  - `npx vitest run --config vitest.unit.config.ts packages/create-prototype-app/test/create.unit.test.ts packages/framework/src/cli/cloudflare-settings.unit.test.ts` passed 30/30, the same as without the fix;
+  - I then reverted with `git checkout --`.
+
+  A compliance run on the fix was not possible uncommitted, because the driver refuses a modified tracked file (COMPL-AC-003).
+
+**Each link is supported by evidence:**
+1. `git blame` puts create.unit.test.ts:174 in `fbfcccc` and cloudflare-settings.unit.test.ts:74 in `3394ca9`. Both descend from `2855407` (`git merge-base --is-ancestor`).
+2. At `2855407`, `validation/local/htth52fbl34gzk7.json` has MAIL-AC-005 `passed`.
+3. `git log 2855407..HEAD -- tests/compliance/criteria/mail/mail.test.ts docs/components/mail.md` is empty, so neither the test nor the criterion changed.
+4. No assertion depends on the addresses:
+   - in cloudflare-settings.unit.test.ts, line 75 compares only `seen` against the environments;
+   - in create.unit.test.ts, `GIT_ENV` is only spread into child environments (lines 175, 184, 188, 232).
+
+**Is the reserved-name list applied correctly? Yes.**
+- mail.md:68 defines a reserved name as `localhost`, or a domain ending in `.test`, `.example` or `.invalid`.
+- `mail.test.ts:61–64` implements exactly that: `localhost` matched exactly, the three suffixes matched case-insensitively.
+- `example.com` ends in `.com`, so under the criterion's own definition it is not reserved. RFC 2606 reserves `example.com` as a second-level name, but it is not on the criterion's list, and the criterion governs.
+- DEC-0514, which the criterion implements, says the same: "Tests use reserved names (`example.test`, `localhost`)".
+- The replacement `.invalid` is on the list, and it matches the repository's git-identity convention (record item 6).
+
+**Is `test-was-wrong` the right reason code? Yes.**
+- The two unit tests broke a rule that applies to tests (MAIL-REQ-003 via MAIL-AC-005; DEC-0514 "No other copy … test"). The fix corrects that defect. That is `test-was-wrong`, citing this record.
+- `refactor-only` would hide that a rule was broken.
+- `behaviour-changed` and `code-removed` do not apply.
+- The change touches only test input, not expected results, assertions or tags (link 4). So under §7a.1.9 "What is reviewed" it is a light review. Recording it as `test-was-wrong` is still correct and costs nothing.
+
+**Alternatives are ruled out:**
+- **`mail.test.ts` is wrong:** ruled out. It matches the criterion text word for word, and it is unchanged since it passed.
+- **Flaky:** ruled out. It is a deterministic scan of tracked files, and I reproduced it twice by two independent methods.
+
+**Why fix now rather than carry the failure until B retires it:**
+- The retirement claim is correct: plan-v0.2.0 §6 lines 358–360 retire `mail.md` and MAIL-*, and progress §3 B lists `46-remove-mail` with the MAIL criteria.
+- But wave-0 and wave-1 exit checks rely on the baseline before 46 lands. A known red would hide any new non-reserved address added in the meantime.
+- The fix is three strings in test data, and create.unit.test.ts's git identity survives B anyway.
+
+**Remark:** B's `46-remove-mail` must still adapt or delete cloudflare-settings.unit.test.ts:74 when it removes the `mail` command. The record already says so.

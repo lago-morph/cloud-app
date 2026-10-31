@@ -62,4 +62,37 @@ LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32 | npm run secrets -- set
 - In S3's CI job, the step runs before the compliance step. The job's evidence record shows the five IDs `passed`, not `blocked`. A count-only leak check like item 4 (SEC-AC-002 itself scans the repository, build output and stored logs) shows the value nowhere.
 
 ## Review
-(pending: independent root-cause reviewer)
+Reviewer: independent subagent, 2026-10-31 (plan-v0.2.0 §7a.1.8 step 2, prompt §8 step 2). I did not diagnose this or write any of the files involved. Base: `origin/v0.2.0/08-baseline-root-causes` at `26d69a2` (= `1e0c289` plus the P0 records). Node 22.23.4, Chromium shim per progress §6. No Cloudflare call. The only tracked file I changed is this record.
+
+**Verdict: accepted.** This is a runner setup step, not a defect. No code, test or doc change is needed.
+
+**Re-ran:**
+
+| run | `apps/reference/.dev.vars` before the run | result for CORE-AC-002, HTTP-AC-002, SEC-AC-001, SEC-AC-002, E2E-013 |
+| --- | --- | --- |
+| control `dvarshtrzf66e8k` | the three `SECRET_FRAMEWORK_*` keys only, left by the earlier `dev` of my COMPL/MAIL run (keys checked, values not printed) | `130 not-run, 5 blocked`, exit 1. The details are the prerequisite messages quoted in Symptom |
+| `dgr8yr8vjt63gkc` | file deleted, then **only** `SECRET_API_KEY` set: a throwaway 32-character random value piped from `/dev/urandom` to `npm run secrets -- set apiKey --target local --stage local` on stdin (it printed `set secret apiKey for target local as SECRET_API_KEY in .dev.vars`, no value) | `130 not-run, 5 passed`, exit 0. Afterwards the file held `SECRET_API_KEY` plus the three framework keys, so `dev` kept the app secret and added its own |
+
+The command for both runs was `npm run compliance -- --target local --only CORE-AC-002,HTTP-AC-002,SEC-AC-001,SEC-AC-002,E2E-013 --out <scratchpad>`. Afterwards I deleted `apps/reference/.dev.vars`, and `git status --short` was empty.
+
+**Leak check, stated honestly.** My own count-only check is not valid evidence. It read the value from `.dev.vars` with its surrounding quotes (34 characters, not 32), so its zero counts (0 tracked files, 0 scratchpad files) do not prove the bare value is absent. I rely instead on SEC-AC-002 passing in `dgr8yr8vjt63gkc`. That criterion scans the repository, the build output, the browser assets and the stored log entries for exactly this value. `git status` was also empty, and the file holding the value is deleted. The diagnoser's own leak check (item 4) I could not repeat, because that value no longer exists. SEC-AC-002 passing in the diagnoser's runs supports it in the same way.
+
+**Each link is supported by evidence:**
+- `.gitignore:11` ignores `.dev.vars`. `apps/reference/src/server/env.ts:12` declares the single secret `apiKey`.
+- `tests/compliance/criteria/core/support/stores.ts:67–78` (`testSecretValue`) reads the value from `.dev.vars` locally, and calls `prerequisiteMissing` if it is absent or under 12 characters.
+- `core/deployment.test.ts:39` turns the health route's `SEC.MISSING` into `prerequisiteMissing`.
+- `tests/compliance/e2e/support/secrets.ts:29–33` (`apiKeyDigest`) does the same for `GET /api/ref/secret`.
+- DEC-0277 (decision-log.md:2146) states the step and that the result is `blocked`, never a pass. DEC-0398 (:3284) keeps local runs operator-set.
+- `apps/reference/ROUTES.md:124` documents the command.
+- `.github/workflows/*.yml` contain no compliance or `apiKey` step (one path-filter mention of `tests/compliance/e2e/support/template-pages.ts` only).
+
+**Alternatives are ruled out:**
+- **A product defect:** ruled out by the run with the value set, where all five passed.
+- **"Should fail, not block":** ruled out by DEC-0277 and COMPL-REQ-003's prerequisite path.
+- **`dev` drops a pre-set value:** ruled out by the file's contents after my second run.
+
+**Does the fix address the cause? Yes.** The cause is a missing operator step. Putting that step in the runner briefs and in S3's CI job, before the driver, with a fresh value of at least 12 characters on stdin, removes it. Not having the local driver generate the value is right: DEC-0398 excludes local runs on purpose, and changing that needs its own decision.
+
+**Remarks (not required changes):**
+- DEC-0277's `Affects:` list names four of the five IDs. E2E-013 is not on it. E2E-013's blocked path follows the same design in code (`apiKeyDigest`). If a decision is ever touched here, E2E-013 can be added to that list; this review does not require it.
+- S3's CI step must `cd apps/reference` (or use `-w`) before `npm run secrets`, as the record's snippet notes ("in apps/reference").
