@@ -128,7 +128,7 @@ Origin: owner · Decision: DEC-0014
 Every request MUST be classified as anonymous, logged-in user, or admin. App code sees only that level, a stable opaque user ID, and an optional display name. App code MUST NOT see email addresses, provider identities, protocol details, or tokens; all authentication handling, including validation, happens behind the abstraction. A user ID is stable for a person and login provider; signing in through a different provider yields a different user ID.
 
 #### SYS-REQ-018 — Admins (by role, amended; formerly by configuration)
-Origin: owner · Decision: DEC-0015 (superseded), DEC-0521 (superseded), DEC-0522 (superseded), DEC-0690
+Origin: owner · Decision: DEC-0015 (superseded), DEC-0521 (superseded), DEC-0522 (superseded), DEC-0690, DEC-0703
 
 Admins MUST be designated in configuration by user ID. The framework MUST provide documented steps by which a user can see their own user ID so it can be copied into configuration.
 
@@ -139,11 +139,11 @@ Amendment (Origin: owner · Decision: DEC-0521, DEC-0522; the operator command, 
 - The framework MUST provide an operator command that grants, revokes and lists the `admin` role by email address on any stage. On a production stage the command MUST require an explicit confirmation.
 - Configuration MUST NOT hold admin or user lists.
 
-Amendment for v0.2.0 (Origin: owner-approved · Decision: DEC-0690): sign-in is through Cloudflare (SYS-REQ-019 as amended by DEC-0691), and roles come from the owner's Cloudflare account. The original text and the amendment above (DEC-0521…DEC-0524) are replaced by the following:
+Amendment for v0.2.0 (Origin: owner-approved · Decision: DEC-0690; when a role change takes effect: ai-proposed, DEC-0703, pending owner approval of wording): sign-in is through Cloudflare (SYS-REQ-019 as amended by DEC-0691), and roles come from the owner's Cloudflare account. The original text and the amendment above (DEC-0521…DEC-0524) are replaced by the following:
 - Anyone who is not a member of the owner's Cloudflare account MUST NOT be able to sign in.
 - A member whose account role is an administrator role MUST be level `admin`. Any other member MUST be level `user`. Anyone not signed in is `anonymous`.
 - The role names that count as administrator are a parameter.
-- A role change in the Cloudflare account MUST take effect at the app's next role refresh or session renewal, not necessarily on the next request. The refresh interval is a parameter.
+- A role change in the Cloudflare account MUST take effect at the person's next sign-in, not necessarily on the next request. A role refresh MUST keep each session's level in step with the role recorded at the person's latest sign-in. The refresh interval is a parameter (DEC-0703).
 - If a refresh cannot confirm the role after its retries, the person MUST be signed out. The number of retries and the delay between them are parameters.
 - Configuration MUST NOT hold admin or user lists.
 
