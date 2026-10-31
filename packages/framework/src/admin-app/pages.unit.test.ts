@@ -6,7 +6,7 @@ import { PAGE_SCOPES } from "./scopes.js";
 describe("ADMIN_PAGES", () => {
   it("lists the pages built so far, once each, every one with a PAR-447 row", () => {
     const ids = ADMIN_PAGES.map((p) => p.id);
-    expect(ids).toEqual(["setup", "everyday", "status"]);
+    expect(ids).toEqual(["setup", "everyday", "status", "cleanup"]);
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of ids) expect(Object.keys(PAGE_SCOPES)).toContain(id);
   });

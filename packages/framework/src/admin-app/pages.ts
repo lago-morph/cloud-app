@@ -6,6 +6,7 @@
  * the bundle (unit tests) they are absent, and account setup refuses to run.
  */
 import type { AdminPage } from "./app.js";
+import { cleanupPage } from "./cleanup-page.js";
 import { everydayPage } from "./everyday-page.js";
 import { createSetupPage } from "./setup-page.js";
 import { statusPage } from "./status-page.js";
@@ -21,4 +22,4 @@ const setupPage = createSetupPage({
   frameworkVersion: typeof __PF_FRAMEWORK_VERSION__ === "string" ? __PF_FRAMEWORK_VERSION__ : "unknown",
 });
 
-export const ADMIN_PAGES: readonly AdminPage[] = Object.freeze([setupPage, everydayPage, statusPage]);
+export const ADMIN_PAGES: readonly AdminPage[] = Object.freeze([setupPage, everydayPage, statusPage, cleanupPage]);
