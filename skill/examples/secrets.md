@@ -118,11 +118,14 @@ function toBase64url(bytes: Uint8Array): string {
 function fromBase64url(text: string): Uint8Array<ArrayBuffer> | null {
   if (!/^[A-Za-z0-9_-]+$/.test(text)) return null;
   const base64 = text.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(text.length / 4) * 4, "=");
+  let bytes: Uint8Array<ArrayBuffer>;
   try {
-    return Uint8Array.from(atob(base64), (ch) => ch.charCodeAt(0));
+    bytes = Uint8Array.from(atob(base64), (ch) => ch.charCodeAt(0));
   } catch {
     return null;
   }
+  // atob ignores the unused low bits of the last character, so accept only the canonical spelling.
+  return toBase64url(bytes) === text ? bytes : null;
 }
 
 /** A token for `subject` that verifies until `expiresAt` (milliseconds since the epoch). */
@@ -175,6 +178,22 @@ describe("signed tokens (HMAC, base64url)", () => {
     for (const bad of ["", "note-1", "note-1.x.y", `note-1.${expiresAt}.not base64!`, `${token}.extra`]) {
       expect(await verifyToken(key, bad)).toBeNull();
     }
+  });
+
+  // root cause 2026-10-31-G-template-signing-noncanonical: a 32-byte signature is 43 base64url
+  // characters, so its last character carries 2 unused bits; only the issued spelling may verify.
+  it("accepts only the issued spelling of a signature, not one re-spelled in its last character", async () => {
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const token = await signToken(key, "note-1", Date.now() + 60_000);
+    const [subject = "", expiresAt = "", signature = ""] = token.split(".");
+    expect(signature).toHaveLength(43);
+    const last = alphabet.indexOf(signature.slice(-1));
+    expect(last % 4, "the issued spelling leaves the unused low bits at zero").toBe(0);
+    for (const flip of [1, 2, 3]) {
+      const respelled = signature.slice(0, -1) + (alphabet[last ^ flip] ?? "");
+      expect(await verifyToken(key, `${subject}.${expiresAt}.${respelled}`), respelled.slice(-3)).toBeNull();
+    }
+    expect(await verifyToken(key, token)).toBe("note-1");
   });
 
   it("refuses a token once it has expired", async () => {
