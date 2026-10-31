@@ -17,7 +17,7 @@ verify: tests (postgres)
 The output stops after `verify: tests (postgres)`, with no verdict line.
 
 ## Evidence
-1. **`-1` means the process ended by a signal.** `git-warnings.test.ts:221` maps a result to `r.status ?? -1`. `runCommand` (`tests/compliance/criteria/core/support/processes.ts:39–58`) resolves `status` from the child's `close` event, which is `null` when the child was killed by a signal.
+1. **`-1` means the process ended by a signal.** `git-warnings.test.ts:224` maps a result to `r.status ?? -1`. `runCommand` (`tests/compliance/criteria/core/support/processes.ts:39–58`) resolves `status` from the child's `close` event, which is `null` when the child was killed by a signal.
 2. **Not the test's own timeout.** On timeout, `runCommand` appends `[c-t1] timed out after <ms> ms` to the output and kills the group. T1's `vitest.log` has 0 occurrences of `timed out after`. Each verify's limit is 10 min (`git-warnings.test.ts:209`). The whole test took 666 s for four verifies.
 3. **A cgroup OOM kill at the same second.** `vitest.json` of T1's run: the `git-warnings.test.ts` file ran 12:16:46.523 → **12:27:58.599** UTC. The "no repository" verify is the last of its four. `dmesg -T`:
    - `[Sat Oct 31 12:27:58 2026] … oom_memcg=/process_api/01a1909e-…/claude-code-bash … Memory cgroup out of memory: Killed process 21556 (node)`
@@ -34,11 +34,11 @@ The output stops after `verify: tests (postgres)`, with no verdict line.
 6. **Not reproducible without memory pressure.** On `60b5e8e`:
    - `--only CHECK-AC-005,CLI-AC-008,CORE-AC-001,E2E-016,SEC-AC-002` (run `hv2yas3d80t67es`): CLI-AC-008 **passed**, 5 of 5; the template verify part took 278 s.
    - My full local run, at load ~29: CLI-AC-008 **passed**, 5 of 5; the template part took 573 s.
-7. **Nothing in the code path changed.** `git diff --stat origin/main...60b5e8e -- tests/compliance/criteria/cli/git-warnings.test.ts packages/framework/src/provision/cloudflare/git-safety.ts packages/framework/src/cli/cloudflare-settings.ts packages/framework/src/cli/commands/verify.ts apps/template` shows only `apps/template/package.json | 2 --` (two npm scripts of removed commands). The git-warning logic and `verify` are unchanged since main, where CLI-AC-008 passed. The other three conditions of the same test (not ignored, clean, tracked) passed in T1's run. Only the condition whose process was killed differs.
+7. **Nothing in the code path changed.** `git diff --stat origin/main...60b5e8e -- tests/compliance/criteria/cli/git-warnings.test.ts packages/framework/src/provision/cloudflare/git-safety.ts packages/framework/src/cli/cloudflare-settings.ts packages/framework/src/cli/commands/verify.ts apps/template` shows only `apps/template/package.json | 2 --` (two npm scripts of removed commands). The git-warning logic and `verify` are unchanged since main, where CLI-AC-008 passed. T1 ran on `93eab74`, not `60b5e8e`. `60b5e8e` is an ancestor of `93eab74`, and `git diff --stat 60b5e8e 93eab74` on the same paths plus `tests/compliance/criteria/core/support` is empty. Branch 75's head has since moved to `7ea6454`. The other three conditions of the same test (not ignored, clean, tracked) passed in T1's run. Only the condition whose process was killed differs.
 
 ## Causal chain
 1. The session runs many agents at once. All of their bash commands share one memory cgroup limited to 13.36 GiB, and it hit the limit (evidence 4).
-2. At 12:27:58 the kernel's cgroup OOM killer killed a `node` process (evidence 3). That was the moment T1's CLI-AC-008 file ended, while its last verify ("no repository") was in its postgres tests step (Symptom).
+2. At 12:27:58 the kernel's cgroup OOM killer killed a `node` process (evidence 3). That it was the verify's own top-level process (or its process group) is an inference, not a pid match. The output stops after `verify: tests (postgres)` with no verdict line. When only a vitest worker is killed, `verify` survives and prints a failed step verdict (evidence 5: "Worker forks emitted error", then the step's result). So here the verify itself died. That was the moment T1's CLI-AC-008 file ended, while its last verify ("no repository") was in its postgres tests step (Symptom).
 3. The killed verify had `status: null`. The test recorded `-1`, with no timeout marker (evidence 1, 2).
 4. `-1` ≠ the clean run's `0`, so the assertion failed (Symptom). With the memory available, the same test passes, alone and in a full run (evidence 6).
 
@@ -60,11 +60,32 @@ No code or test change. It is an environment cause (class c):
   - `df -h /` then showed 1.1 GB free (98%). The session's agents share one disk too, and my own four extra worktrees (about 575 MB of `node_modules` each) were part of the load. Removing them freed it to 3.1 GB.
 
   Same class and the same runner rule: a full local run needs free disk (several GB for scratch copies and downloads) as well as memory. A run that hits ENOSPC is unreliable for the IDs that failed then. These two IDs are not in T1's list. I did not diagnose them further, and they need a clean re-run.
-- **E2E-004 on 71n alone.** E2E-004's coverage part failed in my run because AUTH-AC-012, AUTH-AC-013 and AUTH-AC-015 have no tagged test on 71n. T1's PRs #131/#132 add those tests, and T1's run on branch 75 did not fail E2E-004. This is covered, not environmental.
+- **E2E-004 on 71n alone.** E2E-004's coverage part failed in my run because AUTH-AC-012, AUTH-AC-013 and AUTH-AC-015 have no tagged test under `tests/compliance/criteria/` on 71n. They do have tagged unit tests (`levels.unit.test.ts`, `runtime.unit.test.ts`, `test-app.unit.test.ts`), but those are not in this target's criteria suite. T1's branches add `criteria/auth/auth-app-sign-in.test.ts` and `criteria/auth/role-refresh.test.ts` (PRs #131/#132, in branch 75), and T1's run on branch 75 did not fail E2E-004. This is covered, not environmental. Neither the reviewer nor I reproduced E2E-003, E2E-004 or E2E-009 further.
 
 ## Verification plan
 - Re-run `npm run compliance -- --target local --only CLI-AC-008` with no concurrent heavy job. Expect 5 passed, as in `hv2yas3d80t67es`.
 - On any future `-1` (null status) in a CLI criterion, the kernel log shows a matching `Killed process` line in the test's window. If none appears, this record does not explain that failure, and it needs its own diagnosis.
 
 ## Review
-Status: awaiting review
+Reviewer: independent root-cause reviewer, session_014mWQ6hjtYXfjcSWXUEWwEy, 2026-10-31 (at `6a983d2`)
+Verdict: accepted-with-changes
+
+Reasons:
+- **minor** The code-side links hold. `runCommand` (`processes.ts:39–60`) resolves `status` from `close` (`:53`). I checked that Node gives `status=null signal=SIGKILL` for a child killed by SIGKILL. A timeout appends `[c-t1] timed out after …` before the kill. The 10-minute limit is at `git-warnings.test.ts:209`. The `?? -1` mapping is at `git-warnings.test.ts:224`, not `:221`. Correct the line number.
+- **minor** I cannot see the machine-local evidence (T1's `vitest.json`, the `dmesg -T` lines, the cgroup counters). It is stated precisely: second-level timestamps, the cgroup path, the counter values and the btime check. That is enough to audit.
+- **minor** The record does not link pid 21556 to the verify's own `node` process. State the inference: the output stops after `tests (postgres)` with no verdict line, so the top-level verify (or its group) died. A killed vitest worker makes verify print a failed verdict instead (as the record's own evidence 5 shows).
+- **minor** Evidence 7 diffs `origin/main...60b5e8e`, but T1's run was on `93eab74`. Add that `git diff 60b5e8e 93eab74` on the same paths (plus `tests/compliance/criteria/core/support`) is empty; I checked, and it is, and `60b5e8e` is an ancestor of `93eab74`. Also note that branch 75's head has since moved to `7ea6454`.
+- **minor** Similar cases (added in `6a983d2`): the ENOSPC finding fits the same class and runner rule. Its handling is sound: no claim beyond "needs a clean re-run" for E2E-003 and E2E-009. Make the E2E-004 bullet precise. On 71n, AUTH-AC-012, AUTH-AC-013 and AUTH-AC-015 do have tagged unit tests (`levels.unit.test.ts:15`, `runtime.unit.test.ts:126,154,171`, `test-app.unit.test.ts:230,244`). What they lack is a test under `tests/compliance/criteria/`. Branch 75 adds `criteria/auth/auth-app-sign-in.test.ts` and `criteria/auth/role-refresh.test.ts`. I did not reproduce E2E-003, E2E-004 or E2E-009.
+- **minor** Class c with no code fix is appropriate. The runner rule and the signal-marker suggestion are proportionate.
+
+Re-run:
+- Compliance run `he319fk0u13979l` (`--only CHECK-AC-005,CLI-AC-008,CORE-AC-001,SEC-AC-002`, no other heavy job in my sandbox, about 13 GiB free): CLI-AC-008 passed, `git-warnings.test.ts` 5 tests in 176 s. Fixes 97 and 98 were present in that tree; they touch neither `verify` nor the template.
+
+## Response (round 1)
+All five minors are applied above:
+- the line number is now `:224`;
+- causal link 2 states the pid inference and why;
+- evidence 7 adds the `60b5e8e`→`93eab74` check (I re-ran it: empty, ancestor confirmed) and branch 75's newer head;
+- the E2E-004 bullet now separates the unit tags from the missing criteria tests.
+
+Nothing else changes.
