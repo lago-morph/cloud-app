@@ -74,8 +74,8 @@ export interface StageOptions {
   readonly cookies?: CookieSettings;
   /** The authentication mock: only locally and on test stages. */
   readonly mock?: AuthMock;
-  /** The stage's real login provider, or the stub in tests. */
-  readonly provider?: LoginProvider;
+  /** The stage's real login provider (the auth-app provider, built per request), or the stub in tests. */
+  readonly provider?: LoginProvider | ((c: RuntimeContext) => LoginProvider);
   /** The stage's credential provider (PWD), built per request over the request's database (password.md §2). */
   readonly credentialProvider?: (c: RuntimeContext) => CredentialProvider;
   /** Further framework routes under `/api` (the local file-transfer route, the test-stage test-mail route). */

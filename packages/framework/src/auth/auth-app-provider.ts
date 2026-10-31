@@ -67,7 +67,9 @@ export function createAuthAppProvider(options: AuthAppProviderOptions): LoginPro
       let identity;
       try {
         identity = await binding.redeem({ code, app });
-      } catch {
+      } catch (thrown) {
+        // A missing binding is the deployment's fault, not the auth app's: a server error.
+        if (thrown instanceof FrameworkError && thrown.code === "CORE.MISCONFIGURED") throw thrown;
         // An outage at sign-in is a failed login, not a server error (DEC-0666); the code is not used up.
         throw failed("auth app unavailable");
       }

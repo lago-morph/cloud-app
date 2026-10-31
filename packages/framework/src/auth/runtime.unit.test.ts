@@ -471,3 +471,77 @@ describe("GET /api/auth/me", () => {
     expect(await (await request("/api/auth/me", { headers: { cookie } })).json()).toStrictEqual({ level: "anonymous" });
   });
 });
+
+describe("sign-in through the auth app (plan §4.1 steps 1 and 4)", () => {
+  const sub = "cf-sub-alice";
+  const cookieOf = (res: Response): string => `session_local=${valueOf(cookiesOf(res).get("session_local"))}`;
+
+  async function authAppHarness() {
+    const { createFakeAuthAppBinding } = await import("./auth-app-binding.js");
+    const { createAuthAppProvider } = await import("./auth-app-provider.js");
+    const binding = createFakeAuthAppBinding();
+    const built: string[] = [];
+    // A per-request provider, as the Worker builds it over `env.AUTH`.
+    const h = harness({
+      provider: (c) => {
+        built.push(c.req.path);
+        return createAuthAppProvider({ binding, app: "notes-dev", authAppOrigin: "https://auth.example.test" });
+      },
+    });
+    async function begin() {
+      const res = await h.request("/api/auth/login?returnTo=%2Fnotes");
+      const start = new URL(res.headers.get("location") ?? "");
+      return { start, state: start.searchParams.get("state") ?? "", tx: `login_local=${valueOf(cookiesOf(res).get("login_local"))}` };
+    }
+    async function signIn(identity: { sub: string; email: string; role: "admin" | "user" } = { sub, email: "alice@example.com", role: "user" }) {
+      const { start, state, tx } = await begin();
+      const code = binding.issueCode(identity, { app: "notes-dev", returnUrl: start.searchParams.get("return") ?? "" });
+      return { start, res: await h.request(`/api/auth/callback?${new URLSearchParams({ code, state }).toString()}`, { headers: { cookie: tx } }) };
+    }
+    return { ...h, binding, built, begin, signIn };
+  }
+
+  it(tag("AUTH-AC-008", "login redirects to the auth app's /start with the app ID and the callback URL from the public origin"), async () => {
+    const { begin } = await authAppHarness();
+    const { start } = await begin();
+    expect(`${start.origin}${start.pathname}`).toBe("https://auth.example.test/start");
+    expect(start.searchParams.get("app")).toBe("notes-dev");
+    expect(start.searchParams.get("return")).toBe(`${ORIGIN}/api/auth/callback`);
+  });
+
+  it(tag("AUTH-AC-002", "a redeemed code creates a cf-account session whose user ID is derived from the Cloudflare sub"), async () => {
+    const { deriveUserId } = await import("./user-id.js");
+    const { readSession } = await import("./session.js");
+    const { request, signIn } = await authAppHarness();
+    const { res } = await signIn();
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/notes");
+    const cookie = cookieOf(res);
+    const id = await deriveUserId("cf-account", sub);
+    expect(await readSession(KEY, cookie.slice("session_local=".length), Date.now())).toMatchObject({ id, provider: "cf-account", subject: sub });
+    expect(await (await request("/api/whoami", { headers: { cookie } })).json()).toStrictEqual({ level: "user", id, displayName: null });
+  });
+
+  it(tag("AUTH-AC-003", "the level follows the auth app's role, and a removed user is anonymous"), async () => {
+    const { request, signIn, binding } = await authAppHarness();
+    const cookie = cookieOf((await signIn({ sub, email: "alice@example.com", role: "admin" })).res);
+    expect(await (await request("/api/whoami", { headers: { cookie } })).json()).toMatchObject({ level: "admin" });
+    binding.setRole(sub, null);
+    expect(await (await request("/api/whoami", { headers: { cookie } })).json()).toStrictEqual({ level: "anonymous" });
+  });
+
+  it(tag("AUTH-AC-010", "the auth app's error redirect is a failed login: no session, one warn naming the reason"), async () => {
+    const { request, written, binding, begin } = await authAppHarness();
+    const { state, tx } = await begin();
+    const res = await request(`/api/auth/callback?${new URLSearchParams({ error: "login_failed", state }).toString()}`, { headers: { cookie: tx } });
+    expectFailedLogin(res, written, /^login failed: provider refused$/);
+    expect(binding.calls.redeem).toBe(0);
+  });
+
+  it("the provider is built for the request that uses it", async () => {
+    const { signIn, built } = await authAppHarness();
+    await signIn();
+    expect(built).toContain("/api/auth/login");
+    expect(built).toContain("/api/auth/callback");
+  });
+});
