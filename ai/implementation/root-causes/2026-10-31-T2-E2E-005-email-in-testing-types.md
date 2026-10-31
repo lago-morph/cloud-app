@@ -53,4 +53,14 @@ The other reading — that `./testing` identities may carry an email because the
 
 ## Review
 
-(pending: independent root-cause reviewer)
+Reviewer: independent cloud session `session_014mWQ6iQm8CioUNqZEjoNmt` (found neither cause, wrote none of the code), 2026-10-31.
+Verdict: `accepted`.
+- Reproduced: `dist/testing/test-app.d.ts` line 3 imports `AuthAppIdentity` and `FakeAuthAppBinding`; `dist/auth/auth-app-binding.d.ts` declares `email`. The test's type walk, copied with the same `scan.ts` helpers, reads 33 declaration files and finds exactly that one; run again without `auth-app-binding.d.ts`, the same 33 files give no finding, so nothing else hides behind it (the mail types give none).
+- The fix addresses the cause, and the record chose correctly: letting `./testing` identities carry an email would contradict E2E-005's Pass line and SYS-REQ-005. Making it a new item outside T2 follows the ownership rule.
+- **minor:** the fix must also change `docs/contracts/ts/testing.d.ts` lines 101 and 159 (`issueCode`, `loginWithAuthApp`).
+- **minor:** declare `TestAuthApp` without `Pick<FakeAuthAppBinding, …>`; green means `dist/testing/*.d.ts` no longer imports `auth-app-binding` at all, not only that `email` is gone.
+- **minor:** cite CORE-REQ-005's location: `docs/components/check.md`, the row that lets app test code import `.` and `./testing`.
+
+## Handling
+
+The fix is outside T2's owned paths (framework `src/testing/`, `src/auth/auth-app-binding.ts`, the testing contract, B's tests) and `test-app.ts` is a serialised shared file, so it goes to the orchestrator as a new T7 item with this record and the review's three minors (DEC-0762). T2 leaves the E2E-005 type test as it is: it fails on every target until that item lands.

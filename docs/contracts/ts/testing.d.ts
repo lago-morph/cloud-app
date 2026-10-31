@@ -73,7 +73,7 @@ export interface TestAppOptions {
    */
   readonly stubLoginProvider?: boolean;
   /**
-   * Use the auth-app provider (sign-in with Cloudflare; provider id `cf-account`) over the
+   * Use the auth-app provider (sign-in through the account's auth app) over the
    * in-memory fake auth-app binding (internal/auth-app.d.ts, `TestApp.authApp`), instead of the
    * authentication mock. Logins then go through `/api/auth/login`, the fake auth app's `/start`,
    * the callback's code redemption, the user-ID derivation and the role refresh
@@ -151,7 +151,7 @@ export interface TestApp {
    */
   loginWithStub(subject: string, options?: { readonly displayName?: string; readonly stubFailure?: "refused" | "replayed" }): Promise<void>;
   /**
-   * With `authAppLoginProvider`: signs in as the Cloudflare user `identity` (its `sub`, `email`
+   * With `authAppLoginProvider`: signs in as the auth-app user `identity` (its `sub`, `email`
    * and the role the fake auth app records for it) through `/api/auth/login`, the fake auth app
    * and the callback, and keeps the resulting session for later requests. Throws otherwise and on
    * a connected stage.

@@ -50,4 +50,13 @@ These are contract comments and descriptions only: no type, field or schema chan
 
 ## Review
 
-(pending: independent root-cause reviewer)
+Reviewer: independent cloud session `session_014mWQ6iQm8CioUNqZEjoNmt` (found neither cause, wrote none of the code), 2026-10-31, before the fix commit.
+Verdict: `accepted-with-changes`.
+- Reproduced at `6f7ddcf`: `npx playwright test --project=e2e-api E2E-016` → 1 failed, 2 passed, exactly the three findings; `Cloudflare` occurs 0 times in both files at `1e0c289`. Every link has evidence; the alternatives are argued; the fix addresses the cause and keeps the meaning (comments and descriptions only).
+- **minor (binding):** in `testing.d.ts` line 76 also drop "provider id `cf-account`" (or point to `internal/login-provider.d.ts`): `cf` abbreviates the provider's name, against SYS-REQ-005, though the whole-word scan cannot catch it. It is the only occurrence in an app-facing contract.
+- **minor (non-binding):** in `framework.openapi.yaml` line 50, "the owner's account" is a little vague; "the account the auth app serves (the owner's)" is more precise. Either is acceptable.
+- **minor:** the line-154 wording is fine; red/green should also `grep -rnw "cf-account\|Cloudflare"` over the app-facing contracts.
+
+## Fix (after the review)
+
+Applied as amended: line 76 reads "Use the auth-app provider (sign-in through the account's auth app) over …" with no provider ID; line 154 "signs in as the auth-app user `identity`"; `framework.openapi.yaml` line 50 "… an administrator role in the account the auth app serves (the owner's) (SYS-REQ-018, DEC-0690)". Red before (the run above), green after: see the commit that follows this record's Review.
