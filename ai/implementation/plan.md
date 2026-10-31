@@ -8,6 +8,7 @@ Abbreviations: `FW` = `packages/framework` (package `@lago-morph/prototype-frame
 
 ## 1. Ground rules for every item
 
+- **Testing standards (from v0.2.0, for this and every later plan):** `.claude/skills/testing-standards/SKILL.md`, from `ai/implementation/plan-v0.2.0-testing-auth.md` §7a. They add to the rules of this section and of §10, and change them where they say so. For example: two more roles (test-change reviewer, skill reviewer); the diagnosis and review loop (attempt and round limits, point-by-point responses, similar cases before the fix); and test economy rule 2 (docs-only items run the linters plus only the tests that the CI path map lists for the changed docs).
 - **Roles are separate subagents** (prompt §7, §8): for any code, the *implementer*, the *test-case author*, the *test runner*, the *evaluator*, a *diagnoser*, and a *root-cause reviewer* are six different subagents. None may be the author of the code under test. Item IDs ending in `-Tn` are test-author items, `-RUN` runner items, `-EV` evaluator items, `-INT` integrator items.
 - **Branches:** each item works on `claude/implement-local-cloudflare-<item-id lowercase>` in its own worktree, branched from the current feature branch `claude/implement-local-cloudflare`; it commits and pushes before returning (CLAUDE.md).
 - **Before returning**, an implementer rebases on the feature branch, runs the per-item checks of "Test economy" below (not a full `npm run verify`, except where that section requires it), and reports the result. The orchestrator merges only items that report green per-item checks; the full `npm run verify` runs once per merge batch.
@@ -619,6 +620,8 @@ Test authors in B2 run until their suites are complete; their suites are expecte
 ---
 
 ## 10. Conventions for implementers
+
+The testing standards (`.claude/skills/testing-standards/SKILL.md`; see §1 of this plan) apply on top of these conventions: diagnosis and root-cause records (§10.5) follow its `resources/failure-diagnosis.md`, and changes to once-green tests its `resources/test-change-review.md`.
 
 ### 10.1 Test layers and commands (root)
 - `npm run test:unit` — `FW/src/**/*.unit.test.ts` and tool unit tests; no network; red-green TDD per behaviour (prompt §6).
