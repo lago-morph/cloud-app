@@ -4,5 +4,6 @@
  */
 import type { AdminPage } from "./app.js";
 import { everydayPage } from "./everyday-page.js";
+import { statusPage } from "./status-page.js";
 
-export const ADMIN_PAGES: readonly AdminPage[] = Object.freeze([everydayPage]);
+export const ADMIN_PAGES: readonly AdminPage[] = Object.freeze([everydayPage, statusPage]);
