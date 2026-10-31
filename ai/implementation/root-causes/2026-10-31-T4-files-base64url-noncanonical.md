@@ -1,0 +1,114 @@
+# Root cause: `files/base64url.ts` accepts non-canonical base64url, so each local transfer ticket's MAC has 4 accepted spellings and each FILES list cursor several
+
+Author: item T4 (diagnosis, plan §7a.1.8 step 1), 2026-10-31. Found by fuzz target F4 (S4, `ai/implementation/v0.2.0-coverage-fuzz.md` §2), which S4 predicted would fail. Branch `v0.2.0/88-fuzz-targets` at `07922db` (based on `v0.2.0/55-merge-auth-app-into-bootstrap`, PR #94). Item T4 is the implementer and also the diagnoser; no separate diagnoser subagent was available (see "Process").
+
+## Symptom
+On `88-fuzz-targets`, `npx vitest run --config vitest.unit.config.ts packages/framework/src/files/local/tickets.fuzz.unit.test.ts packages/framework/src/files/cursor.fuzz.unit.test.ts` (Node v22.23.4) gives 3 failures:
+
+```
+× F4 … no mutation of a valid ticket verifies (500 runs, seed 2026103104)
+  Property failed after 7 tests  { seed: 2026103104, … }
+  Counterexample: [{"op":"upload","name":"\u0000","contentType":"image/png"},{"kind":"respell-end","part":1,"flip":1}]
+  (verifyLocalTicket returned the grant for the mutated token instead of undefined)
+× F4 … base64urlToBytes and base64urlToText return a value only for its canonical spelling (500 runs, seed 2026103104)
+  Counterexample: ["AO"]   Expected: "AO"  Received: "AA"
+× F6 … decoding any string gives a name inside the prefix, or FILES.INVALID_CURSOR (1000 runs, seed 2026103106)
+  Counterexample: ["eyJwIjoiYS8iLCJhIjoiYS8ifR","a/"]
+  Expected: "eyJwIjoiYS8iLCJhIjoiYS8ifR"  Received: "eyJwIjoiYS8iLCJhIjoiYS8ifQ"
+```
+
+The same mutations of the auth tokens (`auth/signing.fuzz.unit.test.ts`, the same seed, 4 properties) and of KV cursors (`kv/cursor.fuzz.unit.test.ts`) pass.
+
+## Evidence
+- **Minimal reproduction** (the script in the Appendix, run with `node` against `packages/framework/dist` built from `07922db`). A download ticket for `a.png`, whose 43-character MAC ends in `…tWA`:
+
+  ```
+  MAC length 43 chars -> 32 bytes
+  ticket MAC spelling tWA verifyLocalTicket: {"op":"download","name":"a.png"} signing.base64urlDecode: bytes
+  ticket MAC spelling tWB verifyLocalTicket: {"op":"download","name":"a.png"} signing.base64urlDecode: undefined
+  ticket MAC spelling tWC verifyLocalTicket: {"op":"download","name":"a.png"} signing.base64urlDecode: undefined
+  ticket MAC spelling tWD verifyLocalTicket: {"op":"download","name":"a.png"} signing.base64urlDecode: undefined
+  base64urlToBytes("AA") [ 0 ] base64urlToBytes("AB") [ 0 ] base64urlDecode("AB") undefined
+  base64urlToText("AO") === "\u0000" (same as AA: "\u0000")
+  files cursor ifQ -> a/      files cursor ifR -> a/      files cursor ifS -> a/      files cursor ifT -> a/
+  kv cursor iJd -> a/b        kv cursor iJc -> KV.INVALID_CURSOR   (iJf, iJe: KV.INVALID_CURSOR)
+  ```
+- **The decoder** (`files/base64url.ts:10-14`): `base64urlToBytes` checks the alphabet and `length % 4 !== 1`, then returns `atob(...)`'s bytes. It never re-encodes. `atob` (WHATWG forgiving-base64) discards the leftover bits of the last character: 2 bits when `length % 4 === 3` (a 32-byte MAC is 43 characters), 4 bits when `length % 4 === 2`.
+- **The two other copies check canonical form:** `auth/signing.ts:22-32` `base64urlDecode` returns bytes only when `base64urlEncode(bytes) === text`; `kv/cursor.ts:37` throws when `toBase64Url(bytes) !== cursor`. So the drift is between copies of one rule (S4's evidence for F4).
+- **Callers of `files/base64url.ts`:** only `files/local/tickets.ts:7` (MAC via `base64urlToBytes`, payload via `base64urlToText`) and `files/cursor.ts:7` (`base64urlToText`); `grep -rn 'base64url.js"' packages/framework` finds nothing else.
+- **The ticket body is not affected:** `verifyLocalTicket` signs and verifies the body *text* (`tickets.ts:30`, `:59`), so a re-spelled body changes the signed data and fails verification. Only the MAC part, which is decoded to bytes before `crypto.subtle.verify`, has extra spellings. The fuzz counterexample is on part 1 (the MAC).
+- **Experiment confirming the cause:** with `base64urlToBytes` changed to return `bytesToBase64url(bytes) === text ? bytes : undefined` (uncommitted, reverted after), `vitest run` over `packages/framework/src/{auth,files,kv}` passed: 50 files, 596 tests, including the three properties above.
+
+## Causal chain
+1. `verifyLocalTicket` decodes the MAC with `base64urlToBytes` and verifies those bytes. Shown by `tickets.ts:56-58`.
+2. `base64urlToBytes` maps every spelling whose last character differs only in the discarded low bits to the same bytes. Shown by `base64urlToBytes("AA")` and `("AB")` both giving `[0]`, and the 4 MAC spellings giving the same grant.
+3. So the 4 spellings of a 43-character MAC all verify. Shown by the reproduction and by the F4 counterexample (`respell-end`, part 1).
+4. `files/cursor.ts` decodes cursors with the same function (through `base64urlToText`), so a FILES cursor has 4 (length % 4 = 3) or 16 (length % 4 = 2) accepted spellings. Shown by the 4 `files cursor` lines and the F6 counterexample. KV's own decoder rejects them (the `kv cursor` lines).
+5. The fix experiment removes every failure and breaks no other test in the three components. Shown by the 596 passing tests.
+
+## Alternatives ruled out
+- **A forgery or key problem:** every accepted spelling decodes to the *same* 32 MAC bytes, which `crypto.subtle.verify` checks against the real key. No new MAC is accepted. It is a malleability and drift defect, not a forgery (S4).
+- **The fuzz test is wrong:** the property ("no mutation of a valid ticket verifies"; "a decoder returns a value only for its canonical spelling") is S4's, confirmed by the S4 reviewer. The same mutation passes on `auth/signing.ts` and on KV cursors, so the generator does not produce false positives on canonical decoders.
+- **`atob` differs between Node and workerd:** both implement WHATWG forgiving-base64, which discards the leftover bits. In any case the reproduction is in Node, where the unit tests and the local target run.
+- **The ticket payload or cursor JSON:** they are signed as text (tickets) or compared after parsing (cursor); the extra spellings come only from the byte decoding.
+
+## Proposed fix
+In `packages/framework/src/files/base64url.ts`, `base64urlToBytes` returns the bytes only when they re-encode to the input: `return bytesToBase64url(bytes) === text ? bytes : undefined;`. This matches the other two copies. `base64urlToText` goes through it, so it gets the same check. No caller changes. The tokens and cursors the framework issues are canonical (`bytesToBase64url`), so no issued value stops working.
+
+Files: `packages/framework/src/files/base64url.ts`. The fuzz tests are the red tests and need no change. The shrunk counterexamples become plain regression tests (plan §7a.1.7) in `packages/framework/src/files/local/tickets.unit.test.ts` (a re-spelled MAC is refused) and `packages/framework/src/files/cursor.unit.test.ts` (a re-spelled cursor is FILES.INVALID_CURSOR).
+
+## Similar cases (plan §7a.1.8 step 4)
+Search: `grep -rn "atob(" packages apps skill --include=*.ts`, plus the callers of each decoder found.
+- **`apps/template/src/server/signing.ts` `fromBase64url`, copied verbatim into `apps/demo/src/server/signing.ts`.** The app template's share-link signatures (`verifyToken`) have the same defect: it pads and `atob`s with no canonical check. Reproduced with the template's code (Node v22.23.4): all 4 spellings of a signature verify. This is **outside T4's owned paths**, so it is not fixed here. It is reported as a new item, for G (the template owner) or T7: the template, its tests and the demo copy (plan §1 ownership).
+- **`kv/cursor.ts`:** canonical, rejects the spellings (reproduction above; F6's KV property passes).
+- **`auth/signing.ts` `base64urlDecode`:** canonical (F4's auth properties pass).
+- **Not the same case:** `apps/reference/src/server/encoding.ts` `fromBase64` decodes upload *content* sent by the reference app's own client (`routes/files.ts:33`); no signature or identity depends on its spelling. `mail/mime.ts` `base64Bytes` decodes test mail bodies in the MAIL reader that B 45/46 retire.
+- The FILES cursor case (link 4) is fixed by the same change, and its failing test is F6's FILES property.
+
+## Verification plan
+- **Red (now, on `88`):** the three properties above fail with the counterexamples shown.
+- **Green (on `89`):** after the fix, `packages/framework/src/files/local/tickets.fuzz.unit.test.ts`, `packages/framework/src/files/cursor.fuzz.unit.test.ts` and the two new regression tests pass. `npm run build -w packages/framework && npm run typecheck && npm run lint && npm run test:unit` passes, except for F1 (`auth/return-to.fuzz.unit.test.ts`), which is a separate finding (`2026-10-31-T4-return-to-decoded-tab-newline.md`) fixed in `89b`.
+- **CI:** the unit job on `89` shows only F1 failing; on `89b`, nothing fails.
+
+## Process
+Item T4 had no subagent tool, so it diagnosed its own finding. The review is by a fresh, independent Claude Code remote session that did not write the test or the code (plan §7a.1.8 step 2).
+
+## Review
+_Pending: the independent reviewer's verdict goes here before the fix commit._
+
+## Appendix: reproduction script
+Run as `D=$PWD/packages/framework/dist node repro.mjs` from the repo root, after `npm run build -w packages/framework`.
+
+```js
+const D = process.env.D;
+const { createLocalTicketIssuer, verifyLocalTicket, LOCAL_TRANSFER_PATH } = await import(`${D}/files/local/tickets.js`);
+const { base64urlToBytes, base64urlToText } = await import(`${D}/files/base64url.js`);
+const { base64urlDecode } = await import(`${D}/auth/signing.js`);
+const { decodeCursor: filesDecode, encodeCursor: filesEncode } = await import(`${D}/files/cursor.js`);
+const { decodeCursor: kvDecode, encodeCursor: kvEncode } = await import(`${D}/kv/cursor.js`);
+
+const B = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+const spellings = (s) => [0, 1, 2, 3].map((f) => s.slice(0, -1) + B[B.indexOf(s.slice(-1)) ^ f]);
+const key = `evidence-key-${"k".repeat(32)}`; // a dummy key, not a credential
+const issuer = createLocalTicketIssuer({ key: async () => key });
+const token = (await issuer.download("a.png")).url.slice(LOCAL_TRANSFER_PATH.length);
+const [body, mac] = token.split(".");
+console.log("MAC length", mac.length, "chars ->", base64urlToBytes(mac).length, "bytes");
+for (const m of spellings(mac)) {
+  console.log("ticket MAC spelling", m.slice(-3), "verifyLocalTicket:", JSON.stringify(await verifyLocalTicket(`${body}.${m}`, key)), "signing.base64urlDecode:", base64urlDecode(m) === undefined ? "undefined" : "bytes");
+}
+console.log('base64urlToBytes("AA")', [...base64urlToBytes("AA")], 'base64urlToBytes("AB")', [...base64urlToBytes("AB")], 'base64urlDecode("AB")', base64urlDecode("AB"));
+console.log('base64urlToText("AO") ===', JSON.stringify(base64urlToText("AO")), "(same as AA:", JSON.stringify(base64urlToText("AA")) + ")");
+for (const s of spellings(filesEncode("a/", "a/"))) {
+  let r;
+  try { r = filesDecode("a/", s); } catch (e) { r = e.code; }
+  console.log("files cursor", s.slice(-3), "->", r);
+}
+for (const s of spellings(kvEncode("a/", "a/b"))) {
+  let r;
+  try { r = kvDecode(s, "a/"); } catch (e) { r = e.code; }
+  console.log("kv cursor", s.slice(-3), "->", r);
+}
+```
+
+The template case (Similar cases) was reproduced by running `fromBase64url`, `toBase64url` and `verifyToken`'s HMAC check copied from `apps/template/src/server/signing.ts` on a fresh signature and its 3 re-spellings: all 4 verified.
