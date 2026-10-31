@@ -297,6 +297,7 @@ describe("a page's grant", () => {
     expect(ran).toHaveLength(0);
     // Refused before the exchange: only the sign-in's tokens were ever issued.
     expect(cf.issued).toHaveLength(1);
+    expect(cf.issued.every((t) => t.revokedAccess && t.revokedRefresh)).toBe(true);
     expect(b.jar.has(GRANT_COOKIE)).toBe(false);
   });
 
