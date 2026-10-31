@@ -3,5 +3,6 @@
  * are PAR-447 (scopes.ts).
  */
 import type { AdminPage } from "./app.js";
+import { everydayPage } from "./everyday-page.js";
 
-export const ADMIN_PAGES: readonly AdminPage[] = Object.freeze([]);
+export const ADMIN_PAGES: readonly AdminPage[] = Object.freeze([everydayPage]);

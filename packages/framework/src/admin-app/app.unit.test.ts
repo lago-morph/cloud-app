@@ -300,6 +300,21 @@ describe("a page's grant", () => {
     expect(b.jar.has(GRANT_COOKIE)).toBe(false);
   });
 
+  it("a page's form `action` travels sealed in the grant to the page's run; a malformed one starts nothing", async () => {
+    const seen: (string | undefined)[] = [];
+    const withAction: AdminPage = { ...statusPage, run: (ctx) => (seen.push(ctx.action), Promise.resolve({ html: "<p>ran</p>", script: "1;" })) };
+    const b = browser(() => deps({ pages: [withAction] }));
+    await signIn(b);
+    const post = (body: string) => handleAdminRequest(new Request(`${ORIGIN}/status`, { method: "POST", headers: { origin: ORIGIN, "content-type": "application/x-www-form-urlencoded", cookie: [...b.jar].map(([k, v]) => `${k}=${v}`).join("; ") }, body }), deps({ pages: [withAction] }));
+    const id = "a".repeat(32);
+    const start = await post(`action=delete:${id}`);
+    for (const c of start.headers.getSetCookie()) b.jar.set(c.slice(0, c.indexOf("=")), c.slice(c.indexOf("=") + 1, c.indexOf(";")));
+    const r = await b.get(cf.consent(start.headers.get("location")!, { sub: "admin-1" }));
+    expect(seen).toEqual([`delete:${id}`]);
+    expect(r.headers.get("content-security-policy")).toMatch(/script-src 'nonce-/);
+    for (const bad of ["action=delete:../x", "action=DELETE", `action=delete:${id}x`, `action=${"a".repeat(30)}`]) expect((await post(bad)).status, bad).toBe(400);
+  });
+
   it("a page whose action throws shows a generic error page, and both tokens are still revoked", async () => {
     const failing: AdminPage = { ...statusPage, run: () => Promise.reject(new Error("boom")) };
     const b = browser(() => deps({ pages: [failing] }));

@@ -19,7 +19,7 @@
  */
 import type { CloudflareApi } from "../provision/cloudflare/api.js";
 import { readCookie } from "../auth/cookies.js";
-import { GrantError, logLine, openGrant, startGrant, useGrant, type AdminConfig, type Grant } from "./grant.js";
+import { GrantError, isAction, logLine, openGrant, startGrant, useGrant, type AdminConfig, type Grant } from "./grant.js";
 import { button, esc, page, SECURITY_HEADERS } from "./html.js";
 import { ADMIN_GRANT_MS, ADMIN_SESSION_MS, GRANT_COOKIE, SESSION_COOKIE } from "./params.js";
 import { open, seal } from "./seal.js";
@@ -39,7 +39,12 @@ export interface GrantContext {
   readonly granted: readonly string[];
   readonly log: (line: string) => void;
   readonly now: () => number;
+  /** The page form's sub-action (`isAction`), if it posted one. */
+  readonly action?: string;
 }
+
+/** A page's result: trusted HTML, optionally with one inline script (run under the CSP nonce). */
+export type PageResult = string | { readonly html: string; readonly script: string };
 
 export interface AdminPage {
   readonly id: Exclude<AdminPageId, "signin">;
@@ -47,7 +52,7 @@ export interface AdminPage {
   /** The page before its action: what it will do (trusted HTML). */
   view(admin: Admin): string | Promise<string>;
   /** The action, with the person's grant; its result as trusted HTML. */
-  run(ctx: GrantContext): Promise<string>;
+  run(ctx: GrantContext): Promise<PageResult>;
 }
 
 export interface AdminDeps {
@@ -159,9 +164,9 @@ async function callback(request: Request, url: URL, deps: AdminDeps): Promise<Re
         );
       }
       const api = grantApi(deps.fetch, deps.config.apiBase, grant.accessToken);
-      let html: string;
+      let result: PageResult;
       try {
-        html = await target.run({ admin: grant.admin, accountId: deps.config.accountId, api, granted: grant.granted, log: deps.log, now: deps.now });
+        result = await target.run({ admin: grant.admin, accountId: deps.config.accountId, api, granted: grant.granted, log: deps.log, now: deps.now, ...(g.action === undefined ? {} : { action: g.action }) });
       } catch (e) {
         // Step errors name the step and Cloudflare's answer, never a token or a value (each step's own rule).
         const message = e instanceof Error ? e.message : "unknown error";
@@ -169,7 +174,8 @@ async function callback(request: Request, url: URL, deps: AdminDeps): Promise<Re
         const advice = /code 9109\b/.test(message) ? "<p>Cloudflare refused a permission: start again and keep every permission on the Cloudflare page ticked.</p>" : "";
         return withCookies(page(target.title, `<p class="warn">That step failed: ${esc(message)}</p>${advice}${button(`/${target.id}`, "Start again")}<p><a href="/">Back to the admin app</a></p>`, { status: 502 }), done);
       }
-      return withCookies(page(target.title, `${html}<p><a href="/">Back to the admin app</a></p>`), done);
+      const { html, script } = typeof result === "string" ? { html: result, script: undefined } : result;
+      return withCookies(page(target.title, `${html}<p><a href="/">Back to the admin app</a></p>`, script === undefined ? {} : { script }), done);
     });
   } catch (e) {
     if (e instanceof GrantError) {
@@ -207,7 +213,15 @@ export async function handleAdminRequest(request: Request, deps: AdminDeps): Pro
     const target = pageFor!;
     if (admin === null) return request.method === "GET" ? redirect("/", 303) : signInPage(401, "<p class=\"warn\">Your admin session ended. Sign in again.</p>");
     if (request.method === "GET") return page(target.title, `${await target.view(admin)}${button(`/${target.id}`, `Continue at Cloudflare`)}<p><a href="/">Back</a></p>`);
-    const g = await startGrant(deps, target.id);
+    let action: string | undefined;
+    if ((request.headers.get("content-type") ?? "").startsWith("application/x-www-form-urlencoded")) {
+      const posted = new URLSearchParams(await request.text()).get("action");
+      if (posted !== null) {
+        if (!isAction(posted)) return page(target.title, "<p>That request was not understood.</p>", { status: 400 });
+        action = posted;
+      }
+    }
+    const g = await startGrant(deps, target.id, action);
     return redirect(g.location, 302, [cookie(GRANT_COOKIE, g.cookie, ADMIN_GRANT_MS)]);
   } catch {
     deps.log(logLine("error", "request failed: internal error"));
