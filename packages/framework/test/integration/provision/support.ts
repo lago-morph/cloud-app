@@ -9,7 +9,9 @@
  *   whose fake SST CLI reads the program the target really generates;
  * - the stage's own answers (health route) modelled from the deployed Worker: a disabled route
  *   answers 404 as live (DEC-0090), a declared secret missing from the Worker answers
- *   `SEC.MISSING` with a request ID (SEC-REQ, HTTP error shape).
+ *   `SEC.MISSING` with a request ID (SEC-REQ, HTTP error shape); any other path or method 404. The
+ *   storage CORS preflight of step 7 (FILES' helper) is stubbed to pass, so this suite does not
+ *   check it (FILES' own suites do).
  *
  * Fake-API runs are not evidence for PROV's Cloud criteria (§7a.1.4), so nothing here is tagged.
  */
@@ -84,7 +86,8 @@ export async function openWorld(options: { native?: boolean } = {}): Promise<Wor
     events.push(`${isD1 ? "d1" : "api"} ${method} ${path}`);
     // The in-memory account has no Worker-secret DELETE (`DELETE …/workers/scripts/<w>/secrets/<name>`),
     // which deploy sends before a Secrets Store binding takes the secret's name (DEC-0727): answered
-    // here as Cloudflare documents it, 404 for an absent Worker or secret.
+    // here by its status as Cloudflare documents it, 404 for an absent Worker or secret (only the
+    // status is modelled; deploy reads nothing else).
     const del = method === "DELETE" ? new RegExp(`^/accounts/${ACCOUNT}/workers/scripts/([^/]+)/secrets/([^/]+)$`).exec(path) : null;
     if (del) {
       const removed = cloud.workers.get(del[1]!)?.secrets.delete(decodeURIComponent(del[2]!)) === true;
@@ -93,9 +96,11 @@ export async function openWorld(options: { native?: boolean } = {}): Promise<Wor
     return isD1 ? d1.api(method, path, body) : cloud.api(method, path, body);
   };
   // The stage itself: what its health route answers, from the deployed Worker's state.
-  const stageFetch = (async (input: string | URL | Request) => {
+  const stageFetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     const worker = url.hostname.split(".")[0] ?? "";
+    const method = (input instanceof Request ? input.method : init?.method ?? "GET").toUpperCase();
+    if (method !== "GET" || url.pathname !== "/api/__framework/health") return new Response("not found", { status: 404 });
     events.push(`health ${worker}`);
     const w = cloud.workers.get(worker);
     if (w === undefined || !w.enabled) return new Response("error code: 1042", { status: 404 });

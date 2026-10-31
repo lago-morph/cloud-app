@@ -10,6 +10,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Histories } from "../../../src/mig/apply.js";
 import { runDeploy, type DeployRequest } from "../../../src/provision/core/deploy.js";
+import { runStop } from "../../../src/provision/core/stop-start.js";
 import { cleanTempDirs, histories, io, openWorld, rows, stageDatabases, workerOf, type World } from "./support.js";
 
 const STAGE = { app: "reference", stage: "test-int" };
@@ -35,9 +36,9 @@ describe("PROV deploy on the Cloudflare target with local D1", { timeout: 120_00
     expect(result.status, out.err).toBe(0);
 
     const w = workerOf(STAGE);
-    const firstChange = world.events.findIndex((e) => /^(api|d1) (?!GET)/.test(e) || e.startsWith("sst deploy"));
+    const firstChange = world.events.findIndex((e) => /^(api|d1|bytes) (?!GET)/.test(e) || e.startsWith("sst deploy"));
     expect(firstChange, "something changed").toBeGreaterThan(0);
-    expect(world.events.slice(0, firstChange).filter((e) => !/^(api|d1) GET |^sst install/.test(e)), "before the first change only reads").toEqual([]);
+    expect(world.events.slice(0, firstChange).filter((e) => !/^(api|d1|bytes) GET |^sst install/.test(e)), "before the first change only reads").toEqual([]);
     // A first deploy has no Worker yet: step 3 is SST's first run, step 5 its next one.
     const infra = first(/^sst deploy /);
     const created = first(/^d1 POST \/accounts\/[^/]+\/d1\/database$/);
@@ -102,6 +103,8 @@ describe("PROV deploy on the Cloudflare target with local D1", { timeout: 120_00
     expect(out.err).toMatch(/deploy failed at step 7/);
     expect(out.err).toContain("SEC.MISSING");
     expect(out.err).toContain("req-health-1");
+    expect(out.err).toMatch(/stage state: .*health check failed/);
+    expect(out.err).toMatch(/next action: .*requestId/);
     expect(out.err.includes("a-value"), "no secret value is printed").toBe(false);
   });
 
@@ -115,7 +118,10 @@ describe("PROV deploy on the Cloudflare target with local D1", { timeout: 120_00
     expect((await runDeploy(world.target, request(h.v2, { abortAt: "after-copy" }), aborted)).status).toBe(1);
     expect(aborted.out + aborted.err, "which copy ran is printed although a later step stopped (DEC-0545)").toMatch(/cop(y|ied)[^\n]*(native|row by row)/i);
     const w = workerOf(STAGE);
-    expect((await stageDatabases(world, STAGE)).map((d) => d.name)).toEqual([`${w}-db-1`, `${w}-db-2`]);
+    const dbs1 = await stageDatabases(world, STAGE);
+    expect(dbs1.map((d) => d.name)).toEqual([`${w}-db-1`, `${w}-db-2`]);
+    expect(aborted.err).toMatch(/stage state: .*stopped.*the next deploy deletes the copy/);
+    expect(world.cloud.workers.get(w)?.bindings, "the code still uses the current database").toContainEqual(expect.objectContaining({ name: "DB", id: dbs1[0]!.id }));
 
     const out = io();
     expect((await runDeploy(world.target, request(h.v2), out)).status, out.err).toBe(0);
@@ -133,8 +139,12 @@ describe("PROV deploy on the Cloudflare target with local D1", { timeout: 120_00
     world = await openWorld({ native: false }); // as in the after-copy case (DEC-0769)
     expect((await runDeploy(world.target, request(h.v1), io())).status).toBe(0);
     const aborted = io();
+    const codeAt = world.events.length;
     expect((await runDeploy(world.target, request(h.v2, { abortAt: "after-code" }), aborted)).status).toBe(1);
     const w = workerOf(STAGE);
+    expect(aborted.err).toMatch(/stage state: .*the app is not started/);
+    const afterCode = world.events.slice(world.events.findIndex((e, i) => i >= codeAt && /^sst deploy (?!.*--target)/.test(e)));
+    expect(afterCode.filter((e) => e.endsWith(`/workers/scripts/${w}/subdomain`) || e === `health ${w}`), "no start step and no health check after the abort").toEqual([]);
     const [current] = await stageDatabases(world, STAGE);
     expect(world.cloud.workers.get(w)?.bindings, "the code is bound to the migrated database").toContainEqual(expect.objectContaining({ name: "DB", id: current!.id }));
 
@@ -146,5 +156,38 @@ describe("PROV deploy on the Cloudflare target with local D1", { timeout: 120_00
     expect(after.some((e) => e === `health ${w}`)).toBe(true);
     expect((await stageDatabases(world, STAGE)).map((d) => d.id)).toEqual([current!.id]);
     expect(world.cloud.workers.get(w)?.enabled).toBe(true);
+  });
+
+  it("a stage stopped with stop stays stopped through deploys, a failed one included, until deploy --start clears the record, starts it and checks its health (DEC-0544)", async () => {
+    await world.d1.close();
+    world = await openWorld({ native: false }); // as in the abort cases (DEC-0769)
+    const w = workerOf(STAGE);
+    const RECORD = `sst-state/framework/${STAGE.app}/${STAGE.stage}/stage.json`;
+    expect((await runDeploy(world.target, request(h.v1), io())).status).toBe(0);
+    expect(await runStop(world.target, STAGE, io())).toBe(0);
+    expect(world.cloud.workers.get(w)?.enabled).toBe(false);
+    expect(world.cloud.buckets.get("sst-state")?.has(RECORD.slice("sst-state/".length)), "stop writes the stage record").toBe(true);
+
+    let mark = world.events.length;
+    const plain = io();
+    expect((await runDeploy(world.target, request(h.v2), plain)).status, plain.err).toBe(0);
+    expect(world.cloud.workers.get(w)?.enabled, "a plain deploy leaves it stopped").toBe(false);
+    expect(world.events.slice(mark).filter((e) => e === `health ${w}`), "step 7 is skipped").toEqual([]);
+    expect(plain.out).toMatch(/stopped/);
+    expect(plain.out).toContain(`start --target cloudflare --stage ${STAGE.stage}`);
+
+    const [current] = await stageDatabases(world, STAGE);
+    await world.d1.database(current!.id).prepare(`DELETE FROM "notes"`).run();
+    const failing = io();
+    const v3 = { ...h.v2, app: [...h.v2.app, { ...h.v2.app[1]!, id: "app/9999_fails", name: "9999_fails", file: "9999_fails.sql", statements: ["CREATE TABLE \"notes\" (\"id\" text)"] }] };
+    expect((await runDeploy(world.target, request(v3), failing)).status).toBe(1);
+    expect(world.cloud.workers.get(w)?.enabled, "a failed migration leaves it stopped").toBe(false);
+
+    mark = world.events.length;
+    const started = io();
+    expect((await runDeploy(world.target, request(h.v2, { start: true }), started)).status, started.err).toBe(0);
+    expect(world.cloud.buckets.get("sst-state")?.has(RECORD.slice("sst-state/".length)), "deploy --start clears the record").toBe(false);
+    expect(world.cloud.workers.get(w)?.enabled).toBe(true);
+    expect(world.events.slice(mark)).toContain(`health ${w}`);
   });
 });

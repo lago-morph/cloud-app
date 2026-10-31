@@ -54,11 +54,13 @@ describe("PROV production stage and F's bindings on the Cloudflare target with l
     const storeId = record().secretsStore?.storeId;
     expect(storeId, "the record says where the credential is").toBeDefined();
 
-    await deploy(PROD);
+    const out = await deploy(PROD);
+    const origin = /public origin: (https:\/\/\S+)/.exec(out.out)?.[1];
+    expect(origin).toBeDefined();
     const worker = world.cloud.workers.get(workerOf(PROD))!;
     expect(worker.bindings).toContainEqual({ type: "service", name: "AUTH", service: AUTH_APP_WORKER, entrypoint: "AuthApp" });
     const registry = world.d1.database(registryId) as unknown as D1Like;
-    expect(await isRegistered(registry, workerOf(PROD), "https://reference-prod.example.workers.dev/api/auth/callback")).toBe(true);
+    expect(await isRegistered(registry, workerOf(PROD), `${origin!}/api/auth/callback`)).toBe(true);
     expect(storeBindings(PROD)).toEqual(SIGNING.map((s) => ({ type: "secrets_store_secret", name: s.binding, storeId, secretName: s.secretName })));
     for (const s of SIGNING) expect(worker.secrets.has(s.binding), `${s.binding} is not also a Worker secret`).toBe(false);
   });
@@ -67,7 +69,9 @@ describe("PROV production stage and F's bindings on the Cloudflare target with l
     const registryId = await withAuthApp(world);
     withLegacyEmailDomain(world.cloud);
     await deploy(TEST);
-    await deploy(PROD);
+    const origin = /public origin: (https:\/\/\S+)/.exec((await deploy(PROD)).out)?.[1];
+    const registry = world.d1.database(registryId) as unknown as D1Like;
+    expect(await isRegistered(registry, workerOf(PROD), `${origin!}/api/auth/callback`)).toBe(true);
     const [prodDb] = await stageDatabases(world, PROD);
     await world.d1.database(prodDb!.id).prepare(`INSERT INTO "notes" ("id", "title") VALUES ('n1', 'kept in the backup')`).run();
     world.cloud.putBytes(`${workerOf(PROD)}-files`, "photos/a.jpg", new Uint8Array([1, 2, 3]), "image/jpeg");
@@ -82,7 +86,11 @@ describe("PROV production stage and F's bindings on the Cloudflare target with l
 
     // The backup is complete, and written before anything was deleted (DEC-0543).
     const events = world.events.slice(mark);
-    const firstDelete = events.findIndex((e) => /^(api|d1) DELETE /.test(e) || e.startsWith("sst remove"));
+    const firstDelete = events.findIndex((e) => (/^(api|d1|bytes) DELETE /.test(e) && !e.includes("/prototype-backups/")) || e.startsWith("sst remove"));
+    // DEC-0725 also puts the registry clear before anything is deleted: that order fails on this
+    // base and is the red test of its own fix PR (root cause 2026-10-31-T3-remove-registry-order).
+    const registryClear = events.findIndex((e) => e.startsWith(`d1 POST /accounts/${ACCOUNT}/d1/database/${registryId}/query`));
+    expect(registryClear, "the registry entry is cleared").toBeGreaterThan(-1);
     const lastBackupWrite = events.map((e) => e.startsWith("bytes PUT /accounts/") && e.includes("/prototype-backups/")).lastIndexOf(true);
     expect(lastBackupWrite, "the backup was written").toBeGreaterThan(-1);
     expect(firstDelete, "nothing is deleted before the backup is complete").toBeGreaterThan(lastBackupWrite);
@@ -97,7 +105,9 @@ describe("PROV production stage and F's bindings on the Cloudflare target with l
     expect(await stageDatabases(world, PROD)).toEqual([]);
     expect(world.cloud.workers.has(workerOf(PROD))).toBe(false);
     expect(world.cloud.buckets.has(`${workerOf(PROD)}-files`)).toBe(false);
-    expect(await isRegistered(world.d1.database(registryId) as unknown as D1Like, workerOf(PROD), "https://reference-prod.example.workers.dev/api/auth/callback")).toBe(false);
+    expect((await world.target.listStageResources(PROD)).resources, "no resource of the removed stage is left").toEqual([]);
+    expect([...(world.cloud.buckets.get("sst-state") ?? [])].filter((k) => k.includes(`/${PROD.app}/${PROD.stage}`)), "no state object or stage record of it is left").toEqual([]);
+    expect(await isRegistered(registry, workerOf(PROD), `${origin!}/api/auth/callback`)).toBe(false);
 
     // The other stage and the account's shared resources are untouched.
     expect(await stageDatabases(world, TEST)).toEqual(testDbs);
