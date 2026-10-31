@@ -44,4 +44,4 @@ One record per change set: `test-records/test-changes/<yyyy-mm-dd>-<slug>.md`. F
 
 ## Stopping condition
 
-Stop reading when the change's test impact is written down and done, and every change to a once-green test is in a record with an accepted review.
+Stop reading when the change's test impact is written down and done, every change to a once-green test is in a record with an accepted review, and a subagent that made none of the changes has confirmed each one is covered.

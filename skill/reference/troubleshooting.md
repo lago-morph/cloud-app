@@ -103,7 +103,7 @@ Production stages sign people in with Cloudflare, through the account's auth app
 
 Signed out after a while, with a `warn` entry `role refresh failed (<code>)`: the app could not confirm the person's role with the auth app, so it ended the session. Sign in again once the auth app answers.
 
-Signed in, but not admin: the level comes from the person's role in the Cloudflare account ([owner-tasks.md](owner-tasks.md) §7). A change shows at the next sign-in, or within 5 minutes (PAR-425).
+Signed in, but not admin (or still admin): the level comes from the person's role in the Cloudflare account ([owner-tasks.md](owner-tasks.md) §7), recorded when they last signed in. Log out and sign in again after the role changes.
 
 ## 4. Deploy, remove and setup failures
 

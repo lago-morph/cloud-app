@@ -49,7 +49,7 @@ On "set up Cloudflare", "continue prototype setup" or "continue setup", run `npm
 | Add a per-stage setting | [configuration.md](reference/configuration.md) |
 | Use an API key; sign or verify data | [secrets.md](reference/secrets.md) |
 | Record what happened | [log.md](reference/log.md) |
-| Test (TDD, in-process, e2e, smoke, fuzz); a test or check fails; a test must change | [testing.md](reference/testing.md), then the one file under `reference/testing/` it names |
+| Test (TDD, in-process, e2e, smoke, fuzz); a test or check fails; a test must change | [testing.md](reference/testing.md) and the file it names |
 | Deploy, run the smoke test on a cloud, remove a stage | [deploying.md](reference/deploying.md) |
 | Diagnose a failing request or deploy; a `verify` diagnostic | [troubleshooting.md](reference/troubleshooting.md), and the reference the diagnostic names |
 | Set up Cloudflare; steps the owner performs (bootstrap token and admin app, secrets, sign-in, admins, deploy and remove, logs) | [owner-tasks.md](reference/owner-tasks.md) |

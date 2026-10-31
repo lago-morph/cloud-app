@@ -26,15 +26,15 @@ An unproven link means more evidence, never a guess.
 
 1. **Diagnose.** The diagnoser reproduces the failure, gathers the evidence and writes the record.
 2. **Review.** The reviewer first decides whether the evidence supports every link and rules out the alternatives; only then does it judge the fix (the cause, not the symptom). It reproduces once, plus one experiment per hypothesis it doubts. Its verdict is `accepted`, `accepted-with-changes` (binding on the fixer) or `rejected`, with each reason marked **major** or **minor**.
-3. **Respond.** On `rejected` or any major reason, the diagnoser answers each one point by point in a `Response (round n)` section (more evidence, a corrected chain, a revised fix, or a rebuttal with evidence), and the record goes back to step 2.
+3. **Respond.** On `rejected` or any major reason, the diagnoser answers each one point by point in a `Response (round n)` section (more evidence, a corrected chain, a revised fix, or a rebuttal with evidence), Minor reasons are fixed or answered in the same section. The record then goes back to step 2.
 4. **Similar cases.** After acceptance and before the fix, a subagent searches the app for the same pattern: other routes, other call sites, the other SQL dialect, local versus cloud. It lists what it found in a `Similar cases` section and adds a failing test for each.
 5. **Fix, red then green.** A fixer adds the reproduction test (and the similar-case tests), sees them fail, then fixes the code as the accepted record says, and sees them pass.
-6. **Re-check.** Run the affected tests and `npm run verify` again. The record's Review must be dated before the fix.
+6. **Re-check.** A subagent that changed nothing re-runs the affected tests and `npm run verify`, and checks that the record's Review came before the fix and that no test was skipped or weakened. Its verdict is the only pass.
 
 ## Limits
 
 - At most **3 attempts** (steps 1–6) per failure, and **3 review rounds** per attempt. A failed re-check starts the next attempt in the same record.
-- A failure that needed a second attempt or round gets a short `Non-convergence note`, written by another subagent: why the first try failed.
+- A failure that needed a second attempt or round gets a short `Non-convergence note`, written by another subagent: why the first try failed. If the note shows this skill was not specific enough, add a `FRAMEWORK-ISSUE.md` entry citing the note.
 - Still open after the limits: stop and tell the user, in plain words, what fails, what was tried, and the record's path.
 - A suspected framework defect goes to `FRAMEWORK-ISSUE.md` (`SKILL.md` hard rules 6 and 7), with the record as its evidence.
 

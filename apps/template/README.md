@@ -6,7 +6,7 @@ This page lists everything the owner does by hand, as copy-and-paste steps. Run 
 
 This release runs apps locally (§1) and on Cloudflare (§2 on). The short version of everything here is the framework's [QUICKSTART.md](https://github.com/lago-morph/cloud-app/blob/main/QUICKSTART.md).
 
-People sign in with Cloudflare. **Only members of the owner's Cloudflare account can sign in**, and every member is a user. Members with an administrator role in the account are admins (§8). Nothing about people is kept in configuration.
+People sign in with Cloudflare. **Only members of the owner's Cloudflare account can sign in**, and every member is a user. Members with the account role "Super Administrator - All Privileges" or "Administrator" are admins (§8). Nothing about people is kept in configuration.
 
 ## 1. Run it on your computer
 
@@ -53,7 +53,7 @@ npm run cloudflare-setup
 
 1. It prints one pre-filled dashboard link, for the **bootstrap token**, and where to put it (`.env.cloudflare` in this folder, or the environment). Make the token with an end date under TTL **no more than 1 day away**, put it there, and run the command again.
 2. It deploys the account's **admin app**, deletes the bootstrap token, and prints the admin app's address.
-3. Open the admin app and sign in with your Cloudflare account (you need an administrator role). Do **Account setup**, then make the **Everyday token** and save it as `CLOUDFLARE_API_TOKEN`, as in step 1. The page shows it once; never paste it into a chat.
+3. Open the admin app and sign in with your Cloudflare account (you need the role "Super Administrator - All Privileges" or "Administrator"). Do **Account setup**, then make the **Everyday token** and save it as `CLOUDFLARE_API_TOKEN`, as in step 1. The page shows it once; never paste it into a chat.
 4. Run `npm run cloudflare-setup` again (in Claude Code, "continue prototype setup") until it says everything is set up.
 
 Coming from framework 0.1.x: `npm run upgrade` says setup needs re-running; do steps 1–4 once per account. Everyone signs in again, with Cloudflare (QUICKSTART, "Coming from 0.1.x?").
@@ -133,11 +133,11 @@ npm run deploy -- --target cloudflare --stage "$STAGE"
 2. Sign in on Cloudflare's page with a member of the account, and allow what it asks.
 3. Back on the app, `https://template-prod.<subdomain>.workers.dev/api/auth/me` shows `"level":"user"` or `"level":"admin"`.
 
-To let someone sign in, invite them to the Cloudflare account (Manage Account → Members); a read-only role such as "HTTP Applications Read" is enough. `npm run check-login -- --target cloudflare --stage "$STAGE"` checks, with no sign-in, that the stage sends people to the auth app with its own address.
+To let someone sign in, invite them to the Cloudflare account (Manage Account → Members); a read-only role, for example "HTTP Applications Read", is enough. `npm run check-login -- --target cloudflare --stage "$STAGE"` checks, with no sign-in, that the stage sends people to the auth app with its own address.
 
 ## 8. Admins
 
-A member with an administrator role in the Cloudflare account is admin; every other member is a user. Change a person's role in the dashboard (Manage Account → Members). No file edit, no commit and no deploy: the change shows at their next sign-in, or within 5 minutes when the app next confirms their role.
+A member whose Cloudflare account role is "Super Administrator - All Privileges" or "Administrator" is admin; every other member is a user. Change a person's role in the dashboard (Manage Account → Members). No file edit, no commit and no deploy: the change shows when they next sign in (ask them to log out and in again). Removing someone from the account does not end a session they already have; it lasts until it expires (7 days) or they log out.
 
 ## 9. Stop, start and remove
 

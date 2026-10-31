@@ -13,7 +13,7 @@ Having a zod schema makes a route eligible, not required. Never fuzz every route
 
 ## The template's helper
 
-`tests/support/fuzz.ts` drives a route from its zod schema with the `fast-check` package (pinned in `package.json`, hard rule 5): it sends generated bodies, both valid and invalid for the schema, and checks that the route never answers a server error, answers 400 `HTTP.INVALID_INPUT` exactly when the schema rejects the body, and accepts what the schema accepts. Each use states its run count and fixed seed, with a one-line reason, so a run is small and repeatable and adds only seconds to `verify`. See `tests/fuzz.test.ts` for the template's one use.
+`tests/support/fuzz.ts` drives a route from its zod schema with the `fast-check` package (pinned in the template's `package.json`): it sends generated bodies, both valid and invalid for the schema, and checks that the route never answers a server error, answers 400 `HTTP.INVALID_INPUT` when the schema rejects the body, and never answers it when the schema accepts the body (the route's own rules may still refuse it, for example with 404 or 409). Each use states its run count and fixed seed, with a one-line reason, so a run is small and repeatable and adds only seconds to `verify`. See `tests/fuzz.test.ts` for the template's one use.
 
 ## A finding
 
