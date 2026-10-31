@@ -10,6 +10,7 @@ import { runRemove } from "../core/remove.js";
 import { runSetupAccount } from "../core/setup-account.js";
 import { unwiredDatabases } from "./databases.js";
 import { ACCOUNT, FAKE_SIGNING, FakeCloud, FakeDatabases, FULL_POLICIES } from "./fake-cloud.test-support.js";
+import { createAccountSigningCredential } from "./r2-token.js";
 import { SETUP_STEPS } from "./setup-record.js";
 import { createCloudflareTarget, type CloudflareTargetOptions } from "./target.js";
 
@@ -464,6 +465,65 @@ describe("deploy on Cloudflare (PROV-REQ-002 steps 3, 5, 6, 7)", () => {
     const secrets = cloud.workers.get("notes-test-abc")!.secrets;
     expect(secrets.get("SECRET_FRAMEWORK_R2_ACCESS_KEY_ID")).toBe("tok7");
     expect(secrets.get("SECRET_FRAMEWORK_R2_SECRET_ACCESS_KEY")).toBe("7".repeat(64));
+  });
+
+  describe("the signing credential bound from Secrets Store (plan-v0.2.0 D7, §10; DEC-0727, DEC-0729)", () => {
+    const R2_SECRETS = ["SECRET_FRAMEWORK_R2_ACCESS_KEY_ID", "SECRET_FRAMEWORK_R2_SECRET_ACCESS_KEY"];
+    /** The Worker-secret delete endpoint on the fake account; `seen` records the SST runs done at each delete. */
+    function allowSecretDeletes(cloud: FakeCloud, seen: number[]) {
+      for (const name of R2_SECRETS) {
+        cloud.override.set(`DELETE /accounts/${ACCOUNT}/workers/scripts/notes-test-abc/secrets/${name}`, () => {
+          seen.push(cloud.sstRuns.length);
+          const w = cloud.workers.get("notes-test-abc");
+          return w?.secrets.delete(name) === true ? { status: 200, body: { success: true, result: null } } : { status: 404, body: { success: false, errors: [{ code: 10056, message: "not found" }] } };
+        });
+      }
+    }
+
+    it("a deploy binds both S3 credentials from the store under the Worker secrets' names and copies neither; a stage holding copies has them deleted before the upload", async () => {
+      const { cloud, target } = setup();
+      const seen: number[] = [];
+      allowSecretDeletes(cloud, seen);
+      expect((await runDeploy(target, request(), captureIo())).status).toBe(0);
+      expect(cloud.workers.get("notes-test-abc")!.secrets.has("SECRET_FRAMEWORK_R2_ACCESS_KEY_ID")).toBe(true);
+
+      expect((await createAccountSigningCredential(cloud.api, ACCOUNT, { secretsStore: true })).where).toBe("secrets-store");
+      const runs = cloud.sstRuns.length;
+      const io = captureIo();
+      expect((await runDeploy(target, request(), io)).status, io.err).toBe(0);
+      const worker = cloud.workers.get("notes-test-abc")!;
+      expect(worker.bindings).toContainEqual({ type: "secrets_store_secret", name: "SECRET_FRAMEWORK_R2_ACCESS_KEY_ID", storeId: "store1", secretName: "PROTOTYPE_R2_ACCESS_KEY_ID" });
+      expect(worker.bindings).toContainEqual({ type: "secrets_store_secret", name: "SECRET_FRAMEWORK_R2_SECRET_ACCESS_KEY", storeId: "store1", secretName: "PROTOTYPE_R2_SECRET_ACCESS_KEY" });
+      expect([...worker.secrets.keys()].sort()).toEqual(["SECRET_FRAMEWORK_AUTH_SECRET", "SECRET_FRAMEWORK_SESSION_KEY"]);
+      // Deleted after step 3's targeted run and before step 5's upload, which takes their names.
+      expect(seen).toEqual([runs + 1, runs + 1]);
+      expect(cloud.programs.at(-1)).not.toContain(cloud.secretStores.get("store1")!.secrets.get("PROTOTYPE_R2_SECRET_ACCESS_KEY")!.value);
+    });
+
+    it("the Worker-secret fallback: once the record holds the credentials again, a deploy declares no Secrets Store binding and copies them", async () => {
+      const { cloud, target } = setup();
+      allowSecretDeletes(cloud, []);
+      await createAccountSigningCredential(cloud.api, ACCOUNT, { secretsStore: true });
+      expect((await runDeploy(target, request(), captureIo())).status).toBe(0);
+      cloud.override.set(`GET /accounts/${ACCOUNT}/secrets_store/stores?per_page=50`, { status: 403, body: { success: false, errors: [{ code: 10000, message: "Authentication error" }] } });
+      expect((await createAccountSigningCredential(cloud.api, ACCOUNT, { secretsStore: true })).where).toBe("record");
+      expect((await runDeploy(target, request(), captureIo())).status).toBe(0);
+      const worker = cloud.workers.get("notes-test-abc")!;
+      expect(worker.bindings.some((b) => b.type === "secrets_store_secret")).toBe(false);
+      const record = cloud.objectBodies.get("sst-state/framework/r2-signing.json") as { accessKeyId: string; secretAccessKey: string };
+      expect(worker.secrets.get("SECRET_FRAMEWORK_R2_ACCESS_KEY_ID")).toBe(record.accessKeyId);
+      expect(worker.secrets.get("SECRET_FRAMEWORK_R2_SECRET_ACCESS_KEY")).toBe(record.secretAccessKey);
+    });
+
+    it("[PROV-AC-002] unit part: with a store-held credential missing from the store, deploy stops at step 1 naming the signing credential", async () => {
+      const { cloud, target } = setup();
+      await createAccountSigningCredential(cloud.api, ACCOUNT, { secretsStore: true });
+      cloud.secretStores.get("store1")!.secrets.delete("PROTOTYPE_R2_SECRET_ACCESS_KEY");
+      const io = captureIo();
+      expect((await runDeploy(target, request(), io)).status).toBe(1);
+      expect(io.err).toMatch(/the account's shared resources are missing \(.*R2 signing credential prototype-r2-signing.*\)/);
+      expect(cloud.sstRuns).toEqual([]);
+    });
   });
 
   it("[PROV-AC-004] unit part: setup-account without Account API Tokens Write, while the signing credential is absent, names that permission and changes nothing (DEC-0551)", async () => {
