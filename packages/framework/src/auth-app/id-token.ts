@@ -41,7 +41,8 @@ function decodeJson(part: string): Record<string, unknown> {
 }
 
 function chooseKey(keys: readonly JsonWebKey[], kid: unknown): JsonWebKey {
-  const rsa = keys.filter((k) => k.kty === "RSA");
+  // Signing keys only: a key marked for encryption or for another algorithm is never used.
+  const rsa = keys.filter((k) => k.kty === "RSA" && (k.use === undefined || k.use === "sig") && (k.alg === undefined || k.alg === "RS256"));
   const found = kid === undefined && rsa.length === 1 ? rsa[0] : rsa.find((k) => (k as { kid?: unknown }).kid === kid);
   return found ?? refuse("unknown key");
 }
@@ -53,6 +54,7 @@ export async function verifyIdToken(token: string, check: IdTokenCheck): Promise
   const header = decodeJson(h);
   const claims = decodeJson(p);
   if (header.alg !== "RS256") refuse("unsupported alg");
+  if (header.crit !== undefined) refuse("unsupported header");
   const jwk = chooseKey(check.keys, header.kid);
   const signature = new Uint8Array(base64urlDecode(s) ?? refuse("bad signature"));
   if (typeof jwk.n !== "string" || typeof jwk.e !== "string") refuse("unknown key");
@@ -70,8 +72,10 @@ export async function verifyIdToken(token: string, check: IdTokenCheck): Promise
   if (claims.iss !== check.issuer) refuse("wrong iss");
   const aud = claims.aud;
   const audOk = typeof aud === "string" ? aud === check.clientId : Array.isArray(aud) && aud.includes(check.clientId);
-  if (!audOk) refuse("wrong aud");
-  if (typeof claims.nonce !== "string" || claims.nonce !== check.nonce) refuse("wrong nonce");
+  // OIDC Core 3.1.3.7: with several audiences azp must name this client; any azp must be it.
+  const azpOk = claims.azp === undefined ? !(Array.isArray(aud) && aud.length > 1) : claims.azp === check.clientId;
+  if (!audOk || !azpOk) refuse("wrong aud");
+  if (check.nonce === "" || typeof claims.nonce !== "string" || claims.nonce !== check.nonce) refuse("wrong nonce");
   if (typeof claims.exp !== "number" || check.nowSeconds > claims.exp + ID_TOKEN_LEEWAY_S) refuse("expired");
   if (typeof claims.sub !== "string" || claims.sub === "") refuse("no sub");
 
