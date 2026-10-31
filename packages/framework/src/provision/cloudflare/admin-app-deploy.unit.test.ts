@@ -13,6 +13,8 @@ describe("the uploaded admin app (E replaced C's stub)", () => {
     const source = await bundleAdminApp();
     expect(source).not.toMatch(/^\s*import\s/m);
     expect(source).not.toMatch(/\bnode:/);
+    // Loaded in Node below, so Node-only globals must be ruled out here.
+    expect(source).not.toMatch(/\bBuffer\b|\bprocess\.|\brequire\(|import\.meta/);
   });
 
   it("serves the sign-in page when its settings are bound, and a generic 500 page without them", async () => {
@@ -20,6 +22,8 @@ describe("the uploaded admin app (E replaced C's stub)", () => {
     const env = { ADMIN_CLIENT_ID: { get: () => Promise.resolve("cid") }, ADMIN_CLIENT_SECRET: { get: () => Promise.resolve("csecret-value") }, ADMIN_ACCOUNT_ID: "acct", ADMIN_APP_ORIGIN: `https://prototype-admin.${SUB}.workers.dev` };
     const ok = await loaded.default.fetch(new Request(`https://prototype-admin.${SUB}.workers.dev/`), env);
     expect(ok.status).toBe(200);
+    expect(ok.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect(ok.headers.get("cache-control")).toBe("no-store");
     expect(await ok.text()).toContain('action="/signin"');
     const broken = await loaded.default.fetch(new Request(`https://prototype-admin.${SUB}.workers.dev/`), { ...env, ADMIN_ACCOUNT_ID: undefined });
     expect(broken.status).toBe(500);
