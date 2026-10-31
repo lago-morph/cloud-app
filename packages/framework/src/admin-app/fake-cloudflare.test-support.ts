@@ -44,6 +44,9 @@ export function scopeFor(method: string, path: string): string | undefined {
 /** Scopes that also allow a call needing the key (a write scope covers its read). */
 const ALSO: Readonly<Record<string, string>> = { "secrets-store.read": "secrets-store.write" };
 
+/** Whether `granted` allows a call needing `needs` (the scope itself, or the write scope that covers its read). */
+export const covers = (needs: string, granted: readonly string[]): boolean => granted.includes(needs) || (ALSO[needs] !== undefined && granted.includes(ALSO[needs]));
+
 /** The scope that covers each permission group a grant-made token may hold (plan §5.2 page 2's table). */
 export const GROUP_SCOPE: Readonly<Record<string, string>> = {
   "Workers Scripts Write": "workers-scripts.write",
@@ -125,7 +128,7 @@ export async function fakeCloudflare(options: { account?: CloudflareApi; omitSco
       return { status: 200, body: { success: true, result, result_info: { page: 1, total_pages: 1 } } };
     }
     const needs = scopeFor(method, path)!;
-    if (!t.scope.includes(needs) && !(ALSO[needs] !== undefined && t.scope.includes(ALSO[needs]))) {
+    if (!covers(needs, t.scope)) {
       // §2.1, third sign-in: the Workers list without its scope is filtered, not refused; D1 and
       // R2 never asked for answer code 10000; anything else asked for but unticked, 9109.
       if (method === "GET" && /^\/accounts\/[^/]+\/workers\/scripts$/.test(p)) return { status: 200, body: { success: true, errors: [], messages: [], result: [] } };

@@ -18,7 +18,7 @@
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { GROUP_SCOPE, scopeFor } from "../../../src/admin-app/fake-cloudflare.test-support.js";
+import { covers, GROUP_SCOPE, scopeFor } from "../../../src/admin-app/fake-cloudflare.test-support.js";
 import { fakeTokens, type FakeTokens } from "../../../src/admin-app/fake-tokens.test-support.js";
 
 export const ISSUER_ID = "cf";
@@ -35,6 +35,10 @@ export interface Edge {
   readonly tokens: FakeTokens;
   /** Every access and refresh token issued, and whether it was revoked. */
   readonly issued: { access: string; refresh: string; scope: string[]; revoked: Set<string> }[];
+  /**
+   * Records the scopes an authorization request asked for; the next token answer grants them
+   * (minus `untick`). One grant at a time: tests run their grants in sequence.
+   */
   noteAuthorize(authorizeUrl: string): void;
   close(): Promise<void>;
 }
@@ -105,7 +109,7 @@ export async function startEdge(issuerBase: string): Promise<Edge> {
         const text = method === "GET" || method === "DELETE" ? "" : await body(req);
         const json: unknown = text === "" ? undefined : JSON.parse(text);
         const needs = scopeFor(method, path)!;
-        if (!grant.scope.includes(needs)) return send(res, 403, apiErr(9109, "Unauthorized to access requested resource"));
+        if (!covers(needs, grant.scope)) return send(res, 403, apiErr(9109, "Unauthorized to access requested resource"));
         if ((method === "POST" || method === "PUT") && /^\/accounts\/[^/]+\/tokens(\/[^/]+)?$/.test(p)) {
           const groups = ((json as { policies?: { permission_groups?: { id?: string }[] }[] } | undefined)?.policies ?? []).flatMap((x) => x.permission_groups ?? []);
           if (groups.some((g) => !grant.scope.includes(GROUP_SCOPE[g.id ?? ""] ?? "-"))) return send(res, 400, apiErr(1001, "The OAuth session does not include the scopes required for the requested permission groups"));
