@@ -203,8 +203,16 @@ describe("production remove backs up first (DEC-0543)", () => {
 
   it("a production remove clears the stage's return URLs from the auth app's registry after the backup; a test stage's remove does not ask (DEC-0725)", async () => {
     const { authApp, databases, target } = await deployedProd();
+    // One sequence across both recorders: the clear comes before any database is deleted (DEC-0725).
+    const unregister = authApp.unregister;
+    let dropsBeforeClear = -1;
+    authApp.unregister = async (app: string) => {
+      dropsBeforeClear = databases.calls.filter((c) => c.startsWith("drop")).length;
+      return unregister(app);
+    };
     expect((await runRemove(target, prod, captureIo())).status).toBe(0);
     expect(authApp.calls).toEqual(["register notes-prod", "unregister notes-prod"]);
+    expect(dropsBeforeClear, "databases deleted before the registry entry was cleared").toBe(0);
     expect(databases.calls).toContain("export notes-prod-db-1");
 
     const t = setup();

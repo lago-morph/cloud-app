@@ -323,6 +323,12 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       return { resources, databases: await databases.listDatabases() };
     },
 
+    // The core calls this before it deletes anything of the stage: nobody new signs in to a stage
+    // being removed, and its outstanding codes go too (DEC-0725, DEC-0730). Test stages are not registered.
+    async unregisterStage(stage) {
+      if (production(stage)) await authApp.unregister(workerName(stage));
+    },
+
     async removeStage(stage) {
       refuseAccountResourceClash(stage);
       const failures: string[] = [];
@@ -334,8 +340,6 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
         }
       };
       const bucket = filesBucketName(stage);
-      // First, so nobody new signs in to a stage being removed; its outstanding codes go too (DEC-0725).
-      if (production(stage)) await attempt(() => authApp.unregister(workerName(stage)));
       await attempt(async () => deleteObjects(api, accountId, bucket, await listObjectKeys(api, accountId, bucket)));
       await attempt(async () => {
         const token = await findLegacySigningToken(api, accountId, stage);
