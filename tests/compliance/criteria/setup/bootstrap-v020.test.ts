@@ -79,14 +79,14 @@ if (isLocal()) {
       const before = readEnvFile(dir);
       const r = await runSetup("v020 AC-002 current", world, dir);
       expect(r.status, r.all).toBe(0);
-      expect(r.all).toMatch(/already set up|setup is complete/i);
+      expect(r.all).toMatch(/already set up/i);
       expect(r.stdinReads).toBe(0);
       expect(writesOf(r.requests)).toEqual([]);
       expect(readEnvFile(dir)).toBe(before);
       const bare = await project();
       const e = await runSetup("v020 AC-002 environment only", world, bare, { env: { [EVERYDAY_SETTING]: everyday.value, CLOUDFLARE_ACCOUNT_ID: ACCOUNT } });
       expect(e.status, e.all).toBe(0);
-      expect(e.all).toMatch(/already set up|setup is complete/i);
+      expect(e.all).toMatch(/already set up/i);
       expect(e.stdinReads).toBe(0);
       expect(writesOf(e.requests)).toEqual([]);
       expect(envFileExists(bare), "no .env.cloudflare: the project had none").toBe(false);
@@ -303,6 +303,7 @@ if (isLocal()) {
       const r = await runSetup("v020 AC-008 two accounts", world, await project({ envFile: envFile({ [EVERYDAY_SETTING]: user.value }) }));
       expect(r.status, r.all).toBe(1);
       for (const name of ["Main account", "Second account", "CLOUDFLARE_ACCOUNT_ID"]) expect(r.all).toContain(name);
+      for (const id of [ACCOUNT, SECOND_ACCOUNT]) expect(r.all, "the accounts by name, no ID").not.toContain(id);
       expect(writesOf(r.requests)).toEqual([]);
     });
 

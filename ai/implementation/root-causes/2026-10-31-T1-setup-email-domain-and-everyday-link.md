@@ -46,4 +46,12 @@ All three majors accepted; the test side is corrected in T1's own file (never gr
 4. *Evidence 1 count*: corrected by item 3 (cause A: seven tests; the AC-008 no-zone stop is line 795).
 5. *Verification plan, revised*: after C's fix of A and B, on a branch holding it and 75, `bootstrap-v020.test.ts` 20/20 and `npm run compliance -- --target local --only SETUP-AC-001,…,SETUP-AC-010` all `passed`. Until then the 10 stay red, not skipped.
 
-Status: awaiting review (round 2)
+## Review (round 2)
+Same reviewer, 2026-10-31, at 24c71ba. Reproduced both runs: 10 failed / 10 passed without the domain, 5 failed / 15 passed with it. Verdict: **accepted**. The re-scoped chain matches the experiment: seven tests fail on step 5 alone (cause A), three on the v0.1.x messages (cause B); nothing left points at the tests. The fix and its routing to C, and the revised verification plan, are right.
+- **minor** — with the domain injected, SETUP-AC-002 and SETUP-AC-008's no-zone test still fail, as artifacts of the experiment (the domain is written into `.env.cloudflare`; the cleared account has no zone for it), consistent with cause A. Answered: Response (round 1) item 2 says so; nothing to change.
+
+Test-side minors of round 2 (all applied before the fix, in T1's file): SETUP-AC-002 matches "already set up" again (the criterion's words); SETUP-AC-008's two-accounts test asserts that neither account ID is printed; DEC-0750 notes the gap between DEC-0681 ("no account check") and the refused token's account-list read; the remedy reading is recorded as the loosening it is (the bootstrap link may stand beside the Everyday token page).
+
+Full harness run at 93eab74 (`npm run compliance -- --target local`): every SETUP ID expected locally is reported; SETUP-AC-001, -002, -003, -004, -007, -008 `failed` on exactly the ten tests of causes A and B; SETUP-AC-005, -006, -009, -010 `passed`.
+
+Status: accepted (round 2). Fix: C (34a or 34c), as forwarded by the orchestrator. T1 does not fix it (§7a.1.8 step 4: outside T1's owned paths).
