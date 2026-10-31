@@ -19,7 +19,7 @@
  */
 import type { CloudflareApi } from "../provision/cloudflare/api.js";
 import { readCookie } from "../auth/cookies.js";
-import { GrantError, isAction, logLine, openGrant, startGrant, useGrant, type AdminConfig, type Grant } from "./grant.js";
+import { actionVerb, GrantError, isAction, logLine, openGrant, startGrant, useGrant, type AdminConfig, type Grant } from "./grant.js";
 import { button, esc, page, SECURITY_HEADERS } from "./html.js";
 import { ADMIN_GRANT_MS, ADMIN_SESSION_MS, GRANT_COOKIE, SESSION_COOKIE } from "./params.js";
 import { open, seal } from "./seal.js";
@@ -49,6 +49,8 @@ export type PageResult = string | { readonly html: string; readonly script: stri
 export interface AdminPage {
   readonly id: Exclude<AdminPageId, "signin">;
   readonly title: string;
+  /** The sub-action verbs its form may post (`<verb>:<ids>`); none when absent. */
+  readonly actions?: readonly string[];
   /** The page before its action: what it will do (trusted HTML). */
   view(admin: Admin): string | Promise<string>;
   /** The action, with the person's grant; its result as trusted HTML. */
@@ -217,7 +219,8 @@ export async function handleAdminRequest(request: Request, deps: AdminDeps): Pro
     if ((request.headers.get("content-type") ?? "").startsWith("application/x-www-form-urlencoded")) {
       const posted = new URLSearchParams(await request.text()).get("action");
       if (posted !== null) {
-        if (!isAction(posted)) return page(target.title, "<p>That request was not understood.</p>", { status: 400 });
+        // Only a well-formed action whose verb the page declares; anything else starts nothing.
+        if (!isAction(posted) || !(target.actions ?? []).includes(actionVerb(posted))) return page(target.title, "<p>That request was not understood.</p>", { status: 400 });
         action = posted;
       }
     }

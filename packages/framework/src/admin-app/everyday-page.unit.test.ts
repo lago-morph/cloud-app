@@ -77,6 +77,7 @@ describe("page 2: the everyday token", () => {
     const html = await r.text();
     expect(html.split(t!.value)).toHaveLength(2);
     expect(html).toContain('id="copy"');
+    expect(html).not.toMatch(/<p>(?:(?!<\/p>).)*<ul>/s);
     expect(html).toContain("CLOUDFLARE_API_TOKEN=");
     expect(r.headers.get("cache-control")).toBe("no-store");
     expect(r.headers.get("content-security-policy")).toMatch(/script-src 'nonce-[0-9a-f]+'/);
