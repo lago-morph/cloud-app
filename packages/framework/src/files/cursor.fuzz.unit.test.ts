@@ -17,8 +17,9 @@ const SEED = 2026103106;
 const OPTIONS = { seed: SEED, numRuns: RUNS } as const;
 
 const B64URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+const UTF8_BOM = Buffer.from([0xef, 0xbb, 0xbf]);
 
-const edge = fc.constantFrom("a", "/", ".", "..", "\u0000", "\u0001", "\u007f", "\u0080", "퟿", "", "￿", "\u{10ffff}", "\ud800", "\udc00");
+const edge = fc.constantFrom("a", "/", ".", "..", "\u0000", "\u0001", "\u007f", "\u0080", "\ud7ff", "\ue000", "\uffff", "\u{10ffff}", "\ud800", "\udc00");
 const anyText = fc.array(fc.oneof(edge, fc.string({ unit: "binary", maxLength: 2 })), { maxLength: 6 }).map((p) => p.join(""));
 const wellFormedText = fc.array(fc.oneof(edge.filter((c) => !/^[\ud800-\udfff]$/.test(c)), fc.string({ unit: "grapheme", maxLength: 2 })), { maxLength: 6 }).map((p) => p.join(""));
 /** Prefixes shared by generated cursors and requests, so that some cursors match the prefix asked for. */
@@ -39,6 +40,8 @@ const cursorInput = fc.oneof(
   fc.tuple(issued, fc.constantFrom("=", "==", "+", "/", " ")).map(([c, extra]) => c + extra),
   // Another spelling of the last character: the same high bits, other low (padding) bits.
   fc.tuple(issued, fc.constantFrom(1, 2, 3)).map(([c, flip]) => c.slice(0, -1) + (B64URL[B64URL.indexOf(c.slice(-1)) ^ flip] ?? "")),
+  // The same JSON behind a UTF-8 byte order mark (review of the F4 record, round 1).
+  issued.map((c) => Buffer.concat([UTF8_BOM, Buffer.from(c, "base64url")]).toString("base64url")),
   fc.jsonValue().map((v) => Buffer.from(JSON.stringify(v) ?? "").toString("base64url")),
   fc.string({ unit: fc.constantFrom(...B64URL), maxLength: 40 }),
   fc.string({ unit: "binary", maxLength: 16 }),
@@ -57,8 +60,10 @@ describe("F6: FILES list cursors fuzz (FILES-REQ-001)", () => {
           return;
         }
         expect(name.startsWith(prefix)).toBe(true);
-        // Only the canonical base64url spelling of the bytes decodes (as in KV, kv.md §2).
-        expect(Buffer.from(cursor, "base64url").toString("base64url")).toBe(cursor);
+        // Only the canonical base64url spelling of exactly the UTF-8 JSON `{p, a}` decodes (as in KV, kv.md §2).
+        const bytes = Buffer.from(cursor, "base64url");
+        expect(bytes.toString("base64url")).toBe(cursor);
+        expect(JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes))).toEqual({ p: prefix, a: name });
       }),
       OPTIONS,
     );

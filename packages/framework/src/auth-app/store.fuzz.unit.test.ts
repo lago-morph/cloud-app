@@ -73,7 +73,7 @@ type UrlMutation = { readonly kind: string; readonly at: number; readonly ch: st
 const urlMutation: fc.Arbitrary<UrlMutation> = fc.record({
   kind: fc.constantFrom("exact", "slash", "case", "port", "default-port", "percent", "insert", "idn", "punycode", "trailing-dot", "query", "fragment", "userinfo", "extend", "truncate", "space"),
   at: fc.nat(),
-  ch: fc.constantFrom("\t", "\n", "\r", " ", "\u0000", "/", "\\", ".", "%", "@", "#", "?", ";", "A", "а", "é"),
+  ch: fc.constantFrom("\t", "\n", "\r", " ", "\u0000", "/", "\\", ".", "%", "@", "#", "?", ";", "A", "\u0430", "\u00e9"),
 });
 
 /** A near-miss of `url` (or `url` itself for "exact"). */
@@ -101,7 +101,7 @@ function mutateUrl(url: string, m: UrlMutation): string {
     case "insert":
       return url.slice(0, i) + m.ch + url.slice(i);
     case "idn":
-      return url.slice(0, hostAt) + u.host.replace(/a/, "а").replace(/e/, "é") + url.slice(hostEnd);
+      return url.slice(0, hostAt) + u.host.replace(/a/, "\u0430").replace(/e/, "\u00e9") + url.slice(hostEnd);
     case "punycode":
       return `${url.slice(0, hostAt)}xn--${u.host}${url.slice(hostEnd)}`;
     case "trailing-dot":
@@ -162,7 +162,7 @@ const RETURN = "https://notes-prod.acct.workers.dev/api/auth/callback";
 const NOW = 1_800_000_000_000;
 const B64URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 /** Look-alikes of base64url characters: Cyrillic and Greek letters, digits from other scripts, dashes. */
-const LOOK_ALIKES: Record<string, string> = { A: "А", B: "Β", O: "0", "0": "О", l: "1", "1": "l", I: "Ι", "-": "‐", _: "＿", a: "а", e: "е" };
+const LOOK_ALIKES: Record<string, string> = { A: "\u0410", B: "\u0392", O: "0", "0": "\u041e", l: "1", "1": "l", I: "\u0399", "-": "\u2010", _: "\uff3f", a: "\u0430", e: "\u0435" };
 
 type CodeMutation = { readonly kind: string; readonly at: number; readonly ch: string };
 const codeMutation: fc.Arbitrary<CodeMutation> = fc.record({
@@ -188,7 +188,7 @@ function mutateCode(code: string, m: CodeMutation): string {
       return code + "=".repeat((m.at % 2) + 1);
     case "look-alike": {
       const k = [...code].findIndex((c, idx) => idx >= j && LOOK_ALIKES[c] !== undefined);
-      return k < 0 ? `${code}А` : code.slice(0, k) + LOOK_ALIKES[code.charAt(k)] + code.slice(k + 1);
+      return k < 0 ? `${code}\u0410` : code.slice(0, k) + LOOK_ALIKES[code.charAt(k)] + code.slice(k + 1);
     }
     case "respell-end":
       return code.slice(0, -1) + (B64URL[B64URL.indexOf(code.slice(-1)) ^ ((m.at % 3) + 1)] ?? "");
