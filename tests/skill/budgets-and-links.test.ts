@@ -107,6 +107,15 @@ describe("SKILL: size budgets and links", () => {
     "troubleshooting.md": [],
   };
 
+  it(tag("SKILL-AC-001", "link check: each testing workflow reference (reference/testing/) links to at least one existing example"), () => {
+    const exampleSet = new Set(examples);
+    const withoutExample = markdownFiles(TESTING_REFERENCE_DIR)
+      .filter((ref) => ![...linkedFiles(ref)].some((f) => exampleSet.has(f)))
+      .map(repoPath);
+    expect(markdownFiles(TESTING_REFERENCE_DIR).length).toBeGreaterThan(0);
+    expect(withoutExample, "testing workflow references with no link to an example").toEqual([]);
+  });
+
   it(tag("SKILL-AC-001", "link check: the table of each reference's examples covers exactly the references CHECK names and names only existing examples"), () => {
     expect(Object.keys(ITS_EXAMPLES).sort()).toEqual([...REFERENCE_FILES].sort());
     const unknown = [...new Set(Object.values(ITS_EXAMPLES).flat())].filter((name) => !existsSync(join(EXAMPLES_DIR, name)));

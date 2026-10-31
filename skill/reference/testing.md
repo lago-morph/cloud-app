@@ -20,7 +20,7 @@ These hold for every change, without asking the user technical questions. Explai
 | --- | --- | --- | --- |
 | Unit and integration | App logic and routes, in process, with real local storage on both SQL dialects | `tests/**/*.test.ts` | `npm run verify` |
 | E2E, API | Each flow through the running app's HTTP API | `tests/e2e/api/*.spec.ts` | `npm run verify` (project `e2e-api`, no browser) |
-| E2E, UI | What only a browser shows: page rendering, the login button, file transfer in the page, cookies; a few per flow | `tests/e2e/ui/*.spec.ts` | `npm run test:e2e:ui` (project `e2e-ui`, installs Chromium) |
+| E2E, UI | What only a browser shows: page rendering, the login button, file transfer in the page, cookies; a few per flow | `tests/e2e/ui/*.spec.ts` | `npm run test:e2e:ui` (project `e2e-ui`, needs Chromium) |
 | Fuzz | A route input at a trust boundary, from its zod schema, only where [testing/fuzzing.md](testing/fuzzing.md) says | `tests/**/*.test.ts` | `npm run verify` |
 | Smoke | A short check on a deployed `test-` stage | `tests/smoke/**/*.test.ts` | `npm run smoke` |
 
@@ -47,7 +47,7 @@ Expiry and other time checks are tested in-process with Vitest's fake timers: `v
 
 One file under `tests/smoke/` runs both ways: under `verify` it is an ordinary in-process test (`createTestApp`); under `smoke`, `inject("prototypeFrameworkSmoke")` is `true` and it uses `connectTestStage()`, which connects to the stage `smoke` targets and logs in through the authentication mock.
 
-Keep it short: the health route (`GET /api/__framework/health` answers 204), one open route, and one write-then-read per capability your app depends on. Use a fresh mock user per run (`` mockUsers.user(`smoke-${crypto.randomUUID()}`) ``) because stage data is kept between runs. `logs()` is not available against a stage. Copy the template's file and change the routes ([examples/tests.md](../examples/tests.md)).
+Keep it short: the health route (`GET /api/__framework/health` answers 204), one open route, and one write-then-read per capability your app depends on. Use a fresh mock user per run (`` mockUsers.user(`smoke-${crypto.randomUUID()}`) ``) because stage data is kept between runs; do not assert totals that earlier runs would change. `logs()` is not available against a stage. Copy the template's file and change the routes ([examples/tests.md](../examples/tests.md)).
 
 `t.request` sends only to the app; a URL on any other origin is refused. A ticket's `url` is a path on the app locally (send it with `t.request`) and an absolute signed storage URL on a cloud (send it with plain `fetch`, no cookie): choose with `/^\/(?![\/\\])/.test(ticket.url)`. Behind a proxy, `smoke` needs `NODE_USE_ENV_PROXY=1` for that `fetch`. To run it on a cloud, deploy a test stage, run `npm run smoke -- --target cloudflare --stage test-1`, then remove the stage ([deploying.md](deploying.md)).
 
