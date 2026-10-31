@@ -6,7 +6,7 @@ Source: `ai/implementation/plan-v0.2.0-testing-auth.md` §7a.2.4 (TS-11, TS-16, 
 
 ## The path map
 
-The committed path map is `scripts/ci/path-map.json`. CI's first step classifies the PR's changed files against it and selects the layers to run. The map is the single source for that selection: when you add a component, a test layer, an e2e support file or a doc that a test reads, update the map in the same change, so that the change still selects its tests.
+The committed path map is `scripts/ci/path-map.json`, created by item S3. Until it exists, CI runs as `.github/workflows/ci.yml` says, and the rules below describe the selection S3 introduces. CI's first step classifies the PR's changed files against it and selects the layers to run. The map is the single source for that selection: when you add a component, a test layer, an e2e support file or a doc that a test reads, update the map in the same change, so that the change still selects its tests.
 
 ## Triggers
 

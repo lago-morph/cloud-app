@@ -51,7 +51,7 @@ These are the lasting text of the v0.2.0 testing standards (`ai/implementation/p
 
     Put its verdict and its reasons in the commit message, or in the PR description for a batch of commits.
 11. **Fuzzing is local, limited and targeted.** Fuzz only reviewed targets, with a small run and a fixed seed, in the unit or integration layer, and never against a cloud stage (`resources/fuzzing.md`).
-12. **CI selects tests from the path map** (`scripts/ci/path-map.json`). A change that adds a component, a test file or a doc that a test reads keeps the map current (`resources/ci-path-map.md`).
+12. **CI selects tests from the path map** (`scripts/ci/path-map.json`, created by item S3; until it exists, CI runs as `.github/workflows/ci.yml` says). A change that adds a component, a test file or a doc that a test reads keeps the map current (`resources/ci-path-map.md`).
 
 ## When to read a resource
 
