@@ -7,7 +7,7 @@ What it shows:
 - `tests/app.test.ts`: `createTestApp` per test with `dispose()` afterwards; `mockUsers` with `as()` and the `user` option; `config` and `secrets` options; asserting status codes, error codes and `logs()`; an in-process upload sent with the ticket's wire form, to test the finalize route (the form is the same on every target; only `url` differs: here a path on the app, sent with `t.request`; on a cloud an absolute storage URL, which tests send with plain `fetch`, never a test helper, see "The smoke test" in [testing.md](../reference/testing.md)) (the HMAC tests are in [secrets.md](secrets.md)).
 - `tests/smoke/smoke.test.ts`: one file that runs in-process under `verify` and against a deployed test stage under `smoke` (`connectTestStage()`).
 - From the reference app, `tests/support.ts`: a shared `open()` helper that disposes test apps after each test.
-- `tests/e2e/`: the e2e layer, against a local `dev` server that the template's `playwright.config.ts` has Playwright start. `api/notes.spec.ts` drives one flow through the HTTP API (project `e2e-api`, no browser, run by `verify`) with its edge cases listed first; `ui/account.spec.ts` is the one browser test, of what only a page shows (project `e2e-ui`) ([e2e.md](../reference/testing/e2e.md)).
+- `tests/e2e/`: the e2e layer, against a local `dev` server that the template's `playwright.config.ts` has Playwright start and stop. `api/notes.spec.ts` drives one flow through the HTTP API (project `e2e-api`, no browser, run by `verify`) with its edge cases listed first; `ui/account.spec.ts` is the one browser test, of what only a page shows (project `e2e-ui`) ([e2e.md](../reference/testing/e2e.md)).
 
 ## `apps/template/tests/app.test.ts`
 
@@ -300,11 +300,14 @@ import type { NoteList } from "../../../src/shared/types";
  *
  * Edge cases, listed before the tests (the skill's reference/testing/e2e.md):
  * - Boundaries: empty text and text of only spaces are refused; 500 characters are accepted; 501 are refused.
- * - Text: Unicode text comes back unchanged; surrounding spaces are trimmed.
+ * - Text: Unicode text comes back unchanged; surrounding spaces are trimmed. Case, `..`, `/`,
+ *   percent-encoding and prefix names do not apply: a note is free text, never a name or a path.
  * - Order and time: not asserted here. Two notes made in the same millisecond tie on their time and
  *   fall back to their random IDs; there is no expiry.
- * - Access: anonymous is refused (401); another user does not see the notes.
- * - Repetition: the same text twice makes two notes.
+ * - Access: anonymous is refused (401); another user does not see the notes. Admin does not apply:
+ *   the notes routes treat an admin as any user, and there is no admin view of notes.
+ * - Repetition: the same text twice makes two notes. Concurrent writes do not apply: each request
+ *   inserts one row with a new ID, and the notes contract promises nothing about concurrency.
  * - Failures: an unavailable database is simulated in-process only (`setUnavailable`, tests/app.test.ts).
  */
 
@@ -329,12 +332,16 @@ test("a signed-in user writes notes and lists only their own", async ({ request 
   const again = await request.post("/api/notes", { data: { text } });
   expect(again.status()).toBe(201);
 
-  const mine: NoteList = await (await request.get("/api/notes")).json();
+  const mineRes = await request.get("/api/notes");
+  expect(mineRes.status()).toBe(200);
+  const mine: NoteList = await mineRes.json();
   expect(mine.notes.filter((n) => n.text === text)).toHaveLength(2);
 
   // A new mock login replaces the session: now another user.
   await signIn(request);
-  const theirs: NoteList = await (await request.get("/api/notes")).json();
+  const theirsRes = await request.get("/api/notes");
+  expect(theirsRes.status()).toBe(200);
+  const theirs: NoteList = await theirsRes.json();
   expect(theirs.notes.filter((n) => n.text === text)).toEqual([]);
 });
 
@@ -356,6 +363,7 @@ test("note text must be 1 to 500 characters after trimming", async ({ request })
   expect((await request.post("/api/notes", { data: { text: "x".repeat(500) } })).status()).toBe(201);
   const missing = await request.post("/api/notes", { data: {} });
   expect(missing.status()).toBe(400);
+  expect(await errorCode(missing)).toBe("HTTP.INVALID_INPUT");
 });
 ```
 

@@ -20,6 +20,7 @@ Write a spec from the flow, not from the code:
 - Check status codes and `(await res.json()).error.code`, never messages.
 - In UI specs, find elements by role and visible text (`page.getByRole("button", { name: "Log in" })`).
 - Never wait in real time, and never test expiry here: use fake timers in-process ([../testing.md](../testing.md)).
+- `playwright.config.ts` is part of the gate: a change to it that could run fewer tests or pass more easily (projects, `testIgnore`, `retries`, timeouts) is reviewed like a change to a once-green test ([test-changes.md](test-changes.md)).
 
 ## Edge cases
 
