@@ -72,7 +72,7 @@ describe.each([
     await h.run(`INSERT INTO __framework_test_mail (id, recipient, sender, subject, text_body, html_body, sent_at) VALUES ('m1', 'r@example.test', 's@example.test', 'S', 't', 'h', '2026-01-01T00:00:00Z')`);
 
     const { applied } = await applyMigrations(h.db, { framework: history, app: [] });
-    expect(applied.length).toBeGreaterThan(0);
+    expect(applied).toEqual(["framework/0004_drop_auth_mail_tables"]);
     const after = await h.tables();
     for (const table of DROPPED) expect(after, table).not.toContain(table);
     expect(after).toEqual(expect.arrayContaining(["__framework_kv", "__framework_migrations", "notes"]));

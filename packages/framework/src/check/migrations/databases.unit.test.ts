@@ -61,7 +61,7 @@ describe.each(["sqlite", "postgres"] as const)("%s", (dialect) => {
       try {
         await applyMigrations(db.migrations, { framework: readHistory(FRAMEWORK_MIGRATIONS_DIR, dialect, "framework"), app: readHistory(root, dialect, "app") });
         const schema = await db.introspect();
-        expect(Object.keys(schema).filter((t) => !t.startsWith("__framework_auth_")).sort()).toEqual(["__framework_kv", "__framework_migrations", "kids", "parents"]);
+        expect(Object.keys(schema).sort()).toEqual(["__framework_kv", "__framework_migrations", "kids", "parents"]);
         const expected = expectedFor(dialect === "postgres");
         expect(schema["parents"]).toEqual(expected["parents"]);
         expect(schema["kids"]).toEqual(expected["kids"]);
