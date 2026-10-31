@@ -63,24 +63,24 @@ Replace Better Auth, email and password, with **sign-in through Cloudflare**. Th
 |---|---|
 | TS-1 | **Every session's main agent orchestrates.** It keeps its context small and reduces wall-clock time by making aggressive use of subagents, running them in parallel where they don't touch the same files (prompt §1, kept and made permanent). In an app, this holds unless the app's user overrides it. |
 | TS-2 | **Unit tests use red/green/refactor TDD** (prompt §6, kept). |
-| TS-3 | **Any failure outside red/green gets an evidence-based root cause, never a guess.** That covers unit regressions, every integration and e2e failure, and builds and deploys. A **diagnoser subagent**, never the code's author, finds it (prompt §8, kept). Evidence includes logs, a debugger, and several variations of the test. |
-| TS-4 | **An independent reviewer subagent** first decides whether the evidence supports the root cause. Only then does it evaluate the fix. Major issues must be answered. At most **3 attempts** per failure. A failure that needed a second attempt, or a second review round, gets an analysis of why, and the skill is made more specific if that analysis shows a gap (§7a.1.8). |
-| TS-5 | **Similar cases before the fix.** After approval and before the fix, search for similar cases and add tests for them too. |
+| TS-3 | **Any failure outside red/green gets an evidence-based root cause, never a guess** (prompt §8, kept unchanged: diagnose, one independent review, fix red-green, re-check). A failure that appears only while other suites run on the same machine is first re-run alone; only a failure that reproduces alone enters §7a.1.8. |
+| TS-4 | **Withdrawn 2026-10-31.** The review rounds, major/minor findings, response sections and non-convergence notes added here multiplied the first implementation's one-review process by three or more subagents per failure. §7a.1.8 keeps prompt §8's single accept-or-reject review and adds only a cap: at most 3 attempts, then stop and report. |
+| TS-5 | **Withdrawn 2026-10-31.** No separate similar-case subagent. The fixer fixes the same defect where it sees it in the code it owns, and names anything outside its ownership as an open item. |
 | TS-6 | **Integration tests use the existing layer definition and strategy:** real local dependencies (Miniflare/workerd, PGlite, the file system, local stand-ins such as mock-oauth2-server); fakes only for external platforms with no local stand-in. No new mocking rule. Every framework component has a comprehensive integration suite. |
 | TS-7 | **E2E covers every happy path and every expected error scenario,** with creatively chosen edge cases. It is API-first: e2e tests drive the API, and a limited number of Playwright UI tests cover what only a browser shows. |
 | TS-8 | **Fuzzing is local, limited and targeted.** It is never run against a cloud stage. Use it a little where it makes sense: chosen APIs and well-defined client/server interfaces, especially code with repeated regressions. Never brute-force every API. |
 | TS-9 | **Every change carries its test impact,** and its implementer makes the needed test changes in the same work, without being asked. |
-| TS-10 | **Changes to once-green tests are reviewed by an independent subagent,** in every layer. That covers any change to a once-green test's expected results, its removal, or its weakening. "Green once" means it passed in this session, or it is on the main branch. Review may be in bulk, grouped by reason. The aim: agents fix real defects instead of deleting or changing tests (§7a.1.9). |
+| TS-10 | **Never skip, delete or weaken a test to get a pass** (prompt §8, kept). A wrong test is a root-cause finding. The implementer lists every change to a once-green test in its report, by reason (§7a.1.9). The separate test-change reviewer, its records and its linter, added on 2026-10-31, are **withdrawn**: they produced a reviewer session and a record for every removal in a release that removes three components. |
 | TS-11 | **Framework CI runs tests intelligently, on PRs only.** Component integration tests run when that component changes. E2E runs on PRs that change application behaviour, never when only unit or integration tests, docs or specs change. Every test, e2e included, runs at release. No test runs twice in one run without a recorded reason. Chromium is installed only when a UI test is selected (§7a.2.4). |
-| TS-12 | **Linters run in two places:** a Claude Code hook that runs when Claude commits, in the framework repository only, and CI, which runs the linters appropriate to the PR's changes. There is no git pre-commit hook. The root-cause record linter is not added to CI (§7a.2.5). |
-| TS-13 | **Any change to a skill that can affect testing is reviewed by a subagent first,** for test quality not being weakened and for strict progressive disclosure (§7a.2.6). |
+| TS-12 | **Linters run in two places:** a Claude Code hook that runs when Claude commits, in the framework repository only, and CI, which runs the linters appropriate to the PR's changes. There is no git pre-commit hook. The root-cause record linter is not added to CI (§7a.2.5). The test-review record linter is withdrawn with TS-10. |
+| TS-13 | **Skills that affect testing keep their quality rules and progressive disclosure** (§7a.2.6). The mandatory skill-reviewer subagent added on 2026-10-31 is **withdrawn**; the rules are checked by the implementer and the orchestrator's exit check. |
 | TS-14 | **Apps built with the framework get the same level of testing as the framework,** except what relies on Claude Code harness hooks, which exist only in the framework repository (TS-18). The rule "app tests use the API only and add no browser driver" (`skill/reference/testing.md`, "What runs your tests", last bullet) is removed. Installing or updating the framework's npm packages never changes an app's CI. The product skill may suggest CI changes to the app's user (§7a.3). |
-| TS-15 | **E2E tests are kept current without owner approval.** In the framework, agents keep the E2E scenarios current, and every addition, change and retirement is reviewed and validated by an independent subagent (§7a.2.3). The e2e scope changes for v0.2.0 (§7.1) go in their own PR. In an app, the app's agent keeps the app's e2e tests current, unless the app's user directs otherwise (§7a.3). |
+| TS-15 | **E2E tests are kept current without owner approval.** In the framework, agents keep the E2E scenarios current as the requirements change, with a decision-log entry per change (§7a.2.3). The e2e scope changes for v0.2.0 (§7.1) go in their own PR. In an app, the app's agent keeps the app's e2e tests current, unless the app's user directs otherwise (§7a.3). The independent review of every scenario change, added on 2026-10-31, is withdrawn. |
 | TS-16 | **CI economy is the orchestrator's call.** The owner leaves the docs-only CI question to the implementation: choose the method that safely reduces wall-clock time without compromising test quality. §7a.2.4 records the choice. |
 | TS-17 | **Retrospectives stay out of agent context.** Agent sessions do not read anything under `retrospective/`, so none of it enters their context. The exception is the self-retrospective skill, which normally runs at the end of a session and may read earlier retrospectives. A retrospective recommendation the owner has not adopted is never used in any decision. This becomes a hard rule in `CLAUDE.md` (§6.2). |
 | TS-18 | **Claude Code harness hooks apply only to the framework repository,** never to repositories where users have installed the npm packages. |
 | TS-19 | **Framework CI runs the integration and e2e layers when §7a.2.4's selection calls for them.** Today it never runs them, although `compliance.md` §2 "Tiers" says automated criteria and scenarios run for every commit. This does not mean running them on every PR: a PR that changes only docs or specs runs neither. |
-| TS-20 | **Review loops answer comments.** Before, a rejected record went back to diagnosis with no limit and no step for answering comments (prompt §8 step 2). TS-4 fills the gap. |
+| TS-20 | **Withdrawn 2026-10-31** with TS-4. A rejected record goes back to diagnosis, as in prompt §8; the only addition is the 3-attempt cap in §7a.1.8. |
 | TS-21 | **Background pointers name specific files, never directories.** The standards live in the testing skills, which load through their descriptions and use progressive disclosure. `CLAUDE.md` names the testing-standards skill. `docs/CONVENTIONS.md` keeps only a short pointer to it, plus the scenario-origin rule (§7a.2.3). |
 
 ## 2. Already verified. Don't redo.
@@ -394,8 +394,8 @@ v0.2.0 replaces password login with sign-in through Cloudflare. Three of the own
 - **`docs/acceptance/e2e-scenarios.md`, `docs/README.md`:** §7a.2.3 and §7.1.
 - **`docs/spec/system-spec.md`, `docs/components/compliance.md`:** the requirement changes of §6.1, after the owner approves their wording.
 - **`docs/components/compliance.md`:** "Tiers" per TS-19 and §7a.2.4, the two e2e Playwright projects, and the milestone list changes of §7.1.
-- **`.claude/skills/testing-standards/`** (new): a short `SKILL.md`, with `resources/` for the diagnosis workflow (§7a.1.8), test-change review (§7a.1.9), fuzzing (§7a.1.7), edge cases (§7a.1.6) and the CI path map (§7a.2.4). Reviewed per §7a.2.6.
-- **`skill/` (product skill):** `reference/testing.md` reworked, and new references per §7a.3. Reviewed per §7a.2.6.
+- **`.claude/skills/testing-standards/`** (new): a short `SKILL.md`, with `resources/` for the diagnosis workflow (§7a.1.8), fuzzing (§7a.1.7), edge cases (§7a.1.6) and the CI path map (§7a.2.4). No test-change-review resource (TS-10 withdrawn).
+- **`skill/` (product skill):** `reference/testing.md` reworked, and new references per §7a.3.
 - **`apps/template/`:** e2e projects, fuzz helper (§7a.3).
 - **`.github/workflows/ci.yml`, `release.yml`, `playwright.config.ts`, the Vitest configs, and a new root `.claude/settings.json`:** §7a.2.4 and §7a.2.5.
 - **`ai/implementation/plan.md`:** a pointer from §1 and §10 to the new standards, so later plans inherit them.
@@ -424,7 +424,7 @@ All of this work follows the testing standards of §7a.
   Mock login covers the automated passes on `test-` stages. On `prodcheck`, the automated part checks the `/start` redirect (E2E-008, §7.1).
 
 ### 7.1 E2E scope for v0.2.0 (TS-15; its own PR)
-This is relative to the v0.2.0 end state: sign-in through the auth app, bootstrap plus the admin app, and password, mail and `admins` removed. It depends on the requirement changes in §6.1. Retirements and rewrites go through §7a.1.9 and use the §7a.2.3 retirement mechanics. Additions are `ai-proposed`. An independent subagent reviewed this section (verdict `accepted-with-changes`, changes applied). The implementation's test author turns each item into scenario text and tests, and that text is reviewed again (§7a.2.3).
+This is relative to the v0.2.0 end state: sign-in through the auth app, bootstrap plus the admin app, and password, mail and `admins` removed. It depends on the requirement changes in §6.1. Retirements and rewrites are listed by reason (§7a.1.9) and use the §7a.2.3 retirement mechanics. Additions are `ai-proposed`. An independent subagent reviewed this section (verdict `accepted-with-changes`, changes applied). The implementation's test author turns each item into scenario text and tests.
 
 **Rewrite or retire (stale today or by v0.2.0):**
 - **E2E-005:** rewritten for the auth app (§6). Its no-email check inspects real auth-app identities, which carry an email. Test stages use mock login only (§4.3), so that part runs locally against mock-oauth2-server: Where `Local, cloud`.
@@ -499,11 +499,12 @@ These sections are normative for the framework repository and for apps. Where a 
 #### 7a.1.1 Orchestration (TS-1)
 - **What the orchestrator does and doesn't do:** prompt §1 applies to every session's main agent. The main agent plans nothing, writes no code, tests or documents, runs no suites and diagnoses nothing. It briefs subagents, tracks items, merges branches and relays questions to the owner or the app's user.
 - **Briefs and replies:** a brief gives file paths, not file contents. Subagents return short summaries, and details go into files in the repository.
-- **Parallel work:** independent items run in parallel in their own worktrees and branches whenever that saves wall-clock time. Bounded research is delegated, and only its conclusions return to the main context.
+- **Parallel work:** independent items run in parallel in their own worktrees and branches whenever that saves wall-clock time. Bounded research is delegated, and only its conclusions return to the main context. Full test suites run one at a time on a shared machine.
+- **Who spawns whom:** the orchestrator spawns every subagent, reviewers included. A subagent never creates a cloud session or another agent; if its brief would need one, the brief is wrong.
 - **In an app:** the app's user may override this.
 
 #### 7a.1.2 Roles
-Each of the following is a separate subagent, and none may be the author of the code under test. The first six are kept from prompt §7 and §8 and `plan.md` §1:
+The roles of the first implementation, unchanged (prompt §7 and §8, `plan.md` §1). Each is a separate subagent, and none may be the author of the code under test:
 - **Implementer.**
 - **Test-case author.** Writes from the requirements, criteria, contracts and scenarios, not from the implementation.
 - **Test runner.** Records results only. It changes nothing.
@@ -511,9 +512,7 @@ Each of the following is a separate subagent, and none may be the author of the 
 - **Diagnoser.**
 - **Root-cause reviewer.** It may not review a record whose cause it found itself.
 
-New in these standards:
-- **Test-change reviewer** (§7a.1.9).
-- **Skill reviewer**, in the framework repository only (§7a.2.6).
+No other review roles. The test-change reviewer and the skill reviewer added on 2026-10-31 are withdrawn (TS-10, TS-13).
 
 #### 7a.1.3 Unit tests (TS-2)
 - Red/green/refactor, one behaviour at a time. Confirm the test fails for the expected reason before writing code. Unit tests need no network (prompt §6).
@@ -551,7 +550,7 @@ For each criterion and scenario, the test author lists edge cases before writing
   - parsers, validators and encoders at a trust boundary (names, cursors, redirect and return URLs, codes and tokens, request bodies);
   - especially code with repeated regressions, judged from its root-cause records.
 
-  Having a contract or a schema makes an interface eligible, not required. The target list stays short. In the framework, a reviewer confirms each entry is justified (§9, item s4).
+  Having a contract or a schema makes an interface eligible, not required. The target list stays short, and each entry states its reason.
 - **How much:**
   - Each fuzz target keeps its run small, and states in the test its run count and fixed seed, with a one-line reason.
   - Fuzz targets run in the normal unit or integration layer and add only seconds.
@@ -560,49 +559,23 @@ For each criterion and scenario, the test author lists edge cases before writing
 - **Findings:** a failure found by fuzzing goes through §7a.1.8. Its case becomes a plain regression test.
 - **Tool:** the implementation chooses it, with a decision-log entry. It must run offline in Node, so apps need no other toolchain.
 
-#### 7a.1.8 Failure diagnosis and review (TS-3, TS-4, TS-5, TS-20)
-This applies to every failure except a test that is red on purpose during red/green. It covers unit regressions, all integration and e2e failures, and failed builds, deploys and spikes. "Probably", "flaky" and "timing" are not causes without evidence (prompt §8).
+#### 7a.1.8 Failure diagnosis and review (TS-3)
+This is prompt §8, unchanged, with two additions: a record path and an attempt cap. It applies to every failure except a test that is red on purpose during red/green: any failing test on any layer and target, and failed builds, deploys and spikes. "Probably", "flaky" and "timing" are not causes without evidence. A failure seen only while other suites ran on the same machine is re-run alone first; if it passes alone, it is a load problem of the run, not a defect, and is noted, not diagnosed.
 
 **Where records live:** in the framework, `ai/implementation/root-causes/<yyyy-mm-dd>-<item-id>-<slug>.md`. In an app, at the path the product skill names.
 
-1. **Diagnose.** A diagnoser subagent:
-   - reproduces the failure;
-   - gathers evidence: exact output and logs, requests and responses, state, a debugger session (for example `node inspect`, or Vitest `--inspect-brk` driven from the command line), variations of the test that confirm or rule out each hypothesis, and a minimal reproduction;
-   - writes the root-cause record, with sections Symptom, Evidence, Causal chain (evidence per link), Alternatives ruled out, Proposed fix, Verification plan, and Review (`plan.md` §10.5).
+1. **Diagnose.** A diagnosing subagent reproduces the failure, gathers evidence (exact output and logs, requests and responses, state, a minimal reproduction, experiments that confirm or rule out each hypothesis) and writes the root-cause record: symptom, evidence, the chain from cause to symptom with evidence for every link, the proposed fix, and how the fix will be verified (`plan.md` §10.5). An unproven link means more evidence, never a guess.
+2. **Review.** An independent subagent, which did not diagnose the failure or write the code, checks that the evidence supports every link, that alternatives are ruled out, and that the fix addresses the cause, not the symptom. It accepts or rejects the record, with reasons. A rejected record goes back to step 1.
+3. **Fix.** Only after acceptance, a subagent implements the fix red-green: first a test that reproduces the failure and fails, then the fix that makes it pass. It fixes the same defect where it sees it in the code it owns; anything outside its ownership becomes an open item for that owner, in the same PR's notes.
+4. **Re-check.** The test runner and the evaluator run the affected tests again (§7a.1.2).
 
-   An unproven link means more evidence, never a guess.
-2. **Review.** A root-cause reviewer subagent:
-   - first decides whether the evidence supports every link and rules out the alternatives;
-   - only if it does, evaluates the fix (cause, not symptom);
-   - reproduces once, plus one experiment per hypothesis it doubts (`plan.md` §1 test economy rule 8).
+**Cap:** at most 3 attempts (steps 1–4) per failure. A failure still open after 3 attempts stops; the orchestrator reports it to the owner, or to the app's user, with the record.
 
-   Its verdict is one of `accepted`, `accepted-with-changes` (binding on the fixer) or `rejected`. Each reason is marked **major** or **minor**.
-3. **Respond.** On `rejected`, or on any major issue, the diagnoser answers each major issue point by point in a `Response (round n)` section: more evidence, a corrected chain or a revised fix, or a rebuttal with evidence. The record then goes back to review. Minor issues are fixed or answered in the same section.
-4. **Similar cases.** After acceptance and before the fix, a subagent searches for the same defect pattern elsewhere: other call sites, other components with the same assumption, the other target. It lists what it found with evidence and adds failing tests for each case.
-   - A case outside the fixing item's owned paths becomes a new item. It is not fixed silently (`plan.md` §1 ownership).
-5. **Fix.** A fixer subagent fixes red-green: the reproduction test and the similar-case tests fail first, then pass. It follows the accepted record as amended by its Review.
-6. **Re-check.** The test runner and the evaluator re-run the affected tests (prompt §8 step 4). The evaluator checks that the record has a Review verdict that came before the fix commit.
-7. **Attempts and non-convergence.**
-   - An attempt is steps 1–6. A failed re-check starts a new attempt at step 1 in the same record, with its own section.
-   - At most 3 attempts per failure, and at most 3 review rounds per attempt.
-   - A failure that needed a second attempt or a second review round gets a short non-convergence note. A subagent other than the diagnoser and the reviewer writes it: why the first try did not succeed. If the note shows the standards or the skill were not specific enough, the orchestrator has the skill changed (in the framework, through §7a.2.6).
-   - A failure still open after 3 attempts or 3 rounds stops. The orchestrator reports it to the owner, or to the app's user, with the record and the notes.
+A fix lands in the PR of the item that owns the code. It never gets a PR of its own unless no such PR is open.
 
 #### 7a.1.9 Changes to once-green tests (TS-10)
-- **What counts as once-green:** a test is once-green if it passed in the current session or is on the main branch.
-- **Which layers:** unit, integration, compliance criteria, e2e, smoke and fuzz.
-- **What is reviewed:** any change to such a test's expected results or assertions, its removal, a skip, a widened tolerance or timeout, or a changed tag.
-- **Who reviews:** an independent test-change reviewer subagent, which wrote neither the change nor the code, before the change is merged.
-- **Review in bulk:**
-  - The author groups the changes by reason code:
-    - `code-removed`, `component-removed` or `behaviour-changed`, each citing the requirement, decision or plan section;
-    - `test-was-wrong`, citing its root-cause record;
-    - `strengthened`;
-    - `refactor-only`.
-  - The reviewer judges each group as a whole and samples within it as far as the risk needs. For example, the unit tests of a removed module are one group with one reason, not one review each.
-  - The reviewer looks closely at any change where a test was weakened while the code it covers stayed.
-- **The record:** one review record per change set: the groups, the verdict per group, and its reasons. In the framework it goes in `ai/implementation/test-reviews/<yyyy-mm-dd>-<item-id>.md`; in an app, at the path the product skill names. The evaluator checks that every once-green test change in its scope is covered by an accepted review.
-- **Never weaken to pass:** never skip, delete or weaken a test to get a pass. A wrong test is a root-cause finding (prompt §8).
+- **Never weaken to pass:** never skip, delete or weaken a test to get a pass. A wrong test is a root-cause finding and goes through §7a.1.8 (prompt §8).
+- **Report, don't review:** the implementer lists every change to a once-green test (expected results, assertions, removal, skip, widened tolerance or timeout, changed tag) in its report and PR description, grouped by reason: `code-removed`, `component-removed` or `behaviour-changed` (citing the requirement, decision or plan section), `test-was-wrong` (citing its root-cause record), `strengthened`, `refactor-only`. The owner reads these lists at review. No separate reviewer, record or linter.
 
 #### 7a.1.10 Test impact of every change (TS-9)
 - **Briefs:** every implementation brief has a "Tests" section with:
@@ -632,9 +605,9 @@ The following stay as they are:
 
 #### 7a.2.3 E2E scenario governance (TS-15)
 - **Origin lines:** CONVENTIONS §4 is extended to E2E scenarios. Each scenario gets an `Origin` line. The existing scenarios get `Origin: ai-proposed (reviewed by the owner before 2026-10-31)`.
-- **Who may change them:** CONVENTIONS §4 gains this rule: agents may add, change and retire E2E scenarios of any origin to match the framework's current intent. Each change needs a decision-log entry and an independent subagent's review, and no owner approval.
+- **Who may change them:** CONVENTIONS §4 gains this rule: agents may add, change and retire E2E scenarios of any origin to match the framework's current intent. Each change needs a decision-log entry, and no owner approval.
 - **The README status row:** `docs/README.md`'s "Reviewed by owner" row gets a note that it is not an approval gate for later changes.
-- **Test-change review:** changes and retirements also go through §7a.1.9.
+- **Reporting:** changed and retired scenarios are listed in the PR by reason (§7a.1.9).
 - **IDs and mechanics:**
   - New IDs continue from the highest one (E2E-017 is next). IDs are never renumbered or reused, and a retired ID is kept (CONVENTIONS §2).
   - A new scenario has a `Where:` line (without one, `tests/compliance/harness/catalogue.ts` silently leaves it out of the catalogue) and a `Verifies:` line (CONVENTIONS §3).
@@ -677,8 +650,7 @@ The following stay as they are:
 - **The linters:**
   - eslint;
   - typecheck;
-  - the root-cause record lint: required sections, and a Review verdict or `Status: awaiting review`;
-  - the test-review record lint.
+  - the root-cause record lint: required sections, and a Review verdict or `Status: awaiting review`.
 - **CI:** runs the linters appropriate to the PR's changes (§7a.2.4). The two record linters run only in the hook.
 - **Where hooks apply:** Claude Code harness hooks apply only to this repository. They are never shipped to apps (TS-18).
 
@@ -687,15 +659,12 @@ The following stay as they are:
   - any change to `.claude/skills/testing-standards/**`;
   - any change to the product skill's testing references;
   - any change to `skill/SKILL.md`'s hard rules or its definition of done.
-- **Who reviews:** a skill-reviewer subagent, before the change is committed.
-- **What it checks:**
+- **Rules the change must keep** (checked by the implementer, stated in the PR; no separate reviewer):
   - **Quality:** no rule that protects test quality is removed, loosened or made ambiguous.
   - **Progressive disclosure:**
     - `SKILL.md` holds only the rules that always apply, plus pointers to specific files.
     - Details live in reference files that each start with "Read this when…" and end with a stopping condition.
     - The product skill stays within PAR-070…072.
-
-  Its verdict and reasons go in the commit message, or in the PR description for a batch.
 
 ### 7a.3 Apps built with the framework (TS-1, TS-14, TS-15, TS-18)
 Apps get §7a.1 through the product skill (`skill/`), the template and the framework's `/testing` export. App builders' agents apply it without asking the user technical questions, and explain results in plain words.
@@ -711,7 +680,7 @@ Apps get §7a.1 through the product skill (`skill/`), the template and the frame
   - integration tests (§7a.1.4);
   - e2e: API-first against `dev`, plus a few Playwright UI tests of the app's pages (§7a.1.5);
   - the smoke test on a deployed stage, unchanged.
-- **Keeping e2e current:** the app's agent keeps the app's e2e tests current as the app changes, and after a framework upgrade, unless the app's user directs otherwise. Changes to once-green tests go through §7a.1.9.
+- **Keeping e2e current:** the app's agent keeps the app's e2e tests current as the app changes, and after a framework upgrade, unless the app's user directs otherwise. Changes to once-green tests follow §7a.1.9: never weakened to pass, and listed by reason.
 - **The template ships:**
   - the e2e layer and its two Playwright projects;
   - a small fuzz helper for route inputs, driven by a route's zod schema. The skill says to use it only on routes that meet §7a.1.7, not on every route.
@@ -721,8 +690,7 @@ Apps get §7a.1 through the product skill (`skill/`), the template and the frame
 - **The skill tells the app's agent to:**
   - use red/green/refactor;
   - run §7a.1.8 with subagents, with records at a path the skill names;
-  - search for similar cases;
-  - review changes to once-green tests (§7a.1.9);
+  - never weaken once-green tests, and list changes to them by reason (§7a.1.9);
   - state each change's test impact;
   - keep e2e current.
 - **Disclosure:** each of these is a reference read only when needed, and the skill stays within PAR-070…072.
@@ -738,10 +706,10 @@ Apps get §7a.1 through the product skill (`skill/`), the template and the frame
 ## 9. Work breakdown (parallel waves; DEC and PAR numbers start after the last on main when work begins)
 Every item's brief carries its "Tests" and "E2E" sections (§7a.1.10).
 - **Wave 0, before wave 1, in parallel:**
-  - (s1) standards text: `CONVENTIONS.md`, `compliance.md`, `CLAUDE.md`, and the testing-standards skill, reviewed per §7a.2.6 (§6.2);
+  - (s1) standards text: `CONVENTIONS.md`, `compliance.md`, `CLAUDE.md`, and the testing-standards skill (§6.2);
   - (s2) the Claude Code commit hook and the record linters (§7a.2.5);
   - (s3) CI and release restructuring, Playwright projects, and duplicate removal (§7a.2.4), shown by a PR whose classification log matches the path map;
-  - (s4) the integration coverage list (§7a.2.2) and a short fuzz target list (§7a.1.7), by a planning subagent, read-only. A reviewer confirms each fuzz target is justified.
+  - (s4) the integration coverage list (§7a.2.2) and a short fuzz target list (§7a.1.7), by a planning subagent, read-only.
 - **Wave 1, in parallel:**
   - (a) the auth app: OAuth flow, D1, codes, registry, service-binding interface (§3, §4);
   - (b) the framework's auth-app provider and session changes, with removal of Better Auth and MAIL (§4.1 step 4, §6);
@@ -763,8 +731,7 @@ Every item's brief carries its "Tests" and "E2E" sections (§7a.1.10).
   - the e2e scope of §7.1, in its own PR;
   - integration suites for the gaps found in (s4);
   - fuzz targets from (s4);
-  - a test-change review of all v0.2.0 test removals, grouped by reason code (§7a.1.9), before the removal merges;
-  - an independent review;
+  - one independent review of the whole release (not one per PR);
   - red-green fixes, each failure through the diagnosis and review workflow of §7a.1.8;
   - the live pass, which needs the owner's bootstrap token and sign-ins, so do it last and batch them.
 
