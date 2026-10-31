@@ -28,14 +28,15 @@ export function authAppMiniflareWorkers(script: string, settings: Record<string,
   ];
 }
 
-/** An app Worker whose `POST /redeem` and `POST /role` forward their JSON body to `env.AUTH`. */
+/** An app Worker whose `POST /redeem` and `POST /role` forward their JSON body to `env.AUTH` (`POST /call` probes another method name). */
 export const CALLER_WORKER = `
 export default {
   async fetch(request, env) {
     const path = new URL(request.url).pathname;
     const body = await request.json();
     try {
-      const result = path === "/redeem" ? await env.AUTH.redeem(body) : await env.AUTH.role(body.sub);
+      // "/call" tries any other method name, e.g. to show it is not reachable over the binding.
+      const result = path === "/redeem" ? await env.AUTH.redeem(body) : path === "/role" ? await env.AUTH.role(body.sub) : await (await env.AUTH[body.method]()).role("sub-w");
       return Response.json({ result });
     } catch (e) {
       return Response.json({ error: String(e && e.message) }, { status: 502 });
