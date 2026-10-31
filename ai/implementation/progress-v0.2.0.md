@@ -33,6 +33,7 @@ Plan: `ai/implementation/plan-v0.2.0-testing-auth.md` ("plan §n"); governing pr
     - whether Secrets Store `comment` round-trips;
     - the status a store listing returns without Secrets Store;
     - whether a store-bound stage signs R2 tickets.
+- D follow-up also: AUTH-REQ-003 in `auth.md` still cites "PAR-425…PAR-434"; name PAR-425, 426, 427 (DEC-0695 follow-up). B's DEC-0667 cites DEC-0660 where it means DEC-0661 (copied as written into the log by I1; correct it in I2). I1 chose PAR categories `platform` for PAR-413/418 and `ai-proposed` for the other A/B PARs.
 - D follow-up (one small spec PR, after B 43): the PROV-AC-002 text from F (*"For a production stage, without the account's auth app or its registry, deploy names it and stops before creating anything; a production deploy registers `<public origin>/api/auth/callback` for `<app>-<stage>` with the auth app, and `remove` clears it."*), plus the COMPL-REQ-005, COMPL-AC-005 and prodcheck paragraph amendments (owner-questions 19).
 - Under full-suite load (load average up to 38, with other agents running), T4 also saw `admins.unit.test.ts` time out. It passes alone. `admins` is removed by B 47. T6 notes it; no diagnosis unless it recurs after B 47.
 - New finding from T4: `apps/template/src/server/signing.ts`, copied into `apps/demo`, accepts 4 spellings of each share-link signature. The fix goes with G (template owner) through §7a.1.8; the record stub is on T4's 89.
@@ -142,7 +143,7 @@ Format: **ID — title** · plan § · deps · status. Then Owns / PRs (`nn` bra
 **T5 — test-change review of v0.2.0 removals** · §7a.1.9, TS-10 · runs as each removal PR is ready · `running` (batch 1 done: records on #88 accepted-with-changes, #83 accepted, #95 accepted, S3 coverage complete; batch 2 waits for B 43/45/46/47, C 34a, F)
 - Owns: `ai/implementation/test-reviews/2026-*-{b,c,d,s3}.md` (written onto PRs 17, 43, 45, 46, 47, 34, 38 before they merge). Exit: each record has groups by reason code, verdict per group, sampling notes; evaluator confirms coverage. IDs: none.
 
-**I1 — integrate decisions, waves 0–1** · `plan.md` §10.4 · batch 2 merged · `todo`
+**I1 — integrate decisions, waves 0–1** · `plan.md` §10.4 · batch 2 merged · `done` (PR #130 ← main, CI green; 72 DEC added (DEC-0620–0699 used IDs + P0 0778–0779), supersessions marked; 17 PAR added (PAR-410–418, 425–427, 435–439), PAR-331 1→2, superseded/kept PARs noted; DEC-0690/0691/0692/0699 and dependent supersessions "pending owner approval of wording"; no ID out of range; 10 drafts replaced by ID lists, add/add conflicts at merge resolved by keeping #130's version, command in PR body)
 - Owns: `docs/decisions/decision-log.md`, `docs/parameters/parameters.md`, `ai/implementation/decisions/v020-{r,s1,s2,s3,s4,a,b,c,d}.md` (replaced by ID lists).
 - PRs: `50-int-decisions-w1` ← main (append-only; ~500 of generated-from-drafts text, allowed as integration).
 - Exit: every DEC/PAR cited in the repo exists in the log/register (`grep -rhoE 'DEC-0[67][0-9]{2}' . | sort -u` ⊆ log); no ID outside its item's range. IDs: none of its own.
