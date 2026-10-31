@@ -119,17 +119,19 @@ describe("[COMPL-AC-006] release report", () => {
     ]);
   });
 
-  // plan-auth.md T3, with the documents' own catalogue: the provider check (PWD-AC-009, AUTH-AC-011, E2E-008)
-  // is automated on Cloudflare, so a commit is working only when its cloud run recorded check-login's results.
-  it("with the documents' catalogue, a commit whose cloud run lacks check-login's PWD-AC-009 result is not working, and no GOOGLE criterion or milestone item is demanded", () => {
+  // plan-auth.md T3, with the documents' own catalogue: the provider check's automated part (AUTH-AC-011, E2E-008)
+  // is automated on Cloudflare, so a commit is working only when its cloud run recorded its results.
+  // PWD-AC-009 is retired with PWD (v0.2.0, DEC-0696); AUTH-AC-011 is the automated `/start` check that stays (DEC-0692).
+  it("with the documents' catalogue, a commit whose cloud run lacks the provider check's AUTH-AC-011 result is not working, and no GOOGLE or PWD criterion or milestone item is demanded", () => {
     const real = readCatalogue(fileURLToPath(new URL("../../../docs", import.meta.url)));
     const ids = (target: "local" | "cloudflare", mode: "automated" | "milestone"): string[] =>
       real.filter((e) => (mode === "automated" ? e.applies[target]?.automated === true : (e.applies[target]?.milestone.length ?? 0) > 0)).map((e) => e.id);
-    for (const id of ["PWD-AC-009", "AUTH-AC-011", "E2E-008"]) {
+    for (const id of ["AUTH-AC-011", "E2E-008"]) {
       expect(ids("cloudflare", "automated"), id).toContain(id);
       expect(ids("cloudflare", "milestone"), `${id} is not a milestone item`).not.toContain(id);
     }
     expect(real.filter((e) => e.id.startsWith("GOOGLE-")), "the retired GOOGLE criteria are not in the catalogue").toEqual([]);
+    expect(real.filter((e) => e.id.startsWith("PWD-") || e.id.startsWith("MAIL-")), "the retired PWD and MAIL criteria are not in the catalogue").toEqual([]);
     const passed = (list: string[]): EvidenceRecord["results"] => list.map((id) => ({ id, status: "passed" as const }));
     const records = (cloud: string[]): EvidenceRecord[] => [
       rec("local", "c1", passed(ids("local", "automated"))),
@@ -140,9 +142,9 @@ describe("[COMPL-AC-006] release report", () => {
     const works = releaseReport({ commit: "c1", catalogue: real, records: records(ids("cloudflare", "automated")), invalidations: [], loginCommits: () => [] });
     expect(works.problems).toEqual([]);
     expect(works.works).toBe(true);
-    const without = releaseReport({ commit: "c1", catalogue: real, records: records(ids("cloudflare", "automated").filter((id) => id !== "PWD-AC-009")), invalidations: [], loginCommits: () => [] });
+    const without = releaseReport({ commit: "c1", catalogue: real, records: records(ids("cloudflare", "automated").filter((id) => id !== "AUTH-AC-011")), invalidations: [], loginCommits: () => [] });
     expect(without.works).toBe(false);
-    expect(without.problems).toEqual(["PWD-AC-009 on cloudflare: no record for commit c1"]);
+    expect(without.problems).toEqual(["AUTH-AC-011 on cloudflare: no record for commit c1"]);
     expect(renderRelease(without)).not.toContain("GOOGLE");
   });
 
