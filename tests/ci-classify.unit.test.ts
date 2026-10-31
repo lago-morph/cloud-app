@@ -170,7 +170,7 @@ describe("the CI plan (what the staged ci.yml runs)", () => {
   });
 
   it("an e2e spec change names the integration tests the harness also runs for its IDs", () => {
-    expect(plan("tests/compliance/e2e/E2E-007.spec.ts").alsoIntegration).toEqual(expect.arrayContaining(["packages/framework/test/integration/auth/admin-role.test.ts"]));
+    expect(plan("tests/compliance/e2e/demo-local.spec.ts").alsoIntegration).toEqual(expect.arrayContaining(["packages/framework/test/integration/cli/verify.test.ts"]));
   });
 
   it("docs off the test-input list: nothing to run", () => {
