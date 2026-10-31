@@ -42,7 +42,7 @@ Every `SYS-REQ` must be verified by at least one `E2E` scenario or by component 
 
 ## 4. Origin (provenance)
 
-Every requirement, decision, and parameter carries an **origin**:
+Every requirement, decision, parameter, and end-to-end scenario carries an **origin**:
 
 | Origin | Meaning | Who may change it |
 | --- | --- | --- |
@@ -51,6 +51,8 @@ Every requirement, decision, and parameter carries an **origin**:
 | `ai-proposed` | Proposed by an AI as a design choice; not reviewed by the owner. | An implementer, with a decision-log entry. |
 | `provenance-unclear` | Inherited from earlier AI-assisted work; origin cannot be established. Treat as `ai-proposed`. | An implementer, with a decision-log entry. |
 | `derived` | A consequence of other decisions, not a choice in itself. | Changes when its sources change. |
+
+**End-to-end scenarios** (`acceptance/e2e-scenarios.md`) carry their origin on an `Origin:` line after the `Where:` line. The scenarios that existed on 2026-10-31 carry `Origin: ai-proposed (reviewed by the owner before 2026-10-31)`, and a new scenario carries `Origin: ai-proposed`. For scenarios, the following rule replaces the table's last column: agents may add, change and retire E2E scenarios of any origin, to match the framework's current intent. Each such change needs a decision-log entry and a review by an independent subagent, and no owner approval. How to make the change is in the testing-standards skill (§8).
 
 ## 5. Parameter categories
 
@@ -86,3 +88,7 @@ A contract file is the single source of truth for the shape of its interface. De
 | `demo/` | Demo application specification |
 | `acceptance/` | End-to-end scenarios |
 
+
+## 8. Testing
+
+How tests and E2E scenarios are written, changed, reviewed and run in this repository is in the testing-standards skill: [`.claude/skills/testing-standards/SKILL.md`](../.claude/skills/testing-standards/SKILL.md). For changes to E2E scenarios, read its `resources/e2e-scenarios.md`.
