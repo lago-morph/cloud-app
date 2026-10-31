@@ -76,7 +76,9 @@ describe("[COMPL-AC-001] this phase's not-run rules (plan §8) against the docum
     const cf = new Map(expectedCriteria(real, "cloudflare", "automated").map((e) => [e.id, e]));
     // plan-auth.md T2/T3: tagged cloud tests exist for these, so they run with no not-run rule.
     // PWD-AC-008 and MAIL-AC-006 are retired with PWD and MAIL (v0.2.0, DEC-0696) and are expected nowhere.
-    for (const id of ["AUTH-AC-009", "AUTH-AC-014", "COMPL-AC-005", "E2E-006", "E2E-007", "CLI-AC-007"]) {
+    // CLI-AC-007 is retired with `admins` (v0.2.0, DEC-0698) and is expected nowhere.
+    expect(cf.has("CLI-AC-007")).toBe(false);
+    for (const id of ["AUTH-AC-009", "AUTH-AC-014", "COMPL-AC-005", "E2E-006", "E2E-007"]) {
       expect(cf.get(id), id).toEqual({ id, run: true, parts: [""], notRunParts: [] });
     }
     // CLI-AC-001's cloud part (the whole command table from the template on a cloud) has no cloud test yet.
