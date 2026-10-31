@@ -134,10 +134,23 @@ describe("upgrade (plan-setup-wizard §4.8a)", () => {
 describe("whether Cloudflare setup needs re-running", () => {
   it("compares the versions the app had with the new release's", () => {
     expect(cloudflareVerdict({ permissions: 1, accountSetup: 1 }, { permissions: 2, accountSetup: 1 })).toBe(
-      "Cloudflare setup needs re-running (token permissions 1 → 2): run `npm run cloudflare-setup`. It needs the bootstrap token once.",
+      "Cloudflare setup needs re-running (token permissions 1 → 2): make a new bootstrap token with an expiry of 1 day or less and run `npm run cloudflare-setup`, which deploys the admin app. Then open the admin app it prints, sign in, and use its Account setup and Everyday token pages.",
     );
     expect(cloudflareVerdict({ permissions: 1, accountSetup: 1 }, { permissions: 2, accountSetup: 3 })).toContain("token permissions 1 → 2, account setup 1 → 3");
     expect(cloudflareVerdict({ permissions: 2, accountSetup: 2 }, { permissions: 2, accountSetup: 2 })).toContain("nothing new is needed");
+  });
+
+  it("points a 0.1.x app moving to v0.2.0 to the bootstrap and then the admin app (plan-v0.2.0 §8)", () => {
+    // 0.1.x exported PERMISSIONS_VERSION 1; v0.2.0 raises it (DEC-0680) and ACCOUNT_SETUP_VERSION (E).
+    const verdict = cloudflareVerdict({ permissions: 1, accountSetup: 1 }, { permissions: 2, accountSetup: 2 });
+    expect(verdict).toContain("bootstrap token");
+    expect(verdict).toContain("1 day or less");
+    expect(verdict).toContain("npm run cloudflare-setup");
+    expect(verdict).toContain("admin app");
+    expect(verdict).toContain("Account setup");
+    expect(verdict).toContain("Everyday token");
+    expect(verdict.indexOf("npm run cloudflare-setup")).toBeLessThan(verdict.indexOf("Account setup"));
+    expect(verdict).not.toMatch(/needs the bootstrap token once/);
   });
 
   it("is unknown when either release does not export the versions", () => {

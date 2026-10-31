@@ -8,7 +8,8 @@
  * 3. runs `npm run verify`;
  * 4. says whether Cloudflare setup needs re-running, comparing PERMISSIONS_VERSION and
  *    ACCOUNT_SETUP_VERSION of the framework the app had with the new one's (`./provision`
- *    exports, read in a child process; absent means unknown);
+ *    exports, read in a child process; absent means unknown); when it does, it points to the
+ *    bootstrap and then the admin app's pages (plan-v0.2.0 §8);
  * 5. prints the cloud environment's setup script at the new version (pinned; DEC-0593).
  * Exit status 0 when every step passed, 1 otherwise (the upgrade stays applied; the message says
  * how to go back), 2 on a usage mistake.
@@ -89,7 +90,8 @@ export function cloudflareVerdict(before: SetupVersions | undefined, after: Setu
   if (after.permissions > before.permissions) raised.push(`token permissions ${before.permissions} → ${after.permissions}`);
   if (after.accountSetup > before.accountSetup) raised.push(`account setup ${before.accountSetup} → ${after.accountSetup}`);
   if (raised.length === 0) return "Cloudflare setup: nothing new is needed; no need to re-run it.";
-  return `Cloudflare setup needs re-running (${raised.join(", ")}): run \`npm run cloudflare-setup\`. It needs the bootstrap token once.`;
+  // Since v0.2.0 the bootstrap deploys only the admin app; the account setup and the everyday token are its pages (plan-v0.2.0 §5, §8; DEC-0736).
+  return `Cloudflare setup needs re-running (${raised.join(", ")}): make a new bootstrap token with an expiry of 1 day or less and run \`npm run cloudflare-setup\`, which deploys the admin app. Then open the admin app it prints, sign in, and use its Account setup and Everyday token pages.`;
 }
 
 export function upgradeCommand(deps: UpgradeDeps): Command {

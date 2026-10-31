@@ -6,7 +6,7 @@ This page lists everything the owner does by hand, as copy-and-paste steps. Run 
 
 This release runs apps locally (§1) and on Cloudflare (§2 on). The short version of everything here is the framework's [QUICKSTART.md](https://github.com/lago-morph/cloud-app/blob/main/QUICKSTART.md).
 
-People sign in with an email address and a password. **Anyone who signs up and verifies their address is a user.** Admins are users holding the `admin` role, granted with the `admins` command (§8); nothing about people is kept in configuration. `<domain>` below is the account's email domain.
+People sign in with Cloudflare. **Only members of the owner's Cloudflare account can sign in**, and every member is a user. Members with the account role "Super Administrator - All Privileges" or "Administrator" are admins (§8). Nothing about people is kept in configuration.
 
 ## 1. Run it on your computer
 
@@ -31,11 +31,7 @@ People sign in with an email address and a password. **Anyone who signs up and v
    ```sh
    npm run dev
    ```
-   Press Ctrl-C to stop. The login button opens the sign-in page: create an account with any address. Locally no mail is sent; it is written to `.mail/`. Read the latest message to the address, open its link, and press the button:
-   ```sh
-   npm run mail -- last --to '<address>'
-   ```
-   To make yourself an admin locally, run `npm run admins -- grant '<address>' --target local` (`revoke` takes it away). Your next request is admin.
+   Press Ctrl-C to stop. Locally there is no real sign-in: the login button signs you in as a test user. Tests choose any level with the authentication mock.
 5. Check everything before you call a change done:
    ```sh
    npm run verify
@@ -49,21 +45,28 @@ People sign in with an email address and a password. **Anyone who signs up and v
 
 ## 2. Cloudflare setup (once per account)
 
-You need a Cloudflare account on the Workers Paid plan and a domain on it with Cloudflare DNS active (`<domain>` below). Run, in this app's folder (in Claude Code, say "set up Cloudflare"):
+Any Cloudflare account works, on the free Workers plan too; no domain is needed. Run, in this app's folder (in Claude Code, say "set up Cloudflare"):
 
 ```sh
 npm run cloudflare-setup
 ```
 
-It prints two pre-filled dashboard links, one per token, and where to put the values (`.env.cloudflare` in this folder, or the environment). Make the tokens, put them there, and run it again until it says everything is set up. It never prints a token value, and every later command reads the tokens itself. The steps, and what to do when it stops: [QUICKSTART.md](https://github.com/lago-morph/cloud-app/blob/main/QUICKSTART.md) and the skill's `reference/owner-tasks.md` §2 (in this app, `.claude/skills/prototype-framework/reference/owner-tasks.md`).
+1. It prints one pre-filled dashboard link, for the **bootstrap token**, and where to put it (`.env.cloudflare` in this folder, or the environment). Make the token with an end date under TTL **no more than 1 day away**, put it there, and run the command again.
+2. It deploys the account's **admin app**, deletes the bootstrap token, and prints the admin app's address.
+3. Open the admin app and sign in with your Cloudflare account (you need the role "Super Administrator - All Privileges" or "Administrator"). Do **Account setup**, then make the **Everyday token** and save it as `CLOUDFLARE_API_TOKEN`, as in step 1. The page shows it once; never paste it into a chat.
+4. Run `npm run cloudflare-setup` again (in Claude Code, "continue prototype setup") until it says everything is set up.
+
+Coming from framework 0.1.x: `npm run upgrade` says setup needs re-running; do steps 1–4 once per account. Everyone signs in again, with Cloudflare (QUICKSTART, "Coming from 0.1.x?").
+
+It never prints a token value, and every later command reads the tokens itself. The steps, and what to do when it stops: [QUICKSTART.md](https://github.com/lago-morph/cloud-app/blob/main/QUICKSTART.md) and the skill's `reference/owner-tasks.md` §2 (in this app, `.claude/skills/prototype-framework/reference/owner-tasks.md`).
 
 ## 3. What the account setup creates
 
-Setup creates the account's shared resources once, including the file-signing credential every stage uses: the log bucket `prototype-logs`, the deploy-state bucket `sst-state`, the backup bucket `prototype-backups` (a removed production stage's data, kept 30 days), the account's `workers.dev` address, sending from `no-reply@<domain>`, and a test mailbox for agents: mail to `sink+<tag>@t.<domain>` is kept for a day. Running it again changes only what is missing. `deploy` never creates these resources; if any is missing, it says to run the setup again.
+The admin app's Account setup page creates the account's shared resources once: the **auth app**, which signs people in to every app, with its database; the log bucket `prototype-logs`; the deploy-state bucket `sst-state`; the backup bucket `prototype-backups` (a removed production stage's data, kept 30 days); and the file-signing credential every stage uses. `deploy` never creates these resources; if any is missing, it says so.
 
 ## 4. Deploy a test stage, test it, remove it
 
-A stage whose name starts with `test-` is a test stage. It uses `config/cloudflare/test.json`, has the mock login for tests, never sends mail, and holds no real data. Stage names are at most 20 lowercase letters, digits and hyphens.
+A stage whose name starts with `test-` is a test stage. It uses `config/cloudflare/test.json`, has only the mock login for tests, and holds no real data. Stage names are at most 20 lowercase letters, digits and hyphens.
 
 Set the stage name once, in the first line, and deploy. In a new terminal, set `STAGE` again:
 
@@ -92,14 +95,12 @@ npm run remove -- --target cloudflare --stage "$STAGE"
 
 ## 5. The production stage's values file
 
-Every stage that does not start with `test-` is a production stage, for example `prod`. It needs its own committed values file. Copy the skill's template (in the framework's repository: `skill/templates/production-stage.json`) and set the display name of the sign-up and reset mail in it:
+Every stage that does not start with `test-` is a production stage, for example `prod`. It needs its own committed values file. Copy the skill's template (in the framework's repository: `skill/templates/production-stage.json`):
 
 ```sh
 STAGE=prod
 mkdir -p config/cloudflare
 cp ../../skill/templates/production-stage.json "config/cloudflare/$STAGE.json"
-SENDER='<the sender name, for example the app name>'
-node -e 'const fs=require("fs"),f=process.argv[1],c=JSON.parse(fs.readFileSync(f,"utf8"));c.framework.email.senderName=process.argv[2];fs.writeFileSync(f,JSON.stringify(c,null,2)+"\n")' "config/cloudflare/$STAGE.json" "$SENDER"
 npm run build -- --target cloudflare --stage "$STAGE"
 git add "config/cloudflare/$STAGE.json"
 git commit -m "Add the values file of stage $STAGE"
@@ -116,7 +117,7 @@ npm run secrets -- set apiKey --target cloudflare --stage "$STAGE"
 npm run deploy -- --target cloudflare --stage "$STAGE"
 ```
 
-The first `deploy` stops and names the unset secrets. Set them as above, pasting each value and then pressing Ctrl-D, and deploy again. The framework generates its own keys. The second deploy prints the stage's address, its sign-in page and the sender address `no-reply@<domain>`.
+The first `deploy` stops and names the unset secrets. Set them as above, pasting each value and then pressing Ctrl-D, and deploy again. The framework generates its own keys. The second deploy registers the stage with the auth app and prints its address. Without the account's auth app it stops before creating anything: do the admin app's Account setup (§2) first.
 
 To change the stage later (code or configuration), commit the change and run the same `deploy` again:
 
@@ -126,39 +127,17 @@ git commit -m "<what you changed>"
 npm run deploy -- --target cloudflare --stage "$STAGE"
 ```
 
-## 7. Sign up and sign in
+## 7. Sign in
 
-1. Open the sign-in page `https://template-prod.<subdomain>.workers.dev/api/auth/sign-in` and choose "Create an account". Enter an email address, a password of 12 to 128 characters, and a display name.
-2. Open the link in the "Confirm your email address" mail and press the button.
-3. Sign in. `https://template-prod.<subdomain>.workers.dev/api/auth/me` now shows `"level":"user"`.
+1. Open `https://template-prod.<subdomain>.workers.dev/` and press the login button.
+2. Sign in on Cloudflare's page with a member of the account, and allow what it asks.
+3. Back on the app, `https://template-prod.<subdomain>.workers.dev/api/auth/me` shows `"level":"user"` or `"level":"admin"`.
 
-"Forgot your password?" on the sign-in page mails a reset link (valid for one hour); "Send a new confirmation link" mails a new confirmation link.
-
-**An agent with no mailbox** signs up with a test address, `sink+<tag>@t.<domain>` (`<tag>`: lowercase letters, digits and hyphens), and reads the mail with:
-
-```sh
-npm run mail -- last --to 'sink+<tag>@t.<domain>' --target cloudflare
-```
-
-Without a browser, it posts the link's token (the value after `token=`) instead of pressing the button:
-
-```sh
-curl -sS -X POST 'https://template-prod.<subdomain>.workers.dev/api/auth/password/verify' -H 'Origin: https://template-prod.<subdomain>.workers.dev' -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"token":"<token>"}'
-```
-
-`npm run check-login -- --target cloudflare --stage "$STAGE"` runs this whole flow automatically on a production stage (with a password reset and the sign-in rate limit) and writes an evidence record under `validation/`.
+To let someone sign in, invite them to the Cloudflare account (Manage Account → Members); a read-only role, for example "HTTP Applications Read", is enough. `npm run check-login -- --target cloudflare --stage "$STAGE"` checks, with no sign-in, that the stage sends people to the auth app with its own address.
 
 ## 8. Admins
 
-The `admin` role is stored with the person's account in the stage's database. Granting or revoking it needs no file edit, no commit and no deploy: it applies from the person's next request. The person must have signed up and verified their address on that stage first (§7). On a production stage, repeat the stage's name with `--confirm-production`:
-
-```sh
-STAGE=prod
-npm run admins -- grant '<their address>' --target cloudflare --stage "$STAGE" --confirm-production "$STAGE"
-npm run admins -- list --target cloudflare --stage "$STAGE" --confirm-production "$STAGE"
-```
-
-`grant` prints the person's user ID (as `/api/auth/me` shows it) and roles. To take the role away, run the same command with `revoke`; the person is a user again. On a test stage, leave out `--confirm-production`. An address with no verified account is refused, and nothing changes.
+A member whose Cloudflare account role is "Super Administrator - All Privileges" or "Administrator" is admin; every other member is a user. Change a person's role in the dashboard (Manage Account → Members). No file edit, no commit and no deploy: the change shows when they next sign in (ask them to log out and in again). Removing someone from the account does not end a session they already have; it lasts until it expires (7 days) or they log out.
 
 ## 9. Stop, start and remove
 
