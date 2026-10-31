@@ -162,6 +162,14 @@ describe("lintRootCause", () => {
     ]);
   });
 
+  it("counts a marking at the end of a reason, in a blockquote and in a table cell", () => {
+    const flagged = "## Review: verdict accepted lists a **major** issue; a major issue needs a Response (round n) and another review round";
+    for (const reason of ["- Link 2 has no evidence (**major**)", "> - **major** x", "| M1 | **major** | x |", "- M1 — **major**: x"]) {
+      expect(lintRootCause(rootCause(`Verdict: accepted\n\n${reason}`)), reason).toEqual([flagged]);
+    }
+    expect(lintRootCause(rootCause("Verdict: rejected\n\n- rename the test (**minor**)"))).toEqual([]);
+  });
+
   it("rejects an accepted verdict that carries a **major** issue, which needs a Response first (§7a.1.8 step 3)", () => {
     expect(lintRootCause(rootCause("Verdict: accepted\n\n- **major** link 2 has no evidence"))).toEqual([
       "## Review: verdict accepted lists a **major** issue; a major issue needs a Response (round n) and another review round",
