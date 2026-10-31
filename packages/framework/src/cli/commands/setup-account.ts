@@ -7,9 +7,8 @@
  * other command, script or test helper of the framework runs `setup-account` on its own.
  * Locally there are no shared resources.
  *
- * `--email-domain <domain>` records the account's single email domain in the account settings
- * record (PROV-REQ-004 amendment, DEC-0514). It is required while the record has none, and it is
- * how the owner changes the domain. The value is lowercased.
+ * Since v0.2.0 it takes no `--email-domain`: there is no email domain (PROV-REQ-004's v0.2.0
+ * amendment, DEC-0698; DEC-0689).
  */
 import type { Target } from "../../core/identity.js";
 import { runSetupAccount } from "../../provision/core/setup-account.js";
@@ -25,20 +24,18 @@ export interface SetupAccountDeps {
 
 export function setupAccountCommand(deps: SetupAccountDeps): Command {
   return async (args, io) => {
-    const options = parseOptions(args, ["target", "email-domain"]);
+    const options = parseOptions(args, ["target"]);
     const target = options.get("target");
-    const emailDomain = options.get("email-domain")?.toLowerCase();
     if (target === undefined) throw new UsageError("--target is missing");
     if (!(TARGETS as readonly string[]).includes(target)) throw new UsageError(`--target must be one of: ${TARGETS.join(", ")}`);
     if (target === "local") {
-      if (emailDomain !== undefined) throw new UsageError("--email-domain is a cloud account setting; the local target sends no real mail");
       io.stdout("setup-account (local): nothing to set up; the local target has no shared account resources\n");
       return EXIT.ok;
     }
     const refused = refuseUnreachableCloud("setup-account", deps.env, io);
     if (refused !== undefined) return refused;
     const ops = deps.operations({ appDir: io.cwd, target: target as Target });
-    return (await runSetupAccount(ops, io, emailDomain === undefined ? {} : { emailDomain })).status;
+    return (await runSetupAccount(ops, io)).status;
   };
 }
 

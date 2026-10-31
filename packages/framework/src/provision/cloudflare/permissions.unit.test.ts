@@ -7,6 +7,8 @@ import {
   comparePolicies,
   deepLink,
   EVERYDAY,
+  EVERYDAY_V1,
+  EVERYDAY_V2,
   inPlaceUpdateBody,
   PERMISSIONS_VERSION,
   permissionTableMarkdown,
@@ -31,20 +33,38 @@ const dashboardPolicies = (gs: readonly PermissionGroup[], zoneRes: Record<strin
 ];
 
 describe("the permission list", () => {
-  it("has plan §4.1's everyday groups, v0.2.0 plan §5.1's bootstrap groups, versions and names", () => {
+  it("has v0.2.0 plan §5.2's four everyday groups, plan §5.1's bootstrap groups, versions and names", () => {
     expect(PERMISSIONS_VERSION).toBe(2);
-    expect(ACCOUNT_SETUP_VERSION).toBe(1);
-    expect(names(byScope(EVERYDAY, "account"))).toEqual(["Workers Scripts Write", "Workers R2 Storage Write", "D1 Write", "Email Sending Read"]);
-    expect(names(byScope(EVERYDAY, "zone"))).toEqual(["Zone Read", "Analytics Read", "Email Routing Rules Read"]);
+    // 2: v0.2.0's account setup in the admin app (DEC-0719, PAR-332).
+    expect(ACCOUNT_SETUP_VERSION).toBe(2);
+    expect(EVERYDAY).toEqual(EVERYDAY_V2);
+    expect(names(byScope(EVERYDAY, "account"))).toEqual(["Workers Scripts Write", "Workers R2 Storage Write", "D1 Write", "Secrets Store Read"]);
+    expect(byScope(EVERYDAY, "zone")).toEqual([]);
+    expect(names(byScope(EVERYDAY_V1, "account"))).toEqual(["Workers Scripts Write", "Workers R2 Storage Write", "D1 Write", "Email Sending Read"]);
+    expect(names(byScope(EVERYDAY_V1, "zone"))).toEqual(["Zone Read", "Analytics Read", "Email Routing Rules Read"]);
     expect(names(byScope(BOOTSTRAP, "account"))).toEqual(["Workers Scripts Write", "OAuth Client Write", "Secrets Store Write", "Account API Tokens Write"]);
     expect(byScope(BOOTSTRAP, "zone")).toEqual([]);
     expect(TOKEN_NAMES).toEqual({ everyday: "prototype-framework", bootstrap: "prototype-framework-bootstrap" });
-    const all = [...EVERYDAY, ...BOOTSTRAP];
+    const all = [...EVERYDAY, ...EVERYDAY_V1, ...BOOTSTRAP];
     for (const g of all) expect(g.id).toMatch(/^[0-9a-f]{32}$/);
     // One ID per name and one name per ID.
     expect(new Set(all.map((g) => `${g.id} ${g.name}`)).size).toBe(new Set(all.map((g) => g.id)).size);
     expect(new Set(all.map((g) => g.id)).size).toBe(new Set(all.map((g) => g.name)).size);
     expect(EVERYDAY.some((g) => g.name.startsWith("Account API Tokens") || (g.scope === "zone" && g.name.endsWith("Write")))).toBe(false);
+  });
+
+  it("EVERYDAY_V2 is v0.2.0 plan §5.2 page 2's set: exactly four account groups, no zone group, with their IDs (§2.1b for Secrets Store Read)", () => {
+    expect(Object.fromEntries(EVERYDAY_V2.map((g) => [g.name, g.id]))).toEqual({
+      "Workers Scripts Write": "e086da7e2179491d91ee5f35b3ca210a",
+      "Workers R2 Storage Write": "bf7481a1826f439697cb59a20b22293e",
+      "D1 Write": "09b2857d1c31407795e75e3fed8617a1",
+      "Secrets Store Read": "5e33b7d77788455c9fdf18cbd38ee5a0",
+    });
+    expect(EVERYDAY_V2.every((g) => g.scope === "account")).toBe(true);
+    // Secrets Store Write includes Read, as Zone Write includes Zone Read.
+    const read = EVERYDAY_V2.find((g) => g.name === "Secrets Store Read")!;
+    const writeOnly = [{ effect: "allow" as const, resources: accountRes, permission_groups: [{ id: "adc8fa2bc6124928a8b3314dc63a1235", name: "Secrets Store Write" }] }];
+    expect(comparePolicies(writeOnly, [read], { accountId: A, zoneId: Z }).missing).toEqual([]);
   });
 
   it("the bootstrap groups carry the IDs read from permission_groups (v0.2.0 plan §2.1b)", () => {
@@ -82,81 +102,81 @@ describe("comparePolicies", () => {
   const scope = { accountId: A, zoneId: Z };
 
   it("the dashboard's token: nothing missing, the zone covered by all zones", () => {
-    expect(comparePolicies(dashboardPolicies(EVERYDAY), EVERYDAY, scope)).toEqual({ missing: [], denied: [], wrongAccount: false, zoneCovered: true });
+    expect(comparePolicies(dashboardPolicies(EVERYDAY_V1), EVERYDAY_V1, scope)).toEqual({ missing: [], denied: [], wrongAccount: false, zoneCovered: true });
   });
 
   it("a specific zone covers it; another zone does not, and its groups are missing", () => {
-    expect(comparePolicies(dashboardPolicies(EVERYDAY, oneZone(Z)), EVERYDAY, scope)).toEqual({ missing: [], denied: [], wrongAccount: false, zoneCovered: true });
-    const elsewhere = comparePolicies(dashboardPolicies(EVERYDAY, oneZone("zone2")), EVERYDAY, scope);
+    expect(comparePolicies(dashboardPolicies(EVERYDAY_V1, oneZone(Z)), EVERYDAY_V1, scope)).toEqual({ missing: [], denied: [], wrongAccount: false, zoneCovered: true });
+    const elsewhere = comparePolicies(dashboardPolicies(EVERYDAY_V1, oneZone("zone2")), EVERYDAY_V1, scope);
     expect(elsewhere.zoneCovered).toBe(false);
     expect(elsewhere.wrongAccount).toBe(false);
     expect(names(elsewhere.missing)).toEqual(["Zone Read", "Analytics Read", "Email Routing Rules Read"]);
   });
 
   it("names a missing group (the release-1 everyday token lacks Email Routing Rules Read)", () => {
-    const old = dashboardPolicies(EVERYDAY.filter((g) => g.name !== "Email Routing Rules Read"));
-    expect(names(comparePolicies(old, EVERYDAY, scope).missing)).toEqual(["Email Routing Rules Read"]);
+    const old = dashboardPolicies(EVERYDAY_V1.filter((g) => g.name !== "Email Routing Rules Read"));
+    expect(names(comparePolicies(old, EVERYDAY_V1, scope).missing)).toEqual(["Email Routing Rules Read"]);
   });
 
   it("matches by ID without names, or by name, and a stronger group satisfies a read group", () => {
-    const idsOnly = dashboardPolicies(EVERYDAY).map((p) => ({ ...p, permission_groups: p.permission_groups.map((g) => ({ id: g.id })) }));
-    expect(comparePolicies(idsOnly, EVERYDAY, scope).missing).toEqual([]);
-    const namesOnly = dashboardPolicies(EVERYDAY).map((p) => ({ ...p, permission_groups: p.permission_groups.map((g, i) => ({ id: `x${i}`, name: g.name ?? "" })) }));
-    expect(comparePolicies(namesOnly, EVERYDAY, scope).missing).toEqual([]);
-    const stronger = dashboardPolicies(EVERYDAY).map((p) => ({ ...p, permission_groups: p.permission_groups.map((g) => ({ id: "?", name: (g.name ?? "").replace(/ Read$/, " Write") })) }));
-    expect(names(comparePolicies(stronger, EVERYDAY, scope).missing)).toEqual(["Analytics Read"]);
+    const idsOnly = dashboardPolicies(EVERYDAY_V1).map((p) => ({ ...p, permission_groups: p.permission_groups.map((g) => ({ id: g.id })) }));
+    expect(comparePolicies(idsOnly, EVERYDAY_V1, scope).missing).toEqual([]);
+    const namesOnly = dashboardPolicies(EVERYDAY_V1).map((p) => ({ ...p, permission_groups: p.permission_groups.map((g, i) => ({ id: `x${i}`, name: g.name ?? "" })) }));
+    expect(comparePolicies(namesOnly, EVERYDAY_V1, scope).missing).toEqual([]);
+    const stronger = dashboardPolicies(EVERYDAY_V1).map((p) => ({ ...p, permission_groups: p.permission_groups.map((g) => ({ id: "?", name: (g.name ?? "").replace(/ Read$/, " Write") })) }));
+    expect(names(comparePolicies(stronger, EVERYDAY_V1, scope).missing)).toEqual(["Analytics Read"]);
   });
 
   it("a deny policy takes a group away, and is reported as denied", () => {
-    const rules = EVERYDAY.find((g) => g.name === "Email Routing Rules Read")!;
-    const policies = [...dashboardPolicies(EVERYDAY), { effect: "deny" as const, resources: allZones, permission_groups: [{ id: rules.id }] }];
-    const c = comparePolicies(policies, EVERYDAY, scope);
+    const rules = EVERYDAY_V1.find((g) => g.name === "Email Routing Rules Read")!;
+    const policies = [...dashboardPolicies(EVERYDAY_V1), { effect: "deny" as const, resources: allZones, permission_groups: [{ id: rules.id }] }];
+    const c = comparePolicies(policies, EVERYDAY_V1, scope);
     expect(names(c.missing)).toEqual(["Email Routing Rules Read"]);
     expect(names(c.denied)).toEqual(["Email Routing Rules Read"]);
   });
 
   it("a deny of a stronger group leaves the weaker one granted (denying Zone Write keeps Zone Read)", () => {
-    const policies = [...dashboardPolicies(EVERYDAY), { effect: "deny" as const, resources: allZones, permission_groups: [{ id: "e6d2666161e84845a636613608cee8d5", name: "Zone Write" }] }];
-    expect(comparePolicies(policies, EVERYDAY, scope)).toEqual({ missing: [], denied: [], wrongAccount: false, zoneCovered: true });
+    const policies = [...dashboardPolicies(EVERYDAY_V1), { effect: "deny" as const, resources: allZones, permission_groups: [{ id: "e6d2666161e84845a636613608cee8d5", name: "Zone Write" }] }];
+    expect(comparePolicies(policies, EVERYDAY_V1, scope)).toEqual({ missing: [], denied: [], wrongAccount: false, zoneCovered: true });
   });
 
   it("the dashboard's single entire-account policy with every group passes", () => {
-    for (const list of [EVERYDAY, BOOTSTRAP]) {
+    for (const list of [EVERYDAY, EVERYDAY_V1, BOOTSTRAP]) {
       const one = [{ id: "p", effect: "allow" as const, resources: accountRes, permission_groups: list.map((g) => ({ id: g.id, name: g.name })) }];
       expect(comparePolicies(one, list, scope)).toEqual({ missing: [], denied: [], wrongAccount: false, zoneCovered: true });
     }
   });
 
   it("an account group in a policy that names only zones of the account is not granted on the account", () => {
-    const zonesOnly = [{ effect: "allow" as const, resources: oneZone(Z), permission_groups: EVERYDAY.map((g) => ({ id: g.id })) }];
-    const c = comparePolicies(zonesOnly, EVERYDAY, scope);
-    expect(c.missing).toEqual(byScope(EVERYDAY, "account"));
+    const zonesOnly = [{ effect: "allow" as const, resources: oneZone(Z), permission_groups: EVERYDAY_V1.map((g) => ({ id: g.id })) }];
+    const c = comparePolicies(zonesOnly, EVERYDAY_V1, scope);
+    expect(c.missing).toEqual(byScope(EVERYDAY_V1, "account"));
     expect(c.zoneCovered).toBe(true);
   });
 
   it("a token of another account: wrong account, everything missing", () => {
-    const other = dashboardPolicies(EVERYDAY).map((p) => ({ ...p, resources: JSON.parse(JSON.stringify(p.resources).replaceAll(`account.${A}`, "account.other")) as Record<string, unknown> }));
-    const c = comparePolicies(other, EVERYDAY, scope);
+    const other = dashboardPolicies(EVERYDAY_V1).map((p) => ({ ...p, resources: JSON.parse(JSON.stringify(p.resources).replaceAll(`account.${A}`, "account.other")) as Record<string, unknown> }));
+    const c = comparePolicies(other, EVERYDAY_V1, scope);
     expect(c.wrongAccount).toBe(true);
     expect(c.zoneCovered).toBe(false);
-    expect(c.missing).toHaveLength(EVERYDAY.length);
+    expect(c.missing).toHaveLength(EVERYDAY_V1.length);
   });
 
   it("an account given as `*` is not the wrong account; top-level zone keys name no account", () => {
-    const star = [{ effect: "allow" as const, resources: { "com.cloudflare.api.account.*": "*" }, permission_groups: EVERYDAY.map((g) => ({ id: g.id })) }];
-    expect(comparePolicies(star, EVERYDAY, scope)).toEqual({ missing: [], denied: [], wrongAccount: false, zoneCovered: true });
-    const zoneOnly = [{ effect: "allow" as const, resources: { [`com.cloudflare.api.account.zone.${Z}`]: "*" }, permission_groups: byScope(EVERYDAY, "zone").map((g) => ({ id: g.id })) }];
-    const c = comparePolicies(zoneOnly, EVERYDAY, scope);
+    const star = [{ effect: "allow" as const, resources: { "com.cloudflare.api.account.*": "*" }, permission_groups: EVERYDAY_V1.map((g) => ({ id: g.id })) }];
+    expect(comparePolicies(star, EVERYDAY_V1, scope)).toEqual({ missing: [], denied: [], wrongAccount: false, zoneCovered: true });
+    const zoneOnly = [{ effect: "allow" as const, resources: { [`com.cloudflare.api.account.zone.${Z}`]: "*" }, permission_groups: byScope(EVERYDAY_V1, "zone").map((g) => ({ id: g.id })) }];
+    const c = comparePolicies(zoneOnly, EVERYDAY_V1, scope);
     expect(c.wrongAccount).toBe(false);
     expect(c.zoneCovered).toBe(true);
-    expect(c.missing).toEqual(byScope(EVERYDAY, "account"));
+    expect(c.missing).toEqual(byScope(EVERYDAY_V1, "account"));
   });
 });
 
 describe("withMissingPermissions and inPlaceUpdateBody", () => {
-  const rules = EVERYDAY.find((g) => g.name === "Email Routing Rules Read")!;
-  const sending = EVERYDAY.find((g) => g.name === "Email Sending Read")!;
-  const existing = dashboardPolicies(EVERYDAY.filter((g) => g !== rules && g !== sending));
+  const rules = EVERYDAY_V1.find((g) => g.name === "Email Routing Rules Read")!;
+  const sending = EVERYDAY_V1.find((g) => g.name === "Email Sending Read")!;
+  const existing = dashboardPolicies(EVERYDAY_V1.filter((g) => g !== rules && g !== sending));
 
   it("keeps every existing policy (id, effect, resources, groups by ID) and adds the missing groups per scope", () => {
     const body = withMissingPermissions(existing, [sending, rules], { accountId: A, zoneId: Z });
@@ -165,7 +185,7 @@ describe("withMissingPermissions and inPlaceUpdateBody", () => {
       { effect: "allow", resources: accountRes, permission_groups: [{ id: sending.id }] },
       { effect: "allow", resources: { [`com.cloudflare.api.account.zone.${Z}`]: "*" }, permission_groups: [{ id: rules.id }] },
     ]);
-    expect(comparePolicies(body, EVERYDAY, { accountId: A, zoneId: Z }).missing).toEqual([]);
+    expect(comparePolicies(body, EVERYDAY_V1, { accountId: A, zoneId: Z }).missing).toEqual([]);
   });
 
   it("keeps a group's meta", () => {
@@ -189,32 +209,31 @@ describe("withMissingPermissions and inPlaceUpdateBody", () => {
 });
 
 describe("probeEveryday", () => {
-  it("one read per everyday group against the fake; all pass", async () => {
+  it("one read per everyday group against the fake, all GETs on the account; all pass", async () => {
     const cloud = new FakeCloud();
     const zoneId = cloud.zones.get("example.test")!.id;
     const results = await probeEveryday(cloud.api, { accountId: ACCOUNT, zoneId });
     expect(results.map((r) => [r.group.name, r.ok, r.status])).toEqual(EVERYDAY.map((g) => [g.name, true, 200]));
-    expect(cloud.requests).toHaveLength(EVERYDAY.length);
-    expect(cloud.requests.every((r) => r.startsWith("GET ") || r === "POST /graphql")).toBe(true);
-  });
-
-  it("names the refused group with its status; a GraphQL error fails Analytics Read", async () => {
-    const cloud = new FakeCloud();
-    const zoneId = cloud.zones.get("example.test")!.id;
-    const refused = { status: 403, body: { success: false, errors: [{ code: 10000, message: "Authentication error" }], result: null } };
-    cloud.override.set(`GET /zones/${zoneId}/email/routing/rules?per_page=1`, refused);
-    cloud.graphqlErrors = [{ message: "not authorized for that account: com.cloudflare.api.account.zone.analytics.read" }];
-    const failed = (await probeEveryday(cloud.api, { accountId: ACCOUNT, zoneId })).filter((r) => !r.ok);
-    expect(failed.map((r) => [r.group.name, r.status])).toEqual([
-      ["Analytics Read", 200],
-      ["Email Routing Rules Read", 403],
+    expect(cloud.requests).toEqual([
+      `GET /accounts/${ACCOUNT}/workers/scripts`,
+      `GET /accounts/${ACCOUNT}/r2/buckets?per_page=1`,
+      `GET /accounts/${ACCOUNT}/d1/database?per_page=1`,
+      `GET /accounts/${ACCOUNT}/secrets_store/stores?per_page=1`,
     ]);
   });
 
-  it("without a zone, reads only the account groups", async () => {
+  it("names the refused group with its status", async () => {
+    const cloud = new FakeCloud();
+    const refused = { status: 403, body: { success: false, errors: [{ code: 10000, message: "Authentication error" }], result: null } };
+    cloud.override.set(`GET /accounts/${ACCOUNT}/secrets_store/stores?per_page=1`, refused);
+    const failed = (await probeEveryday(cloud.api, { accountId: ACCOUNT })).filter((r) => !r.ok);
+    expect(failed.map((r) => [r.group.name, r.status])).toEqual([["Secrets Store Read", 403]]);
+  });
+
+  it("reads the same groups with or without a zone: none of them is zone-scoped", async () => {
     const cloud = new FakeCloud();
     const results = await probeEveryday(cloud.api, { accountId: ACCOUNT });
-    expect(results.map((r) => r.group)).toEqual(byScope(EVERYDAY, "account").filter((g) => g.name !== "Email Sending Read"));
+    expect(results.map((r) => r.group)).toEqual([...EVERYDAY]);
     expect(results.every((r) => r.ok)).toBe(true);
   });
 });

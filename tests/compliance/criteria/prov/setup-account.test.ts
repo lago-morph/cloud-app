@@ -1,14 +1,13 @@
 /**
  * PROV-AC-004 (provisioning.md §4; milestone): "Running `setup-account` twice changes nothing
- * the second time, including in the state home, the account settings record and the email setup.
- * Deploying without it fails with a clear message. With a token lacking one email permission of
- * DEC-0515, `setup-account` names that permission and changes nothing; with a token lacking
- * 'Account API Tokens Write' while the account's R2 signing credential is absent, `setup-account`
- * names that permission and changes nothing. With a token lacking 'Email Sending Read', a
- * production stage's `deploy` names that permission and changes nothing (DEC-0553)."
+ * the second time, including in the state home and the account settings record. Deploying
+ * without it fails with a clear message. With a token lacking 'Account API Tokens Write' while
+ * the account's R2 signing credential is absent, `setup-account` names that permission and
+ * changes nothing." Since v0.2.0 there is no email setup and no email permission clause (PROV-REQ-004's
+ * v0.2.0 amendment, DEC-0698; DEC-0689).
  *
  * The shared resources `setup-account` creates on Cloudflare (PROV-REQ-004 as amended): the log
- * bucket and state home, the email setup, the backup bucket `prototype-backups` with its
+ * bucket and state home, the backup bucket `prototype-backups` with its
  * lifecycle rule `framework-backups-retention` (PAR-311, DEC-0543), and the R2 signing
  * credential: the token `prototype-r2-signing` (allowed "Workers R2 Storage Bucket Item Write" on
  * the account, denied it on the 4 account buckets) and its record `framework/r2-signing.json`
@@ -42,15 +41,7 @@
  *    home and the backup bucket (existence, settings, CORS and lifecycle rules), every object of
  *    the state home (key, ETag, last-modified, size; the records included), every object of the
  *    log bucket that is not a log entry, the signing token's ID and policies, the workers.dev
- *    subdomain (by digest only, DEC-0086), and the email setup.
- * 5. Email permission clause: `setup-account` with the setup token lacking "Email Routing
- *    Addresses Write" (`COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_EMAIL_PERMISSION`) names it and
- *    changes nothing.
- * 6. DEC-0553 clause: a production stage's `deploy` with the everyday token lacking "Email
- *    Sending Read" (`COMPLIANCE_CLOUDFLARE_TOKEN_WITHOUT_EMAIL_SENDING_READ`) names that
- *    permission and changes nothing. The production stage is a new name in a scratch copy, with
- *    prodcheck's values copied as its committed values file; a deploy that wrongly gets past the
- *    preflight is removed again.
+ *    subdomain (by digest only, DEC-0086).
  *
  * "Deploying without it": needs an account on which `setup-account` has never run. The test
  * never deletes the shared resources (they hold other stages' state and retained log entries),
@@ -58,18 +49,18 @@
  * that require another account"; DEC-0532): the driver records the clause `not-run` with
  * "deferred: needs a second Cloudflare account (owner, 2026-10-25)" (`harness/expected.ts`), and
  * the tests are defined only when the operator says the account is fresh
- * (`COMPLIANCE_CLOUDFLARE_FRESH_ACCOUNT=1`, with the email domain to record in
- * `COMPLIANCE_CLOUDFLARE_EMAIL_DOMAIN`), for when the deferral is lifted.
+ * (`COMPLIANCE_CLOUDFLARE_FRESH_ACCOUNT=1`), for when the deferral is lifted. Since v0.2.0
+ * `setup-account` takes no email domain (DEC-0698).
  *
  * Cloud usage (estimate, D-T.md): no D1 at all (setup-account creates R2 buckets only; the
- * stopped deploy creates nothing). ≈ 250 Cloudflare API requests (8 snapshots of ≈ 28 each,
+ * stopped deploy creates nothing). ≈ 200 Cloudflare API requests (4 snapshots of ≈ 28 each,
  * the scoped R2 tokens of 4 record writes ≈ 16; the setup-account runs' own requests not
  * counted), plus the state-home and log-bucket listings through R2's S3 endpoint (one request
  * per 1,000 objects).
  */
 import { describe, expect, it } from "vitest";
 import { newTestStage, prerequisiteMissing, tag, target } from "../../harness/index.js";
-import { NO_API_TOKENS_WRITE_ENV, NO_EMAIL_PERMISSION_ENV, NO_EMAIL_SENDING_READ_ENV } from "../../harness/test-tokens.js";
+import { NO_API_TOKENS_WRITE_ENV } from "../../harness/test-tokens.js";
 import {
   ACCOUNT_BUCKETS,
   REPAIR_COMMAND,
@@ -87,31 +78,19 @@ import {
 } from "../_cloud/account.js";
 import { accountId, cfApi, cfOk } from "../_cloud/api.js";
 import { BACKUP_BUCKET, LOG_BUCKET, listObjects, STATE_BUCKET } from "../_cloud/r2.js";
-import { randomBytes } from "node:crypto";
 import { accountWorkers, listStageResources, MAIL_SINK, sharedResources } from "../_cloud/stage-resources.js";
 import { MARKER_PREFIX, stageOfMarkerKey } from "../../harness/criterion-stages.js";
-import { deleteCriterionMarker, writeCriterionMarker } from "../_cloud/criterion-markers.js";
 import { requireCloudD1 } from "../_cloud/d1.js";
 import { listKeys } from "../_cloud/r2.js";
-import { sinkAddress } from "../../../../packages/framework/src/provision/cloudflare/email.js";
-import { sinkMail } from "../cli/support/admins.js";
-import { createVerifiedAccount, expectAnswer, httpBrowser, signIn, testDisplayName, testIp, testPassword, type Account, type AuthBrowser } from "../pwd/support.js";
-import { emailState, zoneOf } from "../_cloud/email.js";
-import { emailDomain } from "../cli/support/admins.js";
 import { scratchCopy } from "../core/support/processes.js";
 import { isLocal, parameterNumber, REFERENCE_DIR } from "../core/support/repo.js";
-import { deployOrigin, newProductionStage, runCli, tail } from "./support/stage.js";
+import { deployOrigin, runCli, tail } from "./support/stage.js";
 
 const FRESH_ENV = "COMPLIANCE_CLOUDFLARE_FRESH_ACCOUNT";
-const FRESH_DOMAIN_ENV = "COMPLIANCE_CLOUDFLARE_EMAIL_DOMAIN";
 /** Deferred by the owner (DEC-0532): defined only on an account the operator says is fresh. */
 const itOnFreshAccount = process.env[FRESH_ENV] === "1" ? it : undefined;
-/** DEC-0515's email permissions, as an output naming one of them may write it ("Write" or "Edit"). */
-const EMAIL_PERMISSION = /Email Sending|Email Routing Addresses|Email Routing Rules|DNS (?:Write|Edit)|Zone Settings|Zone Read/i;
 /** "Account API Tokens Write", as an output may write it ("Write" or the dashboard's "Edit"). */
 const API_TOKENS_WRITE = /Account API Tokens:? (?:Write|Edit)/i;
-/** "Email Sending Read" (DEC-0553). */
-const EMAIL_SENDING_READ = /Email Sending:? Read/i;
 /** A log entry's key (LOG-REQ-004): `<app>/<stage>/<yyyy>/<mm>/<dd>/<file>`. */
 const LOG_ENTRY_KEY = /^[a-z0-9]+\/[a-z0-9-]+\/\d{4}\/\d{2}\/\d{2}\/[^/]+$/;
 
@@ -139,9 +118,7 @@ async function signingTokenState(): Promise<unknown[]> {
 }
 
 async function accountSnapshot(): Promise<unknown> {
-  const domain = await emailDomain();
   return {
-    email: await emailState(await zoneOf(domain), domain),
     shared: await sharedResources(),
     logBucket: await bucketSettings(LOG_BUCKET),
     stateHome: await bucketSettings(STATE_BUCKET),
@@ -188,10 +165,10 @@ async function requireNoOtherStages(): Promise<void> {
 /**
  * After the signing token was replaced: redeploys the reference app's `prodcheck` (when it
  * exists) from a scratch copy, so its Worker secrets hold the new credential (every deploy copies
- * the record, PROV-REQ-002 step 5), then shows a ticket round trip on it: a verified user (a
- * sink address under `t.<domain>`, as COMPL §2's prodcheck parts do; it is left with no role),
- * an upload through an upload ticket (R2 checks the ticket's signature) and the bytes read back
- * through a download ticket. The file is deleted afterwards.
+ * the record, PROV-REQ-002 step 5), and checks that the deploy, its health step included,
+ * passed. The signed-in ticket round trip that followed signed a user up with a password through
+ * the mail sink; both are removed in v0.2.0 (plan §6, B 45/46), so it went with them
+ * (`component-removed`, DEC-0689) until a production-stage sign-in exists for tests.
  */
 async function refreshProdcheck(t: string): Promise<void> {
   if (!(await accountWorkers()).includes(PRODCHECK_WORKER)) return;
@@ -201,25 +178,6 @@ async function refreshProdcheck(t: string): Promise<void> {
     expect(r.status, `redeploy of prodcheck with the new signing credential:\n${tail(r.output)}`).toBe(0);
     const origin = deployOrigin(r.output);
     expect(origin, "the prodcheck deploy printed its origin").toBeDefined();
-    const domain = await emailDomain();
-    const a: Account = { email: sinkAddress(domain, `prov-ac-004-${randomBytes(6).toString("hex")}`), password: testPassword(), displayName: testDisplayName("PROV 004") };
-    const b: AuthBrowser = { ...httpBrowser({ baseUrl: origin ?? "" }), mail: sinkMail() };
-    await createVerifiedAccount(b, a, testIp());
-    expectAnswer(await signIn(b, a.email, a.password, { ip: testIp() }), 200);
-    const name = `dt1/prov004-${randomBytes(6).toString("hex")}.txt`;
-    const bytes = new TextEncoder().encode(`prov-ac-004 ${name}`);
-    const cookie = Object.entries(b.cookies()).map(([k, v]) => `${k}=${v}`).join("; ");
-    try {
-      const up = expectAnswer(await b.post("/api/files/upload-ticket", { name, contentType: "text/plain" }), 200).json<{ ticket: { url: string } }>().ticket;
-      const put = await fetch(new URL(up.url, b.publicOrigin), { method: "PUT", headers: { "content-type": "text/plain" }, body: bytes, signal: AbortSignal.timeout(30_000) });
-      expect(put.status >= 200 && put.status < 300, `the upload through prodcheck's ticket (signed with the new credential): HTTP ${String(put.status)}`).toBe(true);
-      const down = expectAnswer(await b.post("/api/files/download-ticket", { name }), 200).json<{ ticket: { url: string } }>().ticket;
-      const got = await fetch(new URL(down.url, b.publicOrigin), { signal: AbortSignal.timeout(30_000) });
-      expect(got.status, "the download through prodcheck's ticket").toBe(200);
-      expect(new Uint8Array(await got.arrayBuffer()), "the downloaded bytes").toEqual(bytes);
-    } finally {
-      await fetch(new URL(`/api/files/content?name=${encodeURIComponent(name)}`, b.publicOrigin), { method: "DELETE", headers: { cookie, origin: b.publicOrigin }, signal: AbortSignal.timeout(30_000) });
-    }
   } finally {
     await copy.remove();
   }
@@ -250,14 +208,12 @@ if (!isLocal()) {
     }, 15 * 60_000);
 
     itOnFreshAccount?.(tag("PROV-AC-004", "on an account without a workers.dev subdomain, setup-account registers pf-<random>, never derived from the account ID (DEC-0552, PAR-320)"), async () => {
-      const domain = process.env[FRESH_DOMAIN_ENV] ?? "";
-      if (domain === "") prerequisiteMissing(`${FRESH_ENV}=1 needs the email domain to record in ${FRESH_DOMAIN_ENV}`);
       const before = await cfApi<{ subdomain?: string }>("GET", `/accounts/${accountId()}/workers/subdomain`);
       if (before.status === 200 && (before.body?.result.subdomain ?? "") !== "") prerequisiteMissing("the fresh account already has a workers.dev subdomain");
       const t = target().target;
       const copy = await scratchCopy(REFERENCE_DIR, "d-t1-prov004");
       try {
-        const r = await runCli(["setup-account", "--target", t, "--email-domain", domain], { cwd: copy.dir, timeoutMs: 10 * 60_000 });
+        const r = await runCli(["setup-account", "--target", t], { cwd: copy.dir, timeoutMs: 10 * 60_000 });
         expect(r.status, `setup-account on the fresh account:\n${tail(r.output)}`).toBe(0);
         const sub = await subdomain();
         const random = parameterNumber("PAR-320");
@@ -299,7 +255,7 @@ if (!isLocal()) {
       }
     }, 30 * 60_000);
 
-    it(tag("PROV-AC-004", "a re-run of setup-account replaces a signing record written before the backup bucket existed: a new token with every account bucket denied, the old token deleted; prodcheck, redeployed, signs working tickets with it"), async () => {
+    it(tag("PROV-AC-004", "a re-run of setup-account replaces a signing record written before the backup bucket existed: a new token with every account bucket denied, the old token deleted; prodcheck is redeployed with it"), async () => {
       const t = target().target;
       if ((await accountWorkers()).includes(PRODCHECK_WORKER)) requireCloudD1(t);
       await requireNoOtherStages();
@@ -346,7 +302,7 @@ if (!isLocal()) {
       }
     }, 60 * 60_000);
 
-    it(tag("PROV-AC-004", "running setup-account twice changes nothing the second time, including in the state home, the account settings record, the email setup, the backup bucket and the R2 signing credential"), async () => {
+    it(tag("PROV-AC-004", "running setup-account twice changes nothing the second time, including in the state home, the account settings record, the backup bucket and the R2 signing credential"), async () => {
       const t = target().target;
       const copy = await scratchCopy(REFERENCE_DIR, "d-t1-prov004");
       try {
@@ -367,50 +323,6 @@ if (!isLocal()) {
         await copy.remove();
       }
     }, 30 * 60_000);
-
-    it(tag("PROV-AC-004", "with a token lacking one email permission of DEC-0515, setup-account names that permission and changes nothing"), async () => {
-      const restricted = token(NO_EMAIL_PERMISSION_ENV, "lacking exactly one email permission of DEC-0515");
-      const t = target().target;
-      const copy = await scratchCopy(REFERENCE_DIR, "t2-prov004-perm");
-      try {
-        const before = await accountSnapshot();
-        const setup = await runCli(["setup-account", "--target", t], { cwd: copy.dir, timeoutMs: 10 * 60_000, env: { CLOUDFLARE_API_TOKEN: restricted } });
-        expect(setup.status, `setup-account with the restricted token must fail:\n${tail(setup.output)}`).not.toBe(0);
-        expect(setup.output, "setup-account names the missing email permission").toMatch(EMAIL_PERMISSION);
-        expect(setup.output.includes(restricted), "the output does not print the token").toBe(false);
-        expect(await accountSnapshot(), "the account after the refused setup-account").toEqual(before);
-      } finally {
-        await copy.remove();
-      }
-    }, 30 * 60_000);
-
-    it(tag("PROV-AC-004", "with a token lacking Email Sending Read, a production stage's deploy names that permission and changes nothing (DEC-0553)"), async () => {
-      const restricted = token(NO_EMAIL_SENDING_READ_ENV, 'with the everyday set but without "Email Sending Read"');
-      const t = target().target;
-      const copy = await scratchCopy(REFERENCE_DIR, "t2-prov004-send");
-      // A production stage: any name not starting with test- (PROV-REQ-005), with a committed values file of its own.
-      const stage = newProductionStage("p004");
-      // DEC-0560: marked before the deploy, so a later run's sweep removes it if this process dies.
-      await writeCriterionMarker(stage);
-      let cleaned = false;
-      try {
-        const before = await accountSnapshot();
-        await copy.write(`config/${t}/${stage}.json`, await copy.read(`config/${t}/prodcheck.json`));
-        const deploy = await runCli(["deploy", "--target", t, "--stage", stage], { cwd: copy.dir, timeoutMs: 10 * 60_000, env: { CLOUDFLARE_API_TOKEN: restricted } });
-        const left = await listStageResources({ target: t, app: "reference", stage, production: true });
-        if (left.length > 0) await runCli(["remove", "--target", t, "--stage", stage, "--confirm-production", stage], { cwd: copy.dir, timeoutMs: 20 * 60_000 });
-        cleaned = (await listStageResources({ target: t, app: "reference", stage, production: true })).length === 0;
-        expect(deploy.status, `deploy of the production stage with the restricted token must fail:\n${tail(deploy.output)}`).not.toBe(0);
-        expect(deploy.output, "deploy names Email Sending Read").toMatch(EMAIL_SENDING_READ);
-        expect(deploy.output.includes(restricted), "the output does not print the token").toBe(false);
-        expect(left, "resources the refused deploy created").toEqual([]);
-        expect(await accountSnapshot(), "the account after the refused deploy").toEqual(before);
-      } finally {
-        await copy.remove();
-        // The marker goes once nothing of the stage is left; otherwise a later run's sweep removes the stage.
-        if (cleaned) await deleteCriterionMarker(stage);
-      }
-    }, 45 * 60_000);
   });
 } else {
   // Untagged, so never selected as evidence: keeps the file a valid suite on local runs.

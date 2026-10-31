@@ -26,8 +26,23 @@ const migration = (id: string): Migration => ({ id, name: id.split("/")[1]!, fil
 const MIGRATIONS = { framework: [migration("framework/0001_init")], app: [migration("app/0001_schema")] };
 const NOW = Date.UTC(2026, 9, 25, 15, 3, 1);
 
+/** The auth app link as a recording stand-in: a production stage needs the auth app (DEC-0725). */
+function recordingAuthApp(unregisterError?: Error) {
+  const calls: string[] = [];
+  return {
+    calls,
+    problems: async () => [],
+    register: async (app: string) => void calls.push(`register ${app}`),
+    unregister: async (app: string) => {
+      calls.push(`unregister ${app}`);
+      if (unregisterError) throw unregisterError;
+    },
+  };
+}
+
 function setup(overrides: Partial<CloudflareTargetOptions> = {}) {
   const cloud = FakeCloud.withSharedResources();
+  const authApp = recordingAuthApp();
   cloud.objectBodies.set("sst-state/framework/account.json", { emailDomain: "example.test" });
   cloud.buckets.get("sst-state")!.add("framework/account.json");
   const zone = cloud.zones.get("example.test")!;
@@ -48,10 +63,10 @@ function setup(overrides: Partial<CloudflareTargetOptions> = {}) {
     randomKey: () => "generated-key",
     now: () => NOW,
     sleep: async () => {},
-    email: { setupProblems: async () => [], setUp: async () => [], productionPrerequisites: async () => [] },
+    authApp,
     ...overrides,
   };
-  return { cloud, databases, options, target: createCloudflareTarget(options), health: () => healthCalls };
+  return { cloud, databases, options, authApp, target: createCloudflareTarget(options), health: () => healthCalls };
 }
 
 const request = (stage: Stage, extra: Partial<DeployRequest> = {}): DeployRequest => ({ stage, migrations: MIGRATIONS, requiredSecrets: [], ...extra });
@@ -185,6 +200,34 @@ describe("production remove backs up first (DEC-0543)", () => {
       expect(s.cloud.sstRuns.some((r) => r.startsWith("remove"))).toBe(false);
     });
   }
+
+  it("a production remove clears the stage's return URLs from the auth app's registry after the backup; a test stage's remove does not ask (DEC-0725)", async () => {
+    const { authApp, databases, target } = await deployedProd();
+    expect((await runRemove(target, prod, captureIo())).status).toBe(0);
+    expect(authApp.calls).toEqual(["register notes-prod", "unregister notes-prod"]);
+    expect(databases.calls).toContain("export notes-prod-db-1");
+
+    const t = setup();
+    expect((await runDeploy(t.target, request(test), captureIo())).status).toBe(0);
+    expect((await runRemove(t.target, test, captureIo())).status).toBe(0);
+    expect(t.authApp.calls).toEqual([]);
+  });
+
+  it("a production remove whose backup fails leaves the registry alone; a failed clear is reported while the rest is removed", async () => {
+    const s = await deployedProd();
+    s.databases.failingExports.add("notes-prod-db-1");
+    expect((await runRemove(s.target, prod, captureIo())).status).toBe(1);
+    expect(s.authApp.calls).toEqual(["register notes-prod"]);
+
+    const failing = recordingAuthApp(new Error("reading the settings of the auth app's Worker prototype-auth failed: HTTP 500"));
+    const f = setup({ authApp: failing });
+    expect((await runDeploy(f.target, request(prod), captureIo())).status).toBe(0);
+    const io = captureIo();
+    expect((await runRemove(f.target, prod, io)).status).toBe(1);
+    expect(io.err).toContain("reading the settings of the auth app's Worker prototype-auth failed: HTTP 500");
+    expect(f.cloud.workers.has("notes-prod")).toBe(false);
+    expect(f.cloud.buckets.has("notes-prod-files")).toBe(false);
+  });
 
   it("after turning the route off, remove waits PAR-315 for requests in flight before it reads anything for the backup", async () => {
     const waits: { ms: number; route: boolean | undefined; exports: number }[] = [];

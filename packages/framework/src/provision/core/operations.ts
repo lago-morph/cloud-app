@@ -113,8 +113,8 @@ export interface DeployInput {
   readonly database?: StageDatabase;
   /**
    * The account settings record's email domain, as step 1 read it (DEC-0514): the sender of a
-   * production stage's mail binding and the mail variable derive from it. Always present for a
-   * production stage (step 1 requires it); a test stage may have none.
+   * production stage's `EMAIL` binding and the mail variable derive from it. Always present for a
+   * production stage (step 1 requires it); a test stage may have none. Recorded by 0.1.x only.
    */
   readonly emailDomain?: string;
 }
@@ -167,27 +167,18 @@ export interface TargetOperations {
    * state home, DEC-0514); `{}` when there is none yet. Changes nothing.
    */
   readAccountSettings(): Promise<AccountSettings>;
-  /** Records the account settings. Only `setup-account` calls it, after the shared resources exist. */
-  writeAccountSettings(settings: AccountSettings): Promise<void>;
   /**
-   * `setup-account`: makes the email domain's setup exist (sending onboarding, the mail sink),
-   * listing first so a second run changes nothing (PROV-REQ-004, MAIL-REQ-005). Returns the names
-   * of what it created.
+   * `setup-account`, before anything changes: its missing prerequisites by name: on Cloudflare
+   * while the account's R2 signing credential is absent, the permission to create it (DEC-0551).
+   * Changes nothing. Since v0.2.0 there is no email setup to check (DEC-0689).
    */
-  setUpEmail(emailDomain: string): Promise<readonly string[]>;
+  setupProblems(): Promise<readonly string[]>;
   /**
-   * `setup-account`, before anything changes: its missing prerequisites by name: the email
-   * setup's (the domain's zone, the credentials' email permissions; DEC-0515) and, on
-   * Cloudflare while the account's R2 signing credential is absent, the permission to create it
-   * (DEC-0551). Changes nothing.
+   * `setup-account`'s last step, once every shared resource exists: records the account setup
+   * (Cloudflare: the setup record, DEC-0577), writing nothing when it already says so. Returns the
+   * names of what it wrote.
    */
-  emailSetupProblems(emailDomain: string): Promise<readonly string[]>;
-  /**
-   * Deploy step 1 of a production stage: the email prerequisites that are missing (the domain's
-   * zone and its sending entry verified, read with the permissions deploy uses; DEC-0553), by name.
-   * Changes nothing.
-   */
-  emailPrerequisites(stage: Stage, emailDomain: string): Promise<readonly string[]>;
+  recordSetup(): Promise<readonly string[]>;
 
   /** Deploy step 3: long-lived infrastructure only (buckets, roles), no new app code. */
   deployInfrastructure(input: DeployInput): Promise<void>;

@@ -12,7 +12,7 @@
  * optional single or double quotes around the value, and an unquoted value's ` #` comment. An
  * unquoted value's trailing `(…)` hint, as on the template's account line, is dropped, so a line
  * with only the hint reads as empty; an unquoted value with a space left inside is unreadable. Only
- * the four names of `SETTING_NAMES` are read; other names are ignored. Nothing here ever prints,
+ * the three names of `SETTING_NAMES` are read (since v0.2.0 not `CLOUDFLARE_EMAIL_DOMAIN`, DEC-0697); other names are ignored. Nothing here ever prints,
  * logs or returns in a message a value of the file or the environment (DEC-0573): notices name
  * settings and line numbers only.
  *
@@ -30,7 +30,7 @@ import type { Environment } from "./environment.js";
 export const ENV_CLOUDFLARE_FILE = ".env.cloudflare";
 
 /** The settings the file may hold, in the template's order. */
-export const SETTING_NAMES = ["CLOUDFLARE_BOOTSTRAP_TOKEN", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_EMAIL_DOMAIN", "CLOUDFLARE_ACCOUNT_ID"] as const;
+export const SETTING_NAMES = ["CLOUDFLARE_BOOTSTRAP_TOKEN", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"] as const;
 export type SettingName = (typeof SETTING_NAMES)[number];
 
 /** The file's mode after every write: owner read and write only (PAR-341). */
@@ -39,11 +39,10 @@ export const ENV_CLOUDFLARE_MODE = 0o600;
 /** What replaces the bootstrap token's line once the token has deleted itself (plan §4.2, PAR-342). */
 export const BOOTSTRAP_DELETED_LINE = "# CLOUDFLARE_BOOTSTRAP_TOKEN=deleted by setup process";
 
-/** The template setup prints and writes (plan §3.2), exactly its four lines. */
+/** The template setup prints and writes (plan §3.2; SETUP-REQ-003 as amended, DEC-0697), exactly its three lines: no email domain since v0.2.0. */
 export const ENV_CLOUDFLARE_TEMPLATE = [
   "CLOUDFLARE_BOOTSTRAP_TOKEN=",
   "CLOUDFLARE_API_TOKEN=",
-  "CLOUDFLARE_EMAIL_DOMAIN=",
   "# CLOUDFLARE_ACCOUNT_ID=        (only if your tokens see more than one account)",
 ].join("\n") + "\n";
 
@@ -244,14 +243,14 @@ export function commentOutBootstrap(projectDir: string): boolean {
   return changed;
 }
 
-type FillName = "CLOUDFLARE_ACCOUNT_ID" | "CLOUDFLARE_EMAIL_DOMAIN";
+type FillName = "CLOUDFLARE_ACCOUNT_ID";
 
 /** A commented-out assignment with no value, as the template's `# CLOUDFLARE_ACCOUNT_ID=  (…)` line. */
 const commentedEmpty = (name: string): RegExp => new RegExp(`^\\s*#\\s*${name}\\s*=\\s*(\\(.*\\))?\\s*$`);
 
 /**
- * Fills in `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_EMAIL_DOMAIN` where the file has them empty or
- * absent, so copying the file starts the next project (plan §4.2). A value already in the file is
+ * Fills in `CLOUDFLARE_ACCOUNT_ID` where the file has it empty or absent (since v0.2.0 not
+ * `CLOUDFLARE_EMAIL_DOMAIN`, DEC-0697), so copying the file starts the next project (plan §4.2). A value already in the file is
  * never changed. An empty line is filled in place; else the template's commented line is
  * uncommented and filled; else a line is added. An absent file is never created (settings that
  * live in the environment only stay there; plan §3.4, SETUP-AC-002). Returns the names
@@ -264,7 +263,7 @@ export function fillInSettings(projectDir: string, values: Partial<Record<FillNa
   const current = fileValues(parsed);
   const lines = [...parsed.lines];
   const filled: string[] = [];
-  for (const name of ["CLOUDFLARE_EMAIL_DOMAIN", "CLOUDFLARE_ACCOUNT_ID"] as const) {
+  for (const name of ["CLOUDFLARE_ACCOUNT_ID"] as const) {
     const value = values[name]?.trim() ?? "";
     const have = current[name] ?? "";
     if (value === "" || have === value || (have !== "" && !(options.replace ?? []).includes(name))) continue;

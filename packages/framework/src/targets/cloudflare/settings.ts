@@ -87,7 +87,7 @@ export function cloudflareWorkerSettings(input: StageWorkerInput): CloudflareWor
   if (!input.isTestStage && input.emailDomain === undefined) {
     throw new FrameworkError(
       "CORE.MISCONFIGURED",
-      "a production stage's Worker needs the account's email domain for its EMAIL binding; run setup-account --target cloudflare --email-domain <domain>",
+      "a production stage's Worker needs the account's email domain for its EMAIL binding; the account settings record names none (only a 0.1.x setup recorded one)",
     );
   }
   const sender = input.emailDomain === undefined ? undefined : senderAddress(input.emailDomain);

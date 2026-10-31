@@ -1,32 +1,22 @@
 /**
- * `setup-account` sequence (PROV-REQ-004 and its amendment; DEC-0514): create the account's
- * shared resources that do not exist, record the account settings, set up the email domain, and
- * change nothing when all of that is already in place. It stops before changing anything when a
- * shared resource exists but this account does not own it, when no email domain is known, or
- * when the email setup's prerequisites (the domain's zone, the credentials' email permissions,
- * DEC-0515) are missing; each missing one is named.
+ * `setup-account` sequence (PROV-REQ-004 and its amendments; DEC-0514): create the account's
+ * shared resources that do not exist, record the account setup, and change nothing when all of
+ * that is already in place. It stops before changing anything when a shared resource exists but
+ * this account does not own it, or when a prerequisite is missing (on Cloudflare, the permission
+ * to create the R2 signing credential, DEC-0551); each missing one is named.
  *
- * The email domain is the account settings record's `emailDomain`: `--email-domain` sets it
- * (required while the record has none) and is also how the owner changes it; the record is
- * written only when the value changes, after the shared resources (the record lives in the state
- * home) exist. Account settings are kept by the target with its shared resources, never only on
- * the owner's machine (PROV §2 "State home").
+ * Since v0.2.0 there is no email domain and no email setup, and `setup-account` takes no
+ * `--email-domain` (PROV-REQ-004's v0.2.0 amendment, DEC-0698; DEC-0689). An email domain a 0.1.x
+ * setup recorded is left as it is. Account settings are kept by the target with its shared
+ * resources, never only on the owner's machine (PROV §2 "State home").
  */
-import { emailDomainProblem } from "./account-settings.js";
 import type { TargetOperations } from "./operations.js";
 import { EXIT, errorLine, line, messageOf, type ProvisionIo, type ProvisionStatus } from "./output.js";
 
-export interface SetupAccountRequest {
-  /** `--email-domain`: the account's email domain to record (required while the record has none). */
-  readonly emailDomain?: string;
-}
-
 export interface SetupAccountResult {
   readonly status: ProvisionStatus;
-  /** Names of the shared resources (and parts of the email setup) created by this run. */
+  /** Names of the shared resources (and the setup record) created or written by this run. */
   readonly created: readonly string[];
-  /** The email domain recorded by this run; absent when the record was left unchanged. */
-  readonly recorded?: string;
 }
 
 /** The message `setup-account` and `deploy` print for shared resources this account does not own. */
@@ -34,30 +24,23 @@ export function foreignResourcesMessage(names: readonly string[]): string {
   return `${names.join(", ")} already exist${names.length === 1 ? "s" : ""} but belong${names.length === 1 ? "s" : ""} to another account (or this account's credentials cannot see ${names.length === 1 ? "it" : "them"}); nothing was changed. Use an account that owns ${names.length === 1 ? "it" : "them"}, or remove ${names.length === 1 ? "it" : "them"} there first.`;
 }
 
-/** The message for an account settings record without an email domain. */
-export function noEmailDomainMessage(target: string): string {
-  return `the account settings record names no email domain; run setup-account --target ${target} --email-domain <domain>`;
+/** The message for an account settings record without an email domain, which a production stage's `EMAIL` binding still needs (0.1.x recorded one). */
+export function noEmailDomainMessage(): string {
+  return "the account settings record names no email domain, which a production stage's EMAIL binding still needs (only a 0.1.x setup recorded one)";
 }
 
-export async function runSetupAccount(ops: TargetOperations, io: ProvisionIo, request: SetupAccountRequest = {}): Promise<SetupAccountResult> {
+export async function runSetupAccount(ops: TargetOperations, io: ProvisionIo): Promise<SetupAccountResult> {
   const failed = (message: string): SetupAccountResult => {
     errorLine(io, `setup-account failed: ${message}`);
     return { status: EXIT.failed, created: [] };
   };
   try {
-    if (request.emailDomain !== undefined) {
-      const problem = emailDomainProblem(request.emailDomain);
-      if (problem !== undefined) return failed(`--email-domain ${problem}; nothing was changed`);
-    }
     const resources = await ops.inspectAccount();
     const foreign = resources.filter((r) => r.state === "foreign").map((r) => r.name);
     if (foreign.length > 0) return failed(foreignResourcesMessage(foreign));
-    const settings = await ops.readAccountSettings();
-    const emailDomain = request.emailDomain ?? settings.emailDomain;
-    if (emailDomain === undefined) return failed(`${noEmailDomainMessage(ops.target)}; nothing was changed`);
-    // The email permissions and the domain's zone are checked before anything changes (PROV-REQ-004 amendment, PROV-AC-004).
-    const emailProblems = await ops.emailSetupProblems(emailDomain);
-    if (emailProblems.length > 0) return failed(`${emailProblems.join("; ")}; nothing was changed`);
+    // The prerequisites are checked before anything changes (PROV-AC-004).
+    const problems = await ops.setupProblems();
+    if (problems.length > 0) return failed(`${problems.join("; ")}; nothing was changed`);
 
     const absent = resources.filter((r) => r.state === "absent");
     const present = resources.filter((r) => r.state === "owned").map((r) => r.name);
@@ -69,24 +52,14 @@ export async function runSetupAccount(ops: TargetOperations, io: ProvisionIo, re
       line(io, `created: ${created.join(", ")}`);
     }
 
-    let recorded: string | undefined;
-    if (settings.emailDomain !== emailDomain) {
-      await ops.writeAccountSettings({ ...settings, emailDomain });
-      recorded = emailDomain;
-      line(io, `recorded the account's email domain: ${emailDomain}`);
-      if (settings.emailDomain !== undefined) line(io, `the previous email domain ${settings.emailDomain} keeps its email setup; nothing of it was removed`);
-    } else {
-      line(io, `email domain: ${emailDomain} (unchanged)`);
+    const recorded = await ops.recordSetup();
+    if (recorded.length > 0) {
+      created.push(...recorded);
+      line(io, `recorded: ${recorded.join(", ")}`);
     }
 
-    const email = await ops.setUpEmail(emailDomain);
-    if (email.length > 0) {
-      created.push(...email);
-      line(io, `email setup created: ${email.join(", ")}`);
-    }
-
-    if (created.length === 0 && recorded === undefined) line(io, `setup-account (${ops.target}): nothing changed`);
-    return { status: EXIT.ok, created, ...(recorded === undefined ? {} : { recorded }) };
+    if (created.length === 0) line(io, `setup-account (${ops.target}): nothing changed`);
+    return { status: EXIT.ok, created };
   } catch (error) {
     return failed(messageOf(error));
   }

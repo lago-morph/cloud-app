@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ACCOUNT } from "../../provision/cloudflare/fake-cloud.test-support.js";
 import { CloudflareRequestsStopped } from "../../provision/cloudflare/api.js";
-import { ADMIN_APP_NEXT, BOOTSTRAP_MAX_LIFETIME_MS, bootstrapExpiryProblem, guardTokenWrites, NEXT_PROMPT } from "../../provision/cloudflare/cloudflare-setup.js";
+import { ADMIN_APP_NEXT, BOOTSTRAP_MAX_LIFETIME_MS, EVERYDAY_PAGE, bootstrapExpiryProblem, guardTokenWrites, NEXT_PROMPT } from "../../provision/cloudflare/cloudflare-setup.js";
 import { ACCOUNT_SETUP_VERSION, BOOTSTRAP, deepLink, EVERYDAY } from "../../provision/cloudflare/permissions.js";
 import { readSetupRecord, SETUP_STEPS } from "../../provision/cloudflare/setup-record.js";
 import { applySetupSteps } from "../../provision/cloudflare/setup-steps.js";
@@ -70,10 +70,10 @@ function freshWorld(): SetupWorld {
   return world;
 }
 
-async function setUpAccount(world: SetupWorld, accountId = ACCOUNT, emailDomain = DOMAIN): Promise<void> {
+async function setUpAccount(world: SetupWorld, accountId = ACCOUNT): Promise<void> {
   const cloud = world.cloud(accountId);
   cloud.subdomain = undefined;
-  await applySetupSteps(cloud.api, ACCOUNT, { emailDomain, steps: SETUP_STEPS, setupVersion: ACCOUNT_SETUP_VERSION, frameworkVersion: "0.0.0-test", now: () => NOW, newSubdomain: () => SUB, email: { sleep: async () => {} } });
+  await applySetupSteps(cloud.api, ACCOUNT, { steps: SETUP_STEPS, setupVersion: ACCOUNT_SETUP_VERSION, frameworkVersion: "0.0.0-test", now: () => NOW, newSubdomain: () => SUB });
 }
 
 /** A set-up account with a valid everyday token. */
@@ -111,7 +111,7 @@ async function run(world: SetupWorld, dir: string, options: RunOptions = {}): Pr
     apiFor: world.apiFor,
     reach: options.reach ?? (async (url) => void reached.push(url)),
     localSetup: options.localSetup ?? fakeLocalSetup,
-    stepOptions: { newSubdomain: () => SUB, email: { sleep: async () => {} } },
+    stepOptions: { newSubdomain: () => SUB },
     frameworkVersion: "0.0.0-test",
     now: () => NOW,
     ...(options.protectedTokenIds === undefined ? {} : { protectedTokenIds: options.protectedTokenIds }),
@@ -123,30 +123,24 @@ const bothTokens = (extra: Record<string, string> = {}) => envFile({ CLOUDFLARE_
 const everydayOnly = (extra: Record<string, string> = {}) => envFile({ CLOUDFLARE_API_TOKEN: EVERYDAY_VALUE, CLOUDFLARE_EMAIL_DOMAIN: DOMAIN, ...extra });
 
 describe("cloudflare-setup: no tokens (plan §3.2, §4.3 step 3)", () => {
-  it("prints exactly the requirements, both links with what to choose, the template, where it goes and the next prompt; writes the template; exit 1", async () => {
+  it("prints exactly the bootstrap link with what to choose, that the admin app makes the everyday token, the three-line template, where it goes and the next prompt; writes the template; exit 1 (DEC-0697)", async () => {
     const world = freshWorld();
     const dir = project();
     const { status, io } = await run(world, dir);
     expect(status).toBe(1);
     expect(io.out).toBe(
       [
-        "Cloudflare setup needs two API tokens, both made from pre-filled dashboard links. Setup never prints a token.",
-        "",
-        "Requirements:",
-        "  - a domain on Cloudflare DNS in that account, which the sign-in emails are sent from.",
+        "Cloudflare setup starts with a bootstrap token, made from a pre-filled dashboard link. Setup never prints a token.",
         "",
         "1. The bootstrap token (used once by this setup, which then deletes it), named prototype-framework-bootstrap:",
         `  ${BOOT_LINK}`,
         "  On the page: pick your account if the dashboard asks; under TTL, set an end date no more than 1 day away (setup deletes a bootstrap token that lives longer, or has no end date, at once). Then choose Continue to summary, then Create Token, and copy the token.",
         "",
-        "2. The everyday token (used by deploy and the other commands), named prototype-framework:",
-        `  ${EVERYDAY_LINK}`,
-        "  On the page: pick your account if the dashboard asks; keep your email domain's zone included (the link covers all the account's zones); no TTL (expiry) is needed. Then choose Continue to summary, then Create Token, and copy the token.",
+        "2. The everyday token (used by deploy and the other commands), named prototype-framework: the admin app makes it on its Everyday token page once this setup has deployed the admin app. Open the admin app, sign in, make the token there and put it in CLOUDFLARE_API_TOKEN.",
         "",
-        "Fill in this template (leave CLOUDFLARE_EMAIL_DOMAIN empty to choose from your domains next time):",
+        "Fill in this template:",
         "CLOUDFLARE_BOOTSTRAP_TOKEN=",
         "CLOUDFLARE_API_TOKEN=",
-        "CLOUDFLARE_EMAIL_DOMAIN=",
         "# CLOUDFLARE_ACCOUNT_ID=        (only if your tokens see more than one account)",
         "",
         "Where the values go:",
@@ -159,10 +153,10 @@ describe("cloudflare-setup: no tokens (plan §3.2, §4.3 step 3)", () => {
     );
     expect(io.err).toBe("");
     expect(world.requests).toEqual([]);
-    expect(readEnvFile(dir)).toBe("CLOUDFLARE_BOOTSTRAP_TOKEN=\nCLOUDFLARE_API_TOKEN=\nCLOUDFLARE_EMAIL_DOMAIN=\n# CLOUDFLARE_ACCOUNT_ID=        (only if your tokens see more than one account)\n");
-    // Each link pre-fills its whole list.
+    expect(readEnvFile(dir)).toBe("CLOUDFLARE_BOOTSTRAP_TOKEN=\nCLOUDFLARE_API_TOKEN=\n# CLOUDFLARE_ACCOUNT_ID=        (only if your tokens see more than one account)\n");
+    // The link pre-fills its whole list.
     expect(new URL(BOOT_LINK).searchParams.get("permissionGroupKeys")).toContain(BOOTSTRAP[2]!.id);
-    expect(new URL(EVERYDAY_LINK).searchParams.get("permissionGroupKeys")).toContain(EVERYDAY[6]!.id);
+    expect(io.out).not.toContain(EVERYDAY_LINK);
   });
 
   it("only a bootstrap token: the bootstrap runs without an everyday token (v0.2.0 plan §5.1)", async () => {
@@ -343,7 +337,8 @@ describe("cloudflare-setup: the bootstrap's OAuth clients (v0.2.0 plan §5.1 ste
     expect(io.err).toBe("");
     expect(status).toBe(0);
     const admin = world.cloud().workers.get("prototype-admin")!;
-    expect(admin.bindings.map((b) => b.name)).toEqual(["ADMIN_CLIENT_ID", "ADMIN_CLIENT_SECRET"]);
+    // The admin client's ID and secret (PAR-439), then its account and origin (DEC-0711).
+    expect(admin.bindings.map((b) => b.name)).toEqual(["ADMIN_CLIENT_ID", "ADMIN_CLIENT_SECRET", "ADMIN_ACCOUNT_ID", "ADMIN_APP_ORIGIN"]);
     expect(admin.enabled).toBe(true);
     const writes = world.writes();
     expect(writes.indexOf(`boot-id PUT /accounts/${ACCOUNT}/workers/scripts/prototype-admin`)).toBeLessThan(writes.indexOf(`boot-id DELETE /accounts/${ACCOUNT}/tokens/boot-id`));
@@ -394,12 +389,13 @@ describe("cloudflare-setup: the bootstrap's OAuth clients (v0.2.0 plan §5.1 ste
 });
 
 describe("cloudflare-setup: bad paste (plan §3.4)", () => {
-  it("an everyday value that is not a token: names CLOUDFLARE_API_TOKEN and prints only its link", async () => {
+  it("an everyday value that is not a token: names CLOUDFLARE_API_TOKEN and gives only its remedy, the admin app's Everyday token page (DEC-0697)", async () => {
     const world = freshWorld();
     const { status, io } = await run(world, project({ env: everydayOnly() }));
     expect(status).toBe(1);
     expect(io.out).toMatch(/^CLOUDFLARE_API_TOKEN \(the everyday token\): Cloudflare does not accept it as an API token \(HTTP 401: Invalid API Token \(code 1000\)\)/m);
-    expect(io.out).toContain(EVERYDAY_LINK);
+    expect(io.out).toContain(EVERYDAY_PAGE);
+    expect(io.out).not.toContain(EVERYDAY_LINK);
     expect(io.out).not.toContain(BOOT_LINK);
     expect(io.out).toContain(NEXT_PROMPT);
   });
@@ -493,7 +489,7 @@ describe("cloudflare-setup: the bootstrap on a fresh account (v0.2.0 plan §5.1;
     world.cloud().tokens.set("old-sign-id", { name: "prototype-r2-signing", resources: {} });
     world.cloud().tokens.set("unrelated-id", { name: "someone-else", resources: {} });
     const api = guardTokenWrites(world.cloud().api, { protectedIds: new Set(), selfDeleteArmed: () => false });
-    await applySetupSteps(api, ACCOUNT, { emailDomain: DOMAIN, steps: SETUP_STEPS, setupVersion: ACCOUNT_SETUP_VERSION, frameworkVersion: "0.0.0-test", now: () => NOW, newSubdomain: () => SUB, email: { sleep: async () => {} } });
+    await applySetupSteps(api, ACCOUNT, { steps: SETUP_STEPS, setupVersion: ACCOUNT_SETUP_VERSION, frameworkVersion: "0.0.0-test", now: () => NOW, newSubdomain: () => SUB });
     expect(world.cloud().tokens.has("old-sign-id")).toBe(false);
     expect(world.cloud().tokens.has("unrelated-id")).toBe(true);
   });
@@ -506,7 +502,7 @@ describe("cloudflare-setup: the bootstrap on a fresh account (v0.2.0 plan §5.1;
     const failing: typeof inner = async (method, path, body) =>
       method === "DELETE" && path.endsWith(`/tokens/${OLD}`) ? { status: 403, body: { success: false, errors: [{ code: 9109, message: "Unauthorized" }], result: null } } : inner(method, path, body);
     const api = guardTokenWrites(failing, { protectedIds: new Set(), selfDeleteArmed: () => false });
-    const applied = applySetupSteps(api, ACCOUNT, { emailDomain: DOMAIN, steps: SETUP_STEPS, setupVersion: ACCOUNT_SETUP_VERSION, frameworkVersion: "0.0.0-test", now: () => NOW, newSubdomain: () => SUB, email: { sleep: async () => {} } });
+    const applied = applySetupSteps(api, ACCOUNT, { steps: SETUP_STEPS, setupVersion: ACCOUNT_SETUP_VERSION, frameworkVersion: "0.0.0-test", now: () => NOW, newSubdomain: () => SUB });
     const error = (await applied.then(() => undefined, (e: unknown) => e)) as Error;
     expect(error.message).toContain("deleting the R2 API token prototype-r2-signing failed");
     expect(error.message).not.toContain(OLD);
@@ -608,13 +604,13 @@ describe("cloudflare-setup: later runs (plan §3.4)", () => {
   it("a release needing more everyday permissions: the failed reads and the admin app (or the bootstrap link); the bootstrap token never updates it (DEC-0682)", async () => {
     const world = freshWorld();
     await setUpAccount(world);
-    const rules = groupNamed("Email Routing Rules Read");
-    const everyday = world.addToken("everyday", EVERYDAY_VALUE, "everyday-id", { groups: EVERYDAY.filter((g) => g !== rules) });
+    const d1 = groupNamed("D1 Write");
+    const everyday = world.addToken("everyday", EVERYDAY_VALUE, "everyday-id", { groups: EVERYDAY.filter((g) => g !== d1) });
     const before = JSON.stringify(everyday.policies);
     const dir = project({ env: everydayOnly({ CLOUDFLARE_ACCOUNT_ID: ACCOUNT }) });
     const without = await run(world, dir);
     expect(without.status).toBe(1);
-    expect(without.io.out).toContain('CLOUDFLARE_API_TOKEN failed the quick check for "Email Routing Rules Read" (HTTP 403)');
+    expect(without.io.out).toContain('CLOUDFLARE_API_TOKEN failed the quick check for "D1 Write" (HTTP 403)');
     expect(without.io.out).toContain(ADMIN_APP_NEXT);
     expect(without.io.out).toContain(BOOT_LINK);
     expect(without.io.out).not.toContain(EVERYDAY_LINK);
@@ -677,7 +673,7 @@ describe("cloudflare-setup: later runs (plan §3.4)", () => {
   });
 });
 
-describe("cloudflare-setup: the account and the email domain (plan §4.3 steps 4–5)", () => {
+describe("cloudflare-setup: the account, and no email domain since v0.2.0 (plan §4.3 step 4; v0.2.0 plan §5.3)", () => {
   it("several accounts without CLOUDFLARE_ACCOUNT_ID: their names only, and how to set it; with it set, that account is used", async () => {
     const world = new SetupWorld();
     await setUpAccount(world);
@@ -705,42 +701,41 @@ describe("cloudflare-setup: the account and the email domain (plan §4.3 steps 4
     expect(world.writes()).toEqual([]);
   });
 
-  it("no email domain: lists the zone names and asks; --email-domain answers; a domain not on the account is named", async () => {
-    const world = await setUpWorld();
-    const dir = project({ env: envFile({ CLOUDFLARE_API_TOKEN: EVERYDAY_VALUE }) });
-    const ask = await run(world, dir);
-    expect(ask.status).toBe(1);
-    expect(ask.io.out).toContain('The account "Main account" has these domains on Cloudflare DNS:\n  1. example.test\n  2. one.example\n  3. two.example\n');
-    expect(ask.io.out).toContain("npm run cloudflare-setup -- --email-domain <domain>");
-
-    const answered = await run(world, dir, { args: ["--email-domain", DOMAIN] });
-    expect(answered.status).toBe(0);
-    expect(readEnvFile(dir)).toContain(`CLOUDFLARE_EMAIL_DOMAIN=${DOMAIN}\n`);
-
-    const elsewhere = await run(world, project({ env: envFile({ CLOUDFLARE_API_TOKEN: EVERYDAY_VALUE, CLOUDFLARE_EMAIL_DOMAIN: "nowhere.example" }) }));
-    expect(elsewhere.status).toBe(1);
-    expect(elsewhere.io.out).toContain('The email domain nowhere.example is not a domain of the account "Main account"');
-  });
-
-  it("an account without any domain: explains that one is needed", async () => {
+  it("no CLOUDFLARE_EMAIL_DOMAIN and no zone at all: no domain is asked for, no zone is read, and CLOUDFLARE_EMAIL_DOMAIN is not written (DEC-0689)", async () => {
     const world = await setUpWorld();
     world.cloud().zones.clear();
-    const { status, io } = await run(world, project({ env: envFile({ CLOUDFLARE_API_TOKEN: EVERYDAY_VALUE }) }));
-    expect(status).toBe(1);
-    expect(io.out).toContain('The account "Main account" has no domain on Cloudflare DNS');
+    const dir = project({ env: envFile({ CLOUDFLARE_API_TOKEN: EVERYDAY_VALUE }) });
+    const { status, io } = await run(world, dir);
+    expect(status).toBe(0);
+    expect(io.out).toContain("Cloudflare setup is complete.");
+    expect(io.out).not.toMatch(/domain/i);
+    expect(world.requests.filter((r) => r.includes("/zones"))).toEqual([]);
+    expect(readEnvFile(dir)).toBe(`CLOUDFLARE_API_TOKEN=${EVERYDAY_VALUE}\nCLOUDFLARE_ACCOUNT_ID=${ACCOUNT}\n`);
+  });
+
+  it("a CLOUDFLARE_EMAIL_DOMAIN still set (0.1.x) is ignored: not checked against the zones, never printed", async () => {
+    const world = await setUpWorld();
+    const { status, io } = await run(world, project({ env: envFile({ CLOUDFLARE_API_TOKEN: EVERYDAY_VALUE, CLOUDFLARE_EMAIL_DOMAIN: "nowhere.example" }) }));
+    expect(status).toBe(0);
+    expect(io.out + io.err).not.toContain("nowhere.example");
+    expect(world.requests.filter((r) => r.includes("/zones"))).toEqual([]);
+  });
+
+  it("--email-domain is no longer an option: a usage error", async () => {
+    const world = new SetupWorld();
+    await expect(run(world, project(), { args: ["--email-domain", DOMAIN] })).rejects.toThrow(/unknown option; accepted: --switch-account/);
   });
 });
 
 describe("cloudflare-setup: an everyday token short of a permission (the admin app's since v0.2.0; DEC-0682)", () => {
-  it("scoped to another zone: it cannot look up the email domain's zone, which is named; no token read or written", async () => {
+  it("without any zone permission (v0.2.0's everyday token has none, DEC-0716): the check passes, reading no zone; no token read or written", async () => {
     const world = freshWorld();
     await setUpAccount(world);
-    const otherZone = world.cloud().zones.get("one.example")!.id;
-    world.addToken("everyday", EVERYDAY_VALUE, "everyday-id", { policies: dashboardPolicies(EVERYDAY, ACCOUNT, { [`com.cloudflare.api.account.zone.${otherZone}`]: "*" }) });
+    world.addToken("everyday", EVERYDAY_VALUE, "everyday-id", { groups: EVERYDAY.filter((g) => g.scope === "account") });
     const { status, io } = await run(world, project({ env: everydayOnly() }));
-    expect(status).toBe(1);
-    expect(io.out).toContain("Looking up the zone of example.test failed");
-    expect(io.out).toContain('CLOUDFLARE_API_TOKEN (the everyday token): it needs "Zone Read" on the email domain\'s zone');
+    expect(status, io.out).toBe(0);
+    expect(io.out).toContain("  everyday token: passed the quick check");
+    expect(world.requests.filter((r) => r.includes("/zones"))).toEqual([]);
     expect(world.requests.filter((r) => r.includes("/tokens/everyday-id"))).toEqual([]);
     expect(world.writes()).toEqual([]);
   });
@@ -1059,9 +1054,9 @@ describe("cloudflare-setup: local setup, git and the network (plan §4.3 steps 0
 
     // The setup record's read (checkAccountSetup, with the everyday token).
     plainly(await runStopped(await setUpWorld(), everydayOnly(), (_m, path) => path.includes("/objects/")));
-    // The zone lookup inside checkAccountSetup's email steps.
+    // A step's inspection inside checkAccountSetup, after the record.
     const world = await setUpWorld();
-    plainly(await runStopped(world, everydayOnly(), (_m, path) => path.startsWith("/zones") && world.requests.some((r) => r.includes("/objects/"))));
+    plainly(await runStopped(world, everydayOnly(), (_m, path) => path.endsWith("/workers/subdomain") && world.requests.some((r) => r.includes("/objects/"))));
   });
 
   it("a failure whose message holds the account ID or a token is printed with them hidden (the redaction backstop)", async () => {
@@ -1070,13 +1065,13 @@ describe("cloudflare-setup: local setup, git and the network (plan §4.3 steps 0
     const apiFor = (value: string) => {
       const api = world.apiFor(value);
       return async (method: Parameters<typeof api>[0], path: string, body?: unknown) => {
-        if (path.startsWith("/zones?name=")) throw new Error(`Cloudflare API request GET ${path} with ${value} got no response`);
+        if (path.endsWith("/workers/scripts")) throw new Error(`Cloudflare API request GET ${path} with ${value} got no response`);
         return api(method, path, body);
       };
     };
     const status = await cloudflareSetupCommand({ env: {}, apiFor, reach: async () => {}, localSetup: fakeLocalSetup })([], io);
     expect(status).toBe(1);
-    expect(io.err).toContain("cloudflare-setup failed: Cloudflare API request GET /zones?name=example.test&account.id=[hidden]");
+    expect(io.err).toContain("cloudflare-setup failed: Cloudflare API request GET /accounts/[hidden]/workers/scripts with [hidden] got no response");
     expect(io.out + io.err).not.toContain(ACCOUNT);
     expect(io.out + io.err).not.toContain("MARKER");
   });
@@ -1086,7 +1081,7 @@ describe("cloudflare-setup: local setup, git and the network (plan §4.3 steps 0
     const world = await setUpWorld();
     const none = await run(world, project(), { env: proxied });
     expect(none.status).toBe(1);
-    expect(none.io.out).toContain("Cloudflare setup needs two API tokens");
+    expect(none.io.out).toContain("Cloudflare setup starts with a bootstrap token");
     const tokens = await run(world, project({ env: everydayOnly() }), { env: proxied });
     expect(tokens.status).toBe(1);
     expect(tokens.io.err).toContain("cloudflare-setup failed: HTTPS_PROXY is set, but this process was not started with NODE_USE_ENV_PROXY=1");

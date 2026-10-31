@@ -1,9 +1,9 @@
 /**
- * Login provider interfaces: the framework-internal contracts between AUTH and each
- * provider adapter (the password provider PWD, the test-only stub, the authentication mock,
- * future providers). A provider implements either `LoginProvider` (redirect to a third party
- * and back) or `CredentialProvider` (validates credentials itself).
- * Never exported to app code. Behavior: docs/components/auth.md, docs/components/password.md.
+ * Login provider interface: the framework-internal contract between AUTH and each provider
+ * adapter (the auth-app provider, the test-only stub, future providers). Every provider is a
+ * redirect provider (`LoginProvider`): the credential interface and the password provider left in
+ * v0.2.0 (DEC-0691). The authentication mock is not a provider; it sets sessions directly.
+ * Never exported to app code. Behavior: docs/components/auth.md.
  */
 
 export interface ProviderContext {
@@ -23,7 +23,14 @@ export interface BeginLoginResult {
 export interface ProviderIdentity {
   /** Provider's stable identifier for the person. Never exposed to app code. */
   readonly subject: string;
+  /** `null` for the auth-app provider, whose only name for the person is an email address (AUTH-REQ-008). */
   readonly displayName: string | null;
+  /**
+   * The person's roles at sign-in, when the provider learns them with the login (the auth-app
+   * provider: from `redeem`). AUTH records them in the session as confirmed now. When absent,
+   * the session starts with no roles.
+   */
+  readonly roles?: readonly string[];
 }
 
 /**
@@ -33,83 +40,41 @@ export interface ProviderIdentity {
 export type Role = "admin";
 
 /**
- * An account's current state, read by AUTH once per request that carries a valid session from
- * this provider (AUTH-REQ-003, DEC-0524). The level is `anonymous` unless `verified` is true;
- * then it is `admin` when `roles` contains "admin", and `user` otherwise.
+ * An account's current state, read by AUTH at a role refresh: once the role-refresh interval
+ * has passed since the session's roles were last confirmed (AUTH-REQ-003 as amended by DEC-0690).
+ * `verified` false, like `null`, ends the session; otherwise the level is `admin` when `roles`
+ * contains "admin", and `user` otherwise.
  */
 export interface AccountStatus {
+  /** The auth-app provider always answers true (the auth app returns no unverified state). `false` ends the session at a refresh, like `null`. */
   readonly verified: boolean;
-  /** The account's roles, parsed from its comma-separated role list; empty for a new account. */
+  /** The account's roles; empty for a user. */
   readonly roles: readonly string[];
 }
 
-/** A redirect provider (release 1: only the test-only stub). */
+/**
+ * A redirect provider. In v0.2.0: the auth-app provider (`id` "cf-account", plan-v0.2.0 §4.1),
+ * built over the app Worker's `AUTH` service binding (internal/auth-app.d.ts) and the app's ID,
+ * and the test-only stub (`id` "stub").
+ */
 export interface LoginProvider {
-  /** Short, stable provider name, e.g. "stub". Part of the user ID derivation. */
+  /** Short, stable provider name, e.g. "cf-account". Part of the user ID derivation. */
   readonly id: string;
+  /** The auth-app provider redirects to `<auth app>/start?app=<app id>&return=<callbackUrl>&state=<s>`. */
   beginLogin(ctx: ProviderContext): Promise<BeginLoginResult>;
   /**
    * Validates the callback and returns the identity, or throws AUTH.LOGIN_FAILED.
-   * All protocol checks happen here.
+   * All protocol checks happen here; the auth-app provider checks the state and redeems the code
+   * with `AUTH.redeem({ code, app })`, and a `null` answer is AUTH.LOGIN_FAILED.
    */
   completeLogin(ctx: ProviderContext, callbackQuery: URLSearchParams, transactionState: string): Promise<ProviderIdentity>;
   /**
    * The account's verification state and roles, or null when the provider has no account for
-   * `subject`. Throws when it cannot tell (AUTH then treats the request as anonymous). The stub
-   * answers from its in-memory accounts (DEC-0525). Every provider has it (the retired Google
-   * adapter, which had none, left in item I-G).
-   */
-  accountStatus(subject: string): Promise<AccountStatus | null>;
-}
-
-/** Per-request context for a credential provider. Built by AUTH; never visible to app code. */
-export interface CredentialContext {
-  /** The deployment's resolved public origin. Links in mail are built from it, never from request headers. */
-  readonly publicOrigin: string;
-  /** The request's `Origin` header, already checked by AUTH (AUTH-REQ-007) and passed on to the provider's own check. */
-  readonly origin: string;
-  /** The client IP used for rate limiting: `CF-Connecting-IP`, or "127.0.0.1" locally and in createTestApp when absent. */
-  readonly clientIp: string;
-  readonly userAgent: string | null;
-  /** Schedules work to run after the response (mail sends), so the response and its timing do not depend on it. */
-  readonly waitUntil: (work: Promise<unknown>) => void;
-  readonly getSecret: (name: string) => Promise<string>;
-  readonly getConfig: (key: string) => unknown;
-}
-
-/**
- * A provider that validates credentials itself (release 1: email and password, `id`
- * "password"; docs/components/password.md, DEC-0510). It is created per request over the
- * request's SQL database. It never creates a browser session: AUTH derives the user ID from
- * `id` and `ProviderIdentity.subject` and issues the framework session. Every operation that
- * takes an address resolves identically whether or not an account exists (PWD-REQ-005);
- * only `signIn` returns an identity.
- *
- * Failures are FrameworkErrors with these codes: `AUTH.LOGIN_FAILED` (wrong credentials, or an
- * invalid, used or expired token), `AUTH.NOT_VERIFIED` (sign-in before verification),
- * `AUTH.RATE_LIMITED` (over a PWD-REQ-006 limit), `HTTP.INVALID_INPUT` (password length,
- * missing display name). `AUTH.NOT_VERIFIED` and `AUTH.RATE_LIMITED` join errors.d.ts together
- * with the error catalogue (DEC-0520).
- */
-export interface CredentialProvider {
-  /** Short, stable provider name, e.g. "password". Part of the user ID derivation. */
-  readonly id: string;
-  /** Creates an unverified account and mails a verification link; for an existing address, mails a notice instead. */
-  signUp(ctx: CredentialContext, input: { readonly email: string; readonly password: string; readonly displayName: string }): Promise<void>;
-  /** Validates the credentials of a verified account and returns its identity. Sends no mail. */
-  signIn(ctx: CredentialContext, input: { readonly email: string; readonly password: string }): Promise<ProviderIdentity>;
-  /** Mails a new verification link if the address has an unverified account; otherwise does nothing. */
-  sendVerification(ctx: CredentialContext, input: { readonly email: string }): Promise<void>;
-  /** Marks the account of a valid verification token as verified. Creates no session. */
-  verify(ctx: CredentialContext, input: { readonly token: string }): Promise<void>;
-  /** Mails a single-use reset link if the address has an account; otherwise does nothing. */
-  requestReset(ctx: CredentialContext, input: { readonly email: string }): Promise<void>;
-  /** Sets a new password with a valid reset token and uses the token up. */
-  reset(ctx: CredentialContext, input: { readonly token: string; readonly newPassword: string }): Promise<void>;
-  /**
-   * The account's verification state and roles, or null when no account has this subject.
-   * One primary-key read of `__framework_auth_user` (`email_verified`, `role`; PWD-REQ-008).
-   * Throws when the read fails (AUTH then treats the request as anonymous).
+   * `subject` (AUTH then ends the session at once, with no retry). Throws when it cannot tell
+   * (AUTH then retries, and after the last failed retry ends the session and treats the request
+   * as anonymous). The auth-app provider answers from `AUTH.role(sub)`: `"admin"` is
+   * `{ verified: true, roles: ["admin"] }`, `"user"` is `{ verified: true, roles: [] }`. The stub
+   * answers from its in-memory accounts (DEC-0525).
    */
   accountStatus(subject: string): Promise<AccountStatus | null>;
 }

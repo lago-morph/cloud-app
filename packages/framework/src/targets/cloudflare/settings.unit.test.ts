@@ -57,22 +57,23 @@ describe("cloudflareWorkerSettings", () => {
     }
   });
 
-  it(tag("MAIL-AC-004", "a production stage binds EMAIL (send_email) with exactly the allowed sender no-reply@<emailDomain> and sets FRAMEWORK_MAIL_FROM"), () => {
+  it("a production stage binds EMAIL (send_email) with exactly the allowed sender no-reply@<emailDomain> and sets FRAMEWORK_MAIL_FROM (untagged: MAIL-AC-004 is retired, DEC-0696; the EMAIL binding stays until F removes it)", () => {
     const settings = cloudflareWorkerSettings(production);
     expect(settings.sendEmail).toEqual([{ binding: "EMAIL", allowedSenderAddresses: ["no-reply@example.test"] }]);
     expect(settings.vars).toEqual({ FRAMEWORK_PUBLIC_ORIGIN: "https://notes-prod.example.workers.dev", FRAMEWORK_MAIL_FROM: "no-reply@example.test" });
   });
 
-  it(tag("MAIL-AC-004", "a test stage binds no EMAIL, with or without a recorded email domain; with one it sets FRAMEWORK_MAIL_FROM"), () => {
+  it("a test stage binds no EMAIL, with or without a recorded email domain; with one it sets FRAMEWORK_MAIL_FROM (untagged: MAIL-AC-004 is retired, DEC-0696; the EMAIL binding stays until F removes it)", () => {
     expect(cloudflareWorkerSettings(input).sendEmail).toEqual([]);
     const recorded = cloudflareWorkerSettings({ ...input, emailDomain: "example.test" });
     expect(recorded.sendEmail).toEqual([]);
     expect(recorded.vars["FRAMEWORK_MAIL_FROM"]).toBe("no-reply@example.test");
   });
 
-  it("a production stage without the account's email domain is CORE.MISCONFIGURED naming setup-account", () => {
+  it("a production stage without the account's email domain is CORE.MISCONFIGURED naming the missing domain, and no removed option (v0.2.0, DEC-0689)", () => {
     const { emailDomain: _omitted, ...withoutDomain } = production;
-    expect(() => cloudflareWorkerSettings(withoutDomain)).toThrow(/setup-account --target cloudflare --email-domain/);
+    expect(() => cloudflareWorkerSettings(withoutDomain)).toThrow(/needs the account's email domain for its EMAIL binding; the account settings record names none/);
+    expect(() => cloudflareWorkerSettings(withoutDomain)).not.toThrow(/--email-domain/);
   });
 
   it("refuses a public origin that is not an https origin", () => {

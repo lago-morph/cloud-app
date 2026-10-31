@@ -4,9 +4,11 @@
  * links, the token checks, the in-place upgrade of the everyday token and the docs' permission
  * tables are all generated from it.
  *
- * - `EVERYDAY` (`prototype-framework`): DEC-0551's minimal set for every command but the account
- *   setup, plus "Email Routing Rules Read" (owner, 2026-10-26), so the everyday token can check the
- *   whole account setup on its own. It cannot create tokens and has no zone write permission.
+ * - `EVERYDAY` (`prototype-framework`): v0.2.0 plan §5.2 page 2's four account groups (DEC-0715,
+ *   DEC-0716), the same list as `EVERYDAY_V2`: Workers Scripts Write, Workers R2 Storage Write, D1
+ *   Write and Secrets Store Read. No zone group: v0.2.0 has no email domain. It cannot create tokens.
+ * - `EVERYDAY_V1`: the 0.1.x everyday set (DEC-0551 plus "Email Routing Rules Read"), kept only to
+ *   name the groups an update removes from an old token.
  * - `BOOTSTRAP` (`prototype-framework-bootstrap`): v0.2.0 plan §5.1's four groups (DEC-0680),
  *   what `cloudflare-setup` needs to create the OAuth clients, store their secrets and deploy the
  *   admin app. The account setup itself moved to the admin app. The API cannot create a token that
@@ -36,8 +38,12 @@ export interface PermissionGroup {
 
 /** PAR-331: the version of `EVERYDAY` and `BOOTSTRAP`; raised whenever a release changes them (2: v0.2.0, DEC-0680). */
 export const PERMISSIONS_VERSION = 2;
-/** PAR-332: the version of the account setup this release expects (the setup record's `setupVersion`). */
-export const ACCOUNT_SETUP_VERSION = 1;
+/**
+ * PAR-332: the version of the account setup this release expects (the setup record's
+ * `setupVersion`). 2: v0.2.0's account setup in the admin app (the auth app, the signing credential
+ * in Secrets Store, no email; DEC-0719).
+ */
+export const ACCOUNT_SETUP_VERSION = 2;
 
 const group = (id: string, name: string, scope: PermissionScope): PermissionGroup => Object.freeze({ id, name, scope });
 
@@ -51,14 +57,15 @@ const GROUPS = {
   apiTokensWrite: group("5bc3f8b21c554832afc660159ab75fa4", "Account API Tokens Write", "account"),
   oauthClientWrite: group("50fc2f43318f40e4855a35d8de5bf643", "OAuth Client Write", "account"),
   secretsStoreWrite: group("adc8fa2bc6124928a8b3314dc63a1235", "Secrets Store Write", "account"),
+  secretsStoreRead: group("5e33b7d77788455c9fdf18cbd38ee5a0", "Secrets Store Read", "account"),
   zoneRead: group("c8fed203ed3043cba015a93ad1616f1f", "Zone Read", "zone"),
   analyticsRead: group("9c88f9c5bce24ce7af9a958ba9c504db", "Analytics Read", "zone"),
   emailRoutingRulesRead: group("1b600d9d8062443e986a973f097e728a", "Email Routing Rules Read", "zone"),
   emailRoutingRulesWrite: group("79b3ec0d10ce4148a8f8bdc0cc5f97f2", "Email Routing Rules Write", "zone"),
 } as const;
 
-/** The everyday token's 7 groups (account first, then zone). */
-export const EVERYDAY: readonly PermissionGroup[] = Object.freeze([
+/** The 0.1.x everyday token's 7 groups (account first, then zone): only to name what an update removes. */
+export const EVERYDAY_V1: readonly PermissionGroup[] = Object.freeze([
   GROUPS.workersScriptsWrite,
   GROUPS.r2StorageWrite,
   GROUPS.d1Write,
@@ -67,6 +74,17 @@ export const EVERYDAY: readonly PermissionGroup[] = Object.freeze([
   GROUPS.analyticsRead,
   GROUPS.emailRoutingRulesRead,
 ]);
+
+/**
+ * v0.2.0 plan §5.2 page 2's everyday set (DEC-0715): 4 account groups and no zone group, because
+ * v0.2.0 has no email domain. Each is covered by one admin-client scope (`workers-scripts.write`,
+ * `workers-r2.write`, `d1.write`, `secrets-store.read`; PAR-447). The admin app's everyday-token
+ * page creates or updates the token with exactly these (`everyday-token.ts`).
+ */
+export const EVERYDAY_V2: readonly PermissionGroup[] = Object.freeze([GROUPS.workersScriptsWrite, GROUPS.r2StorageWrite, GROUPS.d1Write, GROUPS.secretsStoreRead]);
+
+/** The everyday token's groups: plan §5.2 page 2's four (DEC-0716: switched once `cloudflare-setup` no longer needs Zone Read). */
+export const EVERYDAY: readonly PermissionGroup[] = EVERYDAY_V2;
 
 /**
  * The bootstrap token's 4 groups (v0.2.0 plan §5.1, IDs from §2.1b; DEC-0680), all account-scoped:
@@ -84,6 +102,7 @@ const SATISFIED_BY: Readonly<Record<string, readonly { readonly id: string; read
   [GROUPS.zoneRead.id]: [{ id: "e6d2666161e84845a636613608cee8d5", name: "Zone Write" }],
   [GROUPS.emailSendingRead.id]: [GROUPS.emailSendingWrite],
   [GROUPS.emailRoutingRulesRead.id]: [GROUPS.emailRoutingRulesWrite],
+  [GROUPS.secretsStoreRead.id]: [GROUPS.secretsStoreWrite],
 });
 
 export type TokenKind = "everyday" | "bootstrap";
@@ -221,45 +240,24 @@ export interface ProbeResult {
   readonly status: number;
 }
 
-/** A GraphQL Analytics read on the zone: the dataset `check-login` reads (email-delivery.ts), one row at most. */
-const ANALYTICS_PROBE = `query AnalyticsProbe($zoneTag: string, $since: Time) {
-  viewer {
-    zones(filter: { zoneTag: $zoneTag }) {
-      emailSendingAdaptive(limit: 1, filter: { datetime_geq: $since }) {
-        datetime
-      }
-    }
-  }
-}`;
-
 /**
- * The quick check of the everyday token (plan §4.3 step 2): one cheap read for each `EVERYDAY`
- * group, with the token the `api` carries. A read passes when it answers 2xx (and, for GraphQL,
- * without errors), so a read-or-write group shows only that it can read. The zone groups, and
- * "Email Sending Read" (read on the zone's sending listing, as a production deploy reads it), need
- * the zone and are read only when `zoneId` is given; without it the result lists only the other
- * account groups. Reads only; the replies' bodies are never returned.
+ * The quick check of the everyday token (plan §4.3 step 2): one cheap read on the account for each
+ * `EVERYDAY` group, with the token the `api` carries. A read passes when it answers 2xx, so a
+ * read-or-write group shows only that it can read. No group is zone-scoped since v0.2.0, so
+ * `zoneId` is not used. Reads only; the replies' bodies are never returned.
  */
 export async function probeEveryday(api: CloudflareApi, scope: { readonly accountId: string; readonly zoneId?: string }): Promise<ProbeResult[]> {
   const a = `/accounts/${scope.accountId}`;
-  const z = scope.zoneId;
-  const reads: Record<string, (() => ReturnType<CloudflareApi>) | undefined> = {
+  const reads: Record<string, () => ReturnType<CloudflareApi>> = {
     [GROUPS.workersScriptsWrite.id]: () => api("GET", `${a}/workers/scripts`),
     [GROUPS.r2StorageWrite.id]: () => api("GET", `${a}/r2/buckets?per_page=1`),
     [GROUPS.d1Write.id]: () => api("GET", `${a}/d1/database?per_page=1`),
-    [GROUPS.emailSendingRead.id]: z === undefined ? undefined : () => api("GET", `/zones/${z}/email/sending/subdomains`),
-    [GROUPS.zoneRead.id]: z === undefined ? undefined : () => api("GET", `/zones/${z}`),
-    [GROUPS.analyticsRead.id]: z === undefined ? undefined : () => api("POST", "/graphql", { query: ANALYTICS_PROBE, variables: { zoneTag: z, since: new Date(Date.now() - 3_600_000).toISOString() } }),
-    [GROUPS.emailRoutingRulesRead.id]: z === undefined ? undefined : () => api("GET", `/zones/${z}/email/routing/rules?per_page=1`),
+    [GROUPS.secretsStoreRead.id]: () => api("GET", `${a}/secrets_store/stores?per_page=1`),
   };
   const results: ProbeResult[] = [];
   for (const g of EVERYDAY) {
-    const read = reads[g.id];
-    if (read === undefined) continue;
-    const r = await read();
-    const errors = (r.body as { errors?: unknown } | null | undefined)?.errors;
-    const graphqlFailed = g.id === GROUPS.analyticsRead.id && Array.isArray(errors) && errors.length > 0;
-    results.push({ group: g, ok: r.status >= 200 && r.status < 300 && !graphqlFailed, status: r.status });
+    const r = await reads[g.id]!();
+    results.push({ group: g, ok: r.status >= 200 && r.status < 300, status: r.status });
   }
   return results;
 }

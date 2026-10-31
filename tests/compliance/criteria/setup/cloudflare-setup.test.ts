@@ -60,6 +60,7 @@ import {
   sensitiveHits,
   SERVER_ERROR,
   setOffByRules,
+  setUpAccount,
   setUpFirstProject,
   SUB,
   TEMPLATE_LINES,
@@ -77,18 +78,21 @@ import {
 
 const RECORD_KEY = "sst-state/framework/account.json";
 
-/** Which token links an output holds. */
+/** Which token links an output holds. Since v0.2.0 setup prints no everyday link (DEC-0697): the everyday token's remedy is the admin app's Everyday token page. */
 function links(text: string): { bootstrap: boolean; everyday: boolean } {
   return { bootstrap: text.includes(BOOT_LINK), everyday: text.includes(EVERYDAY_LINK) };
 }
+const EVERYDAY_PAGE = /Everyday token page of the admin app/;
 
 /** A bad paste's output: names the setting, holds only that token's link, exit 1, no token written. */
 function expectBadPaste(r: RunResult, setting: string, what: RegExp, world: SetupWorld): void {
   expect(r.status, r.all).toBe(1);
   expect(r.all, "names the setting").toContain(setting);
   expect(r.all, "says what is wrong").toMatch(what);
-  const expected = setting === BOOTSTRAP_SETTING ? { bootstrap: true, everyday: false } : { bootstrap: false, everyday: true };
-  expect(links(r.all), `only ${setting}'s link:\n${r.all}`).toEqual(expected);
+  // The everyday token's remedy is the admin app's Everyday token page, not a link (DEC-0697).
+  const expected = setting === BOOTSTRAP_SETTING ? { bootstrap: true, everyday: false } : { bootstrap: false, everyday: false };
+  expect(links(r.all), `only ${setting}'s remedy:\n${r.all}`).toEqual(expected);
+  expect(EVERYDAY_PAGE.test(r.all), `the Everyday token page only for ${EVERYDAY_SETTING}:\n${r.all}`).toBe(setting === EVERYDAY_SETTING);
   expect(tokenWritesOf(r.requests), "token updates or deletions").toEqual([]);
   expect(world.tokens.filter((t) => t.deleted).map((t) => t.name), "deleted tokens").toEqual([]);
 }
@@ -100,19 +104,21 @@ if (isLocal()) {
   afterAll(() => removeProjects());
 
   describe("SETUP: no tokens (SETUP-AC-001)", () => {
-    it(tag("SETUP-AC-001", "with no tokens anywhere: both links exactly as deepLink builds them, the four template lines, where they go, the requirements and the next prompt; template written; no Cloudflare request; exit 1"), async () => {
+    it(tag("SETUP-AC-001", "with no tokens anywhere: the bootstrap link exactly as deepLink builds it, that the admin app makes the everyday token, the three template lines, where they go and the next prompt; no everyday link, no domain requirement; template written; no Cloudflare request; exit 1"), async () => {
       const world = freshWorld();
       const dir = await project();
       const r = await runSetup("AC-001 no tokens", world, dir);
       expect(r.status, r.all).toBe(1);
       expect(linesEqual(r.out, BOOT_LINK), `the bootstrap link on a line of its own:\n${r.out}`).toBe(1);
-      expect(linesEqual(r.out, EVERYDAY_LINK), "the everyday link on a line of its own").toBe(1);
+      // No everyday link since v0.2.0: the admin app makes the everyday token (DEC-0697).
+      expect(r.out, "no everyday link").not.toContain(EVERYDAY_LINK);
+      expect(r.out).toMatch(/admin app[^\n]*Everyday token page/);
       const outLines = r.out.split("\n");
       const at = outLines.indexOf(TEMPLATE_LINES[0]);
       expect(at, "the template's first line").toBeGreaterThanOrEqual(0);
-      expect(outLines.slice(at, at + TEMPLATE_LINES.length), "the template's four lines, in order").toEqual([...TEMPLATE_LINES]);
-      // Plan §3.2: the domain requirement.
-      expect(r.out).toMatch(/Cloudflare DNS/);
+      expect(outLines.slice(at, at + TEMPLATE_LINES.length), "the template's three lines, in order").toEqual([...TEMPLATE_LINES]);
+      // No domain requirement since v0.2.0 (SETUP-AC-001; plan-v0.2.0 §5.3, DEC-0689).
+      expect(r.out).not.toMatch(/Cloudflare DNS|sign-in emails/);
       // Where they go: a cloud session's environment settings, then a new session; on the command line the environment or the file.
       expect(r.out).toMatch(/cloud session/i);
       expect(r.out).toMatch(/Environment variables/);
@@ -127,16 +133,12 @@ if (isLocal()) {
       expect(r.requests, "Cloudflare requests").toEqual([]);
     });
 
-    it(tag("SETUP-AC-001", "the links pre-fill exactly the permission groups and token names (everyday 7 groups, plan §4.1; bootstrap 4, v0.2.0 plan §5.1)"), () => {
-      const everyday = decodeLink(EVERYDAY_LINK, EVERYDAY);
+    // Since v0.2.0 setup prints only the bootstrap link; the admin app makes the everyday token (DEC-0697).
+    it(tag("SETUP-AC-001", "the bootstrap link pre-fills exactly its permission groups and token name (4 groups, v0.2.0 plan §5.1)"), () => {
       const bootstrap = decodeLink(BOOT_LINK, BOOTSTRAP);
-      expect(everyday.unknownKeys).toEqual([]);
       expect(bootstrap.unknownKeys).toEqual([]);
-      expect([...everyday.names].sort()).toEqual([...EVERYDAY_NAMES].sort());
       expect([...bootstrap.names].sort()).toEqual([...BOOTSTRAP_NAMES].sort());
-      expect(everyday.tokenName).toBe("prototype-framework");
       expect(bootstrap.tokenName).toBe("prototype-framework-bootstrap");
-      expect(new URL(EVERYDAY_LINK).origin).toBe("https://dash.cloudflare.com");
       expect(new URL(BOOT_LINK).origin).toBe("https://dash.cloudflare.com");
     });
 
@@ -146,7 +148,7 @@ if (isLocal()) {
       const dir = await project({ envFile: text });
       const r = await runSetup("AC-001 template present", world, dir);
       expect(r.status, r.all).toBe(1);
-      expect(links(r.out)).toEqual({ bootstrap: true, everyday: true });
+      expect(links(r.out)).toEqual({ bootstrap: true, everyday: false });
       expect(r.out).toContain(NEXT_PROMPT_PHRASE);
       expect(readEnvFile(dir)).toBe(text);
       expect(r.requests).toEqual([]);
@@ -154,12 +156,13 @@ if (isLocal()) {
   });
 
   describe("SETUP: everything current (SETUP-AC-002)", () => {
-    it(tag("SETUP-AC-002", "a valid everyday token, a current setup record and every permission: already set up, asks for nothing, no write request, .env.cloudflare byte for byte, plan not checked, exit 0"), async () => {
+    it(tag("SETUP-AC-002", "a valid everyday token, a current setup record and every permission: already set up, asks for nothing, no write request, .env.cloudflare byte for byte, exit 0"), async () => {
       const { world, dir } = await setUpFirstProject("ac002");
       const before = readEnvFile(dir);
       const record = world.cloud().objectBodies.get(RECORD_KEY) as { setupVersion?: number; emailDomain?: string } | undefined;
       expect(record?.setupVersion, "the first setup wrote the release's setup version").toBe(ACCOUNT_SETUP_VERSION);
-      expect(record?.emailDomain).toBe(DOMAIN);
+      // No email domain in the setup record since v0.2.0 (DEC-0689).
+      expect(record?.emailDomain).toBeUndefined();
       const r = await runSetup("AC-002 current", world, dir);
       expect(r.status, r.all).toBe(0);
       expect(r.all).toMatch(/already set up|nothing to do/i);
@@ -258,17 +261,7 @@ if (isLocal()) {
 
     // Since v0.2.0 the bootstrap token neither reads nor changes the everyday token (plan §5.1,
     // §5.2 page 2; DEC-0682): the everyday token's own checks run without a bootstrap token.
-    it(tag("SETUP-AC-003", "an everyday token scoped to another zone: names CLOUDFLARE_API_TOKEN and the zone, only the everyday link, exit 1, no token written"), async () => {
-      const world = freshWorld();
-      const otherZone = world.cloud().zones.get("one.example")?.id ?? "";
-      const t = addTokens(world, "ac003h");
-      t.everyday.policies = t.everyday.policies.map((p: TokenPolicy) =>
-        p.permission_groups.some((g) => g.name === "Zone Read") ? { ...p, resources: { [`com.cloudflare.api.account.zone.${otherZone}`]: "*" } } : p,
-      );
-      const dir = await project({ envFile: both(undefined, t.everyday.value) });
-      const r = await runSetup("AC-003 everyday scoped to another zone", world, dir);
-      expectBadPaste(r, EVERYDAY_SETTING, /zone/i, world);
-    });
+    // No zone is looked up since v0.2.0 (DEC-0689), so a token scoped to another zone is no bad paste.
 
     it(tag("SETUP-AC-003", "an everyday token with a permission denied: names CLOUDFLARE_API_TOKEN and the permission, and the admin app; exit 1, no token written"), async () => {
       const world = freshWorld();
@@ -287,7 +280,8 @@ if (isLocal()) {
   });
 
   describe("SETUP: everyday token short of a permission (SETUP-AC-004)", () => {
-    const REMOVED = "Email Routing Rules Read";
+    // An account group: since v0.2.0 the quick check reads no zone (DEC-0689).
+    const REMOVED = "D1 Write";
     const without = (t: WorldToken, name: string) => {
       t.policies = t.policies.map((p) => ({ ...p, permission_groups: p.permission_groups.filter((g) => g.name !== name) }));
     };
@@ -437,7 +431,8 @@ if (isLocal()) {
       const r = await runSetup("AC-005 everyday of the wrong account", world, dir);
       expect(r.status, r.all).toBe(1);
       expect(r.all).toContain(EVERYDAY_SETTING);
-      expect(r.all).toContain(EVERYDAY_LINK);
+      // The everyday token's remedy is the admin app's Everyday token page (SETUP-AC-003; DEC-0682).
+      expect(r.all).toMatch(/admin app/);
       expect(tokenWritesOf(r.requests)).toEqual([]);
     });
 
@@ -542,36 +537,30 @@ if (isLocal()) {
       expect(writesOf(r.requests)).toEqual([]);
     });
 
-    it(tag("SETUP-AC-008", "no CLOUDFLARE_EMAIL_DOMAIN: the account's zone names and --email-domain <domain>, exit 1; also for a single zone"), async () => {
+    it(tag("SETUP-AC-008", "no CLOUDFLARE_EMAIL_DOMAIN: the command does not stop for the domain; it names no zone, reads none, and completes"), async () => {
       const world = freshWorld();
       const t = addTokens(world, "ac008c");
+      await setUpAccount(world);
       const dir = await project({ envFile: envFile({ [EVERYDAY_SETTING]: t.everyday.value }) });
       const r = await runSetup("AC-008 no email domain", world, dir);
-      expect(r.status, r.all).toBe(1);
-      for (const name of ["example.test", "one.example", "two.example"]) expect(r.all).toContain(name);
-      expect(r.all).toContain("--email-domain <domain>");
-      expect(r.all).toContain("CLOUDFLARE_EMAIL_DOMAIN");
-
-      const single = freshWorld();
-      for (const name of ["one.example", "two.example"]) single.cloud().zones.delete(name);
-      const t2 = addTokens(single, "ac008c2");
-      const dir2 = await project({ envFile: envFile({ [EVERYDAY_SETTING]: t2.everyday.value }) });
-      const s = await runSetup("AC-008 no email domain, one zone", single, dir2);
-      expect(s.status, s.all).toBe(1);
-      expect(s.all).toContain("example.test");
-      expect(s.all).toContain("--email-domain <domain>");
-      expect(writesOf([...r.requests, ...s.requests])).toEqual([]);
+      expect(r.status, r.all).toBe(0);
+      for (const name of ["example.test", "one.example", "two.example"]) expect(r.all).not.toContain(name);
+      expect(r.all).not.toContain("--email-domain");
+      expect(r.all).not.toContain("CLOUDFLARE_EMAIL_DOMAIN");
+      expect(r.requests.filter((q) => q.includes("/zones")), "zone requests").toEqual([]);
+      expect(writesOf(r.requests)).toEqual([]);
     });
 
-    it(tag("SETUP-AC-008", "no zone at all: a domain is needed, with the dashboard link, exit 1"), async () => {
+    it(tag("SETUP-AC-008", "no zone at all: the command does not stop for the domain, and completes"), async () => {
       const world = freshWorld();
       world.cloud().zones.clear();
       const t = addTokens(world, "ac008d");
+      await setUpAccount(world);
       const dir = await project({ envFile: envFile({ [EVERYDAY_SETTING]: t.everyday.value }) });
       const r = await runSetup("AC-008 no zone", world, dir);
-      expect(r.status, r.all).toBe(1);
-      expect(r.all).toMatch(/no domain|domain is needed|needs? (a|one) domain|add a domain/i);
-      expect(r.all).toContain("https://dash.cloudflare.com");
+      expect(r.status, r.all).toBe(0);
+      expect(r.all).not.toMatch(/domain/i);
+      expect(writesOf(r.requests)).toEqual([]);
     });
 
     const blockedCase = (label: string, host: RegExp, kind: RegExp) =>

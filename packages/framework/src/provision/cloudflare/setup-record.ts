@@ -2,13 +2,14 @@
  * The account setup record (plan-setup-wizard §4.4; DEC-0577): the account settings record
  * `framework/account.json` in the state home `sst-state` (`account-settings.ts`, DEC-0514) also
  * says which setup was applied to the account:
- * `{ "emailDomain", "setupVersion", "frameworkVersion", "appliedAt", "completedSteps" }`.
+ * `{ "setupVersion", "frameworkVersion", "appliedAt", "completedSteps" }`.
  * - `setupVersion`: the account setup version the run applied (the release's `ACCOUNT_SETUP_VERSION`,
  *   raised by a release that adds or changes a setup step). A record is current for a release
  *   expecting version N when its `setupVersion` is N or more.
  * - `frameworkVersion`: the framework package's version that applied it; `appliedAt`: when (ISO).
- * - `emailDomain`: the domain the email steps were applied for; the same field `deploy`,
- *   `check-login` and `mail` read (`parseAccountSettings`, which ignores the other fields).
+ * - `emailDomain` is not a setup field since v0.2.0 (no email steps; DEC-0689): a record need not
+ *   have one, and one a 0.1.x setup stored is kept as it is (`deploy` still reads it,
+ *   `parseAccountSettings`).
  * - `completedSteps`: the setup steps (`setup-steps.ts`) found done or applied by that run.
  *
  * Read through the R2 object endpoints of `api.cloudflare.com`, which the everyday token's
@@ -21,11 +22,10 @@ import { readFileSync } from "node:fs";
 import { describeFailure, type CloudflareApi } from "./api.js";
 import { ACCOUNT_SETTINGS_KEY, ACCOUNT_SETTINGS_RESOURCE } from "./account-settings.js";
 import { ACCOUNT_STEP_IDS } from "./account.js";
-import { EMAIL_STEP_IDS } from "./email.js";
 import { STATE_BUCKET } from "./names.js";
 
 /** The account setup's steps, in the order they are applied (DEC-0578). */
-export const SETUP_STEPS = Object.freeze([...ACCOUNT_STEP_IDS, ...EMAIL_STEP_IDS] as const);
+export const SETUP_STEPS = Object.freeze([...ACCOUNT_STEP_IDS] as const);
 export type SetupStepId = (typeof SETUP_STEPS)[number];
 
 /** The first account setup version: setups applied by a release without the record count as older. */
@@ -36,7 +36,6 @@ export interface AccountSetupRecord {
   readonly frameworkVersion: string;
   /** ISO time. */
   readonly appliedAt: string;
-  readonly emailDomain: string;
   readonly completedSteps: readonly SetupStepId[];
 }
 
@@ -54,15 +53,16 @@ export async function readAccountObject(api: CloudflareApi, accountId: string): 
 
 /**
  * The setup record in a stored object; undefined when a field is absent or invalid (a record from
- * before the setup fields reads as none). Step names this release does not know are left out.
+ * before the setup fields reads as none). Step names this release does not know (0.1.x's email
+ * steps among them) are left out.
  */
 export function parseSetupRecord(body: Readonly<Record<string, unknown>> | undefined): AccountSetupRecord | undefined {
   if (body === undefined) return undefined;
-  const { setupVersion, frameworkVersion, appliedAt, emailDomain, completedSteps } = body;
+  const { setupVersion, frameworkVersion, appliedAt, completedSteps } = body;
   if (typeof setupVersion !== "number" || !Number.isInteger(setupVersion) || setupVersion < 1) return undefined;
-  if (typeof frameworkVersion !== "string" || typeof appliedAt !== "string" || typeof emailDomain !== "string" || emailDomain === "") return undefined;
+  if (typeof frameworkVersion !== "string" || typeof appliedAt !== "string") return undefined;
   if (!Array.isArray(completedSteps)) return undefined;
-  return { setupVersion, frameworkVersion, appliedAt, emailDomain, completedSteps: SETUP_STEPS.filter((id) => completedSteps.some((s) => isStep(s) && s === id)) };
+  return { setupVersion, frameworkVersion, appliedAt, completedSteps: SETUP_STEPS.filter((id) => completedSteps.some((s) => isStep(s) && s === id)) };
 }
 
 /** The account setup record; undefined when there is none (or it predates the setup fields). Reads only. */
@@ -72,7 +72,6 @@ export async function readSetupRecord(api: CloudflareApi, accountId: string): Pr
 
 /** What a setup run records. */
 export interface SetupRecordInput {
-  readonly emailDomain: string;
   readonly completedSteps: readonly SetupStepId[];
   readonly setupVersion: number;
   readonly frameworkVersion: string;
@@ -80,9 +79,8 @@ export interface SetupRecordInput {
 }
 
 /**
- * Writes the setup record unless the stored one already says the same: same domain, the same
- * completed steps and a `setupVersion` at least the input's (`changed` forces the write: the run
- * applied a step). A stored higher `setupVersion` is kept: an older release re-running setup on
+ * Writes the setup record unless the stored one already says the same: the same completed steps
+ * and a `setupVersion` at least the input's (`changed` forces the write: the run applied a step). A stored higher `setupVersion` is kept: an older release re-running setup on
  * an account a newer one set up does not make it look out of date to the newer one. Every other
  * field of the stored object is kept. Returns the record now stored; `onWrite` is called when it
  * was written (so `setup-account` does not say "nothing changed" after recording a new version).
@@ -99,16 +97,14 @@ export async function writeSetupRecord(
   const completedSteps = SETUP_STEPS.filter((id) => input.completedSteps.includes(id));
   const same =
     previous !== undefined &&
-    previous.emailDomain === input.emailDomain &&
     previous.setupVersion >= input.setupVersion &&
     previous.completedSteps.length === completedSteps.length &&
     previous.completedSteps.every((id, i) => id === completedSteps[i]);
   if (same && !changed) return previous;
   const record: AccountSetupRecord = {
-    setupVersion: Math.max(input.setupVersion, previous?.emailDomain === input.emailDomain ? previous.setupVersion : 0),
+    setupVersion: Math.max(input.setupVersion, previous?.setupVersion ?? 0),
     frameworkVersion: input.frameworkVersion,
     appliedAt: input.now().toISOString(),
-    emailDomain: input.emailDomain,
     completedSteps,
   };
   const r = await api("PUT", objectPath(accountId), { ...(stored ?? {}), ...record });
