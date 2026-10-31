@@ -27,7 +27,7 @@ const removeBinding: Command = cloud("remove", async (env) => (await import("./c
 const stopBinding: Command = cloud("stop", async (env) => (await import("./commands/stop-start.js")).stopBinding(env));
 const startBinding: Command = cloud("start", async (env) => (await import("./commands/stop-start.js")).startBinding(env));
 const setupAccountBinding: Command = cloud("setup-account", async (env) => (await import("./commands/setup-account.js")).setupAccountBinding(env));
-/** `check-login` (PWD §2): the real login provider on a production stage, with the mail sink. */
+/** `check-login` (plan-v0.2.0 §7.1 E2E-008): the automated part of the real-login check on a production stage, up to the auth app. */
 const checkLoginBinding: Command = cloud("check-login", async (env) => (await import("./commands/check-login.js")).checkLoginBinding(env));
 /** `admins` (CLI-REQ-005): the local D1, or the D1 HTTP API on Cloudflare. */
 const adminsBinding: Command = cloud("admins", async (env) => (await import("./commands/admins.js")).adminsBinding(env));
