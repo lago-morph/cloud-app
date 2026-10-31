@@ -122,7 +122,9 @@ const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1"]);
 export function validReturnUrl(url: string): boolean {
   if (!URL.canParse(url)) return false;
   const u = new URL(url);
-  if (u.href !== url || u.username !== "" || u.password !== "" || u.hash !== "" || url.includes("#")) return false;
+  // No query: the auth app appends `code` and `state` itself (plan §4.1 step 3.8). No trailing-dot
+  // host: browsers treat it as another origin, so the app's `__Host-` cookies would never arrive.
+  if (u.href !== url || u.username !== "" || u.password !== "" || u.hash !== "" || url.includes("#") || u.search !== "" || url.includes("?") || u.hostname.endsWith(".")) return false;
   return u.protocol === "https:" || (u.protocol === "http:" && LOCAL_HOSTS.has(u.hostname));
 }
 
@@ -131,8 +133,9 @@ export async function registerReturnUrl(db: D1Like, app: string, url: string): P
   await db.prepare("INSERT INTO registry (app, return_url) VALUES (?1, ?2) ON CONFLICT DO NOTHING").bind(app, url).run();
 }
 
+/** Clears the app's return URLs and its outstanding codes (`remove`), so a re-deploy revives none. */
 export async function unregisterApp(db: D1Like, app: string): Promise<void> {
-  await db.prepare("DELETE FROM registry WHERE app = ?1").bind(app).run();
+  await db.batch([db.prepare("DELETE FROM registry WHERE app = ?1").bind(app), db.prepare("DELETE FROM codes WHERE app = ?1").bind(app)]);
 }
 
 /** Exact, case-sensitive string match of `(app, url)` against the registry. */

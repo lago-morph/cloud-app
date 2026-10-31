@@ -7,7 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AUTH_APP_CODE_LIFETIME_MS } from "../auth/auth-app-binding.js";
 import { localD1, type LocalD1 } from "./d1.test-support.js";
 import { SIGN_IN_TRANSACTION_MS } from "./params.js";
-import { createCode, ensureSchema, getRole, isRegistered, parseCode, redeemCode, registerReturnUrl, saveSignIn, takeSignIn, unregisterApp, upsertUser, validReturnUrl } from "./store.js";
+import { type D1Like, createCode, ensureSchema, getRole, isRegistered, parseCode, redeemCode, registerReturnUrl, saveSignIn, takeSignIn, unregisterApp, upsertUser, validReturnUrl } from "./store.js";
 
 const APP = "notes-prod";
 const RETURN = "https://notes-prod.acct.workers.dev/api/auth/callback";
@@ -78,9 +78,10 @@ describe("codes (PAR-414)", () => {
   });
 
   it("refuses malformed codes without a query", async () => {
+    const noQueries: D1Like = { prepare: () => { throw new Error("a query ran"); }, batch: () => Promise.reject(new Error("a query ran")) };
     for (const bad of ["", "short", "x".repeat(44), `${"a".repeat(42)}=`, `${"a".repeat(42)}/`, `${"a".repeat(42)}é`]) {
       expect(parseCode(bad), bad).toBeNull();
-      await expect(redeemCode(d1.db, { code: bad, app: APP }, T0)).resolves.toBeNull();
+      await expect(redeemCode(noQueries, { code: bad, app: APP }, T0)).resolves.toBeNull();
     }
     expect(parseCode("A".repeat(43))).toBe("A".repeat(43));
   });
@@ -144,6 +145,18 @@ describe("registry: exact match only", () => {
     await expect(isRegistered(d1.db, "other", "https://other.acct.workers.dev/api/auth/callback")).resolves.toBe(true);
   });
 
+  it("refuses a code made for a return URL that was never registered", async () => {
+    const code = await createCode(d1.db, { sub: "sub-a", app: APP, returnUrl: "https://notes-prod.acct.workers.dev/other" }, T0);
+    await expect(redeemCode(d1.db, { code, app: APP }, T0)).resolves.toBeNull();
+  });
+
+  it("drops an app's codes on remove, so a re-deploy within 60 s does not revive them", async () => {
+    const code = await createCode(d1.db, { sub: "sub-a", app: APP, returnUrl: RETURN }, T0);
+    await unregisterApp(d1.db, APP);
+    await registerReturnUrl(d1.db, APP, RETURN);
+    await expect(redeemCode(d1.db, { code, app: APP }, T0 + 1)).resolves.toBeNull();
+  });
+
   it("registering twice is harmless", async () => {
     await registerReturnUrl(d1.db, APP, RETURN);
     await expect(isRegistered(d1.db, APP, RETURN)).resolves.toBe(true);
@@ -153,7 +166,7 @@ describe("registry: exact match only", () => {
     expect(validReturnUrl(RETURN)).toBe(true);
     expect(validReturnUrl("http://localhost:8787/api/auth/callback")).toBe(true);
     expect(validReturnUrl("http://127.0.0.1:8787/api/auth/callback")).toBe(true);
-    for (const bad of ["http://notes.example/cb", "https://Notes.example/cb", "https://notes.example:443/cb", "https://u:p@notes.example/cb", "https://notes.example/cb#f", "https://notes.example/a/../cb", "javascript:alert(1)", "/relative", "", "notaurl"]) {
+    for (const bad of ["http://notes.example/cb", "https://Notes.example/cb", "https://notes.example:443/cb", "https://u:p@notes.example/cb", "https://notes.example/cb#f", "https://notes.example/cb#", "https://notes.example/cb?", "https://notes.example/cb?next=https://evil.example", "https://notes.example./cb", "https://notes.example/a/../cb", "javascript:alert(1)", "/relative", "", "notaurl"]) {
       expect(validReturnUrl(bad), bad).toBe(false);
     }
   });
