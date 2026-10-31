@@ -154,7 +154,7 @@ if (isLocal()) {
   });
 
   describe("SETUP: everything current (SETUP-AC-002)", () => {
-    it(tag("SETUP-AC-002", "a valid everyday token, a current setup record and every permission: already set up, asks for nothing, no write request, .env.cloudflare byte for byte, plan not checked, exit 0"), async () => {
+    it(tag("SETUP-AC-002", "a valid everyday token, a current setup record and every permission: already set up, asks for nothing, no write request, .env.cloudflare byte for byte, exit 0"), async () => {
       const { world, dir } = await setUpFirstProject("ac002");
       const before = readEnvFile(dir);
       const record = world.cloud().objectBodies.get(RECORD_KEY) as { setupVersion?: number; emailDomain?: string } | undefined;
