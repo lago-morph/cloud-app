@@ -27,6 +27,7 @@ These are the lasting text of the v0.2.0 testing standards (`ai/implementation/p
    - E2E is API-first. Most e2e tests drive the HTTP API, the CLI, or both. They go in the Playwright project `e2e-api`.
    - Playwright UI tests, in project `e2e-ui`, cover only what a browser alone shows: page rendering, sign-in pages, file transfer in the page, and cookies. Each flow has at most a few of them, and the rest of its cases are API tests.
    - A test that uses only HTTP (Playwright's `request` fixture or a plain HTTP client) does not launch a browser.
+   - Before writing the tests for a criterion or a scenario, list its edge cases and cover each one that applies (`resources/edge-cases.md`).
 5. **State the test impact of every change.**
    - Every brief has a "Tests" section that lists: the unit, integration and e2e tests to add, change or remove; the E2E scenarios affected; and the fuzz targets affected.
    - Every framework plan has a "Tests" section and an "E2E" section for each work item.
@@ -49,6 +50,8 @@ These are the lasting text of the v0.2.0 testing standards (`ai/implementation/p
       - the product skill stays within PAR-070…072.
 
     Put its verdict and its reasons in the commit message, or in the PR description for a batch of commits.
+11. **Fuzzing is local, limited and targeted.** Fuzz only reviewed targets, with a small run and a fixed seed, in the unit or integration layer, and never against a cloud stage (`resources/fuzzing.md`).
+12. **CI selects tests from the path map** (`scripts/ci/path-map.json`). A change that adds a component, a test file or a doc that a test reads keeps the map current (`resources/ci-path-map.md`).
 
 ## When to read a resource
 
@@ -58,3 +61,6 @@ Read only the file that matches your situation:
 |---|---|
 | A test, build, deploy or spike failed outside red/green, or you diagnose, review or fix such a failure | `resources/failure-diagnosis.md` |
 | You change, remove, skip or re-tag a once-green test, or you review such a change | `resources/test-change-review.md` |
+| You are about to write the tests for a criterion, a scenario or a flow | `resources/edge-cases.md` |
+| You consider, write or review a fuzz target, or fuzzing found a failure | `resources/fuzzing.md` |
+| You add, move or rename a test file, a component, or a doc that a test reads, or you need to know what CI runs for a change | `resources/ci-path-map.md` |
