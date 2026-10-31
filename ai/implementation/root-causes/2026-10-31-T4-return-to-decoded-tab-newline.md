@@ -69,7 +69,23 @@ Search: `grep -rn 'startsWith("//")\|decodeURIComponent(' packages apps skill --
 Item T4 had no subagent tool, so it diagnosed its own finding. The review is by a fresh, independent Claude Code remote session that did not write the test or the code (plan §7a.1.8 step 2). Disclosure: T4's first F1 generator mixed the special pieces too thinly and passed 1,000 runs. A hand probe of `/%09/evil.example` showed the failure first. The generator was then focused on separator runs after the leading `/`, using the characters S4's property names. Only after that did the fuzz test find `/%0a/` on its own at run 270.
 
 ## Review
-_Pending: the independent reviewer's verdict goes here before the fix commit._
+Reviewer: an independent Claude Code remote session (`session_014mWQ6iUAmPMoYo2DWNgSsL`), 2026-10-31, round 1, read-only, on commit `f5de06d`. It reproduced the F1 failure (`["/%0a/","https://a.aa"]`) and every line of the Appendix. It then applied the proposed fix as an uncommitted experiment and reverted it. With the fix, F1 passed at the fixed seed and at seeds 1–3 with 20,000 runs, and the existing AUTH-AC-010 unit tests still passed.
+
+**Verdict: accepted.**
+1. **minor:** The chain is supported:
+   - `/%09/evil.example` is kept, and its raw value resolves same-origin;
+   - its decoded value resolves to `https://evil.example`, because WHATWG strips tab, LF and CR;
+   - link 1 matches the decoded `startsWith` checks, and link 4 the raw-only origin check.
+2. **minor:** The fix is right and minimal. It states the rule directly and also refuses `/\n/`, which throws. The "too broad" alternative is correctly rejected: `/a%09b` and `/%20/…` are still kept.
+3. **minor:** The F1 property has all four of S4's clauses. The generator was focused after the hand probe, the record discloses this, and the generator's pieces stay within S4's list.
+4. **minor:** The similar-case search is adequate. `startsWith("//")` occurs only in `return-to.ts`, and `returnTo` appears nowhere in `apps` or `skill`. "Reach today" matches `runtime.ts:256, 268, 301`.
+5. **minor:** When fixing, update the module comment (`return-to.ts:1-7`) to say the decoded path must also resolve same-origin.
+
+## Response (round 1)
+- **To 5.** Done in the fix commit: the module comment now says that both the raw and the decoded path must resolve same-origin.
+- **Nothing else changes.** The fix follows the record.
+
+**Status:** accepted.
 
 ## Appendix: reproduction script
 Run as `D=$PWD/packages/framework/dist node repro.mjs` from the repo root, after `npm run build -w packages/framework`.
