@@ -130,9 +130,12 @@ export function createAuthParts(options: AuthOptions): AuthParts {
   const { mock } = options;
   const now = options.now ?? (() => Date.now());
 
-  /** The session's role fields for an identity whose provider confirmed its roles at sign-in (DEC-0668). */
+  /**
+   * The session's level for a new sign-in (DEC-0668, DEC-0672): the roles the provider confirmed,
+   * now. A provider that confirmed none gets `checkedAt` 0, so the first request reads its account.
+   */
   function confirmedRole(identity: ProviderIdentity): Pick<ProviderSessionData, "role"> {
-    if (identity.roles === undefined) return {};
+    if (identity.roles === undefined) return { role: { level: "user", checkedAt: 0 } };
     return { role: { level: identity.roles.includes(ADMIN_ROLE) ? "admin" : "user", checkedAt: Math.floor(now() / 1000) } };
   }
 
@@ -203,7 +206,7 @@ export function createAuthParts(options: AuthOptions): AuthParts {
         const provider = factory(c);
         const identity = await provider.signIn(credentialContext(c), input);
         const id = await deriveUserId(provider.id, identity.subject);
-        const session = { id, displayName: identity.displayName, provider: provider.id, subject: identity.subject };
+        const session: ProviderSessionData = { id, displayName: identity.displayName, provider: provider.id, subject: identity.subject, ...confirmedRole(identity) };
         c.header("Set-Cookie", await issueSessionCookie(c, session), { append: true });
         return { id };
       },
@@ -230,8 +233,9 @@ export function createAuthParts(options: AuthOptions): AuthParts {
   }
 
   /**
-   * AUTH-REQ-003, DEC-0524: a valid real-provider session's level, from one read of its account
-   * through the session's provider. A provider the stage does not install is anonymous (fail closed); a failed read is anonymous with one `warn` entry.
+   * AUTH-REQ-003, DEC-0672: a valid real-provider session's level, kept for PAR-425 and then
+   * refreshed through the session's provider (`refreshedLevel`). A provider the stage does not
+   * install is anonymous (fail closed).
    */
   async function levelOf(c: RuntimeContext, session: ProviderSessionData): Promise<CurrentUser> {
     let read: ((subject: string) => Promise<AccountStatus | null>) | undefined;
@@ -242,15 +246,7 @@ export function createAuthParts(options: AuthOptions): AuthParts {
       if (provider !== undefined && provider.id === session.provider) read = (subject) => provider.accountStatus(subject);
     }
     if (read === undefined) return ANONYMOUS;
-    if (session.role !== undefined) return refreshedLevel(c, session, session.role, read);
-    let status: AccountStatus | null;
-    try {
-      status = await read(session.subject);
-    } catch (thrown) {
-      c.var.log.write("AUTH", "warn", `role lookup failed (${lookupErrorCode(thrown)})`);
-      return ANONYMOUS;
-    }
-    return levelFromAccount(session, status);
+    return refreshedLevel(c, session, session.role, read);
   }
 
   /**
