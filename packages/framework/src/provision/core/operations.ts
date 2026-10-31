@@ -12,9 +12,6 @@
  */
 import type { MigrationDatabase, Histories } from "../../mig/apply.js";
 import type { Dialect } from "../../sql/dialect.js";
-import type { AccountSettings } from "./account-settings.js";
-
-export type { AccountSettings } from "./account-settings.js";
 
 /** One stage of one app. Names follow PAR-290 / PAR-291 (checked by the build before PROV runs). */
 export interface Stage {
@@ -111,12 +108,6 @@ export interface DeployInput {
   readonly stage: Stage;
   /** The current database: an input to the provisioning tool, never in its state. Absent in step 3 of a first deploy. */
   readonly database?: StageDatabase;
-  /**
-   * The account settings record's email domain, as step 1 read it (DEC-0514): the sender of a
-   * production stage's `EMAIL` binding and the mail variable derive from it. Always present for a
-   * production stage (step 1 requires it); a test stage may have none. Recorded by 0.1.x only.
-   */
-  readonly emailDomain?: string;
 }
 
 /** What `deployCode` returns. */
@@ -162,11 +153,6 @@ export interface TargetOperations {
    */
   createSharedResources(absent: readonly SharedResource[], note?: (message: string) => void): Promise<void>;
 
-  /**
-   * The account settings record (provisioning.md §2; Cloudflare: `framework/account.json` in the
-   * state home, DEC-0514); `{}` when there is none yet. Changes nothing.
-   */
-  readAccountSettings(): Promise<AccountSettings>;
   /**
    * `setup-account`, before anything changes: its missing prerequisites by name: on Cloudflare
    * while the account's R2 signing credential is absent, the permission to create it (DEC-0551).

@@ -8,9 +8,9 @@
  *   account resource that `setup-account` creates (DEC-0550), checked by `inspectAccount` like the
  *   other shared resources.
  * - `inspectAccount` / `createSharedResources`: the account steps of `account.ts` (DEC-0578).
- * - `readAccountSettings`: the account settings record
- *   `framework/account.json` in `sst-state` (`account-settings.ts`, DEC-0514); `deploy` reads the
- *   email domain a 0.1.x setup recorded there, for a production stage's `EMAIL` binding.
+ * - No `EMAIL` binding and no email domain: since v0.2.0 a production stage's Worker binds no
+ *   `EMAIL` and gets no `FRAMEWORK_MAIL_FROM`, so `deploy` reads nothing from the account settings
+ *   record; a 0.1.x stage's binding goes with its next deploy's upload (DEC-0698, DEC-0732).
  * - `setupProblems` / `recordSetup`: `setup-account`'s check (the permission to create the
  *   signing credential while it is absent, DEC-0551) and its last operation, which writes the
  *   setup record (`setup-record.ts`, DEC-0577) with every step completed, at `setupVersion`
@@ -58,7 +58,6 @@ import { secretLocation } from "../../config/secret-locations.js";
 import { FRAMEWORK_SECRETS } from "../../secrets/names.js";
 import type { DeployedCode, DeployInput, HealthOutcome, Stage, StageDatabase, StageResource, StageResources, TargetOperations } from "../core/operations.js";
 import { accountSubdomain, createSharedResources, inspectSharedResources, type SharedResourceOptions } from "./account.js";
-import { readAccountSettings } from "./account-settings.js";
 import { describeFailure, succeeded, type CloudflareApi, type CloudflareBytesApi } from "./api.js";
 import { backupStage, IN_FLIGHT_DRAIN_MS, listStageBackups } from "./backup.js";
 import { FIRST_SETUP_VERSION, frameworkVersion, SETUP_STEPS, writeSetupRecord } from "./setup-record.js";
@@ -130,10 +129,9 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
   async function workerInput(input: DeployInput, database: StageDatabase, code: WorkerCode) {
     const subdomain = await accountSubdomain(api, accountId);
     const authAppSettings = production(input.stage) ? { authApp: { service: AUTH_APP_SCRIPT, origin: appOrigin("signin", subdomain) } } : {};
-    return { publicOrigin: publicOrigin(input.stage, subdomain), database, code, ...mail(input), ...authAppSettings };
+    return { publicOrigin: publicOrigin(input.stage, subdomain), database, code, ...authAppSettings };
   }
   const sstRun = (stage: Stage) => ({ dir, env: options.env, stage });
-  const mail = (input: DeployInput) => (input.emailDomain === undefined ? {} : { emailDomain: input.emailDomain });
   /** Whether this setup-account run created a shared resource, so the setup record's time is renewed. */
   let setupChanged = false;
 
@@ -204,7 +202,6 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       if (absent.length > 0) setupChanged = true;
       await createSharedResources(api, accountId, absent, options.newSubdomain === undefined ? {} : { newSubdomain: options.newSubdomain }, note);
     },
-    readAccountSettings: () => readAccountSettings(api, accountId),
     async setupProblems() {
       return (await signingCredentialState(api, accountId)) === "absent" ? [...(await tokenWriteProblems(api, accountId))] : [];
     },

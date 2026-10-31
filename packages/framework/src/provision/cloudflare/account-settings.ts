@@ -4,8 +4,8 @@
  * `framework/account.json` in the state home bucket `sst-state`, `{ "emailDomain": "<domain>" }`.
  * SST's own objects use other top-level prefixes (`app/`, `secret/`, `lock/`, …), so the stage
  * state checks (`isStageStateObject`) never match it. Since v0.2.0 nothing records an email domain
- * (DEC-0689): one a 0.1.x `setup-account` wrote is kept, and `deploy` reads it on every run for a
- * production stage's `EMAIL` binding.
+ * (DEC-0689): one a 0.1.x `setup-account` wrote is kept, and `deploy` no longer reads it, since no
+ * stage binds `EMAIL` (DEC-0698, DEC-0732).
  *
  * Objects are read and written through the R2 object endpoints of `api.cloudflare.com`
  * (`GET`/`PUT …/r2/buckets/<bucket>/objects/<key>`): a GET answers the object's own bytes,
