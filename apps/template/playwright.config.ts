@@ -23,6 +23,8 @@ export default defineConfig({
   webServer: {
     command: "npm run dev",
     wait: { stdout: /is running at http:\/\/localhost:(?<app_e2e_port>\d+)\// },
+    // dev's own server log is not test output; its "is running at" line is still read for the port.
+    stderr: "ignore",
     timeout: 120_000,
     gracefulShutdown: { signal: "SIGTERM", timeout: 10_000 },
   },
