@@ -24,6 +24,7 @@ import {
   repoPath,
   ROUTER,
   SKILL_DIR,
+  TESTING_REFERENCE_DIR,
   filesUnder,
 } from "./support.js";
 
@@ -43,6 +44,13 @@ describe("SKILL: size budgets and links", () => {
   it(tag("SKILL-AC-001", "size check: every reference is within PAR-071 (12,000 bytes)"), () => {
     expect(references.length, "skill/reference/*.md").toBeGreaterThan(0);
     const over = references.filter((f) => bytes(f) > PAR_071_REFERENCE_BYTES).map((f) => `${repoPath(f)}: ${bytes(f)} bytes`);
+    expect(over).toEqual([]);
+  });
+
+  it(tag("SKILL-AC-001", "size check: every testing workflow reference (reference/testing/) is within PAR-071 (12,000 bytes)"), () => {
+    const testingRefs = markdownFiles(TESTING_REFERENCE_DIR);
+    expect(testingRefs.length, "skill/reference/testing/*.md").toBeGreaterThan(0);
+    const over = testingRefs.filter((f) => bytes(f) > PAR_071_REFERENCE_BYTES).map((f) => `${repoPath(f)}: ${bytes(f)} bytes`);
     expect(over).toEqual([]);
   });
 
@@ -98,6 +106,15 @@ describe("SKILL: size budgets and links", () => {
     "testing.md": ["tests.md"],
     "troubleshooting.md": [],
   };
+
+  it(tag("SKILL-AC-001", "link check: each testing workflow reference (reference/testing/) links to at least one existing example"), () => {
+    const exampleSet = new Set(examples);
+    const withoutExample = markdownFiles(TESTING_REFERENCE_DIR)
+      .filter((ref) => ![...linkedFiles(ref)].some((f) => exampleSet.has(f)))
+      .map(repoPath);
+    expect(markdownFiles(TESTING_REFERENCE_DIR).length).toBeGreaterThan(0);
+    expect(withoutExample, "testing workflow references with no link to an example").toEqual([]);
+  });
 
   it(tag("SKILL-AC-001", "link check: the table of each reference's examples covers exactly the references CHECK names and names only existing examples"), () => {
     expect(Object.keys(ITS_EXAMPLES).sort()).toEqual([...REFERENCE_FILES].sort());

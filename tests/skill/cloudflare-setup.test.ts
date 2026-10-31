@@ -26,7 +26,7 @@
  */
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import { tag } from "../support/tags.js";
@@ -187,5 +187,19 @@ describe("SKILL: the template's .claude/settings.json", () => {
     roots.push(root);
     const app = create({ target: join(root, "myapp"), templateDir: join(REPO_ROOT, "apps", "template"), skillDir: join(REPO_ROOT, "skill"), frameworkSpec: "0.0.0-test" });
     expect(readFileSync(join(app.target, ".claude", "settings.json"), "utf8")).toBe(readFileSync(TEMPLATE_SETTINGS, "utf8"));
+  });
+
+  // plan-v0.2.0 §7a.3 (TS-14): installing the framework never creates or changes an app's CI.
+  it("an app made with the starter's create has no CI file", async () => {
+    const { create } = (await import(pathToFileURL(join(REPO_ROOT, "packages", "create-prototype-app", "lib", "create.mjs")).href)) as {
+      create(options: { target: string; templateDir: string; skillDir?: string | null; frameworkSpec: string }): { target: string };
+    };
+    const root = mkdtempSync(join(tmpdir(), "starter-no-ci-"));
+    roots.push(root);
+    const app = create({ target: join(root, "myapp"), templateDir: join(REPO_ROOT, "apps", "template"), skillDir: join(REPO_ROOT, "skill"), frameworkSpec: "0.0.0-test" });
+    const CI = /^(?:\.github\/|\.gitlab-ci\.ya?ml$|\.circleci\/|\.buildkite\/|azure-pipelines\.ya?ml$|bitbucket-pipelines\.ya?ml$|\.travis\.ya?ml$|Jenkinsfile$|\.woodpecker)/;
+    const files = filesUnder(app.target).map((f) => relative(app.target, f).split(sep).join("/"));
+    expect(files.length).toBeGreaterThan(0);
+    expect(files.filter((f) => CI.test(f))).toEqual([]);
   });
 });

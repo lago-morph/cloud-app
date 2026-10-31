@@ -32,12 +32,12 @@ Each file has exactly two members:
 ```json
 {
   "values": { "greeting": "Hello from production" },
-  "framework": { "email": { "senderName": "Notes" } }
+  "framework": {}
 }
 ```
 
 - `values` holds values for your declared keys; keys with a default may be left out. A key you did not declare, a missing value for a key without a default, or a wrong type fails the build with `CORE.MISCONFIGURED`, naming the file and every bad field.
-- `framework` holds only `email` (only `senderName`, the display name of the framework's sign-up and reset mail; optional, default the app name). It holds no address or domain: the sender address comes from the account's email domain, which the owner sets up once ([owner-tasks.md](owner-tasks.md)).
+- `framework` is empty (`{}`): the framework sends no email, and who may sign in comes from the owner's Cloudflare account ([current-user.md](current-user.md)). `framework.admins` and `framework.users` fail the build.
 - A production stage reads only its own file and never falls back to `test.json`, so create `config/<target>/<stage>.json` before its first deploy.
 - Never put a secret in these files: there is no place for one.
 
@@ -47,7 +47,7 @@ App code reads configuration only through `c.var.config`. Never read `process.en
 
 ## In tests
 
-`createTestApp(app, { config: { greeting: "Hi there" } })` overrides declared values; an undeclared key makes it throw. The reserved key `framework` takes only `email`; `admins` or `users` make it throw, as the build does. Test roles with `grantRole` ([current-user.md](current-user.md)).
+`createTestApp(app, { config: { greeting: "Hi there" } })` overrides declared values; an undeclared key makes it throw. The reserved key `framework` takes no `admins` or `users`: they make it throw, as the build does. Test role changes with the fake auth app ([current-user.md](current-user.md)).
 
 ## Check rules that send you here
 

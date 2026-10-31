@@ -1,13 +1,13 @@
 # Deploying
 
-Read this when you deploy, smoke-test, stop, start or remove a stage on a cloud. Cloudflare setup (the tokens and the email domain), secrets, sign-up and admins are in [owner-tasks.md](owner-tasks.md).
+Read this when you deploy, smoke-test, stop, start or remove a stage on a cloud. Cloudflare setup (the bootstrap token and the admin app), secrets, sign-in and admins are in [owner-tasks.md](owner-tasks.md).
 
 Commands run in the app's directory, after `npm run cloudflare-setup` has said everything is set up ([owner-tasks.md](owner-tasks.md) §2); each reads the tokens itself, from the environment or `.env.cloudflare`. Each `npm run <command> -- …` is the same as `npm exec --no -- prototype-framework <command> …`. Behind an HTTPS proxy, put `NODE_USE_ENV_PROXY=1 ` in front of every cloud command; the command says so if it is needed.
 
 ## 1. Test stages and production stages
 
-- A stage whose name starts with `test-` is a **test stage**. It uses `config/cloudflare/test.json`, has the mock login for tests beside email-and-password sign-in, keeps its mail in a test capture (never sent), holds no real data, and is removed after use.
-- Every other stage is a **production stage**, for example `prod`. It needs its own committed `config/cloudflare/<stage>.json` ([owner-tasks.md](owner-tasks.md) §5) and the account's email domain (§3 there). It has no mock: people sign up with email and password, and real mail is sent from `no-reply@<domain>`.
+- A stage whose name starts with `test-` is a **test stage**. It uses `config/cloudflare/test.json`, has only the mock login for tests (no real sign-in), holds no real data, and is removed after use.
+- Every other stage is a **production stage**, for example `prod`. It needs its own committed `config/cloudflare/<stage>.json` ([owner-tasks.md](owner-tasks.md) §5) and the account's auth app (§2 there). It has no mock: members of the owner's Cloudflare account sign in with Cloudflare.
 - A stage name is at most 20 lowercase letters, digits and hyphens. The stage's address is `https://<app>-<stage>.<subdomain>.workers.dev`.
 
 ## 2. Deploy and smoke-test a test stage
@@ -42,8 +42,8 @@ npm run smoke -- --target cloudflare --stage "$STAGE"
    npm run secrets -- set apiKey --target cloudflare --stage "$STAGE"
    npm run deploy -- --target cloudflare --stage "$STAGE"
    ```
-   It prints the stage's address, its sign-in page and the sender address.
-3. Sign up on the stage, then make yourself an admin with `admins grant` ([owner-tasks.md](owner-tasks.md) §6, §7). Admins change without a deploy.
+   It registers the stage with the auth app and prints the stage's address.
+3. Sign in on the stage ([owner-tasks.md](owner-tasks.md) §6). Admins are the account's administrators (§7 there); they change without a deploy.
 
 To change a production stage later (code or configuration), commit the change and run `deploy` again:
 
