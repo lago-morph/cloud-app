@@ -116,12 +116,18 @@ describe("classification", () => {
     expect(components(run("packages/framework/src/auth-app/worker.ts"))).toContain("AUTH");
     expect(components(run("packages/framework/src/admin-app/pages.ts"))).toContain("SETUP");
     expect(components(run("tests/support/mock-oauth2/server.ts"))).toContain("AUTH");
+    // The admin app's suite also runs on mock-oauth2-server (item E, review of #120).
+    expect(components(run("tests/support/mock-oauth2/launcher.ts"))).toContain("SETUP");
   });
 });
 
 describe("the CI plan (what the staged ci.yml runs)", () => {
   interface Plan { unit: string; unitFiles: string[]; ids: string[]; direct: string[]; alsoE2e: string[]; alsoIntegration: string[]; chromium: boolean }
   const plan = (...files: string[]): Plan => ciPlan(run(...files), map, REPO) as Plan;
+
+  it("an admin-app change runs the admin app's integration suite directly (item E)", () => {
+    expect(plan("packages/framework/src/admin-app/app.ts").direct).toContain("packages/framework/test/integration/admin-app");
+  });
 
   it("a criteria doc runs COMPL's tagged criteria through the harness and the catalogue unit tests; no e2e ID", () => {
     const p = plan("docs/acceptance/e2e-scenarios.md");
