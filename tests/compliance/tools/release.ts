@@ -4,11 +4,14 @@
  *   automated record for that commit (any other result, or no record, is a problem); and
  * - every milestone item's latest milestone record exists, passed, and is not invalidated by an
  *   entry in `validation/invalidations.md` dated at or after it (never by elapsed time).
- * It also lists the commits that touched PWD, MAIL or login-provider interface files since the
- * last passing `check-login` record (PWD-AC-009; COMPL-REQ-006 as amended, DEC-0512, DEC-0513):
- * the newest record, of any target and tier and not a dry run, whose PWD-AC-009 entries all
- * passed (`check-login`'s own record, or a cloud run that folded it in). GOOGLE-AC-005 is retired
- * and never demanded. It records; the evaluator judges.
+ * It also lists the commits that touched AUTH, auth-app or login-provider interface files since
+ * the latest passing real sign-in records, the live parts of E2E-007 and E2E-008 (COMPL-REQ-006 and
+ * COMPL-AC-006 as amended, DEC-0692; DEC-0780): for each of the two IDs, the newest milestone record,
+ * of any target and not a dry run, whose entries for it all passed; the older of the two is the
+ * reference point. `check-login`'s automated record (the automated sign-in path check, DEC-0670) is
+ * not a real sign-in and never counts. COMPL-AC-006 says "latest passing", so an invalidation entry does
+ * not move the reference point. GOOGLE-AC-005 is retired and never demanded. It records; the
+ * evaluator judges.
  *
  * Release 1 judges local and Cloudflare only (DEC-0508; SYS-REQ-026 as amended): the AWS target,
  * and every criterion that applies only there, is deferred to a later release (branch `aws`), so
@@ -18,16 +21,18 @@ import type { EvidenceRecord } from "../../../packages/framework/src/evidence/pu
 import { DEFERRED, RELEASE_TARGETS, selectedEntries, type CatalogueEntry } from "../harness/catalogue.js";
 import { isDryRun } from "./records.js";
 
-/** PWD, MAIL and the login-provider interface (password.md, mail.md, auth.md, internal/login-provider.d.ts). */
+/** AUTH, the auth app and the login-provider interface (COMPL-AC-006, DEC-0692; DEC-0780). */
 export const LOGIN_PROVIDER_PATHS = [
-  "packages/framework/src/auth/password/",
-  "packages/framework/src/mail/",
-  "packages/framework/src/auth/login-provider.ts",
+  "packages/framework/src/auth/",
+  "packages/framework/src/auth-app/",
+  "packages/framework/src/targets/cloudflare/auth-app.ts",
+  "packages/framework/src/provision/cloudflare/auth-app-deploy.ts",
+  "docs/contracts/ts/auth.d.ts",
+  "docs/contracts/ts/internal/auth-app.d.ts",
   "docs/contracts/ts/internal/login-provider.d.ts",
-  "docs/contracts/http/internal/auth-password.openapi.yaml",
 ];
-/** The criterion whose passing record is the reference point (password.md PWD-AC-009, `check-login`). */
-export const LOGIN_CHECK = "PWD-AC-009";
+/** The real sign-in: the live, milestone parts of these scenarios (DEC-0692, DEC-0780). */
+export const REAL_SIGN_IN = ["E2E-007", "E2E-008"] as const;
 
 export interface Invalidation {
   /** ISO time from which earlier records are invalid (a date alone means the end of that day). */
@@ -73,8 +78,8 @@ export interface ReleaseReport {
   readonly commit: string;
   readonly works: boolean;
   readonly problems: readonly string[];
-  /** The last passing `check-login` record (PWD-AC-009). */
-  readonly lastLoginCheck?: { readonly runId: string; readonly commit: string; readonly finishedAt: string; readonly command: string };
+  /** The older of the latest passing real sign-in records (REAL_SIGN_IN). */
+  readonly lastRealSignIn?: { readonly runId: string; readonly commit: string; readonly finishedAt: string; readonly command: string };
   readonly loginCommits: readonly string[];
 }
 
@@ -122,13 +127,11 @@ export function releaseReport(input: ReleaseInput): ReleaseReport {
       }
     }
   }
-  const passing = sorted.find((r) => {
-    const entries = r.results.filter((x) => x.id === LOGIN_CHECK);
-    return entries.length > 0 && entries.every((x) => x.status === "passed");
-  });
-  const lastLoginCheck = passing === undefined ? undefined : { runId: passing.runId, commit: passing.commit, finishedAt: passing.finishedAt, command: passing.command };
-  const loginCommits = input.loginCommits(lastLoginCheck?.commit);
-  return { commit: input.commit, works: problems.length === 0, problems, ...(lastLoginCheck === undefined ? {} : { lastLoginCheck }), loginCommits };
+  const latest = REAL_SIGN_IN.map((id) => milestone.find((r) => selects(r, id) && summary(r, id).passed));
+  const oldest = latest.includes(undefined) ? undefined : (latest as EvidenceRecord[]).reduce((a, b) => (Date.parse(b.finishedAt) < Date.parse(a.finishedAt) ? b : a));
+  const lastRealSignIn = oldest === undefined ? undefined : { runId: oldest.runId, commit: oldest.commit, finishedAt: oldest.finishedAt, command: oldest.command };
+  const loginCommits = input.loginCommits(lastRealSignIn?.commit);
+  return { commit: input.commit, works: problems.length === 0, problems, ...(lastRealSignIn === undefined ? {} : { lastRealSignIn }), loginCommits };
 }
 
 export function renderRelease(report: ReleaseReport): string {
@@ -143,11 +146,11 @@ export function renderRelease(report: ReleaseReport): string {
     "",
     ...(report.problems.length === 0 ? ["Nothing outstanding."] : report.problems.map((p) => `- ${p}`)),
     "",
-    "## Commits touching PWD, MAIL or login-provider interface files since the last passing check-login record",
+    "## Commits touching AUTH, auth-app or login-provider interface files since the latest passing real sign-in records",
     "",
-    report.lastLoginCheck === undefined
-      ? `No passing check-login record (${LOGIN_CHECK}): all commits since the start of history are listed.`
-      : `Last passing check-login record: ${LOGIN_CHECK} in run ${report.lastLoginCheck.runId} (\`${report.lastLoginCheck.command}\`) at commit ${report.lastLoginCheck.commit} (${report.lastLoginCheck.finishedAt}).`,
+    report.lastRealSignIn === undefined
+      ? `No passing real sign-in records (live parts of ${REAL_SIGN_IN.join(" and ")}, milestone): all commits since the start of history are listed.`
+      : `Latest passing real sign-in records (live parts of ${REAL_SIGN_IN.join(" and ")}), the older: run ${report.lastRealSignIn.runId} (\`${report.lastRealSignIn.command}\`) at commit ${report.lastRealSignIn.commit} (${report.lastRealSignIn.finishedAt}).`,
     "",
     ...(report.loginCommits.length === 0 ? ["None."] : report.loginCommits.map((c) => `- ${c}`)),
   ];

@@ -226,6 +226,15 @@ describe("connectTestStage (testing.d.ts; CLI-AC-005 local part)", () => {
     expect(() => app.logs()).toThrow(/not available on a connected stage.*log location.*smoke/);
   });
 
+  it("grantRole and revokeRole are not available on a connected stage; they point to as() and the account's administrator role, not the removed command (DEC-0690, DEC-0698)", async () => {
+    const app = await connectWith(LOCAL, fakeStage().fetch);
+    for (const change of [() => app.grantRole("u_1", "admin"), () => app.revokeRole("u_1", "admin")]) {
+      const error = await change().then(() => undefined, (e: unknown) => e as Error);
+      expect(error?.message).toMatch(/not available on a connected stage: .*as\(user\).*administrator of the owner's Cloudflare account/);
+      expect(error?.message).not.toMatch(/admins/);
+    }
+  });
+
   it("loginWithStub is not available on a connected stage", async () => {
     const app = await connectWith(LOCAL, fakeStage().fetch);
     await expect(app.loginWithStub("s")).rejects.toThrow(/not available on a connected stage/);
