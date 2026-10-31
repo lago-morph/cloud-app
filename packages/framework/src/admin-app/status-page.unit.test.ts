@@ -85,6 +85,8 @@ describe("page 3: status", () => {
     expect(r.status).toBe(200);
     const asked = cf.issued.at(-1)!.scope.filter((s) => !["openid", "user-details.read", "memberships.read", "offline_access"].includes(s));
     expect(asked.sort()).toEqual([...PAGE_SCOPES.status].sort());
+    expect(calls.filter((c) => c.method === "GET").length).toBeGreaterThan(0);
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(2);
     for (const c of calls) {
       if (c.method === "GET") continue;
       expect(c.method).toBe("POST");
@@ -125,6 +127,21 @@ describe("page 3: status", () => {
     cf.override.set(`GET /accounts/${ACCOUNT}/workers/scripts`, { status: 403, body: { success: false, errors: [{ code: 9109, message: "Unauthorized to access requested resource" }] } });
     const html = await (await status()).text();
     expect(html).toContain("listing the Workers failed: HTTP 403: Unauthorized to access requested resource (code 9109)");
+    expect(html).toContain("notes-prod");
+  });
+
+  it("a part whose request throws, or a row with a bad time, still leaves the rest of the page", async () => {
+    world.users = [{ email: "x@example.com", role: "user", updated_at: Number.NaN }];
+    cf.override.set(`GET /accounts/${ACCOUNT}/r2/buckets/sst-state/objects/framework%2Faccount.json`, { status: 200, body: "not json" });
+    const original = account;
+    const throwing: CloudflareApi = (m, p, b) => (p.endsWith("/workers/scripts") ? Promise.reject(new Error("network down")) : original(m, p, b));
+    cf = await fakeCloudflare({ account: throwing });
+    cf.members.set("owner", { sub: "owner", email: "owner@example.com", roles: ["Administrator"] });
+    const r = await status();
+    expect(r.status).toBe(200);
+    const html = await r.text();
+    expect(html).toContain("listing the Workers failed");
+    expect(html).toContain("x@example.com (user), last signed in at an unknown time");
     expect(html).toContain("notes-prod");
   });
 

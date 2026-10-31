@@ -82,6 +82,34 @@ describe("ensureEverydayToken", () => {
     expect(f.tokens.has(old.id)).toBe(true);
   });
 
+  it("only a refusal (403) falls back to a new token; any other failed read or update throws and creates nothing", async () => {
+    const f = fakeTokens(A);
+    const old = f.add({ id: "1".repeat(32), name: TOKEN_NAMES.everyday, value: "v", policies: V01_POLICIES });
+    const failing = (m: Parameters<typeof f.api>[0], p: string, b?: unknown) => (m === "PUT" ? Promise.resolve({ status: 500, body: { success: false, errors: [{ code: 10001, message: "Internal" }] } }) : f.api(m, p, b));
+    await expect(ensureEverydayToken(failing, A)).rejects.toThrow(`updating the everyday token ${old.id} failed: HTTP 500: Internal (code 10001)`);
+    expect([...f.tokens.keys()]).toEqual([old.id]);
+  });
+
+  it("with several tokens, every one is read before any is written: a refusal on one changes none", async () => {
+    const f = fakeTokens(A);
+    const a = f.add({ id: "2".repeat(32), name: TOKEN_NAMES.everyday, value: "va", policies: V01_POLICIES });
+    const b = f.add({ id: "3".repeat(32), name: TOKEN_NAMES.everyday, value: "vb", policies: V01_POLICIES });
+    f.refuseUpdate.add(b.id);
+    const out = await ensureEverydayToken(f.api, A);
+    expect(out.kind).toBe("replaced");
+    expect(out.kind === "replaced" && out.oldIds).toEqual([a.id, b.id]);
+    expect(f.tokens.get(a.id)!.policies).toEqual(V01_POLICIES);
+    expect(f.writes.filter((w) => w.startsWith("PUT"))).toEqual([]);
+  });
+
+  it("refuses to work from a token list longer than it reads (no silent duplicate)", async () => {
+    const f = fakeTokens(A);
+    const huge = (m: Parameters<typeof f.api>[0], p: string, b?: unknown) =>
+      m === "GET" && p.includes("/tokens?") ? Promise.resolve({ status: 200, body: { success: true, result: [], result_info: { page: 1, total_pages: 21 } } }) : f.api(m, p, b);
+    await expect(ensureEverydayToken(huge, A)).rejects.toThrow("more than 20 pages");
+    expect(f.writes).toEqual([]);
+  });
+
   it("a refused create names the step and Cloudflare's answer, never a value", async () => {
     const f = fakeTokens(A);
     const refusing = (m: Parameters<typeof f.api>[0], p: string, b?: unknown) => (m === "POST" ? Promise.resolve({ status: 400, body: { success: false, errors: [{ code: 1001, message: "The OAuth session does not include the scopes required" }] } }) : f.api(m, p, b));
@@ -93,10 +121,18 @@ describe("deleteOldEverydayTokens", () => {
   it("deletes the named old tokens that are everyday tokens, and refuses any other ID", async () => {
     const f = fakeTokens(A);
     const old = f.add({ id: "f".repeat(32), name: TOKEN_NAMES.everyday, value: "o", policies: V01_POLICIES });
+    f.add({ id: "e".repeat(32), name: TOKEN_NAMES.everyday, value: "the new one", policies: everydayPolicies(A) });
     const other = f.add({ id: "9".repeat(32), name: "someone-elses", value: "s", policies: [] });
     expect(await deleteOldEverydayTokens(f.api, A, [old.id, other.id, "../x"])).toEqual({ deleted: [old.id], skipped: [other.id, "../x"] });
     expect(f.tokens.has(old.id)).toBe(false);
     expect(f.tokens.has(other.id)).toBe(true);
     expect(f.writes).toEqual([`DELETE /accounts/${A}/tokens/${old.id}`]);
+  });
+
+  it("never deletes the last everyday token", async () => {
+    const f = fakeTokens(A);
+    const only = f.add({ id: "4".repeat(32), name: TOKEN_NAMES.everyday, value: "o", policies: [] });
+    expect(await deleteOldEverydayTokens(f.api, A, [only.id])).toEqual({ deleted: [], skipped: [only.id] });
+    expect(f.tokens.has(only.id)).toBe(true);
   });
 });
