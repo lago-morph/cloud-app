@@ -73,9 +73,9 @@ export interface ClauseRule {
 const CLOUD: readonly Target[] = ["cloudflare"];
 
 /**
- * This phase's not-run rules (plan §8.1, §8.2; plan-auth.md, DEC-0520, DEC-0526). PWD-AC-009,
- * AUTH-AC-011 and E2E-008 have none since item I-G: the driver runs `check-login` on `prodcheck`
- * (prodcheck.ts). The password-pending rules of the criteria that items T2 and T3 tagged cloud
+ * This phase's not-run rules (plan §8.1, §8.2; plan-auth.md, DEC-0520, DEC-0526). AUTH-AC-011
+ * and E2E-008, the results `check-login` records (DEC-0670; COMPL-AC-005 as #136 proposes, DEC-0700), have none: the driver runs
+ * `check-login` on `prodcheck` (prodcheck.ts). The password-pending rules of the criteria that items T2 and T3 tagged cloud
  * tests for are gone (plan-auth.md): AUTH-AC-005's admin-role part, AUTH-AC-009's production
  * part, AUTH-AC-014, COMPL-AC-005, PWD-AC-008, MAIL-AC-006, MAIL-AC-007, E2E-006, E2E-007 and
  * CLI-AC-007. PROV-AC-004's fresh-account clause is deferred (plan §8.4, DEC-0532). §8.3's

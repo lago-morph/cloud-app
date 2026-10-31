@@ -5,19 +5,17 @@
  *
  * - AUTH-AC-009, production part: "`/api/auth/mock-login` … returns 404 on a production
  *   deployment. Production bundles contain no mock module."
- * - MAIL-AC-006, `prodcheck` part: "on the redeployed `prodcheck` stage the same route
- *   [`GET /api/__framework/test-mail?to=<address>`] returns 404." With MAIL-REQ-002 / PROV-REQ-005:
- *   the deployed bundle holds no test-mail route.
  * - E2E-006: "`/api/auth/mock-login` and `/api/__framework/test-mail` return 404, the deployed
  *   bundle contains no mock or mail-capture code, and `/api/auth/login` redirects to the
  *   framework's sign-in page on the stage's public origin."
- * - COMPL-AC-005: "On every cloud run, after `prodcheck` is redeployed, the evidence record has
- *   results for its production checks: mock-login and the test-mail route answer 404,
- *   `/api/auth/login` redirects to `<public origin>/api/auth/sign-in`, and `check-login`'s
- *   PWD-AC-009 result is present." This test is the record's result for the three HTTP checks,
+ * - COMPL-AC-005 as D's #136 proposes to amend it (DEC-0700, awaiting the owner's approval; the
+ *   text on this base still names PWD-AC-009): "On every cloud run, after `prodcheck` is redeployed, the
+ *   evidence record has results for its production checks: mock-login and the test-mail route
+ *   answer 404, `/api/auth/login` redirects to the auth app's `/start`, and `check-login`'s
+ *   AUTH-AC-011 and E2E-008 results are present." This test is the record's result for the HTTP checks,
  *   made after the redeploy (the stage's recorded deploy output is newer than the run stage's).
  *   `check-login` runs after the test layers, so a test cannot read its result; the test checks
- *   that this run is one in which the driver runs it and folds PWD-AC-009 in (the expected list,
+ *   that this run is one in which the driver runs it and folds AUTH-AC-011 and E2E-008 in (the expected list,
  *   PRODCHECK_IDS, CHECK_LOGIN_IDS), and the driver's unit tests show the folding itself.
  *
  * The deployed bundle is the Worker script `reference-prodcheck` (CF §2, DEC-0331), downloaded
