@@ -68,3 +68,12 @@ Verdict: accepted
 2. **minor** — The fix addresses the cause (the decoder accepts non-canonical input), not the symptom. Make the demo's `signing.ts` and `signing.test.ts` byte-identical to G's fixed template files, so the DEC-0392 exemption plainly applies.
 3. **minor** — `npx vitest run` in `apps/demo` has a failure that is there before this fix and is unrelated to signing: `app.test.ts` "…the admin role, granted and revoked, decides who publishes" (`expected 'user' to be 'admin'`), red in 2/2 runs at `d365e29`. With the fix, the other 24 of 25 tests in `signing.test.ts` and `app.test.ts` pass. The fixer must not attribute it to this fix or change it. It needs its own §7a.1.8 record and item.
 4. **minor** — The record's probe used `post-N` subjects. The UUID-subject run above gives the same result.
+
+## Fix (attempt 1)
+
+Fixer: the T7 follow-up subagent, after the accepted Review above (round 1, commit `884eab2`), on branch `v0.2.0/95-fix-demo-signing`.
+
+- **Red** (the commit after `884eab2`). `apps/demo/tests/signing.test.ts` is now byte-identical to G's fixed `apps/template/tests/signing.test.ts` (Review reason 2). It gains "accepts only the issued spelling of a signature, not one re-spelled in its last character". Before the fix (`cd apps/demo && npx vitest run tests/signing.test.ts`): `AssertionError: ZGl: expected 'note-1' to be null`, 1 failed, 3 passed.
+- **Fix.** `apps/demo/src/server/signing.ts` is now byte-identical to G's fixed template file: `fromBase64url` returns the bytes only when `toBase64url(bytes) === text`. `signToken` is unchanged, so every share link the demo issued still verifies.
+- **Green.** The same command gives 4 passed. The demo's `verify` (`npx prototype-framework verify` in `apps/demo`) gives 32 passed and 1 failed on SQLite and on Postgres. The one failure is the earlier, unrelated `app.test.ts` admin-role test (Review reason 3). It is not changed here, and is reported as a new item. From the root, `npm run build -w packages/framework`, `npm run typecheck` and `npm run lint` pass. The PR body gives the `npm run test:unit` and `tests/skill/example-copies.test.ts` results.
+- **Similar cases:** none further (the Similar cases section above; the Review confirmed `apps/reference/src/server/encoding.ts` is not the same case).
