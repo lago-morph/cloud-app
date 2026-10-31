@@ -1,6 +1,6 @@
 # Plan: v0.2.0, sign-in with Cloudflare (auth revamp) and testing standards
 
-Status: draft for owner review (2026-10-26). The testing standards (owner decisions of 2026-10-31, from the reviewed addendum `plan-v0.2.0-testing.md`) were merged in on 2026-10-31: decisions in §1, standards in §7a, the e2e scope in §7.1, requirement changes in §6.1, where the standards land in §6.2, and their work in §9.
+Status: draft for owner review (2026-10-26). The testing standards (owner decisions of 2026-10-31, from the reviewed addendum `plan-v0.2.0-testing.md`, deleted after the merge) were merged in on 2026-10-31: decisions in §1, standards in §7a, the e2e scope in §7.1, requirement changes in §6.1, where the standards land in §6.2, and their work in §9.
 - **Assumes v0.1.1:** the setup-wizard plan (`plan-setup-wizard.md`) is implemented and merged. "v0.1.1 §n" cites that plan.
 - **Breaking:** apps on 0.1.x lose their password accounts. See §8.
 - **Already established:** the live tests and research in §2 are done. Don't repeat them. Only the items marked *unverified* need checking.
@@ -255,7 +255,10 @@ admin app ──(admin OAuth client, optional scopes per page)──► Cloudfla
    7. creates a one-time code (random, stored hashed, 60 s lifetime, single use, bound to the app ID and return URL);
    8. redirects to `return?code=…&state=…`.
 4. The app's callback checks the state, then calls `env.AUTH.redeem({ code, app })` over the service binding. It receives `{ sub, email, role }` and issues `__Host-session`. The session format's provider field (`prv`, today `stub` or `password`) gains `cf-account`, and `password` goes. The user ID is derived from `sub`.
-5. **Role freshness:** apps can call `env.AUTH.role(sub)` over the binding, on session renewal or every N minutes (a PAR). The auth app's record is refreshed at each sign-in. A removed member keeps any existing session only until it next renews.
+5. **Role freshness:** apps call `env.AUTH.role(sub)` over the binding, on session renewal or every N minutes (a PAR). The auth app's record is refreshed at each sign-in. A removed member keeps any existing session only until it next renews.
+   - **If the refresh fails** (the binding throws, the auth app returns an error, or its D1 is unavailable), the app retries twice, with a short delay, within the same request. The retry count and delay are PARs.
+   - **If every retry fails, the app fails closed:** it ends the session (clears `__Host-session`) and handles the request as anonymous, so a role-protected route returns its usual unauthenticated error. It never keeps a role it could not confirm. Signing in again needs the auth app, so an outage that lasts past a refresh signs people out until it recovers (§10).
+   - Between refreshes, a session keeps its role without calling the auth app.
 
 ### 4.2 Sign-out
 The app clears its cookie. Cloudflare's session logout (`end_session`) is optional and linked from the auth app.
@@ -281,7 +284,7 @@ Verified strings: "Super Administrator - All Privileges" (admin) and "HTTP Appli
 **Steps:**
 1. Read `CLOUDFLARE_BOOTSTRAP_TOKEN` from the environment or `.env.cloudflare`. Verify it and read its `expires_on`. If it has no expiry, or one more than 1 day away, **DELETE it at once** and tell the user to make a new one with a 1-day expiry, giving the link.
 2. Create **both OAuth clients**, because no sign-in scope can create clients (§2.1a). Put each secret straight into Secrets Store, since it's shown only once (§2.1):
-   - **the admin client:** private and confidential; required scopes `user-details.read` and `memberships.read`; optional scopes covering everything §5.2 needs, including one scope for every permission group in the everyday token (§2.1a);
+   - **the admin client:** private and confidential; required scopes `user-details.read` and `memberships.read`; optional scopes covering everything §5.2 needs, including one scope for every permission group in the everyday token (§2.1a, §5.2 page 2);
    - **the sign-in client:** private and confidential; required scopes `user-details.read` and `memberships.read` only.
 3. Deploy the admin app and bind it.
 4. **Delete the bootstrap token.**
@@ -295,7 +298,27 @@ Verified strings: "Super Administrator - All Privileges" (admin) and "HTTP Appli
    - deploy the auth app with its D1 database, bound to the sign-in client's secret, which the bootstrap already stored;
    - create the shared resources from v0.1.1, without anything email-related: log bucket, state bucket, backups, the signing credential (moved to Secrets Store, D7; today it is the account API token `prototype-r2-signing`, whose S3 credentials sit in `sst-state` at `framework/r2-signing.json` and are copied into each stage's Worker secrets by `deploy`);
    - write the setup record (v0.1.1 §4.4), bumping `ACCOUNT_SETUP_VERSION`.
-2. **Everyday token:** create it through the user's grant (`account-api-tokens.write`, verified §2.1), with the minimal everyday permission set (v0.1.1 §4.1 minus email). **Show the value once to the human,** with a copy button and the env-file or environment-settings instructions. **The agent never sees it.** It can also add permissions to the existing everyday token in place (§2.3).
+2. **Everyday token:** create it through the user's grant (`account-api-tokens.write`, verified §2.1), with the everyday permission set below. **Show the value once to the human,** with a copy button and the env-file or environment-settings instructions. **The agent never sees it.**
+   - **The everyday set** (`EVERYDAY` in `provision/cloudflare/permissions.ts`, with `PERMISSIONS_VERSION` bumped). Every group is account-scoped; there are no zone groups, because v0.2.0 has no email domain.
+
+     | Group | Why v0.2.0 needs it | Admin-client scope |
+     |---|---|---|
+     | Workers Scripts Write | deploying a stage's Worker, with its Worker secrets and its service binding to the auth app; checking that the auth and admin apps exist | `workers-scripts.write` |
+     | Workers R2 Storage Write | stage buckets; reading the setup record in `sst-state` (v0.1.1 §4.4) | `workers-r2.write` |
+     | D1 Write | stage databases and cloud migrations; writing the app's return URL into the auth app's registry on `deploy` and `remove` (§3) | `d1.write` |
+     | Secrets Store Read | binding the shared secrets, the signing credential among them, at deploy (D7); checking that they exist during the setup check | `secrets-store.read` |
+
+   - **Dropped from v0.1.1's set**, because only the email code that v0.2.0 removes uses them:
+     - Email Sending Read and Email Routing Rules Read;
+     - Zone Read, used only by a production deploy's email-domain check (`email.ts`, DEC-0553);
+     - Analytics Read, used only by `check-login`'s email-delivery check (`email-delivery.ts`).
+   - **An existing everyday token** (from 0.1.x) is updated in place to exactly this set: missing groups are added, and the email and zone groups are removed. `PUT …/tokens/{id}` keeps the value (§2.3).
+   - *Unverified:*
+     - whether a deploy with a `secrets_store_secret` binding needs Secrets Store Read, or only Workers Scripts Write. The setup check needs Secrets Store Read either way;
+     - whether each scope in the table covers its group when the grant creates the token (§2.1a showed this only for `account-settings.read`);
+     - whether the grant can update a token it did not create. If it can't, page 2 creates a new token, shows its value, and deletes the old one once the user confirms they have saved the new one.
+
+     The live pass checks all three (§7).
 3. **Status:** what's set up, which version, the registered apps, and recent sign-ins. Read-only.
 4. *(Later, D11)* other providers, role assignment, groups.
 
@@ -305,7 +328,7 @@ Verified strings: "Super Administrator - All Privileges" (admin) and "HTTP Appli
   - test mailbox and mail sink (`prototype-mailsink`);
   - the everyday-token deep link (replaced by admin-app page 2);
   - the Workers Paid requirement (v0.1.1's `cloudflare-setup` stops on Free, because Better Auth needs Paid);
-  - the email permissions in both token sets.
+  - the email permissions in both token sets, and the everyday token's zone permissions (§5.2 page 2).
 - **Unchanged:**
   - `.env.cloudflare` and its precedence;
   - the git-ignore warnings;
@@ -346,7 +369,7 @@ v0.2.0 replaces password login with sign-in through Cloudflare. Three of the own
 
 1. **Who is an admin (SYS-REQ-018, "Admins").**
    - **Today (as amended by DEC-0521…0524):** admin is a role stored with the person's account in the stage's own database, and granted, revoked and listed by an operator command (`admins`). Anyone whose email address is verified is a user. A role change takes effect on the person's next request. Configuration holds no admin or users list.
-   - **Proposed:** only members of the owner's Cloudflare account can sign in. A member whose account role is an administrator role is an admin. Any other member is a user. Anyone not signed in is anonymous. The role names that count as administrator are a parameter (§4.4). A role change in the Cloudflare account takes effect at the app's next role refresh or session renewal, not necessarily on the next request (§4.1 step 5). The refresh interval is a parameter.
+   - **Proposed:** only members of the owner's Cloudflare account can sign in. A member whose account role is an administrator role is an admin. Any other member is a user. Anyone not signed in is anonymous. The role names that count as administrator are a parameter (§4.4). A role change in the Cloudflare account takes effect at the app's next role refresh or session renewal, not necessarily on the next request (§4.1 step 5). If a refresh cannot confirm the role after its retries, the person is signed out. The refresh interval and the retries are parameters.
 2. **Which login (SYS-REQ-019, "Login provider").**
    - **Today:** in release 1 the real login is email and password, run by the framework in the app's own deployment, with each email address verified before its first login.
    - **Proposed:** the real login is sign-in with Cloudflare, through the account's shared auth app. It is limited to members of the owner's Cloudflare account. Unchanged: app code cannot tell which provider is in use, and further providers can be added behind the abstraction without app changes.
@@ -388,11 +411,13 @@ All of this work follows the testing standards of §7a.
   - role mapping;
   - the tokens being revoked in the callback;
   - the bootstrap rules: an expiry over 1 day or none means delete at once; delete at the end; nothing written anywhere;
-  - the admin pages requesting only their own scopes.
+  - the admin pages requesting only their own scopes;
+  - role refresh: a failure is retried twice, and if every retry fails the session ends and the request is handled as anonymous; success on a retry keeps the session;
+  - the everyday set: exactly the four groups of §5.2 page 2, and the in-place update of a 0.1.x token removes its email and zone groups.
 - **Integration (local, and in CI when §7a.2.4 selects it):** mock-oauth2-server stands in for Cloudflare. The full redirect → code → redeem → session path runs over plain HTTP, without a browser.
 - **Live, once per release:**
   1. bootstrap with a 1-day token, showing the admin app is deployed and the token deleted;
-  2. the owner signs in to the admin app and runs account setup and the everyday token, with an unticked-scope check;
+  2. the owner signs in to the admin app and runs account setup and the everyday token, with an unticked-scope check. This step also settles §5.2 page 2's three *unverified* points: deploy a stage that binds a Secrets Store secret, check that the created token holds exactly the four groups, and update a 0.1.x everyday token in place;
   3. the owner signs in to `prodcheck` through the auth app, showing admin as owner;
   4. a non-admin member signs in, if the owner can invite one, showing user.
   
@@ -448,7 +473,7 @@ This is relative to the v0.2.0 end state: sign-in through the auth app, bootstra
      - two concurrent redemptions of one code, where exactly one succeeds;
      - consent denied;
      - an ID token with no `email`, using the `/user` fallback (§10);
-     - the auth app unavailable: existing sessions keep working, and behaviour at role refresh is defined and tested.
+     - the auth app unavailable: requests between refreshes keep working; at the next role refresh the app retries twice, then ends the session and handles the request as anonymous (§4.1 step 5); signing in fails with a clear message; once the auth app is back, signing in works again.
    - Plus one UI test through the sign-in pages.
 3. **Starter and upgrade:**
    - E2E-001 is extended to scaffold through the packed `npm create` starter instead of `skill/scripts/scaffold`, rather than adding a new scenario.
@@ -744,7 +769,7 @@ Every item's brief carries its "Tests" and "E2E" sections (§7a.1.10).
   - the live pass, which needs the owner's bootstrap token and sign-ins, so do it last and batch them.
 
 ## 10. Risks
-- **Single point of failure:** if the auth app is down, nobody can sign in. Existing sessions keep working until they expire.
+- **Single point of failure:** if the auth app is down, nobody can sign in. Existing sessions keep working until their next role refresh. That refresh fails closed after its retries (§4.1 step 5), so an outage longer than the refresh interval signs everyone out until the auth app recovers.
 - **Testers must be account members.** "HTTP Applications Read" works as the least-privilege tester role: verified that such a member can sign in, and is capped by that role (§2.1a).
 - **Secrets Store is a beta.** Keep a fallback to Worker secrets.
 - **Role names are free text** from the API. Keep the mapping as a PAR, and record the verified strings.
