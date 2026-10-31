@@ -5,6 +5,7 @@
  * every request, so tests can check that tokens were revoked. No network. Never in a bundle.
  */
 import { base64urlEncode } from "../auth/signing.js";
+import { s256Challenge } from "./pkce.js";
 
 export const FAKE_ISSUER = "https://dash.example.test";
 export const FAKE_API = "https://api.example.test/client/v4";
@@ -44,6 +45,8 @@ export interface RecordedRequest {
   readonly url: string;
   readonly body: URLSearchParams;
   readonly authorization: string | null;
+  /** The request's redirect mode (`follow` unless the caller set one). */
+  readonly redirect: RequestRedirect;
 }
 
 export interface FakeUpstreamOptions {
@@ -62,6 +65,12 @@ export interface FakeUpstreamOptions {
   membershipsStatus?: number;
   /** Overrides of the discovery document. */
   discovery?: Record<string, unknown>;
+  /**
+   * What the token endpoint checks, like a real one: the client secret (default "client-secret"
+   * unless null), and when set the PKCE challenge the verifier must hash to, the code and the
+   * redirect URI. A mismatch answers 400 invalid_grant. The client ID is always checked.
+   */
+  expect?: { clientSecret?: string | null; challenge?: string; code?: string; redirectUri?: string };
 }
 
 export interface FakeUpstream {
@@ -84,7 +93,8 @@ export function fakeUpstream(options: FakeUpstreamOptions): FakeUpstream {
     const req = new Request(input, init);
     const url = new URL(req.url);
     const body = new URLSearchParams(req.method === "POST" ? await req.text() : "");
-    requests.push({ method: req.method, url: req.url, body, authorization: req.headers.get("authorization") });
+    requests.push({ method: req.method, url: req.url, body, authorization: req.headers.get("authorization"), redirect: req.redirect });
+    const bearerOk = req.headers.get("authorization") === `Bearer ${ACCESS_TOKEN}`;
     const route = `${req.method} ${url.origin}${url.pathname}`;
     switch (route) {
       case `GET ${FAKE_DISCOVERY}`:
@@ -101,6 +111,16 @@ export function fakeUpstream(options: FakeUpstreamOptions): FakeUpstream {
         return json({ keys: [options.key.jwk] });
       case `POST ${FAKE_ISSUER}/oauth2/token`: {
         if ((options.tokenStatus ?? 200) !== 200) return json({ error: "invalid_grant" }, options.tokenStatus);
+        const want = options.expect ?? {};
+        const secret = want.clientSecret === undefined ? "client-secret" : want.clientSecret;
+        const grantOk =
+          body.get("grant_type") === "authorization_code" &&
+          body.get("client_id") === FAKE_CLIENT_ID &&
+          (secret === null || body.get("client_secret") === secret) &&
+          (want.challenge === undefined || (await s256Challenge(body.get("code_verifier") ?? "")) === want.challenge) &&
+          (want.code === undefined || body.get("code") === want.code) &&
+          (want.redirectUri === undefined || body.get("redirect_uri") === want.redirectUri);
+        if (!grantOk) return json({ error: "invalid_grant" }, 400);
         const now = Math.floor(Date.now() / 1000);
         const idToken = await options.key.sign({ iss: FAKE_ISSUER, aud: FAKE_CLIENT_ID, iat: now, exp: now + 3600, sub: "sub-1", ...options.claims });
         return json({ access_token: ACCESS_TOKEN, refresh_token: REFRESH_TOKEN, id_token: idToken, token_type: "bearer", expires_in: 3600 });
@@ -108,8 +128,10 @@ export function fakeUpstream(options: FakeUpstreamOptions): FakeUpstream {
       case `POST ${FAKE_ISSUER}/oauth2/revoke`:
         return new Response(null, { status: options.revokeStatus ?? 200 });
       case `GET ${FAKE_API}/user`:
+        if (!bearerOk) return json({ success: false }, 401);
         return json({ success: true, result: options.user ?? { id: "sub-1", email: "from-user@example.com" } });
       case `GET ${FAKE_API}/memberships`: {
+        if (!bearerOk) return json({ success: false }, 401);
         if ((options.membershipsStatus ?? 200) !== 200) return json({ success: false }, options.membershipsStatus);
         const pages = options.membershipPages ?? [[]];
         const page = Number(url.searchParams.get("page") ?? "1");

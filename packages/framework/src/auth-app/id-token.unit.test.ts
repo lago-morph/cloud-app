@@ -35,8 +35,38 @@ describe("verifyIdToken", () => {
     await expect(check(await key.sign(claims()))).resolves.toEqual({ sub: "sub-1", email: "a@example.com", emailVerified: true });
   });
 
-  it("accepts aud as an array that holds the client ID", async () => {
-    await expect(check(await key.sign(claims({ aud: ["x", AUD] })))).resolves.toMatchObject({ sub: "sub-1" });
+  it("accepts aud as an array that holds the client ID, with azp naming it when there are several", async () => {
+    await expect(check(await key.sign(claims({ aud: [AUD] })))).resolves.toMatchObject({ sub: "sub-1" });
+    await expect(check(await key.sign(claims({ aud: ["x", AUD], azp: AUD })))).resolves.toMatchObject({ sub: "sub-1" });
+  });
+
+  it("refuses several audiences without azp, and any azp that is not the client (OIDC Core 3.1.3.7)", async () => {
+    expect(await reason(check(await key.sign(claims({ aud: ["x", AUD] }))))).toBe("id token: wrong aud");
+    expect(await reason(check(await key.sign(claims({ aud: ["x", AUD], azp: "x" }))))).toBe("id token: wrong aud");
+    expect(await reason(check(await key.sign(claims({ azp: "x" }))))).toBe("id token: wrong aud");
+  });
+
+  it("refuses when the expected nonce is empty, even if the token's is empty too", async () => {
+    const token = await key.sign(claims({ nonce: "" }));
+    expect(await reason(verifyIdToken(token, { keys: [key.jwk], issuer: ISS, clientId: AUD, nonce: "", nowSeconds: NOW }))).toBe("id token: wrong nonce");
+  });
+
+  it("refuses a token with a crit header (RFC 7515 4.1.11)", async () => {
+    expect(await reason(check(await key.sign(claims(), { crit: ["exp"] })))).toBe("id token: unsupported header");
+  });
+
+  it("verifies with the key named by kid when the JWKS holds several (rotation)", async () => {
+    await expect(check(await other.sign(claims()), [key.jwk, other.jwk])).resolves.toMatchObject({ sub: "sub-1" });
+  });
+
+  it("refuses a token without kid when the JWKS holds several keys, and a non-string kid", async () => {
+    expect(await reason(check(await key.sign(claims(), { kid: undefined }), [key.jwk, other.jwk]))).toBe("id token: unknown key");
+    expect(await reason(check(await key.sign(claims(), { kid: 1 })))).toBe("id token: unknown key");
+  });
+
+  it("refuses a key meant for encryption or another algorithm, under the right kid", async () => {
+    expect(await reason(check(await key.sign(claims()), [{ ...key.jwk, use: "enc" }]))).toBe("id token: unknown key");
+    expect(await reason(check(await key.sign(claims()), [{ ...key.jwk, alg: "RS512" }]))).toBe("id token: unknown key");
   });
 
   it("returns email null when the token carries none (the /user fallback, §10)", async () => {
