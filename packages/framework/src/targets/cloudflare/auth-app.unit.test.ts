@@ -77,7 +77,7 @@ describe("Cloudflare runtime: sign-in through the auth app", () => {
   });
 
   it("without the AUTH binding, a cf-account session reads as anonymous (the role read fails)", async () => {
-    const token = await issueSession("s".repeat(43), { id: "u_X", displayName: null, provider: "cf-account", subject: "cf-sub" }, Date.now());
+    const token = await issueSession("s".repeat(43), { id: "u_X", displayName: null, provider: "cf-account", subject: "cf-sub", role: { level: "user", checkedAt: 0 } }, Date.now());
     const res = await setup({ [BINDINGS.authApp]: undefined }).fetch("/api/auth/me", { headers: { cookie: `__Host-session=${token}` } });
     expect(res.status).toBe(200);
     expect(await res.json()).toStrictEqual({ level: "anonymous" });

@@ -74,6 +74,8 @@ export interface StageOptions {
   readonly cookies?: CookieSettings;
   /** The authentication mock: only locally and on test stages. */
   readonly mock?: AuthMock;
+  /** AUTH's clock and retry wait (`createTestApp`'s test clock); default the real ones. */
+  readonly authClock?: { readonly now: () => number; readonly sleep: (ms: number) => Promise<void> };
   /** The stage's real login provider (the auth-app provider, built per request), or the stub in tests. */
   readonly provider?: LoginProvider | ((c: RuntimeContext) => LoginProvider);
   /** The stage's credential provider (PWD), built per request over the request's database (password.md §2). */
@@ -129,6 +131,7 @@ export function assembleStage<C extends ConfigDeclaration, S extends string>(def
     ...(options.credentialProvider === undefined ? {} : { credentialProvider: options.credentialProvider }),
     ...(options.mock === undefined ? {} : { mock: options.mock }),
     ...(options.cookies === undefined ? {} : { cookies: options.cookies }),
+    ...(options.authClock === undefined ? {} : { now: options.authClock.now, sleep: options.authClock.sleep }),
   });
 
   const app = assembleApp(defined, {

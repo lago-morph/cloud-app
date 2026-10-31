@@ -9,11 +9,15 @@ import { afterEach, describe, expect, it } from "vitest";
 import { tag } from "../../../../../tests/support/tags.js";
 import { createTestApp } from "../../../src/testing/index.js";
 import { authApp, disposeAll, expectError, me, newApp } from "./support.js";
+import { ROLE_REFRESH_INTERVAL_SECONDS } from "../../../src/auth/role-refresh.js";
+
+/** Just past PAR-425: a role change shows at the next role refresh (plan-v0.2.0 §4.1 step 5, DEC-0672). */
+const REFRESH_DUE_MS = (ROLE_REFRESH_INTERVAL_SECONDS + 1) * 1000;
 
 afterEach(disposeAll);
 
 describe("the admin role", () => {
-  it(tag("AUTH-AC-003", "every stub login is user; grantRole makes the next request admin and revokeRole makes it user again, with the same session"), async () => {
+  it(tag("AUTH-AC-003", "every stub login is user; grantRole makes the first request after the role refresh admin and revokeRole makes it user again, with the same session"), async () => {
     const app = await newApp({ stubLoginProvider: true });
     await app.loginWithStub("ac003-person");
     const before = await me(app);
@@ -22,12 +26,15 @@ describe("the admin role", () => {
     await expectError(await app.request("/api/admin-only"), "AUTH.FORBIDDEN");
 
     await app.grantRole(id, "admin");
+    expect((await me(app))["level"], "within PAR-425 the session keeps its level").toBe("user");
+    app.clock.advance(REFRESH_DUE_MS);
     expect(await me(app)).toStrictEqual({ level: "admin", id, displayName: expect.toSatisfy((v: unknown) => v === null || typeof v === "string") });
     const adminRoute = await app.request("/api/admin-only");
     expect(adminRoute.status).toBe(200);
     expect(await adminRoute.json()).toStrictEqual({ id, level: "admin" });
 
     await app.revokeRole(id, "admin");
+    app.clock.advance(REFRESH_DUE_MS);
     expect((await me(app))["level"]).toBe("user");
     await expectError(await app.request("/api/admin-only"), "AUTH.FORBIDDEN");
 
@@ -45,7 +52,7 @@ describe("the admin role", () => {
 });
 
 describe("E2E-007 becoming an admin (local, in-process)", () => {
-  it(tag("E2E-007", "local: log in, copy the ID from /api/auth/me, grant the admin role: admin on the next request and not before"), async () => {
+  it(tag("E2E-007", "local: log in, copy the ID from /api/auth/me, grant the admin role: admin after the next role refresh and not before"), async () => {
     // 1. Log in to a stage.
     const stage = await newApp({ stubLoginProvider: true });
     await stage.loginWithStub("e2e007-person", { displayName: "Person" });
@@ -58,6 +65,7 @@ describe("E2E-007 becoming an admin (local, in-process)", () => {
     await expectError(await stage.request("/api/admin-only"), "AUTH.FORBIDDEN");
     // 3. Grant the role (on a stage: `admins grant <address>`); no redeploy, no new login.
     await stage.grantRole(copied as string, "admin");
+    stage.clock.advance(REFRESH_DUE_MS);
     expect(await me(stage)).toStrictEqual({ level: "admin", id: copied, displayName: "Person" });
     expect((await stage.request("/api/admin-only")).status).toBe(200);
   });

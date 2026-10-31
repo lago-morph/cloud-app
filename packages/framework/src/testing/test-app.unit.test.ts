@@ -13,6 +13,11 @@ import { configString, defineApp, defineTable, FrameworkError, id, newId, text }
 import { generateAppMigrations } from "../mig/generate.js";
 import { mockUsers } from "../auth/testing.js";
 import { createTestApp, type TestApp } from "./test-app.js";
+import { deriveUserId } from "../auth/user-id.js";
+import { ROLE_REFRESH_INTERVAL_SECONDS } from "../auth/role-refresh.js";
+
+/** Moves the test clock just past PAR-425. */
+const REFRESH_DUE_MS = (ROLE_REFRESH_INTERVAL_SECONDS + 1) * 1000;
 
 const notes = defineTable("notes", { id: id(), title: text() });
 
@@ -196,21 +201,87 @@ describe("createTestApp", { timeout: 60_000 }, () => {
     }
   });
 
-  it(tag("AUTH-AC-003", "loginWithStub keeps the session; grantRole and revokeRole change the level on the next request"), async () => {
+  it(tag("AUTH-AC-003", "loginWithStub keeps the session; grantRole and revokeRole change the level at the next role refresh"), async () => {
     const t = await open({ ...base, stubLoginProvider: true });
     await t.loginWithStub("person-1", { displayName: "P" });
+    const level = async () => ((await (await t.request("/api/auth/me")).json()) as { level: string }).level;
     const me = (await (await t.request("/api/auth/me")).json()) as { level: string; id: string; displayName: string };
     expect(me.level).toBe("user");
     expect(me.id).toMatch(/^u_[A-Z2-7]{26}$/i);
     expect(me.displayName).toBe("P");
     await t.grantRole(me.id, "admin");
-    expect(((await (await t.request("/api/auth/me")).json()) as { level: string }).level).toBe("admin");
+    expect(await level(), "within PAR-425 the session keeps its level").toBe("user");
+    t.clock.advance(REFRESH_DUE_MS);
+    expect(await level()).toBe("admin");
     await t.grantRole(me.id, "admin"); // already held: no change
-    expect(((await (await t.request("/api/auth/me")).json()) as { level: string }).level).toBe("admin");
+    t.clock.advance(REFRESH_DUE_MS);
+    expect(await level()).toBe("admin");
     await t.revokeRole(me.id, "admin");
-    expect(((await (await t.request("/api/auth/me")).json()) as { level: string }).level).toBe("user");
+    t.clock.advance(REFRESH_DUE_MS);
+    expect(await level()).toBe("user");
     await t.revokeRole(me.id, "admin"); // not held: no change
     await expect(t.grantRole("u_NOBODY", "admin")).rejects.toThrow(/no account has the user ID/);
+  });
+
+  describe("authAppLoginProvider (plan-v0.2.0 §4.1, the fake auth-app binding)", () => {
+    const alice = { sub: "cf-sub-alice", email: "alice@example.test", role: "user" } as const;
+    const me = async (t: TestApp) => (await (await t.request("/api/auth/me")).json()) as { level: string; id?: string; displayName?: string | null };
+
+    it(tag("AUTH-AC-013", "loginWithAuthApp signs in through /start and the callback as a cf-account user, with no display name and no email"), async () => {
+      const t = await open({ ...base, authAppLoginProvider: true });
+      const login = await t.request("/api/auth/login");
+      const start = new URL(login.headers.get("location") ?? "");
+      expect(`${start.origin}${start.pathname}`).toBe("https://auth-app.test/start");
+      expect(start.searchParams.get("app")).toBe(`${app.definition.name}-local`);
+      expect(start.searchParams.get("return")).toBe("http://localhost:8787/api/auth/callback");
+      await t.loginWithAuthApp(alice);
+      const body = await (await t.request("/api/auth/me")).text();
+      expect(JSON.parse(body)).toStrictEqual({ level: "user", id: await deriveUserId("cf-account", alice.sub), displayName: null });
+      expect(body).not.toContain(alice.email);
+      expect(t.authApp.calls.redeem).toBe(1);
+    });
+
+    it(tag("AUTH-AC-015", "within PAR-425 no role call; after it exactly one; grantRole, revokeRole and the fake's setRole show at the refresh"), async () => {
+      const t = await open({ ...base, authAppLoginProvider: true });
+      await t.loginWithAuthApp(alice);
+      const { id } = await me(t);
+      await t.grantRole(id ?? "", "admin");
+      expect((await me(t)).level).toBe("user");
+      expect(t.authApp.calls.role).toBe(0);
+      t.clock.advance(REFRESH_DUE_MS);
+      expect((await me(t)).level).toBe("admin");
+      expect(t.authApp.calls.role).toBe(1);
+      expect((await me(t)).level).toBe("admin");
+      expect(t.authApp.calls.role, "the refreshed session is kept").toBe(1);
+      await t.revokeRole(id ?? "", "admin");
+      t.authApp.setRole(alice.sub, null);
+      t.clock.advance(REFRESH_DUE_MS);
+      expect(await me(t)).toStrictEqual({ level: "anonymous" });
+    });
+
+    it(tag("AUTH-AC-012", "when every try fails the session ends; the retry delays elapse on the test's clock"), async () => {
+      const t = await open({ ...base, authAppLoginProvider: true });
+      await t.loginWithAuthApp({ ...alice, role: "admin" });
+      t.clock.advance(REFRESH_DUE_MS);
+      t.authApp.setUnavailable(true);
+      const before = t.clock.now();
+      expect(await me(t)).toStrictEqual({ level: "anonymous" });
+      expect(t.authApp.calls.role).toBe(3);
+      expect(t.clock.now() - before).toBeGreaterThanOrEqual(400);
+      t.authApp.setUnavailable(false);
+      expect(await me(t), "the cleared session stays ended").toStrictEqual({ level: "anonymous" });
+      expect(t.logs().filter((e) => e.component === "AUTH").map((e) => e.message)).toStrictEqual(["role refresh failed (unknown); session ended"]);
+    });
+
+    it("cannot be combined with the stub or the user option, and has no mock", async () => {
+      await expect(createTestApp(app, { ...base, authAppLoginProvider: true, stubLoginProvider: true })).rejects.toThrow(/cannot be combined/);
+      await expect(createTestApp(app, { ...base, authAppLoginProvider: true, user: mockUsers.user() })).rejects.toThrow(/cannot be combined/);
+      const t = await open({ ...base, authAppLoginProvider: true });
+      expect(() => t.as(mockUsers.user())).toThrow(/auth-app login provider/);
+      const mock = await open();
+      expect(() => mock.authApp).toThrow(/authAppLoginProvider/);
+      await expect(mock.loginWithAuthApp(alice)).rejects.toThrow(/authAppLoginProvider/);
+    });
   });
 
   it("grantRole and revokeRole throw with the authentication mock", async () => {

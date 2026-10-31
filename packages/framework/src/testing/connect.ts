@@ -211,6 +211,15 @@ function connectedApp(c: Connection, user: CurrentUser | undefined): TestApp {
     loginWithStub() {
       return Promise.reject(new Error("loginWithStub is not available on a connected stage: use as(user), which logs in through mock-login"));
     },
+    loginWithAuthApp() {
+      return Promise.reject(new Error("loginWithAuthApp is not available on a connected stage: test stages sign in with the mock only; use as(user)"));
+    },
+    get authApp(): never {
+      throw new Error("authApp is not available on a connected stage: it is the in-process fake auth app");
+    },
+    get clock(): never {
+      throw new Error("clock is not available on a connected stage: the stage keeps real time");
+    },
     grantRole() {
       return Promise.reject(new Error("grantRole is not available on a connected stage: use the admins command (npm run admins -- grant <email> ...)"));
     },
