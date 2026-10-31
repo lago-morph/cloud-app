@@ -1,6 +1,7 @@
-/** The token permission check (DEC-0515): scopes and deny policies. No network. */
+/** The token permission check (DEC-0515): scopes and deny policies. No network. Moved with the code from `email-permissions.unit.test.ts` (DEC-0687). */
 import { describe, expect, it } from "vitest";
-import { EMAIL_PERMISSIONS, missingPermissions, policyCovers } from "./email-permissions.js";
+import { EMAIL_PERMISSIONS } from "./email-permissions.js";
+import { missingPermissions, policyCovers } from "./token-policies.js";
 
 const A = "acct";
 const Z = "zone1";

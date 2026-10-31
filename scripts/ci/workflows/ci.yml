@@ -114,20 +114,19 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Build
         run: npm run build -w packages/framework
-      # mock-oauth2-server for the admin app's integration suite (plan §7 "Integration"; item E),
-      # only when that suite is selected. When the auth app's suite is selected too, its own step
-      # (PR 29) starts the server and sets MOCK_OAUTH2_URL, so this one stands aside.
-      - name: mock-oauth2-server for the admin-app suite (only when selected)
-        if: contains(env.DIRECT, 'packages/framework/test/integration/admin-app') && !contains(env.DIRECT, 'packages/framework/test/integration/auth-app')
-        run: |
-          docker run -d --name mock-oauth2-admin -p 8080:8080 ghcr.io/navikt/mock-oauth2-server:6.1.4@sha256:647dd8c78a54f0e6fcd58d79c884e612f8f998a0662276f3e1db22e464a50192
-          echo "MOCK_OAUTH2_URL=http://localhost:8080" >> "$GITHUB_ENV"
       # The runner sets the reference app's local test secret before a local compliance run
       # (DEC-0277, DEC-0398; root cause ai/implementation/root-causes/2026-10-31-P0-apikey-local-runner-step.md).
       # A fresh random value each run; it is never printed and never stored.
       - name: Reference app's local test secret
         working-directory: apps/reference
         run: node -e "process.stdout.write(require('crypto').randomBytes(24).toString('hex'))" | npm run secrets -- set apiKey --target local --stage local
+      # mock-oauth2-server for the auth app's and the admin app's integration suites (plan §4.3,
+      # §7 "Integration"; DEC-0662), only when one of them is selected.
+      - name: mock-oauth2-server (only when the auth-app or admin-app suite is selected)
+        if: contains(env.DIRECT, 'packages/framework/test/integration/auth-app') || contains(env.DIRECT, 'packages/framework/test/integration/admin-app')
+        run: |
+          docker run -d --name mock-oauth2 -p 8080:8080 ghcr.io/navikt/mock-oauth2-server:6.1.4@sha256:647dd8c78a54f0e6fcd58d79c884e612f8f998a0662276f3e1db22e464a50192
+          echo "MOCK_OAUTH2_URL=http://localhost:8080" >> "$GITHUB_ENV"
       # Every test of the selected framework, skill and starter suites except those tagged with
       # one of IDS, which the harness runs next: each test runs once.
       - name: Integration tests of the selected suites not run by the harness

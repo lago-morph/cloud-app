@@ -7,10 +7,11 @@
  * - `EVERYDAY` (`prototype-framework`): DEC-0551's minimal set for every command but the account
  *   setup, plus "Email Routing Rules Read" (owner, 2026-10-26), so the everyday token can check the
  *   whole account setup on its own. It cannot create tokens and has no zone write permission.
- * - `BOOTSTRAP` (`prototype-framework-bootstrap`): what the account setup needs, plus "Billing
- *   Read" (the plan check) and "D1 Write". The API cannot create a token that itself holds
- *   "Account API Tokens Write" (400, code 1001, verified 2026-10-26), so the owner makes it from the
- *   dashboard link; it deletes itself when setup is done. It supersedes DEC-0551's setup token.
+ * - `BOOTSTRAP` (`prototype-framework-bootstrap`): v0.2.0 plan §5.1's four groups (DEC-0680),
+ *   what `cloudflare-setup` needs to create the OAuth clients, store their secrets and deploy the
+ *   admin app. The account setup itself moved to the admin app. The API cannot create a token that
+ *   itself holds "Account API Tokens Write" (400, code 1001, verified 2026-10-26), so the owner makes
+ *   it from the dashboard link with an expiry of 1 day at most; it deletes itself when setup is done.
  *
  * A release that needs more raises `PERMISSIONS_VERSION` (PAR-331) or `ACCOUNT_SETUP_VERSION`
  * (PAR-332) with the list.
@@ -21,7 +22,7 @@
  * "Edit").
  */
 import type { CloudflareApi } from "./api.js";
-import { policyCovers } from "./email-permissions.js";
+import { policyCovers } from "./token-policies.js";
 
 export type PermissionScope = "account" | "zone";
 
@@ -33,10 +34,14 @@ export interface PermissionGroup {
   readonly scope: PermissionScope;
 }
 
-/** PAR-331: the version of `EVERYDAY` and `BOOTSTRAP`; raised whenever a release needs more. */
-export const PERMISSIONS_VERSION = 1;
-/** PAR-332: the version of the account setup this release expects (the setup record's `setupVersion`). */
-export const ACCOUNT_SETUP_VERSION = 1;
+/** PAR-331: the version of `EVERYDAY` and `BOOTSTRAP`; raised whenever a release changes them (2: v0.2.0, DEC-0680). */
+export const PERMISSIONS_VERSION = 2;
+/**
+ * PAR-332: the version of the account setup this release expects (the setup record's
+ * `setupVersion`). 2: v0.2.0's account setup in the admin app (the auth app, the signing credential
+ * in Secrets Store, no email; DEC-0719).
+ */
+export const ACCOUNT_SETUP_VERSION = 2;
 
 const group = (id: string, name: string, scope: PermissionScope): PermissionGroup => Object.freeze({ id, name, scope });
 
@@ -48,14 +53,13 @@ const GROUPS = {
   emailSendingRead: group("2d5b4b1f6c89487bb7184c2c1dcd3bf1", "Email Sending Read", "account"),
   emailSendingWrite: group("5df633d6b41c42bcaf5b4a62b9d14b64", "Email Sending Write", "account"),
   apiTokensWrite: group("5bc3f8b21c554832afc660159ab75fa4", "Account API Tokens Write", "account"),
-  emailRoutingAddressesWrite: group("e4589eb09e63436686cd64252a3aebeb", "Email Routing Addresses Write", "account"),
-  billingRead: group("7cf72faf220841aabcfdfab81c43c4f6", "Billing Read", "account"),
+  oauthClientWrite: group("50fc2f43318f40e4855a35d8de5bf643", "OAuth Client Write", "account"),
+  secretsStoreWrite: group("adc8fa2bc6124928a8b3314dc63a1235", "Secrets Store Write", "account"),
+  secretsStoreRead: group("5e33b7d77788455c9fdf18cbd38ee5a0", "Secrets Store Read", "account"),
   zoneRead: group("c8fed203ed3043cba015a93ad1616f1f", "Zone Read", "zone"),
   analyticsRead: group("9c88f9c5bce24ce7af9a958ba9c504db", "Analytics Read", "zone"),
   emailRoutingRulesRead: group("1b600d9d8062443e986a973f097e728a", "Email Routing Rules Read", "zone"),
   emailRoutingRulesWrite: group("79b3ec0d10ce4148a8f8bdc0cc5f97f2", "Email Routing Rules Write", "zone"),
-  dnsWrite: group("4755a26eedb94da69e1066d98aa820be", "DNS Write", "zone"),
-  zoneSettingsWrite: group("3030687196b94b638145a3953da2b699", "Zone Settings Write", "zone"),
 } as const;
 
 /** The everyday token's 7 groups (account first, then zone). */
@@ -69,30 +73,33 @@ export const EVERYDAY: readonly PermissionGroup[] = Object.freeze([
   GROUPS.emailRoutingRulesRead,
 ]);
 
-/** The bootstrap token's 12 groups (account first, then zone). */
-export const BOOTSTRAP: readonly PermissionGroup[] = Object.freeze([
-  GROUPS.workersScriptsWrite,
-  GROUPS.r2StorageWrite,
-  GROUPS.apiTokensWrite,
-  GROUPS.emailSendingWrite,
-  GROUPS.emailRoutingAddressesWrite,
-  GROUPS.billingRead,
-  GROUPS.d1Write,
-  GROUPS.emailRoutingRulesWrite,
-  GROUPS.dnsWrite,
-  GROUPS.zoneSettingsWrite,
-  GROUPS.zoneRead,
-  GROUPS.analyticsRead,
-]);
+/**
+ * v0.2.0 plan §5.2 page 2's everyday set (DEC-0715): 4 account groups and no zone group, because
+ * v0.2.0 has no email domain. Each is covered by one admin-client scope (`workers-scripts.write`,
+ * `workers-r2.write`, `d1.write`, `secrets-store.read`; PAR-447). The admin app's everyday-token
+ * page creates or updates the token with exactly these (`everyday-token.ts`). It becomes `EVERYDAY`
+ * (with the tables and the quick check) once `cloudflare-setup`'s check no longer looks up the
+ * email domain's zone with the everyday token (DEC-0716).
+ */
+export const EVERYDAY_V2: readonly PermissionGroup[] = Object.freeze([GROUPS.workersScriptsWrite, GROUPS.r2StorageWrite, GROUPS.d1Write, GROUPS.secretsStoreRead]);
+
+/**
+ * The bootstrap token's 4 groups (v0.2.0 plan §5.1, IDs from §2.1b; DEC-0680), all account-scoped:
+ * deploying the admin (and later auth) Worker and registering the `workers.dev` subdomain, creating
+ * both OAuth clients, putting their secrets in Secrets Store, and "Account API Tokens Write", which
+ * only lets the token delete itself (and is why the dashboard must make it).
+ */
+export const BOOTSTRAP: readonly PermissionGroup[] = Object.freeze([GROUPS.workersScriptsWrite, GROUPS.oauthClientWrite, GROUPS.secretsStoreWrite, GROUPS.apiTokensWrite]);
 
 /**
  * Stronger groups that also grant a read group: a token made by hand with the write group passes
- * the check, as `email-permissions.ts`'s `alsoSatisfiedBy` ("Zone Write" for "Zone Read").
+ * the check, as `token-policies.ts`'s `alsoSatisfiedBy` ("Zone Write" for "Zone Read").
  */
 const SATISFIED_BY: Readonly<Record<string, readonly { readonly id: string; readonly name: string }[]>> = Object.freeze({
   [GROUPS.zoneRead.id]: [{ id: "e6d2666161e84845a636613608cee8d5", name: "Zone Write" }],
   [GROUPS.emailSendingRead.id]: [GROUPS.emailSendingWrite],
   [GROUPS.emailRoutingRulesRead.id]: [GROUPS.emailRoutingRulesWrite],
+  [GROUPS.secretsStoreRead.id]: [GROUPS.secretsStoreWrite],
 });
 
 export type TokenKind = "everyday" | "bootstrap";
@@ -158,7 +165,7 @@ const accountsNamed = (p: TokenPolicy): string[] => Object.keys(p.resources).fil
 
 /**
  * Compares a token's policies with a required list (the plan's step 7 check of the everyday token,
- * read with the bootstrap token). Scopes are read as `email-permissions.ts`'s `policyCovers` reads
+ * read with the bootstrap token). Scopes are read as `token-policies.ts`'s `policyCovers` reads
  * them: an account group needs the account (or `*`), a zone group the zone, all zones, or the whole
  * account.
  */

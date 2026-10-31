@@ -10,6 +10,7 @@ import { runRemove } from "../core/remove.js";
 import { runSetupAccount } from "../core/setup-account.js";
 import { unwiredDatabases } from "./databases.js";
 import { ACCOUNT, FAKE_SIGNING, FakeCloud, FakeDatabases, FULL_POLICIES } from "./fake-cloud.test-support.js";
+import { createAccountSigningCredential } from "./r2-token.js";
 import { SETUP_STEPS } from "./setup-record.js";
 import { createCloudflareTarget, type CloudflareTargetOptions } from "./target.js";
 
@@ -50,6 +51,22 @@ function setup(overrides: Partial<CloudflareTargetOptions> = {}) {
 }
 
 const request = (s = stage): DeployRequest => ({ stage: s, migrations: MIGRATIONS, requiredSecrets: [] });
+
+/** The auth app link as a recording stand-in (the real one, over D1, is `worker.unit.test.ts`'s). */
+function fakeAuthApp(problems: string[] = [], registerError?: Error) {
+  const link = {
+    calls: [] as string[],
+    onRegister: undefined as (() => void) | undefined,
+    problems: async () => (link.calls.push("problems"), problems),
+    register: async (app: string, url: string) => {
+      link.calls.push(`register ${app} ${url}`);
+      link.onRegister?.();
+      if (registerError) throw registerError;
+    },
+    unregister: async (app: string) => void link.calls.push(`unregister ${app}`),
+  };
+  return link;
+}
 
 describe("Cloudflare preflight (PROV-REQ-002 step 1)", () => {
   it("[PROV-AC-002] credential part: names each missing credential variable and sends nothing", async () => {
@@ -283,7 +300,8 @@ describe("a production stage's mail settings on Cloudflare (MAIL-AC-004, CF §2)
   });
 
   it("deploys the EMAIL send_email binding restricted to no-reply@<emailDomain>, FRAMEWORK_MAIL_FROM and nodejs_compat; a test stage binds no EMAIL", async () => {
-    const { cloud, target } = setup();
+    // A production stage also needs the account's auth app (DEC-0725).
+    const { cloud, target } = setup({ authApp: fakeAuthApp() });
     await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
     const io = captureIo();
     expect((await runDeploy(target, request(prod), io)).status).toBe(0);
@@ -298,6 +316,67 @@ describe("a production stage's mail settings on Cloudflare (MAIL-AC-004, CF §2)
     const testWorker = cloud.workers.get("notes-test-abc")!;
     expect(testWorker.bindings.some((b) => b.type === "send_email" || b.name === "EMAIL")).toBe(false);
     expect(cloud.programs.at(-1)).toContain('"FRAMEWORK_MAIL_FROM": "no-reply@example.test"');
+  });
+});
+
+describe("a production stage signs in through the account's auth app (plan-v0.2.0 §3, §4.1; DEC-0667, DEC-0725)", () => {
+  const prod = { app: "notes", stage: "prod" };
+
+  it("[PROV-AC-002] the preflight of a production stage names a missing auth app or registry and stops before creating anything; a test stage does not ask", async () => {
+    const authApp = fakeAuthApp(["the account's auth app (Worker prototype-auth) is not deployed; …"]);
+    const { cloud, target } = setup({ authApp });
+    await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
+    const io = captureIo();
+    expect((await runDeploy(target, request(prod), io)).status).toBe(1);
+    expect(io.err).toMatch(/deploy failed at step 1 \(preflight\)[\s\S]*the account's auth app \(Worker prototype-auth\) is not deployed/);
+    expect(cloud.sstRuns).toEqual([]);
+    expect(authApp.calls).toEqual(["problems"]);
+
+    expect((await runDeploy(target, request(), captureIo())).status).toBe(0);
+    expect(authApp.calls).toEqual(["problems"]);
+  });
+
+  it("a production deploy binds AUTH, sets the auth app's origin and registers <app>-<stage> with <origin>/api/auth/callback after the code; a test stage gets none of it", async () => {
+    const authApp = fakeAuthApp();
+    const { cloud, target } = setup({ authApp });
+    let seen: unknown;
+    // Registered once the code and its framework secrets are deployed, and before step 6 starts the app.
+    authApp.onRegister = () => (seen = { worker: cloud.workers.has("notes-prod"), secrets: cloud.workers.get("notes-prod")?.secrets.size, started: cloud.requests.includes(`POST /accounts/${ACCOUNT}/workers/scripts/notes-prod/subdomain`) });
+    await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
+    expect((await runDeploy(target, request(prod), captureIo())).status).toBe(0);
+    const worker = cloud.workers.get("notes-prod")!;
+    expect(worker.bindings).toContainEqual({ type: "service", name: "AUTH", service: "prototype-auth", entrypoint: "AuthApp" });
+    expect(cloud.programs.at(-1)).toContain('"FRAMEWORK_AUTH_APP_ORIGIN": "https://prototype-auth.example.workers.dev"');
+    expect(authApp.calls).toEqual(["problems", "register notes-prod https://notes-prod.example.workers.dev/api/auth/callback"]);
+    expect(seen).toEqual({ worker: true, secrets: 4, started: false });
+
+    expect((await runDeploy(target, request(), captureIo())).status).toBe(0);
+    expect(cloud.workers.get("notes-test-abc")!.bindings.some((b) => b.name === "AUTH")).toBe(false);
+    expect(cloud.programs.at(-1)).not.toContain("FRAMEWORK_AUTH_APP_ORIGIN");
+    expect(authApp.calls).toHaveLength(2);
+  });
+
+  it("step 3 of a production stage with a database declares the same AUTH binding as step 5", async () => {
+    const authApp = fakeAuthApp();
+    const { cloud, target } = setup({ authApp });
+    await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
+    await runDeploy(target, request(prod), captureIo());
+    const before = cloud.programs.length;
+    expect((await runDeploy(target, request(prod), captureIo())).status).toBe(0);
+    expect(cloud.sstRuns.at(-2)).toBe("deploy --stage prod --target Files");
+    for (const program of cloud.programs.slice(before)) expect(program).toContain('"name": "AUTH"');
+  });
+
+  it("a failed registration fails the deploy at step 5, naming the auth app, and the app is not started", async () => {
+    const authApp = fakeAuthApp([], new Error("the account's auth app (Worker prototype-auth) has no registry (its D1 binding DB); run account setup in the admin app again"));
+    const { cloud, target } = setup({ authApp });
+    await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
+    const io = captureIo();
+    const result = await runDeploy(target, request(prod), io);
+    expect(result.status).toBe(1);
+    expect(result.failure?.step).toBe("code");
+    expect(io.err).toContain("has no registry (its D1 binding DB)");
+    expect(cloud.requests.filter((r) => r.startsWith("POST ") && r.endsWith("/workers/scripts/notes-prod/subdomain"))).toEqual([]);
   });
 });
 
@@ -386,6 +465,65 @@ describe("deploy on Cloudflare (PROV-REQ-002 steps 3, 5, 6, 7)", () => {
     const secrets = cloud.workers.get("notes-test-abc")!.secrets;
     expect(secrets.get("SECRET_FRAMEWORK_R2_ACCESS_KEY_ID")).toBe("tok7");
     expect(secrets.get("SECRET_FRAMEWORK_R2_SECRET_ACCESS_KEY")).toBe("7".repeat(64));
+  });
+
+  describe("the signing credential bound from Secrets Store (plan-v0.2.0 D7, §10; DEC-0727, DEC-0729)", () => {
+    const R2_SECRETS = ["SECRET_FRAMEWORK_R2_ACCESS_KEY_ID", "SECRET_FRAMEWORK_R2_SECRET_ACCESS_KEY"];
+    /** The Worker-secret delete endpoint on the fake account; `seen` records the SST runs done at each delete. */
+    function allowSecretDeletes(cloud: FakeCloud, seen: number[]) {
+      for (const name of R2_SECRETS) {
+        cloud.override.set(`DELETE /accounts/${ACCOUNT}/workers/scripts/notes-test-abc/secrets/${name}`, () => {
+          seen.push(cloud.sstRuns.length);
+          const w = cloud.workers.get("notes-test-abc");
+          return w?.secrets.delete(name) === true ? { status: 200, body: { success: true, result: null } } : { status: 404, body: { success: false, errors: [{ code: 10056, message: "not found" }] } };
+        });
+      }
+    }
+
+    it("a deploy binds both S3 credentials from the store under the Worker secrets' names and copies neither; a stage holding copies has them deleted before the upload", async () => {
+      const { cloud, target } = setup();
+      const seen: number[] = [];
+      allowSecretDeletes(cloud, seen);
+      expect((await runDeploy(target, request(), captureIo())).status).toBe(0);
+      expect(cloud.workers.get("notes-test-abc")!.secrets.has("SECRET_FRAMEWORK_R2_ACCESS_KEY_ID")).toBe(true);
+
+      expect((await createAccountSigningCredential(cloud.api, ACCOUNT, { secretsStore: true })).where).toBe("secrets-store");
+      const runs = cloud.sstRuns.length;
+      const io = captureIo();
+      expect((await runDeploy(target, request(), io)).status, io.err).toBe(0);
+      const worker = cloud.workers.get("notes-test-abc")!;
+      expect(worker.bindings).toContainEqual({ type: "secrets_store_secret", name: "SECRET_FRAMEWORK_R2_ACCESS_KEY_ID", storeId: "store1", secretName: "PROTOTYPE_R2_ACCESS_KEY_ID" });
+      expect(worker.bindings).toContainEqual({ type: "secrets_store_secret", name: "SECRET_FRAMEWORK_R2_SECRET_ACCESS_KEY", storeId: "store1", secretName: "PROTOTYPE_R2_SECRET_ACCESS_KEY" });
+      expect([...worker.secrets.keys()].sort()).toEqual(["SECRET_FRAMEWORK_AUTH_SECRET", "SECRET_FRAMEWORK_SESSION_KEY"]);
+      // Deleted after step 3's targeted run and before step 5's upload, which takes their names.
+      expect(seen).toEqual([runs + 1, runs + 1]);
+      expect(cloud.programs.at(-1)).not.toContain(cloud.secretStores.get("store1")!.secrets.get("PROTOTYPE_R2_SECRET_ACCESS_KEY")!.value);
+    });
+
+    it("the Worker-secret fallback: once the record holds the credentials again, a deploy declares no Secrets Store binding and copies them", async () => {
+      const { cloud, target } = setup();
+      allowSecretDeletes(cloud, []);
+      await createAccountSigningCredential(cloud.api, ACCOUNT, { secretsStore: true });
+      expect((await runDeploy(target, request(), captureIo())).status).toBe(0);
+      cloud.override.set(`GET /accounts/${ACCOUNT}/secrets_store/stores?per_page=50`, { status: 403, body: { success: false, errors: [{ code: 10000, message: "Authentication error" }] } });
+      expect((await createAccountSigningCredential(cloud.api, ACCOUNT, { secretsStore: true })).where).toBe("record");
+      expect((await runDeploy(target, request(), captureIo())).status).toBe(0);
+      const worker = cloud.workers.get("notes-test-abc")!;
+      expect(worker.bindings.some((b) => b.type === "secrets_store_secret")).toBe(false);
+      const record = cloud.objectBodies.get("sst-state/framework/r2-signing.json") as { accessKeyId: string; secretAccessKey: string };
+      expect(worker.secrets.get("SECRET_FRAMEWORK_R2_ACCESS_KEY_ID")).toBe(record.accessKeyId);
+      expect(worker.secrets.get("SECRET_FRAMEWORK_R2_SECRET_ACCESS_KEY")).toBe(record.secretAccessKey);
+    });
+
+    it("[PROV-AC-002] unit part: with a store-held credential missing from the store, deploy stops at step 1 naming the signing credential", async () => {
+      const { cloud, target } = setup();
+      await createAccountSigningCredential(cloud.api, ACCOUNT, { secretsStore: true });
+      cloud.secretStores.get("store1")!.secrets.delete("PROTOTYPE_R2_SECRET_ACCESS_KEY");
+      const io = captureIo();
+      expect((await runDeploy(target, request(), io)).status).toBe(1);
+      expect(io.err).toMatch(/the account's shared resources are missing \(.*R2 signing credential prototype-r2-signing.*\)/);
+      expect(cloud.sstRuns).toEqual([]);
+    });
   });
 
   it("[PROV-AC-004] unit part: setup-account without Account API Tokens Write, while the signing credential is absent, names that permission and changes nothing (DEC-0551)", async () => {
