@@ -573,7 +573,7 @@ describe("cloudflare-setup: the bootstrap on a fresh account (v0.2.0 plan §5.1;
 });
 
 describe("cloudflare-setup: later runs (plan §3.4)", () => {
-  it("everything valid and current: says so and asks for nothing (the everyday token cannot read the plan: not checked)", async () => {
+  it("everything valid and current: says so and asks for nothing", async () => {
     const world = await setUpWorld();
     const dir = project({ env: everydayOnly({ CLOUDFLARE_ACCOUNT_ID: ACCOUNT }) });
     const before = readEnvFile(dir);
@@ -1026,7 +1026,7 @@ describe("cloudflare-setup: local setup, git and the network (plan §4.3 steps 0
     expect(reached).toEqual([]);
   });
 
-  it("a stop of the request layer while the setup record or the plan is read ends the run with the stop, never as unreadable setup or a bootstrap request (DEC-0619)", async () => {
+  it("a stop of the request layer while the setup record is read ends the run with the stop, never as unreadable setup or a bootstrap request (DEC-0619)", async () => {
     /** The world's API, stopped from the first request `from` matches on: that one and every later one reject. */
     const stoppingFrom = (world: SetupWorld, from: (method: string, path: string) => boolean) => {
       let stopped = false;

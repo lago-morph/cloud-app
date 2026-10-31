@@ -638,7 +638,7 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
     /**
      * The bootstrap (v0.2.0 plan §5.1): the token's own permissions, then (DEC-0683) it deletes
      * itself at the end of the run, its line is commented out and its value is never written. The
-     * everyday token, the account setup and the plan are not the bootstrap token's (DEC-0682).
+     * everyday token and the account setup are not the bootstrap token's (DEC-0682).
      */
     async function bootstrap(token: Token, api: CloudflareApi, to: Account, switchedTo: boolean): Promise<ProvisionStatus> {
       const missing = comparePolicies(bootPolicies, BOOTSTRAP, { accountId: to.id, zoneId: "*" }).missing;
