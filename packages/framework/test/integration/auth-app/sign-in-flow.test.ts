@@ -52,6 +52,7 @@ async function authGet(pathOrUrl: string, cookie?: string): Promise<Response> {
 
 async function binding(path: "/redeem" | "/role", body: unknown): Promise<unknown> {
   const res = await (await mf.getWorker("app")).fetch(`https://app.example${path}`, { method: "POST", body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(`binding ${path}: ${res.status} ${await res.text()}`);
   return ((await res.json()) as { result?: unknown }).result;
 }
 
@@ -130,6 +131,42 @@ describe("auth app sign-in flow against mock-oauth2-server", () => {
     }
   });
 
+  /** /start and the issuer's login, without the callback: the callback URL and the state cookie. */
+  async function upToCallback(sub: string, claims: Record<string, unknown>): Promise<{ callback: string; cookie: string }> {
+    const start = await authGet(`/start?${new URLSearchParams({ app: APP, return: RETURN, state: `st-${sub}` })}`);
+    await start.text();
+    const login = await fetch(start.headers.get("location")!, { method: "POST", redirect: "manual", body: new URLSearchParams({ username: sub, claims: JSON.stringify({ sub, ...claims }) }) });
+    return { callback: login.headers.get("location")!, cookie: cookieOf(start) };
+  }
+
+  it("refuses a callback carrying sign-in A's cookie with sign-in B's state", async () => {
+    const a = await upToCallback("sub-a", { email: "a@example.com", email_verified: true });
+    const b = await upToCallback("sub-b", { email: "b@example.com", email_verified: true });
+    const res = await authGet(b.callback, a.cookie);
+    expect(res.status).toBe(400);
+    expect(res.headers.get("location")).toBeNull();
+    await res.text();
+  });
+
+  it("refuses a replayed callback with no redirect", async () => {
+    edge.members.set("sub-replay", { memberships: [{ account: { id: ACCOUNT_ID }, status: "accepted", roles: [] }] });
+    const { callback, cookie } = await upToCallback("sub-replay", { email: "r@example.com", email_verified: true });
+    const first = await authGet(callback, cookie);
+    expect(first.status).toBe(302);
+    await first.text();
+    const again = await authGet(callback, cookie);
+    expect(again.status).toBe(400);
+    expect(again.headers.get("location")).toBeNull();
+    await again.text();
+  });
+
+  it("refuses an email the ID token marks unverified (DEC-0659)", async () => {
+    edge.members.set("sub-unverified", { memberships: [{ account: { id: ACCOUNT_ID }, status: "accepted", roles: [] }] });
+    const back = await signIn({ sub: "sub-unverified", claims: { email: "u@example.com", email_verified: false } });
+    expect(back.toString()).toBe(`${RETURN}?error=login_failed&state=app-state-1`);
+    await expect(binding("/role", { sub: "sub-unverified" })).resolves.toBeNull();
+  });
+
   it("refuses a callback from a browser that did not start the sign-in", async () => {
     const start = await authGet(`/start?${new URLSearchParams({ app: APP, return: RETURN, state: "s" })}`);
     await start.text();
@@ -153,6 +190,7 @@ describe("auth app sign-in flow against mock-oauth2-server", () => {
     const back = await signIn({ sub: "sub-race", claims: { email: "race@example.com", email_verified: true } });
     const code = back.searchParams.get("code");
     const results = await Promise.all(Array.from({ length: 6 }, () => binding("/redeem", { code, app: APP })));
-    expect(results.filter((r) => r !== null)).toHaveLength(1);
+    expect(results.filter((r) => r !== null)).toEqual([{ sub: "sub-race", email: "race@example.com", role: "user" }]);
+    expect(results.filter((r) => r === null)).toHaveLength(5);
   });
 });
