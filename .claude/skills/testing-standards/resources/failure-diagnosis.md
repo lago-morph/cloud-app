@@ -29,7 +29,7 @@ This workflow applies to every failure except a test that is red on purpose duri
 
 ## Steps
 
-An attempt is steps 1 to 6. Each step is done by its own subagent.
+An attempt is steps 1 to 6. Each step is done by the subagent it names.
 
 1. **Diagnose.** The diagnoser:
    - reproduces the failure;
