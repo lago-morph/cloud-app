@@ -40,9 +40,17 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 async function getJson(f: typeof fetch, url: string, what: string, init?: RequestInit): Promise<Record<string, unknown>> {
   let res: Response;
   try {
-    res = await f(url, { ...init, redirect: "error", headers: { accept: "application/json", ...init?.headers } });
+    // "manual", never "follow": a redirect must not re-send the client secret or a bearer token.
+    // ("error" would say so directly, but workerd's fetch rejects it: root cause
+    // 2026-10-31-A-workerd-fetch-redirect-error.)
+    res = await f(url, { ...init, redirect: "manual", headers: { accept: "application/json", ...init?.headers } });
   } catch {
     throw new SignInError(`${what}: unreachable`);
+  }
+  // Status 0 (an opaque redirect) does not occur with "manual" in workerd or Node; defensive only.
+  if (res.status === 0 || (res.status >= 300 && res.status < 400)) {
+    await res.body?.cancel();
+    throw new SignInError(`${what}: redirected`);
   }
   if (!res.ok) throw new SignInError(`${what} (${res.status})`);
   const body: unknown = await res.json().catch(() => undefined);
@@ -121,7 +129,7 @@ export async function revokeTokens(f: typeof fetch, d: Discovery, c: ClientCrede
   const failed: TokenKind[] = [];
   for (const { token, hint } of tokens) {
     try {
-      const res = await f(d.revocationEndpoint, { ...form({ token, token_type_hint: hint, client_id: c.clientId, client_secret: c.clientSecret }), redirect: "error" });
+      const res = await f(d.revocationEndpoint, { ...form({ token, token_type_hint: hint, client_id: c.clientId, client_secret: c.clientSecret }), redirect: "manual" });
       if (!res.ok) failed.push(hint);
       await res.body?.cancel();
     } catch {

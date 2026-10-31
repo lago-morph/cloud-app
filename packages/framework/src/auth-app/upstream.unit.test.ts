@@ -119,15 +119,42 @@ describe("upstream failures (no redirects followed, fixed reasons, no secrets)",
   const SECRET = "client-secret-SENTINEL";
   const raw = (status: number, body: string) => (async () => new Response(body, { status })) as unknown as typeof fetch;
 
-  it("sends every upstream request with redirect: error, so a 3xx never re-posts the secret", async () => {
+  /**
+   * workerd's fetch rule (root cause 2026-10-31-A-workerd-fetch-redirect-error): any redirect mode
+   * other than unset, "follow" or "manual" throws TypeError before any I/O. The guard also fails
+   * any upstream call that does not pass "manual", so a later default ("follow") cannot slip in.
+   */
+  const workerdFetch = (inner: typeof fetch): typeof fetch =>
+    ((input: RequestInfo | URL, init?: RequestInit) => {
+      const mode = init?.redirect;
+      if (mode !== undefined && mode !== "follow" && mode !== "manual") throw new TypeError(`Invalid redirect value, must be one of "follow" or "manual"`);
+      if (mode !== "manual") throw new Error(`upstream call without redirect: "manual": ${String(input)}`);
+      return inner(input, init);
+    }) as typeof fetch;
+
+  it("works under workerd's fetch rule and never follows a redirect (redirect: manual on every call)", async () => {
     const up = fakeUpstream({ key, expect: { clientSecret: SECRET } });
-    const d = await loadDiscovery(up.fetch, FAKE_DISCOVERY);
-    await exchangeCode(up.fetch, d, { clientId: FAKE_CLIENT_ID, clientSecret: SECRET, code: "c", verifier: "v", redirectUri: CALLBACK });
-    await loadJwks(up.fetch, d);
-    await revokeTokens(up.fetch, d, { clientId: FAKE_CLIENT_ID, clientSecret: SECRET }, [{ token: ACCESS_TOKEN, hint: "access_token" }]);
-    await fetchUserEmail(up.fetch, FAKE_API, ACCESS_TOKEN);
-    await fetchMemberships(up.fetch, FAKE_API, ACCESS_TOKEN);
-    expect(up.requests.map((r) => r.redirect)).toEqual(Array(up.requests.length).fill("error"));
+    const f = workerdFetch(up.fetch);
+    const d = await loadDiscovery(f, FAKE_DISCOVERY);
+    await expect(exchangeCode(f, d, { clientId: FAKE_CLIENT_ID, clientSecret: SECRET, code: "c", verifier: "v", redirectUri: CALLBACK })).resolves.toMatchObject({ accessToken: ACCESS_TOKEN });
+    await expect(loadJwks(f, d)).resolves.toHaveLength(1);
+    await expect(revokeTokens(f, d, { clientId: FAKE_CLIENT_ID, clientSecret: SECRET }, [{ token: ACCESS_TOKEN, hint: "access_token" }])).resolves.toEqual([]);
+    await expect(fetchUserEmail(f, FAKE_API, ACCESS_TOKEN)).resolves.toBe("from-user@example.com");
+    await expect(fetchMemberships(f, FAKE_API, ACCESS_TOKEN)).resolves.toEqual([]);
+    expect(up.requests.map((r) => r.redirect)).toEqual(Array(up.requests.length).fill("manual"));
+  });
+
+  it("refuses a 3xx from the token endpoint or the API as redirected, and never requests its target", async () => {
+    const seen: string[] = [];
+    const redirecting = (async (input: RequestInfo | URL) => {
+      seen.push(String(input));
+      return new Response("moved", { status: 307, headers: { location: "https://evil.example/steal" } });
+    }) as typeof fetch;
+    const d = await loadDiscovery(fakeUpstream({ key }).fetch, FAKE_DISCOVERY);
+    expect(await reason(exchangeCode(redirecting, d, { clientId: FAKE_CLIENT_ID, clientSecret: SECRET, code: "c", verifier: "v", redirectUri: CALLBACK }))).toBe("token exchange rejected: redirected");
+    expect(await reason(fetchMemberships(redirecting, FAKE_API, ACCESS_TOKEN))).toBe("memberships failed: redirected");
+    await expect(revokeTokens(redirecting, d, { clientId: FAKE_CLIENT_ID, clientSecret: SECRET }, [{ token: ACCESS_TOKEN, hint: "access_token" }])).resolves.toEqual(["access_token"]);
+    expect(seen.some((u) => u.includes("evil.example"))).toBe(false);
   });
 
   it("names an unreachable endpoint", async () => {
