@@ -24,13 +24,15 @@ Reference material:
 | Conventions, system spec, component map, decision log, parameters register | Reviewed by owner |
 | Component designs, contracts, demo spec, end-to-end scenarios | Reviewed by owner |
 
+"Reviewed by owner" records a past review. It is not an approval gate for later changes: those follow each item's origin (CONVENTIONS §4), and agents keep the end-to-end scenarios current without owner approval.
+
 
 ## Release scope
 
 Release 1 targets **local and Cloudflare** (DEC-0508, owner, 2026-10-24). The AWS target is deferred to a later release: its code, tests and evidence are on the branch `aws`, and the index for resuming it is `ai/implementation/aws-deferred.md`. SYS-REQ-001 and SYS-REQ-026 carry an amendment note for release 1. [components/aws.md](components/aws.md) is kept for the record, and the AWS sections and lines of the other documents are marked "deferred (branch `aws`)". The compliance harness and its traceability and release reports judge local and Cloudflare only.
 
-## Login in release 1
+## Login in release 1 (v0.2.0)
 
-The real login provider is email and password with mandatory email verification (DEC-0509, DEC-0511), run in the app's own deployment: [components/password.md](components/password.md) (PWD) and [components/mail.md](components/mail.md) (MAIL), with the internal contracts [contracts/ts/internal/login-provider.d.ts](contracts/ts/internal/login-provider.d.ts) (`CredentialProvider`) and [contracts/http/internal/auth-password.openapi.yaml](contracts/http/internal/auth-password.openapi.yaml). The email domain is one account setting (DEC-0514). Google sign-in is dropped (DEC-0513): [components/google.md](components/google.md) is kept, marked retired, and its code is on the branch `google`. SYS-REQ-019, SYS-REQ-026 and SYS-REQ-027 carry an amendment note for release 1.
+The real login is sign-in with Cloudflare, through the account's shared auth app (DEC-0691): only members of the owner's Cloudflare account can sign in. An app redirects to the auth app, which runs Cloudflare's OAuth flow and returns a one-time code that the app redeems over a service binding; the app keeps its own session. See [components/auth.md](components/auth.md) (AUTH) and the internal contracts [contracts/ts/internal/login-provider.d.ts](contracts/ts/internal/login-provider.d.ts) (`LoginProvider`) and [contracts/ts/internal/auth-app.d.ts](contracts/ts/internal/auth-app.d.ts) (the auth app's binding). Email and password login and the framework's email are removed: [components/password.md](components/password.md) (PWD) and [components/mail.md](components/mail.md) (MAIL) are kept, marked retired (DEC-0696). Google sign-in stays dropped (DEC-0513): [components/google.md](components/google.md) is kept, marked retired, and its code is on the branch `google`.
 
-Anyone who signs up and verifies their address is a user, and admins hold the `admin` role in the stage's database, granted with the operator command `admins` (DEC-0521…DEC-0526). Configuration holds no admin or users list. SYS-REQ-018 carries an amendment note.
+A member whose Cloudflare account role is an administrator role is an admin; any other member is a user (DEC-0690). A role change takes effect at the person's next sign-in or role refresh. Configuration holds no admin or users list, and there is no `admins` command. The real sign-in is checked by the owner once per release, and its automated parts on every cloud run (DEC-0692). SYS-REQ-018, SYS-REQ-019, SYS-REQ-026 and SYS-REQ-027 carry v0.2.0 amendments.
