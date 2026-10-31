@@ -142,4 +142,16 @@ describe("PROV-REQ-002 production sign-in prerequisite on the fake Cloudflare AP
       expect(io.out).not.toMatch(/sender address/);
     });
   }
+
+  it("fake API: redeploying a stage whose Worker still has a 0.1.x EMAIL binding drops it (the upload carries exactly the declared bindings)", async () => {
+    const { cloud, target } = account("deployed", "0.1.x");
+    expect((await runDeploy(target, REQUEST, captureIo())).status).toBe(0);
+    const worker = cloud.workers.get(APP_ID)!;
+    // The stage as 0.1.x left it: an EMAIL send_email binding on the Worker.
+    worker.bindings = [...worker.bindings, { type: "send_email", name: "EMAIL" }];
+    const io = captureIo();
+    expect((await runDeploy(target, REQUEST, io)).status, io.err).toBe(0);
+    expect(cloud.workers.get(APP_ID)!.bindings.filter((b) => b.type === "send_email" || b.name === "EMAIL")).toEqual([]);
+    expect(cloud.workers.get(APP_ID)!.bindings).toContainEqual({ type: "service", name: "AUTH", service: "prototype-auth", entrypoint: "AuthApp" });
+  });
 });
