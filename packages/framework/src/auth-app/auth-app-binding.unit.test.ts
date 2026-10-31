@@ -57,11 +57,52 @@ describe("fake auth-app binding: redeem", () => {
     expect(fake.issueCode(alice, { app: "a" })).not.toBe(fake.issueCode(alice, { app: "a" }));
   });
 
-  it("lets exactly one of several concurrent redemptions of one code succeed", async () => {
+  it("lets exactly one of several concurrent redemptions of one code succeed, wrong-app ones racing too", async () => {
     const fake = createFakeAuthAppBinding();
     const code = fake.issueCode(alice, { app: "a" });
-    const results = await Promise.all(Array.from({ length: 8 }, () => fake.redeem({ code, app: "a" })));
-    expect(results.filter((r) => r !== null)).toHaveLength(1);
+    const results = await Promise.all(Array.from({ length: 8 }, (_, i) => fake.redeem({ code, app: i % 2 === 0 ? "a" : "b" })));
+    expect(results.filter((r) => r !== null)).toEqual([alice]);
+  });
+
+  it("issues codes in the real format: 43 base64url characters", () => {
+    const fake = createFakeAuthAppBinding();
+    expect(fake.issueCode(alice, { app: "a" })).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  });
+
+  it("refuses app IDs that only resemble the issuing one, without using the code up", async () => {
+    const fake = createFakeAuthAppBinding();
+    const code = fake.issueCode(alice, { app: "notes-prod" });
+    for (const app of ["notes", "notes-prod ", "Notes-prod", "notes-prоd" /* Cyrillic о */, "notes-prod́", ""]) {
+      await expect(fake.redeem({ code, app }), app).resolves.toBeNull();
+    }
+    await expect(fake.redeem({ code, app: "notes-prod" })).resolves.toEqual(alice);
+  });
+
+  it("refuses an expired code even with the right app", async () => {
+    const c = clock();
+    const fake = createFakeAuthAppBinding({ now: c.now });
+    const code = fake.issueCode(alice, { app: "a" });
+    c.advance(AUTH_APP_CODE_LIFETIME_MS + 1);
+    await expect(fake.redeem({ code, app: "a" })).resolves.toBeNull();
+  });
+
+  it("is bound to the return URL: after unregisterApp the code is refused", async () => {
+    const fake = createFakeAuthAppBinding();
+    const code = fake.issueCode(alice, { app: "a", returnUrl: "https://a.example/api/auth/callback" });
+    const other = fake.issueCode(alice, { app: "b" });
+    fake.unregisterApp("a");
+    await expect(fake.redeem({ code, app: "a" })).resolves.toBeNull();
+    await expect(fake.redeem({ code: other, app: "b" })).resolves.toEqual(alice);
+  });
+
+  it("returns the user as stored at redeem time: a later role change shows, a removed user is null", async () => {
+    const fake = createFakeAuthAppBinding();
+    const changed = fake.issueCode(alice, { app: "a" });
+    fake.setRole("sub-alice", "admin");
+    await expect(fake.redeem({ code: changed, app: "a" })).resolves.toEqual({ ...alice, role: "admin" });
+    const removed = fake.issueCode(alice, { app: "a" });
+    fake.setRole("sub-alice", null);
+    await expect(fake.redeem({ code: removed, app: "a" })).resolves.toBeNull();
   });
 });
 
@@ -92,6 +133,14 @@ describe("fake auth-app binding: failures and call counts", () => {
     await expect(fake.role("sub-bob")).rejects.toThrow(/auth app unavailable/);
     await expect(fake.redeem({ code: "x", app: "a" })).rejects.toThrow(/auth app unavailable/);
     await expect(fake.role("sub-bob")).resolves.toBe("user");
+  });
+
+  it("failNext replaces the pending count rather than adding to it", async () => {
+    const fake = createFakeAuthAppBinding();
+    fake.failNext(2);
+    fake.failNext(1);
+    await expect(fake.role("s")).rejects.toThrow();
+    await expect(fake.role("s")).resolves.toBeNull();
   });
 
   it("a failed redeem does not use the code up", async () => {
