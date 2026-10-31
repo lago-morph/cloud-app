@@ -1,0 +1,137 @@
+# STAGED COPY (DEC-0637): this file replaces .github/workflows/ci.yml. The session that wrote
+# it had no `workflow` token scope; copy it over .github/workflows/ci.yml, then delete this one.
+#
+# Checks on every pull request (plan-v0.2.0 §7a.2.4, TS-11, TS-16, TS-19). No Cloudflare secrets:
+# nothing here deploys or calls a cloud. Actions are pinned to full commit SHAs.
+# A first job classifies the PR's changed files against scripts/ci/path-map.json and prints the
+# classification; the other jobs run only the linters and test layers it selects. Criteria and
+# scenarios run only through the compliance harness (`npm run compliance`), never bare (P0).
+# Every test runs at release (release.yml).
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      build: ${{ steps.classify.outputs.build }}
+      linters: ${{ steps.classify.outputs.linters }}
+      unit: ${{ steps.classify.outputs.unit }}
+      unit_files: ${{ steps.classify.outputs.unit_files }}
+      ids: ${{ steps.classify.outputs.ids }}
+      direct: ${{ steps.classify.outputs.direct }}
+      chromium: ${{ steps.classify.outputs.chromium }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.22.0 # engines pin (packages/framework/package.json)
+      # HEAD is GitHub's merge commit of the PR, so `git diff base HEAD` is exactly the PR's change.
+      - name: Classification
+        id: classify
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/ci/classify.mjs --base "$PR_BASE" --github-output "$GITHUB_OUTPUT"
+
+  # Linters for the changed files (TS-12) and the unit layer (all of it on any code change; on a
+  # docs change only the unit tests that read that doc).
+  checks:
+    needs: classify
+    if: needs.classify.outputs.build == 'true' || needs.classify.outputs.linters != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      LINTERS: ${{ needs.classify.outputs.linters }}
+      UNIT: ${{ needs.classify.outputs.unit }}
+      UNIT_FILES: ${{ needs.classify.outputs.unit_files }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.22.0
+          cache: npm
+      - run: npm ci
+      - name: Build
+        run: npm run build -w packages/framework
+      - name: Typecheck
+        if: contains(needs.classify.outputs.linters, 'typecheck')
+        run: npm run typecheck
+      - name: Lint (eslint)
+        if: contains(needs.classify.outputs.linters, 'eslint')
+        run: npm run lint
+      - name: Unit tests (all)
+        if: needs.classify.outputs.unit == 'all'
+        run: npm run test:unit
+      - name: Unit tests that read the changed docs
+        if: needs.classify.outputs.unit == 'files'
+        run: npx vitest run --config vitest.unit.config.ts $UNIT_FILES
+      - name: Package contents
+        if: contains(needs.classify.outputs.linters, 'pack')
+        run: npm pack --dry-run --workspace packages/framework --workspace packages/create-prototype-app --workspace packages/prototype-framework-skill
+
+  # The selected integration tests and e2e scenarios. The harness runs each test tagged with one
+  # of IDS exactly once (Vitest integration config, Playwright integration, e2e-api, e2e-ui);
+  # the untagged tests of the selected framework, skill and starter suites run directly.
+  compliance:
+    needs: classify
+    if: needs.classify.outputs.ids != '' || needs.classify.outputs.direct != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      IDS: ${{ needs.classify.outputs.ids }}
+      DIRECT: ${{ needs.classify.outputs.direct }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.22.0
+          cache: npm
+      - run: npm ci
+      - name: Playwright browser (only when a selected test drives a browser)
+        if: needs.classify.outputs.chromium == 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Build
+        run: npm run build -w packages/framework
+      # The runner sets the reference app's local test secret before a local compliance run
+      # (DEC-0277, DEC-0398; root cause ai/implementation/root-causes/2026-10-31-P0-apikey-local-runner-step.md).
+      # A fresh random value each run; it is never printed and never stored.
+      - name: Reference app's local test secret
+        working-directory: apps/reference
+        run: node -e "process.stdout.write(require('crypto').randomBytes(24).toString('hex'))" | npm run secrets -- set apiKey --target local --stage local
+      - name: Untagged integration tests of the selected suites (no criterion tag; the harness runs the tagged ones)
+        if: env.DIRECT != ''
+        run: npx vitest run --config vitest.integration.config.ts $DIRECT -t '^(?!.*\[(?:[A-Z]+-AC|E2E)-\d{3}\])' --passWithNoTests
+      - name: Criteria and scenarios through the compliance harness
+        if: env.IDS != ''
+        run: npm run compliance -- --target local --only "$IDS" --out "$RUNNER_TEMP/compliance"
+
+  # The one status to require: fails when any selected job failed or was cancelled.
+  verify:
+    needs: [classify, checks, compliance]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Selected jobs passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "classify, checks, compliance: $RESULTS"
+          case " $RESULTS " in *" failure "*|*" cancelled "*) exit 1 ;; esac
