@@ -46,7 +46,7 @@ Each **capability** component (SQL, KV, FILES, …) owns its portable contract a
 | Code | Name | Responsibility |
 | --- | --- | --- |
 | [`PROV`](../components/provisioning.md) | Provisioning | Target-neutral resource declaration, per-target provisioning, deploy and remove, stage isolation, one-time setup of the shared log bucket. |
-| [`SETUP`](../components/setup.md) | Cloudflare setup | The re-runnable `cloudflare-setup` command: the tokens' sources and checks, the account and email domain, the account setup record, the everyday token's in-place upgrade and the bootstrap token's self-deletion (DEC-0603). |
+| [`SETUP`](../components/setup.md) | Cloudflare setup | The re-runnable `cloudflare-setup` command: the tokens' sources and checks, the bootstrap (the two OAuth clients, their secrets in Secrets Store, the admin app's deploy, and the bootstrap token's self-deletion), the check of the account setup record and the everyday token made in the admin app, the git warnings and the network check (DEC-0697). |
 | [`CHECK`](../components/check.md) | Static checks | Portability rules for app code and the migration checker. |
 | [`CLI`](../components/cli.md) | Developer commands | `dev`, the scripted pre-completion verification command (SYS-REQ-025), `build`, `deploy`, `remove`. |
 | [`COMPL`](../components/compliance.md) | Compliance suite | One contract test suite run identically on all targets; evidence recording. |
@@ -69,7 +69,7 @@ Every app-facing component depends on CORE; that dependency is not repeated belo
 | AUTH | HTTP, CFG | Login and logout are HTTP routes; a session's level comes from the role the account's auth app confirms through the `AUTH` service binding, at sign-in and at each role refresh (SYS-REQ-018, SYS-REQ-019). |
 | LOCAL, CF, AWS | All capability components | Each target provides every capability (SYS-REQ-001). (AWS: deferred, branch `aws`.) |
 | PROV | CFG, SEC, MIG, LOG, CF, AWS, HTTP, AUTH | Deployment supplies configuration and secret locations, applies migrations, and sets up the shared log bucket (SYS-REQ-012, SYS-REQ-021, SYS-REQ-023); it calls the HTTP health route and checks the login provider's prerequisites (PROV-REQ-002); on Cloudflare it binds the stage to the auth app and writes and clears the stage's return URL in the auth app's registry (plan-v0.2.0 §3). |
-| SETUP | PROV, CF, CLI | Runs PROV's account setup steps on Cloudflare with the bootstrap token, and the local setup and git checks the CLI shares (SYS-REQ-022, SYS-REQ-023). |
+| SETUP | PROV, CF, CLI | Bootstraps the account's admin app with the bootstrap token, checks the account setup that the admin app does, and runs the local setup and git checks the CLI shares (SYS-REQ-022, SYS-REQ-023). |
 | CHECK | SQL, MIG | Enforces SQL portability and checks migrations (SYS-REQ-011, SYS-REQ-025). |
 | CLI | LOCAL, CHECK, PROV, MIG, SEC, PWD, MAIL, CORE, COMPL | Local development, the verification command, deploy and remove, migration generation, setting secrets, the real-provider check `check-login`, reading mail with `mail`, and granting the admin role with `admins` (SYS-REQ-018, SYS-REQ-022, SYS-REQ-025, SYS-REQ-027); `smoke` uses CORE's `./testing` and writes COMPL evidence (CLI-REQ-001). |
 | COMPL | All capability and target components | Verifies every contract on every target (SYS-REQ-026). |
