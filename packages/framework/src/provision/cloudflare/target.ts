@@ -75,7 +75,7 @@ import { deleteObjects, listObjectKeys } from "./objects.js";
 import { deleteSigningToken, findLegacySigningToken, readSigningPlacement, SIGNING_RESOURCE, SIGNING_SECRET_NAMES, signingCredentialState, tokenWriteProblems, type SigningPlacement } from "./r2-token.js";
 import { INFRASTRUCTURE_COMPONENT, processSstExec, runSst, writeSstApp, type SecretsStoreBinding, type SstExec, type WorkerCode } from "./sst.js";
 import { appOrigin } from "./oauth-clients.js";
-import { AUTH_APP_SCRIPT, AUTH_CALLBACK_PATH, cloudflareAuthAppLink, deleteSecret, listSetSecrets, setRoute, setSecret, type AuthAppLink } from "./worker.js";
+import { AUTH_APP_SCRIPT, AUTH_CALLBACK_PATH, cloudflareAuthAppLink, deleteSecret, listSetSecrets, logicalSecretName, setRoute, setSecret, type AuthAppLink } from "./worker.js";
 
 /** What FILES (D-02) supplies to provisioning. */
 export interface CloudflareFilesProvisioning {
@@ -274,8 +274,10 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       const placement = await signingPlacement();
       const fromStore = placement.kind === "secrets-store" ? { secretsStore: signingBindings(placement.storeId) } : {};
       const worker = { ...(await workerInput(input, input.database, options.code)), ...fromStore };
-      // A Worker cannot hold a secret and a binding of one name: copies an earlier deploy made go first (DEC-0727).
-      if (placement.kind === "secrets-store") for (const name of [FRAMEWORK_SECRETS.r2AccessKeyId, FRAMEWORK_SECRETS.r2SecretAccessKey]) await deleteSecret(api, accountId, input.stage, name);
+      // A Worker cannot hold a secret and a binding of one name: copies an earlier deploy made go first,
+      // exactly the names bound (DEC-0727). Should the upload then fail, the stage has neither until the
+      // next successful deploy, which the step's failure already asks for.
+      for (const b of fromStore.secretsStore ?? []) await deleteSecret(api, accountId, input.stage, logicalSecretName(b.binding)!);
       writeSstApp(dir, { stage: input.stage, worker });
       await runSst(sst, sstRun(input.stage), "deploy");
       await ensureFrameworkSecrets(input.stage, placement);

@@ -206,11 +206,55 @@ describe("the signing credential in Secrets Store (plan-v0.2.0 §5.2 page 1, D7,
   it("with Secrets Store unavailable it falls back to the record holding the credentials, as before (Worker secrets at deploy)", async () => {
     const cloud = FakeCloud.withSharedResources();
     cloud.override.set(`GET /accounts/${FAKE_ACCOUNT}/secrets_store/stores?per_page=50`, err(403, 10000, "Authentication error"));
-    expect((await createAccountSigningCredential(cloud.api, FAKE_ACCOUNT, { secretsStore: true })).where).toBe("record");
+    const result = await createAccountSigningCredential(cloud.api, FAKE_ACCOUNT, { secretsStore: true });
+    expect(result).toMatchObject({ where: "record", reason: expect.stringMatching(/HTTP 403/) as unknown });
     const record = cloud.objectBodies.get(RECORD_KEY) as { tokenId: string; secretAccessKey?: string; secretsStore?: unknown };
     expect(record.secretAccessKey).toBe(hex(`value-of-${record.tokenId}`));
     expect(record.secretsStore).toBeUndefined();
     expect(await readSigningPlacement(cloud.api, FAKE_ACCOUNT)).toEqual({ kind: "worker-secrets", credentials: { id: record.tokenId, accessKeyId: record.tokenId, secretAccessKey: record.secretAccessKey } });
+  });
+
+  const tokenNames = (cloud: FakeCloud) => [...cloud.tokens.keys()].sort();
+  const fail500 = { status: 500, body: { success: false, errors: [{ code: 10001, message: "internal" }], result: null } };
+
+  it("any other store failure before a write throws instead of falling back: the new token is deleted again, the old one and its record stay (review M2)", async () => {
+    const cloud = FakeCloud.withSharedResources();
+    const before = structuredClone(cloud.objectBodies.get(RECORD_KEY));
+    cloud.override.set(`GET /accounts/${FAKE_ACCOUNT}/secrets_store/stores?per_page=50`, fail500);
+    await expect(createAccountSigningCredential(cloud.api, FAKE_ACCOUNT, { secretsStore: true })).rejects.toThrow(/Secrets Store.*HTTP 500/);
+    expect(tokenNames(cloud)).toEqual(["tok0"]);
+    expect(cloud.objectBodies.get(RECORD_KEY)).toEqual(before);
+  });
+
+  it("once a put may have reached the store, a failure throws and keeps the new token and every old one, so stages bound to the store keep a live key; a re-run repairs it (review M1, M2)", async () => {
+    // The second secret's PATCH fails on a re-run, after the first secret already holds the new token's key ID.
+    const cloud = FakeCloud.withSharedResources();
+    await createAccountSigningCredential(cloud.api, FAKE_ACCOUNT, { secretsStore: true });
+    const first = tokenNames(cloud);
+    const secretId = store(cloud).get("PROTOTYPE_R2_SECRET_ACCESS_KEY")!.id;
+    cloud.override.set(`PATCH /accounts/${FAKE_ACCOUNT}/secrets_store/stores/store1/secrets/${secretId}`, fail500);
+    const failure = await createAccountSigningCredential(cloud.api, FAKE_ACCOUNT, { secretsStore: true }).then(() => "", (e: unknown) => String(e));
+    expect(failure).toMatch(/Secrets Store may hold part of the new R2 signing credential .*run account setup again/);
+    expect(failure).not.toMatch(/[0-9a-f]{64}/);
+    expect(tokenNames(cloud)).toHaveLength(first.length + 1);
+    expect(tokenNames(cloud)).toEqual(expect.arrayContaining(first));
+
+    // A record that cannot be written after both puts: the store already holds the new token's key, so the token stays.
+    const again = FakeCloud.withSharedResources();
+    again.override.set(`PUT /accounts/${FAKE_ACCOUNT}/r2/buckets/sst-state/objects/${encodeURIComponent(SIGNING_RECORD_KEY)}`, fail500);
+    await expect(createAccountSigningCredential(again.api, FAKE_ACCOUNT, { secretsStore: true })).rejects.toThrow(/run account setup again/);
+    expect(tokenNames(again)).toHaveLength(2);
+    expect(store(again).get("PROTOTYPE_R2_ACCESS_KEY_ID")?.value).toBe(tokenNames(again).find((t) => t !== "tok0"));
+  });
+
+  it("checking a store-held credential names Secrets Store Read when the store cannot be listed; a store-form record without its key ID is invalid", async () => {
+    const cloud = FakeCloud.withSharedResources();
+    await createAccountSigningCredential(cloud.api, FAKE_ACCOUNT, { secretsStore: true });
+    cloud.override.set(`GET /accounts/${FAKE_ACCOUNT}/secrets_store/stores/store1/secrets?per_page=100`, err(403, 10000, "Authentication error"));
+    await expect(signingCredentialState(cloud.api, FAKE_ACCOUNT)).rejects.toThrow(/needs "Secrets Store Read".*HTTP 403/);
+    const { accessKeyId: _id, ...noKeyId } = cloud.objectBodies.get(RECORD_KEY) as Record<string, unknown>;
+    cloud.objectBodies.set(RECORD_KEY, noKeyId);
+    await expect(readSigningPlacement(cloud.api, FAKE_ACCOUNT)).rejects.toThrow(/not a valid signing record/);
   });
 
   it("a store-held credential is absent (setup runs again) when either secret is missing or tagged with another token", async () => {
