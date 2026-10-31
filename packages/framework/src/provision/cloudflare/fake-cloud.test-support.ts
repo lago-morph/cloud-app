@@ -138,8 +138,13 @@ export class FakeCloud {
   readonly failSst = new Set<string>();
   /** SST's state per `<app>/<stage>`: the logical names of the components it holds. */
   readonly sstState = new Map<string, Set<string>>();
+  /** OAuth clients (`…/oauth_clients`) by client ID: the create body's name and the secret its create answer showed once. */
+  readonly oauthClients = new Map<string, { id: string; name: string; body: Record<string, unknown>; secret: string }>();
+  /** Secrets Store stores by ID (one by default, as on the live account), each with its secrets by name; values are write-only on the API. */
+  readonly secretStores = new Map<string, { name: string; secrets: Map<string, { id: string; value: string; scopes?: unknown; comment?: string }> }>([["store1", { name: "default_secrets_store", secrets: new Map() }]]);
   private nextToken = 1;
   private nextZoneThing = 1;
+  private nextClient = 1;
 
   constructor() {
     for (const name of ["example.test", "one.example", "two.example"]) this.addZone(name);
@@ -219,6 +224,7 @@ export class FakeCloud {
     }
     let m = /^\/accounts\/[^/]+\/tokens\/([^/]+)$/.exec(p);
     if (m && method === "DELETE") return this.tokens.delete(m[1]!) ? ok({ id: m[1] }) : err(404, 1003, "not found");
+    if (p.startsWith(`${A}/oauth_clients`) || p.startsWith(`${A}/secrets_store`)) return this.handleBootstrapResources(method, p, body);
 
     // The everyday token's quick-check reads (permissions.ts `probeEveryday`).
     if (p === `${A}/workers/scripts` && method === "GET") return ok([...this.workers.keys()].map((id) => ({ id })));
@@ -334,6 +340,47 @@ export class FakeCloud {
 
   private zoneById(id: string): FakeZone | undefined {
     return [...this.zones.values()].find((z) => z.id === id);
+  }
+
+  /** The OAuth clients and the Secrets Store (v0.2.0 plan §5.1 step 2), as `oauth-clients.ts` and `secrets-store.ts` call them. */
+  private handleBootstrapResources(method: string, p: string, body: unknown): ApiReply {
+    if (p === `${A}/oauth_clients` && method === "GET") return ok([...this.oauthClients.values()].map((c) => ({ client_id: c.id, name: c.name })));
+    if (p === `${A}/oauth_clients` && method === "POST") {
+      const b = body as Record<string, unknown>;
+      const n = this.nextClient++;
+      const client = { id: `client${n}`, name: String(b.name), body: b, secret: `fake-oauth-client-secret-${n}` };
+      this.oauthClients.set(client.id, client);
+      return ok({ ...b, client_id: client.id, client_secret: client.secret });
+    }
+    const c = /^\/accounts\/[^/]+\/oauth_clients\/([^/]+)$/.exec(p);
+    if (c && method === "DELETE") return this.oauthClients.delete(c[1]!) ? ok({ client_id: c[1] }) : err(404, 1003, "not found");
+    if (p === `${A}/secrets_store/stores` && method === "GET") return ok([...this.secretStores].map(([id, s]) => ({ id, name: s.name })));
+    if (p === `${A}/secrets_store/stores` && method === "POST") {
+      const id = `store${this.secretStores.size + 1}`;
+      this.secretStores.set(id, { name: String((body as { name?: unknown }).name), secrets: new Map() });
+      return ok({ id, name: (body as { name?: unknown }).name });
+    }
+    const s = /^\/accounts\/[^/]+\/secrets_store\/stores\/([^/]+)\/secrets(?:\/([^/]+))?$/.exec(p);
+    const store = s ? this.secretStores.get(s[1]!) : undefined;
+    if (s === null || store === undefined) return err(404, 1003, "not found");
+    if (s[2] === undefined && method === "GET") return ok([...store.secrets].map(([name, x]) => ({ id: x.id, name, ...(x.comment === undefined ? {} : { comment: x.comment }) })));
+    if (s[2] === undefined && method === "POST") {
+      const made = (body as { name: string; value: string; scopes?: unknown; comment?: string }[]).map((x) => {
+        if (store.secrets.has(x.name)) return undefined;
+        const secret = { id: `sec${this.nextClient++}`, value: x.value, scopes: x.scopes, ...(x.comment === undefined ? {} : { comment: x.comment }) };
+        store.secrets.set(x.name, secret);
+        return { id: secret.id, name: x.name };
+      });
+      return made.includes(undefined) ? err(409, 1001, "secret name already exists") : ok(made);
+    }
+    const entry = [...store.secrets.values()].find((x) => x.id === s[2]);
+    if (entry !== undefined && method === "PATCH") {
+      entry.value = String((body as { value?: unknown }).value);
+      const comment = (body as { comment?: unknown }).comment;
+      if (typeof comment === "string") entry.comment = comment;
+      return ok({ id: entry.id });
+    }
+    return err(404, 1003, "not found");
   }
 
   private handleZone(method: string, url: URL, body: unknown): ApiReply {
