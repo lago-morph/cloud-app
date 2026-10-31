@@ -70,6 +70,28 @@ describe("remove core (PROV-REQ-003)", () => {
     expect(err).toMatch(/leftovers could not be listed/);
   });
 
+  it("unregisters the stage through the target's optional hook before it deletes anything; a failed unregister is reported and the rest is still removed (DEC-0725, DEC-0780)", async () => {
+    for (const failing of [false, true]) {
+      const t = twoStages();
+      const hooked = Object.assign(t, {
+        unregisterStage: async (s: typeof one) => {
+          t.calls.push(`unregisterStage ${s.app}/${s.stage}`);
+          if (failing) throw new Error("the registry could not be reached");
+        },
+      });
+      const io = captureIo();
+      const result = await runRemove(hooked, one, io);
+      const at = (prefix: string) => t.calls.findIndex((c) => c.startsWith(prefix));
+      expect(t.calls.filter((c) => c.startsWith("unregisterStage"))).toEqual(["unregisterStage notes/test-one"]);
+      expect(at("unregisterStage"), t.calls.join("\n")).toBeLessThan(at("dropDatabase"));
+      expect(at("dropDatabase")).toBeLessThan(at("removeStage"));
+      expect([...t.databases.keys()].sort(), "the databases are still deleted").toEqual(["notes-test-one-db-x", "notes-test-onex-db-1"]);
+      expect(t.stageState(one).resources).toEqual([]);
+      expect(result.status).toBe(failing ? 1 : 0);
+      if (failing) expect(io.err).toMatch(/clearing the stage's sign-in registration failed: the registry could not be reached/);
+    }
+  });
+
   it("a stage with nothing deployed removes cleanly", async () => {
     const t = new FakeTarget();
     expect((await runRemove(t, { app: "notes", stage: "test-none" }, captureIo())).status).toBe(0);
