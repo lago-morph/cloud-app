@@ -3,5 +3,5 @@
  * docs/contracts/ts/testing.d.ts. Re-exports only; owners testing (public.ts) and AUTH (auth/testing.ts).
  */
 export { createTestApp, connectTestStage } from "./public.js";
-export type { LogEntry, MailMessage, TestApp, TestAppOptions, TestCapability, TestMail, TestRole } from "./public.js";
+export type { LogEntry, MailMessage, TestApp, TestAppOptions, TestAuthApp, TestCapability, TestClock, TestMail, TestRole } from "./public.js";
 export { mockUsers } from "../auth/testing.js";

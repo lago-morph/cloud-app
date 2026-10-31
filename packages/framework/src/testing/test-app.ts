@@ -22,7 +22,7 @@ import { secretLocation } from "../config/secret-locations.js";
 import { createAuthMock } from "../auth/mock.js";
 import { LOCAL_COOKIES } from "../auth/local-cookies.js";
 import { createStubLoginProvider, stubCallbackUrl, type StubFailure } from "../auth/stub-provider.js";
-import { createFakeAuthAppBinding, type AuthAppIdentity, type FakeAuthAppBinding } from "../auth/auth-app-binding.js";
+import { createFakeAuthAppBinding, type FakeAuthAppBinding } from "../auth/auth-app-binding.js";
 import { AUTH_APP_PROVIDER_ID, createAuthAppProvider } from "../auth/auth-app-provider.js";
 import { deriveUserId } from "../auth/user-id.js";
 import type { Role } from "../auth/roles.js";
@@ -86,7 +86,7 @@ export interface TestApp {
   logs(): readonly LogEntry[];
   loginWithStub(subject: string, options?: { readonly displayName?: string; readonly stubFailure?: "refused" | "replayed" }): Promise<void>;
   /** With `authAppLoginProvider`: signs in through `/api/auth/login`, the fake auth app and the callback as `identity`, and keeps the session. */
-  loginWithAuthApp(identity: AuthAppIdentity): Promise<void>;
+  loginWithAuthApp(identity: { readonly sub: string; readonly email: string; readonly role: "admin" | "user" }): Promise<void>;
   /** With `authAppLoginProvider`: the fake auth app (its records, failures and call counts); throws otherwise. */
   readonly authApp: TestAuthApp;
   /** AUTH's clock (session times, role refresh; the fake auth app's too). Retry delays move it instead of waiting. In-process only. */
@@ -111,8 +111,20 @@ export interface TestApp {
 /** The roles a test can grant (testing.d.ts): `admin` only; "user" is a level, not a role. */
 export type TestRole = "admin";
 
-/** The fake auth app as a test sees it (`TestApp.authApp`). */
-export type TestAuthApp = Pick<FakeAuthAppBinding, "issueCode" | "setRole" | "unregisterApp" | "failNext" | "setUnavailable" | "calls">;
+/**
+ * The fake auth app as a test sees it (`TestApp.authApp`; testing.d.ts). Stated in public terms,
+ * as the contract states it, not as a `Pick` of the internal `FakeAuthAppBinding`: every named
+ * type in `./testing`'s signatures must be importable from `./testing` or `.` (CORE-AC-001), and
+ * the auth-app binding's types are internal. The fake binding satisfies it.
+ */
+export interface TestAuthApp {
+  issueCode(identity: { readonly sub: string; readonly email: string; readonly role: "admin" | "user" }, options: { readonly app: string; readonly returnUrl?: string }): string;
+  setRole(sub: string, role: "admin" | "user" | null): void;
+  unregisterApp(app: string): void;
+  failNext(n: number): void;
+  setUnavailable(unavailable: boolean): void;
+  readonly calls: { readonly redeem: number; readonly role: number };
+}
 
 /** A test app's clock (`TestApp.clock`). */
 export interface TestClock {
