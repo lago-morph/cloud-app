@@ -34,8 +34,12 @@ export interface AuthOptions {
   readonly framework?: Readonly<Record<string, unknown>>;
   /** Reads a framework-internal secret (SEC) for this request: the session key and provider secrets. */
   readonly secret: (c: RuntimeContext, name: string) => Promise<string>;
-  /** The stage's redirect login provider: the stub in some tests. */
-  readonly provider?: LoginProvider;
+  /**
+   * The stage's redirect login provider: the auth-app provider on production Cloudflare stages
+   * (plan §4.1), the stub in some tests. A function builds it per request, over that request's
+   * bindings (`env.AUTH`, DEC-0667).
+   */
+  readonly provider?: LoginProvider | ((c: RuntimeContext) => LoginProvider);
   /**
    * The stage's credential provider (PWD), built per request over that request's SQL database
    * (DEC-0510). AUTH derives the user ID from its `id` and subject and issues the session.
@@ -124,6 +128,12 @@ export function createAuthParts(options: AuthOptions): AuthParts {
     return new URL(configured).origin;
   }
 
+  /** The stage's redirect provider for this request, if it has one. */
+  function providerFor(c: RuntimeContext): LoginProvider | undefined {
+    const { provider } = options;
+    return typeof provider === "function" ? provider(c) : provider;
+  }
+
   function sessionKey(c: RuntimeContext): Promise<string> {
     return options.secret(c, FRAMEWORK_SECRETS.sessionKey);
   }
@@ -205,9 +215,9 @@ export function createAuthParts(options: AuthOptions): AuthParts {
     let read: ((subject: string) => Promise<AccountStatus | null>) | undefined;
     const credential = options.credentialProvider?.(c);
     if (credential !== undefined && credential.id === session.provider) read = (subject) => credential.accountStatus(subject);
-    else if (options.provider !== undefined && options.provider.id === session.provider) {
-      const { provider } = options;
-      read = (subject) => provider.accountStatus(subject);
+    else {
+      const provider = providerFor(c);
+      if (provider !== undefined && provider.id === session.provider) read = (subject) => provider.accountStatus(subject);
     }
     if (read === undefined) return ANONYMOUS;
     let status: AccountStatus | null;
@@ -259,7 +269,7 @@ export function createAuthParts(options: AuthOptions): AuthParts {
           const query = returnTo === "/" ? "" : `?${new URLSearchParams({ returnTo }).toString()}`;
           return c.redirect(`${PAGES.signIn}${query}`, 302);
         }
-        const { provider } = options;
+        const provider = providerFor(c);
         if (provider === undefined) {
           // Only createTestApp's mock-only app gets here (no stage lacks the credential provider).
           if (mock === undefined) throw new FrameworkError("CORE.MISCONFIGURED", "no login provider is configured for this deployment");
@@ -286,7 +296,7 @@ export function createAuthParts(options: AuthOptions): AuthParts {
         const token = readCookie(c.req.header("cookie"), cookies().login);
         const key = await sessionKey(c);
         const tx = token === undefined ? undefined : await readTransaction(key, token, Date.now());
-        const { provider } = options;
+        const provider = providerFor(c);
         if (tx === undefined || provider === undefined) return failed("transaction missing or expired");
         let identity: ProviderIdentity;
         try {

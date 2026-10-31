@@ -31,6 +31,7 @@ import { cloudflareFilesStore } from "../../files/cloudflare/keys.js";
 import { assembleStage } from "../stage.js";
 import { workerTicketIssuer } from "./tickets.js";
 import { workerCredentialProvider } from "./password.js";
+import { workerAuthAppProvider } from "./auth-app.js";
 
 export { createAuthMock } from "../../auth/mock.js";
 export { createTestMailCapture } from "../../mail/test-stage.js";
@@ -64,8 +65,9 @@ export function createCloudflareWorker<C extends ConfigDeclaration, S extends st
     readFrameworkSecret: (env) => envSecretReader(env, "cloudflare"),
     secretValues: (c) => workerSecretValues(c.env),
     requiredFrameworkSecrets: required,
-    // The real provider on every stage (DEC-0516): PWD over the stage's D1, mailing through `mail` below.
-    credentialProvider: workerCredentialProvider,
+    // Production stages sign in with Cloudflare through the auth app (plan §4.1, DEC-0667). Test
+    // stages keep PWD beside the mock until it is removed (plan §4.3: then mock only).
+    ...(resolved.deployment.isTestStage ? { credentialProvider: workerCredentialProvider } : { provider: workerAuthAppProvider(resolved.deployment) }),
     ...(options.mock === undefined ? {} : { mock: options.mock() }),
     // A test stage captures its mail (and serves the test-mail route); only production sends.
     mail: (c: RuntimeContext) => (capture === undefined ? workerEmailSender(c.env, senderName) : capture.sender(c, senderName)),
