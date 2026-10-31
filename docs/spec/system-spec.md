@@ -128,7 +128,7 @@ Origin: owner · Decision: DEC-0014
 Every request MUST be classified as anonymous, logged-in user, or admin. App code sees only that level, a stable opaque user ID, and an optional display name. App code MUST NOT see email addresses, provider identities, protocol details, or tokens; all authentication handling, including validation, happens behind the abstraction. A user ID is stable for a person and login provider; signing in through a different provider yields a different user ID.
 
 #### SYS-REQ-018 — Admins (by role, amended; formerly by configuration)
-Origin: owner · Decision: DEC-0015 (superseded), DEC-0521, DEC-0522
+Origin: owner · Decision: DEC-0015 (superseded), DEC-0521, DEC-0522, DEC-0690
 
 Admins MUST be designated in configuration by user ID. The framework MUST provide documented steps by which a user can see their own user ID so it can be copied into configuration.
 
@@ -139,12 +139,22 @@ Amendment (Origin: owner · Decision: DEC-0521, DEC-0522; the operator command, 
 - The framework MUST provide an operator command that grants, revokes and lists the `admin` role by email address on any stage. On a production stage the command MUST require an explicit confirmation.
 - Configuration MUST NOT hold admin or user lists.
 
+Amendment for v0.2.0 (Origin: owner-approved · Decision: DEC-0690): sign-in is through Cloudflare (SYS-REQ-019 as amended by DEC-0691), and roles come from the owner's Cloudflare account. The amendment above (DEC-0521…DEC-0524) is replaced by the following:
+- Only members of the owner's Cloudflare account MUST be able to sign in.
+- A member whose account role is an administrator role MUST be level `admin`. Any other member MUST be level `user`. Anyone not signed in is `anonymous`.
+- The role names that count as administrator are a parameter.
+- A role change in the Cloudflare account MUST take effect at the app's next role refresh or session renewal, not necessarily on the next request. The refresh interval is a parameter.
+- If a refresh cannot confirm the role after its retries, the person MUST be signed out. The number of retries and the delay between them are parameters.
+- Configuration MUST NOT hold admin or user lists.
+
 #### SYS-REQ-019 — Login provider
-Origin: owner · Decision: DEC-0016, DEC-0509, DEC-0513
+Origin: owner · Decision: DEC-0016, DEC-0509, DEC-0513, DEC-0691
 
 Google MUST be supported as a real login provider. App code MUST NOT be able to tell which provider or protocol is in use, and additional providers (for example GitHub) MUST be addable behind the abstraction without app changes.
 
 Amendment for release 1 (Origin: owner · Decision: DEC-0509, DEC-0511, DEC-0513): in release 1 the real login provider MUST be email and password, run by the framework itself in the app's deployment, with each email address verified before its first login. Google is not supported in release 1 (its code is kept on the branch `google`). The rest of this requirement is unchanged: app code MUST NOT be able to tell which provider is in use, and further providers MUST be addable behind the abstraction without app changes.
+
+Amendment for v0.2.0 (Origin: owner-approved · Decision: DEC-0691): the release-1 amendment above is replaced by the following. The real login MUST be sign-in with Cloudflare, through the account's shared auth app, and it MUST be limited to members of the owner's Cloudflare account. Email and password login is removed. Unchanged: app code MUST NOT be able to tell which provider is in use, and further providers MUST be addable behind the abstraction without app changes.
 
 #### SYS-REQ-020 — Mockable authentication
 Origin: owner · Decision: DEC-0017, DEC-0052
@@ -179,7 +189,7 @@ Origin: owner-approved · Decision: DEC-0033, DEC-0053
 The framework MUST provide one scripted, deterministic command that an app must pass before work on it is considered done. The command runs, locally and with no network or cloud dependency: (1) type checking, (2) the portability rules, (3) the migration checker, and (4) the app's automated tests.
 
 #### SYS-REQ-026 — Compliance on every target
-Origin: owner-approved · Decision: DEC-0020, DEC-0508, DEC-0512
+Origin: owner-approved · Decision: DEC-0020, DEC-0508, DEC-0512, DEC-0692
 
 A single compliance suite MUST verify each capability's contract identically on all three targets. The framework is considered working only when the suite passes on all three targets and the provider certification (SYS-REQ-027) is current.
 
@@ -187,12 +197,19 @@ Amendment for release 1 (Origin: owner · Decision: DEC-0508): release 1 targets
 
 Amendment for release 1 (Origin: owner · Decision: DEC-0512): "the provider certification (SYS-REQ-027) is current" reads "the provider check (SYS-REQ-027 as amended) passed for that commit".
 
+Amendment for v0.2.0 (Origin: owner-approved · Decision: DEC-0692): "the provider check (SYS-REQ-027 as amended) passed for that commit" reads "the automated part of the provider check (SYS-REQ-027 as amended by DEC-0692) passed for that commit, and the latest once-per-release real sign-in record is current".
+
 #### SYS-REQ-027 — Provider certification
-Origin: owner · Decision: DEC-0021, DEC-0512
+Origin: owner · Decision: DEC-0021, DEC-0512, DEC-0692
 
 Each real login provider adapter MUST be certified by a guided manual test using a dedicated test account. Re-certification is required only after major restructuring of the framework or a substantive change to that adapter. All automated verification, including on cloud test stages, uses the authentication mock (SYS-REQ-020); the real provider is verified only by this certification.
 
 Amendment for release 1 (Origin: owner · Decision: DEC-0512): the guided manual certification is replaced by an automated provider check. The real login provider MUST be verified by an automated check, needing no manual step, on a production deployment with real email delivery, and that check MUST run on every compliance run on each cloud. Automated verification on cloud test stages still uses the authentication mock (SYS-REQ-020) for access levels; the provider's own behaviour is also verified locally and on test stages without real email delivery.
+
+Amendment for v0.2.0 (Origin: owner-approved · Decision: DEC-0692): with sign-in through Cloudflare, a person has to sign in on Cloudflare's own login page, so a real sign-in cannot be fully automated. The release-1 amendment above is replaced by the following:
+- Once per release, the owner MUST sign in for real through the auth app. This is a milestone item (COMPL-REQ-006): an occasional check that needs a person.
+- Every compliance run on each cloud MUST check automatically the parts that need no person: the app sends people to the auth app's sign-in address with its own app ID and its registered return URL.
+- Automated verification on cloud test stages MUST keep using the authentication mock (SYS-REQ-020).
 
 #### SYS-REQ-028 — Evidence before claims
 Origin: provenance-unclear · Decision: DEC-0034
