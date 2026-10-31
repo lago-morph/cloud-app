@@ -41,7 +41,8 @@ afterEach(() => {
   // No output of any run holds a token value, an account ID, a zone ID or the subdomain.
   for (const { io, world } of runs.splice(0)) {
     // The one place the subdomain is printed: the admin app's URL, which the bootstrap must print (v0.2.0 plan §5.1 step 5; DEC-0686).
-    const text = (io.out + io.err).split(ADMIN_URL).join("<admin app URL>");
+    // On standard output only: standard error is searched as it is.
+    const text = io.out.split(ADMIN_URL).join("<admin app URL>") + io.err;
     const zoneIds = [...world.accounts.values()].flatMap((a) => [...a.cloud.zones.values()].map((z) => z.id));
     for (const secret of ["MARKER", ACCOUNT, OTHER_ACCOUNT, SUB, ...zoneIds]) expect(text, `output holds ${secret.slice(0, 6)}…`).not.toContain(secret);
     // The messages leave the values out themselves; the run's redaction (DEC-0590) is only a backstop.
@@ -317,8 +318,23 @@ describe("cloudflare-setup: the bootstrap's OAuth clients (v0.2.0 plan §5.1 ste
     expect(status).toBe(0);
     expect(io.out).toContain("OAuth clients: prototype-framework-admin and prototype-framework-sign-in already exist, with their secrets in Secrets Store");
     // The admin app is uploaded again (DEC-0686); no client and no secret is written.
-    expect(world.writes().filter((w) => w.startsWith("boot-2 ") && /oauth_clients|secrets_store/.test(w))).toEqual([]);
-    expect(world.writes().filter((w) => w.startsWith("boot-2 ")).at(-1)).toBe(`boot-2 DELETE /accounts/${ACCOUNT}/tokens/boot-2`);
+    expect(world.writes().filter((w) => w.startsWith("boot-2 "))).toEqual([
+      `boot-2 PUT /accounts/${ACCOUNT}/workers/scripts/prototype-admin`,
+      `boot-2 POST /accounts/${ACCOUNT}/workers/scripts/prototype-admin/subdomain`,
+      `boot-2 DELETE /accounts/${ACCOUNT}/tokens/boot-2`,
+    ]);
+  });
+
+  it("a Cloudflare error that echoes a callback URL is redacted: the subdomain appears only in the admin app's URL lines (DEC-0590, DEC-0686)", async () => {
+    const world = freshWorld();
+    world.addToken("bootstrap", BOOT_VALUE, "boot-id", { expires_on: EXPIRES });
+    world.cloud().override.set(`POST /accounts/${ACCOUNT}/oauth_clients`, { status: 400, body: { success: false, errors: [{ code: 1001, message: `redirect_uris ${ADMIN_URL}/callback is not allowed` }], result: null } });
+    const { status, io } = await run(world, project({ env: envFile({ CLOUDFLARE_BOOTSTRAP_TOKEN: BOOT_VALUE }) }));
+    expect(status).toBe(1);
+    expect(io.err).toContain("creating the OAuth client prototype-framework-admin failed: HTTP 400: redirect_uris https://prototype-admin.[hidden].workers.dev/callback is not allowed");
+    expect(io.out + io.err).not.toContain(SUB);
+    // The backstop had to act here; the afterEach check allows that for this run only.
+    runs.pop();
   });
 
   it("deploys the admin app bound to the admin client, then deletes itself, then prints the admin app's URL and the next step (plan §5.1 steps 3–5; DEC-0686)", async () => {

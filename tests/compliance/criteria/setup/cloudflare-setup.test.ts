@@ -379,6 +379,8 @@ if (isLocal()) {
       expect(writesOf(r.requests), "the admin app's upload and route, then the self-delete").toEqual(rerunWrites(boot));
       expect(boot.deleted).toBe(true);
       expect(readEnvFile(dir)).toContain(BOOTSTRAP_DELETED_LINE);
+      // Plan §5.1 step 5: the admin app's URL and the next step, last.
+      expect(r.out.trimEnd()).toMatch(/Next step: open the admin app and sign in: https:\/\/prototype-admin\.[a-z0-9-]+\.workers\.dev$/);
     });
 
     it(tag("SETUP-AC-005", "a bootstrap token without an expiry, or one more than 1 day away, is deleted at once and used for nothing else, exit 1; one within 1 day runs (PAR-435)"), async () => {

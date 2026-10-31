@@ -659,8 +659,9 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
 
       // Step 2: both OAuth clients, each secret straight into Secrets Store (DEC-0684, DEC-0685).
       // A failure throws: the run fails before the self-delete, so the token stays for the next run.
-      // The subdomain is not redacted here: the admin app's URL holds it, and step 5 prints it (DEC-0686).
+      // The subdomain stays in the redaction (DEC-0590); only step 5's two lines print the admin app's URL past it (DEC-0686).
       const subdomain = await ensureSubdomain(api, to.id, deps.stepOptions?.newSubdomain);
+      hidden.add(subdomain);
       const clients = await ensureOAuthClients(api, to.id, { subdomain, onSecret: (value) => hidden.add(value) });
       const both = (kinds: readonly ClientKind[]) => kinds.map((k) => CLIENT_NAMES[k]).join(" and ");
       if (clients.created.length > 0) say(`OAuth clients: created ${both(clients.created)}; their IDs and secrets are in Secrets Store`);
@@ -687,8 +688,10 @@ export async function runCloudflareSetup(deps: CloudflareSetupDeps, request: Clo
       // Step 5: the admin app's URL and the next step.
       say("The Cloudflare bootstrap is complete.");
       say(`  account: ${to.name}`);
-      say(`  admin app: ${adminUrl}`);
-      say(`\nNext step: open the admin app and sign in: ${adminUrl}`);
+      // The only output not passed through the redaction whole: its text is, the URL appended after it is not.
+      const sayWithUrl = (text: string) => io.stdout(`${hidden.redact(text)}${adminUrl}\n`);
+      sayWithUrl("  admin app: ");
+      sayWithUrl("\nNext step: open the admin app and sign in: ");
       return EXIT.ok;
     }
 
