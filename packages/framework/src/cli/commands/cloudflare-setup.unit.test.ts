@@ -273,7 +273,7 @@ describe("cloudflare-setup: the bootstrap token's rules (v0.2.0 plan §5.1, §7;
     }
   });
 
-  it("a long-lived bootstrap token deletes itself before any other call: with the everyday token's account known, it reads only its verify and its own details (no account list), no other token's request comes between, and nothing follows the DELETE (DEC-0681)", async () => {
+  it("a long-lived bootstrap token deletes itself before any other call: its identification, its own details, then its DELETE as the run's last request; with an everyday token set, no request of the everyday token anywhere in the run (DEC-0681)", async () => {
     for (const [label, expires] of [
       ["1 day + 1 s away", AT(ONE_DAY + 1000)],
       ["no expiry", undefined],
@@ -283,8 +283,10 @@ describe("cloudflare-setup: the bootstrap token's rules (v0.2.0 plan §5.1, §7;
       const { status } = await run(world, project({ env: bothTokens() }));
       expect(status, label).toBe(1);
       const own = ownRequests(world, "boot-id");
-      expect(own, label).toEqual([`boot-id GET /accounts/${ACCOUNT}/tokens/verify`, `boot-id GET /accounts/${ACCOUNT}/tokens/boot-id`, `boot-id DELETE /accounts/${ACCOUNT}/tokens/boot-id`]);
-      expect(world.requests.slice(world.requests.indexOf(own[0] ?? "")), `${label}: from its first request to its DELETE, and after it`).toEqual(own);
+      const DELETE = `boot-id DELETE /accounts/${ACCOUNT}/tokens/boot-id`;
+      expect(own.slice(-2), label).toEqual([`boot-id GET /accounts/${ACCOUNT}/tokens/boot-id`, DELETE]);
+      expect(own.slice(0, -2).filter((r) => !IDENTIFICATION.test(r)), `${label}: only its identification before its own details`).toEqual([]);
+      expect(world.requests, `${label}: no other token's request, before or after the DELETE`).toEqual(own);
       expect(world.token("boot-id").deleted, label).toBe(true);
     }
   });
