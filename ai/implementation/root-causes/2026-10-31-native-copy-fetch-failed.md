@@ -145,3 +145,55 @@ Scope note, not proven exposed: other in-process callers of `getPlatformProxy` t
 3. **Stress check of the mechanism (the main evidence; a single clean run cannot prove a race is gone).** Rerun `bursts.sh` (6 busy loops × 4 concurrent copies of `native-copy.unit.test.ts`, with both preloads) and `stress.sh s 6 4 3` on the fixed code. Before the fix: 4/4 and 5/12 failed. Expect 0 failures, and no synchronous burst over 300 ms from the fake's ingests (`sync-bursts.cjs` logs none).
 4. **Offline.** `unshare -rn sh scripts/offline.sh npx vitest run --config vitest.unit.config.ts packages/framework/src/provision/cloudflare/d1/native-copy.unit.test.ts` passes.
 5. **Re-check (§7).** The S3 item's `npm run test:unit` on its branch, after it is rebased onto the fix.
+
+## Review
+
+Reviewer: independent subagent, 2026-10-31 (plan §7a.1.8, prompt §8 step 2). I did not diagnose this failure or write the code or tests, and I changed no code or tests in this commit. Local only: no Cloudflare calls. I ran everything in my own worktree on this branch (`92ac369`, code = `origin/main` 1e0c289) after `npm ci` (wrangler 4.149.0, miniflare 5.20261006.1-alpha, undici 7.29.1, Node 22.23.4). My scripts are in the scratchpad `rv-nc/` folder: `repro2.mjs` (the record's `repro/repro.mjs` with more modes), `repro3.mjs` (the same, plus a log of every pooled socket's close), `count.mjs` (sync proxy calls per D1 operation), and `stress.sh` (the record's `bursts.sh`, pointed at my worktree, using both of the record's preloads). The machine has 4 CPUs, and other agents kept the load average at 13–41 throughout.
+
+**Verdict: ACCEPTED-WITH-CHANGES.** The cause → symptom chain holds, and so does the fix's approach (yield to the event loop between synchronous proxy calls). Two changes are needed:
+- E5 explains why undici does not retire the idle socket, and that explanation is wrong in detail. The conclusion still stands. The correction is below.
+- The fix leaves one burst of the same kind in place, in the failing test's own seeding. Under load it measured 4.98 s.
+
+### What I re-ran
+| run | result |
+|---|---|
+| `repro2.mjs 6000 3 sync` (record E4) | **3/3** `fetch failed`, cause `UND_ERR_SOCKET other side closed` |
+| `repro2.mjs 6000 3 yield` (proposed fix, `setImmediate` after each `prepare`) | 0/3 |
+| `repro2.mjs 6000 3 cpu`: a 6 s busy loop with **no** proxy calls, then `batch` | **3/3** failed, same cause |
+| `repro2.mjs 6000 3 yieldonce`: a 6 s synchronous `prepare` loop, then **one** `setImmediate`, then `batch` | 0/3 |
+| `repro2.mjs 6000 3 cpuimm`: a 6 s busy loop started from a `setImmediate` callback (check phase), then `batch` | 0/3 |
+| `repro3.mjs 6000 1 yield` / `sync` (socket log) | yield: all three pooled sockets are **closed by the client, with no FIN, after 1.03–1.04 s idle**, and `batch` uses fresh sockets. sync: the request is written to a socket that has been idle for 6.0 s, and the FIN is read 10 ms later |
+| the file alone with `sync-bursts.cjs` | 21/21 passed; bursts 183 / 287 / 287 calls (444, 583, 673 ms) |
+| `stress.sh base 6 4` (6 busy loops, 4 copies, unfixed code; load 14 → 29) | **4/4 failed**, each the A-06 test at line 183, cause `UND_ERR_SOCKET other side closed`, `bytesWritten` 8603 every time. Before the write, the failing socket had been idle for 9.5–12.1 s. The 287-call bursts took 4.6–7.1 s |
+| `stress.sh patched 6 4` (local, **uncommitted** change: `await setImmediate` after each `prepare`/`prepare().bind()` in `importAction` and `query`; reverted afterwards; load 21 → 41) | **4/4 passed** (21/21 each). No 287-call bursts remained. The longest burst left is **183 calls, 4980 ms**, and 40-call bursts reached 3267 ms (see change 2) |
+| `count.mjs` | a `prepare` is 1 synchronous proxy call; `prepare(...).bind(...)` is **3**; 61 × `prepare().bind()` = 183 |
+
+I did not rerun the offline or `threads`-pool variants or the full suite. The `cpu` row already shows that the network plays no part.
+
+### Each link, checked
+1. **Synchronous `Atomics.wait` per `prepare`.** Confirmed in the source: `#call` takes `#syncCall` unless the call is `knownAsync` or its arguments contain streams (`miniflare/dist/src/index.js:120453–120488`), and `receiveReply` waits with `Atomics.wait` (119860). `count.mjs` measures 1 call per `prepare`. The 287-call bursts are the fake's ingests (`sync-bursts.cjs`, as in E3).
+2. **Idle time beyond workerd's 5 s.** Confirmed. In my four failing traces, the socket that failed had last been used at the end of the export and was idle for 9.5–12.1 s when the second ingest's `batch` was written to it. The FIN was read 0–49 ms after the write. In `repro3` with yields, the client closes idle sockets after about 1 s, so they never reach 5 s.
+3. **Why undici reuses the socket. E5 is wrong here; the conclusion stands.** The keep-alive timer is **not** a fast timer. `TIMEOUT_KEEP_ALIVE = 8 | USE_NATIVE_TIMER` ("Use native timers to ignore event loop latency for keep-alive handling", `undici/lib/dispatcher/client-h1.js:204–206`), so the "499 ms ticks" argument in E5 does not apply. The actual mechanism, which my traces and repro modes support:
+   - After a response completes, undici re-arms the socket only from `setImmediate(client[kResume])` (`client-h1.js:784`). The keep-alive timer is set in `resumeH1` (1086–1089).
+   - The fake is in-process. Everything from the export's last D1 response through the first ingest's `prepare` burst runs as microtasks of that response's poll-phase callback, so the idle socket's keep-alive timer is not even armed until the first ingest's `batch` has been sent. Then, from the first `batch`'s 500 response through the whole second burst, the code again runs as microtasks of one callback, so no timers phase runs. My traces show one stall of the 200 ms interval timer covering exactly that span.
+   - undici 7.29.1 also has idle-socket validation: it yields to the check phase before writing to an idle socket, so that a pending FIN is read first (`client-h1.js:1022–1040`, GHSA-35p6-xmwp-9g52). The block ran inside a poll-phase callback, so the check phase comes before the next `epoll`, and the FIN that arrived during the block has not been read yet. This is why `cpu` fails while `cpuimm` and `yieldonce` pass.
+   
+   So the precondition is a main-thread block of more than 5 s **inside an I/O callback's continuation**, with a pooled socket idle, followed by a proxy call in the same continuation. Synchronous proxy calls are only how the fake creates the block (`cpu` row).
+4. **Error surface.** Confirmed: `TypeError: fetch failed` from `fetch/index.js` `processResponse`, cause `SocketError: other side closed` from `onHttpSocketEnd`. The fake catches it (`importAction`) and reports it, and `native-copy.ts:129` throws. The request is a POST and is not retried.
+
+### Alternatives
+The record's list holds, with the correction above. I also weighed the ones the review brief named:
+- **`keepAliveTimeout` below 5 s.** It is already 1 s (`index.js:134692`). It cannot help, because the timer is armed late and cannot fire while the thread is blocked (link 3).
+- **`Connection: close`, or a fresh dispatcher for the fake.** The pool is Miniflare's private `#runtimeDispatcher`, and Miniflare sets the request headers itself. `getPlatformProxy` has no option for either. Both would mean patching a dependency's internals. Both would also leave 5–7 s main-thread blocks in place, and those blocks are the defect: they also starve any other I/O in the fork.
+- **One yield before each `batch` (`yieldonce`).** It also passes, and it is the most targeted change. But it relies on the phase ordering of undici's validation, and it leaves multi-second blocks in place. A yield after every statement removes the block itself, and `repro3` shows that undici's own 1 s keep-alive then retires idle sockets. **The proposed fix addresses the cause, not just the gap.**
+- No retries and no timeout changes are proposed. That complies with the rule against masking.
+
+### Binding changes
+1. **Correct E5's explanation wherever it is repeated** (the header comment in `fake-d1-api.ts`, and the fix commit). The keep-alive timer is native, and it is armed from `setImmediate` after the response. Idle-socket validation does not help after a block inside a poll-phase continuation. Do not cite the 499 ms fast-timer tick.
+2. **Cover the test's own seeding burst as well.** Export the helper (`prepareAll`, test support in `fake-d1-api.ts`) and use it for the 61-statement seed at `native-copy.unit.test.ts:163–166`. That seed is 61 × `prepare().bind()` = 183 synchronous calls, measured at 4.98 s under load with the fake already fixed, and its `batch` follows it in the same continuation. Use the helper for `seedSafe` too (40-call bursts, measured at 3.3 s). Change only the setup; the assertions stay as they are. The helper must yield after each item's `prepare` **and** `bind`, not between them.
+3. **Red-first test: as proposed, plus one assertion.** The flag scheme (a `setImmediate` set at each `prepare`) is deterministic and does not depend on timing, and it fails on the current code. Accept it with one addition: also assert that an event-loop turn happened between the last `prepare` and the `batch` call. Cover both `ingest` and `query` (with params, so `bind` is used). A timing-based test is not acceptable.
+4. **Re-check.** Run the record's steps 2–5. For step 3, run the stress check on the fixed code at the same load **with a same-load control** of the unfixed fake (my `rv-nc/stress.sh` can serve). Expect 0 failures, and no burst over 1 s from the fake or the d1 tests' seeding in the `sync-bursts.cjs` logs.
+
+Not binding:
+- The record's scope note (`mig/apply.ts`, `check/migrations/databases.ts`) still applies, and per link 3 it is broader than proxy calls: any block of more than 5 s inside an I/O continuation, with a proxy socket idle, is exposed.
+- The stray `UND_ERR_SOCKET` in E6's full run remains undiagnosed.
