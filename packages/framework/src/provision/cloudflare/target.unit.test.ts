@@ -228,7 +228,7 @@ describe("setup-account on Cloudflare (PROV-REQ-004)", () => {
   });
 });
 
-describe("a production stage's mail settings on Cloudflare (MAIL-AC-004, CF §2)", () => {
+describe("a production stage's mail settings on Cloudflare (CF §2; the EMAIL binding stays until F removes it, MAIL-AC-004 is retired, DEC-0696)", () => {
   const prod = { app: "notes", stage: "prod" };
 
   it("the preflight requires the account's email domain for the EMAIL binding; it reads no zone and no email setup (v0.2.0)", async () => {
