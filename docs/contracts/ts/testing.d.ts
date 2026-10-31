@@ -1,7 +1,7 @@
 /**
  * Test helpers (`<package>/testing`). Importable only from app test files.
- * Owners: CORE (test app), AUTH (mock identities, role helpers), PWD (password login provider), MAIL (outbox).
- * Behavior: docs/components/core.md, docs/components/auth.md, docs/components/password.md,
+ * Owners: CORE (test app), AUTH (mock identities, role helpers), MAIL (outbox).
+ * Behavior: docs/components/core.md, docs/components/auth.md,
  * docs/components/mail.md.
  */
 import type { DefinedApp } from "./core";
@@ -81,13 +81,6 @@ export interface TestAppOptions {
    * with `user`. Default false.
    */
   readonly authAppLoginProvider?: boolean;
-  /**
-   * Use the real email-and-password login provider (docs/components/password.md) with an
-   * in-memory outbox (`TestApp.mail`), instead of the authentication mock. Sign-up, verification,
-   * sign-in and reset then go through the provider's routes, with its rate limits and request
-   * forgery check on. Mutually exclusive with `stubLoginProvider`. Default false.
-   */
-  readonly passwordLoginProvider?: boolean;
   /**
    * For the framework's own MAIL tests: an outgoing-mail sender whose every send fails, or
    * whose sends never complete. Default: the in-memory outbox.
@@ -179,10 +172,9 @@ export interface TestApp {
    */
   readonly clock: TestClock;
   /**
-   * With `stubLoginProvider`, `authAppLoginProvider` or `passwordLoginProvider`: adds `role` to the
-   * roles of the account whose user ID (as `/api/auth/me` shows it) is `userId`: the stub's
-   * in-memory account, the fake auth app's record (`admin`), or the password provider's `role`
-   * column. A session keeps the level it has until its next role refresh (PAR-425; move
+   * With `stubLoginProvider` or `authAppLoginProvider`: adds `role` to the roles of the account
+   * whose user ID (as `/api/auth/me` shows it) is `userId`: the stub's in-memory account, or the
+   * fake auth app's record (`admin`). A session keeps the level it has until its next role refresh (PAR-425; move
    * `clock` past it), so the change shows then, with no new login (AUTH-REQ-003, DEC-0525,
    * DEC-0672). Granting a role already held changes nothing.
    * Rejects when no account has that user ID. Throws on a test app with the authentication mock
