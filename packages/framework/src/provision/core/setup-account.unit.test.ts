@@ -34,22 +34,20 @@ describe("setup-account core (PROV-REQ-004)", () => {
   });
 
   it("records the setup after creating the shared resources, with no email domain (v0.2.0); a second run changes nothing", async () => {
-    const t = new FakeTarget({ sharedResources: { "state home": "absent" }, accountSettings: {} });
+    const t = new FakeTarget({ sharedResources: { "state home": "absent" } });
     t.recordToWrite = ["account setup record (setup version 2)"];
     const io = captureIo();
     expect(await runSetupAccount(t, io)).toEqual({ status: 0, created: ["state home", "account setup record (setup version 2)"] });
     expect(t.calls).toEqual(["inspectAccount", "setupProblems", "createSharedResources state home", "recordSetup"]);
-    expect(t.accountSettings).toEqual({});
     expect(io.out).toContain("recorded: account setup record (setup version 2)");
     const again = captureIo();
     expect(await runSetupAccount(t, again)).toEqual({ status: 0, created: [] });
     expect(again.out).toMatch(/nothing changed/);
   });
 
-  it("leaves an email domain a 0.1.x setup recorded as it is", async () => {
+  it("on an account already set up, changes nothing (a 0.1.x email domain in the stored record is the target's to keep: cloudflare/target.unit.test.ts)", async () => {
     const t = new FakeTarget();
     expect(await runSetupAccount(t, captureIo())).toEqual({ status: 0, created: [] });
-    expect(t.accountSettings).toEqual({ emailDomain: "example.test" });
   });
 
   it("[PROV-AC-007] (core part) a shared resource owned by another account stops setup-account with a message naming it and changes nothing", async () => {

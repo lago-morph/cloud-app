@@ -23,11 +23,10 @@
  * previous version is reported restarted only once step 7's health wait finds it answering (DEC-0561).
  */
 import { applyMigrations, MigrationFailedError, type Histories } from "../../mig/apply.js";
-import { senderAddress } from "./account-settings.js";
 import { databaseName, matchStageDatabases, nextDatabaseName } from "./databases.js";
 import type { DeployedCode, HealthOutcome, Stage, StageDatabase, TargetOperations } from "./operations.js";
 import { EXIT, errorLine, line, messageOf, type ProvisionIo, type ProvisionStatus } from "./output.js";
-import { foreignResourcesMessage, noEmailDomainMessage } from "./setup-account.js";
+import { foreignResourcesMessage } from "./setup-account.js";
 
 export type DeployStep = "preflight" | "databases" | "infrastructure" | "migrate" | "code" | "start" | "health";
 
@@ -86,19 +85,16 @@ class StepFailure extends Error {
   }
 }
 
-const isTestStage = (stage: Stage) => stage.stage.startsWith("test-");
-
 export async function runDeploy(ops: TargetOperations, request: DeployRequest, io: ProvisionIo): Promise<DeployResult> {
   const { stage } = request;
   try {
-    const { deferred: firstSecretsCheckDeferred, emailDomain, stopped } = await preflight(ops, request);
+    const { deferred: firstSecretsCheckDeferred, stopped } = await preflight(ops, request);
     const keepStopped = stopped && request.start !== true;
-    const mail = emailDomain === undefined ? {} : { emailDomain };
     const current = await findDatabases(ops, stage, io);
     if (keepStopped) line(io, `stage ${stage.stage} is stopped (recorded by stop); the deploy leaves it stopped (add --start to start it)`);
 
     await step("infrastructure", "nothing of the new version was deployed; the previous version, if any, is unchanged", "fix the problem and run deploy again", () =>
-      ops.deployInfrastructure({ stage, ...(current ? { database: current } : {}), ...mail }),
+      ops.deployInfrastructure({ stage, ...(current ? { database: current } : {}) }),
     );
 
     const migrated = current ? await migrate(ops, request, current, keepStopped, io) : { database: await firstDatabase(ops, request) };
@@ -111,7 +107,7 @@ export async function runDeploy(ops: TargetOperations, request: DeployRequest, i
         "code",
         keepStopped ? `database ${database.name} is current; the code deploy may be partial` : `database ${database.name} is current; the app may be stopped`,
         "fix the problem and run deploy again",
-        () => ops.deployCode({ stage, database, ...mail }),
+        () => ops.deployCode({ stage, database }),
       );
       if (request.abortAt === "after-code") throw abort("after the code deploy", `code deployed against database ${database.name}; the app is not started`);
 
@@ -140,11 +136,8 @@ export async function runDeploy(ops: TargetOperations, request: DeployRequest, i
 
     line(io, `deployed ${stage.app} stage ${stage.stage} to ${ops.target}; database ${database.name}`);
     line(io, `public origin: ${deployed.publicOrigin}`);
-    // provisioning.md §2 "Publishing the result": nothing to register with a login provider (DEC-0513).
-    if (!isTestStage(stage) && emailDomain !== undefined) {
-      line(io, `sign-in page: ${deployed.publicOrigin}/api/auth/sign-in`);
-      line(io, `sender address: ${senderAddress(emailDomain)}`);
-    }
+    // provisioning.md §2 "Publishing the result": the public origin only; since v0.2.0 there is no
+    // sign-in page and no sender address to print (DEC-0698, DEC-0732).
     return { status: EXIT.ok, publicOrigin: deployed.publicOrigin, ...copied };
   } catch (error) {
     const failure: DeployFailure =
@@ -192,9 +185,11 @@ function abort(point: string, stageState: string): StepFailure {
 
 /**
  * Step 1. `deferred`: the stage's secrets cannot be read yet (checked after step 5).
- * `emailDomain`: the account settings record's, which steps 3 and 5 hand to the target.
+ * A production stage's login prerequisites (the auth app and its registry) are checked by the
+ * target's `preflight`; since v0.2.0 no email domain is needed, and the account settings record is
+ * not read (PROV-REQ-002 step 1, DEC-0698, DEC-0732).
  */
-async function preflight(ops: TargetOperations, request: DeployRequest): Promise<{ deferred: boolean; emailDomain?: string; stopped: boolean }> {
+async function preflight(ops: TargetOperations, request: DeployRequest): Promise<{ deferred: boolean; stopped: boolean }> {
   const { stage } = request;
   const missing: string[] = [];
   const attempt = async (what: string, run: () => Promise<void>) => {
@@ -205,7 +200,6 @@ async function preflight(ops: TargetOperations, request: DeployRequest): Promise
     }
   };
   let deferred = false;
-  let emailDomain: string | undefined;
   let stopped = false;
 
   await attempt("credentials", async () => {
@@ -224,13 +218,6 @@ async function preflight(ops: TargetOperations, request: DeployRequest): Promise
       missing.push(...(await validate()).map((p) => `configuration: ${p}`));
     });
   }
-  const production = !isTestStage(stage);
-  // A production stage's EMAIL binding still takes the account's email domain (DEC-0514); since
-  // v0.2.0 nothing sends mail, so its email setup is not checked (DEC-0689). A test stage only reads the record.
-  await attempt("account settings", async () => {
-    emailDomain = (await ops.readAccountSettings()).emailDomain;
-    if (production && emailDomain === undefined) missing.push(`${noEmailDomainMessage()} (required for a production stage)`);
-  });
   await attempt("stage record", async () => {
     stopped = (await ops.readStageRecord(stage)).stopped;
   });
@@ -251,7 +238,7 @@ async function preflight(ops: TargetOperations, request: DeployRequest): Promise
       nextAction: "provide the missing prerequisites and run deploy again",
     });
   }
-  return { deferred, stopped, ...(emailDomain === undefined ? {} : { emailDomain }) };
+  return { deferred, stopped };
 }
 
 /** Step 2: the lowest-numbered stage database is current; higher-numbered ones are deleted and reported. */

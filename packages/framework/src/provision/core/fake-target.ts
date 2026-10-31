@@ -11,7 +11,6 @@ import type { Migration } from "../../mig/history.js";
 import type { Dialect } from "../../sql/dialect.js";
 import type {
   BackupListing,
-  AccountSettings,
   DeployedCode,
   DeployInput,
   HealthOutcome,
@@ -52,8 +51,6 @@ export interface FakeTargetOptions {
   readonly sharedResources?: Readonly<Record<string, SharedResource["state"]>>;
   readonly databases?: readonly { readonly name: string; readonly records?: readonly string[]; readonly rows?: number }[];
   readonly dialect?: Dialect;
-  /** The account settings record; default `{ emailDomain: "example.test" }` (a reserved name). */
-  readonly accountSettings?: AccountSettings;
 }
 
 const key = (s: Stage) => `${s.app}/${s.stage}`;
@@ -70,14 +67,10 @@ export class FakeTarget implements TargetOperations {
   readonly stages = new Map<string, FakeStage>();
   /** Returned by `preflight`. */
   missingPrerequisites: string[] = [];
-  /** The account settings record (`readAccountSettings`). */
-  accountSettings: AccountSettings;
   /** Returned by `setupProblems`. */
   missingSetup: string[] = [];
   /** Returned by the next `recordSetup` (then emptied: a second run finds the record in place). */
   recordToWrite: string[] = [];
-  /** The `emailDomain` of each `deployInfrastructure` and `deployCode` input, in order. */
-  readonly deployedEmailDomains: (string | undefined)[] = [];
   /** Returned by `checkHealth`. */
   health: HealthOutcome = { ok: true };
   /** After `startApp`, the route answers 404 for this long (fake time), like a just-started Cloudflare route (DEC-0090). */
@@ -101,7 +94,6 @@ export class FakeTarget implements TargetOperations {
 
   constructor(options: FakeTargetOptions = {}) {
     this.dialect = options.dialect ?? "sqlite";
-    this.accountSettings = options.accountSettings ?? { emailDomain: "example.test" };
     const shared: Readonly<Record<string, SharedResource["state"]>> = options.sharedResources ?? { "log bucket": "owned" };
     for (const [name, state] of Object.entries(shared)) this.shared.set(name, state);
     for (const db of options.databases ?? []) {
@@ -180,11 +172,6 @@ export class FakeTarget implements TargetOperations {
     }
   }
 
-  async readAccountSettings(): Promise<AccountSettings> {
-    this.enter("readAccountSettings");
-    return { ...this.accountSettings };
-  }
-
   async recordSetup(): Promise<readonly string[]> {
     this.enter("recordSetup");
     const written = this.recordToWrite;
@@ -199,14 +186,12 @@ export class FakeTarget implements TargetOperations {
 
   async deployInfrastructure(input: DeployInput): Promise<void> {
     this.enter("deployInfrastructure", key(input.stage));
-    this.deployedEmailDomains.push(input.emailDomain);
     const s = this.stageState(input.stage);
     if (!s.resources.some((r) => r.kind === "bucket")) s.resources.push({ kind: "bucket", id: `${key(input.stage)}/bucket` });
   }
 
   async deployCode(input: DeployInput & { readonly database: StageDatabase }): Promise<DeployedCode> {
     this.enter("deployCode", `${key(input.stage)} ${input.database.name}`);
-    this.deployedEmailDomains.push(input.emailDomain);
     this.db(input.database);
     const s = this.stageState(input.stage);
     if (!s.resources.some((r) => r.kind === "runtime")) s.resources.push({ kind: "runtime", id: `${key(input.stage)}/runtime` });

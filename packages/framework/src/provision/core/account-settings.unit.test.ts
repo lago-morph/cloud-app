@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { emailDomainProblem, senderAddress, testMailDomain } from "./account-settings.js";
+import { emailDomainProblem, testMailDomain } from "./account-settings.js";
 
 describe("the account's email domain and what derives from it (MAIL-REQ-003, DEC-0511, DEC-0514)", () => {
-  it("the sender is no-reply@<emailDomain> and the test mailbox subdomain is t.<emailDomain>", () => {
-    expect(senderAddress("example.test")).toBe("no-reply@example.test");
+  it("the test mailbox subdomain is t.<emailDomain>", () => {
     expect(testMailDomain("example.test")).toBe("t.example.test");
   });
 
