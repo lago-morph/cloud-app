@@ -168,6 +168,13 @@ describe("PROV deploy on the Cloudflare target with local D1", { timeout: 120_00
     expect(world.cloud.workers.get(w)?.enabled).toBe(false);
     expect(world.cloud.buckets.get("sst-state")?.has(RECORD.slice("sst-state/".length)), "stop writes the stage record").toBe(true);
 
+    // A failure after step 5 (here the runner's after-code abort) turns a stopped stage off again,
+    // since the code deploy may have turned it on, and its stage state says so.
+    const aborted = io();
+    expect((await runDeploy(world.target, request(h.v2, { abortAt: "after-code" }), aborted)).status).toBe(1);
+    expect(world.cloud.workers.get(w)?.enabled, "turned off again after the abort").toBe(false);
+    expect(aborted.err).toMatch(/stage state: .*turned off again/);
+
     let mark = world.events.length;
     const plain = io();
     expect((await runDeploy(world.target, request(h.v2), plain)).status, plain.err).toBe(0);
@@ -181,6 +188,8 @@ describe("PROV deploy on the Cloudflare target with local D1", { timeout: 120_00
     const failing = io();
     const v3 = { ...h.v2, app: [...h.v2.app, { ...h.v2.app[1]!, id: "app/9999_fails", name: "9999_fails", file: "9999_fails.sql", statements: ["CREATE TABLE \"notes\" (\"id\" text)"] }] };
     expect((await runDeploy(world.target, request(v3), failing)).status).toBe(1);
+    expect(failing.err).toMatch(/deploy failed at step 4/);
+    expect(failing.err).toContain("9999_fails.sql");
     expect(world.cloud.workers.get(w)?.enabled, "a failed migration leaves it stopped").toBe(false);
 
     mark = world.events.length;
