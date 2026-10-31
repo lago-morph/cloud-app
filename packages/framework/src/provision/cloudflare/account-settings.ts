@@ -44,23 +44,3 @@ export async function readAccountSettings(api: CloudflareApi, accountId: string)
   if (r.status < 200 || r.status >= 300) throw new Error(`reading the ${ACCOUNT_SETTINGS_RESOURCE} failed: ${describeFailure(r)}`);
   return parseAccountSettings(r.body);
 }
-
-/** The setup record's fields (`setup-record.ts`, DEC-0577): they describe the setup of one email domain. */
-const SETUP_RECORD_FIELDS: readonly string[] = ["setupVersion", "frameworkVersion", "appliedAt", "completedSteps"];
-
-/**
- * Writes the record's settings. Every other field of the stored object is kept (DEC-0577), except
- * that a changed email domain drops the setup record's fields, which described the old domain's
- * setup, until the setup writes them for the new one (DEC-0587). Only `setup-account` calls it.
- */
-export async function writeAccountSettings(api: CloudflareApi, accountId: string, settings: AccountSettings): Promise<void> {
-  const read = await api("GET", objectPath(accountId));
-  if (read.status !== 404 && (read.status < 200 || read.status >= 300)) throw new Error(`reading the ${ACCOUNT_SETTINGS_RESOURCE} failed: ${describeFailure(read)}`);
-  const stored = read.status === 404 || typeof read.body !== "object" || read.body === null || Array.isArray(read.body) ? {} : (read.body as Record<string, unknown>);
-  const domainChanged = stored.emailDomain !== settings.emailDomain;
-  const kept = Object.fromEntries(Object.entries(stored).filter(([key]) => key !== "emailDomain" && !(domainChanged && SETUP_RECORD_FIELDS.includes(key))));
-  const record = { ...kept, ...(settings.emailDomain === undefined ? {} : { emailDomain: settings.emailDomain }) };
-  const r = await api("PUT", objectPath(accountId), record);
-  // A 2xx is the end state; the body of the object endpoint's answer is not relied on.
-  if (r.status < 200 || r.status >= 300 || (r.body as { success?: unknown } | null)?.success === false) throw new Error(`writing the ${ACCOUNT_SETTINGS_RESOURCE} failed: ${describeFailure(r)}`);
-}

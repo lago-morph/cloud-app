@@ -8,7 +8,7 @@
  *   account resource that `setup-account` creates (DEC-0550), checked by `inspectAccount` like the
  *   other shared resources.
  * - `inspectAccount` / `createSharedResources`: the account steps of `account.ts` (DEC-0578).
- * - `readAccountSettings` / `writeAccountSettings`: the account settings record
+ * - `readAccountSettings`: the account settings record
  *   `framework/account.json` in `sst-state` (`account-settings.ts`, DEC-0514); `deploy` reads the
  *   email domain a 0.1.x setup recorded there, for a production stage's `EMAIL` binding.
  * - `setupProblems` / `recordSetup`: `setup-account`'s check (the permission to create the
@@ -58,7 +58,7 @@ import { secretLocation } from "../../config/secret-locations.js";
 import { FRAMEWORK_SECRETS } from "../../secrets/names.js";
 import type { DeployedCode, DeployInput, HealthOutcome, Stage, StageDatabase, StageResource, StageResources, TargetOperations } from "../core/operations.js";
 import { accountSubdomain, createSharedResources, inspectSharedResources, type SharedResourceOptions } from "./account.js";
-import { readAccountSettings, writeAccountSettings } from "./account-settings.js";
+import { readAccountSettings } from "./account-settings.js";
 import { describeFailure, succeeded, type CloudflareApi, type CloudflareBytesApi } from "./api.js";
 import { backupStage, IN_FLIGHT_DRAIN_MS, listStageBackups } from "./backup.js";
 import { FIRST_SETUP_VERSION, frameworkVersion, SETUP_STEPS, writeSetupRecord } from "./setup-record.js";
@@ -205,7 +205,6 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
       await createSharedResources(api, accountId, absent, options.newSubdomain === undefined ? {} : { newSubdomain: options.newSubdomain }, note);
     },
     readAccountSettings: () => readAccountSettings(api, accountId),
-    writeAccountSettings: (settings) => writeAccountSettings(api, accountId, settings),
     async setupProblems() {
       return (await signingCredentialState(api, accountId)) === "absent" ? [...(await tokenWriteProblems(api, accountId))] : [];
     },

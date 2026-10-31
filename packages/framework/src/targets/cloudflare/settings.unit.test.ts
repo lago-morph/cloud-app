@@ -57,13 +57,13 @@ describe("cloudflareWorkerSettings", () => {
     }
   });
 
-  it(tag("MAIL-AC-004", "a production stage binds EMAIL (send_email) with exactly the allowed sender no-reply@<emailDomain> and sets FRAMEWORK_MAIL_FROM"), () => {
+  it("a production stage binds EMAIL (send_email) with exactly the allowed sender no-reply@<emailDomain> and sets FRAMEWORK_MAIL_FROM (untagged: MAIL-AC-004 is retired, DEC-0696; the EMAIL binding stays until F removes it)", () => {
     const settings = cloudflareWorkerSettings(production);
     expect(settings.sendEmail).toEqual([{ binding: "EMAIL", allowedSenderAddresses: ["no-reply@example.test"] }]);
     expect(settings.vars).toEqual({ FRAMEWORK_PUBLIC_ORIGIN: "https://notes-prod.example.workers.dev", FRAMEWORK_MAIL_FROM: "no-reply@example.test" });
   });
 
-  it(tag("MAIL-AC-004", "a test stage binds no EMAIL, with or without a recorded email domain; with one it sets FRAMEWORK_MAIL_FROM"), () => {
+  it("a test stage binds no EMAIL, with or without a recorded email domain; with one it sets FRAMEWORK_MAIL_FROM (untagged: MAIL-AC-004 is retired, DEC-0696; the EMAIL binding stays until F removes it)", () => {
     expect(cloudflareWorkerSettings(input).sendEmail).toEqual([]);
     const recorded = cloudflareWorkerSettings({ ...input, emailDomain: "example.test" });
     expect(recorded.sendEmail).toEqual([]);

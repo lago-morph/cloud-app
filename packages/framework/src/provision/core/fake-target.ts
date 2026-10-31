@@ -70,7 +70,7 @@ export class FakeTarget implements TargetOperations {
   readonly stages = new Map<string, FakeStage>();
   /** Returned by `preflight`. */
   missingPrerequisites: string[] = [];
-  /** The account settings record (`readAccountSettings` / `writeAccountSettings`). */
+  /** The account settings record (`readAccountSettings`). */
   accountSettings: AccountSettings;
   /** Returned by `setupProblems`. */
   missingSetup: string[] = [];
@@ -183,11 +183,6 @@ export class FakeTarget implements TargetOperations {
   async readAccountSettings(): Promise<AccountSettings> {
     this.enter("readAccountSettings");
     return { ...this.accountSettings };
-  }
-
-  async writeAccountSettings(settings: AccountSettings): Promise<void> {
-    this.enter("writeAccountSettings", settings.emailDomain ?? "");
-    this.accountSettings = { ...settings };
   }
 
   async recordSetup(): Promise<readonly string[]> {

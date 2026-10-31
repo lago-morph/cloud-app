@@ -5,5 +5,5 @@
  */
 export type { LogEntry } from "../log/entry.js";
 export { createTestApp } from "./test-app.js";
-export type { MailMessage, TestApp, TestAppOptions, TestCapability, TestMail, TestRole } from "./test-app.js";
+export type { TestApp, TestAppOptions, TestCapability, TestRole } from "./test-app.js";
 export { connectTestStage } from "./connect.js";

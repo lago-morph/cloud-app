@@ -167,8 +167,6 @@ export interface TargetOperations {
    * state home, DEC-0514); `{}` when there is none yet. Changes nothing.
    */
   readAccountSettings(): Promise<AccountSettings>;
-  /** Records the account settings. Only `setup-account` calls it, after the shared resources exist. */
-  writeAccountSettings(settings: AccountSettings): Promise<void>;
   /**
    * `setup-account`, before anything changes: its missing prerequisites by name: on Cloudflare
    * while the account's R2 signing credential is absent, the permission to create it (DEC-0551).

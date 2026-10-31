@@ -63,7 +63,7 @@
     "SEC": { "dependsOn": ["CFG"], "paths": ["packages/framework/src/secrets/**"], "integration": ["packages/framework/test/integration/secrets", "tests/compliance/criteria/secrets"] },
     "LOG": { "dependsOn": [], "paths": ["packages/framework/src/log/**"], "integration": ["packages/framework/test/integration/log", "tests/compliance/criteria/log"] },
     "AUTH": { "dependsOn": ["HTTP", "CFG"], "paths": ["packages/framework/src/auth/**", "!packages/framework/src/auth/password/**", "packages/framework/src/auth-app/**", "tests/support/mock-oauth2/**"], "integration": ["packages/framework/test/integration/auth", "packages/framework/test/integration/auth-app", "tests/compliance/criteria/auth"] },
-    "PWD": { "dependsOn": ["AUTH", "MAIL"], "paths": ["packages/framework/src/auth/password/**"], "integration": ["tests/compliance/criteria/pwd"] },
+    "PWD": { "dependsOn": ["AUTH", "MAIL"], "paths": ["packages/framework/src/auth/password/**"], "integration": [] },
     "MAIL": { "dependsOn": ["LOG", "CFG"], "paths": ["packages/framework/src/mail/**"], "integration": [] },
     "LOCAL": { "dependsOn": ["SQL", "MIG", "KV", "FILES", "CFG", "SEC", "LOG", "AUTH", "PWD", "MAIL"], "paths": ["packages/framework/src/targets/local/**", "packages/framework/src/targets/*.ts"], "integration": ["packages/framework/test/integration/local"] },
     "CF": { "dependsOn": ["SQL", "MIG", "KV", "FILES", "CFG", "SEC", "LOG", "AUTH", "PWD", "MAIL"], "paths": ["packages/framework/src/targets/cloudflare/**", "packages/framework/src/targets/*.ts"], "integration": ["tests/compliance/criteria/cf"] },
