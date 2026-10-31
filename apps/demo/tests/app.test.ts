@@ -335,7 +335,12 @@ describe("account (DEMO-REQ-009, DEMO-AC-009)", () => {
   });
 });
 
-describe("signed-up users and admins by role (DEMO-REQ-002; DEC-0521, DEC-0522)", () => {
+// A role change shows at the session's next role refresh, not on the next request (AUTH-REQ-003,
+// DEC-0672; testing.d.ts `grantRole`): the refresh interval PAR-425 is 300 s, so moving the test
+// app's clock past it makes the next request read the account's role again.
+const ROLE_REFRESH_DUE_MS = 301_000;
+
+describe("signed-up users and admins by role (DEMO-REQ-002; DEC-0521, DEC-0522, DEC-0672)", () => {
   it("every signed-up user can post; the admin role, granted and revoked, decides who publishes", async () => {
     // One app, so every login sees the same posts.
     const t = await open({ stubLoginProvider: true });
@@ -345,6 +350,9 @@ describe("signed-up users and admins by role (DEMO-REQ-002; DEC-0521, DEC-0522)"
     expect(bossMe.unlistedId).toBeUndefined();
     if (bossMe.id === undefined) throw new Error("no id");
     await t.grantRole(bossMe.id, "admin");
+    const notYet: Me = await (await t.request("/api/auth/me")).json();
+    expect(notYet.level, "within PAR-425 the session keeps its level").toBe("user");
+    t.clock.advance(ROLE_REFRESH_DUE_MS);
     const granted: Me = await (await t.request("/api/auth/me")).json();
     expect(granted.level).toBe("admin");
     const published = await createDraft(t, "published post");
@@ -357,7 +365,12 @@ describe("signed-up users and admins by role (DEMO-REQ-002; DEC-0521, DEC-0522)"
     expect(await errorCode(await t.request(`/api/posts/${draft}/publish`, { method: "POST" }), 403)).toBe("AUTH.FORBIDDEN");
 
     await t.loginWithStub("boss");
+    // A new sign-in confirms the role recorded for the account at once: the stub returns its
+    // account's roles at sign-in (DEC-0672; also the rule proposed in DEC-0703).
+    const signedInAgain: Me = await (await t.request("/api/auth/me")).json();
+    expect(signedInAgain.level).toBe("admin");
     await t.revokeRole(bossMe.id, "admin");
+    t.clock.advance(ROLE_REFRESH_DUE_MS);
     const revoked: Me = await (await t.request("/api/auth/me")).json();
     expect(revoked.level).toBe("user");
     const page: PostPage = await (await t.request("/api/posts")).json();
