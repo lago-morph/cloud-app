@@ -52,6 +52,16 @@ function setup(overrides: Partial<CloudflareTargetOptions> = {}) {
 
 const request = (s = stage): DeployRequest => ({ stage: s, migrations: MIGRATIONS, requiredSecrets: [] });
 
+/**
+ * A 0.1.x setup's email domain in the account settings record, which a production stage's EMAIL
+ * binding still reads (DEC-0514). Since v0.2.0 nothing records one (DEC-0689).
+ */
+function recordEmailDomain(cloud: FakeCloud, emailDomain = "example.test"): void {
+  const key = "sst-state/framework/account.json";
+  cloud.buckets.get("sst-state")!.add("framework/account.json");
+  cloud.objectBodies.set(key, { ...(cloud.objectBodies.get(key) as object | undefined), emailDomain });
+}
+
 /** The auth app link as a recording stand-in (the real one, over D1, is `worker.unit.test.ts`'s). */
 function fakeAuthApp(problems: string[] = [], registerError?: Error) {
   const link = {
@@ -126,11 +136,11 @@ describe("Cloudflare preflight (PROV-REQ-002 step 1)", () => {
 });
 
 describe("setup-account on Cloudflare (PROV-REQ-004)", () => {
-  it("[PROV-AC-004] [MAIL-AC-007] unit part: creates the shared resources and the email setup once; a second run changes nothing", async () => {
+  it("[PROV-AC-004] unit part: creates the shared resources once, with no email setup and no email domain (v0.2.0); a second run changes nothing", async () => {
     const { cloud, target } = setup();
     cloud.buckets.clear();
     cloud.subdomain = undefined;
-    expect(await runSetupAccount(target, captureIo(), { emailDomain: "example.test" })).toEqual({
+    expect(await runSetupAccount(target, captureIo())).toEqual({
       status: 0,
       created: [
         "R2 bucket prototype-logs",
@@ -139,20 +149,11 @@ describe("setup-account on Cloudflare (PROV-REQ-004)", () => {
         "lifecycle rule of R2 bucket prototype-backups (PAR-311)",
         "workers.dev subdomain",
         "R2 signing credential prototype-r2-signing",
-        "Email Sending entry example.test",
-        "R2 bucket prototype-mailsink",
-        "lifecycle rule of R2 bucket prototype-mailsink (PAR-241)",
-        "Worker prototype-mailsink",
-        "Email Routing on t.example.test",
-        "Email Routing subaddressing",
-        "routing rule sink@t.example.test → Worker prototype-mailsink",
         "account setup record (setup version 1)",
       ],
-      recorded: "example.test",
     });
-    // The record also holds the setup record's fields, written last (plan-setup-wizard §4.4, DEC-0577).
+    // The record holds the setup record's fields, written last (plan-setup-wizard §4.4, DEC-0577).
     expect(cloud.objectBodies.get("sst-state/framework/account.json")).toEqual({
-      emailDomain: "example.test",
       setupVersion: 1,
       frameworkVersion: expect.any(String) as string,
       appliedAt: expect.any(String) as string,
@@ -163,16 +164,16 @@ describe("setup-account on Cloudflare (PROV-REQ-004)", () => {
     expect(cloud.subdomain).not.toContain(ACCOUNT.slice(0, 6));
     expect([...cloud.tokens.values()].map((t) => t.name)).toEqual(["prototype-r2-signing"]);
     expect(Object.keys(cloud.objectBodies.get("sst-state/framework/r2-signing.json") as object).sort()).toEqual(["accessKeyId", "deniedBuckets", "secretAccessKey", "tokenId"]);
+    // No zone, email or mail sink request.
+    expect(cloud.requests.filter((r) => /\/zones|\/email|mailsink/.test(r))).toEqual([]);
     cloud.requests.length = 0;
-    // The record now names the domain, so --email-domain may be left out; the same domain changes nothing either.
     expect(await runSetupAccount(target, captureIo())).toEqual({ status: 0, created: [] });
-    expect(await runSetupAccount(target, captureIo(), { emailDomain: "example.test" })).toEqual({ status: 0, created: [] });
     expect(cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
   });
 
   it("a release with a raised setup version records it and says so, not \"nothing changed\"", async () => {
     const { cloud, target } = setup();
-    await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
+    await runSetupAccount(target, captureIo());
     const upgraded = setup({ api: cloud.api, setupVersion: 2 }).target;
     const io = captureIo();
     expect(await runSetupAccount(upgraded, io)).toEqual({ status: 0, created: ["account setup record (setup version 2)"] });
@@ -180,63 +181,30 @@ describe("setup-account on Cloudflare (PROV-REQ-004)", () => {
     expect(io.out).toContain("account setup record (setup version 2)");
   });
 
-  it("[PROV-AC-004] unit part: without --email-domain and with no recorded domain it stops before creating anything", async () => {
-    const { cloud, target } = setup();
-    cloud.buckets.clear();
-    const io = captureIo();
-    expect(await runSetupAccount(target, io)).toEqual({ status: 1, created: [] });
-    expect(io.err).toContain("--email-domain <domain>");
-    expect(cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
-    expect(cloud.buckets.size).toBe(0);
-  });
-
-  it("the account settings record is framework/account.json in sst-state, written only on a change, and read by deploy", async () => {
+  it("the account settings record is framework/account.json in sst-state, written only on a change; a 0.1.x email domain in it is kept and read by deploy", async () => {
     const { cloud, target } = setup();
     expect(await target.readAccountSettings()).toEqual({});
-    await runSetupAccount(target, captureIo(), { emailDomain: "one.example" });
-    const io = captureIo();
-    // The new domain is onboarded and routed; the sink's bucket and Worker are shared and already there.
-    expect(await runSetupAccount(target, io, { emailDomain: "two.example" })).toEqual({
-      status: 0,
-      created: ["Email Sending entry two.example", "Email Routing on t.two.example", "Email Routing subaddressing", "routing rule sink@t.two.example → Worker prototype-mailsink", "account setup record (setup version 1)"],
-      recorded: "two.example",
-    });
-    expect(cloud.zones.get("one.example")!.sending.map((e) => e.name)).toEqual(["one.example"]);
-    expect(io.out).toContain("the previous email domain one.example keeps its email setup");
-    // Each run with a new domain writes it (dropping the old domain's setup fields), then the setup record last (DEC-0577).
-    expect(cloud.requests.filter((r) => r.startsWith("PUT ") && r.includes("/objects/"))).toEqual(
-      Array.from({ length: 4 }, () => `PUT /accounts/${ACCOUNT}/r2/buckets/sst-state/objects/framework%2Faccount.json`),
-    );
+    recordEmailDomain(cloud, "two.example");
+    await runSetupAccount(target, captureIo());
+    expect(await runSetupAccount(target, captureIo())).toEqual({ status: 0, created: [] });
+    // One write, the setup record's (DEC-0577); the stored email domain is kept as it is.
+    expect(cloud.requests.filter((r) => r.startsWith("PUT ") && r.includes("/objects/"))).toEqual([`PUT /accounts/${ACCOUNT}/r2/buckets/sst-state/objects/framework%2Faccount.json`]);
     expect(await target.readAccountSettings()).toEqual({ emailDomain: "two.example" });
     // The record is a shared account object, never one of a stage's SST state objects.
     await runDeploy(target, request(), captureIo());
     expect((await target.listStageResources(stage)).resources.map((r) => r.id)).not.toContain("framework/account.json");
   });
 
-  it("[PROV-AC-004] unit part: a token lacking an email permission is named and nothing is changed", async () => {
+  it("removing a stage leaves a 0.1.x mail sink's Worker and bucket (only the admin app's optional cleanup removes them, plan-v0.2.0 §8)", async () => {
     const { cloud, target } = setup();
-    cloud.buckets.clear();
-    cloud.tokenPolicies = [];
-    const io = captureIo();
-    expect(await runSetupAccount(target, io, { emailDomain: "example.test" })).toEqual({ status: 1, created: [] });
-    expect(io.err).toContain('the Cloudflare API token lacks the permission "Email Sending Write" (account; DEC-0515)');
-    expect(io.err).toContain('lacks the permission "Zone Settings Write" (zone example.test; DEC-0515)');
-    expect(io.err).toContain("nothing was changed");
-    expect(cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
-    expect(cloud.buckets.size).toBe(0);
-  });
-
-  it("[MAIL-AC-007] unit part: removing a stage leaves the mail sink's Worker, bucket, routing and sending entry", async () => {
-    const { cloud, target } = setup();
-    await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
+    await runSetupAccount(target, captureIo());
+    cloud.workers.set("prototype-mailsink", { secrets: new Map(), enabled: true, previews: false, bindings: [] });
+    cloud.buckets.set("prototype-mailsink", new Set());
     cloud.putObject("prototype-mailsink", "sink+a@t.example.test/20261025T100000000Z-x.eml", "Subject: x\n\nbody");
     expect((await runDeploy(target, request(), captureIo())).status).toBe(0);
     expect((await runRemove(target, stage, captureIo())).status).toBe(0);
     expect(cloud.workers.has("prototype-mailsink")).toBe(true);
     expect(cloud.buckets.get("prototype-mailsink")!.size).toBe(1);
-    const zone = cloud.zones.get("example.test")!;
-    expect([...zone.routedSubdomains]).toEqual(["t.example.test"]);
-    expect(zone.sending).toHaveLength(1);
     expect(cloud.requests.filter((r) => r.startsWith("DELETE ") && r.includes("prototype-mailsink"))).toEqual([]);
   });
 
@@ -252,57 +220,32 @@ describe("setup-account on Cloudflare (PROV-REQ-004)", () => {
     expect(cloud.workers.has("prototype-mailsink")).toBe(true);
   });
 
-  it("an invalid stored record is reported, naming the record and how to rewrite it", async () => {
+  it("an invalid stored record is reported, naming the record and how to correct it (no --email-domain any more)", async () => {
     const { cloud, target } = setup();
-    cloud.buckets.get("sst-state")!.add("framework/account.json");
-    cloud.objectBodies.set("sst-state/framework/account.json", { emailDomain: "Not A Domain" });
-    await expect(target.readAccountSettings()).rejects.toThrow(/framework\/account\.json.*setup-account --target cloudflare --email-domain/);
-  });
-
-  it("an invalid --email-domain is refused before anything is read or changed", async () => {
-    const { cloud, target } = setup();
-    const io = captureIo();
-    expect((await runSetupAccount(target, io, { emailDomain: "no_such domain" })).status).toBe(1);
-    expect(io.err).toContain("is not a domain name");
-    expect(cloud.requests).toEqual([]);
-  });
-
-  it("the email setup runs through its seam on every setup-account, after the record", async () => {
-    const calls: string[] = [];
-    const { target } = setup({
-      email: {
-        setupProblems: async () => [],
-        setUp: async (domain) => (calls.push(`setUp ${domain}`), calls.length === 1 ? ["Email Routing on t.example.test"] : []),
-        productionPrerequisites: async () => [],
-      },
-    });
-    const first = await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
-    expect(first.created).toContain("Email Routing on t.example.test");
-    expect((await runSetupAccount(target, captureIo())).created).toEqual([]);
-    expect(calls).toEqual(["setUp example.test", "setUp example.test"]);
+    recordEmailDomain(cloud, "Not A Domain");
+    await expect(target.readAccountSettings()).rejects.toThrow(/framework\/account\.json.*invalid emailDomain.*dashboard/);
+    await expect(target.readAccountSettings()).rejects.not.toThrow(/--email-domain/);
   });
 });
 
-describe("a production stage's mail settings on Cloudflare (MAIL-AC-004, CF §2)", () => {
+describe("a production stage's mail settings on Cloudflare (CF §2; the EMAIL binding stays until F removes it, MAIL-AC-004 is retired, DEC-0696)", () => {
   const prod = { app: "notes", stage: "prod" };
 
-  it("the preflight requires the account's email domain and the email prerequisites of the seam", async () => {
-    const missing: string[] = ["the Email Sending entry of example.test is not verified"];
-    const { cloud, target } = setup({ email: { setupProblems: async () => [], setUp: async () => [], productionPrerequisites: async () => missing } });
+  it("the preflight requires the account's email domain for the EMAIL binding; it reads no zone and no email setup (v0.2.0)", async () => {
+    const { cloud, target } = setup({ authApp: fakeAuthApp() });
     const io = captureIo();
     expect((await runDeploy(target, request(prod), io)).status).toBe(1);
     expect(io.err).toContain("the account settings record names no email domain");
-    await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
-    const io2 = captureIo();
-    expect((await runDeploy(target, request(prod), io2)).status).toBe(1);
-    expect(io2.err).toContain("the Email Sending entry of example.test is not verified");
     expect(cloud.sstRuns).toEqual([]);
+    recordEmailDomain(cloud);
+    expect((await runDeploy(target, request(prod), captureIo())).status).toBe(0);
+    expect(cloud.requests.filter((r) => /\/zones|\/email\//.test(r))).toEqual([]);
   });
 
   it("deploys the EMAIL send_email binding restricted to no-reply@<emailDomain>, FRAMEWORK_MAIL_FROM and nodejs_compat; a test stage binds no EMAIL", async () => {
     // A production stage also needs the account's auth app (DEC-0725).
     const { cloud, target } = setup({ authApp: fakeAuthApp() });
-    await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
+    recordEmailDomain(cloud);
     const io = captureIo();
     expect((await runDeploy(target, request(prod), io)).status).toBe(0);
     expect(io.out).toContain("sender address: no-reply@example.test");
@@ -325,7 +268,7 @@ describe("a production stage signs in through the account's auth app (plan-v0.2.
   it("[PROV-AC-002] the preflight of a production stage names a missing auth app or registry and stops before creating anything; a test stage does not ask", async () => {
     const authApp = fakeAuthApp(["the account's auth app (Worker prototype-auth) is not deployed; …"]);
     const { cloud, target } = setup({ authApp });
-    await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
+    recordEmailDomain(cloud);
     const io = captureIo();
     expect((await runDeploy(target, request(prod), io)).status).toBe(1);
     expect(io.err).toMatch(/deploy failed at step 1 \(preflight\)[\s\S]*the account's auth app \(Worker prototype-auth\) is not deployed/);
@@ -342,7 +285,7 @@ describe("a production stage signs in through the account's auth app (plan-v0.2.
     let seen: unknown;
     // Registered once the code and its framework secrets are deployed, and before step 6 starts the app.
     authApp.onRegister = () => (seen = { worker: cloud.workers.has("notes-prod"), secrets: cloud.workers.get("notes-prod")?.secrets.size, started: cloud.requests.includes(`POST /accounts/${ACCOUNT}/workers/scripts/notes-prod/subdomain`) });
-    await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
+    recordEmailDomain(cloud);
     expect((await runDeploy(target, request(prod), captureIo())).status).toBe(0);
     const worker = cloud.workers.get("notes-prod")!;
     expect(worker.bindings).toContainEqual({ type: "service", name: "AUTH", service: "prototype-auth", entrypoint: "AuthApp" });
@@ -359,7 +302,7 @@ describe("a production stage signs in through the account's auth app (plan-v0.2.
   it("step 3 of a production stage with a database declares the same AUTH binding as step 5", async () => {
     const authApp = fakeAuthApp();
     const { cloud, target } = setup({ authApp });
-    await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
+    recordEmailDomain(cloud);
     await runDeploy(target, request(prod), captureIo());
     const before = cloud.programs.length;
     expect((await runDeploy(target, request(prod), captureIo())).status).toBe(0);
@@ -370,7 +313,7 @@ describe("a production stage signs in through the account's auth app (plan-v0.2.
   it("a failed registration fails the deploy at step 5, naming the auth app, and the app is not started", async () => {
     const authApp = fakeAuthApp([], new Error("the account's auth app (Worker prototype-auth) has no registry (its D1 binding DB); run account setup in the admin app again"));
     const { cloud, target } = setup({ authApp });
-    await runSetupAccount(target, captureIo(), { emailDomain: "example.test" });
+    recordEmailDomain(cloud);
     const io = captureIo();
     const result = await runDeploy(target, request(prod), io);
     expect(result.status).toBe(1);
@@ -532,14 +475,14 @@ describe("deploy on Cloudflare (PROV-REQ-002 steps 3, 5, 6, 7)", () => {
     cloud.tokens.clear();
     cloud.tokenPolicies = FULL_POLICIES.map((p) => ({ ...p, permission_groups: p.permission_groups.filter((g) => g.name !== "Account API Tokens Write").concat(p.id === "p1" ? [{ id: "r", name: "Account API Tokens Read" }] : []) }));
     const io = captureIo();
-    expect(await runSetupAccount(target, io, { emailDomain: "example.test" })).toEqual({ status: 1, created: [] });
+    expect(await runSetupAccount(target, io)).toEqual({ status: 1, created: [] });
     expect(io.err).toMatch(/lacks the permission "Account API Tokens Write" \(account\), which creating the R2 signing credential prototype-r2-signing needs/);
     expect(cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
     expect(cloud.buckets.size).toBe(0);
     // With the credential in place, the setup token's token permission is no longer needed.
     const b = setup();
     b.cloud.tokenPolicies = cloud.tokenPolicies;
-    expect((await runSetupAccount(b.target, captureIo(), { emailDomain: "example.test" })).status).toBe(0);
+    expect((await runSetupAccount(b.target, captureIo())).status).toBe(0);
   });
 
   it("deploying code without the built Worker fails naming what is missing", async () => {

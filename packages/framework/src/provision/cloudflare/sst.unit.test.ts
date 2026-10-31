@@ -98,7 +98,7 @@ describe("the SST app built from the app definition (PROV-REQ-001; cloudflare.md
     }
   });
 
-  it("[MAIL-AC-004] a production stage binds EMAIL as a send_email binding allowed to send only as no-reply@<emailDomain>, with FRAMEWORK_MAIL_FROM", async () => {
+  it("a production stage binds EMAIL as a send_email binding allowed to send only as no-reply@<emailDomain>, with FRAMEWORK_MAIL_FROM (untagged: MAIL-AC-004 is retired, DEC-0696; the EMAIL binding stays until F removes it)", async () => {
     const prodStage = { app: "notes", stage: "prod" };
     const prodWorker = { ...worker, publicOrigin: "https://notes-prod.example.workers.dev", emailDomain: "example.test" };
     const { config, components } = evaluate(sstProgram({ stage: prodStage, worker: prodWorker }));
@@ -143,7 +143,7 @@ describe("the SST app built from the app definition (PROV-REQ-001; cloudflare.md
     expect("FRAMEWORK_AUTH_APP_ORIGIN" in (plain.components[1]!.args.environment as object)).toBe(false);
   });
 
-  it("[MAIL-AC-004] a test stage binds no EMAIL; with a recorded domain it still gets FRAMEWORK_MAIL_FROM", async () => {
+  it("a test stage binds no EMAIL; with a recorded domain it still gets FRAMEWORK_MAIL_FROM (untagged: MAIL-AC-004 is retired, DEC-0696; the EMAIL binding stays until F removes it)", async () => {
     for (const w of [worker, { ...worker, emailDomain: "example.test" }]) {
       const { config, components } = evaluate(sstProgram({ stage, worker: w }));
       await config.run();

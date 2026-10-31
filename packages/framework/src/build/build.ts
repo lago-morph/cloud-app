@@ -94,8 +94,8 @@ export function entrySource(options: {
     lines.push(`import { createLocalWorker } from ${JSON.stringify(options.runtimeImport)};`, "export default createLocalWorker(app, config);");
   } else if (options.deployment.isTestStage) {
     lines.push(
-      `import { createAuthMock, createCloudflareWorker, createTestMailCapture } from ${JSON.stringify(options.runtimeImport)};`,
-      "export default createCloudflareWorker(app, config, { mock: createAuthMock, testMail: createTestMailCapture });",
+      `import { createAuthMock, createCloudflareWorker } from ${JSON.stringify(options.runtimeImport)};`,
+      "export default createCloudflareWorker(app, config, { mock: createAuthMock });",
     );
   } else {
     lines.push(`import { createCloudflareWorker } from ${JSON.stringify(options.runtimeImport)};`, "export default createCloudflareWorker(app, config);");

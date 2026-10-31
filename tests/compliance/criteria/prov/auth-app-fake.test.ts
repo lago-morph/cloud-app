@@ -51,7 +51,7 @@ afterAll(async () => {
   await d1?.close();
 });
 
-/** A fake account set up for production deploys (email seam satisfied), with the auth app's Worker as `authApp` gives it. */
+/** A fake account set up for production deploys (a 0.1.x email domain recorded for the EMAIL binding), with the auth app's Worker as `authApp` gives it. */
 function account(authApp: "absent" | "no-registry" | "deployed") {
   const cloud = FakeCloud.withSharedResources();
   cloud.objectBodies.set("sst-state/framework/account.json", { emailDomain: "example.test" });
@@ -74,7 +74,6 @@ function account(authApp: "absent" | "no-registry" | "deployed") {
     fetch: (async () => new Response(null, { status: 204 })) as unknown as typeof fetch,
     code: { bundle: "/app/.framework/cloudflare/worker.js", compatibilityDate: "2026-10-01", logBucketBinding: "LOGS" },
     files: { bucketCors: () => ({ rules: [] }), storagePreflight: async (): Promise<HealthOutcome> => ({ ok: true }) },
-    email: { setupProblems: async () => [], setUp: async () => [], productionPrerequisites: async () => [] },
     randomKey: () => "generated-session-key",
     sleep: async () => {},
   });

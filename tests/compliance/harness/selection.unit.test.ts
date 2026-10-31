@@ -23,17 +23,17 @@ describe("[E2E-004] coverage is computed from the runners' listing with the driv
     expect(uncovered(["KV-AC-001", "KV-AC-004", "SQL-AC-003", "KV-AC-002"], listed)).toEqual(["KV-AC-002"]);
   });
 
-  it("local selection is the driver's: integration config, unit config for unit-level IDs only, the two Playwright projects", () => {
+  it("local selection is the driver's: integration config, unit config for unit-level IDs only, the three Playwright projects", () => {
     const local = runnerSelection({ target: "local" });
     expect(local.map((s) => [s.runner, s.label, s.args.join(" ")])).toEqual([
       ["vitest", "vitest", "vitest run --config vitest.integration.config.ts"],
       ["vitest", "vitest-unit", "vitest run --config vitest.unit.config.ts"],
-      ["playwright", "playwright", "playwright test --project integration --project e2e"],
+      ["playwright", "playwright", "playwright test --project integration --project e2e-api --project e2e-ui"],
     ]);
     expect(local[1]?.onlyIds).toEqual(UNIT_LEVEL);
     expect(local[0]?.onlyIds).toBeUndefined();
     const cloud = runnerSelection({ target: "cloudflare" });
-    expect(cloud.map((s) => s.args.join(" "))).toEqual(["vitest run --config vitest.integration.config.ts tests/compliance/criteria", "playwright test tests/compliance/ --project integration --project e2e"]);
+    expect(cloud.map((s) => s.args.join(" "))).toEqual(["vitest run --config vitest.integration.config.ts tests/compliance/criteria", "playwright test tests/compliance/ --project integration --project e2e-api --project e2e-ui"]);
     expect(runnerSelection({ target: "local", selfTest: true }).map((s) => s.args.join(" "))).toEqual(["vitest run --config tests/compliance/harness/self-test/vitest.config.ts"]);
   });
 

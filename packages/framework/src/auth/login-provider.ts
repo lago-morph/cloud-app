@@ -1,9 +1,8 @@
 /**
  * Login provider interfaces (contract: docs/contracts/ts/internal/login-provider.d.ts; owner AUTH).
- * The framework-internal contracts between AUTH and each provider adapter: `LoginProvider`
- * (redirect: the test-only stub) and `CredentialProvider` (validates credentials itself: the
- * password provider PWD, `src/auth/password/`). Never exported to app code. Behavior:
- * docs/components/auth.md, docs/components/password.md.
+ * The framework-internal contract between AUTH and each provider adapter: `LoginProvider`
+ * (redirect: the auth-app provider and the test-only stub). Never exported to app code.
+ * Behavior: docs/components/auth.md.
  */
 
 export interface ProviderContext {
@@ -24,6 +23,13 @@ export interface ProviderIdentity {
   /** Provider's stable identifier for the person. Never exposed to app code. */
   readonly subject: string;
   readonly displayName: string | null;
+  /**
+   * The roles the provider confirmed at sign-in, when it has them (the auth-app provider:
+   * the role at redemption). Then AUTH keeps the level in the session and asks
+   * `accountStatus` again only every PAR-425, failing closed (plan-v0.2.0 §4.1 step 5,
+   * DEC-0668). Absent: the level is read on every request.
+   */
+  readonly roles?: readonly string[];
 }
 
 /**
@@ -58,57 +64,6 @@ export interface LoginProvider {
    * `subject`. Throws when it cannot tell (AUTH then treats the request as anonymous). The stub
    * answers from its in-memory accounts (DEC-0525). Every provider has it (the retired Google
    * adapter, which had none, left in item I-G).
-   */
-  accountStatus(subject: string): Promise<AccountStatus | null>;
-}
-
-/** Per-request context for a credential provider. Built by AUTH; never visible to app code. */
-export interface CredentialContext {
-  /** The deployment's resolved public origin. Links in mail are built from it, never from request headers. */
-  readonly publicOrigin: string;
-  /** The request's `Origin` header, already checked by AUTH (AUTH-REQ-007) and passed on to the provider's own check. */
-  readonly origin: string;
-  /** The client IP used for rate limiting: `CF-Connecting-IP`, or "127.0.0.1" locally and in createTestApp when absent. */
-  readonly clientIp: string;
-  readonly userAgent: string | null;
-  /** Schedules work to run after the response (mail sends), so the response and its timing do not depend on it. */
-  readonly waitUntil: (work: Promise<unknown>) => void;
-  readonly getSecret: (name: string) => Promise<string>;
-  readonly getConfig: (key: string) => unknown;
-}
-
-/**
- * A provider that validates credentials itself (release 1: email and password, `id`
- * "password"; password.md, DEC-0510). It is created per request over the request's SQL
- * database and never creates a browser session: AUTH derives the user ID from `id` and
- * `ProviderIdentity.subject` and issues the framework session. Every operation that takes an
- * address resolves identically whether or not an account exists (PWD-REQ-005); only `signIn`
- * returns an identity.
- *
- * Failures are FrameworkErrors: `AUTH.LOGIN_FAILED` (wrong credentials, or an invalid, used or
- * expired token), `AUTH.NOT_VERIFIED` (sign-in before verification), `AUTH.RATE_LIMITED` (over a
- * PWD-REQ-006 limit), `AUTH.REQUEST_FORGERY` (a forged `Origin`), `HTTP.INVALID_INPUT` (password
- * length, missing display name).
- */
-export interface CredentialProvider {
-  /** Short, stable provider name, e.g. "password". Part of the user ID derivation. */
-  readonly id: string;
-  /** Creates an unverified account and mails a verification link; for an existing address, mails a notice instead. */
-  signUp(ctx: CredentialContext, input: { readonly email: string; readonly password: string; readonly displayName: string }): Promise<void>;
-  /** Validates the credentials of a verified account and returns its identity. Sends no mail. */
-  signIn(ctx: CredentialContext, input: { readonly email: string; readonly password: string }): Promise<ProviderIdentity>;
-  /** Mails a new verification link if the address has an unverified account; otherwise does nothing. */
-  sendVerification(ctx: CredentialContext, input: { readonly email: string }): Promise<void>;
-  /** Marks the account of a valid verification token as verified. Creates no session. */
-  verify(ctx: CredentialContext, input: { readonly token: string }): Promise<void>;
-  /** Mails a single-use reset link if the address has an account; otherwise does nothing. */
-  requestReset(ctx: CredentialContext, input: { readonly email: string }): Promise<void>;
-  /** Sets a new password with a valid reset token and uses the token up. */
-  reset(ctx: CredentialContext, input: { readonly token: string; readonly newPassword: string }): Promise<void>;
-  /**
-   * The account's verification state and roles, or null when no account has this subject.
-   * One primary-key read of `__framework_auth_user` (`email_verified`, `role`; PWD-REQ-008).
-   * Throws when the read fails (AUTH then treats the request as anonymous).
    */
   accountStatus(subject: string): Promise<AccountStatus | null>;
 }

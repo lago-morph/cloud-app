@@ -82,7 +82,9 @@ async function expectTestMail404(c: ComplianceClient): Promise<void> {
 async function expectLoginRedirect(c: ComplianceClient): Promise<void> {
   const r = c.expectStatus(await c.get("/api/auth/login?returnTo=%2Fafter"), 302);
   const location = new URL(r.headers.get("location") ?? "", c.baseUrl);
-  expect(`${location.origin}${location.pathname}`, "/api/auth/login redirects to the framework's sign-in page on the public origin").toBe(`${c.baseUrl}/api/auth/sign-in`);
+  // Production stages sign in through the auth app (plan-v0.2.0 §4.1; the password sign-in page is removed).
+  expect(location.pathname, "/api/auth/login redirects to the auth app's /start").toBe("/start");
+  expect(location.searchParams.get("return"), "with the callback URL on the public origin").toBe(`${c.baseUrl}/api/auth/callback`);
 }
 
 /** The recorded deploy output of `stage` (cli.md §2) and when it was written. */
@@ -98,12 +100,7 @@ if (!isLocal()) {
       await expectBundleClean({ mock: true, mail: false });
     });
 
-    it(tag("MAIL-AC-006", "prodcheck part: GET /api/__framework/test-mail?to=<address> is 404 HTTP.NOT_FOUND on the redeployed prodcheck stage, whose deployed bundle holds no test-mail route"), async () => {
-      await expectTestMail404(prodcheck());
-      await expectBundleClean({ mock: false, mail: true });
-    });
-
-    it(tag("E2E-006", "prodcheck: mock-login and the test-mail route are 404, the deployed bundle holds no mock or mail-capture code, and /api/auth/login redirects to the sign-in page on the public origin"), async () => {
+    it(tag("E2E-006", "prodcheck: mock-login and the test-mail route are 404, the deployed bundle holds no mock or mail-capture code, and /api/auth/login redirects to the auth app's /start"), async () => {
       const c = prodcheck();
       await expectMockLogin404(c);
       await expectTestMail404(c);
@@ -111,7 +108,7 @@ if (!isLocal()) {
       await expectLoginRedirect(c);
     });
 
-    it(tag("COMPL-AC-005", "after this run redeployed prodcheck: mock-login and the test-mail route are 404, /api/auth/login redirects to <public origin>/api/auth/sign-in, and the run runs check-login there and records its PWD-AC-009 result"), async () => {
+    it(tag("COMPL-AC-005", "after this run redeployed prodcheck: mock-login and the test-mail route are 404, /api/auth/login redirects to the auth app's /start, and the run runs check-login there"), async () => {
       const t = target();
       // "After prodcheck is redeployed": the driver deploys the run stage, then prodcheck (prodcheck.ts).
       const runStage = t.stage ?? "";
@@ -126,12 +123,9 @@ if (!isLocal()) {
       await expectTestMail404(c);
       await expectLoginRedirect(c);
 
-      // check-login runs after the test layers: this run must be one that runs it and records PWD-AC-009.
+      // check-login runs after the test layers: this run must be one that runs it (its E2E-008 result).
       expect(PRODCHECK_IDS, "COMPL-AC-005 makes the run redeploy prodcheck and run check-login").toContain("COMPL-AC-005");
-      expect(CHECK_LOGIN_IDS, "the driver folds check-login's PWD-AC-009 result into the run's record").toContain("PWD-AC-009");
-      expect(driverChecks(t.target).map((d) => d.title).some((title) => title.startsWith("[PWD-AC-009]")), "the run lists check-login's PWD-AC-009 check").toBe(true);
-      const expected = expectedCriteria(readCatalogue(DOCS), t.target, "automated").find((e) => e.id === "PWD-AC-009");
-      expect(expected, "PWD-AC-009 is expected on every automated cloud run, with no not-run rule").toMatchObject({ run: true, notRunParts: [] });
+      expect(driverChecks(t.target).map((d) => d.title).some((title) => title.startsWith("[E2E-008]")), "the run lists check-login's E2E-008 check").toBe(true);
     });
   });
 } else {

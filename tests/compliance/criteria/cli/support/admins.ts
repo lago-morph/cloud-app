@@ -9,11 +9,9 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import type { MailMessage } from "../../../../../docs/contracts/ts/testing.js";
 import { prerequisiteMissing } from "../../../harness/index.js";
 import { cli, type CommandResult } from "../../core/support/processes.js";
 import { REFERENCE_DIR } from "../../core/support/repo.js";
-import type { MailReader } from "../../pwd/support.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const REQUEST_RECORDER = join(here, "record-requests.mjs");
@@ -60,26 +58,6 @@ export function d1ApiRequests(lines: readonly string[]): string[] {
   return lines.filter((l) => /\/d1\/database\b/.test(l) || /\/d1\//.test(l));
 }
 
-/** The mail sink, read by recipient with `mail last --to <address> --target cloudflare` (MAIL-REQ-005). */
-export function sinkMail(appDir = REFERENCE_DIR): MailReader {
-  const latest = async (address: string): Promise<MailMessage | undefined> => {
-    const r = await cli(["mail", "last", "--to", address, "--target", "cloudflare"], { cwd: appDir, timeoutMs: 120_000 });
-    if (r.status === 1) return undefined;
-    if (r.status !== 0) throw new Error(`mail last --target cloudflare exited ${String(r.status)}: ${r.output.slice(-1500)}`);
-    const start = r.output.indexOf("{");
-    const v = JSON.parse(r.output.slice(start)) as Partial<Record<string, unknown>>;
-    const text = (k: string): string => (typeof v[k] === "string" ? (v[k] as string) : "");
-    return { to: text("to"), from: text("from"), subject: text("subject"), text: text("text"), html: text("html"), sentAt: text("sentAt") || text("time") };
-  };
-  return {
-    latest,
-    async all(address) {
-      const m = await latest(address);
-      return m === undefined ? [] : [m];
-    },
-  };
-}
-
 /** The stage's recorded deploy output `.framework/<target>/stages/<stage>.json` `{ publicOrigin }` (cli.md §2). */
 export function recordedOrigin(target: string, stage: string, appDir = REFERENCE_DIR): string {
   const file = join(appDir, ".framework", target, "stages", `${stage}.json`);
@@ -87,20 +65,6 @@ export function recordedOrigin(target: string, stage: string, appDir = REFERENCE
   const v = JSON.parse(readFileSync(file, "utf8")) as { publicOrigin?: unknown };
   if (typeof v.publicOrigin !== "string" || v.publicOrigin === "") throw new Error(`${file} has no publicOrigin`);
   return v.publicOrigin.replace(/\/$/, "");
-}
-
-/** The account's email domain: `emailDomain` of the Cloudflare account settings record (MAIL-REQ-003, DEC-0514). */
-export async function emailDomain(): Promise<string> {
-  const { readObject, STATE_BUCKET } = await import("../../_cloud/r2.js");
-  let text: string;
-  try {
-    text = await readObject(STATE_BUCKET, "framework/account.json");
-  } catch (error) {
-    return prerequisiteMissing(`the account settings record (framework/account.json in ${STATE_BUCKET}) could not be read: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  const v = JSON.parse(text) as { emailDomain?: unknown };
-  if (typeof v.emailDomain !== "string" || v.emailDomain === "") return prerequisiteMissing("the account settings record has no emailDomain: run setup-account --target cloudflare --email-domain <domain>");
-  return v.emailDomain;
 }
 
 /**

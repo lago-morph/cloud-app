@@ -70,14 +70,12 @@ export class FakeTarget implements TargetOperations {
   readonly stages = new Map<string, FakeStage>();
   /** Returned by `preflight`. */
   missingPrerequisites: string[] = [];
-  /** The account settings record (`readAccountSettings` / `writeAccountSettings`). */
+  /** The account settings record (`readAccountSettings`). */
   accountSettings: AccountSettings;
-  /** Returned by `emailPrerequisites`. */
-  missingEmailPrerequisites: string[] = [];
-  /** Returned by `emailSetupProblems`. */
-  missingEmailSetup: string[] = [];
-  /** Returned by the next `setUpEmail` (then emptied: a second run finds everything in place). */
-  emailToCreate: string[] = [];
+  /** Returned by `setupProblems`. */
+  missingSetup: string[] = [];
+  /** Returned by the next `recordSetup` (then emptied: a second run finds the record in place). */
+  recordToWrite: string[] = [];
   /** The `emailDomain` of each `deployInfrastructure` and `deployCode` input, in order. */
   readonly deployedEmailDomains: (string | undefined)[] = [];
   /** Returned by `checkHealth`. */
@@ -187,26 +185,16 @@ export class FakeTarget implements TargetOperations {
     return { ...this.accountSettings };
   }
 
-  async writeAccountSettings(settings: AccountSettings): Promise<void> {
-    this.enter("writeAccountSettings", settings.emailDomain ?? "");
-    this.accountSettings = { ...settings };
+  async recordSetup(): Promise<readonly string[]> {
+    this.enter("recordSetup");
+    const written = this.recordToWrite;
+    this.recordToWrite = [];
+    return written;
   }
 
-  async setUpEmail(emailDomain: string): Promise<readonly string[]> {
-    this.enter("setUpEmail", emailDomain);
-    const created = this.emailToCreate;
-    this.emailToCreate = [];
-    return created;
-  }
-
-  async emailSetupProblems(emailDomain: string): Promise<readonly string[]> {
-    this.enter("emailSetupProblems", emailDomain);
-    return [...this.missingEmailSetup];
-  }
-
-  async emailPrerequisites(stage: Stage, emailDomain: string): Promise<readonly string[]> {
-    this.enter("emailPrerequisites", `${key(stage)} ${emailDomain}`);
-    return [...this.missingEmailPrerequisites];
+  async setupProblems(): Promise<readonly string[]> {
+    this.enter("setupProblems");
+    return [...this.missingSetup];
   }
 
   async deployInfrastructure(input: DeployInput): Promise<void> {

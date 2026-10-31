@@ -225,13 +225,11 @@ async function preflight(ops: TargetOperations, request: DeployRequest): Promise
     });
   }
   const production = !isTestStage(stage);
-  // The login provider's prerequisites (PROV-REQ-002, DEC-0514, DEC-0515): a production stage
-  // sends mail from the account's email domain. A test stage only reads the record.
+  // A production stage's EMAIL binding still takes the account's email domain (DEC-0514); since
+  // v0.2.0 nothing sends mail, so its email setup is not checked (DEC-0689). A test stage only reads the record.
   await attempt("account settings", async () => {
     emailDomain = (await ops.readAccountSettings()).emailDomain;
-    if (!production) return;
-    if (emailDomain === undefined) missing.push(`${noEmailDomainMessage(ops.target)} (required for a production stage)`);
-    else missing.push(...(await ops.emailPrerequisites(stage, emailDomain)));
+    if (production && emailDomain === undefined) missing.push(`${noEmailDomainMessage()} (required for a production stage)`);
   });
   await attempt("stage record", async () => {
     stopped = (await ops.readStageRecord(stage)).stopped;

@@ -8,6 +8,8 @@ import type { Severity } from "../log/public.js";
 import { FRAMEWORK_SECRETS } from "../secrets/names.js";
 import { LOCAL_COOKIES } from "./local-cookies.js";
 import type { AccountStatus, LoginProvider } from "./login-provider.js";
+import { requireAdmin } from "./public.js";
+import { ROLE_REFRESH_INTERVAL_SECONDS, ROLE_REFRESH_RETRIES, ROLE_REFRESH_RETRY_DELAY_MS } from "./role-refresh.js";
 import { createAuthParts, type AuthOptions } from "./runtime.js";
 import { issueSession } from "./session.js";
 import { signToken } from "./signing.js";
@@ -43,7 +45,8 @@ function fakeProvider(accounts: Map<string, AccountStatus | Error> = new Map([["
 }
 
 /** A real-provider session of the fake provider. */
-const real = (id: string, displayName: string | null, subject = "s-user") => ({ id, displayName, provider: "fake", subject });
+// Confirmed at time 0: every request is past PAR-425, so each one reads the account (DEC-0672).
+const real = (id: string, displayName: string | null, subject = "s-user") => ({ id, displayName, provider: "fake", subject, role: { level: "user" as const, checkedAt: 0 } });
 
 function harness(options: Partial<AuthOptions> = {}, target: Target = "local", stage = "dev") {
   const written: Written[] = [];
@@ -55,6 +58,8 @@ function harness(options: Partial<AuthOptions> = {}, target: Target = "local", s
       if (name === FRAMEWORK_SECRETS.sessionKey) return KEY;
       throw new Error(`unexpected secret ${name}`);
     },
+    // Retries wait no real time here (PAR-427 is tested in role-refresh.unit.test.ts).
+    sleep: async () => undefined,
     // The local runtime passes the local settings (DEC-0195).
     ...(target === "local" ? { cookies: LOCAL_COOKIES } : {}),
     ...options,
@@ -67,6 +72,7 @@ function harness(options: Partial<AuthOptions> = {}, target: Target = "local", s
     tables: {},
     routes: (api) => {
       api.get("/whoami", (c) => c.json(c.var.user));
+      api.get("/admin-only", requireAdmin(), (c) => c.json({ ok: true }));
       api.get("/twice", (c) => c.json({ first: c.var.user.level, second: c.var.user.level }));
       for (const method of ["post", "put", "patch", "delete"] as const) api[method]("/change", (c) => c.json({ changed: true }));
     },
@@ -132,15 +138,15 @@ describe("current user", () => {
       expect(await res.json(), subject).toStrictEqual({ level: "anonymous" });
     }
     expect(written).toStrictEqual([
-      { component: "AUTH", severity: "warn", message: "role lookup failed (SQLITE_ERROR)" },
-      { component: "AUTH", severity: "warn", message: "role lookup failed (unknown)" },
+      { component: "AUTH", severity: "warn", message: "role refresh failed (SQLITE_ERROR); session ended" },
+      { component: "AUTH", severity: "warn", message: "role refresh failed (unknown); session ended" },
     ]);
   });
 
   it("a session of a provider the stage does not install is anonymous with no read", async () => {
     const fake = fakeProvider();
     const { request } = harness({ provider: fake.provider });
-    const other = await session({ id: "u_X", displayName: null, provider: "other", subject: "s-user" });
+    const other = await session({ id: "u_X", displayName: null, provider: "other", subject: "s-user", role: { level: "user", checkedAt: 0 } });
     expect(await (await request("/api/whoami", { headers: { cookie: other } })).json()).toStrictEqual({ level: "anonymous" });
     expect(fake.reads).toEqual([]);
   });
@@ -469,5 +475,195 @@ describe("GET /api/auth/me", () => {
     const { request } = harness({ provider: fake.provider });
     const cookie = await session(real("u_OTHER", "O"));
     expect(await (await request("/api/auth/me", { headers: { cookie } })).json()).toStrictEqual({ level: "anonymous" });
+  });
+});
+
+describe("sign-in through the auth app (plan §4.1 steps 1 and 4)", () => {
+  const sub = "cf-sub-alice";
+  const cookieOf = (res: Response): string => `session_local=${valueOf(cookiesOf(res).get("session_local"))}`;
+
+  async function authAppHarness() {
+    const { createFakeAuthAppBinding } = await import("./auth-app-binding.js");
+    const { createAuthAppProvider } = await import("./auth-app-provider.js");
+    // A fixed clock the test moves (whole seconds), and a sleep that only records its delays.
+    const clock = { now: Date.parse("2026-10-31T12:00:00Z") };
+    const delays: number[] = [];
+    const binding = createFakeAuthAppBinding({ now: () => clock.now });
+    const built: string[] = [];
+    // A per-request provider, as the Worker builds it over `env.AUTH`.
+    const h = harness({
+      provider: (c) => {
+        built.push(c.req.path);
+        return createAuthAppProvider({ binding, app: "notes-dev", authAppOrigin: "https://auth.example.test" });
+      },
+      now: () => clock.now,
+      sleep: async (ms) => void delays.push(ms),
+    });
+    async function begin() {
+      const res = await h.request("/api/auth/login?returnTo=%2Fnotes");
+      const start = new URL(res.headers.get("location") ?? "");
+      return { start, state: start.searchParams.get("state") ?? "", tx: `login_local=${valueOf(cookiesOf(res).get("login_local"))}` };
+    }
+    async function signIn(identity: { sub: string; email: string; role: "admin" | "user" } = { sub, email: "alice@example.com", role: "user" }) {
+      const { start, state, tx } = await begin();
+      const code = binding.issueCode(identity, { app: "notes-dev", returnUrl: start.searchParams.get("return") ?? "" });
+      return { start, res: await h.request(`/api/auth/callback?${new URLSearchParams({ code, state }).toString()}`, { headers: { cookie: tx } }) };
+    }
+    return { ...h, binding, built, begin, signIn, clock, delays };
+  }
+
+  it("login redirects to the auth app's /start with the app ID and the callback URL from the public origin", async () => {
+    const { begin } = await authAppHarness();
+    const { start } = await begin();
+    expect(`${start.origin}${start.pathname}`).toBe("https://auth.example.test/start");
+    expect(start.searchParams.get("app")).toBe("notes-dev");
+    expect(start.searchParams.get("return")).toBe(`${ORIGIN}/api/auth/callback`);
+  });
+
+  it("a redeemed code creates a cf-account session whose user ID is derived from the Cloudflare sub", async () => {
+    const { deriveUserId } = await import("./user-id.js");
+    const { readSession } = await import("./session.js");
+    const { request, signIn, clock } = await authAppHarness();
+    const { res } = await signIn();
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/notes");
+    const cookie = cookieOf(res);
+    const id = await deriveUserId("cf-account", sub);
+    expect(await readSession(KEY, cookie.slice("session_local=".length), clock.now)).toMatchObject({ id, provider: "cf-account", subject: sub });
+    expect(await (await request("/api/whoami", { headers: { cookie } })).json()).toStrictEqual({ level: "user", id, displayName: null });
+  });
+
+  it("the level follows the auth app's role at its next refresh, and a removed user is anonymous", async () => {
+    const { request, signIn, binding, clock } = await authAppHarness();
+    const cookie = cookieOf((await signIn({ sub, email: "alice@example.com", role: "admin" })).res);
+    expect(await (await request("/api/whoami", { headers: { cookie } })).json()).toMatchObject({ level: "admin" });
+    binding.setRole(sub, null);
+    clock.now += (ROLE_REFRESH_INTERVAL_SECONDS + 1) * 1000;
+    expect(await (await request("/api/whoami", { headers: { cookie } })).json()).toStrictEqual({ level: "anonymous" });
+  });
+
+  describe("role refresh (plan §4.1 step 5)", () => {
+    const due = (ROLE_REFRESH_INTERVAL_SECONDS + 1) * 1000;
+    const sessionLines = (res: Response) => res.headers.getSetCookie().filter((line) => line.startsWith("session_local="));
+
+    async function signedIn(role: "admin" | "user" = "user") {
+      const h = await authAppHarness();
+      const cookie = cookieOf((await h.signIn({ sub, email: "alice@example.com", role })).res);
+      const whoami = (path = "/api/whoami") => h.request(path, { headers: { cookie } });
+      return { ...h, cookie, whoami };
+    }
+
+    it("the session keeps the role confirmed at redemption, with no role call, up to and including exactly the interval", async () => {
+      const { whoami, binding, clock } = await signedIn("admin");
+      binding.setRole(sub, "user");
+      expect(await (await whoami()).json()).toMatchObject({ level: "admin" });
+      clock.now += ROLE_REFRESH_INTERVAL_SECONDS * 1000;
+      const res = await whoami();
+      expect(await res.json()).toMatchObject({ level: "admin" });
+      expect(sessionLines(res)).toStrictEqual([]);
+      expect(binding.calls.role).toBe(0);
+    });
+
+    it("one second past the interval, the role is read once and the session is re-issued with it, keeping its expiry", async () => {
+      const { readSession } = await import("./session.js");
+      const { whoami, binding, clock, cookie } = await signedIn("admin");
+      const before = (await readSession(KEY, cookie.slice("session_local=".length), clock.now)) as { expiresAt?: number } | undefined;
+      expect(before?.expiresAt).toBeTypeOf("number");
+      binding.setRole(sub, "user");
+      clock.now += due;
+      const res = await whoami();
+      expect(await res.json()).toMatchObject({ level: "user" });
+      expect(binding.calls.role).toBe(1);
+      const [line] = sessionLines(res);
+      const after = await readSession(KEY, valueOf(line).slice("session_local=".length), clock.now);
+      expect(after).toMatchObject({ role: { level: "user", checkedAt: clock.now / 1000 }, expiresAt: before?.expiresAt });
+      expect(line).toContain(`Max-Age=${(before?.expiresAt ?? 0) - clock.now / 1000}`);
+    });
+
+    it("a refresh that fails is retried twice with the delay; success on a retry keeps the session", async () => {
+      const { whoami, binding, clock, delays, written } = await signedIn("admin");
+      binding.failNext(ROLE_REFRESH_RETRIES);
+      clock.now += due;
+      const res = await whoami();
+      expect(await res.json()).toMatchObject({ level: "admin" });
+      expect(binding.calls.role).toBe(1 + ROLE_REFRESH_RETRIES);
+      expect(delays).toStrictEqual([ROLE_REFRESH_RETRY_DELAY_MS, ROLE_REFRESH_RETRY_DELAY_MS]);
+      expect(sessionLines(res)).toHaveLength(1);
+      expect(sessionLines(res)[0]).not.toContain("Max-Age=0");
+      expect(written.filter((w) => w.component === "AUTH")).toStrictEqual([]);
+    });
+
+    it("when every retry fails, the session ends and the request is anonymous: a role-protected route refuses it", async () => {
+      const { whoami, binding, clock, written } = await signedIn("admin");
+      binding.failNext(1 + ROLE_REFRESH_RETRIES);
+      clock.now += due;
+      const res = await whoami("/api/admin-only");
+      expect(res.status).toBe(401);
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe("AUTH.UNAUTHENTICATED");
+      expect(binding.calls.role).toBe(1 + ROLE_REFRESH_RETRIES);
+      expect(sessionLines(res)).toStrictEqual(["session_local=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"]);
+      expect(written.filter((w) => w.component === "AUTH")).toStrictEqual([{ component: "AUTH", severity: "warn", message: "role refresh failed (unknown); session ended" }]);
+    });
+
+    it("a removed user (null) ends the session at once, without retrying", async () => {
+      const { whoami, binding, clock, delays } = await signedIn();
+      binding.setRole(sub, null);
+      clock.now += due;
+      const res = await whoami();
+      expect(await res.json()).toStrictEqual({ level: "anonymous" });
+      expect(binding.calls.role).toBe(1);
+      expect(delays).toStrictEqual([]);
+      expect(sessionLines(res)).toStrictEqual(["session_local=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"]);
+    });
+
+    it("a logout on a request that refreshes still ends with the session cleared", async () => {
+      const { request, cookie, clock } = await signedIn();
+      clock.now += due;
+      const res = await request("/api/auth/logout", { method: "POST", headers: { cookie, origin: ORIGIN } });
+      expect(res.status).toBe(204);
+      const lines = sessionLines(res);
+      expect(lines).toHaveLength(2);
+      expect(lines[0]).not.toContain("Max-Age=0");
+      expect(lines[1]).toBe("session_local=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax");
+    });
+
+    it("a callback on a request whose old session refreshes ends with the new session's cookie", async () => {
+      const { readSession } = await import("./session.js");
+      const { cookie, clock, begin, binding, request } = await signedIn();
+      clock.now += due;
+      const { start, state, tx } = await begin();
+      const code = binding.issueCode({ sub: "cf-sub-bob", email: "bob@example.com", role: "admin" }, { app: "notes-dev", returnUrl: start.searchParams.get("return") ?? "" });
+      const res = await request(`/api/auth/callback?${new URLSearchParams({ code, state }).toString()}`, { headers: { cookie: `${cookie}; ${tx}` } });
+      const lines = sessionLines(res);
+      expect(lines).toHaveLength(2);
+      expect(await readSession(KEY, valueOf(lines[1]).slice("session_local=".length), clock.now)).toMatchObject({ subject: "cf-sub-bob", role: { level: "admin" } });
+    });
+
+    it("an unverified account at refresh ends the session at once, with no log line", async () => {
+      const fake = fakeProvider(new Map([["s-user", { verified: false, roles: [] }]]));
+      const now = Date.parse("2026-10-31T12:00:00Z");
+      const { request, written } = harness({ provider: fake.provider, now: () => now, sleep: async () => undefined });
+      const stale = { ...real("u_USER", null), role: { level: "user" as const, checkedAt: now / 1000 - ROLE_REFRESH_INTERVAL_SECONDS - 1 } };
+      const res = await request("/api/whoami", { headers: { cookie: await session(stale, now - 1000) } });
+      expect(await res.json()).toStrictEqual({ level: "anonymous" });
+      expect(fake.reads).toStrictEqual(["s-user"]);
+      expect(sessionLines(res)).toStrictEqual(["session_local=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"]);
+      expect(written.filter((w) => w.component === "AUTH")).toStrictEqual([]);
+    });
+  });
+
+  it("the auth app's error redirect is a failed login: no session, one warn naming the reason", async () => {
+    const { request, written, binding, begin } = await authAppHarness();
+    const { state, tx } = await begin();
+    const res = await request(`/api/auth/callback?${new URLSearchParams({ error: "login_failed", state }).toString()}`, { headers: { cookie: tx } });
+    expectFailedLogin(res, written, /^login failed: provider refused$/);
+    expect(binding.calls.redeem).toBe(0);
+  });
+
+  it("the provider is built for the request that uses it", async () => {
+    const { signIn, built } = await authAppHarness();
+    await signIn();
+    expect(built).toContain("/api/auth/login");
+    expect(built).toContain("/api/auth/callback");
   });
 });

@@ -118,29 +118,6 @@ describe("buildApp --target cloudflare", () => {
     expect(result.modules.some((m) => m.endsWith("auth/mock.ts"))).toBe(false);
   });
 
-  // MAIL §2: the test stages' mail capture and its route are imported only by test-stage entries.
-  const TEST_MAIL_ROUTE = /__framework\/test-mail/;
-  const CAPTURE_MODULE = /mail\/test-stage\.ts$/;
-
-  for (const stage of ["prod", "prodcheck", "mytest-1"]) {
-    it(`a production stage (${stage}) bundles no test-mail capture or route, but the Email Service sender`, async () => {
-      const dir = fixture({ [`config/cloudflare/${stage}.json`]: JSON.stringify({ values: { greeting: `marker-${stage}` }, framework: {} }) });
-      const result = await buildApp(options(dir, "cloudflare", stage));
-      const bundle = readFileSync(result.bundle, "utf8");
-      expect(bundle).not.toMatch(TEST_MAIL_ROUTE);
-      expect(result.modules.some((m) => CAPTURE_MODULE.test(m))).toBe(false);
-      expect(result.modules.some((m) => /mail\/cloudflare\.ts$/.test(m))).toBe(true);
-      expect(bundle).toContain("FRAMEWORK_MAIL_FROM");
-    });
-  }
-
-  it("a test-<id> stage bundles the test-mail capture and its route", async () => {
-    const dir = fixture({});
-    const result = await buildApp(options(dir, "cloudflare", "test-b16"));
-    expect(readFileSync(result.bundle, "utf8")).toMatch(TEST_MAIL_ROUTE);
-    expect(result.modules.some((m) => CAPTURE_MODULE.test(m))).toBe(true);
-  });
-
   it(tag("CFG-AC-002", "build part: a production stage without its own values file fails naming the file, even with test.json present"), async () => {
     const dir = fixture({});
     await expect(buildApp(options(dir, "cloudflare", "prodcheck"))).rejects.toThrow(/config\/cloudflare\/prodcheck\.json/);

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { addForeignToken, FAKE_ACCOUNT, fakeCfApi, type FakeCfApi } from "./fake-cf-api.test-support.js";
-import { cloudflareAccountOps, NO_EMAIL_PERMISSION_ENV, NO_R2_TOKEN_PERMISSION_ENV } from "./test-tokens.js";
+import { cloudflareAccountOps, NO_API_TOKENS_WRITE_ENV, NO_R2_TOKEN_PERMISSION_ENV } from "./test-tokens.js";
 import { validateEvidence, writeEvidence, type EvidenceRecord, type GitState, type WriteEvidenceInput } from "../../../packages/framework/src/evidence/public.js";
 import { parseArgs } from "./args.js";
 import { NOT_SELECTED, parseWhere, type CatalogueEntry } from "./catalogue.js";
@@ -896,12 +896,8 @@ describe("[COMPL-AC-003] the cloud account at the start and end of a run: D1 pla
     const api = fakeCfApi({ subscriptions: 403 });
     const h = harness({ catalogue: TOKEN_CATALOGUE, vitest: vitestReport([{ title: "[PROV-AC-004] twice", status: "passed" }]) });
     await runCompliance(parseArgs(["--target", "cloudflare", "--milestone"]), [], withAccount(h, api));
-    expect(posts(api).map((r) => (r.body as { name: string }).name)).toEqual([
-      "prototype-compliance-abcdefghij12345-no-email",
-      "prototype-compliance-abcdefghij12345-no-tokens-write",
-      "prototype-compliance-abcdefghij12345-no-sending-read",
-    ]);
-    expect(h.calls.find((c) => c.args[0] === "vitest")?.env[NO_EMAIL_PERMISSION_ENV]).toMatch(/^fake-value-/);
+    expect(posts(api).map((r) => (r.body as { name: string }).name)).toEqual(["prototype-compliance-abcdefghij12345-no-tokens-write"]);
+    expect(h.calls.find((c) => c.args[0] === "vitest")?.env[NO_API_TOKENS_WRITE_ENV]).toMatch(/^fake-value-/);
     expect(h.calls.find((c) => c.args[0] === "vitest")?.env.COMPLIANCE_D1_PLAN).toBe("free");
     expect(recordOf(h).results).toEqual([
       { id: "PROV-AC-004", status: "passed" },

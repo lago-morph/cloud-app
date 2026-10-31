@@ -29,7 +29,7 @@ export function runnerSelection(options: { readonly target: Target; readonly sel
   return [
     { runner: "vitest", label: "vitest", args: ["vitest", "run", "--config", "vitest.integration.config.ts", ...(isCloud ? ["tests/compliance/criteria"] : [])] },
     ...(isCloud ? [] : [{ runner: "vitest" as const, label: "vitest-unit", args: ["vitest", "run", "--config", "vitest.unit.config.ts"], onlyIds: UNIT_LEVEL }]),
-    { runner: "playwright", label: "playwright", args: ["playwright", "test", ...(isCloud ? ["tests/compliance/"] : []), "--project", "integration", "--project", "e2e"] },
+    { runner: "playwright", label: "playwright", args: ["playwright", "test", ...(isCloud ? ["tests/compliance/"] : []), "--project", "integration", "--project", "e2e-api", "--project", "e2e-ui"] },
   ];
 }
 

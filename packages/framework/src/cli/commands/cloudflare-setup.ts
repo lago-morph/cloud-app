@@ -1,6 +1,6 @@
 /**
- * `cloudflare-setup [--email-domain <domain>] [--switch-account]` (CLI-REQ-001; plan-setup-wizard
- * §4.3; DEC-0584): the re-runnable Cloudflare setup (`runCloudflareSetup`). It has no `--target`:
+ * `cloudflare-setup [--switch-account]` (CLI-REQ-001; plan-setup-wizard §4.3; DEC-0584; since
+ * v0.2.0 without `--email-domain`, DEC-0689): the re-runnable Cloudflare setup (`runCloudflareSetup`). It has no `--target`:
  * it reads `.env.cloudflare` itself, bootstrap token included (DEC-0574's opt-out, DEC-0584), after
  * running the local setup, so it is bound with `lazy`, not `cloud`. The template's npm script
  * `cloudflare-setup` runs it.
@@ -19,15 +19,14 @@ export type CloudflareSetupCommandDeps = Omit<CloudflareSetupDeps, "projectDir">
 export function cloudflareSetupCommand(deps: CloudflareSetupCommandDeps): Command {
   return async (args, io) => {
     const switchAccount = args.includes("--switch-account");
-    const options = parseOptions(
+    parseOptions(
       args.filter((a) => a !== "--switch-account"),
-      ["email-domain", "switch-account"],
+      ["switch-account"],
     );
-    const emailDomain = options.get("email-domain");
     // The process check (D-05) stops the run only before its first request, so the local setup and the no-token instructions still run.
     const problems = cloudProcessProblems(deps.env);
     const unreachable = problems.length === 0 ? {} : { unreachable: problems.join("; ") };
-    return runCloudflareSetup({ ...deps, ...unreachable, projectDir: io.cwd }, { ...(emailDomain === undefined ? {} : { emailDomain }), switchAccount }, io);
+    return runCloudflareSetup({ ...deps, ...unreachable, projectDir: io.cwd }, { switchAccount }, io);
   };
 }
 
