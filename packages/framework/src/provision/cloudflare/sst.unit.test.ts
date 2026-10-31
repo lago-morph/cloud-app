@@ -129,6 +129,18 @@ describe("the SST app built from the app definition (PROV-REQ-001; cloudflare.md
     expect(() => sstProgram({ stage, worker: { ...worker, secretsStore, code: { ...code, variables: { SECRET_FRAMEWORK_R2_ACCESS_KEY_ID: "x" } } } })).toThrow(/would replace the Worker secret/);
   });
 
+  it("only the shared framework secrets may come from Secrets Store (D7: per-app secrets stay Worker secrets), each once, with a store and a secret name (DEC-0727)", () => {
+    const one = { binding: "SECRET_FRAMEWORK_R2_ACCESS_KEY_ID", storeId: "store1", secretName: "PROTOTYPE_R2_ACCESS_KEY_ID" };
+    const program = (secretsStore: { binding: string; storeId: string; secretName: string }[]) => () => sstProgram({ stage, worker: { ...worker, secretsStore } });
+    for (const binding of ["SECRET_API_KEY", "SECRET_FRAMEWORK_SESSION_KEY", "SECRET_", "SECRET_framework_r2_access_key_id"]) {
+      expect(program([{ ...one, binding }])).toThrow(new RegExp(`Secrets Store binding ${binding} is not one of the shared framework secrets`));
+    }
+    expect(program([one, { ...one, secretName: "OTHER" }])).toThrow(/SECRET_FRAMEWORK_R2_ACCESS_KEY_ID is bound twice/);
+    expect(program([{ ...one, storeId: "" }])).toThrow(/names no store or secret/);
+    expect(program([{ ...one, secretName: "" }])).toThrow(/names no store or secret/);
+    expect(program([one, { ...one, binding: "SECRET_FRAMEWORK_R2_SECRET_ACCESS_KEY", secretName: "PROTOTYPE_R2_SECRET_ACCESS_KEY" }])).not.toThrow();
+  });
+
   it("with the auth app given, the Worker binds AUTH to its AuthApp entrypoint and gets FRAMEWORK_AUTH_APP_ORIGIN (DEC-0667, DEC-0661); without it neither", async () => {
     const authApp = { service: "prototype-auth", origin: "https://prototype-auth.example.workers.dev" };
     const { config, components } = evaluate(sstProgram({ stage, worker: { ...worker, authApp } }));
