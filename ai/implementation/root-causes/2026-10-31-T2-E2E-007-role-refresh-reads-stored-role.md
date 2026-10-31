@@ -51,6 +51,10 @@ In the same run, the outage at the refresh ended its session as expected (`role 
 - **The test's timing:** 5 min 15 s is past PAR-425 (5 min); the session's `checkedAt` was earlier than the change.
 - **The fake memberships API not changing:** A's fresh sign-in after the change got `admin`, so the fake answered the new role.
 
+## Resolution
+
+2026-10-31: the owner chose option (b) with a shorter session (owner question 56, option a; DEC-0791, with DEC-0703's wording). A role change or removal takes effect at the person's next sign-in, an existing session keeps its role until it expires or the person signs in again, and PAR-250 is 12 hours. E2E-007's scenario and its outcome test now state and assert that rule (`behaviour-changed`), and the test is green. No auth-app code changes.
+
 ## Proposed fix
 
 This is a design gap between the owner-approved requirement and the auth app's design, not a coding slip. It needs a decision before code. The options, for the orchestrator to put to the owner, or to A's successor as a T7 item:

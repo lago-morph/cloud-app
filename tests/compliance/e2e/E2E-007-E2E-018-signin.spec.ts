@@ -11,9 +11,17 @@
  * outside the account; the auth app unavailable between refreshes, at a refresh and at sign-in.
  * A code past its 60 s lifetime is not here: workerd's clock cannot be moved, and waiting is not
  * worth it for a rule the auth app's unit tests show with a fake clock (DEC-0765).
+ *
+ * E2E-007 (DEC-0703, DEC-0791): a promote, a demote and a removal leave each existing session's level as
+ * it was, also after a role refresh; a new sign-in shows the new level, and a removed member's is
+ * refused; an existing session follows a new sign-in at its next refresh; a session ends just after
+ * PAR-250 (12 hours) and not before. The 12-hour part runs in-process (`createTestApp` with the
+ * auth-app provider over the fake binding and its clock), because workerd's clock cannot be moved.
  */
+import type { TestApp } from "@lago-morph/prototype-framework/testing";
 import { tag } from "../harness/index.js";
 import { expect, test } from "../harness/playwright.js";
+import { referenceTestApp } from "./support/in-process.js";
 import { Browser } from "./support/signin-client.js";
 import { APP_ID, startSignInStack, type SignInStack } from "./support/signin-stack.js";
 import { ACCOUNT_ID } from "../../../packages/framework/test/integration/auth-app/support.js";
@@ -191,7 +199,7 @@ test(tag("E2E-018", "consent denied, someone outside the account and a pending m
 
 // The role-refresh window, shared by E2E-007 and E2E-018: sessions made, the account changed, then one real
 // wait past PAR-425 (workerd's clock cannot be moved, DEC-0765). The outcomes are separate tests, so each
-// scenario's result is its own; E2E-007's comes last, as it is red until its root cause is fixed.
+// scenario's result is its own; E2E-007's comes last.
 const people = {} as Record<"promoted" | "demoted" | "removed" | "outage", Browser>;
 
 test(tag(["E2E-007", "E2E-018"], "until the role refresh: a promote, a demote and a removal change no session's level; with the auth app down, sessions keep working and a sign-in in flight fails with the app's message; then the interval passes"), async () => {
@@ -245,14 +253,89 @@ test(tag("E2E-018", "at the role refresh with the auth app down, the request is 
   expect(await back.me()).toMatchObject({ level: "user" });
 });
 
-// Red until the auth app's role(sub) reflects the account's current membership (root cause
-// 2026-10-31-T2-E2E-007-role-refresh-reads-stored-role): today it answers the role stored at the person's last sign-in.
-test(tag("E2E-007", "at the role refresh: the promoted member is admin, the demoted one user, and the removed one's session ends"), async () => {
+// E2E-007 step 3 (DEC-0703, DEC-0791): a role change or removal shows at the person's next sign-in. The auth
+// app records the role only at sign-in, so a role refresh re-reads the recorded role and changes no level.
+test(tag("E2E-007", "after the role refresh, each existing session keeps its level; a new sign-in shows the new level, and the removed member is refused"), async () => {
   expect(people.promoted, "the refresh-window test ran first").toBeDefined();
-  expect.soft(await people.promoted.me(), "promoted").toMatchObject({ level: "admin" });
-  expect.soft((await people.promoted.api("/api/levels/admin")).status, "promoted: admin route").toBe(200);
-  expect.soft(await people.demoted.me(), "demoted").toMatchObject({ level: "user" });
-  expect.soft((await people.demoted.api("/api/levels/admin")).status, "demoted: admin route").toBe(403);
-  expect.soft((await people.removed.api("/api/levels/user")).status, "removed: user route").toBe(401);
-  expect.soft(await people.removed.me(), "removed").toEqual({ level: "anonymous" });
+  // Past PAR-425: the refresh has run, and every existing session keeps the level it signed in with.
+  expect(await people.promoted.me(), "promoted, existing session").toMatchObject({ level: "user" });
+  expect((await people.promoted.api("/api/levels/admin")).status, "promoted, existing session: admin route").toBe(403);
+  expect(await people.demoted.me(), "demoted, existing session").toMatchObject({ level: "admin" });
+  expect((await people.demoted.api("/api/levels/admin")).status, "demoted, existing session: admin route").toBe(200);
+  expect((await people.removed.api("/api/levels/user")).status, "removed, existing session: user route").toBe(200);
+  expect(await people.removed.me(), "removed, existing session").toMatchObject({ level: "user" });
+
+  // A new sign-in shows the new level; the removed member can no longer sign in.
+  const promoted = new Browser(stack);
+  await promoted.signIn("e2e007-promoted");
+  expect(await promoted.me(), "promoted, new sign-in").toMatchObject({ level: "admin" });
+  expect((await promoted.api("/api/levels/admin")).status, "promoted, new sign-in: admin route").toBe(200);
+  const demoted = new Browser(stack);
+  await demoted.signIn("e2e007-demoted");
+  expect(await demoted.me(), "demoted, new sign-in").toMatchObject({ level: "user" });
+  expect((await demoted.api("/api/levels/admin")).status, "demoted, new sign-in: admin route").toBe(403);
+  const removed = new Browser(stack);
+  expect((await removed.signIn("e2e007-removed")).appCallback.location, "removed, new sign-in").toMatch(/authError=login_failed/);
+  expect(await removed.me(), "removed, new sign-in").toEqual({ level: "anonymous" });
+});
+
+/** In-process: signs in through `/api/auth/login`, the fake auth app and the callback, and returns the session cookie pair. */
+async function signInInProcess(app: TestApp, identity: { readonly sub: string; readonly role: "admin" | "user" }): Promise<string> {
+  const begin = await app.request("/api/auth/login");
+  expect(begin.status, "login redirects").toBe(302);
+  const start = new URL(begin.headers.get("location") ?? "", "https://app.test");
+  const pairs = (res: Response) => res.headers.getSetCookie().map((c) => c.split(";")[0] ?? "");
+  const transaction = pairs(begin).filter((pair) => !pair.endsWith("=")).join("; ");
+  const code = app.authApp.issueCode(identity, { app: start.searchParams.get("app") ?? "", returnUrl: start.searchParams.get("return") ?? "" });
+  const query = new URLSearchParams({ code, state: start.searchParams.get("state") ?? "" });
+  const done = await app.request(`/api/auth/callback?${query.toString()}`, { headers: { cookie: transaction } });
+  const session = pairs(done).find((pair) => pair.startsWith("session_local=") && pair !== "session_local=");
+  if (session === undefined) throw new Error(`in-process sign-in as ${identity.sub} set no session: ${done.status} ${done.headers.get("location") ?? ""}`);
+  return session;
+}
+
+/** PAR-250 (12 hours, DEC-0791) and PAR-425 (5 minutes), in ms, as the scenario states them. */
+const SESSION_LIFETIME_MS = 12 * 60 * 60 * 1000;
+const REFRESH_MS = 5 * 60_000;
+
+test(tag("E2E-007", "in-process, on the test clock: a demoted admin keeps admin in an existing session until just before 12 hours and has no session just after; a new sign-in shows the new level, and an existing session follows it at its next refresh"), async () => {
+  const app = await referenceTestApp({ authAppLoginProvider: true });
+  try {
+    const level = async (cookie: string) => ((await (await app.request("/api/auth/me", { headers: { cookie } })).json()) as { level: string }).level;
+    const status = async (cookie: string, path: string) => (await app.request(path, { headers: { cookie } })).status;
+    const signedInAt = app.clock.now();
+    // The auth app records each person's role at sign-in.
+    const demoted = await signInInProcess(app, { sub: "e2e007-ip-demoted", role: "admin" });
+    const promoted = await signInInProcess(app, { sub: "e2e007-ip-promoted", role: "user" });
+
+    // The account demotes one and promotes the other; neither has signed in since. Past a refresh, no level changes.
+    app.clock.advance(REFRESH_MS + 1000);
+    expect(await level(demoted), "demoted, existing session, after a refresh").toBe("admin");
+    expect(await status(demoted, "/api/levels/admin"), "demoted, existing session: admin route").toBe(200);
+    expect(await level(promoted), "promoted, existing session, after a refresh").toBe("user");
+    expect(await status(promoted, "/api/levels/admin"), "promoted, existing session: admin route").toBe(403);
+
+    // The promoted member signs in again: the new session is admin, and the existing one follows at its next refresh.
+    const promotedAgain = await signInInProcess(app, { sub: "e2e007-ip-promoted", role: "admin" });
+    expect(await level(promotedAgain), "promoted, new sign-in").toBe("admin");
+    expect(await status(promotedAgain, "/api/levels/admin"), "promoted, new sign-in: admin route").toBe(200);
+    app.clock.advance(REFRESH_MS + 1000);
+    expect(await level(promoted), "promoted, existing session, at its next refresh after the new sign-in").toBe("admin");
+
+    // The demoted member's existing session keeps admin until it expires (PAR-250): still admin just before, gone just after.
+    app.clock.advance(signedInAt + SESSION_LIFETIME_MS - 60_000 - app.clock.now());
+    expect(await level(demoted), "demoted, existing session, just before 12 hours").toBe("admin");
+    expect(await status(demoted, "/api/levels/admin"), "demoted, just before 12 hours: admin route").toBe(200);
+    app.clock.advance(120_000);
+    expect(await level(demoted), "demoted, existing session, just after 12 hours").toBe("anonymous");
+    expect(await status(demoted, "/api/levels/user"), "demoted, just after 12 hours: user route").toBe(401);
+    expect(await level(promoted), "promoted's first session, just after 12 hours").toBe("anonymous");
+
+    // The demoted member signs in again: user.
+    const demotedAgain = await signInInProcess(app, { sub: "e2e007-ip-demoted", role: "user" });
+    expect(await level(demotedAgain), "demoted, new sign-in").toBe("user");
+    expect(await status(demotedAgain, "/api/levels/admin"), "demoted, new sign-in: admin route").toBe(403);
+  } finally {
+    await app.dispose();
+  }
 });
