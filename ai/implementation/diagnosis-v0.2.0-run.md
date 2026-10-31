@@ -62,6 +62,15 @@ The general failure: three generations of instructions (v0.1 prompt, v0.1 plan a
 
 I subscribed this session to every PR I or a subagent opened (about 100). GitHub sent an event for every CI completion, new PR, comment and subscription: 301 wake-ups. Each wake-up re-read this session's full context (hundreds of thousands of tokens by the end) to conclude "no action". The prompt said "Don't wait idle for [CI]" and "Check each PR's CI when you come back to it"; subscribing was my choice, and the harness guidance that came with each subscription told me to subscribe after creating a PR. Subagents handled their own PRs, so the subscriptions bought nothing.
 
+### 2.6 Why 80 "review" sessions appeared in the owner's session history
+
+The account's session list shows 80 sessions created on 2026-10-31 between 07:38 and 14:40, all reviewers, root-cause reviewers, test-change reviewers, evaluators or one diagnoser. They are the "subagents" the owner sees in the harness. Cause:
+- The plan requires an *independent reviewer subagent* for every PR, root cause, test change and skill change (§7a.1.1, §7a.1.8, §7a.1.9, §7a.2.6).
+- Implementation subagents launched with the Agent tool have no Agent tool of their own, so they cannot spawn an in-process reviewer.
+- They do have `mcp__claude-code-remote__create_session`, which creates a real session in the owner's account. I told them to use it, starting with the S4 fuzz-target reviewer at 07:40, and then wrote that instruction into every brief. In-process subagents (43 of them) never appear in the history; account sessions do.
+- Each such session starts with an empty context, re-reads the plan and code and often re-runs suites, so it is the most expensive possible reviewer. Several reported to this session instead of their parent, which added relaying work here. All 80 are still live, not archived.
+- This had not happened in earlier runs because reviews were either spawned by the orchestrator in-process or done inside the implementing subagent. This run pushed reviews into subagents while the remote-session tool was available.
+
 ### 2.5 What I should have done at the first sign
 
 By mid-run the count was already past 40 PRs and the token notices from subagents were 300–600k each. The prompt said never to stop for the owner, but it did not say to burn the budget. The right move was to stop, write the status note, and end the turn with a clear message: "this process is producing N PRs and M tokens per item; here is the state; continuing needs your decision." Autonomy rules are not a licence to exceed any reasonable cost; I treated them as one.
@@ -114,6 +123,7 @@ Self-contained; it must not say "the old prompt still applies".
 4. **PR model for autonomous runs:** one integration branch per release, plus per-component PRs chosen from a short list in the prompt. No merge-only PRs, no records-only PRs, no fix-per-finding PRs: a finding goes to the owner of the code and lands in that owner's PR.
 5. **No PR subscriptions in autonomous runs.** Subagents own their PRs' CI. The orchestrator checks CI once per item, when the item reports.
 6. **Serial heavy suites.** At most one full-suite run at a time on the shared machine; load-induced failures are re-run alone before any diagnosis starts.
+7. **Subagents may not create cloud sessions.** Reviews are spawned by the orchestrator, in-process, one batched reviewer per item. If a brief would require a subagent to start a session, the brief is wrong.
 
 ### 5.2 In the plan (§7a) — proposed amendments for the owner
 1. **Tier the failure process.** Full §7a.1.8 (diagnoser, reviewer, similar-case search, fixer, evaluator) only for failures that cross an ownership boundary, recur after one fix, or touch security or data. Everything else: the owning implementer fixes it red-green in its own PR with a 5-line note; one reviewer checks all such notes for the item at the end.
