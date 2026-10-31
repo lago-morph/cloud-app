@@ -40,7 +40,7 @@ Format: **ID — title** · plan § · deps · status. Then Owns / PRs (`nn` bra
 - Exit: files present and current at run end. Tests/E2E: none (docs). IDs: DEC-0620–0624 (orchestrator choices), no PAR.
 
 **P0 — local compliance baseline on main** · §7a.1.8, TS-3 · — · `todo`
-- Bare `npm run test:integration` / `npm run test:e2e` are not self-contained: 48 of 53 integration and 5 of 8 e2e failures on clean `1e0c289` are "COMPLIANCE_BASE_URL is not set" (criteria and scenarios must run through `npm run compliance -- --target local`). The remaining failures (§6) and the result of `npm run compliance -- --target local` (§6) are the baseline. Any failure there gets a diagnoser + reviewer (§7a.1.8) before wave-1 exit checks rely on it; a fix is PR `08-fix-baseline-<slug>` ← main. S3 must make CI run criteria through the harness (or set the env), never bare.
+- Bare `npm run test:integration` / `npm run test:e2e` are not self-contained: 48 of 53 integration and 5 of 8 e2e failures on clean `1e0c289` are "COMPLIANCE_BASE_URL is not set" (criteria and scenarios must run through `npm run compliance -- --target local`). The baseline is `npm run compliance -- --target local`: 128 passed, 2 failed (COMPL-AC-001, MAIL-AC-005), 5 blocked (missing local test secret), §6. Any failure there gets a diagnoser + reviewer (§7a.1.8) before wave-1 exit checks rely on it; a fix is PR `08-fix-baseline-<slug>` ← main. S3 must make CI run criteria through the harness (or set the env), never bare.
 - Owns: its root-cause records; fix paths named by the accepted record. IDs: DEC-0778–0779 (from T7's range), PAR-480.
 
 ### Wave 0 (batch 1, all parallel)
@@ -263,12 +263,13 @@ Spare IDs for splits and new items: DEC-0790–0799, PAR-485–499 (orchestrator
 | typecheck | `npm run typecheck` (needs build) | yes | 21 s |
 | lint | `npm run lint` | yes | 6 s |
 | unit | `npm run test:unit` | yes, 2527/2527 | 158 s |
-| integration | `npm run test:integration` (build + Vitest integration + Playwright `integration`) | see note | see note |
-| e2e | `npm run test:e2e` (Playwright `e2e`; becomes `e2e-api`/`e2e-ui` in S3 15) | see note | see note |
-| verify | `npm run verify` (build, typecheck, lint, unit, template + reference `verify`, `example-pages`) | parts above green; needs the Chromium shim | ≈ 4 min + app verifies |
-| compliance | `npm run compliance -- --target local` | local only; Cloud `not-run` | — |
+| integration | `npm run test:integration` (build + Vitest integration + Playwright `integration`) | framework suites yes; bare run fails 53 tests in 30 criteria files (48 × `COMPLIANCE_BASE_URL is not set`); Playwright part skipped by `&&` | 15.5 min |
+| e2e | `npm run test:e2e` (Playwright `e2e`; becomes `e2e-api`/`e2e-ui` in S3 15) | bare run: 23 passed, 8 failed (5 × `COMPLIANCE_BASE_URL`) | 10 min |
+| verify | `npm run verify` (build, typecheck, lint, unit, template + reference `verify`, `example-pages`) | build/typecheck/lint/unit green; full run not repeated (needs the Chromium shim; last known green per `handoff-setup-wizard.md`) | ≈ 3.2 min + app verifies |
+| compliance | `npm run compliance -- --target local` (the real way to run criteria + scenarios) | yes: 128 passed, 2 failed, 5 blocked | 32 min |
 
 - **Chromium shim:** sandbox Chromium is build 1243, Playwright 1.64.1 wants 1248. Use a directory of symlinks to `/opt/pw-browsers/*` plus `chromium-1248 → chromium-1243` and `chromium_headless_shell-1248 → chromium_headless_shell-1243`, then `PLAYWRIGHT_BROWSERS_PATH=<dir>` (`handoff-setup-wizard.md`).
 - **mock-oauth2-server:** Java 21 and Docker binaries are present; A 28 confirms how to fetch and run it through the proxy.
 - **Offline runs:** `unshare -rn sh scripts/offline.sh <cmd>` (`plan.md` §10.2).
-- Integration/e2e results: INTEGRATION_E2E_NOTE
+- **Baseline (P0):** `compliance --target local` on `1e0c289` (with the shim): failed COMPL-AC-001 (the milestone listing returns 10 items where the test expects 9) and MAIL-AC-005 (3 addresses on a non-reserved domain under packages/apps/skill/tests); blocked CORE-AC-002, HTTP-AC-002, SEC-AC-001, SEC-AC-002, E2E-013, all because the reference app's test secret `apiKey` has no value in `apps/reference/.dev.vars` (set it with `npm run secrets -- set apiKey --target local --stage local` in `apps/reference`, value on stdin). Runners set it before a run. Not diagnosed here.
+- **Use in exit checks:** framework suites run directly (`npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/<c>`); criteria and scenarios run through `npm run compliance -- --target local` (optionally narrowed per the harness's selection options), never bare.
