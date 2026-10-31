@@ -94,7 +94,6 @@ if (isLocal()) {
         const lines = out.split("\n");
         const at = lines.indexOf(TEMPLATE_LINES[0]);
         expect(lines.slice(at, at + TEMPLATE_LINES.length), "the template").toEqual([...TEMPLATE_LINES]);
-        expect(out).toContain("Workers Paid");
         expect(out).toMatch(/Cloudflare DNS/);
         expect(out).toMatch(/Environment variables/);
         expect(out).toMatch(/new session/i);

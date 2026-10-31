@@ -133,7 +133,6 @@ describe("cloudflare-setup: no tokens (plan §3.2, §4.3 step 3)", () => {
         "Cloudflare setup needs two API tokens, both made from pre-filled dashboard links. Setup never prints a token.",
         "",
         "Requirements:",
-        "  - a Cloudflare account on the Workers Paid plan: sign-in by email (Better Auth with Cloudflare Email Sending) needs it;",
         "  - a domain on Cloudflare DNS in that account, which the sign-in emails are sent from.",
         "",
         "1. The bootstrap token (used once by this setup, which then deletes it), named prototype-framework-bootstrap:",
@@ -562,16 +561,6 @@ describe("cloudflare-setup: the bootstrap on a fresh account (v0.2.0 plan §5.1;
     expect(io.out).toContain("You can now remove CLOUDFLARE_BOOTSTRAP_TOKEN from the cloud environment's settings");
   });
 
-  it("the plan is checked before the email domain is asked for (plan §4.3 step 4): only the setting can say Workers Free", async () => {
-    const world = freshWorld();
-    world.addToken("everyday", EVERYDAY_VALUE, "everyday-id");
-    const { status, io } = await run(world, project({ env: envFile({ CLOUDFLARE_API_TOKEN: EVERYDAY_VALUE }) }), { env: { PROTOTYPE_FRAMEWORK_CLOUDFLARE_PLAN: "free" } });
-    expect(status).toBe(1);
-    expect(io.out).toContain('The account "Main account" is on the Workers Free plan');
-    expect(io.out).not.toContain("Which domain");
-    expect(world.writes()).toEqual([]);
-  });
-
   it("the bootstrap reads no plan (it has no Billing Read): a Workers Free account is bootstrapped", async () => {
     const world = freshWorld();
     world.accounts.get(ACCOUNT)!.plan = "free";
@@ -591,7 +580,6 @@ describe("cloudflare-setup: later runs (plan §3.4)", () => {
     const { status, io } = await run(world, dir);
     expect(status).toBe(0);
     expect(io.out).toContain("Everything is already set up and current: nothing to do.");
-    expect(io.out).toContain('  plan: not checked (reading it needs "Billing Read")');
     expect(io.out).not.toMatch(/https:\/\/dash\.cloudflare\.com\/\?to=/);
     expect(world.writes()).toEqual([]);
     expect(readEnvFile(dir)).toBe(before);
@@ -1074,12 +1062,6 @@ describe("cloudflare-setup: local setup, git and the network (plan §4.3 steps 0
     // The zone lookup inside checkAccountSetup's email steps.
     const world = await setUpWorld();
     plainly(await runStopped(world, everydayOnly(), (_m, path) => path.startsWith("/zones") && world.requests.some((r) => r.includes("/objects/"))));
-    // The plan read (with the everyday token since v0.2.0): not taken as "not checked".
-    const planWorld = await setUpWorld();
-    const planStop = await runStopped(planWorld, everydayOnly(), (_m, path) => path.endsWith("/subscriptions"));
-    plainly(planStop);
-    expect(planStop.io.out).not.toContain("not checked");
-    expect(planWorld.writes()).toEqual([]);
   });
 
   it("a failure whose message holds the account ID or a token is printed with them hidden (the redaction backstop)", async () => {
