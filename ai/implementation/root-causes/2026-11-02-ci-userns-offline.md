@@ -190,4 +190,31 @@ The session cannot push `.github/workflows/*`, so the workflow check is done in 
 
 Written by the independent root-cause reviewer (step 2).
 
-Status: awaiting review
+Reviewer: independent root-cause reviewer subagent (`failure-diagnosis.md`, step 2). Date: 2026-11-02. I did not write this diagnosis, the tests or the workflows. Base: `v0.2.0/ci-userns-fix` at f489413.
+
+**Verdict: rejected.** The cause is very probably right and the fix very probably works, but link 4 is left unproven although this session can prove it, and the fix itself, on the real runner, before the owner installs anything. Two factual errors also need correcting. Return to step 1 for one evidence run and the corrections below; everything else can stay.
+
+### What I checked
+- **CI logs, with `get_job_logs`:** #164's job 124629947865 (westus3), #166's job 125065874957 (centralus) and the last green job 124622206075. All three show image `ubuntu-24.04` 20261025.353.1 and provisioner 20261021.618 (E1). #164 has `unshare: write failed /proc/self/uid_map: Operation not permitted` at CLI-AC-002 and at E2E-001-E2E-003.spec.ts:87, then `compliance: 63 passed, 60 not-run, 3 failed`. #166 has the same line, the EPIPE, and `94 passed, 31 not-run, 1 failed`. The green job's `DIRECT` is `packages/create-prototype-app/test tests/skill`, it reports `118 not-run, 7 passed`, and it contains no `unshare` (E2). Confirmed.
+- **Git history:** a632b8c (owner, 2026-10-31 13:28 -0500) replaced `ci.yml` and `release.yml`. `ci.yml` at a519cd8 ran build, typecheck, lint, `test:unit`, the two apps' `verify`, `tests/skill` and `packages/create-prototype-app`, and no framework integration suite and no harness (E3). `git diff --stat 35a1278 459fdfb` touches only `E2E-001-E2E-003.spec.ts`, and only its version-pin regex. Confirmed.
+- **Callers of the wrapper:** `grep` outside `docs/` and `ai/` finds `unshare` only in `packages/framework/test/fixtures/support/app.ts:199` (used only at `packages/framework/test/integration/cli/verify.test.ts:74-75`) and `tests/compliance/e2e/E2E-001-E2E-003.spec.ts:60`. `tests/skill/example-pages.test.ts` uses `template-pages.ts` without `unshare`.
+- **util-linux 2.39.3 order of writes, with `strace -f unshare -rn true` here:** `unshare(CLONE_NEWUSER|CLONE_NEWNET) = 0`, then `/proc/self/uid_map`, then `/proc/self/setgroups`, then `/proc/self/gid_map`.
+
+### Accepted parts
+- Links 1, 2, 3 and 5, and E6: the evidence supports each one.
+- Alternatives: the runner image, load or flakiness, a test defect, a code change in #165/#166, `offline.sh` itself, and namespaces disabled outright are each ruled out with evidence. The "write failed" form (namespace created, map write refused) against the "unshare failed" form is a sound discriminator.
+- Fix: lifting `kernel.apparmor_restrict_unprivileged_userns` addresses the cause (the LSM denies capabilities in the new namespace, and `map_write` needs `CAP_SYS_ADMIN` there). It is not a symptom fix: the tests still cut networking the way rule 9 requires, without sudo or skips. The AppArmor LSM reads the sysctl when each namespace is created, so one early step covers every later step of the job. Rejecting `sudo unshare` and keeping the EPIPE as a separate open item are both right.
+- Coverage: only two jobs run `offline.sh`-based tests, and the record covers both. They are `ci.yml` `compliance` (CLI-AC-002 through the harness, and any untagged `cli/` test through the "not run by the harness" step) and `release.yml` `verify` (both the direct step and the full harness run). Because the new step runs first in each job, it covers both steps there. `ci.yml` `checks` runs only the unit layer, which never calls `unshare`. `classify`, `verify` (the aggregate job) and `release.yml` `publish` run no tests.
+
+### Why rejected
+1. **Link 4 is unproven, although the session can prove it (major).** The process says an unproven link calls for more evidence, not for a deferral. The record says the value cannot be read because the session cannot push `.github/workflows/*`. That is true, but it does not need to. `ci.yml` runs code from the PR's own merge commit: `classify` runs `node scripts/ci/classify.mjs`, and `compliance` runs the selected tests. A throwaway diagnostic PR, which is never merged and is closed afterwards, can change that script on the same runner image and run a few commands there. The GitHub-hosted runner user has passwordless sudo. Those commands are:
+   - print `cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns`;
+   - run `unshare -rn true` (expected: the CI message, exit 1);
+   - run `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`;
+   - run `unshare -rn sh scripts/offline.sh cat /proc/self/uid_map /proc/net/dev` (expected: map `0 <uid> 1`, only `lo`).
+
+   That one run proves link 4 directly, and it reproduces the failure and the fix on image 20261025.353.1. The orchestrator decides whether a diagnostic PR is acceptable. The record must either carry that evidence or say why it could not be gathered.
+2. **The verification plan makes the owner's install the first real test of the fix (major, follows from 1).** As written, a wrong diagnosis costs an owner install cycle. For `release.yml` the cost is higher: the first test is the next RC tag, and PR #167 (0.2.0-rc01) is open now. With the diagnostic run from 1, the after-install steps confirm the fix instead of testing it. Keep them.
+3. **Factual errors to correct (minor):**
+   - E4 says `unshare -r` writes `setgroups` and then `uid_map`, and that "the setgroups write passed". util-linux 2.39.3 writes `uid_map` first (strace above), so nothing about `setgroups` is shown. The conclusion (`unshare(2)` succeeded, and the first map write got EPERM) is unchanged.
+   - The proposed step says the `sysctl -n` line "fails loudly if the key does not exist". It does not: in `echo "before: $(sysctl -n …)"`, GitHub's `bash -e` does not catch a failed command substitution in a command's arguments, so the step prints `before: ` and goes on. Only the `sudo sysctl -w` line would then fail. Read the value in its own command (for example `v=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns)` and then `echo "before: $v"`), or test it explicitly, so a missing key fails at the line that states it.
