@@ -255,8 +255,12 @@ describe("the CI plan (what the staged ci.yml runs)", () => {
   });
 });
 
-describe("ci.yml (.github/workflows/ci.yml; staged under scripts/ci/workflows/ until the owner applied it, DEC-0637)", () => {
-  const yml = readFileSync(join(REPO, ".github/workflows/ci.yml"), "utf8");
+// The applied workflow, and a staged replacement while one waits for the owner (DEC-0637): the staged
+// copy must pass the same checks, so applying it cannot turn these tests red.
+const appliedAndStaged = (name: string): string[] => [`.github/workflows/${name}`, `scripts/ci/staged/${name}`].filter((f) => f.startsWith(".github/") || existsSync(join(REPO, f)));
+
+describe.each(appliedAndStaged("ci.yml"))("ci.yml (%s; DEC-0637)", (file) => {
+  const yml = readFileSync(join(REPO, file), "utf8");
 
   it("runs on pull requests only and prints the classification first", () => {
     expect(yml).toMatch(/\non:\n {2}pull_request:\n\n/);
@@ -280,6 +284,37 @@ describe("ci.yml (.github/workflows/ci.yml; staged under scripts/ci/workflows/ u
   });
 });
 
+// Ubuntu 24.04 runners set kernel.apparmor_restrict_unprivileged_userns=1, so `unshare -rn` cannot write
+// its uid_map and every offline test fails (root cause ai/implementation/root-causes/2026-11-02-ci-userns-offline.md).
+// Each job that runs offline tests lifts the restriction, and proves the wrapper works, before npm ci.
+describe("the jobs that run offline tests allow unprivileged user namespaces first", () => {
+  // The staged copy while one waits for the owner (DEC-0637), the applied workflow otherwise.
+  const workflow = (name: string): string => (existsSync(join(REPO, `scripts/ci/staged/${name}`)) ? `scripts/ci/staged/${name}` : `.github/workflows/${name}`);
+  // A job's steps, as text: from `  <job>:` to the next top-level job, split at each `      - `.
+  const steps = (yml: string, job: string): string[] => (yml.split(`\n  ${job}:\n`)[1]?.split(/\n {2}[a-z][\w-]*:\n/)[0] ?? "").split("\n      - ").slice(1);
+
+  it.each([
+    ["ci.yml", "compliance"],
+    ["release.yml", "verify"],
+  ])("%s job %s", (name, job) => {
+    const file = workflow(name);
+    const all = steps(readFileSync(join(REPO, file), "utf8"), job);
+    const npmCi = all.findIndex((s) => s.trim() === "run: npm ci");
+    const lift = all.findIndex((s) => s.includes("sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0"));
+    expect(npmCi, `${file} ${job}: npm ci`).toBeGreaterThanOrEqual(0);
+    expect(lift, `${file} ${job}: a step that sets kernel.apparmor_restrict_unprivileged_userns=0`).toBeGreaterThanOrEqual(0);
+    expect(lift, `${file} ${job}: the step comes before npm ci`).toBeLessThan(npmCi);
+    const lines = (all[lift] ?? "").split("\n").map((l) => l.trim());
+    // The value is read in a command of its own: under bash -e a missing key then fails the step at that line.
+    const read = lines.indexOf("before=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns)");
+    const set = lines.indexOf("sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0");
+    const prove = lines.findIndex((l) => l.startsWith("unshare -rn sh scripts/offline.sh "));
+    expect(read, `${file} ${job}: reads the value in its own command`).toBeGreaterThanOrEqual(0);
+    expect(read, `${file} ${job}: reads it before setting it`).toBeLessThan(set);
+    expect(prove, `${file} ${job}: proves unshare -rn sh scripts/offline.sh works after setting it`).toBeGreaterThan(set);
+  });
+});
+
 describe("no duplicates (plan-v0.2.0 §7a.2.4)", () => {
   it("names every file that two layers collect, with the layers", () => {
     expect(duplicates({ unit: ["a.unit.test.ts", "b.unit.test.ts"], integration: ["c.test.ts", "b.unit.test.ts"], "playwright e2e-api": ["d.spec.ts", "d.spec.ts"] })).toEqual([{ file: "b.unit.test.ts", layers: ["unit", "integration"] }]);
@@ -294,9 +329,8 @@ describe("no duplicates (plan-v0.2.0 §7a.2.4)", () => {
     const all = ciPlan(classify([], map, { everything: true }), map, REPO) as { unit: string; ids: string[]; direct: string[]; chromium: boolean };
     expect(all).toMatchObject({ unit: "all", chromium: true });
     expect(all.direct).toEqual(expect.arrayContaining(["packages/framework/test/integration/sql", "tests/skill", "packages/create-prototype-app/test"]));
-    // The applied workflow, and a staged replacement while one waits for the owner (DEC-0637, DEC-0792): the
-    // staged copy must pass the same checks, so applying it cannot turn this test red.
-    for (const file of [".github/workflows/release.yml", "scripts/ci/staged/release.yml"].filter((f) => f.startsWith(".github/") || existsSync(join(REPO, f)))) {
+    // The applied workflow and a staged replacement (DEC-0637, DEC-0792), as for ci.yml above.
+    for (const file of appliedAndStaged("release.yml")) {
       const release = readFileSync(join(REPO, file), "utf8");
       expect(release, file).toMatch(/\n {2}push:\n {4}tags: \["v\*\.\*\.\*"\]/);
       for (const step of ["node scripts/ci/classify.mjs --check-duplicates", "npm run test:unit", "node scripts/ci/classify.mjs --all --github-output", '$DIRECT ${DIRECT_FILTER:+-t "$DIRECT_FILTER"}', "DIRECT_FILTER: ${{ steps.all.outputs.direct_filter }}", "npm run secrets -- set apiKey --target local --stage local", 'npm run compliance -- --target local --out "$RUNNER_TEMP/compliance"', "npx playwright install --with-deps chromium"]) {

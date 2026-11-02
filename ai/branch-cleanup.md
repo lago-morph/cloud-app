@@ -616,3 +616,15 @@ Batch 24 (5), only after checking:
 ```sh
 git push origin --delete claude/implement-aws-g-s2 claude/implement-aws-g-t1 claude/implement-aws-g-t2 claude/implement-aws-g-t3 google
 ```
+
+## Added after the list was written
+
+| Branch | Last commit | Reason | Note |
+| --- | --- | --- | --- |
+| `v0.2.0/ci-userns-probe` | 2026-11-02 | PR closed without merging | THROWAWAY probe for `ai/implementation/root-causes/2026-11-02-ci-userns-offline.md` (PR #168, closed). Never merge. |
+
+Batch 25 (1):
+
+```sh
+git push origin --delete v0.2.0/ci-userns-probe
+```
