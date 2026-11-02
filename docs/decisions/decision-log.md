@@ -5005,7 +5005,7 @@ Open spike questions:
 - S4: Email Service quotas, and when `E_SENDER_NOT_VERIFIED` appears.
 
 ### DEC-0519 — Accepted limitations of the password provider
-Origin: ai-proposed · Status: superseded by DEC-0696 (PWD retired) (was: accepted) · Affects: PWD-REQ-004, MAIL-REQ-001, COMPL-REQ-005
+Origin: ai-proposed · Status: superseded by DEC-0696 (PWD retired); on `prodcheck` also by DEC-0700 (`check-login` leaves no test user) (was: accepted) · Affects: PWD-REQ-004, MAIL-REQ-001, COMPL-REQ-005
 
 - **A reset does not end framework sessions.** A reset revokes BA's sessions, of which there are none after the bridge. Framework sessions are stateless (DEC-0028) and stay valid until they expire (PAR-250). This is out of scope, like revocable sessions (system spec §4).
 - **Send failures are logged, not shown.** Sends run after the response, so the page cannot report a failed send without revealing whether the account exists.
@@ -5104,7 +5104,7 @@ Origin: ai-proposed · Status: accepted; the test helper granting roles to passw
 - **Configuration.** `createTestApp`'s reserved `config.framework` key no longer takes `admins` or `users`. With either, it throws, as the build does.
 
 ### DEC-0526 — What changes because admins are a role
-Origin: ai-proposed · Status: accepted; `admins grant` on `prodcheck`, and E2E-007 and AUTH-AC-005 automated on every cloud run, superseded by DEC-0690 and DEC-0692 (wording approved by the owner on 2026-10-31; the live parts return as the real sign-in) · Amends: DEC-0520 (its first bullet) · Affects: E2E-007, AUTH-AC-003, AUTH-AC-005, AUTH-AC-012, AUTH-AC-013, AUTH-AC-015, PWD-AC-010, CFG-AC-005, CLI-AC-006, CLI-AC-007, SKILL-AC-006, DEMO-REQ-009, DEMO-REQ-011, DEMO-AC-011, COMPL-REQ-006, MIG §2, `tests/compliance/harness/expected.ts`
+Origin: ai-proposed · Status: accepted; `admins grant` on `prodcheck`, and E2E-007 and AUTH-AC-005 automated on every cloud run, superseded by DEC-0690 and DEC-0692 (wording approved by the owner on 2026-10-31; the live parts return as the real sign-in); its `admins grant` on `prodcheck` also by DEC-0700 (COMPL-REQ-005, COMPL-AC-005) · Amends: DEC-0520 (its first bullet) · Affects: E2E-007, AUTH-AC-003, AUTH-AC-005, AUTH-AC-012, AUTH-AC-013, AUTH-AC-015, PWD-AC-010, CFG-AC-005, CLI-AC-006, CLI-AC-007, SKILL-AC-006, DEMO-REQ-009, DEMO-REQ-011, DEMO-AC-011, COMPL-REQ-006, MIG §2, `tests/compliance/harness/expected.ts`
 
 - **No more "copy your user ID into configuration".** The skill's and the template README's copy-ID steps go away. Becoming an admin is one `admins grant <address>` command, run by the owner or an agent. `/api/auth/me` and the demo's account page still show the ID, for support and for the test helpers.
 - **Milestone parts become automated.**
@@ -5776,7 +5776,7 @@ The mock-oauth2-server CI step and the auth-app path-map entry go in `v0.2.0/29-
 Item: v0.2.0 R.
 
 ### DEC-0622 — An independent reviewer adds the test-change review records to removal PRs
-Origin: ai-proposed (orchestrator, pending owner review) · Status: accepted · Affects: PRs 17, 34, 38, 43, 45–47
+Origin: ai-proposed (orchestrator, pending owner review) · Status: superseded by plan v0.2.0 TS-4/5/10/13/15/20 withdrawn 2026-10-31 (#161) (TS-10: the test-change reviewer and its records are withdrawn) (was: accepted) · Affects: PRs 17, 34, 38, 43, 45–47
 
 The implementing item opens its pure-removal PR. Item T5, an independent reviewer, adds the §7a.1.9 record to that branch before the PR merges.
 Item: v0.2.0 R.
@@ -5794,7 +5794,7 @@ Plan-v0.2.0 §6.2, §7a.1, §7a.2.3, §7a.2.6. Range DEC-0625–0629, PAR-400–
 Integrated by item I1 from `ai/implementation/decisions/v020-S1.md`.
 
 ### DEC-0625 — Shape of the testing-standards skill
-Origin: ai-proposed · Status: accepted · Affects: `.claude/skills/testing-standards/**`, plan §6.2, §7a.2.6, TS-21
+Origin: ai-proposed · Status: accepted; the skill review in `SKILL.md` and the test-change resource superseded by plan v0.2.0 TS-4/5/10/13/15/20 withdrawn 2026-10-31 (#161) (TS-10, TS-13) · Affects: `.claude/skills/testing-standards/**`, plan §6.2, §7a.2.6, TS-21
 
 - The skill serves the framework repository only. Apps get §7a.1 through the product skill (`skill/`, item G), so the skill names framework paths directly and has no "in an app" variants.
 - `SKILL.md` holds only the rules that always apply: the roles (§7a.1.2), unit TDD (§7a.1.3), integration (§7a.1.4, §7a.2.2), e2e (§7a.1.5), test impact (§7a.1.10), "never weaken to pass", the kept practices (§7a.2.1) and the skill review (§7a.2.6). Everything with steps or tables lives in one resource file per workflow, each starting "Read this when…" and ending with a "Done" section as its stopping condition.
@@ -5803,7 +5803,7 @@ Origin: ai-proposed · Status: accepted · Affects: `.claude/skills/testing-stan
 Item: v0.2.0 S1.
 
 ### DEC-0626 — Test-change review uses the root-cause review's verdicts
-Origin: ai-proposed · Status: accepted · Affects: `.claude/skills/testing-standards/resources/test-change-review.md`, plan §7a.1.9
+Origin: ai-proposed · Status: superseded by plan v0.2.0 TS-4/5/10/13/15/20 withdrawn 2026-10-31 (#161) (TS-10: no test-change review; `test-change-review.md` deleted) (was: accepted) · Affects: `.claude/skills/testing-standards/resources/test-change-review.md`, plan §7a.1.9
 
 §7a.1.9 asks for "the verdict per group, and its reasons" but names no verdict values. The skill uses §7a.1.8's: `accepted`, `accepted-with-changes` (binding) or `rejected`, each reason marked major or minor, and a major issue answered point by point before the group goes back to review. The record's exact headings are left to `ai/implementation/test-reviews/README.md` (item S2 owns it and the linter that checks it), so the skill states only what the record must contain.
 Item: v0.2.0 S1.
@@ -5818,7 +5818,7 @@ Origin: ai-proposed · Status: accepted · Affects: `.claude/skills/testing-stan
 Item: v0.2.0 S1.
 
 ### DEC-0628 — E2E scenario governance: where the rule and the mechanics live
-Origin: ai-proposed · Status: accepted · Affects: `docs/CONVENTIONS.md` §4 and §8, `docs/acceptance/e2e-scenarios.md`, `docs/README.md` "Status", `.claude/skills/testing-standards/resources/e2e-scenarios.md`, plan §6.2, §7a.2.3, TS-15, TS-21
+Origin: ai-proposed · Status: accepted; the independent review of each scenario change superseded by plan v0.2.0 TS-4/5/10/13/15/20 withdrawn 2026-10-31 (#161) (TS-15: a decision-log entry, no review) · Affects: `docs/CONVENTIONS.md` §4 and §8, `docs/acceptance/e2e-scenarios.md`, `docs/README.md` "Status", `.claude/skills/testing-standards/resources/e2e-scenarios.md`, plan §6.2, §7a.2.3, TS-15, TS-21
 
 - **The `Origin:` line goes after the `Where:` line** of each scenario. `catalogue.ts` reads the first `Where:` line after a `#### E2E-nnn` heading and ignores other lines, so the order is free; after `Where:` keeps `Verifies:`/`Where:` where readers expect them. The 16 existing scenarios carry `Origin: ai-proposed (reviewed by the owner before 2026-10-31)` (§7a.2.3).
 - **CONVENTIONS §4** gains the scenario origin and the agents' change rule, which replaces the table's "Who may change it" column for scenarios (any origin, a decision-log entry and an independent review, no owner approval). A new §8 holds the one pointer to the testing-standards skill. TS-21 says CONVENTIONS keeps "only a short pointer … plus the scenario-origin rule", so the mechanics of §7a.2.3 (next ID, `Verifies:`/`Where:`/`Origin:` lines, tagged tests in the same change, `(milestone)` for live-only parts, the retirement table) go in a sixth skill resource, `resources/e2e-scenarios.md`. §6.2 lists five resources; this one is added because TS-21 leaves the mechanics nowhere else to live.
@@ -5841,7 +5841,7 @@ Plan-v0.2.0 §7a.2.5, TS-12, TS-18. Range DEC-0630–0634, PAR-403–405; no PAR
 Integrated by item I1 from `ai/implementation/decisions/v020-S2.md`.
 
 ### DEC-0630 — What the root-cause record lint checks, and that it applies to every staged record
-Origin: ai-proposed · Status: accepted · Affects: plan v0.2.0 §7a.1.8, §7a.2.5; plan.md §10.5; `scripts/lint-records.mjs`
+Origin: ai-proposed · Status: accepted; the **major**/**minor** marking of reasons, the `Response (round n)` headings and the cap of 3 Review sections per attempt superseded by plan v0.2.0 TS-4/5/10/13/15/20 withdrawn 2026-10-31 (#161) (TS-4, TS-20; the lint keeps the sections, the verdict and the 3-attempt cap) · Affects: plan v0.2.0 §7a.1.8, §7a.2.5; plan.md §10.5; `scripts/lint-records.mjs`
 
 The plan names the required sections and "a Review verdict or `Status: awaiting review`" (§7a.2.5) and the three verdicts with reasons marked **major** or **minor** (§7a.1.8 step 2). The lint makes that checkable:
 - The seven sections (Symptom, Evidence, Causal chain, Alternatives ruled out, Proposed fix, Verification plan, Review) are level-2 headings, matched by prefix and case-insensitively, so `## Proposed fix (not applied)` counts but `### Evidence` (a subsection) and `## Evidenced …` do not. Each has content; subsection text counts. Headings inside fenced code are ignored.
@@ -5858,7 +5858,7 @@ Reverse: drop a rule from `lintRootCause`, or add a date cut-off in `lintRecord`
 Item: v0.2.0 S2.
 
 ### DEC-0631 — The test-review record format
-Origin: ai-proposed · Status: accepted · Affects: plan v0.2.0 §7a.1.9; `ai/implementation/test-reviews/README.md`; `scripts/lint-records.mjs`
+Origin: ai-proposed · Status: superseded by plan v0.2.0 TS-4/5/10/13/15/20 withdrawn 2026-10-31 (#161) (TS-10: the test-review records and their lint are withdrawn; the README is marked withdrawn and the records stay as history) (was: accepted) · Affects: plan v0.2.0 §7a.1.9; `ai/implementation/test-reviews/README.md`; `scripts/lint-records.mjs`
 
 §7a.1.9 asks for "the groups, the verdict per group, and its reasons" and the six reason codes, but gives no layout. The record has header fields `Item:`, `Change set:`, `Author:`, then `Reviewer:` (after review) or `Status: awaiting review` (before), and one `## Group: <reason-code> — <title>` section per group with `Cites:`, `Tests:`, `Verdict:` and `Reasons:`. A group's verdict uses the root-cause record's three values (`accepted`, `accepted-with-changes`, `rejected`) so both reviews read alike. `Cites:` is required for `code-removed`, `component-removed`, `behaviour-changed` and `test-was-wrong`; for `test-was-wrong` it names a root-cause record that exists in the index or the working tree and whose last Review verdict is `accepted` or `accepted-with-changes` (§7a.1.9: "citing its root-cause record"; a wrong test is a root-cause finding). A second change set of the same item on the same day takes a suffix, `<yyyy-mm-dd>-<item-id>-2.md`.
 
@@ -5878,7 +5878,7 @@ Reverse: narrow `commitFiles` to `git diff --cached` only.
 Item: v0.2.0 S2.
 
 ### DEC-0633 — Which linters the hook runs, and how
-Origin: ai-proposed · Status: accepted · Affects: plan v0.2.0 §7a.2.5; `scripts/claude-commit-hook.mjs`
+Origin: ai-proposed · Status: accepted; its test-review record lint superseded by plan v0.2.0 TS-4/5/10/13/15/20 withdrawn 2026-10-31 (#161) (TS-10, TS-12) · Affects: plan v0.2.0 §7a.2.5; `scripts/claude-commit-hook.mjs`
 
 - **eslint** on every `.js/.mjs/.cjs/.ts/.mts/.cts/.jsx/.tsx` file of the commit, with the root `eslint.config.js` and `--no-warn-ignored`; the config's own scope decides which rules apply (today typescript-eslint's recommended rules on `packages/framework/{src,bin,test}`, the same files as `npm run lint`).
 - **typecheck**: the three projects of `npm run typecheck` (framework, root, harness) that include a TypeScript file of the commit, in that order; all three when a root `tsconfig*.json` or one of the three project files changes. The harness project reads the framework through its built `dist` (without it, `tsc` fails with TS2307 on `@lago-morph/prototype-framework/testing`), so a change under `packages/framework/src` also selects it, and before it the hook runs `npm run build -w packages/framework`. That makes the hook stricter than a bare `npm run typecheck` over a stale `dist`. TypeScript outside the three projects (apps, starter) is not in `npm run typecheck` and is not checked here either.
@@ -6220,7 +6220,7 @@ Item: v0.2.0 A.
 
 Plan-v0.2.0 §4.1 steps 4–5, §6, §8. Range DEC-0665–0679, PAR-425–434; DEC-0675…0679 and PAR-428…434 are unused.
 
-Integrated by item I1 from `ai/implementation/decisions/v020-B.md`.
+Integrated by item I1 from `ai/implementation/decisions/v020-B.md`. Corrected by item I2 (2026-11-02): DEC-0667 cited DEC-0660 for the `AuthApp` entrypoint, which is DEC-0661.
 
 ### DEC-0665 — The auth-app provider is a redirect `LoginProvider` with id `cf-account`, built per request, with no display name
 Origin: ai-proposed · Status: accepted · Affects: `packages/framework/src/auth/{auth-app-provider.ts,runtime.ts}`, `packages/framework/src/targets/stage.ts`, plan §3, §4.1 steps 1 and 4
@@ -6237,7 +6237,7 @@ Item: v0.2.0 B.
 ### DEC-0667 — Worker settings for sign-in: `AUTH`, `FRAMEWORK_AUTH_APP_ORIGIN`, app ID `<app>-<stage>`; production stages only
 Origin: ai-proposed · Status: accepted · Affects: `packages/framework/src/targets/cloudflare/{auth-app.ts,bindings.ts,public.ts}`, F's deploy binding and registry write (PR 52), plan §3, §4.1, §4.3
 
-A production Cloudflare stage's Worker signs in through the service binding `AUTH` (entrypoint `AuthApp`, DEC-0660) and the plain variable `FRAMEWORK_AUTH_APP_ORIGIN` (the auth app's public origin; only its origin part is used). The app ID it passes to `/start` and `redeem` is the Worker name `<app>-<stage>` (`authAppId`), and its return URL is `<FRAMEWORK_PUBLIC_ORIGIN>/api/auth/callback`; F's `deploy` registers exactly that pair and binds `AUTH`. Both settings are read on first use, so a missing one fails only the request that needs it, as `CORE.MISCONFIGURED` naming the setting. Test stages and local `dev` do not use the auth app (plan §4.3: mock only); until PR 45 removes PWD they keep it beside the mock. From this PR on, a production stage has no password sign-in, and until F's PR 52 binds `AUTH` and registers the return URL, a production deploy cannot sign anyone in: no release or production deploy is cut between the two (they ship together in v0.2.0). Reverse: rename in `bindings.ts` and F's deploy together.
+A production Cloudflare stage's Worker signs in through the service binding `AUTH` (entrypoint `AuthApp`, DEC-0661) and the plain variable `FRAMEWORK_AUTH_APP_ORIGIN` (the auth app's public origin; only its origin part is used). The app ID it passes to `/start` and `redeem` is the Worker name `<app>-<stage>` (`authAppId`), and its return URL is `<FRAMEWORK_PUBLIC_ORIGIN>/api/auth/callback`; F's `deploy` registers exactly that pair and binds `AUTH`. Both settings are read on first use, so a missing one fails only the request that needs it, as `CORE.MISCONFIGURED` naming the setting. Test stages and local `dev` do not use the auth app (plan §4.3: mock only); until PR 45 removes PWD they keep it beside the mock. From this PR on, a production stage has no password sign-in, and until F's PR 52 binds `AUTH` and registers the return URL, a production deploy cannot sign anyone in: no release or production deploy is cut between the two (they ship together in v0.2.0). Reverse: rename in `bindings.ts` and F's deploy together.
 Item: v0.2.0 B.
 
 ### DEC-0668 — An auth-app session carries its level and when it was confirmed; a refresh keeps the session's expiry
@@ -6284,7 +6284,7 @@ Item: v0.2.0 B.
 
 ## Release v0.2.0, item C: the bootstrap command (2026-10-31)
 
-Plan-v0.2.0 §5.1, §5.3, §2.1a/b, §2.3, §7. No Cloudflare token was available: every check ran against the fake Cloudflare API, and Cloud checks are `not-run`. Range DEC-0680–0689, PAR-435–439; DEC-0689 is unused.
+Plan-v0.2.0 §5.1, §5.3, §2.1a/b, §2.3, §7. No Cloudflare token was available: every check ran against the fake Cloudflare API, and Cloud checks are `not-run`. Range DEC-0680–0689, PAR-435–439. DEC-0689 (C 34a/34b) was drafted on C's branches after I1 integrated this section, and I1's short form listed it as unused; item I2 added it on 2026-11-02 from the draft on `v0.2.0/34c-fix-bootstrap-token-rules`.
 
 Integrated by item I1 from `ai/implementation/decisions/v020-C.md`.
 
@@ -6408,9 +6408,26 @@ Origin: ai-proposed · Status: accepted · Affects: `cloudflare-setup.ts`, PR 34
   - **To reverse:** let one item take both sides of the files (assign the importers to C, or the three files to B 46).
 Item: v0.2.0 C.
 
+### DEC-0689 — 34a/34b: setup without an email domain, a zone or an everyday link; the email files deleted in a pure removal
+Origin: ai-proposed · Status: accepted; its "What stays" (a production deploy still needs a recorded email domain) superseded by DEC-0732 · Affects: `cloudflare-setup.ts`, `token-sources.ts`, `setup-steps.ts`, `setup-record.ts`, `target.ts`, `account-settings.ts`, `provision/core/{operations,setup-account,deploy,fake-target}.ts`, `cli/commands/{cloudflare-setup,setup-account}.ts`, `cli/main.ts` (one help line), PRs 34b and 34a; unblocks E's 57z (DEC-0716)
+
+- **Two PRs.** `34b-setup-without-email-domain` (behaviour change, below 34a) makes every email, zone and everyday-link path dead; `34a-remove-email-files` (pure removal, on top) deletes what nothing uses any more. A behaviour change and a removal never share a PR (DEC-0622).
+- **`cloudflare-setup` (34b).**
+  - No email domain question, no zone lookup, no `--email-domain`; `CLOUDFLARE_EMAIL_DOMAIN` is neither read nor written, and the template has three lines (SETUP-REQ-002/003 as amended, DEC-0697). An old `.env.cloudflare` line with it is ignored and kept.
+  - The everyday token's quick check reads the account only (`probeEveryday` without a zone), so a token with no zone group, such as 57z's four groups, passes. This is the lookup that needed Zone Read (DEC-0716).
+  - No requirements block (the Cloudflare DNS domain) and no everyday-token link. The everyday token's remedy is the admin app's Everyday token page (`EVERYDAY_PAGE`); the no-token text says the admin app makes it.
+  - A bootstrap token that is set but not accepted is a bad paste: when the run stops for the admin app, the output gives that token's remedy only (its link), not the admin app's pages as well (SETUP-AC-003).
+- **The setup steps and record (34b).** `SETUP_STEPS` are the six account steps. The record has no `emailDomain` field: a record without one is valid (the admin app's page 1 never writes one), one stored by 0.1.x is kept as it is, and 0.1.x's email step names are dropped on read. `checkAccountSetup` and `inspectSetupSteps` take no domain; the record-vouches-for-a-refused-read path went with the email steps (no account step reads "unreadable").
+- **`setup-account` (34b).** No `--email-domain` (PROV-REQ-004's v0.2.0 amendment, DEC-0698). `TargetOperations.emailSetupProblems`/`setUpEmail` became `setupProblems()` (the signing credential's "Account API Tokens Write") and `recordSetup()` (the setup record). `emailPrerequisites` is gone: a production deploy no longer reads the zone or Email Sending (both need groups v0.2.0's everyday token lacks).
+- **What stays (F's and B's, not 34a's).** A production deploy still needs a recorded email domain, because F's `sst.ts` and B's `targets/cloudflare/settings.ts` still bind `EMAIL` (MAIL-AC-004). Only 0.1.x recorded one, so a production stage on an account set up only by v0.2.0 stops at the preflight; the message says so and no longer names `--email-domain`. Removing the binding is F's.
+- **Setup criteria (34b).** C's older `criteria/setup` tests asserting 0.1.x text change as `behaviour-changed` under DEC-0697, as the orchestrator directed after T1's root-cause record; T1's new file is not committed here.
+- **The pure removal (34a).** `email.ts`, `email-permissions.ts`, `mail-sink.ts`, `src/mail/**`, `cli/commands/mail.ts`, `TestApp.mail` with `connectTestStage`'s mail capture and the `mailSender` option, `criteria/pwd/support.ts`, `criteria/_cloud/email.ts`, `secrets/password-no-leak.test.ts`, the unused mail helpers in `criteria/cli/support/admins.ts`, the two email token specs of `harness/test-tokens.ts`, and `writeAccountSettings`, each with its tests (`code-removed` / `component-removed`). PROV-AC-004's prodcheck ticket round trip signed in with a password through the mail sink, both removed by B; it goes as `component-removed` and is listed open for a sign-in that works on a production stage.
+- **To reverse:** revert 34a, then 34b.
+Item: v0.2.0 C.
+
 ## Release v0.2.0, item D: spec and docs (2026-10-31)
 
-Plan-v0.2.0 §4.4, §6, §6.1. Range DEC-0690–0709, PAR-440–444; DEC-0700…0709 and the PARs are unused.
+Plan-v0.2.0 §4.4, §6, §6.1. Range DEC-0690–0709, PAR-440–444; DEC-0704…0709 and the PARs are unused. DEC-0700…0703 are D's follow-ups (PR 39b, #136, and PR 39c, #151); the owner approved the wording of DEC-0700 and DEC-0703 on 2026-10-31.
 
 DEC-0690, DEC-0691 and DEC-0692 are the three owner amendments of plan §6.1, and DEC-0699 proposes a fourth. **The owner approved their wording on 2026-10-31** (owner questions 18 and 55; DEC-0699 with one addition, below). Until then it was pending owner approval (owner questions 18–19). They are drafted in the plan's proposed wording, and implementation proceeds on it. The amended texts carry `Origin: owner-approved` in the docs, because they take effect only when the owner approves the wording by merging PR 36 (PR 39a for DEC-0699). If the owner changes the wording, those PRs and these entries change with it, and so do the supersessions below that rest on them.
 
@@ -6446,10 +6463,12 @@ D's supersessions (plan §6 "Spec"), marked on each entry's Status line:
 
 D's correction to the log: DEC-0277's `Affects:` list gains E2E-013, which also reads the reference app's test secret `apiKey`. No decision changes.
 
-Integrated by item I1 from `ai/implementation/decisions/v020-D.md`.
+Integrated by item I1 from `ai/implementation/decisions/v020-D.md`; DEC-0700…0703 by item I2 from the same draft (2026-11-02).
+
+D's 39b follow-up also names the role-refresh parameters in AUTH-REQ-003's v0.2.0 amendment by ID: the interval PAR-425, the retries PAR-426 and the retry delay PAR-427 (DEC-0668, DEC-0669). That is the one-line edit DEC-0695 announced, so no decision changes. `docs/contracts/ts/internal/auth-app.d.ts` (A's contract) still cites "PAR-425–434".
 
 ### DEC-0690 — Admins are the Cloudflare account's administrators (SYS-REQ-018 amended)
-Origin: owner-approved (owner amendment; wording approved by the owner on 2026-10-31) · Status: accepted (owner approved 2026-10-31) · Supersedes: DEC-0521, DEC-0522, DEC-0523, DEC-0524 (as the SYS-REQ-018 amendment) · Affects: SYS-REQ-018, AUTH (PR 37), plan §1 D1/D2, §4.1 step 5, §4.4, §6.1 item 1
+Origin: owner-approved (owner amendment; wording approved by the owner on 2026-10-31) · Status: accepted (owner approved 2026-10-31); its sentence on when a role change takes effect ("at the next role refresh or session renewal") superseded by DEC-0703 (at the person's next sign-in) · Supersedes: DEC-0521, DEC-0522, DEC-0523, DEC-0524 (as the SYS-REQ-018 amendment) · Affects: SYS-REQ-018, AUTH (PR 37), plan §1 D1/D2, §4.1 step 5, §4.4, §6.1 item 1
 
 Only members of the owner's Cloudflare account can sign in. A member whose account role is an administrator role is an admin, any other member is a user, and anyone not signed in is anonymous. The administrator role names, the role refresh interval, and the refresh retries and delay are parameters (PR 37 adds them). A role change takes effect at the next role refresh or session renewal, not necessarily on the next request. If a refresh cannot confirm the role after its retries, the person is signed out (fail closed). The operator command `admins` and the role stored in the stage's database go. Configuration still holds no admin or user list.
 Item: v0.2.0 D.
@@ -6546,6 +6565,42 @@ Origin: owner-approved (owner amendment; wording approved by the owner on 2026-1
 Plan §6.1 item 4 adds one exception to "Testers": the owner's once-per-release real sign-in. D9 and D10 also make the owner create the bootstrap token in the dashboard and authorize the admin app's pages as the signed-in admin, and an AI agent cannot do either. The proposed wording extends the same once-per-release live pass to those steps. The owner may override this in a session. (Added by the owner on approval, 2026-10-31.) If the owner had rejected it, SKILL-AC-006 and SETUP-AC-011 would have been narrowed to the agent's steps. PR 39a carried "owner approval of wording needed".
 Item: v0.2.0 D.
 
+### DEC-0700 — The production checks name B's sign-in path check instead of PWD-AC-009 and `admins grant` (COMPL-REQ-005, COMPL-AC-005, "Production-check stage")
+Origin: owner-approved (wording of an owner amendment that follows from DEC-0692; wording approved by the owner on 2026-10-31) · Status: owner-approved, 2026-10-31 · Supersedes: DEC-0519 (on `prodcheck`: a `check-login` run no longer leaves a test user); DEC-0526's `admins grant` on `prodcheck` (already listed under DEC-0690/DEC-0692 above) · Affects: COMPL-REQ-005, COMPL-AC-005, `compliance.md` §2 "Production-check stage", owner question 19, plan-v0.2.0 §6.1 items 3 and 4, §7 "Live"
+
+- **Why.** COMPL-REQ-005 (owner), COMPL-AC-005 and the "Production-check stage" paragraph still named the password check `check-login` (PWD-AC-009) and the `admins grant … --confirm-production prodcheck` steps. B's PR 43 (#115, DEC-0670) replaced `check-login`'s steps with the automated sign-in path check: the login redirect to the auth app's `/start` with the app ID, return URL and state; a bogus-code callback that signs nobody in; and the auth app's `/start` accepting the return URL. It records AUTH-AC-011 (steps 1–2) and E2E-008's automated part (steps 1–3). PWD-AC-009 is retired (DEC-0696) and `admins` is removed (DEC-0698). Owner question 19 assigned this amendment to D.
+- **COMPL-REQ-005.** COMPL-REQ-005 has owner origin, so it gets an "Amendment for v0.2.0" paragraph and its text is not edited in place. The amendment keeps "mock and test-mail route absent (AUTH-AC-009)". It drops MAIL-AC-006 (retired) and the redirect to the framework's sign-in page, and requires `check-login` on every cloud run, naming what it checks and its IDs. It states that no role is granted on the production stage.
+- **COMPL-AC-005.** Rewritten under its ID. The redirect target becomes the auth app's `/start`, and the required `check-login` results become AUTH-AC-011 and E2E-008. The test-mail 404 clause stays, because the existing test (`criteria/compl/prodcheck.test.ts`) checks it and the route must stay absent. Dropping it with E2E-006's test-mail clause (plan §7.1) is T2's call. The Where column is unchanged (`Cloud`).
+- **"Production-check stage".** The paragraph is design prose, so it is edited in place. It serves COMPL-REQ-005, E2E-006 and `check-login` (AUTH-AC-011, E2E-008's automated part). Its deploy registers its return URL with the auth app (DEC-0701). The owner's once-per-release real sign-in (plan §7 "Live" item 3) is also on `prodcheck`. The `admins grant` and revoke steps and DEC-0519's leftover test user are gone. The sentence naming `frameworkAuthSecret` is left as it is, because the code still generates it (progress, "From B", item 7; T6 checks). Changing that sentence belongs with that check.
+- **Not changed here.** `tests/compliance/harness/prodcheck.ts` (`CHECK_LOGIN_IDS`, `PRODCHECK_IDS`, its header), `driver.unit.test.ts` (its COMPL-AC-005 block) and `expected.ts` still name PWD-AC-009, MAIL-AC-006 and the sign-up budget. So do `criteria/compl/prodcheck.test.ts`'s header and `tests/compliance/tools/release.ts`'s `LOGIN_CHECK`. This PR changes spec text only, so they stay open for T2 and T6 (see the PR body). The harness catalogue tests pass with this text (`npx vitest run --config vitest.unit.config.ts tests/compliance/harness`: 225/225).
+Item: v0.2.0 D.
+
+### DEC-0701 — PROV-AC-002 gains F's auth-app clause; the auth app's absence is shown against the fake Cloudflare API only
+Origin: ai-proposed · Status: accepted · Affects: PROV-AC-002, `provisioning.md` §2 "Publishing the result", owner question 21, DEC-0725 (F)
+
+- **Text.** F's proposed criterion text (DEC-0725, `tests/compliance/criteria/prov/auth-app-fake.test.ts`) is added word for word to PROV-AC-002, after the signing-credential clause. PROV-REQ-002 step 1's new production prerequisite now has a criterion. It is a clause of the existing row, not a new ID, so the catalogue count does not change.
+- **Where.** Making the account's auth app or its registry absent would break sign-in for every production stage on the account. So, like the other account-state clauses (DEC-0560), that part is shown only against the fake Cloudflare API, where F's test already runs it. The Where column is unchanged (`Cloud; signing-credential clause: Cloud (milestone)`). The registration and its clearing need only a production stage of the app's own, so they fall under `Cloud`. Today F's test shows them against the fake API only. A live test of them is open (T1).
+- **Prose.** `provisioning.md` §2 "Publishing the result" said "There is nothing to register with a login provider (DEC-0513)". That no longer holds, so it now says a production deploy registers the callback URL and `remove` clears it (DEC-0725).
+Item: v0.2.0 D.
+
+### DEC-0702 — PROV-REQ-002 step 7: the health route no longer checks `frameworkAuthSecret`
+Origin: ai-proposed · Status: accepted · Affects: PROV-REQ-002 step 7, DEC-0698 (SEC `frameworkAuthSecret` retired)
+
+- **Why.** T5 reported (relayed by the orchestrator) that step 7 still said "The health route also checks `frameworkAuthSecret` (SEC)". That has not been true since B's removals. On the base, the health route (`/api/__framework/health`, `src/http/runtime.ts`) runs the checks that `assembleStage` (`src/targets/stage.ts`) registers. They make one trivial SQL read on the migration table, and check that every declared app secret and every `requiredFrameworkSecrets` entry has a value. On Cloudflare that list is `[frameworkSessionKey]` (`src/targets/cloudflare/public.ts`). Locally it also holds the local framework secrets. `frameworkAuthSecret` is not among them.
+- **Change.** PROV-REQ-002 is `provenance-unclear`, so step 7 is corrected in place to say what the route checks, in the words of the HTTP contract's health description (`framework.openapi.yaml`, unchanged). It is a correction to match the code and DEC-0698, not a new behaviour, but it is requirement text, so it rides in this "owner approval of wording needed" PR.
+- **Left as is.** `secrets.md` and PAR-253's note still describe `frameworkAuthSecret` as retired-but-named, which is correct. The CLI and `target.ts` still generate it (progress "From B" item 7), and T6 checks that.
+Item: v0.2.0 D.
+
+### DEC-0703 — A role change takes effect at the person's next sign-in; a role refresh keeps sessions in step with the recorded role
+Origin: owner-approved (wording of owner amendments that follows from owner question 25's design; wording approved by the owner on 2026-10-31) · Status: owner-approved, 2026-10-31 · Affects: SYS-REQ-018 (v0.2.0 amendment), AUTH-REQ-005 (v0.2.0 amendment), SKILL-REQ-006 (v0.2.0 amendment), `auth.md` §2 "How the level is evaluated", `docs/README.md`, owner questions 25 and 54, plan-v0.2.0 §6.1 item 1
+
+- **Why.** The spec said a role change takes effect "at the person's next sign-in or role refresh" (AUTH-REQ-005, SKILL-REQ-006, `auth.md` §2, `docs/README.md`) or "at the app's next role refresh or session renewal" (SYS-REQ-018). The code does not do that, by design (owner question 25, kept). The auth app writes a person's role to its `users` table only at a successful sign-in (`auth-app/app.ts` → `upsertUser`). `role(sub)` reads that stored row (`auth-app/service.ts` → `store.ts` `getRole`); it does not ask Cloudflare. B's role refresh (`auth/role-refresh.ts`, `auth/runtime.ts`) calls `role(sub)` after PAR-425. So a refresh can only show a role recorded at a sign-in. A change made in the Cloudflare dashboard shows once the person next signs in, to any app on the account; after that, their other sessions follow at their next refresh. There is no session renewal: a re-issued cookie keeps its expiry (AUTH-AC-003). Owner question 54 proposed correcting the wording and keeping the code.
+- **Change.** The wording is corrected to match: the change takes effect at the person's next sign-in, and a refresh keeps each session's level in step with the role recorded at that sign-in. The v0.2.0 amendments of SYS-REQ-018, AUTH-REQ-005 and SKILL-REQ-006 are this release's own, not yet released, text, so the sentence is corrected in place and the amendment header names DEC-0703. Earlier amendments are not touched. `auth.md` §2 is design prose and is edited in place. Its sentence "A removed member keeps a session only until its next refresh" was also wrong for the same reason: a removed member cannot sign in again, so their recorded role stays, and a session they hold lasts until it expires (PAR-250) or they log out. It now says so. This is what owner question 25 accepted, and G's skill text (`skill/reference/owner-tasks.md` §7 on G's branches 64 and later) already says it.
+- **SYS-REQ-018 is included.** Owner question 54 did not list it, but its v0.2.0 amendment (plan §6.1 item 1) has the same defect, and AUTH-REQ-005 derives from it. Leaving it would keep the spec self-contradictory. It is the owner's requirement, so its change most needs the owner's approval.
+- **Not changed.** No code changes. `skill/**` on this base still has the pre-v0.2.0 text, which has no role-refresh wording; G's v0.2.0 skill text (PR 64 onward) already says "next signs in", so it needs no change. AUTH-AC-003 and the `testing.d.ts` / `login-provider.d.ts` comments describe the fake auth app's record changing, which a refresh does pick up, so they stay. `component-map.md` ("at sign-in and at each role refresh") stays correct.
+- **To reverse.** Make the refresh re-read `/memberships`, which needs a stored token or an admin-app update path (owner question 25).
+Item: v0.2.0 D.
+
 ## Release v0.2.0, item P0: local compliance baseline (2026-10-31)
 
 Plan-v0.2.0 §7a.1.8, TS-3. Both decisions follow from root-cause records an independent reviewer accepted (`ai/implementation/root-causes/2026-10-31-P0-*.md`). Range DEC-0778–0779 and PAR-480, taken from T7's range; PAR-480 is unused.
@@ -6578,6 +6633,759 @@ It must run before the driver starts, because `dev` does not reload `.dev.vars` 
 - **CI.** The CI step that runs it before the compliance step is added by item S3, in the job that runs criteria through the harness. P0 edits no workflow.
 - **Evidence.** `ai/implementation/root-causes/2026-10-31-P0-apikey-local-runner-step.md` (verdict `accepted`): with the step alone, all five IDs went from `blocked` to `passed`, in both orders of `dev` and the step.
 Item: v0.2.0 P0.
+
+## Release v0.2.0, item E: the admin app (2026-10-31)
+
+Plan-v0.2.0 §3, §5.2, §7, §8; D3, D4, D8, D10. No Cloudflare token was available: every check ran against the fake Cloudflare API (which enforces granted scopes) and mock-oauth2-server, and Cloud checks are `not-run`. Range DEC-0710–0724, PAR-445–454; DEC-0721…0724 and PAR-451…454 are unused.
+
+Integrated by item I2 from `ai/implementation/decisions/v020-E.md`.
+
+### DEC-0710 — The admin app keeps no state and no token: a short signed session, and one OAuth grant per page action
+Origin: ai-proposed · Status: accepted · Affects: `packages/framework/src/admin-app/{seal,grant,app,params}.ts`, PRs 56, 56b
+
+- **No storage.** The admin app has no D1 or KV of its own; it is bound only to the admin client's ID and secret (C's PAR-439 bindings) and two plain settings (DEC-0711). Its session and its grant transaction live in cookies sealed with HMAC-SHA-256 under a key derived from the admin client's secret (`seal.ts`): `__Host-admin-session` (`sub`, `email`, expiry) and `__Host-admin-grant` (state, PKCE verifier, nonce, page). Each value is bound to its purpose and expires. Setting the clients up again (a new secret) ends every session.
+- **Sign-in** is an authorization-code grant with PKCE S256 for `openid user-details.read memberships.read` only. It reuses the auth app's OAuth core (discovery, `verifyIdToken`, `fetchMemberships`, `pickMembership`, `mapRole` with PAR-413, `revokeTokens`). Only an `admin` (PAR-413) gets a session; anyone else gets a refusal page and no cookie. Both tokens are revoked before the response.
+- **Each page's action is its own grant** asking for that page's optional scopes (PAR-447). On the callback the admin app checks the grant was made by the session's person, who is still an administrator, and that every asked-for optional scope was granted. It then runs the page's action with the person's access token and revokes the access and refresh tokens when the action ends, whatever happens. No Cloudflare token is stored, logged or shown.
+- **CSRF.** Every state-changing request is a POST whose `Origin` must equal the admin app's origin; the cookies are `SameSite=Lax`, so a cross-site POST carries no session. A callback whose `state` does not match the grant cookie is refused before any token exchange and leaves the cookie alone.
+- **The PKCE verifier sits in a signed, not encrypted, cookie** (HttpOnly, Secure). Anyone who can read the person's cookies already holds their session; PKCE still stops a code taken from the redirect being redeemed elsewhere.
+- **To reverse:** give the admin app a D1 database (page 1 already creates the auth app's) and keep sessions and transactions there.
+Item: v0.2.0 E.
+
+### DEC-0711 — The admin app gets its account ID and its own origin as plain-text bindings
+Origin: ai-proposed · Status: accepted · Affects: `provision/cloudflare/admin-app-deploy.ts` (`ADMIN_APP_SETTINGS`), `admin-app/config.ts`, PR 56c
+
+- The admin app must check that a sign-in is a member of *this* account, and must build its callback URL (the admin client's one redirect URI, `oauth-clients.ts`) from a known origin, never from the request's Host header. C's deploy bound only the client's ID and secret (PAR-439, kept). `deployAdminApp` now also binds `ADMIN_ACCOUNT_ID` and `ADMIN_APP_ORIGIN` (`appOrigin("admin", subdomain)`) as `plain_text`. They are not secrets and are never printed: the bootstrap's output rules (DEC-0590, DEC-0686) are unchanged.
+- `ADMIN_DISCOVERY_URL` and `ADMIN_API_BASE` are read when set, for tests only; the bootstrap never sets them.
+- **To reverse:** derive the origin from the request URL and read the account from the admin's single membership; both weaken the checks.
+Item: v0.2.0 E.
+
+### DEC-0712 — The bootstrap uploads the admin app bundled from the framework at run time
+Origin: ai-proposed · Status: accepted; its bundle with no imports superseded by DEC-0720 (the bundle keeps `node:crypto` and runs with `nodejs_compat`) · Affects: `admin-app/bundle.ts`, `provision/cloudflare/admin-app-deploy.ts`, PR 56c; C's `ADMIN_APP_SOURCE` (removed)
+
+- C's stub was a hand-written module string, `ADMIN_APP_SOURCE`. The real admin app reuses the auth app's OAuth core and the framework's helpers, so it is bundled: `bundleAdminApp()` runs esbuild (already a framework dependency, used by `build`) on `admin-app/worker.ts`, or `dist/admin-app/worker.js` in the published package, into one self-contained ES module (no imports; about 28 kB). The bootstrap uploads that; a unit test loads the bundle and checks it serves the sign-in page.
+- Modules bundled into the Worker import no Node built-in (`scopes.ts` keeps its own copy of the required scopes, held equal to `oauth-clients.ts` by a test).
+- **To reverse:** generate a module string at `npm run build` time instead (a build-script change in `packages/framework/package.json`).
+Item: v0.2.0 E.
+
+### DEC-0713 — The status page asks for write scopes, because the admin client offers no read variants
+Origin: ai-proposed · Status: accepted · Affects: `admin-app/scopes.ts` (PAR-447), page 3
+
+- The status page reads the Workers list, the setup record in R2 and the auth app's D1. The admin client's optional scopes (C's `ADMIN_OPTIONAL_SCOPES`) hold only `workers-scripts.write`, `workers-r2.write` and `d1.write` for these. §2.1 showed `GET …/workers/scripts` without the scope answers an *empty* list, not an error, so the page cannot rely on an un-asked scope. The page only reads.
+- **To reverse:** add `workers-scripts.read` (verified to exist, §2.1) and read variants for R2 and D1, if Cloudflare has them, to `ADMIN_OPTIONAL_SCOPES` in `oauth-clients.ts`, and switch PAR-447's `status` row to them.
+Item: v0.2.0 E.
+
+### DEC-0714 — The granted scopes come from the token answer's `scope`; without one, the scopes as asked
+Origin: ai-proposed · Status: accepted · Affects: `admin-app/grant.ts`
+
+- The auth app's `exchangeCode` drops the token answer's `scope`, so the admin app makes its own exchange (same request, `client_secret_post`, `redirect: "manual"`) and keeps it. When the answer has no `scope`, RFC 6749 §5.1 says the grant is as asked. The API still enforces the real grant: a call refused with 9109 shows the same "keep every permission ticked" advice on the page that made it.
+- *Unverified:* that Cloudflare's token answer carries `scope` and leaves out unticked optional scopes. §2.1 recorded the granted scope string of the unticked sign-in; the live pass confirms its source (runbook item E-1).
+- **To reverse:** read the grant from a test call per scope instead of from `scope`.
+Item: v0.2.0 E.
+
+### DEC-0715 — The everyday token: four account groups, created or updated in place through the admin's grant
+Origin: ai-proposed · Status: accepted · Affects: `provision/cloudflare/{permissions.ts (EVERYDAY_V2), everyday-token.ts}`, `admin-app/everyday-page.ts`, PRs 57, 57b
+
+- **The set** (plan §5.2 page 2): Workers Scripts Write, Workers R2 Storage Write, D1 Write and Secrets Store Read (`5e33b7d77788455c9fdf18cbd38ee5a0`, §2.1b), as **one `allow` policy on this account**. There is no zone group. Secrets Store Write counts as covering Secrets Store Read in policy checks, as Zone Write covers Zone Read.
+- **Which token.** Every token named `prototype-framework` (the everyday name, `TOKEN_NAMES.everyday`) is the everyday token. If there is none, one is created and its value is shown once. If there are several, each is updated.
+- **Update in place** (plan §2.3): the token's name, status, expiry, start and IP condition are kept, and its policies are *replaced* by the one policy. "Exactly this set" means the email and zone groups and any extra policy go. A token already exact is not written. The page lists the groups added and removed, naming the 0.1.x groups.
+- **Fallback** (plan §5.2, *unverified*: whether the grant can update a token it did not create). Only a **refusal (HTTP 403)** of a token's read or update triggers the fallback. Any other failure is an error, and no token is created. Every token is read before any is written, so a refused read changes nothing. A new token is then created and shown, and the old tokens not already updated are listed for deletion. An old token is deleted only after the person presses "I have saved the new token", which is a second grant (`action=delete:<ids>`). Before any DELETE, the IDs are checked against the list of everyday tokens and the 32-hex shape, and the last everyday token is never deleted. A token list longer than 20 pages is refused rather than read partially, which would risk a duplicate (review of PR #104).
+- **PERMISSIONS_VERSION** stays 2. C raised it for v0.2.0 (DEC-0680), and nothing is released between the two changes.
+- **To reverse:** keep the existing policies and add only the missing groups (`inPlaceUpdateBody`), as v0.1.1 did; that leaves the email and zone groups.
+Item: v0.2.0 E.
+
+### DEC-0716 — `EVERYDAY` becomes the four groups only after `cloudflare-setup` stops looking up the email domain
+Origin: ai-proposed · Status: accepted · Affects: `provision/cloudflare/permissions.ts`, the generated tables in `QUICKSTART.md` and `docs/components/provisioning.md`, C's `cloudflare-setup.ts`; PR `57z-everyday-switch` (blocked)
+
+- **The problem.** Without a bootstrap token, `cloudflare-setup` ("continue prototype setup") still reads an email domain and looks up its zone with the everyday token (C's code, which imports `email.ts`'s `zoneCandidates`). A four-group token has no Zone Read. Switching `EVERYDAY` makes 22 of C's `cloudflare-setup.unit.test.ts` cases fail, because the run stops at the zone lookup. This is a real gap: a token made by page 2 would fail that check. Plan §5.3 removes the email domain. C's follow-up 34a deletes `email.ts`, so it has to take that lookup out anyway.
+- **Choice.** PR 57 adds the set as `EVERYDAY_V2`, and page 2 creates and updates tokens with it. `EVERYDAY`, its quick check (`probeEveryday`) and the generated tables move to the four groups in a separate switch PR, `57z-everyday-switch`, which merges after C's 34a. Without that switch, a page-2 token fails today's CLI quick check. Page 2 also updates an existing, working 0.1.x token in place and strips its Zone Read, so running page 2 before 57z breaks `cloudflare-setup`'s check (and the 0.1.x email-domain deploy check) for existing users too. **57z (with C's 34a) is a hard release blocker:** v0.2.0 must not ship with page 2 but without it (review of PR #104).
+- I did not change C's tests or `cloudflare-setup.ts` (ownership, plan §1): changing those tests would hide the gap.
+- **To reverse:** switch `EVERYDAY` in PR 57 and have C (or whoever owns 34a) remove the email-domain lookup in the same merge batch.
+Item: v0.2.0 E.
+
+### DEC-0717 — The status page reads the Workers list, the setup record and the auth app's D1, and shows what it could not read
+Origin: ai-proposed · Status: accepted · Affects: `admin-app/status-page.ts`, `provision/cloudflare/auth-app-deploy.ts` (`AUTH_APP_DATABASE`), PR 58
+
+- **What it reads.**
+  - `GET …/workers/scripts`: whether `prototype-admin` and `prototype-auth` are deployed.
+  - The setup record `framework/account.json` in `sst-state`: its version against `ACCOUNT_SETUP_VERSION`, the framework version and when it was applied.
+  - The auth app's D1 database `prototype-auth` (PAR-450), found by name, through `POST …/d1/database/<id>/query`. It runs two `SELECT`s: the registry (`app`, `return_url`) and the PAR-448 most recent `users` by `updated_at`, which the auth app sets at each sign-in. Recent sign-ins are therefore the latest sign-in per person, not a log.
+- **Read-only.** Every call is a GET or a `SELECT` query; a unit test asserts this.
+- **Partial failure.** Each part that cannot be read names the step and Cloudflare's answer; the other parts are still shown. All values are escaped.
+- The Worker names are kept equal to C's `APP_SCRIPTS` by a test, not imported, because `oauth-clients.ts` pulls in Node's crypto.
+- *Unverified:* the D1 query endpoint's answer shape (`result[0].results`) with a grant token. Live-pass item E-4.
+- **To reverse:** give the auth app a read-only admin route over a service binding from the admin app, instead of querying its D1 through the API.
+Item: v0.2.0 E.
+
+### DEC-0718 — The v0.1.x email cleanup deletes the mail-sink Worker and bucket; the zone's email settings are dashboard steps
+Origin: ai-proposed · Status: accepted · Affects: `admin-app/cleanup-page.ts`, PAR-447 `cleanup`, PR 60
+
+- **Optional, never automatic** (plan §8). The page only describes what v0.1.x left. Nothing is deleted until the person presses Continue and approves the grant (`workers-scripts.write`, `workers-r2.write`).
+- **What it deletes.** The Worker `prototype-mailsink`, then the R2 bucket `prototype-mailsink`. The bucket is emptied first (an R2 bucket must be empty to delete), with at most PAR-449 pages of 1000 keys per run. A 404 counts as already gone, so running it again is harmless.
+- **What it leaves to the dashboard.** The routing rule `sink@t.<domain>`, Email Routing on `t.<domain>` and the Email Sending entry all live on the domain's zone, and the admin client has no email or zone scope (C's `ADMIN_OPTIONAL_SCOPES`). The page lists them as dashboard steps, naming the domain when the v0.1.x setup record holds it. v0.1.x's "test mailbox" is that routing rule plus the sink Worker and bucket.
+- *Unverified* (live-pass item E-10): the R2 object delete endpoint, and the bucket delete after emptying, called with a grant token.
+- **To reverse:** add the email and zone scopes to the admin client (C's `oauth-clients.ts`) and delete the routing rule and sending entry here.
+Item: v0.2.0 E.
+
+### DEC-0719 — Account setup (page 1) deploys the auth app and reuses the framework's account steps and F's signing credential; setup version 2
+Origin: ai-proposed · Status: accepted · Affects: `provision/cloudflare/{auth-app-deploy.ts, permissions.ts (ACCOUNT_SETUP_VERSION)}`, `admin-app/setup-page.ts`, PRs 59, 59b
+
+- **The auth app.** Its D1 database `prototype-auth` (PAR-450) is found by name or created. The Worker `prototype-auth` is uploaded with these bindings:
+  - `DB`: the D1 database. F's deploy finds the registry through this binding (DEC-0725).
+  - `AUTH_APP_CLIENT_ID` and `AUTH_APP_CLIENT_SECRET`: Secrets Store bindings to the sign-in client that the bootstrap stored (PAR-436).
+  - `AUTH_APP_ACCOUNT_ID` and `AUTH_APP_ORIGIN`: plain text (A's `config.ts` names).
+
+  Its `workers.dev` route is turned on and previews off. If the sign-in client is missing from Secrets Store, nothing is written and the page sends the person back to the bootstrap. The auth app applies its own schema on its first request (DEC-0656).
+- **Shared resources.** The framework's account steps (`accountSteps()`) run in order: the log, state and backup buckets, the backup lifecycle, the subdomain, and the signing record. Each is inspected first and created only if absent, and a foreign bucket stops the run. Nothing email-related is created. The signing record's step calls F's `createAccountSigningCredential(api, account, { secretsStore: true })` (DEC-0729), which falls back to the record when Secrets Store is unavailable.
+- **Order.** Everything is read first: the bootstrap's subdomain and Secrets Store, and every shared resource's state. If the bootstrap has not run, or a bucket is foreign, the run stops before any write (review of PR #109).
+- **Signing credential.** It is created when absent. When it is still held in the record (a 0.1.x account, or an earlier Secrets Store fallback), it is **moved** into Secrets Store (D7): F's function makes a new token, stores it and deletes the old one. Deployed stages then need a redeploy, and the page says so.
+- **Setup record.** `framework/account.json` is written with:
+  - `setupVersion` = `ACCOUNT_SETUP_VERSION`, now **2** (PAR-332: 1 → 2);
+  - the framework version (compiled in, DEC-0720);
+  - `appliedAt`;
+  - the completed account steps.
+
+  Every other stored field is kept. `emailDomain` is **never invented**, because C's `parseAccountSettings` refuses an empty one and the deploy preflight reads it (review of PR #109, major). A record a newer release wrote with a higher version is left as it is. C's `parseSetupRecord` still requires `emailDomain`, so C's `cloudflare-setup` check reads a v0.2.0 record as "not set up" until C's 34a drops the email domain (DEC-0716).
+- *Unverified* (live-pass items):
+  - E-8: that `workers-r2.write` covers "Workers R2 Storage Bucket Item Write", the signing token's group, when the grant creates that token. The fake assumes it does. **Release-blocking for page 1:** if it is wrong, the signing step fails mid-run, after the auth app and the buckets are already written. A second run then completes, once the scope covers the group.
+  - E-9: that the upload API accepts a `d1` binding with `id`, and `plain_text` bindings, from a grant token.
+- **To reverse:** split the auth app's deploy back out into the bootstrap (it would then need D1 Write), or set PAR-332 back to 1.
+Item: v0.2.0 E.
+
+### DEC-0720 — The admin app bundle keeps `node:crypto` as an import and runs with `nodejs_compat`
+Origin: ai-proposed · Status: accepted · Affects: `admin-app/bundle.ts`, `provision/cloudflare/admin-app-deploy.ts` (`ADMIN_APP_COMPATIBILITY_FLAGS`), PR 59; changes DEC-0712's "imports nothing"
+
+- Page 1 reuses C's `account.ts` (`randomBytes`) and F's `r2-token.ts` (`createHash` for the S3 key). Both import `node:crypto`, and E may not edit either. The bundle therefore leaves exactly `node:crypto` external (a test checks that it is the only import), and the admin app is uploaded with `compatibility_flags: ["nodejs_compat"]`. A unit test runs the uploaded bundle under local workerd with that flag.
+- `bundle.ts` also compiles in two values:
+  - `__PF_AUTH_APP_SOURCE__`: A's auth-app Worker, bundled with `cloudflare:workers` external, which page 1 uploads;
+  - `__PF_FRAMEWORK_VERSION__`: the package version, for the setup record.
+- **To reverse:** give `account.ts` and `r2-token.ts` WebCrypto versions of these two calls, then drop the flag.
+Item: v0.2.0 E.
+
+## Release v0.2.0, item F: Secrets Store adoption and deploy bindings (2026-10-31)
+
+Plan-v0.2.0 §3 (registry), D7, §5.2 page 1 (signing credential), §10 (fallback). Range DEC-0725–0734, PAR-455–459; F used DEC-0725…0729 and PAR-455, and PAR-456…459 are unused.
+
+**Loans from F's range.** F's unused DEC-0730…0734 were lent to later items, because T7's own range DEC-0780–0787 is exhausted (DEC-0780 and DEC-0787 PR 94, DEC-0782…0786 PR 93a, DEC-0781 reserved for the native-copy fix): DEC-0730 to T3 (#144; it amends DEC-0725's "Remove"), and DEC-0732, DEC-0733 and DEC-0734 to T7 (#156, PR 34c, #155). Each is in its borrower's section below. DEC-0731 was reserved for the demo's share-link signature fix, which needed no new decision (#153); it stays unused.
+
+Integrated by item I2 from `ai/implementation/decisions/v020-F.md`.
+
+### DEC-0725 — A production deploy registers its return URL in the auth app's registry, found through the auth app's `DB` binding; remove clears it first
+Origin: ai-proposed · Status: accepted; its "Remove" (the clear as the first step of `removeStage`) superseded by DEC-0730 (the core's `remove` clears it through `unregisterStage`, after the production backup and before the databases are deleted) · Affects: `packages/framework/src/provision/cloudflare/{worker.ts,target.ts}`, PROV-REQ-002 step 1 (new production prerequisite, owner question 21), plan §3, §4.1 step 2, §5.2 page 2 (D1 Write)
+
+- **Which stages.** Production stages only (every stage not named `test-*`), as B's DEC-0667 binds `AUTH` only there; test stages sign in through the mock (plan §4.3) and never touch the auth app.
+- **Where the registry is.** The D1 database the auth app's Worker `prototype-auth` (PAR-438) binds as `DB`, read from `GET …/workers/scripts/prototype-auth/settings`. So `deploy` needs no name of its own for the auth app's database, and whatever E's account setup names it, deploy follows the deployed Worker. The settings' D1 binding field is read as `id`, or `database_id` (live pass checks which).
+- **Preflight (PROV-REQ-002 step 1).** A production stage's preflight names "the account's auth app (Worker prototype-auth) is not deployed …" or "… has no registry (its D1 binding DB) …", both pointing to account setup in the admin app; nothing is created. A test stage does not ask.
+- **What is written.** The pair `(<app>-<stage>, <public origin>/api/auth/callback)` (DEC-0667), through the D1 HTTP API with the auth app's own statements (`auth-app/store.ts`: `ensureSchema`, `registerReturnUrl`, `unregisterApp`), so the exact-match lookup the auth app runs finds exactly what deploy wrote, and only canonical URLs can be written. The schema is applied idempotently first (the auth app applies it only on first use, DEC-0656).
+- **When.** In step 5, after the code and its framework secrets are deployed and before step 6 starts the app; a failure fails step 5 and the app is not started (on a redeploy the new code already answers by then, since the route stayed on; acceptable, because the earlier deploy registered the same pair). Every production deploy writes it again (idempotent). An older return URL of the same app (a changed `workers.dev` subdomain) stays until `remove`.
+- **Remove.** The first step of `removeStage` on a production stage (after the production backup, before anything is deleted), so nobody new signs in to a stage being removed; it also deletes the app's outstanding codes (`unregisterApp`). With the auth app or its registry absent there is nothing to clear. A failure is reported with the other removal failures; the rest is still removed.
+- **Reverse:** drop the `production(stage)` guards in `target.ts` (register every stage), or name the registry database explicitly in `worker.ts`.
+Item: v0.2.0 F.
+
+### DEC-0726 — The AUTH service binding is declared through SST's `transform.worker`, with names local to `sst.ts` until B's `BINDINGS` merges
+Origin: ai-proposed · Status: accepted · Affects: `packages/framework/src/provision/cloudflare/sst.ts`, B's `targets/cloudflare/bindings.ts` (DEC-0667), A's `AuthApp` entrypoint (DEC-0661)
+
+A production stage's Worker gets `{ type: "service", name: "AUTH", service: "prototype-auth", entrypoint: "AuthApp" }` appended to the script's bindings in `transform.worker` (as D1, R2 and `send_email` are), and the plain variable `FRAMEWORK_AUTH_APP_ORIGIN = https://prototype-auth.<subdomain>.workers.dev` (`appOrigin("signin", …)`). The names are constants in `sst.ts` (`AUTH_BINDING`, `AUTH_APP_ORIGIN_VARIABLE`, `AUTH_APP_ENTRYPOINT`) because B's `BINDINGS.authApp`/`authAppOrigin` are not on this stack's base (#94); they hold the same strings. Pulumi Cloudflare 6.15.0's `service` binding with `entrypoint` is *unverified* (plan §2.1b verified `service` only): the live pass checks it. Reverse: once B's stack merges, import `BINDINGS` instead of the local constants.
+Item: v0.2.0 F.
+
+### DEC-0727 — A shared secret is bound from Secrets Store under the `SECRET_<NAME>` of the Worker secret it replaces, through SST's `transform.worker`
+Origin: ai-proposed · Status: accepted · Affects: `packages/framework/src/provision/cloudflare/{sst.ts,worker.ts}`, `packages/framework/src/secrets/service.ts`, plan D7, §2.1b, §10
+
+- **Binding.** `sstProgram` appends `{ type: "secrets_store_secret", name: "SECRET_<NAME>", storeId, secretName }` (Pulumi Cloudflare 6.15.0's fields, plan §2.1b) in `transform.worker`, like the other bindings. That is the plan's first option; the script-upload fallback is not built, because Pulumi's types accept the binding and an upload outside SST would leave SST's state behind (the live pass decides; reverse below). Only the shared framework secrets (`SHARED_FRAMEWORK_SECRETS`: the R2 signing credential's two halves) may be bound this way, because D7 keeps per-app secrets, and the per-stage session key, as Worker secrets. Each name may be bound once and must not clash with another binding, and `storeId`/`secretName` must be non-empty. That binding type is the only one that may take a `SECRET_*` name, and a variable of that name is still refused (DEC-0087) (PR 53 review M1).
+- **Same name as the Worker secret.** The runtime keeps one location per secret (SEC-REQ-003): `envSecretReader` reads a string as before, or a binding with `get()`; a rejecting `get()` (on workerd, also a secret not yet in the store) is SEC.UNAVAILABLE, never the store's message. So moving a framework secret between a Worker secret and Secrets Store changes no runtime code. Because a Worker cannot hold a secret and a binding of one name, `deploy` deletes the Worker secret first (`deleteSecret`; an absent one counts as deleted). **Precondition for any caller (PR 53 review M2):** delete exactly the bound names, before the upload. PR 54 derives the deletes from the same binding list. Between that delete and the upload, a stage switching over cannot read the secret (once per stage), and if the upload then fails the stage has neither until the next successful deploy.
+- **Fallback to Worker secrets (plan §10).** Unchanged: `setSecret` still writes Worker secrets, and a deploy that binds nothing from Secrets Store declares no such binding, so the SST upload drops one left by an earlier deploy (`keepBindings` keeps only `secret_text`/`secret_key`).
+- *Unverified* (live pass): that a deploy with a `secrets_store_secret` binding succeeds with the everyday token, and whether it needs "Secrets Store Read" (plan §5.2 page 2); that the delete-then-bind switch and the bind-then-secret switch back both work on a live Worker.
+- **Reverse:** a binding name of its own (for example `FRAMEWORK_R2_SIGNING`) read by the ticket issuer, with no delete; or a script-settings `PATCH` after the SST deploy instead of `transform.worker`.
+Item: v0.2.0 F.
+
+### DEC-0728 — F edits `secrets/service.ts` (the runtime reader), outside its owned paths
+Origin: ai-proposed · Status: accepted · Affects: `packages/framework/src/secrets/{service.ts,service.unit.test.ts,service.workerd.unit.test.ts}`, progress §2 ownership
+
+Binding a framework secret from Secrets Store (PR 54) is useless unless the Worker can read a `{ get() }` binding, and no v0.2.0 item owns `secrets/service.ts` or edits it. The change is the reader's object branch (≈5 lines) with a unit test and a workerd test on Miniflare's Secrets Store; nothing else in `secrets/` changes. The reader is shared by app and framework secrets, so an app secret's `SECRET_<NAME>` would also be read from a `{ get() }` binding; that cannot happen through `deploy`, which binds only the shared framework secrets (DEC-0727) and refuses every other `SECRET_*` binding. Reported to the orchestrator as an ownership deviation. Reverse: move the commit to an item that owns the runtime and stack F 54 on it.
+Item: v0.2.0 F.
+
+### DEC-0729 — The signing credential moves to Secrets Store through `createAccountSigningCredential(api, accountId, { secretsStore: true })`; the record says where it is
+Origin: ai-proposed · Status: accepted · Affects: `packages/framework/src/provision/cloudflare/{r2-token.ts,target.ts}`, E's account-setup page (PR 59), plan §5.2 page 1, D7, §10
+
+- **The function E calls.** `createAccountSigningCredential(api, accountId, { secretsStore: true })`, with the admin's grant as `api` (it needs "Account API Tokens Write" for the token and "Secrets Store Write" for the store; both are admin-client scopes, `oauth-clients.ts`). It creates the token `prototype-r2-signing` as before, puts the access key ID and the secret access key into the account's store (`ensureStore`) under PAR-455's names, each with the token's id as its comment, and writes `framework/r2-signing.json` as `{ tokenId, accessKeyId, deniedBuckets, secretsStore: { storeId } }`, with no secret. It returns `{ replaced, where: "secrets-store" }`. Old tokens are deleted only after the new credential is in place, as before.
+- **Fallback (plan §10).** Only when Secrets Store refuses access to the store listing (HTTP 401, 403 or 404: not entitled or not permitted), before anything is written, does the record hold the credentials as before. The result is `where: "record"` with the `reason` for the admin page to show, and deploy copies them into Worker secrets. Any other Secrets Store failure throws, and the new token is deleted again, as for a failed record write. Once a put may have reached the store, any failure (a later put, or the record write) keeps the new token and every old one, because stages bound to the store may already read the new key, and it says to run account setup again; a re-run replaces both secrets and the record. Without the option (the CLI `setup-account` with the setup token), nothing changes: the record form. (PR 54 review M1–M3.)
+- **Deploy.** It reads the record (`readSigningPlacement`). In the store form, step 5 deletes the stage's Worker-secret copies and binds both from the store under `SECRET_FRAMEWORK_R2_ACCESS_KEY_ID`/`…_SECRET_ACCESS_KEY` (DEC-0727), so it no longer copies them. In the record form it copies as before. Step 3's targeted run declares the Worker without the Secrets Store bindings; it does not deploy the Worker.
+- **Present means usable.** A store-form credential is "owned" only when the record is current (it denies every account bucket) and the store lists both names tagged with the record's token. Otherwise it is absent, and the deploy preflight sends the owner to setup, as for a missing record. This check reads the store, so it needs "Secrets Store Read" (in the everyday set, plan §5.2 page 2); a refused listing is reported naming that permission. A store-form record must also carry `accessKeyId`.
+- *Unverified* (live pass, as DEC-0685 for the store create): that the secrets create and `PATCH …/secrets/<id>` accept `comment` and the list returns it (the presence check depends on it), and which status a store listing answers on an account without Secrets Store.
+- **Reverse:** drop the option, so the record always holds the credentials, or make the store form the default.
+Item: v0.2.0 F.
+
+## Release v0.2.0, item G: the skill, the quickstart, the migration notes and §7a.3 (2026-10-31)
+
+Plan-v0.2.0 §5.3, §8, §7a.3, TS-14. The owner was unavailable for the whole run, so every entry is `ai-proposed`. No Cloudflare token was available; Cloud checks are `not-run`. Range DEC-0735–0744, PAR-460–464; DEC-0743, DEC-0744 and the PARs are unused.
+
+Integrated by item I2 from `ai/implementation/decisions/v020-G.md`.
+
+### DEC-0735 — The skill describes the v0.2.0 flow as specified, not stale CLI text
+Origin: ai-proposed · Status: accepted · Affects: `skill/SKILL.md`, `skill/reference/{owner-tasks,current-user,deploying,troubleshooting,configuration,testing}.md`, `skill/templates/{README.md,production-stage.json}`, PR 64
+
+- The owner steps follow `setup.md` SETUP-REQ-001…004 and `skill.md` SKILL-REQ-006 as amended for v0.2.0 (DEC-0697, DEC-0698): one bootstrap link with an expiry of at most PAR-435, `cloudflare-setup`, then the admin app's Account setup and Everyday token pages, then "continue prototype setup" as the check. No step sets an email domain, signs up, reads mail or runs `admins`.
+- `cloudflare-setup.ts` still prints two email-era strings (the everyday link's "keep your email domain's zone included", and "leave CLOUDFLARE_EMAIL_DOMAIN empty" in the no-token message), and `EVERYDAY` in `permissions.ts` still holds the 0.1.x set (`EVERYDAY_V2` replaces it after C 34a). Those files are C's and E's, not G's: the skill follows the spec, and the mismatch is reported as open, not worked around.
+- `skill/templates/production-stage.json` drops `framework.email`: the framework sends no mail. The schema still accepts the key (B owns `config/schema.ts`), so an older values file still builds.
+- **Review (PR 64, session `session_014mWQ6iGV3T8BjGdh3sMPtG`, accepted-with-changes):** major 1 applied. The role refresh re-reads the role the auth app recorded at the person's last sign-in (`auth-app/service.ts` `role` → `store.ts` `getRole`; only a sign-in writes it), so the skill now says a role change shows after the person next signs in, and that removing a member does not end a session they already have. `auth.md` §2 ("takes effect at … role refresh"), SKILL-REQ-006 and AUTH-REQ-005 read otherwise: reported open for D (spec) or A (the auth app re-checking the membership in `role`). Minors applied: the two PAR-413 role names, the everyday page's create-new fallback, "the admin app's client and the sign-in client", "for example" for the tester role.
+- **To reverse:** restore the 0.1.x text from git history (`git show origin/main:skill/reference/owner-tasks.md`).
+Item: v0.2.0 G.
+
+### DEC-0736 — `upgrade` names the bootstrap and then the admin app's two pages
+Origin: ai-proposed · Status: accepted · Affects: `packages/framework/src/cli/commands/upgrade.ts` (`cloudflareVerdict`), its unit test, `QUICKSTART.md`, `skill/reference/owner-tasks.md` §10, `apps/template/README.md`, PR 65
+
+- Plan §8: "`npm run upgrade` to 0.2.0 points to re-running setup: bootstrap, then the admin app." The comparison of `PERMISSIONS_VERSION` and `ACCOUNT_SETUP_VERSION` (DEC-0595) stays; only the sentence for "needs re-running" changes. It now says to make a new bootstrap token with an expiry of 1 day or less (PAR-435), run `npm run cloudflare-setup` (which deploys the admin app), then sign in to the admin app and use its Account setup and Everyday token pages. The old "It needs the bootstrap token once" is dropped: since v0.2.0 the bootstrap alone sets nothing up (DEC-0682).
+- The "nothing new" and "unknown" sentences are unchanged: an unknown verdict still sends the user to `cloudflare-setup`, whose check names the admin app page that is missing (SETUP-REQ-001 as amended).
+- `upgrade` still writes no CI file (§7a.3): the change is one string.
+- Tests: `upgrade.unit.test.ts` "compares the versions…" expectation `behaviour-changed` (plan §8); new case "points a 0.1.x app moving to v0.2.0…" (red, then green).
+- **To reverse:** restore the old sentence in `cloudflareVerdict` and its test.
+Item: v0.2.0 G.
+
+### DEC-0737 — QUICKSTART keeps both generated permission tables; the migration note lives in three places with one wording
+Origin: ai-proposed · Status: accepted · Affects: `QUICKSTART.md`, `skill/reference/owner-tasks.md` §10, `apps/template/README.md`, PR 65
+
+- The everyday token is no longer made from a link, but QUICKSTART keeps its `<!-- permission-table: everyday -->` block, relabelled "the admin app makes it with exactly these": the table is generated (`scripts/permission-tables.mjs`, owned by C/E) and the starter-offline and permission-table tests read the markers. Until `EVERYDAY` becomes `EVERYDAY_V2` (after C 34a) the generated table still lists the 0.1.x groups; that is reported open, not hand-edited.
+- The 0.1.x note (re-run setup once per account; password accounts and sessions gone, everyone signs in again; old tables dropped on the next `dev` or `deploy`, app data kept; optional "Clean up v0.1.x email" page) is the same in QUICKSTART and `owner-tasks.md` §10. The template README points to QUICKSTART for it.
+- **Review (PR 65, session `session_014mWQ6iGV3T8BjGdh3sMPtG`, accepted-with-changes):** major 2 applied: the label no longer says "with exactly these", since the generated table still lists the 0.1.x `EVERYDAY` groups (7, with email and zone) while the admin app makes `EVERYDAY_V2` (4). Open for C (switch `EVERYDAY` after 34a, then regenerate). The role wording follows DEC-0735's review note (next sign-in; PAR-413 names).
+- **To reverse:** drop the everyday table block and its marker from QUICKSTART once C/E agree; or move the note to the CHANGELOG only (V's file).
+Item: v0.2.0 G.
+
+### DEC-0738 — The app's testing workflows are four references under `skill/reference/testing/`, reached from `testing.md`
+Origin: ai-proposed · Status: accepted · Affects: `skill/reference/testing.md`, `skill/reference/testing/{failures,test-changes,e2e,fuzzing}.md`, `skill/SKILL.md` (hard rules 3 and 5, task map, "Done means"), `tests/skill/{support,structure,budgets-and-links,hard-rules}.test.ts`, PR 66
+
+- Plan §7a.3 asks for "new references", each "read only when needed", with the skill within PAR-070…072. `skill/reference/` must hold exactly the thirteen files `check/references.ts` names (CHECK's diagnostics point there; `budgets-and-links` asserts it), and that file is CHECK's, not G's. So the new references live one level down, in `skill/reference/testing/`: `failures.md` (§7a.1.8), `test-changes.md` (§7a.1.9 and §7a.1.10), `e2e.md` (§7a.1.5, §7a.1.6, keeping e2e current), `fuzzing.md` (§7a.1.7 and the template helper). `testing.md` links each; the router's task-map row for testing names `testing.md` "then the one file under `reference/testing/` it names". The router gains no new always-apply text beyond hard rule 3's e2e clause, rule 5's Playwright pin and "each flow end to end" in "Done means", so it stays under PAR-070 (7,939 of 8,000 bytes).
+- `testing.md` keeps what always applies when testing (red/green, test impact, keep e2e current, diagnose before changing, never weaken, orchestrate with subagents unless the user says otherwise, CI is the user's and apps have no hooks) and the layer table. The rule "your tests reach the app only through its API … do not add a browser driver" is removed (TS-14).
+- **Record paths in an app** (§7a.1.8, §7a.1.9 "at the path the product skill names"): `test-records/root-causes/<yyyy-mm-dd>-<slug>.md` and `test-records/test-changes/<yyyy-mm-dd>-<slug>.md` at the app's root. Short, outside `src/` and `tests/` (so CHECK and Vitest ignore them), and committed with the app.
+- **Tests:** `structure` and `budgets-and-links` now also cover `reference/testing/*.md` (opening, stopping condition, PAR-071) and require `testing.md` to link each (`strengthened`); `hard-rules` gains two untagged checks from plan §7a.3 (rule 3 names the e2e projects; rule 5 names `@playwright/test`), red on the old router and green on the new. No once-green assertion changed.
+- **SKILL-AC-001 reading:** "the router links to every reference" is met for `reference/testing/*.md` through `testing.md`, which the router links and which links each of them; each of them links an example (checked).
+- **Skill review (§7a.2.6):** independent session `session_014mWQ6mQAVdeVRZCD1BJTkR`, verdict accepted-with-changes, 8 minors, all applied (fast-check pin wording, Chromium not-run fallback, smoke totals rule restored, minor answers and non-convergence follow-up, independent re-check, example links for the new files, task-map row, fuzz oracle).
+- **To reverse:** add the four names to `check/references.ts` (CHECK's owner) and move the files up one level; or fold them back into `testing.md` if PAR-071 allows.
+Item: v0.2.0 G.
+
+### DEC-0739 — The template's e2e layer: Playwright starts `dev` through `webServer`; `verify` runs `e2e-api`
+Origin: ai-proposed · Status: accepted; a `playwright.config.ts` change "reviewed like" a once-green test change superseded by plan v0.2.0 TS-4/5/10/13/15/20 withdrawn 2026-10-31 (#161) (TS-10: `e2e.md` says it is listed like one) · Affects: `apps/template/{package.json,playwright.config.ts}`, `apps/template/tests/e2e/{api,ui}/*.spec.ts`, `skill/examples/tests.md`, `package-lock.json`, `upgrade.unit.test.ts`, `tests/skill/cloudflare-setup.test.ts`, PR 67
+
+- **Projects** (plan §7a.3, §7a.1.5): `e2e-api` (`tests/e2e/api/*.spec.ts`, Playwright's `request` fixture, no browser) and `e2e-ui` (`tests/e2e/ui/*.spec.ts`, Chromium). One worker: one local server and one local database; specs use fresh mock users and never assert totals.
+- **Server:** `dev` binds a free port, so the config starts it with `webServer.command: "npm run dev"` and reads the port from its "is running at http://localhost:<port>/" line with `webServer.wait.stdout` (a named group, exposed as `APP_E2E_PORT`). No global-setup script: a script under `tests/` would break CHECK (Node built-ins, `process.env`), and one at the root would be another non-app file. The config itself sits at the app's root, beside `package.json`, outside CHECK's `src/` and `tests/`.
+- **Scripts:** `verify` becomes `prototype-framework verify && playwright test --project e2e-api`, so hard rule 3's `npm run verify` covers the API e2e tests, offline and without a browser (the starter's offline test passes with it). `test:e2e:api` and `test:e2e:ui` run each project; Chromium is needed only for `test:e2e:ui`.
+- **Pin:** `@playwright/test` `1.64.1` (the framework repository's own pin) in the template's devDependencies, named in hard rule 5. `upgrade` leaves it as it is: the framework package does not depend on it, so `repin` has no release version to move it to; a later release that does can add it to `COMPANION_PINS`.
+- **CI** (§7a.3, TS-14): the starter and `upgrade` write no CI file; two new tests show it (`tests/skill/cloudflare-setup.test.ts` "an app made with the starter's create has no CI file"; `upgrade.unit.test.ts` "never creates or changes the app's CI", byte-for-byte outside `node_modules`, the skill copy and `package.json`). Both pass on the code as it is (characterisation, no code change).
+- **Example:** `skill/examples/tests.md` copies the two spec files; it does not copy `playwright.config.ts`, because SKILL-AC-004 requires every copied source to be type-checked by `verify` and the config is not.
+- **PROV-AC-001's allow-list** (`tests/compliance/criteria/prov/template-deploy.test.ts`, F's file, cloud only): it allowed `vitest.config.ts` as tool metadata but not `playwright.config.ts`, so its next cloud run would fail on this PR's file. The PR 67 reviewer marked shipping that as **major**, so G adds `playwright.config.ts` to the same tool-metadata pattern and its header comment, outside G's owned paths, as B did for files its removals broke (progress Open items, B (9)). It is a once-green test change (reason `behaviour-changed`, plan §7a.3), in the test-change record, group 5. The file is still no infrastructure as code: the IaC checks are unchanged.
+- **Review (PR 67, session `session_014mWQ6ksVGeywLeebwVdH4x`, accepted-with-changes):** the major above fixed; minors applied: the spec's edge-case header gives a reason for each prompt that does not apply; the missing-field case checks `HTTP.INVALID_INPUT`; list responses check 200 before parsing; `e2e.md` says a change to `playwright.config.ts` that could weaken the gate is reviewed like a once-green test change; `webServer.stderr: "ignore"` (dev's server log no longer fills `verify`'s output; the port is read from stdout); "starts and stops" wording. Re-review: **accepted**; its last minor (the hidden server log also hides `dev`'s start-up failures) is answered in `e2e.md`: "If the server does not start …, run `npm run dev` to see why." **Open (not G's):** the template now depends on `dev`'s "is running at http://localhost:<port>/" line (`cli/commands/dev.ts`); a `dev` unit test pinning that format, or a contract note, is for the CLI owner.
+- **To reverse:** restore `"verify": "prototype-framework verify"`, delete `playwright.config.ts`, `tests/e2e/` and the pin, and drop the e2e clauses from hard rules 3 and 5.
+Item: v0.2.0 G.
+
+### DEC-0740 — The template's fuzz helper: `fast-check`, oracle from the route's zod schema, one demonstration target
+Origin: ai-proposed · Status: accepted · Affects: `apps/template/tests/support/{fuzz.ts,fuzz.test.ts}`, `apps/template/tests/fuzz.test.ts`, `apps/template/src/server/routes/notes.ts` (`newNote` exported), `apps/template/package.json`, `package-lock.json`, `skill/SKILL.md` rule 5, `skill/reference/testing/fuzzing.md`, `skill/examples/notes-sql.md`, PR 68
+
+- **Tool** (§7a.1.7 "the implementation chooses it, with a decision-log entry; offline in Node"): `fast-check` `4.10.2`, the exact version T4 pinned in the framework's devDependencies (PAR-410, branch 88), so apps and the framework fuzz with one tool. It runs in Vitest under `verify`, offline, on both dialects. Pinned in the template's devDependencies and named in hard rule 5. `package-lock.json` regenerated with `npm install` (+41 lines: `fast-check`, `pure-rand`).
+- **Oracle** (`fuzzJsonRoute`): bodies are any JSON value, a valid example, or a valid example with one field replaced (any JSON value, a Unicode string up to 600 graphemes, spaces, or boundary strings), removed or added. Each answer must not be 5xx; a body the schema refuses (judged on `JSON.parse(JSON.stringify(body))`, what the route sees) must get 400 `HTTP.INVALID_INPUT`; a body the schema accepts must never get `HTTP.INVALID_INPUT` (other refusals, such as 404 or 409, are the route's own rules). Failures include the cause (`includeErrorInReport`) and fast-check's shrunk counterexample and seed.
+- **The template's use:** `POST /api/notes` (trimmed, 1–500 characters), 150 runs, seed 20261031, with the reason in the test. No finding: 26/26 tests on SQLite and on Postgres, about a second each. The helper's own tests (6) show each oracle breach fails a run and that a correct route and a 409 pass.
+- **Not copied into `skill/examples/`:** `examples/tests.md` is at 17.6 kB of PAR-072's 20 kB; `fuzzing.md` names the two files instead.
+- **Review (PR 68, session `session_014mWQ6kwkkRLC4tiY1oR6gc`, accepted-with-changes, 3 minors, all applied):** the helper now refuses an example its schema refuses before sending anything (a wrong example would leave the accepted-body check untested; new test red without the check, then green); the method/path test uses a valid example and a correct fake route; the no-break and zero-width spaces are written as escapes.
+- **To reverse:** delete the three test files and the pin, un-export `newNote`, and drop `fast-check` from rule 5.
+Item: v0.2.0 G.
+
+### DEC-0741 — G removes the reference app's `mail` and `admins` scripts in its own PR
+Origin: ai-proposed · Status: accepted · Affects: `apps/reference/package.json`, PR 69r (#140)
+
+- `apps/reference/**` is not in G's owned paths. B's open item (6) left the reference app's `mail` and `admins` scripts, which call commands v0.2.0 removes (plan §6), and assigned them to G; the orchestrator's brief for G confirmed it. G deletes only those two script lines, in a stand-alone PR based on 71n (#134), so it can merge without the G stack. The compliance supports call the binary directly, so no test changes.
+- **To reverse:** restore the two lines (they would fail at run time with "unknown command").
+Item: v0.2.0 G.
+
+### DEC-0742 — The template's share-link signature fix stays in the template; the demo's copy is a new item
+Origin: ai-proposed · Status: accepted · Affects: `apps/template/src/server/signing.ts`, `apps/template/tests/signing.test.ts`, `skill/examples/secrets.md`, PR 69; `apps/demo/src/server/signing.ts` (not changed)
+
+- Root cause `2026-10-31-G-template-signing-noncanonical.md` (accepted, round 1): `fromBase64url` accepted the 4 spellings of a 43-character signature. The fix keeps only the canonical spelling, red then green.
+- The brief allowed the same fix in `apps/demo` only if it is a generated copy the template's copy step owns. It is not: it was copied once when the demo was built, and nothing regenerates it. So it stays as it is and becomes a new item for the DEMO owner: the same one-line fix and the same test, in `apps/demo/src/server/signing.ts` and `apps/demo/tests/signing.test.ts`.
+- **To reverse:** restore the old `fromBase64url` (non-canonical spellings verify again) and remove the test.
+Item: v0.2.0 G.
+
+## Release v0.2.0, item H: the root README (2026-10-31)
+
+Plan-v0.2.0 §9 (h), with §4, §5, §6 and §8. Range DEC-0745–0747, no PAR range; DEC-0747 is unused.
+
+Integrated by item I2 from `ai/implementation/decisions/v020-H.md`.
+
+### DEC-0745 — The README names what v0.2.0 removes only in its upgrade note
+Origin: ai-proposed · Status: accepted · Affects: `README.md` ("Put it on Cloudflare", "Sign-in", "Upgrade from 0.1.x"), PR 70
+
+- **The layout.** The README describes the v0.2.0 behaviour where a new reader looks for it: "Put it on Cloudflare" (bootstrap token, then the admin app, plan §5), and a new "Sign-in" section (the auth app, roles from account membership, the authentication mock locally and on `test-` stages, plan §4). What goes (plan §6) and how a 0.1.x app moves (plan §8) sit in one new "Upgrade from 0.1.x" section after "Upgrade an app".
+- **Why.** A new user never needs the removed words (password, mail, `admins`, Workers Paid, domain), and item H's exit check allows them only in the upgrade note.
+- **Names not yet settled.** The admin app's pages are called "Account setup" and "Everyday token", as in plan §5.2 and C's printed text. The README gives no admin-app address form (the workers.dev URL is DEC-0686's open owner question); it says only that setup prints the address. The everyday token's update in place is still *unverified* (plan §5.2 page 2), so the README says the page "brings" the token to the new list and says what to do if it makes a new token instead.
+- **To reverse:** move the removal list into its own section, and change the exit check to match.
+Item: v0.2.0 H.
+
+### DEC-0746 — README follow-up: role changes show at the next sign-in, PAR-413's two roles by name, migrations on `dev` or `deploy`
+Origin: ai-proposed · Status: accepted (the role-change sentence follows DEC-0703, approved by the owner on 2026-10-31) · Affects: `README.md` ("Put it on Cloudflare" step 3, "Sign-in", "Upgrade from 0.1.x"), PR 70b; follows owner questions 25 and 54 and DEC-0703 (D's spec PR 39c)
+
+- **Role change.** The README said a role change "takes effect at their next sign-in or role refresh". The auth app records the role only at sign-in, and a role refresh re-reads that recorded role (`auth-app/store.ts` `getRole`, owner question 25), so a change shows at the person's next sign-in, to any app on the account. Their other open sessions then follow within the role-refresh interval (PAR-425, 5 minutes). The README now says that, in the same words as G's skill text (`skill/reference/owner-tasks.md` §7) and DEC-0703's spec wording. The spec wording itself waits for the owner's approval in PR 39c; if the owner chooses otherwise, this sentence follows.
+- **Admin roles.** "An administrator role" and "an administrator of the account" read as any role with administrator in its name. PAR-413 names exactly two roles, so the README names them: "Super Administrator - All Privileges" and "Administrator". The removal list's "the account's administrators" now says "members with one of its two administrator roles", pointing to Sign-in.
+- **Migrations.** "Locally, on the next `npm run dev`" left out stages: `deploy` runs pending migrations too (`provisioning.md` §2 step 4). It now says "on the next `dev` or `deploy`".
+- **Exit check kept.** `grep -niE 'workers paid|password|mail|admins' README.md` still hits only the upgrade note.
+- **Review (PR 70b, session `session_014mWQ6hQRzv1GmK7BCcaKec`, accepted-with-changes, 2 minors):** the status now notes the dependency on DEC-0703; "within 5 minutes" is kept, as in the skill text (the change shows on the first request after PAR-425).
+- **To reverse:** restore PR 70's sentences.
+Item: v0.2.0 H.
+
+## Release v0.2.0, item T1: criteria tests (2026-10-31)
+
+Plan-v0.2.0 §7, §7a.1.2, §7a.2.1. The owner was unavailable; every entry is the simplest choice, made without asking. Range DEC-0748–0752, PAR-465–467; the PARs are unused.
+
+Integrated by item I2 from `ai/implementation/decisions/v020-T1.md`.
+
+### DEC-0748 — The rewritten AUTH criteria are tested in-process in new files under `criteria/auth/`, from the criteria text
+Origin: ai-proposed · Status: accepted · Affects: `tests/compliance/criteria/auth/{auth-app-support.ts,role-refresh.test.ts,auth-app-sign-in.test.ts}`, AUTH-AC-003, -005, -012, -013, -015
+
+AUTH-AC-003, -012, -013 and -015 say "with `createTestApp` using the auth-app provider over the fake binding", and their Where is Local, so their tests open the reference app in-process (`files/in-process.ts`) like B's AUTH-AC-006 local part, inside `if (target().target === "local")`. Until now they had only unit tests (`runtime.unit.test.ts`, `test-app.unit.test.ts`), which the driver counts only for `UNIT_LEVEL` IDs (DEC-0319), so the harness reported AUTH-AC-012, -013 and -015 as not-run. The sign-in is driven by hand (login, the fake auth app's `issueCode` for the `/start` request's `app` and `return`, the callback) instead of with `loginWithAuthApp`, so a test sees every response and `Set-Cookie`: the re-issued cookie's expiry (AUTH-AC-003), the cleared cookie (AUTH-AC-012) and the absence of the email in every response (AUTH-AC-013). Date is frozen with `vi.useFakeTimers({ toFake: ["Date"] })`, so `TestApp.clock` is the only clock that moves and the retry delays are measured exactly. Parameter values come from the decision drafts that set them (PAR-414 in `v020-A.md`; PAR-425…427 in `v020-B.md`), not from the code. Readings: "has passed" means more than PAR-425 (300 s exactly is still inside); "the delay elapses before each retry" is shown by the clock moving one PAR-427 for one retry and two for two; the four refused codes share one fixed reason, distinct from the state mismatch's and the outage's. B's own tests stay as they are. Reverse: delete the three files.
+Item: v0.2.0 T1.
+
+### DEC-0749 — Two AUTH clauses that `createTestApp` cannot produce are recorded `not-run` with their reason
+Origin: ai-proposed · Status: accepted · Affects: `tests/compliance/criteria/auth/role-refresh.test.ts`, AUTH-AC-012, open item for B / T6
+
+AUTH-AC-012's "or the stub's account is marked unverified" cannot be produced through `createTestApp`: the stub keeps every account verified and `testing.d.ts` has no way to mark one unverified (B's unit test reaches it with a hand-built provider, which the driver does not count for this ID). The clause has a tagged test that calls `ctx.skip(<reason>)`, the harness's convention for a part that does not run (`skip-notes-reporter.ts`: each skipped tagged test adds a `not-run` entry with its note). The fix is B's (a stub control in `testing.d.ts`, or a criterion amendment dropping the clause, since the auth-app provider has no "unverified"); it is listed as open, not done here (`plan.md` §1 ownership). AUTH-AC-015's "a mock session causes no call" and AUTH-AC-012's pre-v0.2.0 and `password` cookies need a cookie signed with the app's own session key, which `createTestApp` draws at random; the tests set `secrets: { frameworkSessionKey }` so a mock app and the auth-app app share one known key, and a self-check shows the re-signed current payload is accepted before the old formats are shown to be refused. Reading: with no real 0.1.x cookie at hand, "the format before v0.2.0" is the current payload re-signed as version 1 or 2 without `rol`/`rat`, so the test shows the version gate rather than every older layout. The tests import two framework internals for fixtures only (`signToken`, `TEST_APP_ORIGIN`); whether criteria tests may do so is left to the testing-standards owner (review of PR #131, side note). Reverse: replace the skip with a real test once the stub can mark an account unverified.
+Item: v0.2.0 T1.
+
+### DEC-0750 — The rewritten SETUP criteria get a new file beside C's; tests that fail on C's unfinished removal stay red
+Origin: ai-proposed · Status: accepted · Affects: `tests/compliance/criteria/setup/bootstrap-v020.test.ts`, SETUP-AC-001…008, -010; C's 34a
+
+C's `cloudflare-setup.test.ts` was updated during C's stack, but several of its tests still assert v0.1.x text that the rewritten criteria removed (both token links, the four-line template with `CLOUDFLARE_EMAIL_DOMAIN`, the Cloudflare DNS requirement, the email-domain stops), and C 34a is editing that area. T1 adds a new file instead of editing C's, written from setup.md §4 as rewritten by DEC-0697, with no email domain in any project, and reuses `support/setup-runs.ts` unchanged. It ends with its own SETUP-AC-010 search, because each Vitest file has its own record of runs. Readings: "no Cloudflare write request" is no request other than a GET; the Everyday token page is recognised as "Everyday token" next to "admin app"; "only that token's remedy" is, for the bootstrap token, the bootstrap link and never the everyday link, and for the everyday token, the Everyday token page and never the everyday link, with the bootstrap link allowed beside the page because SETUP-REQ-001 as amended gives it with anything missing; an everyday-token paste is made on a set-up account with the admin app deployed, a bootstrap-token paste on a new account; "says everything is already set up" is matched as "already set up", the criterion's words (round 2 of the PR #133 review: the summary's "setup is complete" is the message of a run that changed something); "the everyday token is neither read nor updated" means no request on `/tokens/<its id>` (DEC-0682: its permissions are not read), not that the run never authenticates with it; a refused bootstrap token "used for nothing else" may still read itself (verify, its own details, the account list) to learn its expiry (DEC-0681) and then only deletes itself — DEC-0681 says "no account check", so the account-list read is a gap between that decision and the code, left to C and noted, not asserted against; "private" is the API's default, so the create request asks for nothing public, and "confidential" is a client that authenticates with its secret (plan-v0.2.0 §2.2; v020-C.md DEC-0684). After the round-1 review of PR #133, 10 of its 20 tests fail: `cloudflare-setup` still asks for the email domain (7) and still gives the everyday link and the four-line template (3). The root-cause record `root-causes/2026-10-31-T1-setup-email-domain-and-everyday-link.md` routes the fix to C (34a or 34c). The tests are not skipped or weakened: PR 75 merges after that fix. The running CI workflow does not run the criteria layer (the staged `scripts/ci/workflows/ci.yml` is not applied), so this red shows in the harness, not in CI. Reverse: delete the file.
+Item: v0.2.0 T1.
+
+### DEC-0751 — A protected bootstrap token is used for the bootstrap today; reported, not tested under SETUP-AC-005
+Origin: ai-proposed · Status: accepted · Affects: SETUP-REQ-004, SETUP-AC-005, SETUP-AC-011; open item for C and D
+
+SETUP-REQ-004 as amended says a protected token (PAR-361) "MUST be neither used for the bootstrap nor deleted", and C's DEC-0681 says the same. Against the fake API, a bootstrap token whose ID is in `PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS` is not deleted and the run says so, but the run still creates both OAuth clients, writes Secrets Store and deploys the admin app with it, and exits 0. SETUP-AC-005's text says only "neither updated nor deleted", so T1's SETUP-AC-005 test asserts only that, which passes (the 'says it is protected' message is SETUP-REQ-004's and SETUP-AC-011's, review of PR #133); tagging the "not used" clause on SETUP-AC-005 would test more than the criterion says. SETUP-AC-011 (Cloud, milestone) does say "does not use it for the bootstrap" and is `not-run` here. Open: C to fix `cloudflare-setup.ts` through §7a.1.8 (a 9x-fix PR on C's branch), and D or I2 to add the clause to SETUP-AC-005 so the fake-API pass covers it. Reverse: none needed; this records a finding.
+Item: v0.2.0 T1.
+
+### DEC-0752 — T1 ships as a stack of three PRs, on 71m until 71n is pushed
+Origin: ai-proposed · Status: accepted · Affects: PRs 74, 74a, 75
+
+Each PR stays near the 400-line limit: 74 holds the support file, AUTH-AC-003/-012/-015 and this draft; 74a (`v0.2.0/74a-auth-sign-in-criteria-tests`) holds AUTH-AC-013 and AUTH-AC-005's auth-app part; 75 holds the SETUP criteria. 74 starts from `origin/v0.2.0/71m-merge-auth-provider-into-admin-app` and merges `origin/v0.2.0/71n-path-map-after-removals` (pushed by then), so its PR is based on 71n, as the brief says. 75 merges after C's 34a (DEC-0750). Reverse: squash the stack.
+Item: v0.2.0 T1.
+
+## Release v0.2.0, item T2: the e2e scope of plan §7.1 (2026-10-31)
+
+Plan-v0.2.0 §7.1, §7a.1, §7a.2.3, §7a.2.4. Range DEC-0753–0767, PAR-468–470; the PARs are unused.
+
+Integrated by item I2 from `ai/implementation/decisions/v020-T2.md`.
+
+### DEC-0753 — E2E-005…E2E-008 rewritten for sign-in through the auth app (PR 78, scope only)
+Origin: ai-proposed · Status: accepted; its E2E-007 rule (a promote, a demote and a removal take effect at the role refresh) superseded by DEC-0791 (a role change or removal shows at the next sign-in) · Affects: `docs/acceptance/e2e-scenarios.md` E2E-005…E2E-008 and preamble, plan §7.1, TS-15
+
+- **E2E-005** keeps its ID and verifies the same requirements. `Where: Cloud` becomes `Where: Local, cloud`: the mock-driven browser run also runs locally under `dev` (the existing test needs no change for that), and a local auth-app part signs in members whose identities carry an email address, through the auth app with mock-oauth2-server, and checks that no app response shows it. Test stages sign in with the mock only (plan §4.3), so the auth-app part cannot run on a cloud. Retitled "Access levels, and nothing of the login provider exposed", since it is no longer only about a deployed app.
+- **E2E-006** loses its test-mail clause; the sign-in redirect expected is the auth app's `/start` with the app ID and return URL (DEC-0667), not the retired sign-in page.
+- **E2E-007** becomes "Role from membership", `Where: Local; live sign-in: cloud (milestone)`. Its local steps use the reference app's production bundle, the auth app, mock-oauth2-server and the fake memberships API: user, admin, then a promote, a demote and a removal that each take effect at the role refresh (PAR-425) and not before, and someone outside the account refused. Its live part is plan §7 "Live" steps 3–4 (the owner shown `admin`, a non-admin member shown `user` if one can be invited). Its old cloud steps on `prodcheck` (sign-up, `mail last`, `admins grant`/`revoke`) went with password, mail and `admins`.
+- **E2E-008** becomes "Sign-in through the auth app on the production stage", `Where: Cloud; live sign-in: cloud (milestone)`: the automated part is `check-login`'s three steps on `prodcheck` (as rewritten by B, DEC-0670), and the live part is the owner's real sign-in (plan §7 "Live" step 3).
+- **Preamble:** "cloud scenarios run on test stages using the authentication mock" now names the `prodcheck` exception, the live sign-in parts, and how the local real-sign-in parts run (the production bundle and the auth app under local workerd with mock-oauth2-server and the fake Cloudflare API).
+- **AWS notes:** E2E-002's Pass line names the Cloudflare and local smoke runs and marks the AWS run deferred, matching its step 1. E2E-011's AWS clause is marked deferred (branch `aws`, DEC-0508).
+- **Labels:** the live parts are labelled `live sign-in` in both scenarios, so the catalogue, the expected lists and the release report name the same part.
+Item: v0.2.0 T2.
+
+### DEC-0754 — No scenario is retired; the removed clauses are listed under the Retired table
+Origin: ai-proposed · Status: accepted · Affects: `docs/acceptance/e2e-scenarios.md` "Retired scenarios"
+
+Plan §7.1 rewrites E2E-005…E2E-008 and keeps their IDs; none of the 16 scenarios loses its purpose, so none moves to the Retired table (CONVENTIONS §2: a retired ID is one whose scenario no longer applies). The clauses removed with password, mail and `admins` are listed in one sentence below the table's introduction, with this decision, so a reader of an old evidence record can find where each went. The table stays empty and its header unchanged, so the catalogue's parse of the document is unchanged.
+Item: v0.2.0 T2.
+
+### DEC-0755 — The live sign-in parts in the milestone list
+Origin: ai-proposed · Status: accepted · Affects: `docs/components/compliance.md` COMPL-REQ-006 (milestone list), DEC-0692, DEC-0693
+
+DEC-0692 named "E2E-007 (live part)" and "E2E-008 (live part)" in the milestone list before their Where lines had a milestone segment, and DEC-0693's note made COMPL-AC-001 count only named items with a milestone Where until then. Both Where lines now carry `live sign-in: cloud (milestone)`, so a new amendment says the interim rule is spent and restates the list, with the part label `live sign-in`. The set of IDs is unchanged (`milestoneItemsNamed` returns the same 13 IDs), so COMPL-AC-001's list test is unchanged. MAIL-AC-007 already left the list (DEC-0693, DEC-0696).
+Item: v0.2.0 T2.
+
+### DEC-0756 — The v0.2.0 invalidation entry
+Origin: ai-proposed · Status: accepted · Affects: `validation/invalidations.md`, COMPL-REQ-006
+
+Plan §7.1 names E2E-010, E2E-012, E2E-015, E2E-016's review part and SKILL-AC-006. COMPL-REQ-006 also requires every milestone item to run again "after a change to PROV, MIG, CF, AWS, or adapter code", and v0.2.0 changes PROV and CF code (F's deploy, the signing credential in Secrets Store) and setup, so the entry also names PROV-AC-002, PROV-AC-003, PROV-AC-004, PROV-AC-006, COMPL-AC-008 and SETUP-AC-011. E2E-007's and E2E-008's live parts have no record to invalidate. The entry is dated by day only (end of 2026-10-31 UTC), since v0.2.0 work continues for the rest of the day and no milestone run is possible in this run (no Cloud token). The first milestone run after v0.2.0 must therefore finish on a later day, or come after a further entry with a full time (review of PR 78, minor).
+Item: v0.2.0 T2.
+
+### DEC-0757 — E2E-016's term list gains three v0.2.0 terms
+Origin: ai-proposed · Status: accepted · Affects: `docs/acceptance/e2e-scenarios.md` E2E-016, `tests/compliance/e2e/terms.txt`
+
+Plan §7.1 asks for the list to be checked for v0.2.0 terms "for example Secrets Store and PKCE". Added: `Secrets Store`, `PKCE`, `refresh token` (the auth app revokes access and refresh tokens; `access token` is already listed). Not added: "auth app", "admin app" and "membership", which are the framework's own concepts and appear in app-facing contracts by design; "Super Administrator" and other role names, which are PAR-413 values and belong in parameters, not contracts. None of the three added terms occurs in an app-facing contract (checked with `grep`, including the identifier forms `secretsStore`, `refreshToken`, `pkce`).
+Item: v0.2.0 T2.
+
+### DEC-0758 — Harness rules follow the rewritten Where lines
+Origin: ai-proposed · Status: accepted · Affects: `tests/compliance/harness/expected.ts` (`PHASE_RULES`), and its unit test; `tests/compliance/harness/catalogue.unit.test.ts` and `tests/compliance/tools/release.unit.test.ts` (assertions on the catalogue only); progress Open items "From B" 4–5
+
+These files are outside T2's owned paths; the Where changes of DEC-0753 make their current contents wrong (`checkRules` refuses a rule for a tier where its scenario no longer applies), so the smallest change that keeps them consistent goes in the same PR:
+- E2E-007's cloud not-run rule (`E2E_REWRITE_PENDING`, B's note 5) goes: E2E-007 has no automated cloud part any more.
+- PR 78 is scope only (TS-15), so E2E-005's and E2E-007's local auth-app parts have no tagged test until PR 80. Each gets a local not-run part rule with the reason `E2E_TESTS_PENDING`, which PR 80 removes with the tests. The rest of each runs (E2E-005's mock browser test, E2E-007's in-process role-refresh test), so E2E-004's coverage part still passes.
+- PR 80 removes both `E2E_TESTS_PENDING` rules, changes the test that pins them, and updates `E2E-005.spec.ts`'s header (review of PR 78, minor).
+- `PRODCHECK_IDS` keeps E2E-007, although nothing automated of it runs on `prodcheck` any more: the driver redeploys `prodcheck` only for IDs it runs, and E2E-007 is never run on a cloud in the automated tier, so the entry is inert. `harness/prodcheck.ts`, `driver.unit.test.ts` and `tools/release.ts` belong to T7's `94-fix-release-login-check` (orchestrator, 2026-10-31); T2 leaves them alone, and that item may drop the entry.
+- B's note 4 (`PWD-AC-009` in `CHECK_LOGIN_IDS`) is left as is: the harness list mirrors `check-login`'s own `CHECK_LOGIN_IDS` in framework code, which still records PWD-AC-009 `not-run`; removing it is a framework change for T5/T6, not a scenario change.
+Item: v0.2.0 T2.
+
+### DEC-0759 — E2E-007's in-process test keeps its tag
+Origin: ai-proposed · Status: superseded by DEC-0791 (E2E-007 now says a role change shows at the next sign-in, which the stub test does not show; item I2 re-tagged the test AUTH-AC-003, whose stub clause it checks, on 2026-11-02) (was: accepted) · Affects: `packages/framework/test/integration/auth/admin-role.test.ts` (unchanged)
+
+The existing local E2E-007 test (stub provider, in-process) shows that a role change takes effect at the role refresh and not before, which is part of the rewritten step 3. Its tag stays, and its title's "grant the admin role" is the stub's equivalent of a promote. The membership steps get their own tests in PR 80, in `tests/compliance/e2e/`. The file is outside T2's paths and needs no change, so no test-change review is needed for it.
+Item: v0.2.0 T2.
+
+### DEC-0760 — E2E-016's findings fixed in the app-facing contracts' wording
+Origin: ai-proposed · Status: accepted · Affects: `docs/contracts/ts/testing.d.ts` (two comments), `docs/contracts/http/framework.openapi.yaml` (one description); root cause `ai/implementation/root-causes/2026-10-31-T2-E2E-016-provider-term-in-contracts.md` (Review: accepted-with-changes)
+
+B 41a and D 37 wrote "Cloudflare" (and the provider ID `cf-account`) into app-facing contracts, which E2E-016's scan forbids. The three sentences now name the account's auth app instead, with the same references; no type, field or schema changes. The files are D's (done); the change is a "matching spec edit" of PR 78 (TS-15), made after the record's review and red then green.
+Item: v0.2.0 T2.
+
+### DEC-0761 — E2E-017 runs `cloudflare-setup` in-process, and the admin app from its upload
+Origin: ai-proposed · Status: accepted · Affects: `tests/compliance/e2e/E2E-017-setup.spec.ts`, `tests/compliance/e2e/support/setup-edge.ts`, plan §7.1 "Add" 1
+
+- The framework's Cloudflare API client has a fixed base URL (`API_BASE`), so the CLI cannot be pointed at a local fake over HTTP. E2E-017 calls the CLI's own command function (`cloudflareSetupCommand`) with the fake account's API injected, as its unit tests do. The command's argument parsing, file handling and output are the CLI's. Only the local setup's npm steps are replaced, by its real git-ignore step; LOCAL-AC covers the npm steps.
+- The fake account is `SetupWorld`, the fake the setup unit tests use. The admin app the test runs is the Worker the bootstrap uploaded into that account: its module, and its bindings as the upload metadata names them, with Secrets Store bindings read from the account's store. Only the two settings that only tests set (PAR-418: the discovery URL and API base) point at the local stand-ins. Requests go through Miniflare's entry (`dispatchFetch`) to the app's own `workers.dev` URL, because `getWorker()`'s internal route refuses a non-local `Origin`.
+- The edge grants only for the OAuth client the bootstrap registered in the account (its ID, secret and redirect URI) and only scopes that client allows, as Cloudflare does (review of PR 79, major 1). It enforces each grant's scopes with the admin app fake's table (`scopeFor`, `covers`, `GROUP_SCOPE`), and answers from the same fake account. `/user` and `/memberships` need only a live token: their required scopes are part of every grant, so they are not checked separately. It adds a D1 database list for the auth app's database, as the setup page's unit test does. An everyday token made through the grant becomes a real token of the world, so `cloudflare-setup` can use it.
+- The e2e-api project is used, since no browser is needed.
+Item: v0.2.0 T2.
+
+### DEC-0762 — E2E-005's `./testing` type exposure goes to a new T7 item
+Origin: ai-proposed · Status: accepted; the form of the fix (dropping `email` from the internal binding and its fake) superseded by DEC-0734 (an adapter inside `./testing`) · Affects: E2E-005 (type test, unchanged); root cause `ai/implementation/root-causes/2026-10-31-T2-E2E-005-email-in-testing-types.md` (Review: accepted)
+
+The accepted fix drops `email` from `TestApp.loginWithAuthApp` and `TestApp.authApp.issueCode`, in `src/testing/test-app.ts`, `src/auth/auth-app-binding.ts`, `docs/contracts/ts/testing.d.ts` and about 45 call sites in B's tests. That is outside T2's owned paths, and `test-app.ts` is a serialised shared file (progress §2), so per §7a.1.8 step 4 it becomes a new item for the orchestrator, carrying the record and the review's three minors. T2 does not skip or weaken the type test: it fails on every target until the item lands.
+Item: v0.2.0 T2.
+
+### DEC-0763 — E2E-017's scope, and its last step red until `57z-everyday-switch`
+Origin: ai-proposed · Status: accepted · Affects: `docs/acceptance/e2e-scenarios.md` E2E-017; root cause `ai/implementation/root-causes/2026-10-31-T2-E2E-017-setup-check-refuses-everyday-v2.md`
+
+- **Verifies:** SYS-REQ-015 (no token value is stored or shown outside its one page) and SYS-REQ-018 (only a member with an administrator role uses the admin app). SYS-REQ-023 was dropped after review: it is about an app's own resource declaration, not the account's shared resources. It is `Where: Local`. The live run is SETUP-AC-011's and SKILL-AC-006's, both already milestone items, so E2E-017 has no milestone part of its own.
+- **The chain ends with "continue setup":** `cloudflare-setup` with the token page 2 made (plan §5.3 step 4). That step fails today because of DEC-0716's open switch. The test is kept, not skipped, and is 57z's e2e acceptance check.
+- **The 0.1.x token update in place** (page 2's other path) and the email cleanup page are covered by E's integration suite and are not repeated here. An expiry exactly at the limit uses a fixed clock (`now`), as §7a.1.6 asks.
+Item: v0.2.0 T2.
+
+### DEC-0764 — E2E-018 and the local auth-app parts run the production bundle with the real auth app
+Origin: ai-proposed · Status: accepted · Affects: `docs/acceptance/e2e-scenarios.md` E2E-018; `tests/compliance/e2e/support/signin-stack.ts`, `signin-client.ts`; `E2E-007-E2E-018-signin.spec.ts`; `E2E-005.spec.ts`; `tests/compliance/harness/expected.ts`
+
+- **The stack:** plan §4.3 says `dev` and test stages use the mock only. The real sign-in path therefore runs as a production stage would: the reference app built with `build --target cloudflare --stage prodcheck` (no mock in the bundle, the auth-app provider), with its migrations applied as `deploy` applies them. It runs under local workerd with the auth app's own bundle and D1, bound as `AUTH` through a gate Worker, with mock-oauth2-server and A's fake `/user` and `/memberships`. The gate makes outages possible: the binding throws, and the pages answer 503. This is a fault injection like `setUnavailable`, not a fake of the auth app. A local front serves both Workers on `localhost` ports, so a browser and HTTP clients reach them by origin.
+- **Registry:** "`deploy` registers, `remove` deregisters" uses `deploy`'s and `remove`'s own link (`cloudflareAuthAppLink`). Its D1 HTTP API calls run against the auth app's local database. The shim replays the link's `/query` batches on the local database without checking the D1 HTTP API's request shape: it shows the link writes and clears the right rows, not the wire contract, which F's unit tests and the live pass cover (review of PR 80, minor). The rest of `deploy` is PROV's and is covered by `criteria/prov` and F's unit tests.
+- **The one UI test** is E2E-005's auth-app part, tagged `[E2E-005][E2E-018]`, in `E2E-005.spec.ts`. That file is already in the path map's `e2e.ui` list, so the shared path map is not edited. It is defined only on local, because test stages have no real sign-in.
+- **AUTH-AC-006 (T5's advisory):** the transaction cookie's attributes on a production-built Worker (`__Host-login`: HttpOnly, Secure, SameSite=Lax, Path=/, no Domain, cleared by the callback) are checked locally in an E2E-018 test tagged `[E2E-018][AUTH-AC-006]`. The criterion's cloud part still needs a cloud run: open, not-run without a token.
+- PR 78's two `E2E_TESTS_PENDING` rules are removed, with the test that pinned them.
+Item: v0.2.0 T2.
+
+### DEC-0765 — Real time for the role refresh; no e2e for a code past 60 s
+Origin: ai-proposed · Status: accepted · Affects: `E2E-007-E2E-018-signin.spec.ts`
+
+workerd's clock cannot be moved, and the role-refresh interval is PAR-425 (5 min). The refresh window is therefore one real wait of 5 min 15 s, shared by E2E-007 and E2E-018: one test makes the sessions and changes the account, then waits, and the outcome tests follow, one per scenario. The limit is not raised and nothing is shortened: the wait is the parameter's own value. A code past its 60 s lifetime (PAR-414) is not tested at the e2e layer. It is a time rule the auth app's unit tests show with a fake clock (§7a.1.6 "expiry … fake `Date` only"), and a real 60 s wait would add little.
+Item: v0.2.0 T2.
+
+### DEC-0766 — E2E-007's membership outcome is red until the auth app's role is current
+Origin: ai-proposed · Status: superseded by DEC-0791 (the owner chose owner question 56, option a: a change shows at the next sign-in, and sessions last 12 hours; E2E-007 now tests that rule) · Affects: E2E-007; root cause `ai/implementation/root-causes/2026-10-31-T2-E2E-007-role-refresh-reads-stored-role.md`
+
+The auth app answers `role(sub)` with the role stored at the person's last sign-in. So a promote, a demote, or a removal from the account does not reach an existing session at its refresh, which breaks SYS-REQ-018 as amended (owner-approved). The fix is a design decision: a credential for reading memberships, a changed requirement, or a maximum record age. It is outside T2, so it goes to the orchestrator for the owner or a T7 item. E2E-007's text keeps the requirement and is not weakened. Its outcome test is a separate test, so the E2E-018 outage results are recorded on their own.
+Item: v0.2.0 T2.
+
+### DEC-0767 — E2E-001 through the packed starter; E2E-019 upgrades from the published 0.1.1 through a local registry
+Origin: ai-proposed · Status: accepted · Affects: `docs/acceptance/e2e-scenarios.md` E2E-001 and E2E-019; `tests/compliance/e2e/E2E-001-E2E-003.spec.ts`, `E2E-019-upgrade.spec.ts`, `support/packs.ts`, `support/registry.ts`; plan §7.1 "Add" item 3, §8
+
+- **E2E-001** now scaffolds with the starter instead of `skill/scripts/scaffold`. The starter is packed as `npm publish` packs it: a copy of `packages/create-prototype-app` with its template and skill bundled by its own `bundle.mjs`, into a temp folder, so nothing is written into the repository during a run. It is given the packed framework (`--framework file:<tarball>`). It installs from the registry as before, and every later step runs offline as before. The app's name is now the folder's (`app`), and the log check follows that name. The tarball assertion follows the starter's `file:` pin.
+- **E2E-019:** 0.2.0 is not published, so the repository's framework is packed, repacked at version 0.2.0, and served for the `@lago-morph` scope by a local registry. The app points the scope at it in `.npmrc`. The app is made by the published 0.1.1 starter and framework, and upgraded by its own `npm run upgrade -- 0.2.0`, which is 0.1.1's upgrade command, as a real user's would be. The run needs the npm registry, as E2E-001 does, but no cloud. **Verifies** SYS-REQ-012: the framework's own schema evolves, and the app's data is kept. SYS-REQ-022 was dropped after review, because the `dev` runs are not network-isolated. The pointer checked is 0.1.1's upgrade wording ("run `npm run cloudflare-setup`. It needs the bootstrap token once"). Plan §8's "bootstrap, then the admin app" is what that setup run then says, and E2E-017 covers it.
+- Quick child processes (`tar`, `mkdir`) run synchronously. `run()` writes standard input to every child, and a child that closes it first raised EPIPE, which tore the test down mid-run. Seen once on the first E2E-019 run, before any assertion. This is a test-harness slip, not a product failure, so no root-cause record.
+Item: v0.2.0 T2.
+
+## Release v0.2.0, item T3: integration suites for S4's gaps (2026-10-31)
+
+Plan-v0.2.0 §7a.2.2, §7a.1.4; S4's list `ai/implementation/v0.2.0-coverage-fuzz.md` §1.1 items 1–3. Range DEC-0768–0772, PAR-471–473; the PARs are unused. DEC-0730 is lent from F's unused range (T7's range was exhausted); it amends F's DEC-0725.
+
+Integrated by item I2 from `ai/implementation/decisions/v020-T3.md`.
+
+### DEC-0730 — A production stage's registry entry is cleared by the core's `remove` through an optional `TargetOperations.unregisterStage`, before anything is deleted
+Origin: ai-proposed · Status: accepted · Affects: `packages/framework/src/provision/core/{operations.ts,remove.ts}`, `packages/framework/src/provision/cloudflare/target.ts`, provisioning.md §2 "Implementation", DEC-0725 ("Remove")
+
+- **Why.** DEC-0725 clears the entry "before anything is deleted", but F placed the clear at the start of the Cloudflare target's `removeStage`. The core's `runRemove` deletes the stage databases before it calls `removeStage` (PROV §2), so the databases went first. Root cause: `ai/implementation/root-causes/2026-10-31-T3-remove-registry-order.md`. The review was accepted-with-changes (session `session_014mWQ6mgT34ZYNMLcZbvCmx`).
+- **What.** `TargetOperations` gains an optional `unregisterStage(stage)`. `runRemove` calls it after a production backup succeeded (or first, for a test stage) and before listing and deleting the databases. A failure is recorded as `clearing the stage's sign-in registration failed: …`, and removal goes on, which is DEC-0725's failure rule. The Cloudflare target implements the hook with DEC-0725's production guard, and `removeStage` no longer clears the entry. A target without an auth app leaves the hook out, so the core still never branches on the target.
+- **ID.** ID lent from F's unused range (DEC-0730–0734), because it amends F's DEC-0725 and T7's range is used up (DEC-0780 is T7's #143). It was first drafted as DEC-0780; the orchestrator renumbered it. It amends DEC-0725's "Remove" bullet ("the first step of `removeStage`" becomes "the first step of `remove` after the backup"), and I2 integrates the two together.
+- **Reverse:** move the database deletes into `removeStage` after the clear (this changes PROV §2's order for every target), or accept the order and amend DEC-0725.
+Item: v0.2.0 T3.
+
+### DEC-0768 — PROV's suite drives the real Cloudflare target with stage databases on local D1 and the rest of the account in the fake API
+Origin: ai-proposed · Status: accepted · Affects: `packages/framework/test/integration/provision/**`, `scripts/ci/path-map.json` (PROV), S4 §1.1 item 1
+
+- **What runs.** The framework's own `createCloudflareTarget`, driven by the target-neutral `runDeploy` and `runRemove`, with D-04's real D1 operations (`d1DatabaseOperations`, native copy offered as the CLI does) on the fake D1 HTTP API over Miniflare: migrations, copies, D1's export for the production backup and the auth app's registry are real local D1 (plan §7a.1.4). Every other Cloudflare call goes to the in-memory account (`fake-cloud.test-support.ts`), whose fake SST CLI reads the program the target really generates, so the Worker bindings asserted are the generated ones.
+- **The stage's own answers.** The health route is modelled from the deployed Worker's state in the fake: a disabled route answers 404 (DEC-0090), a declared secret absent from the Worker answers `SEC.MISSING` with a request ID. No local stand-in serves a deployed Cloudflare stage, so this is the fake of §7a.1.4.
+- **One endpoint added in the suite's support.** The in-memory account has no Worker-secret `DELETE`, which deploy sends when a Secrets Store binding takes a secret's name (DEC-0727). `support.ts` answers it as Cloudflare documents it (404 when absent) instead of editing `fake-cloud.test-support.ts`, which T3 does not own.
+- **Production cases on this base.** A production preflight on 71n still reads the v0.1.x email domain (DEC-0553); its removal (DEC-0698) is C 34a's, in flight. The suite gives the fake account an onboarded email domain (`withLegacyEmailDomain`), which is simply unread once C 34a lands. It passes no `email` option to the target, so C 34a's removal of that option does not break it.
+- **No tags.** Fake-API runs are not evidence for PROV's Cloud criteria (§7a.1.4; S4 §1.1 item 1). `local-setup` is SETUP-AC-009's in `criteria/setup`; the suite checks the function on real git and the file system, untagged.
+- **CI.** `packages/framework/test/integration/provision` is added to PROV's `integration` list, so a PROV change (or one of its dependencies) runs it directly.
+- **Reverse:** move the cases into `criteria/prov` as fake-API local parts, or drop the modelled health route for a workerd-served stage.
+Item: v0.2.0 T3.
+
+### DEC-0769 — The deploy-recovery cases copy row by row; the fake D1 API's own export does not import (finding for T6)
+Origin: ai-proposed · Status: accepted · Affects: `packages/framework/test/integration/provision/deploy.test.ts`; owner of `provision/cloudflare/d1/fake-d1-api.ts` (T6/T7)
+
+- **Observed.** With the framework's generated schema, every native copy on the fake D1 API falls back to the row-by-row copy: the fake's export writes each `CREATE TABLE` as stored, across several lines, and its own import then fails with `incomplete input: SQLITE_ERROR`. Deploy prints the fallback and its reason, as DEC-0545 requires, so no requirement fails; but no local test reaches a successful native copy of a generated schema. The fake also has four local databases and never reuses a deleted one's.
+- **Choice.** The two abort-and-rerun cases open their world with row-by-row copies only, so each run creates one database per copy. The other cases keep the native path offered, as the CLI does.
+- **Open.** The fake's export/import of multi-line statements is outside T3's paths. Reported to T6 to route (it may be a fake-only defect or match live D1's export; A-06 recorded one statement per line).
+- **Reverse:** once the fake imports its own export, drop `native: false` from the two cases.
+Item: v0.2.0 T3.
+
+### DEC-0770 — T3's PRs stack on 71n, one per gap, because each adds its suite to the CI path map
+Origin: ai-proposed · Status: accepted · Affects: PRs 84–86, `scripts/ci/path-map.json`
+
+- **Base.** The stack starts on `71n-path-map-after-removals` (#134), merged in at its final commit `60b5e8e` (the orchestrator's instruction), so the 3 `ci-classify` failures of 71m are gone. PROV's line was merged by hand with 71n's (71n drops `MAIL` from PROV's `dependsOn`; T3 adds the suite's directory).
+- **Stack.** Each PR adds one directory to one component's `integration` list in `path-map.json`, the same file; they stack (84 ← 71n, 85 ← 84, 86 ← 85) rather than conflict. Each entry is one line; `tests/ci-classify.unit.test.ts` checks that every listed directory exists.
+- **Reverse:** base each PR on 71n and resolve the path-map lines at merge.
+Item: v0.2.0 T3.
+
+### DEC-0771 — `./testing`'s suite checks the TestApp contract on both dialects and `connectTestStage` against a real `dev`, under CORE
+Origin: ai-proposed · Status: accepted · Affects: `packages/framework/test/integration/testing/**`, `scripts/ci/path-map.json` (CORE), S4 §1.1 item 2
+
+- **What runs.** `testing.suite.ts`, once per dialect process (`testing.sqlite.test.ts` and `testing.postgres.test.ts`, as the KV and SQL suites select it): storage isolation and `as()` sharing, `dispose` through an `as()` copy, `unavailable` and `setUnavailable` (sql also makes kv unavailable; stored data kept), `logs()`, `as()` and the `user` option, `loginWithStub` (the derived user ID), and v0.2.0's role path over the fake auth-app binding (`loginWithAuthApp`, `grantRole`/`revokeRole` showing at the next refresh after PAR-425, with one `role` call). `connect-dev.test.ts` starts a real `dev` on the core harness's fixture app and connects through the environment variable `smoke` sets.
+- **Not selected by LOG, KV or SQL alone.** A change to only `src/log/**`, `src/kv/**` or `src/sql/**` does not select this directory; those paths are left to their own suites (review of #142, round 2).
+- **Fresh storage.** The suite's app declares one table, so "fresh local storage … with migrations applied" (core.md §2) and SQL isolation are checked on each dialect (review of #142, reason 2).
+- **Not covered here.** `TestApp.mail` (MAIL is removed; the member stays only for its last users, B's note 2) and the role path's failure rules (AUTH-AC-012/015, T1's criteria).
+- **Untagged.** Every suite uses `createTestApp` as its harness; this one checks the harness itself and evidences no criterion. CLI-AC-005 stays `smoke`'s.
+- **CI.** The directory joins the `integration` lists of CORE (`./testing` is CORE's subpath, core.md §1) and CLI (its `connectTestStage` case runs on `dev`). CLI depends on AUTH and LOCAL (component map §3), so a change to AUTH (the stub and auth-app login paths, the role refresh) or to LOCAL also selects it, as `classify.mjs --files packages/framework/src/auth/runtime.ts` shows. It is not listed under AUTH too: that would only repeat CLI's selection and change a once-green classifier test's expected list. `src/testing/**` is already a shared input that selects every component. A directory in two lists is run once (the CI plan's `direct` list is a set). Review of #142, reason 1.
+- **Reverse:** move the dev case under `cli/` with `smoke`'s tests.
+Item: v0.2.0 T3.
+
+### DEC-0772 — `./client`'s AUTH helpers are tested in Chromium on `dev` with the mock, untagged, under HTTP; the staged CI does not yet run untagged Playwright specs of a selected suite
+Origin: ai-proposed · Status: accepted · Affects: `packages/framework/test/integration/client/session-helpers.spec.ts`, `scripts/ci/path-map.json` (HTTP), S4 §1.1 item 3
+
+- **What runs.** The package's real `./client` export, bundled for the browser with esbuild (as HTTP's `api-helper.spec.ts` does), in a page on a real `dev` server (core harness fixture app). It checks `getCurrentUser` for anonymous, user and admin; `login(returnTo)` through `/api/auth/login` landing on `returnTo`, and on the current page with no `returnTo`; AUTH-AC-010's five hostile values landing on `/` of the app's own origin; and `logout` clearing the cookie, with the server then seeing anonymous. Locally only the mock is installed, so `/api/auth/login` sets a mock session for the default user (auth.md §2 "Provider per stage"). The admin case uses `/api/auth/mock-login` from the page.
+- **Untagged.** AUTH-AC-010's criterion names the stub provider, and its evidence is the in-process suite. AUTH-AC-006's cloud and attribute clauses are not checked here. So no ID is claimed.
+- **CI.** The directory joins HTTP's `integration` list. HTTP owns `src/client/**` and is a browser component, so Chromium is installed. On a PR it does not run yet: the staged `ci.yml` direct step runs only Vitest, and the harness runs Playwright only by ID. At release it does run: `release.yml` runs `npm run compliance` with no `--only`, and that full local run launches every `--project integration` spec, untagged ones included (`tests/compliance/harness/selection.ts`). The same PR gap already applies to `test/integration/http/api-helper.spec.ts`'s untagged cases. It is open for T6/T7, the CI-file holder: run the selected direct directories' `*.spec.ts` with `playwright test --project integration`. A change confined to `src/auth/**` (the server half: `/api/auth/*`, the `returnTo` sanitizer, mock-login) does not select this directory, because HTTP depends only on LOG. It is not listed under AUTH too, because that would change a once-green classifier test's expected list for AUTH. AUTH's own suites and criteria cover that half (review of #146, reasons 4 and 5).
+- **Reverse:** tag the logout and returnTo cases with AUTH-AC-006/010 once T1 decides their local evidence, or move the spec into `criteria/auth`.
+Item: v0.2.0 T3.
+
+## Release v0.2.0, item T4: fuzz targets (2026-10-31)
+
+Plan-v0.2.0 §7a.1.7, §7a.1.8. The targets, their properties, run counts and seeds are S4's (DEC-0645…0648, PAR-410…412); these entries are only the choices S4 left to T4. Range DEC-0773–0777, PAR-474–479; the PARs are unused.
+
+Integrated by item I2 from `ai/implementation/decisions/v020-T4.md`.
+
+### DEC-0773 — One fuzz file per target beside its first-named module; F4 and F6 split by component, F2 and F3 share the store's file; the run count applies per property
+Origin: ai-proposed · Status: accepted · Affects: `packages/framework/src/**/*.fuzz.unit.test.ts`; PRs 88 (F2, F3, F5), 89 (F4, F6) and 89b (F1)
+
+- **Files.** F1: `auth/return-to.fuzz.unit.test.ts`. F2 and F3: `auth-app/store.fuzz.unit.test.ts`, because both target the store and they share its SQLite stand-in (DEC-0775). F4: `auth/signing.fuzz.unit.test.ts` (signing, session, transaction, cookies) and `files/local/tickets.fuzz.unit.test.ts` (tickets, `files/base64url.ts`). F5: `files/names.fuzz.unit.test.ts`. F6: `kv/cursor.fuzz.unit.test.ts` (KV cursor, `prefixEnd`) and `files/cursor.fuzz.unit.test.ts`.
+- **Why split F4 and F6.** Each spans two components (AUTH and FILES; KV and FILES), and "beside its code" puts each half next to the module it tests. The two halves of a target share its seed.
+- **Run count.** S4 gives one count per target. A target with several independent properties (for example F4's session, transaction, decoder and cookie properties) runs that count for each property. Each test's name states its runs and seed.
+- **Owner question.** Should a target's count be split across its properties instead? **Choice:** per property, because each property has its own inputs. **To reverse:** divide `RUNS` in each file by its number of `fc.assert` calls.
+Item: v0.2.0 T4.
+
+### DEC-0774 — Generators aim at the classes S4's properties name; how F6's `prefixEnd` property treats lone surrogates
+Origin: ai-proposed · Status: accepted · Affects: the F1, F4 and F6 fuzz files, PRs 89 and 89b
+
+- **Focused mutations.** A generator built only from mixed random pieces missed classes S4 names explicitly, and passed 1,000 runs:
+  - F1: two separators in a row after the leading `/`, such as `/%09/`;
+  - F4 and F6: another spelling of a value's last base64url character.
+
+  So F1 adds separator runs after `/` (built from `/ \ %2f %5c %09 %0a %0d @ :`), and F4 and F6 add a `respell-end` mutation: the same high bits, other low bits. These are mutation classes S4's sketches list ("mutations built from `/`, `\`, `%2f`, `%5c`, `%09`, `@`, `:`"; "re-padded, `+/=` spellings"). They do not weaken any property.
+- **Cursor spelling.** When the KV or FILES cursor decoder returns a value, the properties also require two things:
+  - the cursor is the canonical base64url spelling of its bytes;
+  - those bytes are exactly the UTF-8 JSON of the requested prefix and the returned key or name. A leading byte order mark does not count as part of that JSON.
+
+  kv.md §2 requires this for KV ("anything that does not decode to exactly that form"). For FILES it is the similar-case test of F4's finding (plan §7a.1.8 step 4). JSON whitespace is allowed, because neither decoder documents a canonical JSON spelling. The byte order mark inputs were added after the root-cause review of F4 (round 1, majors 2 and 3).
+- **FILES cursors and `checkName`.** S4's F6 evidence notes that `files/cursor.ts` does not `checkName` the decoded name. S4's property requires only "a name inside the requested prefix, or FILES.INVALID_CURSOR", and that is what the FILES half asserts, plus the canonical-form check. A canonical cursor that the client forged with an invalid name inside the prefix (for example one with a control character) still decodes, and becomes the store's `startAfter`. KV's decoder does check its key (`checkKey`). **Owner question:** should `files/cursor.ts` refuse a decoded name that fails `checkName`? **Choice:** not in T4. It changes FILES behaviour beyond S4's property and the root cause, and is left for the FILES owner. **To reverse:** add `checkName` to `decodeCursor` (FILES.INVALID_CURSOR on failure) and assert it in `files/cursor.fuzz.unit.test.ts`.
+- **`prefixEnd` and lone surrogates.** `prefixEnd` is called only after `checkPrefix` (`kv/service.ts:78-81`), which refuses text that is not well-formed. So the order property is asserted over well-formed prefixes and keys. For lone surrogates, the test asserts that `checkPrefix` refuses every prefix that has one, so `prefixEnd` never sees one. On a lone high surrogate, "starts with p" in code units and in code points differ: `"\uD800"` + `"\uDC00"` is U+10000, which sorts above `prefixEnd("\uD800")`. So the property is not defined there.
+- **Owner question.** Should `prefixEnd` itself be defined for text that is not well-formed? **Choice:** no. It is unreachable, and KV-REQ-002 forbids such keys. **To reverse:** add lone surrogates to the `prefixEnd` property's generator; it would then fail as described, and `prefixEnd` would need a rule for them.
+Item: v0.2.0 T4.
+
+### DEC-0775 — F2 and F3 run the store's SQL on in-process SQLite (`node:sqlite`) behind its `D1Like` interface
+Origin: ai-proposed · Status: accepted · Affects: `auth-app/store.fuzz.unit.test.ts`, PAR-411, PR 88
+
+- **Why.** A round trip to workerd's local D1 (`d1.test-support.ts`, `getPlatformProxy`) took about 10 ms on this machine (200 queries, load average around 20). F2's 1,000 runs, each 3–8 statements, would take 30–80 s, and F3's 300 runs, each 1–3 statements, 3–9 s. That is far beyond PAR-411 (1 s per target, 10 s in total). S4 planned F3 on an "async D1 fake".
+- **What runs.** The store's own functions (`registerReturnUrl`, `isRegistered`, `createCode`, `redeemCode` through `createAuthAppService().redeem`, `saveSignIn`, `takeSignIn`, and `handleAuthAppRequest`'s `/callback`). Their SQL is unchanged, on SQLite 3.53 (Node 22's `node:sqlite`), the engine D1 runs. A counter on executed statements gives F3's "never reaches D1" check.
+- **Limits.** The stand-in does not reproduce D1's binding layer. `node:sqlite` truncates *returned* text at U+0000, but no property reads back a value containing it (registered URLs are canonical and never contain it). F2 does *bind* candidates that contain U+0000, so the claim that such a candidate is refused holds on the stand-in only, not on D1 (PR review of #111, minor 3). It also prints one ExperimentalWarning per test file. `store.unit.test.ts` and `app.unit.test.ts` still cover the same SQL on real local D1 with examples.
+- **Owner question.** Is an in-process SQLite stand-in acceptable for these two targets? **Choice:** yes. **To reverse:** replace `sqliteD1()` with `localD1()` in the file and lower F2's runs to about 50 and F3's to about 30, stating why (PAR-411).
+Item: v0.2.0 T4.
+
+### DEC-0776 — Each finding's fuzz target lands with its fix in its own PR, stacked 88 ← 89 ← 89b, and every PR is green on its own
+Origin: ai-proposed, amended by the orchestrator · Status: accepted · Affects: PRs 88, 89, 89b; `files/base64url.ts`, `kv/cursor.ts`, `auth/return-to.ts`
+
+- **The two findings.** F4 (S4's prediction, with F6's cursor checks on the same cause) and F1 both fail. Each gets a root-cause record and its own small red-green PR (plan §7a.1.8).
+- **Every PR is green in CI on its own** (orchestrator, replacing a first draft that let 88 and 89 stay red):
+  - **88** holds the targets that pass: F2, F3 and F5, plus the fast-check pin, the lockfile and this draft. F1, F4 and F6 were written on 88 first and removed again in one commit, so their history stays in the branch.
+  - **89** (`v0.2.0/89-fix-files-base64url-noncanonical`, on 88) re-adds F4's and F6's fuzz files together with the fix and the regression tests.
+  - **89b** (`v0.2.0/89b-fix-return-to-decoded-tab-newline`, on 89) re-adds F1's fuzz file together with its fix.
+- **Where the red is.** The red of red-green is the exact failing output of each fuzz file before its fix. It is copied into the root-cause record and the PR body, and anyone can reproduce it by reverting the fix commit's source change.
+- **Why a line, not two siblings.** Each fix PR touches different files, so siblings would also work. A line keeps one merge order and lets 89b's CI run every fuzz target together.
+- **To reverse:** split 89b onto 88 directly.
+Item: v0.2.0 T4.
+
+### DEC-0777 — How the added test time is measured, and F4's HMAC properties run 250 times so that F4 stays within PAR-411
+Origin: ai-proposed, asked for by the orchestrator · Status: accepted · Affects: `auth/signing.fuzz.unit.test.ts`, `files/local/tickets.fuzz.unit.test.ts`, the PR descriptions, PAR-411, PAR-412
+
+- **Measuring.** The whole-suite wall time of `npm run test:unit` on this sandbox varies by more than the fuzz tests' total, because other agents share its 4 CPUs (load average 17–32). So the delta is reported two ways:
+  - (a) the whole-suite `npm run test:unit` time before (base `55`) and after (top of the stack), as asked;
+  - (b) each target's own time: the sum of its tests' durations from Vitest's verbose reporter, run one file at a time (`--no-file-parallelism`) on this machine, and as reported by the CI job.
+
+  PAR-411 is judged on (b), per target.
+- **F4 was over budget.** As first written (500 runs for each of its 6 properties), F4 took 1.02–1.15 s run one file at a time at load average around 30. Run alone earlier, its auth part took 0.45–1.06 s. That can exceed PAR-411's 1 s per target, so two changes were made; the budget was not raised.
+  - **Narrower:** the auth property no longer checks the same thing twice per run (`readSession` already verifies with purpose `session`). The "a session token never verifies as login" check moved into the session property, which saves one HMAC sign per run. Generated texts are at most 8 characters (was 24); a token's length does not change which mutations are possible.
+  - **Fewer runs:** the three properties that sign and verify with HMAC (session, login transaction, local ticket) run 250 times instead of S4's 500. The cheap properties (the decoders, `readCookie`) keep 500. About one run in ten re-spells the last character of the MAC (`respell-end` is 1 of 5 mutation kinds, on part 1 half the time), the class that found F4's finding, so 250 runs give about 25 such cases. The red run in `2026-10-31-T4-files-base64url-noncanonical.md` was taken with 250 runs and fails after 3 tests.
+- **Result.** F4 now takes 0.43–0.81 s (3 runs one file at a time, load average around 19–20). The other targets took 0.4–0.73 s in the same conditions.
+- **Owner question.** Is 250 runs for F4's HMAC properties acceptable, or should PAR-411 allow F4 more time? **Choice:** 250 runs; PAR-411 is unchanged. **To reverse:** set `HMAC_RUNS` back to 500 in both files, and raise PAR-411 for F4 to 1.5 s.
+Item: v0.2.0 T4.
+
+## Release v0.2.0, item T7: red-green fixes (2026-10-31)
+
+Plan-v0.2.0 §7a.1.8, §7a.1.9. The owner was unavailable, so each entry is the simplest choice, made without asking. Range DEC-0780–0787, PAR-481–484 (P0 took DEC-0778–0779 and PAR-480, in P0's section). The range is exhausted: DEC-0780 and DEC-0787 (PR 94, #143), DEC-0782…0786 (PR 93a, #126). DEC-0781 was reserved for the native-copy fix (#123), which drafted no entry; it stays unused, as do PAR-481…484. Later fixes borrowed DEC-0732 (#156), DEC-0733 (PR 34c) and DEC-0734 (#155) from F's unused range (see F's section).
+
+Integrated by item I2 from `ai/implementation/decisions/v020-T7.md`.
+
+### DEC-0732 — Deploy needs, reads and binds no email domain: the `EMAIL` binding, `FRAMEWORK_MAIL_FROM`, the production email-domain preflight and the sign-in/sender output go (96b, release blocker)
+Origin: ai-proposed · Status: accepted · Affects: `packages/framework/src/provision/core/{deploy,operations,fake-target,setup-account,account-settings}.ts`, `packages/framework/src/provision/cloudflare/{target,sst}.ts` (comments in `account-settings.ts`, `setup-record.ts`), `packages/framework/src/targets/cloudflare/{settings,bindings}.ts`; PROV-REQ-002 step 1, provisioning.md §2 "Account settings record" and "Publishing the result", cloudflare.md §2 v0.2.0 amendment; supersedes DEC-0689's "What stays"; root cause `ai/implementation/root-causes/2026-10-31-T7-deploy-email-preflight.md`
+
+- **Problem.** On an account set up only by v0.2.0, the setup record names no email domain (DEC-0689, DEC-0698). Every production `deploy` stopped at step 1 with "the account settings record names no email domain …". Without that check it would have stopped at step 3 or 5 in `cloudflareWorkerSettings`. Both gates existed only for the 0.1.x `EMAIL` binding. MAIL is retired (DEC-0696), and the spec already says production stages bind no `EMAIL` (DEC-0698).
+- **Decision.**
+  - The deploy preflight has no email-domain requirement, and it no longer reads the account settings record at all: nothing in deploy needs it. `TargetOperations.readAccountSettings` and `DeployInput.emailDomain` go.
+  - No stage's Worker binds `EMAIL` (`send_email`) or gets `FRAMEWORK_MAIL_FROM`. The Worker settings are the same for production and test stages, so `StageWorkerInput` loses `isTestStage` and `emailDomain`, and `BINDINGS` loses `email` and `mailFrom`.
+  - A deploy prints the public origin only, with no `sign-in page:` and no `sender address:` line (provisioning.md §2 "Publishing the result", cli.md).
+  - `senderAddress`, `noEmailDomainMessage` and `FakeTarget.accountSettings` go, because only the removed code used them.
+- **Consequence for 0.1.x data.**
+  - A record with a stored `emailDomain`, valid or not, is ignored by deploy. The admin app and `setup-account` keep it as they found it, and `parseAccountSettings` still validates it for its remaining readers.
+  - A 0.1.x production stage loses its `EMAIL` binding and `FRAMEWORK_MAIL_FROM` on its next deploy. The SST upload carries exactly the declared bindings plus the kept secrets (`keepBindings: ["secret_text", "secret_key"]`).
+  - `remove` (bucket-only program, then the Worker is deleted) and `npm run upgrade` need nothing.
+  - *Unverified live:* that the upload drops the old binding. Live-pass item: on a 0.1.x production stage with `EMAIL`, a v0.2.0 deploy leaves the Worker settings without `send_email` and `FRAMEWORK_MAIL_FROM`.
+- **Alternatives rejected.**
+  - Record an email domain in v0.2.0 setup: rejected, because it contradicts DEC-0697/DEC-0698.
+  - Keep reading the record and only drop the requirement: rejected. An invalid 0.1.x `emailDomain` would still stop deploys, and the read has no other use.
+  - Keep the binding when a 0.1.x domain is present: rejected. cloudflare.md says production stages bind no `EMAIL`, and nothing reads it.
+- **Spec follow-up (D, named item).** provisioning.md §2 "Account settings record" says that in v0.2.0 "only `deploy` and the setup check read the record". After this decision only the setup check reads it (the admin app's Account setup and status pages). D amends that sentence. cloudflare.md §2's base text (lines 42-43) still describes `EMAIL`/`FRAMEWORK_MAIL_FROM` under its v0.2.0 amendment and can be tidied in the same change.
+- **Reverse:** revert the 96b fix commit. The red tests in `criteria/prov/auth-app-fake.test.ts` then fail again.
+Item: v0.2.0 T7.
+
+### DEC-0733 — The bootstrap token is judged before the everyday token is touched: a protected one is refused once its verify call names it, and a refused one reads only itself and then deletes itself as the run's last request
+Origin: ai-proposed · Status: proposed · Affects: `provision/cloudflare/cloudflare-setup.ts` (`run`, `bootstrap`, `refuseLongLived`, `PROTECTED_BOOTSTRAP`), SETUP-REQ-004 (v0.2.0 amendment), SETUP-AC-005, SETUP-AC-011, DEC-0681, DEC-0751, root cause `ai/implementation/root-causes/2026-10-31-T7-bootstrap-token-rules.md` (accepted in review round 2)
+
+- **The order.** Right after the bootstrap token's identification, and before the everyday token is identified, the run:
+  1. refuses a user token (as before);
+  2. refuses a protected token;
+  3. reads the token's own details;
+  4. applies the expiry rule.
+
+  The check that the bootstrap token is the same token as the everyday token needs the everyday token, so it stays after the everyday token is identified. The same-value check and the own-details check still stop the everyday token pasted into the bootstrap slot before any DELETE.
+- **A protected token (PAR-361) is refused before any use.**
+  - It is refused as soon as its verify call gives its ID.
+  - It is not deleted, its line is kept, and nothing else is sent with it.
+  - It is reported like any other bad bootstrap token, with the bootstrap link and exit 1. The message: "it is protected (its ID is in PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS) and was not deleted: setup did not use it for the bootstrap, and its line is kept as it is".
+  - The bootstrap did not run, so the run cannot succeed (SETUP-REQ-001 as amended: a successful bootstrap exits 0).
+  - SETUP-REQ-004 as amended says "neither used for the bootstrap nor deleted", and DEC-0681 says "neither deleted nor used". The v0.1.x rule that such a token "finishes as it otherwise would" (DEC-0589) went with the paragraph the amendment replaced.
+- **Identification is not use.** Without the ID from the verify call, nothing can tell that the token is protected.
+- **A refused (long-lived) token.** It sends its identification, its own details (DEC-0681 "Before the rule") and its DELETE. The run then stops, so no other token's request comes before or after the DELETE.
+- **Reading of DEC-0681.** Identification includes the token's own account list (`GET /accounts`). An account token verifies only under its own account (DEC-0584), so with no account known the list is the only way to its verify call. DEC-0681's "no account check" means step 4: `CLOUDFLARE_ACCOUNT_ID`, the switch and the other-account stop. This matches T1's DEC-0750.
+- **Not chosen.** Verifying the bootstrap token on `CLOUDFLARE_ACCOUNT_ID`, or on the everyday token's accounts, to skip the list. Either can send the bootstrap token's verify to an account it does not belong to. In a switch that is the old account, which SETUP-AC-006 forbids (review round 1, item 4).
+- **The early write guard.** It is built before the everyday token is identified, so it does not know the everyday token's ID. It still allows a DELETE only of the bootstrap token's own ID, and only while the self-delete is armed. It also refuses protected IDs first.
+
+Reverse: move the own-details read and the expiry rule back after the everyday token's identification, and move the protected check back into `bootstrap()`, where it withholds only the self-delete.
+Item: v0.2.0 T7.
+
+### DEC-0734 — `./testing` names a person by subject and role only; `TestApp.authApp` makes up the fake auth app's email; the testing contract drops MAIL
+Origin: ai-proposed · Status: accepted · Affects: `docs/contracts/ts/testing.d.ts` (`TestAuthApp`, `TestApp.loginWithAuthApp`, `TestApp.authApp`, `TestApp.mail`, `TestMail`, `MailMessage`, `TestAppOptions.mailSender`, `grantRole` on a connected stage), `packages/framework/src/testing/` (`test-app.ts`, new `auth-app-adapter.ts`, `connect.ts`), E2E-005, AUTH-AC-013, CORE-REQ-005, AUTH-REQ-001, DEC-0762. ID lent from F's unused range (DEC-0725–0734), checked unused with `git grep` over every `origin/v0.2.0/*` branch and `origin/main`.
+
+- **Identity.** `TestApp.loginWithAuthApp` and `TestApp.authApp.issueCode` take `{ readonly sub: string; readonly role: "admin" | "user" }`, inline in both the package and the contract (CORE-AC-001 counts every named framework type, so no named alias). `TestAuthApp` is an interface stated in `./testing`'s terms, not a `Pick` of the internal `FakeAuthAppBinding`, so `dist/testing/*.d.ts` no longer imports `auth-app-binding.d.ts`.
+- **The email stays internal.** The internal binding and its fake are unchanged (`internal/auth-app.d.ts`: the auth app returns an email; auth.md: the provider drops it). `TestApp.authApp` is an adapter (`src/testing/auth-app-adapter.ts`, not exported from `./testing`) that hands the fake `{ sub, email: <sub>@auth-app.test, role }`, ignoring any email a JavaScript caller still passes. AUTH-AC-013's in-process test checks that no response carries that address, or any `@`.
+- **Why not T2's proposed form** (the fake's `issueCode` taking an optional email): it changes the internal fake and its contract for a need only `./testing` has, and the fake's direct users (`src/auth-app`, `src/auth`, `src/targets/cloudflare` unit tests) would see a changed type. The adapter keeps the change inside `src/testing`.
+- **MAIL.** 34a removed MAIL's test surface from the package; the contract now matches: `MailMessage`, `TestMail`, `TestAppOptions.mailSender`, `TestApp.mail` and MAIL in the header are removed. The `config` option's mention of `framework.email` stays while `stage-config.schema.json` still has that section (C's).
+- **Connected stage roles.** `grantRole`/`revokeRole` on a connected stage pointed to the removed `admins` command with `<email>`; they now say test stages sign in with the mock only and to use `as(mockUsers.admin())` / `as(mockUsers.user())`, and the contract's `grantRole` text says the same.
+
+Reversal: restore `email` in the two identity types, `TestAuthApp = Pick<FakeAuthAppBinding, …>` and the MAIL declarations; E2E-005's type test then fails again.
+Item: v0.2.0 T7.
+
+### DEC-0780 — The release report's reference point is the latest passing real sign-in records (live E2E-007 and E2E-008); its paths are AUTH, auth-app and the interfaces
+Origin: ai-proposed · Status: proposed · Affects: `tests/compliance/tools/release.ts` (`REAL_SIGN_IN`, `LOGIN_PROVIDER_PATHS`), COMPL-REQ-006, COMPL-AC-006 (DEC-0692), root cause `ai/implementation/root-causes/2026-10-31-T7-release-login-check.md`
+
+The tool applies COMPL-AC-006 as DEC-0692 amended it. Until now it still used DEC-0512's "last passing `check-login` record (PWD-AC-009)", which nothing can pass since B's #115.
+- **Reference point.** For each of E2E-007 and E2E-008, the tool takes the newest milestone record (`--milestone`, not a dry run, any target) whose entries for that ID all passed. The older of the two is the reference point. The spec says "records", plural, so the list covers commits since either sign-in was last checked. If either is missing, all of history is listed.
+- **`check-login` never counts.** Its automated record (the automated sign-in path check, DEC-0670) is not a real sign-in.
+- **Paths.** `LOGIN_PROVIDER_PATHS` is AUTH's source paths as the CI path map has them (`src/auth/`, `src/auth-app/`), plus the auth app's binding (`targets/cloudflare/auth-app.ts`), its deploy (`provision/cloudflare/auth-app-deploy.ts`) and the contracts `auth.d.ts`, `internal/auth-app.d.ts` and `internal/login-provider.d.ts`. A unit test checks that each one exists.
+- **Why not the brief's wording.** The brief asked to name B's new check and its criterion ID. The independent review (round 1, major) showed that the owner-approved rule replaces `check-login`'s record. So the owner's rule is applied, and B's check is named only as the record that does not count.
+- **Today's output.** Until the live parts have a milestone Where line (compliance.md DEC-0693 note), no such record exists. The report then lists all of history, which is what the spec requires.
+
+Reverse: key the reference on another ID, or take the newer of the two records.
+Item: v0.2.0 T7.
+
+### DEC-0782 — E2E-004's offline Cloudflare coverage test is an integration test in `tests/compliance/coverage`
+Origin: ai-proposed · Status: accepted · Affects: plan-v0.2.0 §7a.1.3, §7a.2.4, `vitest.integration.config.ts`, `scripts/ci/path-map.json` (COMPL), `tests/compliance/harness/tsconfig.json`
+
+The test "every criterion expected on Cloudflare has a tagged test in the cloud selection" moves from `tests/compliance/harness/selection.unit.test.ts` to `tests/compliance/coverage/cloudflare-selection.test.ts`. Its body, assertions and title are unchanged (binding fix 3).
+
+- **Why not the unit layer:** the test runs the integration layer's own runners as child processes (about 50 CPU-seconds alone), and it needs the framework build, which `test:integration` makes and `test:unit` does not.
+- **Collected once:** the integration config includes `tests/compliance/coverage/**/*.test.ts`. Its `**/*.unit.test.ts` exclude still applies, and Playwright collects only `*.spec.ts`, so `classify.mjs --check-duplicates` stays green.
+- **A new directory:** it is not under `tests/compliance/criteria`, so the Cloudflare driver run (`vitest … tests/compliance/criteria`) never collects it, and `E2E-004.spec.ts` keeps doing that listing on the cloud. It is not under `tests/compliance/harness`, whose `self-test/` has its own Vitest config.
+- **Owner:** the directory is in COMPL's `integration` list, so COMPL source changes (`tests/compliance/tools/**`, `packages/framework/src/evidence/**`), COMPL's dependencies' source changes, shared inputs (the harness, root configs, `tests/support/**`) and the release's `--all` run all run it.
+- **It keeps the `[E2E-004]` tag.** In the unit layer the tag counted for nothing, because the unit layer evidences only the IDs in UNIT_LEVEL and E2E-004 is not one of them. In the integration layer a local compliance run that selects E2E-004 runs it through the harness, and it counts as local E2E-004 evidence.
+  - That is accurate. The test checks part of E2E-004's own claim ("every capability on every target"), the Cloudflare coverage part, offline.
+  - It can only make E2E-004's local result stricter.
+  - It keeps the move refactor-only.
+  - In CI it runs directly when E2E-004 is not among the harness's `--only` IDs. When E2E-004 is among them, the harness runs it (`alsoIntegration`) and the direct filter leaves it out. Either way it runs once.
+
+Reversal: move the file back under `tests/compliance/harness/` as `*.unit.test.ts` and drop the include glob. Fix 1's child limit and fix 2's precondition would stay.
+Item: v0.2.0 T7.
+
+### DEC-0783 — Code that tests read is a test input; a test input can select an integration directory directly
+Origin: ai-proposed · Status: accepted · Affects: plan-v0.2.0 §7a.2.4 "Change classification", DEC-0635, DEC-0636, `scripts/ci/classify.mjs`, `scripts/ci/path-map.json`
+
+Before the move, a criteria-only change ran this test through `unit: all`. After the move, the classifier must still select it for every change that can change the Cloudflare selection or its expectations, as the record's binding fix 3 requires.
+
+The classifier changes as follows:
+- **New path-map entry:** a `testInputs` entry for `tests/compliance/criteria/**` and `tests/compliance/e2e/**`, with a new field `direct: ["tests/compliance/coverage"]`.
+- **Test inputs apply to code:** `classify()` now applies test inputs to code files as well as docs (DEC-0635 order step 4). A `*.unit.test.ts` file still selects nothing more. The same applies to e2e specs (step 3).
+- **New result field:** `classify()` returns `direct`, the directories from the matched entries. `ciPlan()` adds them to its `direct` list, never a criteria directory. The readable report prints them.
+
+What this selects:
+- **Criteria-only change:** for example `tests/compliance/criteria/kv/kv.pglite.test.ts` runs KV through the harness, plus `packages/framework/test/integration/kv` and `tests/compliance/coverage` directly. It does not run COMPL's criteria. `ci-classify.unit.test.ts` checks this.
+- **E2E spec change:** it also runs the coverage test. Before this change it did not, because an e2e-only change ran no unit test. A spec can carry the only tag of a criterion expected on Cloudflare.
+- **Catalogue docs:** they already select COMPL (DEC-0636), so they now run the coverage test through COMPL's directory.
+- **Coverage:** `ci-classify.unit.test.ts` lists every path class from the record's binding fix 3 and checks that each one runs the test.
+- **One existing selection gains a reason:** `skill/**` code, already selecting SKILL as "changed", now also selects it as "test input". The selection itself is unchanged.
+
+Why not select all of COMPL for criteria and spec changes: that would also run COMPL's tagged criteria (evidence, prodcheck, targets) through the harness on every criteria change. Only the coverage test reads those files.
+
+Dependency: CI selects tests from the classification only in S3's staged `scripts/ci/workflows/ci.yml` (DEC-0637). The live `.github/workflows/ci.yml` predates S3. It runs `test:unit` but no integration test outside `tests/skill` and `packages/create-prototype-app`, so once this lands it no longer runs the coverage test. That stays true until the staged workflow replaces it, which applies to every S3 layer move (DEC-0640's `example-copies` happened to stay covered by the old `tests/skill` step). Apply the staged workflow before, or together with, merging this change.
+
+This is a **hard merge precondition**, because the independent review rated the gap major. This session tried to add a temporary step to the live workflow and could not: GitHub refused the push, "refusing to allow an OAuth App to create or update workflow `.github/workflows/ci.yml` without `workflow` scope" (DEC-0637). If the staged workflow cannot be applied first, the owner adds this step to `.github/workflows/ci.yml` after the "Verify" step, which builds the framework:
+
+```yaml
+      - name: E2E-004 Cloudflare coverage (integration layer)
+        run: npx vitest run --config vitest.integration.config.ts tests/compliance/coverage
+```
+
+Reversal: drop the entry and the `direct` field. A criteria-only change would then no longer run the coverage test, so the test would have to go back to the unit layer (DEC-0782 reversal).
+Item: v0.2.0 T7.
+
+### DEC-0784 — A listing's runners are bounded: process-group kill at 300 s, `ListingTimeoutError`
+Origin: ai-proposed · Status: accepted · Affects: `tests/compliance/tools/listing.ts`, `tests/compliance/tools/run-bounded.mjs`, `E2E-004.spec.ts`, `report.ts` (callers)
+
+`listSelection` runs each runner as `node run-bounded.mjs <ms> npx …` (binding fix 1).
+- **The wrapper:** it starts the command in its own process group. At the limit, it kills the whole group with SIGKILL and exits with 124. When the command exits by itself, it also kills anything the command left in its group. When the wrapper itself is told to stop (INT, TERM, HUP), it kills the group first.
+- **Why a wrapper:** `execFileSync`'s own `timeout` signals only its direct child. A control experiment showed that killing `npx` this way, with a stub runner, left the runner, its parent process under `npx` and the runner's worker all alive. The unit test checks that none of the three survives.
+- **The error:** on exit 124, or on the `ETIMEDOUT` backstop (limit + 15 s, for a stuck wrapper; it sends SIGTERM, which the wrapper handles by killing its group first, because a SIGKILL backstop left the group orphaned in the reviewer's probe), `listSelection` **throws** `ListingTimeoutError`, `<label>: \`<command>\` timed out after <n> s; listing incomplete …`.
+  - The review suggested recording the error in `errors`. Throwing is still a named, distinct failure, and a synchronous throw reaches Vitest's and Playwright's report ahead of any timeout.
+  - Throwing also stops the caller before it computes `uncovered` from a listing it knows is incomplete. `report.ts traceability` then fails, instead of writing a report from a partial listing.
+- **The default limit:** `LISTING_CHILD_TIMEOUT_MS = 300_000` per runner, overridable with `ListOptions.timeoutMs`. It is sized from the record's worst complete child, Vitest at 254 s with 6 copies and 4 loops at load 40. It bounds a call that had no bound before. It does not loosen one.
+- **Fewer files: no.** The listing still lists exactly the driver's selection (binding fix 5).
+
+Reversal: call `execFileSync("npx", …)` directly again, which leaves the call unbounded and is not recommended.
+Item: v0.2.0 T7.
+
+### DEC-0785 — Listing fails early without the framework build
+Origin: ai-proposed · Status: accepted · Affects: `tests/compliance/tools/listing.ts`
+
+`listSelection` checks `packages/framework/dist/testing/index.js` before it starts a runner (binding fix 2). If the file is missing, it throws `FrameworkBuildMissingError`: "the framework build is missing (…): run `npm run build -w packages/framework` before listing tests".
+- **Before:** the coverage test failed after about 26 s, with an `AssertionError` listing ten `Cannot find module …/dist/…` lines.
+- **Now:** it fails in about 0.2 s with that message.
+
+The check is in `listSelection`, so it also covers `listDriverTests` (E2E-004.spec.ts) and `report.ts` (which builds first).
+Item: v0.2.0 T7.
+
+### DEC-0786 — A listing test's own limit is derived from the runners' limits
+Origin: ai-proposed · Status: accepted · Affects: `tests/compliance/tools/listing.ts`, the moved test, `tests/compliance/e2e/E2E-004.spec.ts`
+
+`driverListingLimitMs(target)` = (number of runner invocations on `target`) × `LISTING_CHILD_TIMEOUT_MS` + `LISTING_OVERHEAD_MS` (30 s: catalogue reading, report parsing, process start-up). Its value is 630 s on Cloudflare (2 runners) and 930 s on local (3 runners). Both the moved test and E2E-004.spec.ts's coverage part use it, through the one constant (binding fix 4). E2E-004.spec.ts's local limit therefore goes from 600 s to 930 s, and its Cloudflare limit from 600 s to 630 s.
+
+The limit cannot interrupt a synchronous listing (the record's Evidence 5). It is the ceiling that the runners' own limits guarantee, so the test's timer never fails a listing that completed. A hang fails as `ListingTimeoutError` at the runner's limit. This is not a stand-alone raise (binding fix 5): it lands with the bounds that make it a real ceiling.
+Item: v0.2.0 T7.
+
+### DEC-0787 — The prodcheck harness lists only IDs it can fold; `check-login` keeps its retired entry until COMPL-AC-005 is amended
+Origin: ai-proposed · Status: proposed · Affects: `tests/compliance/harness/prodcheck.ts` (`CHECK_LOGIN_IDS`, `PRODCHECK_IDS`), DEC-0670, COMPL-AC-005
+
+- **What the harness lists.** `CHECK_LOGIN_IDS` is the command's `CHECK_LOGIN_IDS` that the documents' catalogue has: AUTH-AC-011 and E2E-008. The driver folds only IDs it is running, and those come from the catalogue (`driver.ts:336`), so PWD-AC-009 could never be folded.
+- **Retired IDs leave `PRODCHECK_IDS`.** MAIL-AC-006 (DEC-0696) and CLI-AC-007 (DEC-0698) are dropped. Neither is in the catalogue, so this changes no run.
+- **The command keeps its entry.** `check-login` still writes PWD-AC-009 as `not-run`, because COMPL-AC-005 still says "`check-login`'s PWD-AC-009 result is present" (round 1 review, major). D's #136 (DEC-0700, awaiting the owner's approval of its wording) amends COMPL-AC-005 to "`check-login`'s AUTH-AC-011 and E2E-008 results are present". The command drops the entry once that has merged. The comments in `harness/expected.ts` and `criteria/compl/prodcheck.test.ts` already use DEC-0700's IDs.
+- **The guard.** A unit test compares the harness's list with the command's in this way, so the command dropping the entry later needs no harness change.
+
+Reverse: list PWD-AC-009 in the harness again.
+Item: v0.2.0 T7.
 
 ## Owner decisions on v0.2.0 (2026-10-31)
 
