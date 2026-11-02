@@ -30,4 +30,17 @@ The test above turns green; `run.unit.test.ts` (which reloads the stored state i
 
 ## Review
 
-Status: awaiting review (the independent root-cause reviewer has not run: this evaluator could not start a subagent).
+Status: accepted
+
+Reviewer: the independent root-cause reviewer (a subagent that neither diagnosed these defects nor wrote the runner or its fixes), 2026-11-02, on `e790cb7` in a separate worktree. Common checks, for all five records: the live-pass unit suite is red at `562334d` (pre-fix code, new tests) with exactly the five failures quoted in the records, and green at `e790cb7` (100 passed). Each fix was reverted alone at `e790cb7`: only its own record's tests turned red. The PR's test changes are additions; the one removed line in `exec.unit.test.ts` is the vitest import. `resume.unit.test.ts` is new in this PR (not on `main`). Its switch from `transcript` to `printed` in `661099b` drops only the `$ live-pass …` lines the test writes with its own arguments (the skip reason holds the admin token by design), so it still checks everything the runner prints. No once-green assertion was weakened.
+
+**Verdict: accepted.**
+1. Reproduced: at `562334d` only `runs/<id>/state.json` holds the admin token. With only the two `scrubber.value(...)` wrappers reverted at `e790cb7`, this test is the only failure.
+2. E2 checks out: `saveState` is called only at `live-pass.mjs:150` (start) and `:168` (`save`), and it writes `JSON.stringify(s)`. E3 checks out: the engine puts skip reasons, `blocked` messages and the pending record into the state. Every link is supported.
+3. The alternative is ruled out: the same value is scrubbed in the step record and in `results.md`.
+4. The fix covers both call sites, which is every write of the state. Scrubbing does not break resumption:
+   - the facts hold IDs, URLs and emails;
+   - no state key is in `SECRET_KEYS`;
+   - the runner SHA is all hex, so `TOKEN_LIKE` keeps it;
+   - the four-container offline run, which reloads the stored (scrubbed) state in every invocation, passes.
+   The unscrubbed state lives only in memory within one invocation.

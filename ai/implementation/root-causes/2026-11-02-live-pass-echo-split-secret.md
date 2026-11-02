@@ -33,4 +33,14 @@ The new test above turns green; the companion test "still echoes output that end
 
 ## Review
 
-Status: awaiting review (the independent root-cause reviewer has not run: this evaluator could not start a subagent).
+Status: accepted
+
+Reviewer: the independent root-cause reviewer (a subagent that neither diagnosed these defects nor wrote the runner or its fixes), 2026-11-02, on `e790cb7` in a separate worktree. Common checks, for all five records: the live-pass unit suite is red at `562334d` (pre-fix code, new tests) with exactly the five failures quoted in the records, and green at `e790cb7` (100 passed). Each fix was reverted alone at `e790cb7`: only its own record's tests turned red. The PR's test changes are additions; the one removed line in `exec.unit.test.ts` is the vitest import. `resume.unit.test.ts` is new in this PR (not on `main`). Its switch from `transcript` to `printed` in `661099b` drops only the `$ live-pass …` lines the test writes with its own arguments (the skip reason holds the admin token by design), so it still checks everything the runner prints. No once-green assertion was weakened.
+
+**Verdict: accepted.**
+1. Reproduced: at `562334d` the echo holds `a very-secret-value-123 b\n` while the record holds `a [REDACTED:SECRET] b\n`. With only `lib/exec.mjs` reverted at `e790cb7`, this test is the only failure.
+2. E2 and E3 check out. On `main`, `runCommand` scrubs each `data` chunk on its own, and neither the known-value layer nor `TOKEN_LIKE` nor the bearer pattern matches a fragment. Every link is supported.
+3. The alternatives are ruled out: the whole text is scrubbed in the record, and the 300 ms gap only forces the split.
+4. The fix addresses the cause. It scrubs whole lines (`\n` or `\r`) and flushes the rest at `close`. A `\r\n` split across chunks is handled, and the companion test covers output with no final newline.
+5. Minor: "credential values never contain line ends" holds for the bare value. A value registered with a trailing newline matches across lines only through its trimmed form, which the fix in `2026-11-02-live-pass-scrub-whitespace-value.md` adds. The two fixes belong together.
+6. Minor, accepted trade-off: a partial line (for example an interactive prompt) is echoed only at the next line end or when the command ends.

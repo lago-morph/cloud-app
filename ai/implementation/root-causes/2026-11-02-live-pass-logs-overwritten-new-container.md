@@ -35,4 +35,13 @@ Both tests above turn green; the existing recorder tests stay green; `scripts/li
 
 ## Review
 
-Status: awaiting review (the independent root-cause reviewer has not run: this evaluator could not start a subagent).
+Status: accepted
+
+Reviewer: the independent root-cause reviewer (a subagent that neither diagnosed these defects nor wrote the runner or its fixes), 2026-11-02, on `e790cb7` in a separate worktree. Common checks, for all five records: the live-pass unit suite is red at `562334d` (pre-fix code, new tests) with exactly the five failures quoted in the records, and green at `e790cb7` (100 passed). Each fix was reverted alone at `e790cb7`: only its own record's tests turned red. The PR's test changes are additions; the one removed line in `exec.unit.test.ts` is the vitest import. `resume.unit.test.ts` is new in this PR (not on `main`). Its switch from `transcript` to `printed` in `661099b` drops only the `$ live-pass …` lines the test writes with its own arguments (the skip reason holds the admin token by design), so it still checks everything the runner prints. No once-green assertion was weakened.
+
+**Verdict: accepted.**
+1. Reproduced: both records tests fail at `562334d` as quoted. With only `lib/records.mjs` reverted at `e790cb7`, they fail, and so does `resume.unit.test.ts` › "keeps every container's lines of the append-only logs".
+2. E2 and E3 check out: `sync` on `main` does a plain `put` of the local file, and the work directory is `~/live-pass/records/<runId>`. Every link is supported.
+3. The alternatives are ruled out (E1 inspects the stored object itself).
+4. The fix addresses the cause, not the symptom. A file created in this container is marked unmerged and persisted in `.unmerged.json` (excluded from `markAll`). It is merged with the stored lines before its first upload. `r2Store.get` (`lib/cloudflare.mjs`) returns `null` only on 404 and throws on any other status, so a failed read never leads to an overwrite. A failed `put` after the merge keeps the merged local file dirty, and a container lost before the `put` merges again in the next one. The four-container offline run passes.
+5. Minor, residual: a process killed between the merged `writeFileSync` and `rememberUnmerged()` (two adjacent synchronous writes) would merge the earlier lines twice on the next sync. This is negligible and not a reason to reject.

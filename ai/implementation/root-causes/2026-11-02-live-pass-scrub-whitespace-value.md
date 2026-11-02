@@ -32,4 +32,11 @@ The test above turns green; the other scrubber tests stay green.
 
 ## Review
 
-Status: awaiting review (the independent root-cause reviewer has not run: this evaluator could not start a subagent).
+Status: accepted
+
+Reviewer: the independent root-cause reviewer (a subagent that neither diagnosed these defects nor wrote the runner or its fixes), 2026-11-02, on `e790cb7` in a separate worktree. Common checks, for all five records: the live-pass unit suite is red at `562334d` (pre-fix code, new tests) with exactly the five failures quoted in the records, and green at `e790cb7` (100 passed). Each fix was reverted alone at `e790cb7`: only its own record's tests turned red. The PR's test changes are additions; the one removed line in `exec.unit.test.ts` is the vitest import. `resume.unit.test.ts` is new in this PR (not on `main`). Its switch from `transcript` to `printed` in `661099b` drops only the `$ live-pass …` lines the test writes with its own arguments (the skip reason holds the admin token by design), so it still checks everything the runner prints. No once-green assertion was weakened.
+
+**Verdict: accepted.**
+1. Reproduced: at `562334d` the bare value is unchanged and `rawHits` is `{}`. With only `lib/scrub.mjs` reverted at `e790cb7`, this test is the only failure.
+2. E2 checks out: `live-pass.mjs:80` registers `env[name]` exactly as given, and `add` registered only that form and its URL encoding. E3 supports link 1. As further support, the framework trims token values it reads from settings files (`packages/framework/src/provision/cloudflare/token-sources.ts:73-84`), so a tool can use the bare form. E4 correctly limits the `TOKEN_LIKE` fallback to 40-character shapes; it never feeds `rawSecretHits`.
+3. The fix addresses the cause: the trimmed form and its URL encoding are registered under the same name, subject to `MIN_SECRET_LENGTH`. `rawHits` reads the same map, so the finding counts the bare form too. The added "every registered form in one text" test is an honest addition that also passes on `main`.

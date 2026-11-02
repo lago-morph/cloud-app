@@ -36,4 +36,19 @@ The test's setup passes and its first case ("resumes session 1 in a new containe
 
 ## Review
 
-Status: awaiting review (the independent root-cause reviewer has not run: this evaluator could not start a subagent).
+Status: rejected (back to step 1 of `failure-diagnosis.md`, attempt 2)
+
+Reviewer: the independent root-cause reviewer (a subagent that neither diagnosed these defects nor wrote the runner or its fixes), 2026-11-02, on `e790cb7` in a separate worktree. Common checks, for all five records: the live-pass unit suite is red at `562334d` (pre-fix code, new tests) with exactly the five failures quoted in the records, and green at `e790cb7` (100 passed). Each fix was reverted alone at `e790cb7`: only its own record's tests turned red. The PR's test changes are additions; the one removed line in `exec.unit.test.ts` is the vitest import. `resume.unit.test.ts` is new in this PR (not on `main`). Its switch from `transcript` to `printed` in `661099b` drops only the `$ live-pass …` lines the test writes with its own arguments (the skip reason holds the admin token by design), so it still checks everything the runner prints. No once-green assertion was weakened.
+
+**Verdict: rejected.**
+1. Reproduced: at `562334d` the harness stops with `expected the owner prompt of S8, got exit 3` and the quoted message, and the four-container block is skipped. With only the `checkEnv` change reverted at `e790cb7`, the same setup fails. E2 to E4 check out, and the alternatives are ruled out.
+2. **Major: the fix still leaves a reachable state with the same symptom, so it does not fully remove the cause.** The cause is that `checkEnv` asks for session 1's variables after the owner was told to change them. The fix detects "the S8 prompt was shown" from three proxies: `facts.everydayTokenId`, `done.S8`, or `pending.prompt` on S8. Together they miss the window after the owner's reply:
+   - `engine.answer` (`lib/engine.mjs:196`) removes `prompt` and saves `{ stepId: "S8", part: 1 }`.
+   - Only then does `runStep` → `complete` run `after`/`afterStep`, which takes a snapshot, sets Workers Logs and uploads, and then saves `done.S8`.
+   - S8's `verify` sets `everydayTokenId` only when it finds the token (`lib/steps.mjs:485`, `if (tokens.length >= 1)`). It finds none if the owner replied before the token was listed after `eventually`'s six tries, or if a snapshot failed.
+   - A container lost in that window leaves no prompt, no `done.S8` and no fact.
+   Experiment: the predicate as it stands at `e790cb7`, run on that stored state with session 2's variables, gives `s8Shown: false`, `asSession: 1` and the stops "CLOUDFLARE_BOOTSTRAP_TOKEN is not set; session 1 needs it" and "CLOUDFLARE_API_TOKEN is set in session 1…". That is the same exit 3, and the owner still cannot satisfy it.
+3. Required for the next attempt:
+   - Causal chain link 2 should name every stored state between the moment the S8 prompt is printed and the moment `done.S8` is saved. The proposed fix should then key on S8 having been reached, for example `pending?.stepId === "S8"` at any part, or `done.S8`, or the fact. The prompt is saved before it is printed, so the owner cannot have changed the variables any earlier.
+   - Add a test that resumes from the stored state after the reply (prompt removed, part 1, no `everydayTokenId`) with session 2's variables.
+4. Minor, optional: `checkEnv` tests `!env.CLOUDFLARE_BOOTSTRAP_TOKEN`, but `envProblems` treats a whitespace-only value as unset. Using the same test in both places would avoid a contradictory message.
