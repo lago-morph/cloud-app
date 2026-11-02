@@ -2,7 +2,7 @@
 # that wrote it had no `workflow` token scope; copy it over .github/workflows/release.yml, then
 # delete this one:  git mv -f scripts/ci/staged/release.yml .github/workflows/release.yml
 #
-# Release on a version tag, vX.Y.Z or the release candidate vX.Y.Z-rc.N (docs/RELEASING.md): verify,
+# Release on a version tag, vX.Y.Z or the release candidate vX.Y.Z-rcNN (docs/RELEASING.md): verify,
 # publish the three npm packages with trusted publishing (OIDC, no npm token) and provenance, then
 # create the GitHub release from CHANGELOG.md. A release candidate goes to the npm dist-tag `next`
 # and is a GitHub pre-release; a final version goes to `latest` (DEC-0792).
@@ -12,7 +12,7 @@ name: Release
 
 on:
   push:
-    # `*` matches any characters but `/`, so this also fires for vX.Y.Z-rc.N; release-check refuses
+    # `*` matches any characters but `/`, so this also fires for vX.Y.Z-rcNN; release-check refuses
     # any other tag shape before anything is built or published.
     tags: ["v*.*.*"]
 
@@ -100,7 +100,7 @@ jobs:
       # Trusted publishing needs npm 11.5.1 or later; Node 22.22.0 ships npm 10.
       - run: npm install --global npm@11.21.0
 
-      # A version with -rc. goes to `next` and is a GitHub pre-release; any other to `latest`
+      # A version ending in -rcNN goes to `next` and is a GitHub pre-release; any other to `latest`
       # (release-check's npmTag, DEC-0792). A release candidate never moves `latest`.
       - name: Release notes and dist-tag
         id: meta
@@ -108,7 +108,7 @@ jobs:
           node scripts/release-check.mjs "$GITHUB_REF_NAME" --notes > "$RUNNER_TEMP/notes.md"
           npm_tag="$(node scripts/release-check.mjs "$GITHUB_REF_NAME" --npm-tag)"
           case "$GITHUB_REF_NAME" in
-            *-rc.*) expected=next; prerelease=--prerelease ;;
+            *-rc[0-9][0-9]) expected=next; prerelease=--prerelease ;;
             *) expected=latest; prerelease= ;;
           esac
           if [ "$npm_tag" != "$expected" ]; then

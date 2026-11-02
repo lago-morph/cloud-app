@@ -274,11 +274,11 @@ describe("command line", () => {
 });
 
 describe("release candidates (DEC-0792, docs/RELEASING.md)", () => {
-  it("a starter packed at X.Y.Z-rc.N creates apps that pin exactly X.Y.Z-rc.N, the framework release it was published with", () => {
+  it("a starter packed at X.Y.Z-rcNN creates apps that pin exactly X.Y.Z-rcNN, the framework release it was published with", () => {
     // Characterisation: a repository copy whose starter and template pin are at a release candidate,
-    // as docs/RELEASING.md step 1 sets them. A range such as ^0.2.0 would not select 0.2.0-rc.1, so
+    // as docs/RELEASING.md step 1 sets them. A range such as ^0.2.0 would not select 0.2.0-rc01, so
     // the pin must be the exact pre-release version.
-    const RC = "0.2.0-rc.1";
+    const RC = "0.2.0-rc01";
     const repo = join(root, "repo");
     const pkgDir = join(repo, "packages", "create-prototype-app");
     for (const part of ["bin", "lib", "scripts"]) copyTree(join(PKG_DIR, part), join(pkgDir, part), SKIP);

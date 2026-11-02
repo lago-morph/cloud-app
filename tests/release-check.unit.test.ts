@@ -54,28 +54,30 @@ describe("release-check", () => {
   it("refuses a tag that does not match, a missing or undated section, and a non-semver tag", () => {
     const dated = fixture(`## [${fwVersion}] - 2026-11-01\n`);
     expect(check(dated, "v9.9.9").problems.join("\n")).toMatch(/the tag says 9\.9\.9/);
-    expect(check(dated, "release-1").problems).toEqual(['tag "release-1" is not vX.Y.Z or vX.Y.Z-rc.N (N = 1, 2, 3, … without leading zeros)']);
+    expect(check(dated, "release-1").problems).toEqual(['tag "release-1" is not vX.Y.Z or vX.Y.Z-rcNN (NN = 01 to 99, two digits)']);
     const undated = fixture(`## [${fwVersion}] - unreleased\n`);
     expect(check(undated, `v${fwVersion}`).problems.join("\n")).toMatch(/must be dated/);
     expect(changelogSection("## [1.0.0] - 2026-01-01\n", "0.1.0").error).toMatch(/no "## \[0\.1\.0\]" section/);
   });
 
-  it("accepts a release candidate vX.Y.Z-rc.N whose versions and CHANGELOG section say X.Y.Z-rc.N, and publishes it to the dist-tag next (DEC-0792)", () => {
-    const dir = fixture("## [0.2.0-rc.1] - 2026-11-02\n\n- first candidate\n\n## [0.1.1] - 2026-10-27\n\n- old\n");
-    setVersions(dir, "0.2.0-rc.1");
-    const r = check(dir, "v0.2.0-rc.1");
+  it("accepts a release candidate vX.Y.Z-rcNN whose versions and CHANGELOG section say X.Y.Z-rcNN, and publishes it to the dist-tag next (DEC-0792)", () => {
+    const dir = fixture("## [0.2.0-rc01] - 2026-11-02\n\n- first candidate\n\n## [0.1.1] - 2026-10-27\n\n- old\n");
+    setVersions(dir, "0.2.0-rc01");
+    const r = check(dir, "v0.2.0-rc01");
     expect(r.problems).toEqual([]);
-    expect(r).toMatchObject({ version: "0.2.0-rc.1", prerelease: true, npmTag: "next", notes: "- first candidate" });
-    setVersions(dir, "0.2.0-rc.12");
-    expect(check(fixtureWith(dir, "## [0.2.0-rc.12] - 2026-11-03\n- x\n"), "v0.2.0-rc.12").problems).toEqual([]);
+    expect(r).toMatchObject({ version: "0.2.0-rc01", prerelease: true, npmTag: "next", notes: "- first candidate" });
+    for (const v of ["0.2.0-rc12", "0.2.0-rc99"]) {
+      setVersions(dir, v);
+      expect(check(fixtureWith(dir, `## [${v}] - 2026-11-03\n- x\n`), `v${v}`).problems, v).toEqual([]);
+    }
   });
 
   it("checks a release candidate's tag against the package versions", () => {
-    const dir = fixture("## [0.2.0-rc.2] - 2026-11-02\n- x\n");
-    setVersions(dir, "0.2.0-rc.1");
-    const problems = check(dir, "v0.2.0-rc.2").problems.join("\n");
-    expect(problems).toMatch(/packages\/framework\/package\.json version is "0\.2\.0-rc\.1", the tag says 0\.2\.0-rc\.2/);
-    expect(problems).toMatch(/@lago-morph\/prototype-framework pin is "0\.2\.0-rc\.1"/);
+    const dir = fixture("## [0.2.0-rc02] - 2026-11-02\n- x\n");
+    setVersions(dir, "0.2.0-rc01");
+    const problems = check(dir, "v0.2.0-rc02").problems.join("\n");
+    expect(problems).toMatch(/packages\/framework\/package\.json version is "0\.2\.0-rc01", the tag says 0\.2\.0-rc02/);
+    expect(problems).toMatch(/@lago-morph\/prototype-framework pin is "0\.2\.0-rc01"/);
   });
 
   it("publishes a final version to the dist-tag latest", () => {
@@ -83,17 +85,17 @@ describe("release-check", () => {
     expect(check(dir, `v${fwVersion}`)).toMatchObject({ prerelease: false, npmTag: "latest" });
   });
 
-  it("refuses a malformed release-candidate tag, and any pre-release part other than rc.N", () => {
-    const dir = fixture("## [0.2.0-rc.1] - 2026-11-02\n- x\n");
-    setVersions(dir, "0.2.0-rc.1");
-    for (const tag of ["v0.2.0-rc01", "v0.2.0-rc.01", "v0.2.0-rc", "v0.2.0-rc.", "v0.2.0-rc.0", "v0.2.0-rc.1.1", "v0.2.0-RC.1", "v0.2.0-beta.1", "v0.2.0-rc.x", "v0.02.0", "v0.2.0rc.1"]) {
-      expect(check(dir, tag).problems, tag).toEqual([`tag ${JSON.stringify(tag)} is not vX.Y.Z or vX.Y.Z-rc.N (N = 1, 2, 3, … without leading zeros)`]);
+  it("refuses a release-candidate tag that is not -rc with exactly two digits 01 to 99, and any other pre-release part", () => {
+    const dir = fixture("## [0.2.0-rc01] - 2026-11-02\n- x\n");
+    setVersions(dir, "0.2.0-rc01");
+    for (const tag of ["v0.2.0-rc.1", "v0.2.0-rc1", "v0.2.0-rc00", "v0.2.0-rc100", "v0.2.0-rc.01", "v0.2.0-rc", "v0.2.0-rc0", "v0.2.0-RC01", "v0.2.0-rc01.1", "v0.2.0-beta01", "v0.2.0-rcxx", "v0.02.0", "v0.2.0rc01"]) {
+      expect(check(dir, tag).problems, tag).toEqual([`tag ${JSON.stringify(tag)} is not vX.Y.Z or vX.Y.Z-rcNN (NN = 01 to 99, two digits)`]);
     }
   });
 
   it("marks a version with a pre-release part as a prerelease", () => {
-    const dir = fixture(`## [${fwVersion}-rc.1] - 2026-11-01\n- x\n`);
+    const dir = fixture(`## [${fwVersion}-rc01] - 2026-11-01\n- x\n`);
     // The files say fwVersion, so the versions do not match; the classification still holds.
-    expect(check(dir, `v${fwVersion}-rc.1`).prerelease).toBe(true);
+    expect(check(dir, `v${fwVersion}-rc01`).prerelease).toBe(true);
   });
 });

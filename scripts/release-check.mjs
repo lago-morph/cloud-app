@@ -5,20 +5,20 @@
 //        node scripts/release-check.mjs <tag> --npm-tag  also print the npm dist-tag: next or latest
 // The framework, the create starter, the template's framework pin and the Claude Code plugin are
 // released together at one version; the tag is `v<version>`. A version is X.Y.Z, or a release
-// candidate X.Y.Z-rc.N (N = 1, 2, 3, … without leading zeros), published to the dist-tag `next`
-// and never to `latest` (DEC-0792, docs/RELEASING.md "Release candidates").
+// candidate X.Y.Z-rcNN (NN = 01 to 99, always two digits, so rc01…rc99 sort in order), published
+// to the dist-tag `next` and never to `latest` (DEC-0792, docs/RELEASING.md "Release candidates").
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const FRAMEWORK = "@lago-morph/prototype-framework";
 
-/** `vX.Y.Z` or `vX.Y.Z-rc.N`: numbers without leading zeros, N at least 1 (DEC-0792). */
-const TAG = /^v((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-rc\.[1-9]\d*)?)$/;
+/** `vX.Y.Z` or `vX.Y.Z-rcNN`: X, Y, Z without leading zeros; NN exactly two digits, 01 to 99 (DEC-0792). */
+const TAG = /^v((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-rc(?:0[1-9]|[1-9]\d))?)$/;
 
-/** The npm dist-tag a version is published to: `next` for a release candidate, else `latest`. */
+/** The npm dist-tag a version is published to: `next` for a release candidate (`-rcNN`), else `latest`. */
 export function npmTag(version) {
-  return version.includes("-rc.") ? "next" : "latest";
+  return /-rc\d\d$/.test(version) ? "next" : "latest";
 }
 
 /** Every version that must equal the tag's, as [where, value]. */
@@ -51,7 +51,7 @@ export function changelogSection(changelog, version) {
 /** Problems with releasing `tag` from `repo`; empty when it may be released. */
 export function check(repo, tag) {
   const m = TAG.exec(tag);
-  if (m === null) return { problems: [`tag ${JSON.stringify(tag)} is not vX.Y.Z or vX.Y.Z-rc.N (N = 1, 2, 3, … without leading zeros)`] };
+  if (m === null) return { problems: [`tag ${JSON.stringify(tag)} is not vX.Y.Z or vX.Y.Z-rcNN (NN = 01 to 99, two digits)`] };
   const version = m[1];
   const problems = versions(repo)
     .filter(([, v]) => v !== version)
