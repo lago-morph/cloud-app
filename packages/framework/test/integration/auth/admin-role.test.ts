@@ -1,9 +1,13 @@
 /**
- * Admins by role, anyone who signs in is a user (DEC-0521, DEC-0522, DEC-0524, DEC-0525), with the
- * stub login provider, locally: AUTH-AC-003 (docs/components/auth.md) and E2E-007's local
- * in-process run (docs/acceptance/e2e-scenarios.md). A grant or revoke through
- * `TestApp.grantRole`/`revokeRole` changes the level on the next request of the same session,
- * with no new login and no rebuild. Configuration holds no admins or users list.
+ * Admins by role, anyone who signs in is a user, with the stub login provider, locally: AUTH-AC-003's
+ * stub clause (docs/components/auth.md: "The same holds with `stubLoginProvider`, `loginWithStub`,
+ * `grantRole` and `revokeRole`"). A grant or revoke through `TestApp.grantRole`/`revokeRole` changes
+ * the level at the first request after the role refresh (PAR-425) of the same session, with no new
+ * login and no rebuild. Configuration holds no admins or users list.
+ *
+ * E2E-007 (a role from account membership; a change shows at the next sign-in, DEC-0703, DEC-0791) is
+ * tested in tests/compliance/e2e/E2E-007-E2E-018-signin.spec.ts. The stub's `grantRole` is no
+ * membership change, so the last test here is tagged AUTH-AC-003, not E2E-007 (DEC-0759 superseded).
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { tag } from "../../../../../tests/support/tags.js";
@@ -51,8 +55,8 @@ describe("the admin role", () => {
   });
 });
 
-describe("E2E-007 becoming an admin (local, in-process)", () => {
-  it(tag("E2E-007", "local: log in, copy the ID from /api/auth/me, grant the admin role: admin after the next role refresh and not before"), async () => {
+describe("becoming an admin through the stub (local, in-process)", () => {
+  it(tag("AUTH-AC-003", "stub: log in, copy the ID from /api/auth/me, grantRole: admin after the next role refresh, with no new login"), async () => {
     // 1. Log in to a stage.
     const stage = await newApp({ stubLoginProvider: true });
     await stage.loginWithStub("e2e007-person", { displayName: "Person" });
@@ -63,7 +67,7 @@ describe("E2E-007 becoming an admin (local, in-process)", () => {
     expect(typeof copied).toBe("string");
     // Not admin before.
     await expectError(await stage.request("/api/admin-only"), "AUTH.FORBIDDEN");
-    // 3. Grant the role (on a stage: `admins grant <address>`); no redeploy, no new login.
+    // 3. Grant the role through the stub; no redeploy, no new login.
     await stage.grantRole(copied as string, "admin");
     stage.clock.advance(REFRESH_DUE_MS);
     expect(await me(stage)).toStrictEqual({ level: "admin", id: copied, displayName: "Person" });
