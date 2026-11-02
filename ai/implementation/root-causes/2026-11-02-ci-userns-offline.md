@@ -77,7 +77,7 @@ The last green run's job env shows `IDS: SKILL-AC-001,…,SKILL-AC-008` and `DIR
 
 ### E4. The error is printed by `unshare` itself, after `unshare(2)` succeeded and before `offline.sh` ran
 
-- util-linux `unshare -r` (Ubuntu 24.04 ships util-linux 2.39.3, the same version as this sandbox) calls `unshare(2)` and then writes `deny` to `/proc/self/setgroups` and `0 <uid> 1` to `/proc/self/uid_map`. A failed `unshare(2)` prints `unshare: unshare failed: <errno>`. A failed map write prints `unshare: write failed <file>: <errno>`. The observed message is the second form for `uid_map`. So the namespace was created, the setgroups write passed, and the `uid_map` write was refused with EPERM.
+- util-linux `unshare -r` (Ubuntu 24.04 ships util-linux 2.39.3, the same version as this sandbox) calls `unshare(2)` and then writes `0 <uid> 1` to `/proc/self/uid_map`, before `/proc/self/setgroups` and `gid_map` (order corrected in attempt 2, per the reviewer's strace). A failed `unshare(2)` prints `unshare: unshare failed: <errno>`. A failed map write prints `unshare: write failed <file>: <errno>`. The observed message is the second form for `uid_map`. So the namespace was created and the first map write, `uid_map`, was refused with EPERM.
 - Experiment, to show that the message tells the two cases apart (this sandbox; a nested user namespace with `max_user_namespaces=0`, so nothing else is affected):
   ```
   $ unshare -Ur sh -c 'echo 0 > /proc/sys/user/max_user_namespaces && unshare -rn true; echo inner_rc=$?'
@@ -165,7 +165,7 @@ Workflow change only; no test or framework change. The owner installs it (the se
        sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
        unshare -rn sh scripts/offline.sh cat /proc/self/uid_map /proc/net/dev
    ```
-   - The `sysctl -n` line reads the value that link 4 needs. It fails loudly if the key does not exist on the runner kernel, which would falsify the diagnosis.
+   - The `sysctl -n` line reads the value that link 4 needs. (Corrected in attempt 2: inside `echo "$(...)"` a missing key would not fail the step; attempt 2's step reads it in a command of its own.)
    - The last line runs the exact wrapper the tests use, without sudo, and shows the namespace's map and its only interface. A green step means the namespace, the map and loopback-up all work before ten minutes of tests are spent.
 2. **`release.yml`, job `verify`: the same step, in the same place (after setup-node, before `npm ci`).** The release job runs every local criterion and scenario with no `--only`, so CLI-AC-002, E2E-001 and LOCAL-AC-001 would fail the next release tag the same way. No release has run since v0.1.1, so this has not been observed yet.
 3. **Why this addresses the cause and not the symptom.** The cause is the runner's LSM policy refusing capabilities in the new user namespace. Setting the documented knob to 0 restores the kernel's default rule, under which the namespace creator is root inside it. That is the condition the tests already assume (E5). The tests keep cutting networking the way rule 9 requires; nothing is skipped, weakened or run with sudo. The change is limited to an ephemeral, single-tenant hosted VM that is discarded after the job.
@@ -218,3 +218,129 @@ Reviewer: independent root-cause reviewer subagent (`failure-diagnosis.md`, step
 3. **Factual errors to correct (minor):**
    - E4 says `unshare -r` writes `setgroups` and then `uid_map`, and that "the setgroups write passed". util-linux 2.39.3 writes `uid_map` first (strace above), so nothing about `setgroups` is shown. The conclusion (`unshare(2)` succeeded, and the first map write got EPERM) is unchanged.
    - The proposed step says the `sysctl -n` line "fails loudly if the key does not exist". It does not: in `echo "before: $(sysctl -n …)"`, GitHub's `bash -e` does not catch a failed command substitution in a command's arguments, so the step prints `before: ` and goes on. Only the `sudo sysctl -w` line would then fail. Read the value in its own command (for example `v=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns)` and then `echo "before: $v"`), or test it explicitly, so a missing key fails at the line that states it.
+
+
+## Attempt 2
+
+Author: the same diagnosing subagent, after the review above rejected attempt 1 because link 4 was unproven. This attempt adds one evidence run on the real runner and corrects the two factual errors. Everything in attempt 1 that the review accepted still stands and is not repeated here.
+
+### Symptom
+
+Unchanged from attempt 1: CLI-AC-002, E2E-001 and LOCAL-AC-001 fail in `ci.yml` `compliance` with `unshare: write failed /proc/self/uid_map: Operation not permitted` (jobs 124629947865, 125067753380, 125065874957). In #166 the failure also shows as an uncaught EPIPE at `packages/framework/test/fixtures/support/app.ts:215`.
+
+### Evidence
+
+**E7. A probe on the real runner reproduces the failure and the fix.** I ran it from a throwaway branch, `v0.2.0/ci-userns-probe` (e50c64a), through throwaway PR #168 ("THROWAWAY probe, do not merge"), which was closed unmerged after the log was read. The branch is listed for deletion in `ai/branch-cleanup.md`.
+- **How it ran:** `ci.yml` runs only on `pull_request`, and its `classify` job runs `node scripts/ci/classify.mjs` from the PR's merge commit. On `GITHUB_ACTIONS=true`, the probe's `classify.mjs` ran `scripts/ci/userns-probe.sh`, then exited 1 on purpose, so `checks` and `compliance` were skipped. The probe runs each command on its own and prints its exit status.
+- **Where it ran:** run 41390447617, job 125100444324 (classify), 2026-11-02 04:48Z, region eastus3, image `ubuntu-24.04` **20261025.353.1**, provisioner 20261021.618. This is the same image and provisioner as the last green job and all three failures (E1).
+- **Log excerpt** (timestamps removed):
+
+```
+=== PROBE $ uname -a
+Linux runnervm48cm3 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+=== PROBE $ cat /etc/os-release
+PRETTY_NAME="Ubuntu 24.04.5 LTS"
+=== PROBE $ id
+uid=1001(runner) gid=1001(runner) groups=1001(runner),4(adm),100(users),118(docker),999(systemd-journal)
+=== PROBE $ unshare --version
+unshare from util-linux 2.39.3
+=== PROBE $ sysctl -n kernel.apparmor_restrict_unprivileged_userns
+1
+=== PROBE exit status: 0
+=== PROBE $ cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns
+1
+=== PROBE $ cat /proc/sys/user/max_user_namespaces
+58109
+=== PROBE $ cat /sys/module/apparmor/parameters/enabled
+Y
+=== PROBE $ unshare -rn true
+unshare: write failed /proc/self/uid_map: Operation not permitted
+=== PROBE exit status: 1
+=== PROBE $ unshare -rn sh scripts/offline.sh cat /proc/self/uid_map /proc/net/dev
+unshare: write failed /proc/self/uid_map: Operation not permitted
+=== PROBE exit status: 1
+=== PROBE $ sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+kernel.apparmor_restrict_unprivileged_userns = 0
+=== PROBE exit status: 0
+=== PROBE $ sysctl -n kernel.apparmor_restrict_unprivileged_userns
+0
+=== PROBE $ unshare -rn true
+=== PROBE exit status: 0
+=== PROBE $ unshare -rn sh scripts/offline.sh cat /proc/self/uid_map /proc/net/dev
+         0       1001          1
+Inter-|   Receive                                                |  Transmit
+ face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+    lo:       0       0    0    0    0     0          0         0        0       0    0    0    0     0       0          0
+=== PROBE exit status: 0
+=== PROBE $ unshare -rn sh scripts/offline.sh node -e "fetch('https://api.cloudflare.com/client/v4/').then(...)"
+unreachable: EAI_AGAIN
+=== PROBE exit status: 0
+=== PROBE $ sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=1
+kernel.apparmor_restrict_unprivileged_userns = 1
+=== PROBE $ unshare -rn true
+unshare: write failed /proc/self/uid_map: Operation not permitted
+=== PROBE exit status: 1
+```
+
+- **What it shows:**
+  - The knob exists and is `1`, AppArmor is enabled, and user namespaces are not otherwise limited (`max_user_namespaces` 58109).
+  - As the unprivileged `runner` user (uid 1001), `unshare -rn` fails with exactly the CI message.
+  - With the knob at `0`, the exact wrapper the tests use works without sudo. Its map is `0 1001 1`, its only interface is `lo`, and E2E-001's own reachability probe gets `EAI_AGAIN`, which means no network.
+  - Setting the knob back to `1` brings the failure back. The knob alone switches the failure on and off, on this image.
+
+**Corrections to attempt 1 (from the review):**
+- **E4:** util-linux 2.39.3 writes `/proc/self/uid_map` first, then `setgroups`, then `gid_map`, so nothing about `setgroups` was shown. The conclusion is unchanged: `unshare(2)` succeeded, and the first map write got EPERM. E7 confirms it on the runner with the same util-linux 2.39.3. The E4 text is corrected in place.
+- **The proposed step:** `echo "before: $(sysctl -n …)"` would not fail on a missing key under `bash -e`. The step below reads the value in a command of its own.
+
+### Causal chain
+
+Links 1, 2, 3 and 5 are as in attempt 1, which the review accepted. Link 4 is now directly observed:
+
+4. **On runner image 20261025.353.1, `kernel.apparmor_restrict_unprivileged_userns` is `1`. With it at `1`, `unshare -rn` as uid 1001 fails at the `uid_map` write with EPERM. With it at `0`, the same command and the offline wrapper succeed. Setting it back to `1` restores the failure.** Evidence: E7, which supports both directions on the real runner. The mechanism is the same as in attempt 1: the AppArmor `unprivileged_userns` mediation denies capabilities in the new namespace, and `map_write` needs `CAP_SYS_ADMIN` there. The external corroboration in E4 is now supplementary.
+
+No link is unproven.
+
+### Alternatives ruled out
+
+As in attempt 1, which the review accepted. E7 adds two more:
+- **A kernel or user-namespace limit other than AppArmor:** `max_user_namespaces` is 58109, and with only the AppArmor knob changed, `unshare -rn` works.
+- **A probe-only artefact:** the probe ran on the same image and provisioner as the failing jobs, and `unshare` printed the CI's exact message.
+
+### Proposed fix
+
+Unchanged in substance from attempt 1, with the value read in its own command; E7 has already run this sequence on the real image. Add this step to `ci.yml` job `compliance`, and to `release.yml` job `verify`, right after `actions/setup-node` and before `npm ci`:
+
+```yaml
+# Ubuntu 24.04's AppArmor denies capabilities inside unprivileged user namespaces
+# (kernel.apparmor_restrict_unprivileged_userns=1 on this image), so `unshare -rn` cannot write
+# /proc/self/uid_map and every offline test fails (root cause
+# ai/implementation/root-causes/2026-11-02-ci-userns-offline.md). Lift the restriction on this
+# throwaway runner, then prove the offline wrapper works before any test relies on it.
+- name: Allow unprivileged user namespaces (offline tests use unshare -rn)
+  run: |
+    before=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns)
+    echo "kernel.apparmor_restrict_unprivileged_userns before: $before"
+    sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+    unshare -rn sh scripts/offline.sh cat /proc/self/uid_map /proc/net/dev
+```
+
+- **The value is read in its own command:** under GitHub's `bash -e`, a failed `before=$(...)` assignment fails the step at that line, so a missing key would show there.
+- **The other lines:** the `sudo sysctl -w` line is the fix. The `unshare` line proves the wrapper works for the unprivileged user before any test runs.
+- **Why it addresses the cause:** the cause is the knob being `1`, and E7 shows that setting it to `0` is sufficient, on the real image. The tests are unchanged and still cut networking as rule 9 requires: no skip, no sudo for the tests. The narrower per-binary AppArmor profile and the rejected options are as in attempt 1.
+- **Staging:** the fixer stages both files under `scripts/ci/staged/` (DEC-0637 header), and the owner installs them.
+- **Open item:** the EPIPE in `app.ts` `run()` stays separate, as in attempt 1 (E6).
+
+### Verification plan
+
+The fix has already been demonstrated on the real image (E7). The steps below confirm it after it is installed; they no longer test it for the first time.
+- **Fixer, before the owner installs it:**
+  - Add a check to `tests/ci-classify.unit.test.ts`: the `compliance` job of `ci.yml` and the `verify` job of `release.yml` must have a step, before `npm ci`, that reads `kernel.apparmor_restrict_unprivileged_userns` in its own command, sets it to `0` with `sudo sysctl -w`, and runs `unshare -rn sh scripts/offline.sh`. It reads the staged copy when one exists. It is red against the installed workflows and green against the staged ones.
+  - The probe's lines (E7) are the runner-side red and green for the step itself.
+- **Owner, after installing; then the test runner and the evaluator (step 4):**
+  1. The new step's log shows `before: 1`, then `= 0`, then the map `0 1001 1` and only `lo`.
+  2. Re-run `compliance` on a PR that selects CLI-AC-002, E2E-001 and LOCAL-AC-001 (for example, re-run #166's checks against the new base). All three must pass, with no `unshare:` line and no unhandled EPIPE.
+  3. The next RC tag's `release.yml` `verify` job shows the same step output, and its full local compliance run has no `unshare:` failure. PR #167 (0.2.0-rc01) is open: the release fix should be installed before that tag is pushed.
+
+### Review
+
+Status: awaiting review
