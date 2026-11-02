@@ -89,4 +89,24 @@ Out of scope, noted: in state (b) without `everydayTokenId`, S8 is recorded with
 
 ### Review
 
-Status: awaiting review
+Status: accepted
+
+Reviewer: the same independent root-cause reviewer as attempt 1 (it did not diagnose the defect or write the fix), 2026-11-02, on `8f2d804` in a separate worktree.
+
+**Verdict: accepted.**
+1. The attempt-1 reproduction is now covered. I re-ran the experiment against the `s8Reached` and `bootstrapSet` expressions as they stand at `8f2d804`, with session 2's variables, in these states:
+   - S8 pending at part 0 before its prompt;
+   - (a), the prompt waiting;
+   - (b), the reply saved, both with and without `everydayTokenId`;
+   - (c), `done.S8` set with S10 pending;
+   - S8 skipped.
+
+   Each state gives `asSession` 2 and no stops. A blank `CLOUDFLARE_BOOTSTRAP_TOKEN` gives the same result. With session 1's variables, every one of these states stays `asSession` 1 with no stops. Before S8 (E-1 pending), session 2's variables are still refused, which is correct.
+2. Link 2's list of states is complete. `skip` clears `pending` only for the step it skips, and S8 skipped sets `done.S8` in the same save. `retry` clears `pending` only for a blocked step, and S8 is not blocking. After `done.S8`, every later state in session 1 keeps `done.S8`, and the checkpoint phase resumes as session 2. No stored state has S8 reached that the new predicate misses.
+3. The fix addresses the cause: the switch now follows the moment the prompt is saved, which is before the owner can act on it. The blank-token check matches `envProblems`. The alternatives are ruled out with evidence.
+4. The tests:
+   - The full suite at `8f2d804` passes, 101/101.
+   - With only `live-pass.mjs` restored to `ce486d0` (the attempt-1 fix), the new test is the only failure, with exit 3 and "CLOUDFLARE_BOOTSTRAP_TOKEN is not set; session 1 needs it".
+   - The new test's stored state matches what `engine.answer` saves. It leaves out only the failed check's observations, which `checkEnv` does not read.
+   - The attempt's test change is 66 added lines and nothing removed, so no once-green assertion was changed.
+5. Agreed with the out-of-scope note: in (b) without the token ID, R1's BLOCKED path (`retry`/`skip`) is the documented outcome, not this defect.
