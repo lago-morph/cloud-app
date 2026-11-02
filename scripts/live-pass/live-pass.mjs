@@ -112,12 +112,15 @@ const runnerSha = (() => {
 })();
 
 /**
- * Session 1 accepts session 2's variables from the moment the S8 prompt (page 2) has been shown: it
- * tells the owner to change them before replying, so a container lost before the reply resumes with them.
+ * Session 1 accepts session 2's variables once S8 (page 2) has been reached: its prompt, saved before it
+ * is printed, tells the owner to change them before replying. Every stored state from then on counts:
+ * S8 pending in any part (prompt waiting, or the reply saved before S8 completes), S8 done, or the
+ * everyday token's ID known. A container lost in any of them resumes with session 2's variables.
  */
 function checkEnv(session, state) {
-  const s8Shown = !!state?.facts?.everydayTokenId || state?.done?.S8 !== undefined || (state?.pending?.stepId === "S8" && state.pending.prompt !== undefined);
-  const asSession = session === 1 && s8Shown && !env.CLOUDFLARE_BOOTSTRAP_TOKEN ? 2 : session;
+  const s8Reached = !!state?.facts?.everydayTokenId || state?.done?.S8 !== undefined || state?.pending?.stepId === "S8";
+  const bootstrapSet = typeof env.CLOUDFLARE_BOOTSTRAP_TOKEN === "string" && env.CLOUDFLARE_BOOTSTRAP_TOKEN.trim() !== ""; // as envProblems tests it
+  const asSession = session === 1 && s8Reached && !bootstrapSet ? 2 : session;
   const { stop, warn } = envProblems(asSession, env);
   for (const w of warn) say(`warning: ${w}`);
   if (stop.length > 0) fail(3, `the environment is not as the runbook says for session ${session}:\n  - ${stop.join("\n  - ")}\nChange the environment settings, then start a new session (runbook section 5).`);

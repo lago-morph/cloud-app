@@ -52,3 +52,41 @@ Reviewer: the independent root-cause reviewer (a subagent that neither diagnosed
    - Causal chain link 2 should name every stored state between the moment the S8 prompt is printed and the moment `done.S8` is saved. The proposed fix should then key on S8 having been reached, for example `pending?.stepId === "S8"` at any part, or `done.S8`, or the fact. The prompt is saved before it is printed, so the owner cannot have changed the variables any earlier.
    - Add a test that resumes from the stored state after the reply (prompt removed, part 1, no `everydayTokenId`) with session 2's variables.
 4. Minor, optional: `checkEnv` tests `!env.CLOUDFLARE_BOOTSTRAP_TOKEN`, but `envProblems` treats a whitespace-only value as unset. Using the same test in both places would avoid a contradictory message.
+
+## Attempt 2
+
+Author: the same diagnosing test author, after the review above. Local only: no Cloudflare calls.
+
+### Symptom
+The symptom is the same as attempt 1's: `resume` exits 3 with "the environment is not as the runbook says for session 1" after the owner followed the S8 prompt. This time it happens on a state that the attempt-1 fix (`e790cb7`) does not cover: the owner's reply was saved, but S8 was not yet recorded (reproduced by the reviewer, and by E6 below).
+
+### Evidence
+- E5. The reviewer's reproduction holds. `lib/engine.mjs` `answer` pushes the reply into `pending.record.owner`, removes `prompt` and `askedAt`, sets `part: 1` and saves. Only after that does `runStep` → `complete` run, and `complete` ends by saving `done.S8`. S8's `verify` sets `everydayTokenId` only when it lists the token (`lib/steps.mjs`, `if (tokens.length >= 1)`).
+- E6. New test `scripts/live-pass/resume.unit.test.ts` › "resume in session 1 after the owner's S8 reply was saved but before S8 was recorded › accepts session 2's variables, finishes S8 and asks S10". It runs session 1 to the S8 prompt, then writes the stored state that `answer` saves (reply recorded, no prompt, part 1, no `everydayTokenId`, no `done.S8`). It sets session 2's variables and runs `resume` in a new container. On the attempt-1 fix (`e790cb7`) it fails with exit 3: "CLOUDFLARE_BOOTSTRAP_TOKEN is not set; session 1 needs it" and "CLOUDFLARE_API_TOKEN is set in session 1 …".
+
+### Causal chain
+2. These are every stored state from the moment the S8 prompt is printed until `done.S8` is saved:
+   - (a) `pending.stepId === "S8"` with `prompt` set (saved before the prompt is printed);
+   - (b) `pending.stepId === "S8"`, part 1, `prompt` removed, the reply recorded (saved by `answer`), with or without `everydayTokenId`;
+   - (c) `done.S8` set and `pending` cleared (saved by `complete`).
+
+   The owner can have changed the variables in every one of them. They cannot have changed them earlier, because the prompt is saved before it is printed. Attempt 1 keyed on `prompt` being set, so it missed (b) when the token check found no token.
+
+### Alternatives ruled out
+- Keying on the prompt, as attempt 1 did, misses state (b) (E6).
+- Keying on `everydayTokenId` alone misses (a), and also (b) whenever the token check found no token (E5).
+- Accepting session 2's variables earlier than S8 would accept them before the owner was told to change them. Session 1's commands up to S5 need the starter tokens, so that is wrong.
+
+### Proposed fix
+`checkEnv` (`live-pass.mjs`) accepts session 2's variables in session 1 once S8 has been reached: `pending.stepId === "S8"` at any part, or `done.S8`, or `facts.everydayTokenId`. It now treats `CLOUDFLARE_BOOTSTRAP_TOKEN` as set only when it is not blank, the same way `envProblems` does (the reviewer's minor point).
+
+### Verification plan
+- E6's test is red on `e790cb7` and green with the fix.
+- Attempt 1's case ("resumes session 1 in a new container … and asks S8 again") stays green.
+- The whole `scripts/live-pass` suite and `lint-records` are green.
+
+Out of scope, noted: in state (b) without `everydayTokenId`, S8 is recorded with its failed token check, and session 2's R1 then blocks with exit 1, because it cannot match `CLOUDFLARE_API_TOKEN` to an unknown token ID. That is R1's documented BLOCKED path (`retry`/`skip`), not this defect.
+
+### Review
+
+Status: awaiting review

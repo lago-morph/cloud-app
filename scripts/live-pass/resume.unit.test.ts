@@ -378,3 +378,69 @@ describe("the durable state in the records bucket", () => {
     expect(h.printed.join("\n").includes(admin), "the runner printed the admin token").toBe(false);
   }, 120_000);
 });
+
+// Root-cause record 2026-11-02-live-pass-resume-after-s8-refused.md, attempt 2 (the reviewer's
+// reproduction): the owner replied to S8, the runner saved S8 with its prompt removed (part 1) but
+// found no everyday token yet, and the container was lost before S8 was recorded as done.
+describe("resume in session 1 after the owner's S8 reply was saved but before S8 was recorded", () => {
+  it("accepts session 2's variables, finishes S8 and asks S10", async () => {
+    const h = await harness();
+    const w0: World = h.fw.newWorld(ACCOUNT);
+    w0.members = [
+      { id: "m1", status: "accepted", user: { id: "u-owner", email: "owner@example.com" }, roles: [{ id: "r1", name: "Super Administrator - All Privileges" }] },
+      { id: "m2", status: "accepted", user: { id: "u-tester", email: "tester@example.com" }, roles: [{ id: "r3", name: "HTTP Applications Read" }] },
+    ];
+    const admin = h.fw.addToken(w0, { name: "live-pass-admin", groups: ADMIN_GROUPS, expiresInS: 3 * 86_400 });
+    const boot = h.fw.addToken(w0, { name: "prototype-framework-bootstrap", groups: BOOT_GROUPS, expiresInS: 23 * 3600 });
+    writeFileSync(h.worldFile, JSON.stringify(w0));
+    let env: Record<string, string> = { ...h.base(h.container()), LIVE_PASS_ADMIN_TOKEN: admin, CLOUDFLARE_BOOTSTRAP_TOKEN: boot };
+    const run = (...args: string[]) => {
+      let r = h.run(env, ...args);
+      for (let i = 0; i < 20 && r.status === 11; i++) r = h.run(env, "next");
+      return r;
+    };
+    const prompt = (r: Result, step: string) => {
+      if (r.status !== 10 || !r.out.includes(`OWNER STEP ${step} `)) throw new Error(`expected the owner prompt of ${step}, got exit ${String(r.status)}:\n${h.transcript.join("\n")}`);
+    };
+    prompt(run("start"), "P3");
+    prompt(run("answer", "ok"), "S6");
+    h.change((w) => h.fw.addEvent(w, "prototype-admin", "admin signed in"));
+    prompt(run("answer", "ok"), "S7");
+    h.change((w) => {
+      const db = "db-auth-0001";
+      w.d1.push({ uuid: db, name: "prototype-auth" });
+      w.d1Rows[db] = { users: [], registry: [], codes: [], sign_ins: [] };
+      w.workers["prototype-auth"] = { created_on: "x", modified_on: "x", compatibility_flags: ["nodejs_compat"], observability: null, secrets: [], bindings: [{ type: "d1", name: "DB", id: db }] };
+      for (const b of ["prototype-logs", "sst-state", "prototype-backups"]) w.buckets[b] = { objects: {}, lifecycle: null };
+    });
+    prompt(run("answer", "ok"), "E-1");
+    prompt(run("answer", "ok"), "S8");
+
+    // The state `answer` saves before the step completes (lib/engine.mjs `answer`): the reply is in the
+    // record, the prompt is removed, the next part is 1; S8's check found no token, so no fact.
+    h.change((w) => {
+      const objects = w.buckets["live-pass-records"].objects;
+      const key = Object.keys(objects).find((k) => k.endsWith("/state.json"))!;
+      const s = JSON.parse(objects[key].body);
+      expect(s.pending).toMatchObject({ stepId: "S8", part: 0 });
+      s.pending.record.owner.push({ part: 0, prompt: s.pending.prompt, askedAt: s.pending.askedAt, answer: "ok", answeredAt: new Date().toISOString() });
+      delete s.pending.prompt;
+      delete s.pending.askedAt;
+      s.pending.part = 1;
+      s.revision += 1;
+      expect(s.facts.everydayTokenId).toBeUndefined();
+      expect(s.done.S8).toBeUndefined();
+      objects[key].body = JSON.stringify(s);
+      // Page 2 made the everyday token; the owner changed the variables as the prompt said.
+      env = { ...h.base(h.container()), LIVE_PASS_ADMIN_TOKEN: admin, CLOUDFLARE_API_TOKEN: h.fw.addToken(w, { name: "prototype-framework", groups: EVERYDAY_GROUPS }) };
+    });
+    const r = run("resume");
+    expect(r.status, h.transcript.join("\n")).toBe(10);
+    expect(r.out).toContain("OWNER STEP S10 ");
+    const state = JSON.parse(Object.entries(h.records()).find(([k]) => k.endsWith("/state.json"))![1]);
+    // S8 is recorded with the reply saved before the loss (its token check ran then, and is not repeated).
+    expect(state.done.S8).toBeDefined();
+    const s8 = Object.entries(h.records()).filter(([k]) => /\/steps\/\d+-S8\.json$/.test(k)).map(([, b]) => JSON.parse(b)).at(-1);
+    expect(s8.owner.map((o: { answer: string }) => o.answer)).toEqual(["ok"]);
+  }, 180_000);
+});
