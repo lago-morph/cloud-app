@@ -1,12 +1,18 @@
-# STAGED COPY (DEC-0637): this file replaces .github/workflows/release.yml. The session that wrote
-# it had no `workflow` token scope; copy it over .github/workflows/release.yml, then delete this one.
+# STAGED COPY (DEC-0637, DEC-0792): this file replaces .github/workflows/release.yml. The session
+# that wrote it had no `workflow` token scope. From a clean checkout of `main`, the owner moves it
+# into place (this copy goes in the same commit) with:
+#   git switch main && git pull --ff-only && git mv -f scripts/ci/staged/release.yml .github/workflows/release.yml && git commit -m "Install the release-candidate release workflow (DEC-0792)" && git push origin main
 #
-# Release on a version tag (v<semver>): verify, publish both npm packages with trusted publishing
-# (OIDC, no npm token) and provenance, then create the GitHub release from CHANGELOG.md.
+# Release on a version tag, vX.Y.Z or the release candidate vX.Y.Z-rcNN (docs/RELEASING.md): verify,
+# publish the three npm packages with trusted publishing (OIDC, no npm token) and provenance, then
+# create the GitHub release from CHANGELOG.md. A release candidate goes to the npm dist-tag `next`
+# and is a GitHub pre-release; a final version goes to `latest` (DEC-0792).
 # The npm trusted publisher for each package names this file: release.yml. See docs/RELEASING.md.
 # Actions are pinned to full commit SHAs.
 name: Release
 
+# The tag pattern: `*` matches any characters but `/`, so it also fires for vX.Y.Z-rcNN;
+# release-check refuses any other tag shape before anything is built or published.
 on:
   push:
     tags: ["v*.*.*"]
@@ -95,14 +101,23 @@ jobs:
       # Trusted publishing needs npm 11.5.1 or later; Node 22.22.0 ships npm 10.
       - run: npm install --global npm@11.21.0
 
+      # A version ending in -rcNN goes to `next` and is a GitHub pre-release; any other to `latest`
+      # (release-check's npmTag, DEC-0792). A release candidate never moves `latest`.
       - name: Release notes and dist-tag
         id: meta
         run: |
           node scripts/release-check.mjs "$GITHUB_REF_NAME" --notes > "$RUNNER_TEMP/notes.md"
+          npm_tag="$(node scripts/release-check.mjs "$GITHUB_REF_NAME" --npm-tag)"
           case "$GITHUB_REF_NAME" in
-            *-*) echo "npm_tag=next" >> "$GITHUB_OUTPUT"; echo "prerelease=--prerelease" >> "$GITHUB_OUTPUT" ;;
-            *) echo "npm_tag=latest" >> "$GITHUB_OUTPUT"; echo "prerelease=" >> "$GITHUB_OUTPUT" ;;
+            *-rc[0-9][0-9]) expected=next; prerelease=--prerelease ;;
+            *) expected=latest; prerelease= ;;
           esac
+          if [ "$npm_tag" != "$expected" ]; then
+            echo "release-check named dist-tag $npm_tag for $GITHUB_REF_NAME, expected $expected" >&2
+            exit 1
+          fi
+          echo "npm_tag=$npm_tag" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
 
       - run: npm ci
 
