@@ -8,3 +8,4 @@
   - A brief gives file paths, not file contents. Subagents return short summaries and put the details in files in the repository.
   - Independent items run in parallel, each in its own worktree and branch, when they don't touch the same files and that saves wall-clock time. Bounded research is delegated, and only its conclusions come back.
 - For any change to code or tests, follow the testing-standards skill: `.claude/skills/testing-standards/SKILL.md`.
+- Framework releases go out as release candidates `X.Y.Z-rc.N` (npm dist-tag `next`) first, then as the final `X.Y.Z`, per `docs/RELEASING.md` "Release candidates" (DEC-0792). Apps built with the framework are not affected.

@@ -7400,3 +7400,17 @@ Sessions last 12 hours (PAR-250, was 7 days). A role change or removal shows at 
 - **Change.** `SESSION_LIFETIME_SECONDS` is 12 hours; PAR-250's row, `auth.md` §2, the skill's references and the template README say so. E2E-007 now states and tests this rule: an existing session keeps its level after a role refresh, a new sign-in shows the new level, a removed member's new sign-in is refused, and a session ends just after 12 hours (in-process, on the test clock).
 - **To reverse:** set PAR-250 back, or make the role refresh re-read `/memberships` (owner question 56, option b), which needs a stored token or an admin-app update path.
 Item: owner decisions on v0.2.0.
+
+## Owner decision on framework releases (2026-11-01)
+
+### DEC-0792 — Every framework release goes out first as release candidates `X.Y.Z-rc.N`, then as the final `X.Y.Z`; apps are not affected
+Origin: owner · Status: accepted · Affects: `docs/RELEASING.md` ("Release candidates"), `scripts/release-check.mjs`, `.github/workflows/release.yml` (staged as `scripts/ci/staged/release.yml` until the owner applies it), `CLAUDE.md`, `tests/release-check.unit.test.ts`, `packages/create-prototype-app/test/create.unit.test.ts`, `tests/compliance/e2e/E2E-001-E2E-003.spec.ts`
+
+From now on every release of the framework's own packages (`@lago-morph/prototype-framework`, `@lago-morph/create-prototype-app`, `@lago-morph/prototype-framework-skill`) and of the `prototype-framework` plugin is published first as release candidates, `X.Y.Z-rc.N` with git tag `vX.Y.Z-rc.N`, as many as needed, and then as the final `X.Y.Z`. Apps built with the framework are not affected: the product skill, the template's app versioning and the app release guidance do not change.
+
+- **Format.** `N` is 1, 2, 3, … with no leading zeros; no other pre-release form is used. `release-check.mjs` accepts only `vX.Y.Z` and `vX.Y.Z-rc.N`, and checks the tag against every package version, the template's framework pin and the plugin version.
+- **npm.** A candidate is published to the dist-tag `next`, never `latest`; the final version, with the same content and version `X.Y.Z`, to `latest`. A candidate's GitHub release is a pre-release.
+- **CHANGELOG.** One dated `## [X.Y.Z-rc.N]` section per candidate (changes since the previous one); the final `## [X.Y.Z]` section holds the complete notes.
+- **Pins.** The starter and the template pin the framework at the exact version they were released with, a candidate included; a range such as `^0.2.0` would not select `0.2.0-rc.1`. The starter already did (its default spec is its own version, and `prepack` refuses a template pin that differs); a test now shows it at a candidate version. E2E-001's check that the template pins an exact version now also accepts `X.Y.Z-rc.N`.
+- **To reverse:** release `X.Y.Z` directly; `release-check.mjs` and the workflow still handle a final version as before.
+Item: owner decision of 2026-11-01 (pre-RC housekeeping).

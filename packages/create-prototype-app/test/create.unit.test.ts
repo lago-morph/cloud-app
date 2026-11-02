@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { appNameFrom, copySkill, create, firstCommit, FRAMEWORK_PACKAGE, initRepo, localSetupLines, nextStep, packageNameFrom, SKILL_TARGET } from "../lib/create.mjs";
+import { appNameFrom, copySkill, copyTree, create, firstCommit, FRAMEWORK_PACKAGE, initRepo, localSetupLines, nextStep, packageNameFrom, SKILL_TARGET, SKIP } from "../lib/create.mjs";
 import { bundle } from "../scripts/bundle.mjs";
 
 const PKG_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -270,5 +270,34 @@ describe("command line", () => {
     const r = run("full", "--no-install");
     expect(r.status).toBe(1);
     expect(r.stderr).toMatch(/not empty; nothing was changed/);
+  });
+});
+
+describe("release candidates (DEC-0792, docs/RELEASING.md)", () => {
+  it("a starter packed at X.Y.Z-rc.N creates apps that pin exactly X.Y.Z-rc.N, the framework release it was published with", () => {
+    // Characterisation: a repository copy whose starter and template pin are at a release candidate,
+    // as docs/RELEASING.md step 1 sets them. A range such as ^0.2.0 would not select 0.2.0-rc.1, so
+    // the pin must be the exact pre-release version.
+    const RC = "0.2.0-rc.1";
+    const repo = join(root, "repo");
+    const pkgDir = join(repo, "packages", "create-prototype-app");
+    for (const part of ["bin", "lib", "scripts"]) copyTree(join(PKG_DIR, part), join(pkgDir, part), SKIP);
+    writeFileSync(join(pkgDir, "package.json"), JSON.stringify({ ...SELF, version: RC }, null, 2));
+    copyTree(TEMPLATE, join(repo, "apps", "template"), SKIP);
+    const tplFile = join(repo, "apps", "template", "package.json");
+    const tpl = JSON.parse(readFileSync(tplFile, "utf8")) as { dependencies: Record<string, string> };
+    tpl.dependencies[FRAMEWORK_PACKAGE] = RC;
+    writeFileSync(tplFile, JSON.stringify(tpl, null, 2));
+    copyTree(SKILL, join(repo, "skill"), SKIP);
+
+    // prepack, as `npm publish` runs it: it refuses a template pin that differs from the package's version.
+    const packed = spawnSync(process.execPath, [join(pkgDir, "scripts", "bundle.mjs")], { encoding: "utf8" });
+    expect(packed.status, packed.stderr).toBe(0);
+    expect((JSON.parse(readFileSync(join(pkgDir, "template", "package.json"), "utf8")) as { dependencies: Record<string, string> }).dependencies[FRAMEWORK_PACKAGE]).toBe(RC);
+
+    const r = spawnSync(process.execPath, [join(pkgDir, "bin", "create-prototype-app.js"), "rcapp", "--no-install", "--no-skill"], { cwd: root, encoding: "utf8", env: { ...process.env, ...GIT_ENV } });
+    expect(r.status, r.stderr).toBe(0);
+    const pkg = JSON.parse(readFileSync(join(root, "rcapp", "package.json"), "utf8")) as { dependencies: Record<string, string> };
+    expect(pkg.dependencies[FRAMEWORK_PACKAGE]).toBe(RC);
   });
 });
