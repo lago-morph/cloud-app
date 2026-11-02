@@ -19,7 +19,7 @@
     "reset-local": "prototype-framework reset-local"
   },
   "dependencies": {
-    "@lago-morph/prototype-framework": "0.1.1",
+    "@lago-morph/prototype-framework": "0.2.0-rc01",
     "zod": "4.6.7"
   },
   "devDependencies": {
