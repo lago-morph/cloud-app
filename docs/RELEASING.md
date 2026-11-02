@@ -9,6 +9,8 @@ What is released, together and at one version (`v<version>` tag):
 | `@lago-morph/prototype-framework-skill` | npm | the skill alone, for a cloud environment's setup script (see its README) |
 | Claude Code plugin `prototype-framework` | this repository (`.claude-plugin/marketplace.json`, `skill/`) | `/plugin marketplace add lago-morph/cloud-app`, then `/plugin install prototype-framework@lago-morph` |
 
+Every release of these goes out first as one or more release candidates, `X.Y.Z-rcNN`, and then as the final `X.Y.Z` (see "Release candidates" below, DEC-0792). This applies to the framework's own packages and plugin only: apps built with the framework version and release themselves as before.
+
 `.github/workflows/release.yml` runs on the tag: it verifies, publishes the three packages to npm with trusted publishing (OIDC, no npm token stored anywhere) and provenance, and creates the GitHub release from `CHANGELOG.md`. The plugin needs no publishing: Claude Code reads the marketplace from the repository's default branch (`main`). Why it is set up this way: `ai/implementation/decisions/distribution.md`.
 
 ## Owner steps, once
@@ -39,16 +41,30 @@ What is released, together and at one version (`v<version>` tag):
 
 ## Every release
 
+Each release candidate and each final version goes through these steps, with its own version (`X.Y.Z-rcNN` or `X.Y.Z`); "Release candidates" below says what differs.
+
 1. Set the same version in `packages/framework/package.json`, `packages/create-prototype-app/package.json`, `packages/prototype-framework-skill/package.json`, the `@lago-morph/prototype-framework` pin in `apps/template/package.json`, and `skill/.claude-plugin/plugin.json`; run `npm install` to update `package-lock.json`.
 2. **Cloudflare permissions and account setup.** If the release needs a Cloudflare permission the previous one did not, add it to `EVERYDAY` or `BOOTSTRAP` in `packages/framework/src/provision/cloudflare/permissions.ts` and raise `PERMISSIONS_VERSION` (PAR-331): `cloudflare-setup` then asks for the bootstrap token once and adds the permission to each user's everyday token in place. If it adds an account setup step or changes what one creates, raise `ACCOUNT_SETUP_VERSION` (PAR-332): setup then runs the missing steps once. Each is raised whenever a release needs more, and never lowered. Then regenerate the docs' permission tables (`npm run build -w packages/framework && node scripts/permission-tables.mjs`; a unit test fails until you do) and say in the CHANGELOG section that users must run `npm run cloudflare-setup` again.
-3. In `CHANGELOG.md`, write the section and date it: `## [<version>] - YYYY-MM-DD`.
+3. In `CHANGELOG.md`, write the section and date it: `## [<version>] - YYYY-MM-DD` (for a release candidate, see "Release candidates").
 4. Check, merge to `main`, and tag:
    ```sh
    node scripts/release-check.mjs v<version>
    git tag v<version>
    git push origin v<version>
    ```
-   A version with a pre-release part (`v0.2.0-rc.1`) is published under the npm dist-tag `next` and marked as a GitHub pre-release.
+   A release candidate (`v0.2.0-rc01`) is published under the npm dist-tag `next` and marked as a GitHub pre-release; a final version goes to `latest`.
 5. Watch the **Release** workflow in the Actions tab. Check https://www.npmjs.com/package/@lago-morph/prototype-framework shows the version with a provenance badge.
+
+## Release candidates
+
+From v0.2.0 on, every framework release is published first as release candidates, as many as needed, and then as the final version (owner decision of 2026-11-01, DEC-0792). This covers the three npm packages and the Claude Code plugin above. It does not cover apps built with the framework: the product skill, the template's app versioning and the app release guidance are unchanged.
+
+- **Version.** `X.Y.Z-rcNN`, where `NN` is always two digits, `01` for the first candidate, then `02`, …, up to `99` (the owner's choice, DEC-0792). `rc01` is one alphanumeric semver pre-release identifier, so its leading zero is allowed, and two digits keep `rc01`…`rc99` in order (npm compares such identifiers as text, so `rc10` would sort before `rc9`). Never `rc.1`, `rc1`, `rc00` or `rc100`, and no other pre-release form (`-beta01`, `-RC01`). All five places of step 1 carry the full version, `rcNN` included: the template and the starter pin the framework exactly, because a range such as `^0.2.0` does not select `0.2.0-rc01`.
+- **Tag.** `vX.Y.Z-rcNN`, for example `v0.2.0-rc01`. `node scripts/release-check.mjs v0.2.0-rc01` refuses any other shape, and any version that differs from the tag.
+- **npm dist-tag.** A release candidate is published to `next`, never to `latest`, so `npm install` and `npm create` without a version keep getting the last final release. The release workflow picks the dist-tag from the version (`release-check.mjs --npm-tag`): `next` when it ends in `-rcNN`, else `latest`. The GitHub release of a candidate is marked as a pre-release.
+- **CHANGELOG.** One section per candidate, `## [X.Y.Z-rcNN] - YYYY-MM-DD` (for example `## [0.2.0-rc01] - 2026-11-03`), newest first, holding what changed since the previous candidate (the first candidate's section holds the whole release so far). The final version gets its own `## [X.Y.Z] - YYYY-MM-DD` section above them with the complete notes for the release, gathered from its candidates; the candidates' sections stay below it as history. Each section has its link line at the bottom, as the others do.
+- **Another candidate.** A fix found in `rc01` merges to `main` as usual; then repeat steps 1–5 at the next number, `rc02`. A published version is never changed or re-tagged.
+- **Promote to final.** When a candidate is accepted, release the same content as `X.Y.Z`: starting from the accepted candidate's tag, change only the five versions (step 1, with `npm install` for the lockfile) and `CHANGELOG.md`, then run steps 4–5 with `vX.Y.Z`. If `main` has moved on since the candidate, make that change on a branch from the candidate's tag, tag its commit, and merge it back into `main`. The workflow publishes it to `latest`. Nothing else changes between the last candidate and the final version; if something must, it is another candidate. `next` keeps pointing at the last candidate until the next release's first candidate.
+- **Trying a candidate.** A new app: `npm create @lago-morph/prototype-app@next my-app`, or with the exact version, `npm create @lago-morph/prototype-app@0.2.0-rc01 my-app`; the app then pins that exact framework version. An existing app: `npm run upgrade -- next`, or `npm run upgrade -- 0.2.0-rc01`. The skill package installs the same way (`@lago-morph/prototype-framework-skill@next`). The plugin follows `main`, so it shows a candidate's skill only while `plugin.json` says that candidate.
 
 For 0.1.0, step 1 is already done; date its `CHANGELOG.md` section, do the one-time owner steps above, then tag `v0.1.0`.

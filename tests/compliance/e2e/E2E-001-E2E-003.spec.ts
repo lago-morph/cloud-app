@@ -89,7 +89,8 @@ test(tag(["E2E-001", "LOCAL-AC-001"], "a scaffolded app installs the framework f
 
   // 1. The framework comes from an `npm pack` tarball at the template's exact version.
   const pinned = (JSON.parse(readFileSync(join(TEMPLATE_DIR, "package.json"), "utf8")) as { dependencies: Record<string, string> }).dependencies[PACKAGE] ?? "";
-  expect(pinned, "the template pins an exact version").toMatch(/^\d+\.\d+\.\d+$/);
+  // An exact version, or a release candidate's X.Y.Z-rcNN (01 to 99), which the template pins while a release is a candidate (DEC-0792).
+  expect(pinned, "the template pins an exact version").toMatch(/^\d+\.\d+\.\d+(-rc(0[1-9]|[1-9]\d))?$/);
   const appPkg = JSON.parse(readFileSync(join(appDir, "package.json"), "utf8")) as { dependencies: Record<string, string> };
   const spec = appPkg.dependencies[PACKAGE] ?? "";
   expect(spec, "the starter pins exactly the packed tarball it was given").toBe(`file:${framework}`);

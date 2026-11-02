@@ -137,7 +137,9 @@ describe("[COMPL-AC-006] release report", () => {
   // Root cause 2026-10-31-T7-release-login-check: IDs and paths drifted from the command and the tree with no failing test.
   it("the harness folds every ID check-login records that the documents' catalogue has, and the release tool names only paths that exist", () => {
     const ids = new Set(readCatalogue(fileURLToPath(new URL("../../../docs", import.meta.url))).map((e) => e.id));
-    expect(CHECK_LOGIN_IDS).toEqual(COMMAND_CHECK_LOGIN_IDS.filter((id) => ids.has(id)));
+    // The command records exactly the IDs the harness folds, every one in the catalogue (PWD-AC-009 left it with COMPL-AC-005's amendment, DEC-0700).
+    expect(CHECK_LOGIN_IDS).toEqual([...COMMAND_CHECK_LOGIN_IDS]);
+    for (const id of COMMAND_CHECK_LOGIN_IDS) expect(ids, id).toContain(id);
     for (const id of REAL_SIGN_IN) expect(ids, id).toContain(id);
     for (const path of LOGIN_PROVIDER_PATHS) expect(existsSync(fileURLToPath(new URL(`../../../${path}`, import.meta.url))), path).toBe(true);
   });

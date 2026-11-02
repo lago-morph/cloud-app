@@ -2,13 +2,24 @@
 // Release gate (.github/workflows/release.yml, docs/RELEASING.md).
 // Usage: node scripts/release-check.mjs <tag>            check that the tag and every version agree
 //        node scripts/release-check.mjs <tag> --notes    also print the CHANGELOG section (release notes)
+//        node scripts/release-check.mjs <tag> --npm-tag  also print the npm dist-tag: next or latest
 // The framework, the create starter, the template's framework pin and the Claude Code plugin are
-// released together at one version; the tag is `v<version>`.
+// released together at one version; the tag is `v<version>`. A version is X.Y.Z, or a release
+// candidate X.Y.Z-rcNN (NN = 01 to 99, always two digits, so rc01…rc99 sort in order), published
+// to the dist-tag `next` and never to `latest` (DEC-0792, docs/RELEASING.md "Release candidates").
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const FRAMEWORK = "@lago-morph/prototype-framework";
+
+/** `vX.Y.Z` or `vX.Y.Z-rcNN`: X, Y, Z without leading zeros; NN exactly two digits, 01 to 99 (DEC-0792). */
+const TAG = /^v((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-rc(?:0[1-9]|[1-9]\d))?)$/;
+
+/** The npm dist-tag a version is published to: `next` for a release candidate (`-rcNN`), else `latest`. */
+export function npmTag(version) {
+  return /-rc\d\d$/.test(version) ? "next" : "latest";
+}
 
 /** Every version that must equal the tag's, as [where, value]. */
 export function versions(repo) {
@@ -39,21 +50,21 @@ export function changelogSection(changelog, version) {
 
 /** Problems with releasing `tag` from `repo`; empty when it may be released. */
 export function check(repo, tag) {
-  const m = /^v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(tag);
-  if (m === null) return { problems: [`tag ${JSON.stringify(tag)} is not v<semver>`] };
+  const m = TAG.exec(tag);
+  if (m === null) return { problems: [`tag ${JSON.stringify(tag)} is not vX.Y.Z or vX.Y.Z-rcNN (NN = 01 to 99, two digits)`] };
   const version = m[1];
   const problems = versions(repo)
     .filter(([, v]) => v !== version)
     .map(([where, v]) => `${where} is ${JSON.stringify(v)}, the tag says ${version}`);
   const section = changelogSection(readFileSync(join(repo, "CHANGELOG.md"), "utf8"), version);
   if (section.error !== undefined) problems.push(section.error);
-  return { version, problems, notes: section.body, prerelease: version.includes("-") };
+  return { version, problems, notes: section.body, prerelease: version.includes("-"), npmTag: npmTag(version) };
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [tag, flag] = process.argv.slice(2);
   if (tag === undefined) {
-    console.error("usage: release-check.mjs <tag> [--notes]");
+    console.error("usage: release-check.mjs <tag> [--notes | --npm-tag]");
     process.exit(2);
   }
   const repo = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -63,5 +74,6 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(
     process.exit(1);
   }
   if (flag === "--notes") process.stdout.write(`${r.notes}\n`);
+  else if (flag === "--npm-tag") process.stdout.write(`${r.npmTag}\n`);
   else console.error(`release-check: ${tag} ok (${r.prerelease ? "prerelease" : "release"})`);
 }
