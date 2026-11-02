@@ -7414,3 +7414,32 @@ From now on every release of the framework's own packages (`@lago-morph/prototyp
 - **Pins.** The starter and the template pin the framework at the exact version they were released with, a candidate included; a range such as `^0.2.0` would not select `0.2.0-rc01`. The starter already did (its default spec is its own version, and `prepack` refuses a template pin that differs); a test now shows it at a candidate version. E2E-001's check that the template pins an exact version now also accepts `X.Y.Z-rcNN`.
 - **To reverse:** release `X.Y.Z` directly; `release-check.mjs` and the workflow still handle a final version as before.
 Item: owner decision of 2026-11-01 (pre-RC housekeeping).
+
+## Release candidate 0.2.0-rc01 (2026-11-02)
+
+### DEC-0788 — A token holding only Secrets Store Read lists stores and a store's secrets, and is refused every write: plan §5.2's assumption is confirmed live
+Origin: owner (the observation, 2026-11-02) · Status: accepted · Affects: plan-v0.2.0 §5.2 page 2 (Secrets Store Read in the everyday set), `packages/framework/src/provision/cloudflare/permissions.ts` (the everyday quick check's store-list read), `packages/framework/src/provision/cloudflare/setup-world.test-support.ts` (the fake setup world's Secrets Store rule), `ai/implementation/root-causes/2026-10-31-C-34a-fake-secrets-store-read.md`, `ai/implementation/progress-v0.2.0.md`, `ai/implementation/live-pass-v0.2.0.md`
+
+On 2026-11-02, on the owner's main account, a temporary account-owned API token whose only permission was Account · Secrets Store · Read got:
+
+- HTTP 200 on `GET /accounts/<a>/secrets_store/stores?per_page=1` (the everyday quick check's read);
+- HTTP 200 on `GET /accounts/<a>/secrets_store/stores`;
+- HTTP 200 on `GET /accounts/<a>/secrets_store/stores/<id>/secrets?per_page=1`;
+- HTTP 403 (code 10000, "Authentication error") on `DELETE` of a missing store and on `DELETE` of a missing secret.
+
+The full-access admin token got 404 on the same missing-store `DELETE`, so the 403 is a permission refusal, not a missing object. The temporary token was then deleted.
+
+- **What it confirms.** Plan §5.2's assumption, "Secrets Store Read … checking that they exist during the setup check", which the fake setup world encodes (a `GET` under `/secrets_store` needs Secrets Store Read, any other method Secrets Store Write) and the everyday quick check relies on. Until now it was *not verified live* (root-cause record `2026-10-31-C-34a-fake-secrets-store-read.md`, evidence 6).
+- **The live pass.** It no longer needs to check that a Read-only token lists stores. The runner is unchanged: S9 still records the everyday token's own store-list read (U2), as a check of that token, not of this open point. Still open for the live pass: U3, whether a deploy that binds a store secret needs Secrets Store Read (DEC-0727).
+- **No code or test changes.** The fake and the quick check already match what was observed.
+- **To reverse:** a later observation that Read alone cannot list stores would make the everyday quick check read something else, and the fake's `GET` rule change with it (red-green, root-cause record first).
+Item: release candidate 0.2.0-rc01 (V).
+
+### DEC-0789 — The owner's answers about the live pass: the session agent runs the runner itself, the optional starter tokens stay, R2 before session 1 and Workers Logs for every Worker
+Origin: owner (2026-11-02) · Status: accepted · Affects: `ai/implementation/live-pass-v0.2.0.md` (section 1, the session prompts, "For the agent in the session"), `CLAUDE.md` (the orchestrator rule, an exception in the live-pass sessions only), `scripts/live-pass/` (no change)
+
+- **(a) The live-pass sessions' main agent runs the runner itself.** In the live-pass sessions only, the session's main agent may run `scripts/live-pass/` itself and relay its prompts to the owner live. This is an exception to the orchestrator rule in `CLAUDE.md` ("The main agent of every session orchestrates … runs no suites"). The runner is the pass's procedure, its prompts wait for the owner's reply, and a subagent cannot talk to the owner. The runbook's two session prompts and its "For the agent in the session" say so, since those are what that session reads. The exception covers nothing else: the agent still does not diagnose or fix anything during the pass.
+- **(b) The optional S1/S5 starter tokens stay.** The long-lived starter token (S1) and the second starter token (S5) remain optional; without them S1 or S5 is recorded "n/a".
+- **(c) R2 and Workers Logs.** R2 is enabled in the test account before session 1 (runbook 1.2). The runner may turn on Workers Logs for every Worker in the test account (script settings, no redeploy), so that the admin app's and the auth app's log lines are kept for the analyst.
+- **To reverse:** (a) make the live-pass session delegate the runner to a subagent that relays through the main agent; (b) drop 1.4.3 and 1.4.4 and their steps; (c) collect only the framework's own log bucket.
+Item: release candidate 0.2.0-rc01 (V).
