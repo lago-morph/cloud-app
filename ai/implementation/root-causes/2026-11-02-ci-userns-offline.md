@@ -343,4 +343,25 @@ The fix has already been demonstrated on the real image (E7). The steps below co
 
 ### Review
 
-Status: awaiting review
+Reviewer: the same independent root-cause reviewer as attempt 1 (`failure-diagnosis.md`, step 2). Date: 2026-11-02. I did not write this diagnosis, the probe, the tests or the workflows. Base: `v0.2.0/ci-userns-fix` at 4d7df66.
+
+**Verdict: accepted.** Link 4 is now observed directly on the failing image, in both directions. Both corrections are applied. The fix and the verification plan hold.
+
+**E7 against the job log.** I read run 41390447617, job 125100444324, with `get_job_logs`.
+- Set-up: image `ubuntu-24.04` 20261025.353.1, provisioner 20261021.618 and region eastus3, the same image and provisioner as the failures (E1). The checkout is `pull/168/merge`, b22cf84 = e50c64a merged into 459fdfb, and the step shell is `/usr/bin/bash -e {0}`.
+- Every line quoted in E7 is in the log, in order: kernel `7.0.0-1017-azure`, uid 1001 `runner`, util-linux 2.39.3, the sysctl `1` (from both `sysctl -n` and `/proc`), `max_user_namespaces` 58109, AppArmor `Y`. Then `unshare -rn true` and the wrapper each fail with the CI's exact `uid_map` message and exit 1. After `sudo sysctl -w …=0`, both succeed without sudo: the map is `0 1001 1`, the only interface is `lo`, and the fetch prints `unreachable: EAI_AGAIN`. Setting the knob back to `1` brings the same failure back.
+- PR #168 is closed and not merged (closed 04:48:36Z). Its branch is listed for deletion.
+
+**Corrections from attempt 1's review.**
+- E4 now says util-linux writes `uid_map` first and no longer claims anything about `setgroups`. Applied.
+- The proposed step reads the value with `before=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns)` as a command of its own. Under the job's `bash -e`, a failed assignment from a command substitution stops the step at that line. Applied.
+
+**Fix: holds.**
+- E7 runs the step's own commands on the real image as the unprivileged user, so the knob is shown to be both necessary and sufficient. The tests are unchanged, and rule 9's offline form is kept.
+- The two jobs named, ci.yml `compliance` and release.yml `verify`, are still the only ones that run `offline.sh`-based tests (my attempt-1 check). Placing the step before `npm ci` covers every later step in each job.
+
+**Verification plan: holds.**
+- The runner-side red and green now come before the owner installs anything.
+- The staged-copy static check, and the after-install confirmation in compliance and at the next RC tag, are adequate.
+- The note that release.yml should be installed before the rc01 tag is right.
+- For the fixer: the EPIPE in `app.ts` `run()` stays an open item for the test-support owner and is not part of this fix.
