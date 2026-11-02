@@ -43,6 +43,23 @@ describe("known secret values", () => {
     expect(s.rawHits(`${TOKEN} x ${TOKEN}`)).toEqual({ A: 2 });
     expect(s.rawHits("nothing here")).toEqual({});
   });
+
+  // Review 2026-11-02 (independent test author): an environment setting pasted with a trailing
+  // newline or space holds the token plus whitespace; tools that trim it use the bare token.
+  it("scrubs and counts the bare value of a registered value that has surrounding whitespace", () => {
+    const s = createScrubber([{ name: "CLOUDFLARE_API_TOKEN", value: ` ${OTHER}\n` }]);
+    expect(s.text(`used ${OTHER}.`)).toBe("used [REDACTED:CLOUDFLARE_API_TOKEN].");
+    expect(s.rawHits(`used ${OTHER}`)).toEqual({ CLOUDFLARE_API_TOKEN: 1 });
+  });
+
+  it("scrubs every registered form in one text: raw, URL-encoded and inside a bearer header", () => {
+    const value = "tok+with/slash=and-more-0123";
+    const s = createScrubber([{ name: "X", value }]);
+    const out = s.text(`a ${value} b ?t=${encodeURIComponent(value)} c Authorization: Bearer ${value}`);
+    expect(out).not.toContain(value);
+    expect(out).not.toContain(encodeURIComponent(value));
+    expect(s.rawHits(`${value} ${encodeURIComponent(value)}`)).toEqual({ X: 2 });
+  });
 });
 
 describe("patterns, for values the runner never held", () => {

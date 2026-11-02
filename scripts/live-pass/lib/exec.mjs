@@ -40,6 +40,24 @@ export function childEnv(base, { session, set = {}, protectIds = [] }) {
   return env;
 }
 
+/** Buffers text until a line ends (`\n` or `\r`), then writes the complete lines; `end` writes the rest. */
+function lineEcho(write) {
+  let rest = "";
+  return {
+    push(chunk) {
+      rest += chunk;
+      const cut = Math.max(rest.lastIndexOf("\n"), rest.lastIndexOf("\r"));
+      if (cut < 0) return;
+      write(rest.slice(0, cut + 1));
+      rest = rest.slice(cut + 1);
+    },
+    end() {
+      if (rest !== "") write(rest);
+      rest = "";
+    },
+  };
+}
+
 /**
  * Runs one command and returns its record.
  * @param {{ argv: string[], cwd: string, env: Record<string,string>, input?: string, timeoutMs?: number,
@@ -88,19 +106,26 @@ export function runCommand({ argv, cwd, env, input, timeoutMs = 15 * 60_000, scr
       child.kill("SIGTERM");
       setTimeout(() => child.kill("SIGKILL"), 5_000).unref();
     }, timeoutMs);
+    // The echo is scrubbed line by line: a value split across two pipe chunks is whole once its line ends.
+    const outEcho = lineEcho((t) => process.stdout.write(scrubber.text(t)));
+    const errEcho = lineEcho((t) => process.stderr.write(scrubber.text(t)));
     child.stdout.on("data", (d) => {
       stdout += d;
-      if (echo) process.stdout.write(scrubber.text(String(d)));
+      if (echo) outEcho.push(String(d));
     });
     child.stderr.on("data", (d) => {
       stderr += d;
-      if (echo) process.stderr.write(scrubber.text(String(d)));
+      if (echo) errEcho.push(String(d));
     });
     child.on("error", (e) => {
       error = e;
     });
     child.on("close", (code, signal) => {
       clearTimeout(timer);
+      if (echo) {
+        outEcho.end();
+        errEcho.end();
+      }
       finish(error !== undefined ? null : timedOut && code === 0 ? 124 : code, signal);
     });
     child.stdin.on("error", () => {});

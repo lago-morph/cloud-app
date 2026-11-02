@@ -111,9 +111,16 @@ const runnerSha = (() => {
   }
 })();
 
-/** Session-1 continuation after page 2 accepts session 2's variables (the owner may already have changed them). */
+/**
+ * Session 1 accepts session 2's variables once S8 (page 2) has been reached: its prompt, saved before it
+ * is printed, tells the owner to change them before replying. Every stored state from then on counts:
+ * S8 pending in any part (prompt waiting, or the reply saved before S8 completes), S8 done, or the
+ * everyday token's ID known. A container lost in any of them resumes with session 2's variables.
+ */
 function checkEnv(session, state) {
-  const asSession = session === 1 && state?.facts?.everydayTokenId && !env.CLOUDFLARE_BOOTSTRAP_TOKEN ? 2 : session;
+  const s8Reached = !!state?.facts?.everydayTokenId || state?.done?.S8 !== undefined || state?.pending?.stepId === "S8";
+  const bootstrapSet = typeof env.CLOUDFLARE_BOOTSTRAP_TOKEN === "string" && env.CLOUDFLARE_BOOTSTRAP_TOKEN.trim() !== ""; // as envProblems tests it
+  const asSession = session === 1 && s8Reached && !bootstrapSet ? 2 : session;
   const { stop, warn } = envProblems(asSession, env);
   for (const w of warn) say(`warning: ${w}`);
   if (stop.length > 0) fail(3, `the environment is not as the runbook says for session ${session}:\n  - ${stop.join("\n  - ")}\nChange the environment settings, then start a new session (runbook section 5).`);
@@ -143,7 +150,7 @@ if (command === "start") {
     adminTokenExpiresOn: admin.expiresOn,
     recordsBucketWas: made,
   });
-  await saveState(store, holder.state);
+  await saveState(store, scrubber.value(holder.state));
   say(`Run ${runId} started. Records: R2 bucket ${bucket}, prefix ${holder.state.prefix}`);
 } else {
   holder.state = await loadState(store, opts.run).catch((e) => fail(3, e.message));
@@ -159,8 +166,9 @@ const takeSeq = () => {
   holder.state = s;
   return n;
 };
+// The stored state is a record like the others: it passes the scrubber (skip reasons, errors, pending evidence).
 const save = async (s) => {
-  await saveState(store, s);
+  await saveState(store, scrubber.value(s));
 };
 const print = (t) => say(scrubber.text(t));
 const engine = createEngine({
