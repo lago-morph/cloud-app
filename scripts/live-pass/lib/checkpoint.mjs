@@ -114,11 +114,11 @@ function unfinishedSession1(s, catalogue) {
 }
 
 /** The state at the checkpoint: every session-1 step has a result. */
-export function toCheckpoint(s, catalogue, now) {
+export function toCheckpoint(s, catalogue, now, outcome = { result: "pass" }) {
   const open = unfinishedSession1(s, catalogue);
   if (open.length > 0) throw new CheckpointError(`session 1 is not finished: no result yet for ${open.join(", ")}`);
   const cp = catalogue.find((x) => x.checkpoint);
-  const done = cp === undefined ? s.done : { ...s.done, [cp.id]: { result: "pass", endedAt: now } };
+  const done = cp === undefined ? s.done : { ...s.done, [cp.id]: { ...outcome, endedAt: now } };
   const sessions = s.sessions.map((x, i) => (i === s.sessions.length - 1 && x.endedAt === undefined ? { ...x, endedAt: now } : x));
   return bump(s, { phase: "checkpoint", checkpointAt: now, done, sessions, pending: null, updatedAt: now });
 }
