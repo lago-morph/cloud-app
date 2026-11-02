@@ -14,6 +14,17 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
+// THROWAWAY probe (root cause 2026-11-02-ci-userns-offline, attempt 2). Never merge. On the runner
+// only: log the user-namespace probe, then fail classify so no other job spends runner time.
+if (process.env.GITHUB_ACTIONS === "true") {
+  try {
+    execFileSync("bash", [join(ROOT, "scripts", "ci", "userns-probe.sh")], { stdio: "inherit" });
+  } finally {
+    console.error("THROWAWAY probe done: failing classify on purpose so no test job runs.");
+    process.exit(1);
+  }
+}
+
 /** A repository-root-anchored glob: `**` any depth, `*` and `?` within one segment, `{a,b}` alternatives. */
 export function globToRegExp(glob) {
   let re = "";
