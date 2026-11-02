@@ -89,10 +89,14 @@ export function createScrubber(initial = []) {
   };
 
   const add = (name, value) => {
-    if (typeof value !== "string" || value.length < MIN_SECRET_LENGTH) return;
-    known.set(value, name);
-    const encoded = encodeURIComponent(value);
-    if (encoded !== value) known.set(encoded, name);
+    if (typeof value !== "string") return;
+    // A value pasted with surrounding whitespace is used (and could be printed) without it.
+    for (const form of new Set([value, value.trim()])) {
+      if (form.length < MIN_SECRET_LENGTH) continue;
+      known.set(form, name);
+      const encoded = encodeURIComponent(form);
+      if (encoded !== form) known.set(encoded, name);
+    }
     rebuild();
   };
 

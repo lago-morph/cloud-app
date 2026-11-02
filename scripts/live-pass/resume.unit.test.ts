@@ -44,6 +44,8 @@ async function harness() {
   process.env.FAKE_CF_WORLD = worldFile;
   const fw = await import(pathToFileURL(WORLD_MODULE).href);
   const transcript: string[] = [];
+  /** Only what the runner printed (the transcript also shows the arguments the test passed). */
+  const printed: string[] = [];
   let containers = 0;
 
   /** A new container: an empty work directory with the app the release candidate creates (stand-in CLI). */
@@ -66,6 +68,7 @@ async function harness() {
   const run = (env: Record<string, string>, ...args: string[]): Result => {
     const r = spawnSync(process.execPath, [RUNNER, ...args], { env, encoding: "utf8", timeout: 240_000 });
     transcript.push(`$ live-pass ${args.join(" ")} → ${String(r.status)}\n${r.stdout}${r.stderr}`);
+    printed.push(`${r.stdout}${r.stderr}`);
     return { status: r.status, out: `${r.stdout}${r.stderr}` };
   };
   const world = (): World => JSON.parse(readFileSync(worldFile, "utf8"));
@@ -75,7 +78,7 @@ async function harness() {
     writeFileSync(worldFile, JSON.stringify(w));
   };
   const records = (): Record<string, string> => Object.fromEntries(Object.entries(world().buckets["live-pass-records"]?.objects ?? {}).map(([k, o]) => [k, (o as { body: string }).body]));
-  return { fw, worldFile, container, base, run, world, change, records, transcript };
+  return { fw, worldFile, container, base, run, world, change, records, transcript, printed };
 }
 
 type H = Awaited<ReturnType<typeof harness>>;
@@ -326,7 +329,7 @@ describe("an offline live pass that loses its container in both sessions", () =>
 
   it("never prints, logs or stores a token value: not in the runner's output, not in any record, not in the state", () => {
     const values = Object.entries(tokens);
-    const printed = h.transcript.join("\n");
+    const printed = h.printed.join("\n");
     for (const [name, v] of values) expect(printed.includes(v), `the runner printed ${name}`).toBe(false);
     for (const [key, body] of Object.entries(rec)) for (const [name, v] of values) expect(body.includes(v), `${key} holds ${name}`).toBe(false);
   });
@@ -372,6 +375,6 @@ describe("the durable state in the records bucket", () => {
     const state = Object.entries(rec).find(([k]) => k.endsWith("/state.json"))![1];
     expect(JSON.parse(state).done.S2).toMatchObject({ result: "skipped" });
     for (const [key, body] of Object.entries(rec)) expect(body.includes(admin), `${key} holds the admin token`).toBe(false);
-    expect(h.transcript.join("\n").includes(admin)).toBe(false);
+    expect(h.printed.join("\n").includes(admin), "the runner printed the admin token").toBe(false);
   }, 120_000);
 });
