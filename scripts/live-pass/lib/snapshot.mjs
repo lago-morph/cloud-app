@@ -162,14 +162,32 @@ export function summarize(s) {
   return out;
 }
 
-/** What changed between two snapshots: added, removed and changed keys of `summarize`. */
+/** The summary key prefixes of each snapshot section. */
+const SECTION_KEYS = {
+  workers: ["worker:"],
+  d1: ["d1:"],
+  r2: ["bucket:", "objects:", "record:"],
+  secretsStore: ["store:", "secret:"],
+  tokens: ["token:"],
+  members: ["member:"],
+  oauthClients: ["oauth-client:"],
+  subdomain: ["subdomain"],
+};
+
+/**
+ * What changed between two snapshots: added, removed and changed keys of `summarize`. A section
+ * that either snapshot could not read is left out and named in `unreadable`, so a failed read
+ * never shows as everything removed or added.
+ */
 export function diffSnapshots(before, after) {
+  const unreadable = Object.keys(SECTION_KEYS).filter((s) => after?.[s]?.ok === false || (before !== null && before?.[s]?.ok === false));
+  const skip = (k) => unreadable.some((s) => SECTION_KEYS[s].some((p) => k.startsWith(p)));
   const a = before === null ? {} : summarize(before);
   const b = summarize(after);
-  const added = Object.keys(b).filter((k) => !(k in a)).sort();
-  const removed = Object.keys(a).filter((k) => !(k in b)).sort();
-  const changed = Object.keys(b).filter((k) => k in a && a[k] !== b[k]).sort();
-  return { added, removed, changed };
+  const added = Object.keys(b).filter((k) => !(k in a) && !skip(k)).sort();
+  const removed = Object.keys(a).filter((k) => !(k in b) && !skip(k)).sort();
+  const changed = Object.keys(b).filter((k) => k in a && a[k] !== b[k] && !skip(k)).sort();
+  return unreadable.length > 0 ? { added, removed, changed, unreadable } : { added, removed, changed };
 }
 
 /** Finds helpers over a snapshot. */

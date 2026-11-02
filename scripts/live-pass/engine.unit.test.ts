@@ -4,7 +4,7 @@
 // is resumable from the stored state at any point (a reclaimed container loses nothing).
 import { describe, expect, it } from "vitest";
 import { memoryStore, newRun, saveState, loadState } from "./lib/checkpoint.mjs";
-import { createEngine, stepResult } from "./lib/engine.mjs";
+import { checkResults, createEngine, stepResult } from "./lib/engine.mjs";
 
 type Obs = { pass?: boolean | null };
 type Ctx = { observe: (id: string, o: Record<string, unknown>) => void; facts: Record<string, unknown>; setFacts: (f: Record<string, unknown>) => void; na: (why: string) => void };
@@ -80,6 +80,7 @@ describe("automated steps", () => {
     expect(await h.engine.advance(60_000)).toBe("blocked");
     expect(h.holder.state.done.A).toBeUndefined();
     expect(h.printed.join("\n")).toMatch(/no token/);
+    expect(h.records).toEqual([expect.objectContaining({ id: "A", result: "blocked", attempt: 1, error: "no token" })]);
     expect(await h.engine.advance(60_000)).toBe("blocked");
     expect(calls).toBe(1);
     expect(await h.engine.retry(60_000)).not.toBe("blocked");
@@ -160,5 +161,17 @@ describe("sessions", () => {
     expect(await h.engine.beginSession(2, 60_000)).toBe("finished");
     expect(h.holder.state.phase).toBe("finished");
     expect(Object.keys(h.holder.state.done)).toEqual(["A", "CP", "R1", "FIN"]);
+  });
+});
+
+describe("checkResults", () => {
+  it("gives each check ID fail over pass over info", () => {
+    expect(checkResults([{ check: "C-3", pass: true }, { check: "C-3", pass: false }, { check: "E-2", pass: null }, { check: "E-2", pass: true }, { check: "A-2", pass: null }, { pass: false }])).toEqual({ "C-3": "fail", "E-2": "pass", "A-2": "info" });
+  });
+
+  it("is stored with the step's result", async () => {
+    const h = harness([auto("A", 1, (c) => c.observe("x", { check: "C-4", pass: true }))]);
+    await h.engine.advance(60_000);
+    expect(h.holder.state.done.A.checks).toEqual({ "C-4": "pass" });
   });
 });

@@ -20,6 +20,18 @@ export function stepResult(observations, notApplicable) {
   return notApplicable ? "n/a" : "info";
 }
 
+/** Each check ID's result from the observations tagged with it: fail beats pass beats info. */
+export function checkResults(observations) {
+  const out = {};
+  for (const o of observations) {
+    if (!o.check) continue;
+    const r = o.pass === false ? "fail" : o.pass === true ? "pass" : "info";
+    const prev = out[o.check];
+    out[o.check] = prev === "fail" || r === "fail" ? "fail" : prev === "pass" || r === "pass" ? "pass" : "info";
+  }
+  return out;
+}
+
 const message = (e) => (e instanceof Error ? e.message : String(e));
 
 /**
@@ -86,7 +98,8 @@ export function createEngine({ catalogue, holder, save, makeCtx = (base) => base
       rec.notes.push({ at: iso(), text: `after-step collection failed: ${message(e)}` });
     }
     writeStepRecord(rec);
-    const outcome = { result: rec.result, endedAt: rec.endedAt, ...(rec.notApplicable ? { reason: rec.notApplicable } : {}) };
+    const checks = checkResults(rec.observations);
+    const outcome = { result: rec.result, endedAt: rec.endedAt, ...(rec.notApplicable ? { reason: rec.notApplicable } : {}), ...(Object.keys(checks).length > 0 ? { checks } : {}) };
     if (step.checkpoint) holder.state = toCheckpoint(holder.state, catalogue, rec.endedAt, outcome);
     else holder.state = recordStep(holder.state, step.id, outcome);
     if (step.final) holder.state = finish(holder.state, rec.endedAt);
@@ -111,7 +124,10 @@ export function createEngine({ catalogue, holder, save, makeCtx = (base) => base
           await step.run(ctx);
         } catch (e) {
           if (step.blocking) {
-            setPending({ ...pending(), blocked: message(e), record: { ...pending().record, observations: [], notes: [] } });
+            // The attempt's evidence is kept as its own record; a retry starts the step afresh.
+            const attempt = (pending().attempts ?? 0) + 1;
+            writeStepRecord({ ...pending().record, result: "blocked", attempt, error: message(e), endedAt: iso() });
+            setPending({ ...pending(), attempts: attempt, blocked: message(e), record: { ...pending().record, observations: [], commands: [], notes: [] } });
             await save(holder.state);
             print(`\n=== BLOCKED at ${step.id}: ${step.title} ===\n${message(e)}\n\nThis step must pass before the run can go on. Tell the owner what it says. Then run "node scripts/live-pass/live-pass.mjs retry" once it is fixed, or "node scripts/live-pass/live-pass.mjs skip ${step.id} \\"<reason>\\"" if the owner decides to go on without it.`);
             return "blocked";
