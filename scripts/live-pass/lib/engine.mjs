@@ -218,9 +218,11 @@ export function createEngine({ catalogue, holder, save, makeCtx = (base) => base
     return advance(budgetMs);
   }
 
+  /** A new session (or container): a step blocked before is tried again, since the owner changed something. */
   async function beginSession(number, budgetMs) {
     holder.state = beginSessionState(holder.state, number, iso());
     await save(holder.state);
+    if (pending()?.blocked !== undefined) return retry(budgetMs);
     return advance(budgetMs);
   }
 

@@ -87,6 +87,16 @@ describe("automated steps", () => {
     expect(h.holder.state.done.A.result).toBe("pass");
   });
 
+  it("a new session (resume) retries a step that blocked in the previous one", async () => {
+    let calls = 0;
+    const flaky = { ...auto("A", 1, (c) => { calls += 1; if (calls === 1) throw new Error("expiry too far"); c.observe("A", { pass: true }); }), blocking: true };
+    const h = harness([flaky, auto("B")]);
+    expect(await h.engine.advance(60_000)).toBe("blocked");
+    await h.engine.beginSession(1, 60_000);
+    expect(calls).toBe(2);
+    expect(h.holder.state.done.A.result).toBe("pass");
+  });
+
   it("skip records the reason and moves on", async () => {
     const h = harness([{ ...auto("A", 1, () => { throw new Error("x"); }), blocking: true }, auto("B")]);
     await h.engine.advance(60_000);

@@ -566,13 +566,18 @@ export const STEPS = [
     session: 2,
     check: "SETUP-AC-011",
     title: "\"continue prototype setup\" with the everyday token only; A-1a, A-2",
-    expected: ["no question about an email domain", "\"account setup: current (setup version 2)\"", "\"everyday token: passed the quick check …\"", "next step npm run deploy -- --target cloudflare --stage test-first", "exit 0", "A-1a: the role list holds exactly \"Administrator\" and \"Super Administrator - All Privileges\"", "A-2: Cloudflare's issuer string recorded"],
+    expected: ["no question about an email domain", "\"account setup: current (setup version 2)\"", "\"everyday token: passed the quick check …\"", "U2: the everyday token reads Workers, R2, D1 and the Secrets Store list (a Secrets Store Read token can list stores)", "next step npm run deploy -- --target cloudflare --stage test-first", "exit 0", "A-1a: the role list holds exactly \"Administrator\" and \"Super Administrator - All Privileges\"", "A-2: Cloudflare's issuer string recorded"],
     async run(ctx) {
       const rec = await ctx.fw(["cloudflare-setup"], { label: "continue-setup" });
       expectExit(ctx, rec, 0, "S9");
       expectText(ctx, rec, ["account setup: current", "everyday token: passed", "--stage test-first"], "S9");
       expectNoText(ctx, rec, ["email domain", "CLOUDFLARE_EMAIL_DOMAIN"], "S9");
       expectNoSecret(ctx, rec, "S9");
+      // U2: each everyday group answers with the everyday token; the store list needs only Secrets Store Read (C 34a's open item).
+      for (const p of ["/workers/scripts", "/r2/buckets", "/d1/database", "/secrets_store/stores"]) {
+        const r = await ctx.everydayApi().call("GET", ctx.api.account(p));
+        ctx.observe(`everyday token GET ${p}`, { check: "U2", expected: 200, observed: r.ok ? r.status : describeR(r), pass: r.status === 200 && r.ok });
+      }
       const roles = await ctx.api.call("GET", ctx.api.account("/roles?per_page=50"));
       const names = roles.ok ? (roles.body.result ?? []).map((r) => r.name) : [];
       ctx.observe("role names (admin token)", { check: "A-1", expected: ADMIN_ROLES, observed: roles.ok ? names : describeR(roles), pass: roles.ok ? ADMIN_ROLES.every((n) => names.includes(n)) : false });
