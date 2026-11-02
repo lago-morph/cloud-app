@@ -55,7 +55,7 @@ export interface AuthAppBinding {
    * `null` is an answer, not a failure: the app ends the session at once, without retrying.
    * A rejection means the auth app cannot answer: the app retries and then fails closed (plan
    * §4.1 step 5). The retry count and delay are AUTH parameters, allocated by item B
-   * (PAR-425–434), not by this contract.
+   * (PAR-425–427), not by this contract.
    */
   role(sub: string): Promise<AuthAppRole | null>;
 }

@@ -6465,7 +6465,7 @@ D's correction to the log: DEC-0277's `Affects:` list gains E2E-013, which also 
 
 Integrated by item I1 from `ai/implementation/decisions/v020-D.md`; DEC-0700…0703 by item I2 from the same draft (2026-11-02).
 
-D's 39b follow-up also names the role-refresh parameters in AUTH-REQ-003's v0.2.0 amendment by ID: the interval PAR-425, the retries PAR-426 and the retry delay PAR-427 (DEC-0668, DEC-0669). That is the one-line edit DEC-0695 announced, so no decision changes. `docs/contracts/ts/internal/auth-app.d.ts` (A's contract) still cites "PAR-425–434".
+D's 39b follow-up also names the role-refresh parameters in AUTH-REQ-003's v0.2.0 amendment by ID: the interval PAR-425, the retries PAR-426 and the retry delay PAR-427 (DEC-0668, DEC-0669). That is the one-line edit DEC-0695 announced, so no decision changes. `docs/contracts/ts/internal/auth-app.d.ts` (A's contract) cited "PAR-425–434" until the pre-RC housekeeping PR, which names PAR-425–427 there.
 
 ### DEC-0690 — Admins are the Cloudflare account's administrators (SYS-REQ-018 amended)
 Origin: owner-approved (owner amendment; wording approved by the owner on 2026-10-31) · Status: accepted (owner approved 2026-10-31); its sentence on when a role change takes effect ("at the next role refresh or session renewal") superseded by DEC-0703 (at the person's next sign-in) · Supersedes: DEC-0521, DEC-0522, DEC-0523, DEC-0524 (as the SYS-REQ-018 amendment) · Affects: SYS-REQ-018, AUTH (PR 37), plan §1 D1/D2, §4.1 step 5, §4.4, §6.1 item 1
@@ -6952,7 +6952,7 @@ C's `cloudflare-setup.test.ts` was updated during C's stack, but several of its 
 Item: v0.2.0 T1.
 
 ### DEC-0751 — A protected bootstrap token is used for the bootstrap today; reported, not tested under SETUP-AC-005
-Origin: ai-proposed · Status: accepted · Affects: SETUP-REQ-004, SETUP-AC-005, SETUP-AC-011; open item for C and D
+Origin: ai-proposed · Status: accepted; both open items done: C's fix is DEC-0733 (PR 34c), and SETUP-AC-005 gained "a protected bootstrap token is never used" on 2026-11-02 (pre-RC housekeeping PR, with a tagged test in `criteria/setup/bootstrap-v020.test.ts`) · Affects: SETUP-REQ-004, SETUP-AC-005, SETUP-AC-011; open item for C and D
 
 SETUP-REQ-004 as amended says a protected token (PAR-361) "MUST be neither used for the bootstrap nor deleted", and C's DEC-0681 says the same. Against the fake API, a bootstrap token whose ID is in `PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS` is not deleted and the run says so, but the run still creates both OAuth clients, writes Secrets Store and deploys the admin app with it, and exits 0. SETUP-AC-005's text says only "neither updated nor deleted", so T1's SETUP-AC-005 test asserts only that, which passes (the 'says it is protected' message is SETUP-REQ-004's and SETUP-AC-011's, review of PR #133); tagging the "not used" clause on SETUP-AC-005 would test more than the criterion says. SETUP-AC-011 (Cloud, milestone) does say "does not use it for the bootstrap" and is `not-run` here. Open: C to fix `cloudflare-setup.ts` through §7a.1.8 (a 9x-fix PR on C's branch), and D or I2 to add the clause to SETUP-AC-005 so the fake-API pass covers it. Reverse: none needed; this records a finding.
 Item: v0.2.0 T1.
@@ -7377,7 +7377,7 @@ The limit cannot interrupt a synchronous listing (the record's Evidence 5). It i
 Item: v0.2.0 T7.
 
 ### DEC-0787 — The prodcheck harness lists only IDs it can fold; `check-login` keeps its retired entry until COMPL-AC-005 is amended
-Origin: ai-proposed · Status: proposed · Affects: `tests/compliance/harness/prodcheck.ts` (`CHECK_LOGIN_IDS`, `PRODCHECK_IDS`), DEC-0670, COMPL-AC-005
+Origin: ai-proposed · Status: proposed; its condition met: COMPL-AC-005 was amended (DEC-0700), and `check-login` no longer records PWD-AC-009 (pre-RC housekeeping PR, 2026-11-02) · Affects: `tests/compliance/harness/prodcheck.ts` (`CHECK_LOGIN_IDS`, `PRODCHECK_IDS`), DEC-0670, COMPL-AC-005
 
 - **What the harness lists.** `CHECK_LOGIN_IDS` is the command's `CHECK_LOGIN_IDS` that the documents' catalogue has: AUTH-AC-011 and E2E-008. The driver folds only IDs it is running, and those come from the catalogue (`driver.ts:336`), so PWD-AC-009 could never be folded.
 - **Retired IDs leave `PRODCHECK_IDS`.** MAIL-AC-006 (DEC-0696) and CLI-AC-007 (DEC-0698) are dropped. Neither is in the catalogue, so this changes no run.

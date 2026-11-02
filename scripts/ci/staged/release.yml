@@ -1,6 +1,7 @@
 # STAGED COPY (DEC-0637, DEC-0792): this file replaces .github/workflows/release.yml. The session
-# that wrote it had no `workflow` token scope; copy it over .github/workflows/release.yml, then
-# delete this one:  git mv -f scripts/ci/staged/release.yml .github/workflows/release.yml
+# that wrote it had no `workflow` token scope. From a clean checkout of `main`, the owner moves it
+# into place (this copy goes in the same commit) with:
+#   git switch main && git pull --ff-only && git mv -f scripts/ci/staged/release.yml .github/workflows/release.yml && git commit -m "Install the release-candidate release workflow (DEC-0792)" && git push origin main
 #
 # Release on a version tag, vX.Y.Z or the release candidate vX.Y.Z-rcNN (docs/RELEASING.md): verify,
 # publish the three npm packages with trusted publishing (OIDC, no npm token) and provenance, then

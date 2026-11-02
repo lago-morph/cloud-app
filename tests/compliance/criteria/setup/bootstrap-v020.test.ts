@@ -245,6 +245,26 @@ if (isLocal()) {
         if (label === "protected") expect(tokenWritesOf(r.requests), "neither updated nor deleted").toEqual([]);
       }
     });
+
+    it(tag("SETUP-AC-005", "a protected bootstrap token (PAR-361) is never used: only the requests that identify it carry it, nothing is created, and the run exits 1 with the bootstrap link"), async () => {
+      // Edge cases: a new account (nothing to bootstrap yet) and a set-up one (the everyday token is current).
+      for (const label of ["new account", "set-up account"] as const) {
+        const world = freshWorld();
+        if (label === "set-up account") await setUpAccount(world);
+        const t = addTokens(world, `v020-ac005-protected-${label.replace(/\W/g, "")}`);
+        const dir = await project({ envFile: envFile({ [BOOTSTRAP_SETTING]: t.bootstrap.value, [EVERYDAY_SETTING]: t.everyday.value }) });
+        const r = await runSetup(`v020 AC-005 protected bootstrap, ${label}`, world, dir, { env: { [PROTECTED_IDS_SETTING]: `other-id,${t.bootstrap.id}` } });
+        expect(r.status, `${label}:\n${r.all}`).toBe(1);
+        const withIt = r.requests.filter((q) => q.startsWith(`${t.bootstrap.id} `));
+        // Identification only: the account list and the token's verify call (DEC-0681, DEC-0733).
+        expect(withIt.length, label).toBeGreaterThan(0);
+        for (const q of withIt) expect(q, label).toMatch(new RegExp(`^${t.bootstrap.id} GET /(accounts(\\?[^/]*)?|accounts/[^/]+/tokens/verify|user/tokens/verify)$`));
+        expect(writesOf(r.requests), `${label}: nothing created`).toEqual([]);
+        expect(t.bootstrap.deleted, label).toBe(false);
+        expect(readEnvFile(dir), label).toContain(`${BOOTSTRAP_SETTING}=${t.bootstrap.value}`);
+        expect(r.all, label).toContain(BOOT_LINK);
+      }
+    });
   });
 
   describe("SETUP v0.2.0: switch, second project, stops", () => {

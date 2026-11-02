@@ -25,8 +25,8 @@ export const PRODCHECK_STAGE = "prodcheck";
 
 /**
  * The results of `check-login` the driver folds: the command's `CHECK_LOGIN_IDS` that the catalogue
- * has (DEC-0670, DEC-0787; `release.unit.test.ts` compares them). The command also writes the retired
- * PWD-AC-009 as `not-run` until COMPL-AC-005 is amended; the driver never folds a retired ID.
+ * has (DEC-0670, DEC-0787; `release.unit.test.ts` compares them). Since COMPL-AC-005's amendment (DEC-0700)
+ * the command no longer writes the retired PWD-AC-009; an older record's entry for it is never folded.
  */
 export const CHECK_LOGIN_IDS: readonly string[] = ["AUTH-AC-011", "E2E-008"];
 

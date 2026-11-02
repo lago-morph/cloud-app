@@ -20,8 +20,8 @@
  *      a state, setting its own sign-in cookie. A 400 means the return URL is not registered.
  *
  * One evidence record (`src/evidence`) with results for E2E-008 (its automated part, steps 1–3)
- * and AUTH-AC-011 (steps 1–2); PWD-AC-009 is `not-run` (retired with the
- * password provider, plan §6). Exit 0 only if every step passed. The account's `workers.dev`
+ * and AUTH-AC-011 (steps 1–2). The retired PWD-AC-009 is no longer recorded: COMPL-AC-005 names
+ * only these two results (DEC-0700, DEC-0787). Exit 0 only if every step passed. The account's `workers.dev`
  * subdomain is never recorded (DEC-0086). Test stages and target `local` are refused before any
  * request: they sign in with the authentication mock only (plan §4.3).
  */
@@ -36,7 +36,7 @@ import { fetchOver } from "../one-connection.js";
 import { checkedStage, parseCloudTargetStage, refuseUnreachableCloud, type ProcessEnvironment } from "./smoke-cloud.js";
 
 /** The criteria a run gives results for (`tests/compliance/harness/prodcheck.ts` folds them). */
-export const CHECK_LOGIN_IDS = ["PWD-AC-009", "AUTH-AC-011", "E2E-008"] as const;
+export const CHECK_LOGIN_IDS = ["AUTH-AC-011", "E2E-008"] as const;
 
 /** The host the login request claims to be sent to (a reserved name, never resolvable). */
 export const FORGED_HOST = "forged-host.example.test";
@@ -147,17 +147,12 @@ export async function runLoginCheck(options: LoginCheckOptions, io: LoginCheckIo
     if (!(error instanceof StepFailure)) throw error;
     const problem = `step ${String(error.step)}: ${error.message}`;
     const results: EvidenceResult[] = [
-      retired(),
       auth011 ? { id: "AUTH-AC-011", status: "passed" } : { id: "AUTH-AC-011", status: "failed", detail: problem },
       { id: "E2E-008", status: "failed", detail: problem },
     ];
     return { failure: { step: error.step, problem: error.message }, results };
   }
-  return { results: [retired(), { id: "AUTH-AC-011", status: "passed" }, { id: "E2E-008", status: "passed" }] };
-}
-
-function retired(): EvidenceResult {
-  return { id: "PWD-AC-009", status: "not-run", detail: "retired with the password provider (plan-v0.2.0 §6)" };
+  return { results: [{ id: "AUTH-AC-011", status: "passed" }, { id: "E2E-008", status: "passed" }] };
 }
 
 export interface CheckLoginDeps {

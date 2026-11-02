@@ -163,7 +163,7 @@ describe("check-login: refusals before any request", () => {
 });
 
 describe("check-login: the steps (E2E-008, automated part)", () => {
-  it("passes against a working stage and auth app, and writes one record: E2E-008 and AUTH-AC-011 passed, PWD-AC-009 not run", async () => {
+  it("passes against a working stage and auth app, and writes one record: E2E-008 and AUTH-AC-011 passed, and nothing for the retired PWD-AC-009 (COMPL-AC-005, DEC-0700)", async () => {
     const h = harness();
     const r = await h.run();
     expect(r.status, r.out).toBe(0);
@@ -174,7 +174,6 @@ describe("check-login: the steps (E2E-008, automated part)", () => {
     expect(h.records).toHaveLength(1);
     expect(h.record()).toMatchObject({ runId: RUN_ID, commit: "c0ffee", target: "cloudflare", stage: "prodcheck", command: "check-login --target cloudflare --stage prodcheck", exitStatus: 0 });
     expect(h.record().results).toEqual([
-      { id: "PWD-AC-009", status: "not-run", detail: "retired with the password provider (plan-v0.2.0 §6)" },
       { id: "AUTH-AC-011", status: "passed" },
       { id: "E2E-008", status: "passed" },
     ]);
@@ -226,7 +225,7 @@ describe("check-login: the steps (E2E-008, automated part)", () => {
     expect(byId["E2E-008"]?.detail).toMatch(new RegExp(`^step ${String(step)}: `));
     expect(byId["E2E-008"]?.detail).toMatch(message);
     expect(byId["AUTH-AC-011"]?.status).toBe(step <= 2 ? "failed" : "passed");
-    expect(byId["PWD-AC-009"]?.status).toBe("not-run");
+    expect(Object.keys(byId).sort()).toEqual(["AUTH-AC-011", "E2E-008"]);
     expect(r.out + JSON.stringify(h.record())).not.toContain("auth-app-state");
     const appState = new URL(h.seen.find((x) => x.url.includes("/start?"))?.url ?? "https://x.test").searchParams.get("state");
     if (appState !== null) expect(r.out + JSON.stringify(h.record())).not.toContain(appState);

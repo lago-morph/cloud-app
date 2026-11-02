@@ -3,7 +3,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ciPlan, classify, directFilter, duplicates, githubOutput, globToRegExp, loadMap, matches } from "../scripts/ci/classify.mjs";
+import { ciPlan, classify, directFilter, duplicates, githubOutput, globToRegExp, loadMap, matches, tagsIn } from "../scripts/ci/classify.mjs";
 
 interface Result {
   docs: string[];
@@ -226,12 +226,21 @@ describe("the CI plan (what the staged ci.yml runs)", () => {
     expect(p.chromium).toBe(true);
   });
 
-  it("a framework-suite test tagged only with an unselected ID still runs, in the direct run (review finding)", () => {
-    const p = plan("packages/framework/test/integration/auth/admin-role.test.ts");
-    expect(p.direct).toEqual(["packages/framework/test/integration/auth", "packages/framework/test/integration/auth-app"]);
-    expect(p.ids).not.toContain("E2E-007");
+  it("an integration test outside the criteria tagged only with an unselected ID still runs, in the direct run (review finding)", () => {
+    // E2E-004's offline Cloudflare coverage test (DEC-0782) is the integration-layer test tagged only with an E2E ID.
+    // (admin-role.test.ts carried this premise until its stub test was re-tagged AUTH-AC-003, DEC-0759.)
+    const file = "tests/compliance/coverage/cloudflare-selection.test.ts";
+    const source = readFileSync(join(REPO, file), "utf8");
+    expect([...tagsIn(REPO, [file])]).toEqual(["E2E-004"]);
+    const p = plan(file);
+    expect(p.direct).toContain("tests/compliance/coverage");
+    expect(p.ids).not.toContain("E2E-004");
+    // Vitest's -t matches the full name: the describe title, a space, the test title.
+    const titles = [...source.matchAll(/\b(?:describe|it)\("([^"]+)"/g)].map((m) => m[1]);
+    const fullName = titles.join(" ");
+    expect(fullName.startsWith("[E2E-004] ")).toBe(true);
     const filter = new RegExp(directFilter(p.ids) as string);
-    expect(filter.test("[E2E-007] the admin role reaches the app's admin pages")).toBe(true);
+    expect(filter.test(fullName), "the direct run keeps the E2E-004 test").toBe(true);
     expect(filter.test(`[${p.ids[0] ?? ""}] a test the harness runs`)).toBe(false);
     expect(filter.test("an untagged test")).toBe(true);
     expect(directFilter([])).toBe("");
@@ -285,13 +294,17 @@ describe("no duplicates (plan-v0.2.0 §7a.2.4)", () => {
     const all = ciPlan(classify([], map, { everything: true }), map, REPO) as { unit: string; ids: string[]; direct: string[]; chromium: boolean };
     expect(all).toMatchObject({ unit: "all", chromium: true });
     expect(all.direct).toEqual(expect.arrayContaining(["packages/framework/test/integration/sql", "tests/skill", "packages/create-prototype-app/test"]));
-    const release = readFileSync(join(REPO, ".github/workflows/release.yml"), "utf8");
-    expect(release).toMatch(/\n {2}push:\n {4}tags: \["v\*\.\*\.\*"\]/);
-    for (const step of ["node scripts/ci/classify.mjs --check-duplicates", "npm run test:unit", "node scripts/ci/classify.mjs --all --github-output", '$DIRECT ${DIRECT_FILTER:+-t "$DIRECT_FILTER"}', "DIRECT_FILTER: ${{ steps.all.outputs.direct_filter }}", "npm run secrets -- set apiKey --target local --stage local", 'npm run compliance -- --target local --out "$RUNNER_TEMP/compliance"', "npx playwright install --with-deps chromium"]) {
-      expect(release, step).toContain(step);
+    // The applied workflow, and a staged replacement while one waits for the owner (DEC-0637, DEC-0792): the
+    // staged copy must pass the same checks, so applying it cannot turn this test red.
+    for (const file of [".github/workflows/release.yml", "scripts/ci/staged/release.yml"].filter((f) => f.startsWith(".github/") || existsSync(join(REPO, f)))) {
+      const release = readFileSync(join(REPO, file), "utf8");
+      expect(release, file).toMatch(/\n {2}push:\n {4}tags: \["v\*\.\*\.\*"\]/);
+      for (const step of ["node scripts/ci/classify.mjs --check-duplicates", "npm run test:unit", "node scripts/ci/classify.mjs --all --github-output", '$DIRECT ${DIRECT_FILTER:+-t "$DIRECT_FILTER"}', "DIRECT_FILTER: ${{ steps.all.outputs.direct_filter }}", "npm run secrets -- set apiKey --target local --stage local", 'npm run compliance -- --target local --out "$RUNNER_TEMP/compliance"', "npx playwright install --with-deps chromium"]) {
+        expect(release, `${file}: ${step}`).toContain(step);
+      }
+      expect(release, `${file}: verify re-ran the unit layer and both apps' verify, which the harness and unit steps now run once`).not.toContain("npm run verify");
+      expect(release, file).not.toMatch(/vitest run --config vitest\.integration\.config\.ts tests\/skill/);
     }
-    expect(release, "verify re-ran the unit layer and both apps' verify, which the harness and unit steps now run once").not.toContain("npm run verify");
-    expect(release).not.toMatch(/vitest run --config vitest\.integration\.config\.ts tests\/skill/);
   });
 });
 
