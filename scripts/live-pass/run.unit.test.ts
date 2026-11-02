@@ -210,5 +210,21 @@ describe("an offline live pass through both sessions", () => {
     expect(state.sessions.map((s: { number: number }) => s.number)).toEqual([1, 2]);
     // The runner's probe and stand-in tokens are gone; the everyday token and the signing token stay.
     expect(final.tokens.map((t: { name: string }) => t.name).sort()).toEqual(["live-pass-admin", "prototype-framework", "prototype-r2-signing"]);
+
+    // The analyst fetches every record with one command and the final token (here: a token with the admin token's groups).
+    const analysis = (() => {
+      const w = JSON.parse(readFileSync(worldFile, "utf8"));
+      const v = fw.addToken(w, { name: "live-pass-analysis", groups: ["Account API Tokens Write", "Account Settings Read", "D1 Write", "OAuth Client Write", "Secrets Store Write", "Workers Observability Write", "Workers R2 Storage Write", "Workers Scripts Write"], expiresInS: 7 * 86_400 });
+      writeFileSync(worldFile, JSON.stringify(w));
+      return v;
+    })();
+    const to = join(workdir, "analysis");
+    env = { PATH: baseEnv.PATH, HOME: baseEnv.HOME, FAKE_CF_WORLD: worldFile, NODE_OPTIONS: baseEnv.NODE_OPTIONS, CLOUDFLARE_ACCOUNT_ID: ACCOUNT, LIVE_PASS_ADMIN_TOKEN: analysis };
+    const dl = run("download", "--to", to);
+    expect(dl.status, transcript.join("\n")).toBe(0);
+    const runKeys = Object.keys(uploaded).filter((k) => k.startsWith(state.prefix));
+    const downloaded = walk(to).map((f) => f.slice(to.length + 1)).sort();
+    expect(downloaded).toEqual(runKeys.map((k) => k.slice(state.prefix.length)).sort());
+    expect(downloaded).toEqual(expect.arrayContaining(["state.json", "results.md", "handover.json"]));
   }, 600_000);
 });

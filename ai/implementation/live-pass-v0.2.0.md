@@ -106,6 +106,7 @@ Optional variables: `LIVE_PASS_BUCKET` (the records bucket; default `live-pass-r
 - **The admin app asks you to sign in again** (its session lasts 15 minutes): sign in, then repeat the page.
 - **You replied something wrong**: tell the agent; it runs `note "<your correction>"`, which goes into the records.
 - **R2 is not enabled** (the runner says so at `start`): section 1.2, then start again.
+- **The dashboard offers no "Workers Observability" permission** for the admin token: make it with the other seven. The run goes on and records that the Workers logs could not be collected (the framework's own log bucket and the auth app's records still are).
 - **The release candidate has another version string** than `0.2.0-rc01` (for example `0.2.0-rc.1`): tell the agent before `start`; it adds `--version <the version>` (or `--version next`).
 
 ## 6. What the run checks

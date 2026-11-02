@@ -154,8 +154,9 @@ export const STEPS = [
         ctx.observe(`reach ${new URL(url).host}`, { expected: "HTTP 200", observed: r.status, pass: r.status === 200 });
       }
       const missing = await ctx.adminGroupsMissing();
-      ctx.observe("admin token groups", { expected: "every group of the runbook's admin token", observed: missing.length === 0 ? "all present" : `missing: ${missing.join(", ")}`, pass: missing.length === 0 });
-      if (missing.length > 0) throw new Error(`The admin token LIVE_PASS_ADMIN_TOKEN lacks: ${missing.join(", ")}. Make it again as runbook section 1.4 says, put it in the environment settings and start a new session.`);
+      ctx.observe("admin token groups", { expected: "every group of the runbook's admin token", observed: missing.required.length === 0 ? "all required present" : `missing: ${missing.required.join(", ")}`, pass: missing.required.length === 0 });
+      ctx.observe("admin token: Workers Observability", { expected: "present (without it no Workers log is collected)", observed: missing.optional.length === 0 ? "present" : "missing: the run goes on without the Workers logs", pass: missing.optional.length === 0 ? true : null });
+      if (missing.required.length > 0) throw new Error(`The admin token LIVE_PASS_ADMIN_TOKEN lacks: ${missing.required.join(", ")}. Make it again as runbook section 1.4 says, put it in the environment settings and start a new session.`);
       const tokens = {};
       for (const [name, value] of Object.entries(ctx.starterTokens())) {
         const t = await starterToken(ctx, name, value);

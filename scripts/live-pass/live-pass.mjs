@@ -13,6 +13,8 @@
 //   skip <step> "<reason>"                         record a step as skipped (only when the owner decides)
 //   note "<text>"                                  add a note to the run's event log
 //   status                                         print where the run is
+//   download [--run <id>] [--to <dir>]             the analyst: fetch every record of a run (read-only;
+//                                                  LIVE_PASS_ADMIN_TOKEN may hold the final analysis token)
 // Options for every command: --bucket <name> (LIVE_PASS_BUCKET; default live-pass-records),
 //   --workdir <dir> (LIVE_PASS_WORKDIR; default ~/live-pass), --budget <seconds> (default 180: no new step starts after it), --run <id>.
 // Exit codes: 0 session or run done; 10 waiting for the owner; 11 time budget used, run `next` again;
@@ -47,7 +49,7 @@ function parse(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--new") opts.new = true;
-    else if (["--version", "--app", "--bucket", "--workdir", "--budget", "--run"].includes(a)) opts[a.slice(2)] = argv[++i];
+    else if (["--version", "--app", "--bucket", "--workdir", "--budget", "--run", "--to"].includes(a)) opts[a.slice(2)] = argv[++i];
     else if (a.startsWith("--")) throw new Error(`unknown option ${a}`);
     else opts._.push(a);
   }
@@ -67,7 +69,7 @@ try {
   fail(2, e.message);
 }
 const command = opts._[0];
-if (!["start", "next", "answer", "resume", "retry", "skip", "note", "status"].includes(command ?? "")) fail(2, "usage: live-pass.mjs start|next|answer|resume|retry|skip|note|status (see the file's header)");
+if (!["start", "next", "answer", "resume", "retry", "skip", "note", "status", "download"].includes(command ?? "")) fail(2, "usage: live-pass.mjs start|next|answer|resume|retry|skip|note|status|download (see the file's header)");
 
 const env = { ...process.env };
 const bucket = opts.bucket ?? env.LIVE_PASS_BUCKET ?? "live-pass-records";
@@ -81,6 +83,25 @@ let recorder = null;
 const onCall = (c) => (recorder ? recorder.append("api-calls.jsonl", c) : pendingCalls.push(c));
 const api = createApi({ token: env.LIVE_PASS_ADMIN_TOKEN, accountId: env.CLOUDFLARE_ACCOUNT_ID, onCall });
 const store = r2Store(api, bucket);
+
+if (command === "download") {
+  // Read-only: every object under runs/<id>/, written below --to with the same relative paths.
+  const latest = opts.run ? null : await store.get(LATEST_KEY).catch((e) => fail(3, e.message));
+  const runId = opts.run ?? (latest ? JSON.parse(latest).runId : undefined);
+  if (!runId) fail(2, `no run in the R2 bucket ${bucket}; give --run <id>`);
+  const prefix = `runs/${runId}/`;
+  const to = resolve(opts.to ?? join(workdir, "download", runId));
+  const { mkdirSync, writeFileSync } = await import("node:fs");
+  const objects = await r2Store(api, bucket).list(prefix).catch((e) => fail(3, e.message));
+  for (const o of objects) {
+    const body = await store.get(o.key);
+    const file = join(to, o.key.slice(prefix.length));
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, body ?? "");
+  }
+  say(`${objects.length} record files of run ${runId} (r2://${bucket}/${prefix}) written to ${to}`);
+  process.exit(objects.length > 0 ? 0 : 1);
+}
 
 const runnerSha = (() => {
   try {

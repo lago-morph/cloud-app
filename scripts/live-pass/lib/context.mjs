@@ -9,20 +9,9 @@ import { authDbRows, copyLogBucket, d1Query, ensureObservability, matching, quer
 import { diffSnapshots, takeSnapshot } from "./snapshot.mjs";
 import { addProdConfig } from "./steps.mjs";
 
-/**
- * The admin token's permission groups, as the API names them (the dashboard shows "Write" as
- * "Edit"). The final hand-over token holds the same groups.
- */
-export const ADMIN_GROUPS = [
-  "Account API Tokens Write",
-  "Account Settings Read",
-  "D1 Write",
-  "OAuth Client Write",
-  "Secrets Store Write",
-  "Workers Observability Write",
-  "Workers R2 Storage Write",
-  "Workers Scripts Write",
-];
+import { ADMIN_GROUPS, groupKey, missingGroups } from "./groups.mjs";
+
+export { ADMIN_GROUPS };
 
 const pad = (n) => String(n).padStart(3, "0");
 
@@ -136,9 +125,9 @@ export function contextFactory(deps) {
         return r.ok ? (r.body.result.policies ?? []).flatMap((p) => (p.permission_groups ?? []).map((g) => g.name)).sort() : null;
       },
 
+      /** { required, optional }: the admin groups the admin token lacks. */
       async adminGroupsMissing() {
-        const groups = (await ctx.tokenGroups(state().facts.adminTokenId)) ?? [];
-        return ADMIN_GROUPS.filter((g) => !groups.includes(g));
+        return missingGroups((await ctx.tokenGroups(state().facts.adminTokenId)) ?? []);
       },
 
       starterTokens() {
@@ -204,7 +193,8 @@ export function contextFactory(deps) {
       /** Prints the final token's groups and link, and what to hand to the analyst. */
       async finalInstructions() {
         const pg = await listAll(api, api.account("/tokens/permission_groups"), { perPage: 1000 });
-        const byName = new Map(pg.items.map((g) => [g.name, g.id]));
+        const byKey = new Map(pg.items.map((g) => [groupKey(g.name), g.id]));
+        const byName = new Map(ADMIN_GROUPS.filter((n) => byKey.has(groupKey(n))).map((n) => [n, byKey.get(groupKey(n))]));
         const keys = ADMIN_GROUPS.filter((n) => byName.has(n)).map((n) => ({ key: byName.get(n), type: n.endsWith(" Read") ? "read" : "edit" }));
         const missing = ADMIN_GROUPS.filter((n) => !byName.has(n));
         const link = `https://dash.cloudflare.com/?to=/:account/api-tokens&permissionGroupKeys=${encodeURIComponent(JSON.stringify(keys))}&name=live-pass-analysis`;
