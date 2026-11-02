@@ -1,0 +1,193 @@
+# Root cause: CI `compliance` fails every offline test with `unshare: write failed /proc/self/uid_map: Operation not permitted`
+
+Author: diagnosing subagent (`.claude/skills/testing-standards/resources/failure-diagnosis.md`, step 1). I did not write the code, the tests or the workflows. This is a diagnosis only: no code, test or workflow was changed. It needs an independent review (step 2) before anyone fixes it. No Cloudflare calls were made.
+
+**Finding in one line.** The tests and the framework are not at fault. Under the GitHub-hosted `ubuntu-24.04` runner, `unshare -rn` runs as the unprivileged `runner` user. It can create the user namespace but cannot write its own `uid_map`, which is what Ubuntu 24.04's AppArmor user-namespace restriction (`kernel.apparmor_restrict_unprivileged_userns=1`) does. So `unshare` exits 1 before `scripts/offline.sh` runs. These offline tests had never run on GitHub Actions before the owner installed the v0.2.0 `ci.yml` (a632b8c, 2026-10-31). They fail the first time the path map selects them, on the same runner image as the last green run.
+
+## Symptom
+
+The `compliance` job of `.github/workflows/ci.yml` fails at the step "Criteria and scenarios through the compliance harness" in every run since 2026-10-31 that selects the offline tests:
+
+| run / job | PR, head | compliance summary | failing tests |
+|---|---|---|---|
+| 41232661020 / 124629947865 | #164, af84816 | 63 passed, 60 not-run, **3 failed** | CLI-AC-002 (verify.test.ts), E2E-001 + LOCAL-AC-001 (E2E-001-E2E-003.spec.ts:87) |
+| 41376381848 / 125067753380 (attempt 2) | #165, 0a8292e | 116 passed, 7 not-run, **3 failed** | same three |
+| 41379125150 / 125065874957 | #166, 02dae34 | 94 passed, 31 not-run, **1 failed** | CLI-AC-002 (E2E-001 was not selected: 19 Playwright tests ran, all passed) |
+
+`ci.yml` triggers only on `pull_request`, so "main is red" means the PR merge commits: af84816 (#164), then #165 and #166, which are merged into c8ecba1.
+
+Failure text, identical in all three jobs (ANSI codes removed):
+
+```
+FAIL packages/framework/test/integration/cli/verify.test.ts > verify on the template > [CLI-AC-002] two consecutive verify runs with networking disabled give identical results
+AssertionError: verify exit 1:
+
+unshare: write failed /proc/self/uid_map: Operation not permitted
+: expected 1 to be +0 // Object.is equality
+ ❯ packages/framework/test/integration/cli/verify.test.ts:76:39
+```
+
+```
+1) [e2e-ui] › tests/compliance/e2e/E2E-001-E2E-003.spec.ts:87:1 › [E2E-001][LOCAL-AC-001] a scaffolded app installs the framework ... with no credentials and no network
+   Error: a cloud provider was reachable from the offline namespace:
+   unshare: write failed /proc/self/uid_map: Operation not permitted
+   Expected: 0
+   Received: 1
+   > 102 |   expect(probe.status, ...).toBe(0);
+```
+
+In #166 the same CLI-AC-002 failure is also reported by Vitest as an "Unhandled Error":
+
+```
+Error: write EPIPE
+ ❯ Socket.end node:net:737:31
+ ❯ packages/framework/test/fixtures/support/app.ts:215:17
+    215|     child.stdin.end(options.stdin ?? "");
+Serialized Error: { errno: -32, code: 'EPIPE', syscall: 'write' }
+The last test to run before this error was "[CLI-AC-002] two consecutive verify runs with networking disabled give identical results".
+```
+
+## Evidence
+
+The logs were fetched with the GitHub MCP `get_job_logs` (full logs: af84816 1076 lines, #165 1415 lines, #166 1380 lines, last green 672 lines). They were kept in my scratchpad (`/tmp/claude-0/-home-user-cloud-app/40acaefa-30e9-5664-9b0f-2d72e2fb0b88/scratchpad/logs/`), which is ephemeral. The excerpts here are the record.
+
+### E1. The runner image did not change between the last green run and the failures
+
+"Set up job" of each `compliance` job:
+
+| job | result | Image | Image version | Provisioner | Region |
+|---|---|---|---|---|---|
+| 124622206075 (#163, 35a1278, 2026-10-31 18:34Z) | **success** | ubuntu-24.04 (Ubuntu 24.04.5 LTS) | 20261025.353.1 | 20261021.618 | westus |
+| 124629947865 (#164, af84816, 19:07Z) | failure | ubuntu-24.04 | 20261025.353.1 | 20261021.618 | westus3 |
+| 125067753380 (#165, 0a8292e, 2026-11-02) | failure | ubuntu-24.04 | 20261025.353.1 | 20261021.618 | eastus |
+| 125065874957 (#166, 02dae34, 2026-11-02) | failure | ubuntu-24.04 | 20261025.353.1 | 20261021.618 | centralus |
+
+`runs-on: ubuntu-24.04` is the same in the old and the new `ci.yml`, and in `release.yml`.
+
+### E2. The last green `compliance` run did not select any offline test
+
+The last green run's job env shows `IDS: SKILL-AC-001,…,SKILL-AC-008` and `DIRECT: packages/create-prototype-app/test tests/skill`. Its log has 0 occurrences of `unshare`. The failing runs select `CLI-AC-002` (and `CHECK-AC-005`, `E2E-001`, `LOCAL-AC-001` in #164/#165), with `DIRECT` including `packages/framework/test/integration/cli`.
+
+### E3. No GitHub-hosted job had ever run `unshare` before a632b8c
+
+- `unshare` is used only by `packages/framework/test/fixtures/support/app.ts:199` (`run(..., { offline: true })`, used only by `packages/framework/test/integration/cli/verify.test.ts`) and by `tests/compliance/e2e/E2E-001-E2E-003.spec.ts:60` (`offline()`). Found with `grep -rn "unshare\|offline.sh"` outside docs, and `grep -rln "offline: true\|OFFLINE_WRAPPER"`.
+- The CI before the owner applied the v0.2.0 workflows (`.github/workflows/ci.yml` at a519cd8) ran: build, typecheck, lint, `test:unit`, the template and reference apps' `verify`, `tests/skill`, and `packages/create-prototype-app`. It ran no framework integration suite and no compliance harness.
+- The release workflow, before v0.2.0 (228f122 for v0.1.0, d961306 for v0.1.1), ran `npm run verify` (the same list plus `tests/skill/example-pages.test.ts`) and `tests/skill packages/create-prototype-app`. It had no offline test.
+- a632b8c "Apply the v0.2.0 workflows" (owner, 2026-10-31 13:28 -0500 = 18:28Z) replaced `ci.yml` with the classify/checks/compliance/verify layout. The first CI run on its base that selected the CLI suite or E2E-001 is af84816's, and it failed. Between a632b8c and af84816 the only `compliance` runs were 41229720004 (cancelled) and 41230005634 (green, skill-only selection, E2).
+
+### E4. The error is printed by `unshare` itself, after `unshare(2)` succeeded and before `offline.sh` ran
+
+- util-linux `unshare -r` (Ubuntu 24.04 ships util-linux 2.39.3, the same version as this sandbox) calls `unshare(2)` and then writes `deny` to `/proc/self/setgroups` and `0 <uid> 1` to `/proc/self/uid_map`. A failed `unshare(2)` prints `unshare: unshare failed: <errno>`. A failed map write prints `unshare: write failed <file>: <errno>`. The observed message is the second form for `uid_map`. So the namespace was created, the setgroups write passed, and the `uid_map` write was refused with EPERM.
+- Experiment, to show that the message tells the two cases apart (this sandbox; a nested user namespace with `max_user_namespaces=0`, so nothing else is affected):
+  ```
+  $ unshare -Ur sh -c 'echo 0 > /proc/sys/user/max_user_namespaces && unshare -rn true; echo inner_rc=$?'
+  unshare: unshare failed: No space left on device
+  inner_rc=1
+  ```
+  So a kernel or seccomp refusal to create the namespace gives a different message from the CI one.
+- In the kernel, a write to `uid_map` requires `CAP_SYS_ADMIN` in the new namespace (`map_write` → `file_ns_capable(..., CAP_SYS_ADMIN)`). The creator normally has every capability there. With Ubuntu's restriction on, an unconfined unprivileged process that creates a user namespace is moved to AppArmor's `unprivileged_userns` profile. That profile allows the namespace but denies every capability in it. So the `uid_map` write fails with EPERM. This is exactly the observed state: the namespace was created, and the map write was refused.
+- External corroboration of the same symptom on Ubuntu 24.04 with the same mechanism (a user namespace plus a network namespace to cut networking):
+  - AMD UG1144, "Workaround for uid_map error on Ubuntu 24.04": BitBake's `disable_network` fails with `Errno 1 Operation not permitted` when it "attempts to write to the file /proc/self/uid_map". The documented fix is `echo 0 > /proc/sys/kernel/apparmor_restrict_unprivileged_userns`. (https://docs.amd.com/r/en-US/ug1144-petalinux-tools-reference-guide/Workaround-for-uid_map-error-on-Ubuntu-24.04)
+  - actions/runner-images#10443: `unshare(...)` gives `Operation not permitted` on the `ubuntu-24.04` hosted image. Running on 22.04 or in a privileged container works around it. (https://github.com/actions/runner-images/issues/10443)
+  - Ubuntu's own description: unconfined applications may create user namespaces but are denied capabilities inside them, under the `kernel.apparmor_restrict_unprivileged_userns` knob (https://discourse.ubuntu.com/t/understanding-apparmor-user-namespace-restriction/58007; Qualys, https://www.qualys.com/2025/three-bypasses-of-Ubuntu-unprivileged-user-namespace-restrictions.txt).
+
+### E5. The same tests pass where unprivileged user namespaces are not restricted
+
+This sandbox runs Linux 6.18 (Firecracker) with no AppArmor: there is no `/proc/sys/kernel/apparmor_restrict_unprivileged_userns` and no `/sys/module/apparmor`, and `max_user_namespaces` is 64278.
+- An unprivileged user (uid 65534, all inheritable capabilities dropped) can run the exact form the tests use:
+  ```
+  $ setpriv --reuid=65534 --regid=65534 --clear-groups --inh-caps=-all unshare -rn sh -c 'id; cat /proc/self/uid_map'
+  uid=0(root) gid=0(root) groups=0(root)
+           0      65534          1
+  rc=0
+  ```
+- The failing test, on `origin/main` 459fdfb (the c8ecba1 tree plus only `release.yml`), after `npm ci` and the framework build:
+  ```
+  $ npx vitest run --config vitest.integration.config.ts packages/framework/test/integration/cli/verify.test.ts -t "two consecutive verify runs with networking disabled"
+   Test Files  1 passed (1)
+        Tests  1 passed | 11 skipped (12)
+   Duration  137.47s
+  ```
+  (The sandbox runs it as root; the next bullet shows that the wrapper also works for a non-root user here.)
+- The exact wrapper, as the unprivileged user, gives a namespace with loopback only:
+  ```
+  $ setpriv --reuid=65534 --regid=65534 --clear-groups --inh-caps=-all unshare -rn sh scripts/offline.sh cat /proc/self/uid_map /proc/net/dev
+           0      65534          1
+  Inter-|   Receive ...
+      lo:       0       0    0 ...
+  ``` I did not run E2E-001 locally. Its failure in CI is at its first `offline()` call (the probe at line 102/103), with the same `unshare` message, before any framework code runs.
+
+### E6. The EPIPE in #166 is a consequence of `unshare` exiting at once
+
+`run()` in `packages/framework/test/fixtures/support/app.ts` spawns the child with a stdin pipe and calls `child.stdin.end(options.stdin ?? "")` synchronously right after `spawn`, with no `'error'` listener on `child.stdin`. If the child has already exited, which is what `unshare` does when the map write fails, the write raises EPIPE as an uncaught exception. Minimal model (scratchpad `epipe.mjs`: spawn, optional busy wait, then `stdin.end("")`, counting EPIPE through a listener):
+
+```
+/bin/false, no delay:      48/300 runs raised EPIPE on child.stdin.end("")
+/bin/false, 20 ms delay:  100/100 runs raised EPIPE
+/bin/cat,   20 ms delay:    0/100 runs raised EPIPE   (a child that stays alive)
+```
+
+So the EPIPE occurs only some of the time (af84816 and #165 show the plain assertion and no EPIPE), and only when the child is already gone. It is a secondary symptom, not a cause. See "Proposed fix", open item.
+
+## Causal chain
+
+1. **The owner's v0.2.0 `ci.yml` (a632b8c, 2026-10-31) added a `compliance` job that runs the selected framework integration suites and the compliance harness on `ubuntu-24.04` GitHub-hosted runners.** Evidence: E3 (the old `ci.yml` and the old `release.yml` contents; a632b8c's diff).
+2. **When a PR's changes select CLI-AC-002 (or E2E-001/LOCAL-AC-001), the job runs tests that cut networking with `unshare -rn sh scripts/offline.sh …`, as the unprivileged `runner` user.** Evidence: E2 (the IDS/DIRECT selections of the failing jobs versus the green one); E3 (the only callers of `unshare`); `app.ts:199`; `E2E-001-E2E-003.spec.ts:60`; testing-standards rule 9 mandates this form.
+3. **On that runner, `unshare(2)` succeeds but writing `/proc/self/uid_map` is refused with EPERM, so `unshare` exits 1 without running `offline.sh` or the command.** Evidence: E4 (the message form proves the map write failed after the namespace was created; the experiment shows the alternative message); the identical line in all three jobs (E1/Symptom).
+4. **The refusal comes from Ubuntu 24.04's AppArmor restriction on unprivileged user namespaces (`kernel.apparmor_restrict_unprivileged_userns=1`), which denies capabilities inside the new namespace, and `map_write` needs `CAP_SYS_ADMIN` there.** Evidence: E4 (the kernel requirement; Ubuntu's documented behaviour; the identical `uid_map` EPERM on Ubuntu 24.04 with the same sysctl as the fix in AMD UG1144; runner-images#10443 on this image); E5 (the same command and test succeed on a kernel without the restriction, as an unprivileged user too). **Not directly observed:** no job has printed the runner's sysctl value. See "Unproven link".
+5. **The tests therefore see exit status 1 and fail their first assertion: CLI-AC-002 at `verify.test.ts:76`, E2E-001/LOCAL-AC-001 at `E2E-001-E2E-003.spec.ts:102/103`.** When `unshare` has already exited before `child.stdin.end`, the test support also throws EPIPE (E6). Evidence: Symptom; E6.
+
+**Unproven link (4).** The value of `kernel.apparmor_restrict_unprivileged_userns` on runner image 20261025.353.1 has not been read. This session cannot push `.github/workflows/*`, and no existing job prints it. Everything else about link 4 is consistent and corroborated: the exact error form, the kernel requirement, Ubuntu 24.04's documented default, identical third-party reports and fixes, and the success where the restriction is absent. The first step of the verification plan reads the value directly; if it is `0` or absent, this record is wrong and goes back to step 1.
+
+## Alternatives ruled out
+
+- **Runner image change.** E1: the same image `ubuntu-24.04` 20261025.353.1 and the same provisioner 20261021.618 in the last green job and in all three failures; `runs-on` unchanged.
+- **Load, timing, flakiness.** The failure is deterministic: 3 of 3 jobs that selected CLI-AC-002, and 2 of 2 that selected E2E-001, failed with the same message, in four regions on different days. `unshare` refuses in milliseconds, at its own start; no timeout is involved. The same test passes alone locally (E5), and the CI failure is not a "fails only alongside other suites" case: the message comes from a permission check, not from contention.
+- **A test defect.** The test passes locally (E5). Its assertion fails because the offline wrapper never ran, not because of what `verify` printed. The wrapper form is the one the standards require (rule 9), so the test is right to use it. The EPIPE (E6) is a robustness defect in the test support that makes the report noisier; it does not cause the failure (af84816 and #165 fail without it).
+- **A code change in #165 or #166.** The failure first appears on af84816 (#164, 2026-10-31), before either PR existed. Neither PR touches the failing path: `scripts/offline.sh`, `scripts/lo-up.py`, `app.ts` and `verify.test.ts` are unchanged from 35a1278 to 459fdfb (`git diff --stat`). The only change in `E2E-001-E2E-003.spec.ts` is two lines of its version pin, not its `offline()` helper. In any case `unshare` fails before any repository code runs.
+- **`offline.sh` itself (for example, `ip link set lo up` failing).** If `offline.sh` had run and failed, the error would come from `ip` or `lo-up.py`. The message is from `unshare`, before `exec`. `offline.sh` was last changed before a632b8c and works locally.
+- **User namespaces disabled outright (`max_user_namespaces=0`, a Debian-style `unprivileged_userns_clone=0`, or seccomp denying `unshare`).** All of these make `unshare(2)` fail and print `unshare failed: …` (E4 experiment). The CI message shows `unshare(2)` succeeded.
+- **The workflow move (`scripts/ci/workflows/` → `.github/workflows/`) changing the environment.** The move changed which tests run (link 1), not how a job runs: the same `runs-on`, no `container:`, and no step that touches AppArmor or sysctls.
+
+## Proposed fix
+
+Workflow change only; no test or framework change. The owner installs it (the session cannot push `.github/workflows/*`). The fixer stages it as full replacement files under `scripts/ci/staged/` with the "STAGED COPY (DEC-0637)" header convention.
+
+1. **`ci.yml`, job `compliance`: add a step right after `actions/setup-node`, before `npm ci`:**
+   ```yaml
+   # Ubuntu 24.04's AppArmor denies capabilities inside unprivileged user namespaces, so
+   # `unshare -rn` cannot write /proc/self/uid_map and every offline test fails (root cause
+   # ai/implementation/root-causes/2026-11-02-ci-userns-offline.md). Lift the restriction on this
+   # throwaway runner, then prove the offline wrapper works before any test relies on it.
+   - name: Allow unprivileged user namespaces (offline tests use unshare -rn)
+     run: |
+       echo "before: $(sysctl -n kernel.apparmor_restrict_unprivileged_userns)"
+       sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+       unshare -rn sh scripts/offline.sh cat /proc/self/uid_map /proc/net/dev
+   ```
+   - The `sysctl -n` line reads the value that link 4 needs. It fails loudly if the key does not exist on the runner kernel, which would falsify the diagnosis.
+   - The last line runs the exact wrapper the tests use, without sudo, and shows the namespace's map and its only interface. A green step means the namespace, the map and loopback-up all work before ten minutes of tests are spent.
+2. **`release.yml`, job `verify`: the same step, in the same place (after setup-node, before `npm ci`).** The release job runs every local criterion and scenario with no `--only`, so CLI-AC-002, E2E-001 and LOCAL-AC-001 would fail the next release tag the same way. No release has run since v0.1.1, so this has not been observed yet.
+3. **Why this addresses the cause and not the symptom.** The cause is the runner's LSM policy refusing capabilities in the new user namespace. Setting the documented knob to 0 restores the kernel's default rule, under which the namespace creator is root inside it. That is the condition the tests already assume (E5). The tests keep cutting networking the way rule 9 requires; nothing is skipped, weakened or run with sudo. The change is limited to an ephemeral, single-tenant hosted VM that is discarded after the job.
+   - The narrower alternative, for the reviewer to weigh, is an AppArmor profile that grants `userns,` to `/usr/bin/unshare` only, loaded with `sudo apparmor_parser -r`. It keeps the restriction for every other program, but it is more moving parts, and how children exec'd under that profile behave would need its own proof. On a throwaway runner, I recommend the sysctl.
+   - Rejected: `sudo unshare -n` (it runs the tests as root, which changes file ownership and the code paths under test), and simulating offline any other way (forbidden by rule 9).
+4. **Open item, not part of this fix (test-support owner):** `packages/framework/test/fixtures/support/app.ts` `run()` has no `'error'` listener on `child.stdin`, so a child that exits before `stdin.end` raises an uncaught EPIPE that Vitest reports as an unhandled error (E6). It should be ignored or recorded as part of the result, so that the assertion with the child's own output is the only report. A red-green unit or integration test can model it with a command that exits at once. It is independent of the CI cause; fixing it alone would not make any test pass.
+
+## Verification plan
+
+The session cannot push `.github/workflows/*`, so the workflow check is done in two parts:
+
+- **Before the owner installs it (fixer, red-green where possible):**
+  - *Red (already on record):* the three failing jobs above. No new run is needed.
+  - *Static check:* extend `tests/ci-classify.unit.test.ts`, which already reads `.github/workflows/ci.yml`, `release.yml` and a staged `scripts/ci/staged/release.yml` when one exists. Add a test that the `compliance` job of `ci.yml`, and the `verify` job of `release.yml`, have a step that sets `kernel.apparmor_restrict_unprivileged_userns=0` and runs `unshare -rn sh scripts/offline.sh` before `npm ci`. It reads the staged copy when one exists, and the installed file otherwise. It is red against the current workflows and green against the staged copies.
+  - *Local:* the proof line `unshare -rn sh scripts/offline.sh cat /proc/self/uid_map /proc/net/dev` already runs here as an unprivileged user (E5). This sandbox has no AppArmor, so it cannot show the restriction itself.
+- **After the owner installs the staged files (owner, then the test runner and the evaluator, step 4):**
+  1. In the new step's log, `before:` should print `1` (this proves link 4). After it, the `sysctl -w` line should print `= 0`, and the wrapper line should print a `uid_map` of `0 <runner uid> 1` and a `/proc/net/dev` listing only `lo`. If `before:` prints `0`, or the key is missing, the diagnosis is wrong: reopen at step 1.
+  2. Re-run `compliance` on a PR that selects CLI-AC-002 and E2E-001/LOCAL-AC-001 (re-run #165's or #166's checks against the new base, or open a PR touching `packages/framework/test/integration/cli/`). CLI-AC-002 "two consecutive verify runs with networking disabled give identical results", E2E-001 and LOCAL-AC-001 must pass, and the log must contain no `unshare:` line and no unhandled EPIPE.
+  3. `release.yml` has no `workflow_dispatch`, so its new step first runs on the next RC tag. Its log must show the same lines as in 1, and the full local compliance run must have no `unshare:` failure.
+
+## Review
+
+Written by the independent root-cause reviewer (step 2).
+
+Status: awaiting review
