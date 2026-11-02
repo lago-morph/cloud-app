@@ -10,10 +10,10 @@
 # Actions are pinned to full commit SHAs.
 name: Release
 
+# The tag pattern: `*` matches any characters but `/`, so it also fires for vX.Y.Z-rcNN;
+# release-check refuses any other tag shape before anything is built or published.
 on:
   push:
-    # `*` matches any characters but `/`, so this also fires for vX.Y.Z-rcNN; release-check refuses
-    # any other tag shape before anything is built or published.
     tags: ["v*.*.*"]
 
 permissions:
