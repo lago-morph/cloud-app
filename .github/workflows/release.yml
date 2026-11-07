@@ -38,6 +38,18 @@ jobs:
           node-version: 22.22.0
           package-manager-cache: false # no cache in release builds
 
+      # Ubuntu 24.04's AppArmor denies capabilities inside unprivileged user namespaces
+      # (kernel.apparmor_restrict_unprivileged_userns=1 on this image), so `unshare -rn` cannot write
+      # /proc/self/uid_map and every offline test fails (root cause
+      # ai/implementation/root-causes/2026-11-02-ci-userns-offline.md). Lift the restriction on this
+      # throwaway runner, then prove the offline wrapper works before any test relies on it.
+      - name: Allow unprivileged user namespaces (offline tests use unshare -rn)
+        run: |
+          before=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns)
+          echo "kernel.apparmor_restrict_unprivileged_userns before: $before"
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          unshare -rn sh scripts/offline.sh cat /proc/self/uid_map /proc/net/dev
+
       - name: Tag, versions and CHANGELOG agree
         run: node scripts/release-check.mjs "$GITHUB_REF_NAME"
 
