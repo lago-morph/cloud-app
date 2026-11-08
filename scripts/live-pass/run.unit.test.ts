@@ -13,7 +13,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { BOOT_GROUPS, harness, PRIMARY_TOKEN, TESTER } from "./test-support/harness.mjs";
+import { ACCOUNT, BOOT_GROUPS, harness, PRIMARY_TOKEN, TESTER } from "./test-support/harness.mjs";
 import { STEPS } from "./lib/steps.mjs";
 
 const PART2 = new Set(STEPS.filter((s: { session: number }) => s.session === 2).map((s: { id: string }) => s.id));
@@ -79,9 +79,8 @@ describe("an offline live pass in one session", () => {
     r = ask(h.run(c, "answer", "ok"), "S16");
     r = ask(h.run(c, "answer", "ok"), "U1");
     h.owner.updateStandIn(everydayId);
-    r = ask(h.run(c, "answer", "updated"), "E-10");
-    h.owner.cleanUpMail();
-    r = h.run(c, "answer", "ok");
+    // E-10 (Clean up v0.1.x email) is not in this pass: the owner has no v0.1.x installs (DEC-0793).
+    r = h.run(c, "answer", "updated");
     expect(r.status, h.transcript.join("\n")).toBe(0);
     expect(r.out).toContain("THE LIVE PASS IS FINISHED");
     expect(r.out).toMatch(/R2 bucket live-pass-records, prefix runs\/lp-[0-9-]+\//);
@@ -89,7 +88,7 @@ describe("an offline live pass in one session", () => {
     expect(r.out).toContain(`rm -rf ${c.secrets}`);
 
     // ---- Every owner prompt: the login whose browser profile it is for, one link, one to three sentences, the exact reply ----
-    expect(prompts.length).toBe(19);
+    expect(prompts.length).toBe(18);
     expect(prompts.some((p) => /OWNER STEP (TOK-S1|S1) /.test(p))).toBe(false);
     const forPrimary = prompts.filter((p) => p.includes("===\nIn the primary account login's browser profile:")).map((p) => p.match(/OWNER STEP (\S+) \(part (\d+)/)?.slice(1).join("."));
     expect(forPrimary).toEqual(["P3.1", "S6.2", "S13.2", "S14.1", "S14.2", "S14.3"]);
@@ -105,6 +104,7 @@ describe("an offline live pass in one session", () => {
       expect(words, p).not.toMatch(/\btester\b|\bthe owner\b|\byour email\b|\byou \(/i);
     }
     // A pasted value goes into a file, never into a command.
+    for (const p of prompts.filter((x) => /OWNER STEP TOK-/.test(x))) expect(p).toContain(`Open: https://dash.cloudflare.com/${ACCOUNT}/api-tokens?permissionGroupKeys=`);
     for (const p of prompts.filter((x) => /OWNER STEP TOK-/.test(x))) expect(p).toMatch(/save that value .* as \S+\/LIVE_PASS_STARTER(_RERUN)?, run chmod 600 .* answer saved/s);
 
     // ---- What the analyst gets ----

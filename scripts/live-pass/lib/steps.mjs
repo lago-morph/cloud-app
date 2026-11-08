@@ -15,7 +15,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createApi, describe as describeR } from "./cloudflare.mjs";
-import { OWNER_GROUPS } from "./groups.mjs";
+import { OWNER_GROUP_IDS, OWNER_GROUPS } from "./groups.mjs";
 import { SECRET } from "./secrets.mjs";
 import { find } from "./snapshot.mjs";
 
@@ -33,8 +33,15 @@ const SIGNING_SECRETS = ["PROTOTYPE_R2_ACCESS_KEY_ID", "PROTOTYPE_R2_SECRET_ACCE
 const EVERYDAY_NAME = "prototype-framework";
 const EVERYDAY_GROUPS = ["D1 Write", "Secrets Store Read", "Workers R2 Storage Write", "Workers Scripts Write"]; // EVERYDAY_V2, sorted
 const BOOTSTRAP_GROUPS = ["Account API Tokens Write", "OAuth Client Write", "Secrets Store Write", "Workers Scripts Write"];
-/** The framework's own starter-token link (four groups by ID, DEC-0563); the API cannot make this token (code 1001). */
-export const BOOTSTRAP_LINK = `https://dash.cloudflare.com/?to=/:account/api-tokens&permissionGroupKeys=${encodeURIComponent(JSON.stringify(["e086da7e2179491d91ee5f35b3ca210a", "50fc2f43318f40e4855a35d8de5bf643", "adc8fa2bc6124928a8b3314dc63a1235", "5bc3f8b21c554832afc660159ab75fa4"].map((key) => ({ key, type: "edit" }))))}&name=prototype-framework-bootstrap`;
+/**
+ * The starter-token link for the test Cloudflare account (the API cannot make this token, code 1001):
+ * the account's own token page, pre-filled with the token's name and its four groups by ID (DEC-0563's
+ * link form). The dashboard cannot pre-fill the end date, which the prompt names in one line.
+ */
+export function starterTokenLink(accountId) {
+  const keys = BOOTSTRAP_GROUPS.map((g) => ({ key: OWNER_GROUP_IDS[g], type: "edit" }));
+  return `https://dash.cloudflare.com/${accountId}/api-tokens?permissionGroupKeys=${encodeURIComponent(JSON.stringify(keys))}&name=prototype-framework-bootstrap`;
+}
 export const TESTER_ROLE = "HTTP Applications Read";
 // Every prompt names its login (`who`): "test" is the test account login (the new login whose sign-up made
 // the test Cloudflare account; its Super Administrator), "primary" the primary account login (the login
@@ -78,9 +85,10 @@ const levelOf = (answer) => (/admin/i.test(answer) ? "admin" : /user/i.test(answ
 function starterTokenPart(name, ttl, { skippable = true } = {}) {
   return {
     saveAs: name,
-    prompt: () => ({
-      link: BOOTSTRAP_LINK,
-      who: "test", text: [`Pick the test Cloudflare account under Account Resources, ${ttl}, then press "Continue to summary" and "Create Token".`, "Copy the token's value (the API cannot make this token: only a dashboard-made token may hold Account API Tokens Edit)."],
+    prompt: (ctx) => ({
+      link: starterTokenLink(ctx.state.accountId),
+      who: "test",
+      text: [`Set the end date to tomorrow, the one thing the link cannot fill in (${ttl}).`, "Then press \"Continue to summary\" and \"Create Token\", and copy the token's value (only a token made in the dashboard may hold Account API Tokens Edit, so the runner cannot make it)."],
       reply: skippable ? "paste the value into this chat, or skip" : "paste the value into this chat",
     }),
     async verify(ctx, answer) {
@@ -312,7 +320,7 @@ export const STEPS = [
     session: 1,
     title: "The test account login makes the starter token for the bootstrap (S4)",
     expected: ["a starter token with the framework's four groups and an end date of tomorrow, pasted by the owner and saved in the secrets directory"],
-    owner: [starterTokenPart(SECRET.starter, "set the end date to tomorrow (the framework refuses a starter token with more than one day left)", { skippable: false })],
+    owner: [starterTokenPart(SECRET.starter, "the framework refuses a starter token with more than one day left", { skippable: false })],
   },
   {
     id: "C-1",
@@ -375,7 +383,7 @@ export const STEPS = [
     session: 1,
     title: "The test account login makes the second starter token (for the re-run, S5)",
     expected: ["a second starter token with the framework's four groups and an end date of tomorrow, pasted by the owner; or skip (S5 n/a)"],
-    owner: [starterTokenPart(SECRET.starterRerun, "set the end date to tomorrow (S5 runs the bootstrap again with it)")],
+    owner: [starterTokenPart(SECRET.starterRerun, "S5 runs the bootstrap again with it")],
   },
   {
     id: "S5",
@@ -939,32 +947,6 @@ export const STEPS = [
         ctx.observe(`cleanup token ${id}`, { expected: "deleted (the runner's stand-in, or the copy page 2 made for it)", observed: d.status, pass: d.ok || d.status === 404 });
       }
     },
-  },
-  {
-    id: "E-10",
-    session: 2,
-    check: "E-10",
-    title: "Clean up v0.1.x email: R2 object and bucket deletes with a grant token (E-10)",
-    expected: ["the runner makes a stand-in bucket prototype-mailsink with one object", "\"The Worker prototype-mailsink was already gone.\"", "\"Deleted the R2 bucket prototype-mailsink and its 1 stored test messages.\"", "the bucket is gone"],
-    async run(ctx) {
-      const c = await ctx.api.call("POST", ctx.api.account("/r2/buckets"), { json: { name: "prototype-mailsink" } });
-      const p = await ctx.api.call("PUT", ctx.api.account("/r2/buckets/prototype-mailsink/objects/probe.txt"), { body: "probe", contentType: "text/plain" });
-      ctx.observe("stand-in bucket", { check: "E-10", expected: "made, with one object", observed: { bucket: c.status, object: p.status }, pass: (c.ok || c.status === 409) && p.ok });
-    },
-    owner: [
-      {
-        prompt: (ctx) => ({
-          link: ctx.facts.adminUrl,
-          who: "test", text: [`Open "Clean up v0.1.x email", press "Continue at Cloudflare" and approve.`, "You should see \"The Worker prototype-mailsink was already gone.\" and \"Deleted the R2 bucket prototype-mailsink and its 1 stored test messages.\""],
-          reply: "ok",
-        }),
-        async verify(ctx, answer) {
-          replyCheck(ctx, answer, "the bucket and its message deleted");
-          const s = await ctx.freshSnapshot();
-          ctx.observe("stand-in bucket gone", { check: "E-10", expected: "absent", observed: find.bucket(s, "prototype-mailsink") ? "present" : "absent", pass: find.bucket(s, "prototype-mailsink") === undefined });
-        },
-      },
-    ],
   },
   {
     id: "S17",

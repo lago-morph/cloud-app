@@ -100,9 +100,7 @@ describe("an offline live pass that loses its container in both parts", () => {
     h.prompt(h.run(c, "answer", "ok"), "S16");
     h.prompt(h.run(c, "answer", "ok"), "U1");
     h.owner.updateStandIn(everydayId);
-    h.prompt(h.run(c, "answer", "updated"), "E-10");
-    h.owner.cleanUpMail();
-    const r = h.run(c, "answer", "ok");
+    const r = h.run(c, "answer", "updated");
     if (r.status !== 0 || !r.out.includes("THE LIVE PASS IS FINISHED")) throw new Error(`the run did not finish:\n${h.transcript.join("\n")}`);
     rolledAfter = (h.world().rolled ?? []).length;
     if (existsSync(join(c.secrets, "CLOUDFLARE_API_TOKEN"))) values.rolled3 = readFileSync(join(c.secrets, "CLOUDFLARE_API_TOKEN"), "utf8").trim();
