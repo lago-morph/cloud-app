@@ -51,9 +51,7 @@ describe("an offline live pass that loses its container in both parts", () => {
     h.firstMessage(c);
     h.prompt(h.run(c, "start", "--tester", TESTER), "P3");
     h.owner.acceptInvitation();
-    h.prompt(h.run(c, "answer", "ok"), "TOK-S1");
-    h.paste(c, "LIVE_PASS_STARTER_LONG", (values.long = h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, null)));
-    h.prompt(h.run(c, "answer", "saved"), "TOK-S4");
+    h.prompt(h.run(c, "answer", "ok"), "TOK-S4");
     h.paste(c, "LIVE_PASS_STARTER", (values.boot = h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, 23 * 3600)));
     h.prompt(h.run(c, "answer", "saved"), "TOK-S5");
     h.paste(c, "LIVE_PASS_STARTER_RERUN", (values.rerun = h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, 23 * 3600)));

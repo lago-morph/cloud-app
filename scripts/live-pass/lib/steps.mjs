@@ -307,40 +307,6 @@ export const STEPS = [
     },
   },
   {
-    id: "TOK-S1",
-    session: 1,
-    title: "The owner makes the starter token with no expiry (for S1)",
-    expected: ["a starter token with the framework's four groups and no expiry, pasted by the owner and saved in the secrets directory; or skip (S1 n/a)"],
-    owner: [starterTokenPart(SECRET.starterLong, "leave the end date empty (S1 checks that the framework deletes such a token at once)")],
-  },
-  {
-    id: "S1",
-    session: 1,
-    check: "SETUP-AC-011",
-    title: "A starter token with no expiry is deleted at once",
-    expected: ["\"…: it has no expiry … Setup deleted it at once and used it for nothing else.\" and the link again", "exit 1", "the token no longer verifies and is gone from the list", "no token value in the output", "nothing else created"],
-    async run(ctx) {
-      const value = ctx.secretValue(SECRET.starterLong);
-      if (!value) {
-        ctx.na("the owner skipped the starter token with no expiry");
-        return;
-      }
-      const t = await starterToken(ctx, SECRET.starterLong, value);
-      ctx.observe("token before", { expected: "active, no expiry", observed: { status: t.status, expiresOn: t.expiresOn }, pass: t.ok && t.expiresOn === null });
-      const before = await ctx.freshSnapshot();
-      const rec = await ctx.fw(["cloudflare-setup"], { set: { CLOUDFLARE_BOOTSTRAP_TOKEN: value }, label: "long-lived" });
-      expectExit(ctx, rec, 1, "S1");
-      expectText(ctx, rec, ["no expiry", "deleted it at once", "https://dash.cloudflare.com/"], "S1");
-      expectNoSecret(ctx, rec, "S1");
-      const v = await ctx.verify(value);
-      ctx.observe("token after", { check: "S1", expected: "no longer verifies", observed: v.ok ? { status: v.status } : v.error, pass: !v.ok });
-      const after = await ctx.freshSnapshot();
-      ctx.observe("token gone from the list", { check: "S1", expected: "absent", observed: find.token(after, t.id) ? "present" : "absent", pass: find.token(after, t.id) === undefined });
-      const diff = ctx.diff(before, after);
-      ctx.observe("nothing else created", { check: "S1", expected: "nothing added", observed: diff, pass: diff.added.length === 0 });
-    },
-  },
-  {
     id: "TOK-S4",
     session: 1,
     title: "The owner makes the starter token for the bootstrap (S4)",
@@ -623,21 +589,21 @@ export const STEPS = [
     id: "R1",
     session: 2,
     title: "Part 2 preflight: the everyday token, and no starter token left",
-    expected: ["the everyday token's value in the secrets directory verifies as the token page 2 made (rolled again if a new container lost it)", "every starter token is gone (each deleted itself, or was deleted at once)", "network reachable"],
+    expected: ["the everyday token's value in the secrets directory verifies as the token page 2 made (rolled again if a new container lost it)", "every starter token is gone (each deleted itself)", "network reachable"],
     blocking: true,
     async run(ctx) {
       await ctx.ensureEveryday();
       const value = ctx.secretValue(SECRET.everyday);
       const v = value ? await ctx.verify(value) : { ok: false, error: `no value in ${ctx.vault.dir}/${SECRET.everyday}` };
       ctx.observe("everyday token", { expected: `active, ID ${ctx.facts.everydayTokenId}`, observed: v.ok ? { id: v.id, status: v.status, kind: v.kind } : v.error, pass: v.ok && v.status === "active" && v.id === ctx.facts.everydayTokenId });
-      for (const name of [SECRET.starter, SECRET.starterLong, SECRET.starterRerun]) {
+      for (const name of [SECRET.starter, SECRET.starterRerun]) {
         const tv = ctx.secretValue(name);
         if (!tv) {
           ctx.observe(name, { expected: "gone", observed: "not in the secrets directory", pass: null });
           continue;
         }
         const t = await ctx.verify(tv);
-        ctx.observe(name, { expected: "no longer valid (deleted itself, or deleted at once)", observed: t.ok ? `ACTIVE (${t.status})` : "no longer valid", pass: !t.ok, note: "never passed to a part-2 command" });
+        ctx.observe(name, { expected: "no longer valid (deleted itself)", observed: t.ok ? `ACTIVE (${t.status})` : "no longer valid", pass: !t.ok, note: "never passed to a part-2 command" });
       }
       for (const url of ["https://api.cloudflare.com/client/v4/ips", "https://registry.npmjs.org/-/ping", `${ctx.facts.adminUrl}/`]) {
         const r = await ctx.http(url);

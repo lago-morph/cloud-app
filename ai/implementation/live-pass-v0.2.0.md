@@ -40,7 +40,7 @@ Token live-pass-owner: <the value>
 Tester email (the primary Cloudflare account's login): <the email>
 ```
 
-From then on **the agent gives you a link each time** it needs you, says what to do there and what you should see, and names the reply: `ok`, a word such as `user`, `admin`, `updated` or `new`, or a pasted value. If what you see differs, say so in a few words instead. Three times it asks you to make a **starter token** from a link and paste its value (Cloudflare lets only a token made in the dashboard hold "Account API Tokens Edit", so the runner cannot make these); for two of them you may reply `skip`. The runner works on its own in between, for up to 20 minutes during the deploys and about 6 minutes before the role-change check.
+From then on **the agent gives you a link each time** it needs you, says what to do there and what you should see, and names the reply: `ok`, a word such as `user`, `admin`, `updated` or `new`, or a pasted value. If what you see differs, say so in a few words instead. Twice it asks you to make a **starter token** from a link and paste its value (Cloudflare lets only a token made in the dashboard hold "Account API Tokens Edit", so the runner cannot make these); for the second one (S5's) you may reply `skip`. The runner works on its own in between, for up to 20 minutes during the deploys and about 6 minutes before the role-change check.
 
 At the end the agent says **"THE LIVE PASS IS FINISHED"** and prints the records' R2 bucket and prefix. To have the run analysed and the test Cloudflare account cleaned up, start an analysis session (section 3) and give it those lines, the test Cloudflare account's ID and the **same token** `live-pass-owner`. No new token is needed.
 
@@ -62,7 +62,6 @@ All in one session, in this order. "You" is the browser profile of the test Clou
 | P1, P2 | checks tools, network, the token's eight permissions and that the test Cloudflare account is empty; makes the app `livepass` from `npm create @lago-morph/prototype-app@0.2.0-rc01` | — |
 | P3 | invites the tester's email with the role "HTTP Applications Read" | the tester accepts the invitation from its email |
 | S2 | runs the setup with a value that is not a token | — |
-| TOK-S1, S1 | runs the setup with a starter token that has no expiry | you make that token (no end date) and paste it, or `skip` |
 | TOK-S4, C-1, S4 | checks the starter token's expiry and groups, then runs the bootstrap | you make the starter token (end date tomorrow) and paste it |
 | TOK-S5, S5 | runs the bootstrap again | you make a second starter token and paste it, or `skip` |
 | S6 | reads the admin app's log | you sign in to the admin app; the tester is refused |
@@ -74,7 +73,7 @@ All in one session, in this order. "You" is the browser profile of the test Clou
 | U1, E-10 | makes a stand-in token and a stand-in bucket, then checks and removes them | you run Everyday token and Clean up v0.1.x email |
 | S17, FIN | removes both stages, collects every log, uploads the records to R2 | — |
 
-Every token value stays in a mode-600 directory outside the repository and reaches only the command that needs it: a starter token only the setup command of S2, S1, S4 or S5, the everyday token only the part-2 framework commands. The sandbox's own Cloudflare variables (the primary Cloudflare account's) never reach a command.
+Every token value stays in a mode-600 directory outside the repository and reaches only the command that needs it: a starter token only the setup command of S2, S4 or S5, the everyday token only the part-2 framework commands. The sandbox's own Cloudflare variables (the primary Cloudflare account's) never reach a command.
 
 ## 3. After the run: analysis and cleanup
 
@@ -90,8 +89,7 @@ Every step records expected against observed; IDs are kept from the previous run
 | P2 | `npm create @lago-morph/prototype-app@0.2.0-rc01` makes the app `livepass`; the installed framework is that version; a committed `config/cloudflare/prodcheck.json`. |
 | P3 (you) | The runner's invitation is sent; the owner (Super Administrator) and the tester (no administrator role) are accepted members. |
 | S2 | A non-token value in `CLOUDFLARE_BOOTSTRAP_TOKEN`: names the setting and the link, exit 1, nothing created. |
-| TOK-S1, TOK-S4, TOK-S5 (you) | Each pasted starter token is an active account token (or skipped: S1 or S5 is n/a). |
-| S1 | A starter token with no expiry: "… Setup deleted it at once …", exit 1, the token no longer verifies, no token value in the output. |
+| TOK-S4, TOK-S5 (you) | Each pasted starter token is an active account token (TOK-S5 may be skipped: S5 is then n/a). |
 | C-1 | What the TTL picker set: the starter token has at most 24 h left (PAR-435) and holds exactly its four groups. |
 | S4 | Bootstrap: both OAuth clients created, Secrets Store `prototype-framework` with four entries, Worker `prototype-admin`, the token deleted itself, exit 0, no token value in the output; C-2, C-3, C-4, E-2. |
 | S5 | Re-run: "already exist", both client IDs kept, the admin app redeployed, the token deleted itself. |
@@ -127,7 +125,7 @@ Recorded throughout, without your help: every command with its arguments, exit c
 
 **Not verified** (the pass itself shows them): that R2 cannot be enabled by API, and whether a new free account needs a payment method for it; the R2 overview link above; that the dashboard pre-fills Account Settings and Workers Observability from their IDs (DEC-0563's check covered the other six); an invitation actually sent to and accepted by a real email, and a role change of a real member (the request bodies `{"email","roles":[<id>]}` and `{"roles":[{"id"}]}` follow Cloudflare's API reference); rolling a token that an OAuth grant made (the everyday token) rather than one an API token made; and whether a dashboard-made token holding only Account API Tokens Write could make the runner's other tokens, which the pass does not rely on.
 
-Already confirmed, so not an open point of this pass: a token holding only Secrets Store Read lists the stores and a store's secrets and is refused writes (DEC-0788). Not checked: F-5 (needs a 0.1.x stage) and the removal of a member at the next sign-in (E2E-007 step 4 covers it locally).
+Already confirmed, so not an open point of this pass: a token holding only Secrets Store Read lists the stores and a store's secrets and is refused writes (DEC-0788). Not checked: S1, a starter token with no expiry being deleted at once, is dropped from this pass (owner decision on PR #171), so you are never asked for such a token; the rule itself is being removed in the 0.2.0 cleanup. Also not checked: F-5 (needs a 0.1.x stage) and the removal of a member at the next sign-in (E2E-007 step 4 covers it locally).
 
 ## 5. Cost and cleanup
 

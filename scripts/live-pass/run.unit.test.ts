@@ -17,10 +17,10 @@ import { BOOT_GROUPS, harness, PRIMARY_TOKEN, TESTER } from "./test-support/harn
 import { STEPS } from "./lib/steps.mjs";
 
 const PART2 = new Set(STEPS.filter((s: { session: number }) => s.session === 2).map((s: { id: string }) => s.id));
-const BOOT_STEPS = new Set(["S2", "S1", "S4", "S5"]);
+const BOOT_STEPS = new Set(["S2", "S4", "S5"]);
 
 describe("an offline live pass in one session", () => {
-  it("needs from the owner only the first message, links with one reply each, and three pasted starter tokens; records no token value", async () => {
+  it("needs from the owner only the first message, links with one reply each, and two pasted starter tokens; records no token value", async () => {
     const h = await harness();
     const c = h.container();
     h.firstMessage(c);
@@ -35,10 +35,8 @@ describe("an offline live pass in one session", () => {
     let r = ask(h.run(c, "start", "--tester", TESTER), "P3");
     expect(h.world().invitations).toEqual([{ email: TESTER, roles: ["r3"], status: "pending" }]);
     h.owner.acceptInvitation();
-    r = ask(h.run(c, "answer", "ok"), "TOK-S1");
-    const long = h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, null);
-    h.paste(c, "LIVE_PASS_STARTER_LONG", long);
-    r = ask(h.run(c, "answer", "saved"), "TOK-S4");
+    // S1 (a starter token with no expiry) is dropped from this pass (owner decision on #171): the owner is never asked for one.
+    r = ask(h.run(c, "answer", "ok"), "TOK-S4");
     const boot = h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, 23 * 3600);
     h.paste(c, "LIVE_PASS_STARTER", boot);
     r = ask(h.run(c, "answer", "saved"), "TOK-S5");
@@ -91,7 +89,8 @@ describe("an offline live pass in one session", () => {
     expect(r.out).toContain(`rm -rf ${c.secrets}`);
 
     // ---- Every owner prompt: one link, one to three sentences, the exact reply ----
-    expect(prompts.length).toBe(20);
+    expect(prompts.length).toBe(19);
+    expect(prompts.some((p) => /OWNER STEP (TOK-S1|S1) /.test(p))).toBe(false);
     for (const p of prompts) {
       const body = p.slice(p.indexOf("===\n") + 4, p.search(/\n\nWhen the owner replies/)).split("\n");
       expect(body[0], p).toMatch(/^Open: \S/);
@@ -101,7 +100,7 @@ describe("an offline live pass in one session", () => {
       expect(p, p).toMatch(/the (test|primary) Cloudflare account's login/);
     }
     // A pasted value goes into a file, never into a command.
-    for (const p of prompts.filter((x) => /OWNER STEP TOK-/.test(x))) expect(p).toMatch(/save that value .* as \S+\/LIVE_PASS_STARTER(_LONG|_RERUN)?, run chmod 600 .* answer saved/s);
+    for (const p of prompts.filter((x) => /OWNER STEP TOK-/.test(x))) expect(p).toMatch(/save that value .* as \S+\/LIVE_PASS_STARTER(_RERUN)?, run chmod 600 .* answer saved/s);
 
     // ---- What the analyst gets ----
     const recordsDir = join(c.workdir, "records", readdirSync(join(c.workdir, "records"))[0]);
@@ -132,7 +131,7 @@ describe("an offline live pass in one session", () => {
     }
 
     // ---- No token value anywhere: not printed, not in a record, not in the records bucket ----
-    const secrets = { owner: h.tokens.owner, long, boot, rerun, shown, rolled, primary: PRIMARY_TOKEN };
+    const secrets = { owner: h.tokens.owner, boot, rerun, shown, rolled, primary: PRIMARY_TOKEN };
     const printed = h.printed.join("\n");
     for (const [name, v] of Object.entries(secrets)) expect(printed.includes(v), `the runner printed ${name}`).toBe(false);
     const walk = (d: string): string[] => readdirSync(d).flatMap((n) => (statSync(join(d, n)).isDirectory() ? walk(join(d, n)) : [join(d, n)]));
@@ -168,8 +167,7 @@ describe("an offline live pass in one session", () => {
     h.firstMessage(c);
     h.prompt(h.run(c, "start", "--tester", TESTER), "P3");
     h.owner.acceptInvitation();
-    h.prompt(h.run(c, "answer", "ok"), "TOK-S1");
-    h.prompt(h.run(c, "answer", "skip"), "TOK-S4");
+    h.prompt(h.run(c, "answer", "ok"), "TOK-S4");
     h.paste(c, "LIVE_PASS_STARTER", h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, 23 * 3600));
     h.prompt(h.run(c, "answer", "saved"), "TOK-S5");
     h.prompt(h.run(c, "answer", "skip"), "S6");
@@ -191,7 +189,7 @@ describe("an offline live pass in one session", () => {
     const rec = h.records();
     const state = JSON.parse(Object.entries(rec).find(([k]) => k.endsWith("/state.json"))![1]);
     expect(state.done.S8.result).toBe("pass");
-    expect(state.done.S1).toMatchObject({ result: "n/a" });
+    expect(state.done.S1).toBeUndefined();
     expect(state.done.S5).toMatchObject({ result: "n/a" });
     for (const [key, body] of Object.entries(rec)) expect(body.includes(shown), `${key} holds the everyday token`).toBe(false);
     expect(h.printed.join("\n").includes(shown)).toBe(false);

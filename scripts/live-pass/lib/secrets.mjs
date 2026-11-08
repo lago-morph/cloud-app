@@ -17,7 +17,6 @@ export const SECRET = {
   owner: "LIVE_PASS_OWNER_TOKEN", // the owner's one token, live-pass-owner
   starter: "LIVE_PASS_STARTER", // the starter token for S4 (pasted by the owner)
   starterRerun: "LIVE_PASS_STARTER_RERUN", // the second starter token, S5
-  starterLong: "LIVE_PASS_STARTER_LONG", // the starter token with no expiry, S1
   everyday: "CLOUDFLARE_API_TOKEN", // the everyday token's value, rolled by the runner (or pasted)
 };
 

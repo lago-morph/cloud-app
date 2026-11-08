@@ -95,6 +95,6 @@ describe("secretsProblems", () => {
 
   it("counts every token name, and not the account ID, as a token", () => {
     expect(TOKEN_NAMES).not.toContain(SECRET.account);
-    expect(TOKEN_NAMES).toEqual(expect.arrayContaining([SECRET.owner, SECRET.starter, SECRET.starterRerun, SECRET.starterLong, SECRET.everyday]));
+    expect(TOKEN_NAMES).toEqual(expect.arrayContaining([SECRET.owner, SECRET.starter, SECRET.starterRerun, SECRET.everyday]));
   });
 });
