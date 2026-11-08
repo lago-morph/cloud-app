@@ -2,10 +2,11 @@
 //
 // The state is one JSON object, saved after every step to the records bucket in the test account
 // (`runs/<runId>/state.json`, plus `latest.json` naming the newest run), so it survives the
-// container being reclaimed. Session 1 has the starter (bootstrap) token and does the setup;
-// session 2 is a new cloud session with only the everyday token and the admin token. The
-// checkpoint is the state with `phase: "checkpoint"`: every session-1 step done, and the facts
-// session 2 needs (URLs, IDs, people, stages). `resume` loads it and begins session 2.
+// container being reclaimed. The run has two parts, called sessions in the state ("session" 1 and 2),
+// both in one Claude session since DEC-0793: part 1 uses the starter tokens and does the setup; part 2
+// uses the everyday token. The checkpoint is the state with `phase: "checkpoint"`: every part-1 step
+// done, and the facts part 2 needs (URLs, IDs, people, stages); the runner then begins part 2 at once.
+// `resume` (in a new container) continues the part the run is in.
 //
 // Each save carries a revision; a save over a newer stored revision is refused, so two sessions
 // never run the same run at once.
@@ -83,6 +84,18 @@ export function recordStep(s, stepId, outcome) {
   });
 }
 
+/**
+ * The state with some steps' results forgotten and nothing pending: the run asks them again, in
+ * catalogue order. Used when a later step finds an earlier one's result unusable in this container
+ * (a starter token or the everyday token's value that was only in a lost container's secrets directory).
+ */
+export function rewind(s, stepIds) {
+  const missing = stepIds.filter((id) => s.done[id] === undefined);
+  if (missing.length > 0) throw new CheckpointError(`cannot go back to ${missing.join(", ")}: no result recorded`);
+  const done = Object.fromEntries(Object.entries(s.done).filter(([id]) => !stepIds.includes(id)));
+  return bump(s, { done, pending: null });
+}
+
 /** The state with new facts merged in. */
 export function withFacts(s, facts) {
   return bump(s, { facts: { ...s.facts, ...facts } });
@@ -142,36 +155,6 @@ export function beginSession(s, number, now) {
 export function finish(s, now) {
   const sessions = s.sessions.map((x, i) => (i === s.sessions.length - 1 && x.endedAt === undefined ? { ...x, endedAt: now } : x));
   return bump(s, { phase: "finished", sessions, pending: null, updatedAt: now, finishedAt: now });
-}
-
-const TOKEN_VARS = ["LIVE_PASS_ADMIN_TOKEN", "CLOUDFLARE_BOOTSTRAP_TOKEN", "CLOUDFLARE_API_TOKEN", "LIVE_PASS_BOOTSTRAP_LONG", "LIVE_PASS_BOOTSTRAP_RERUN"];
-const REQUIRED = {
-  1: ["LIVE_PASS_ADMIN_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_BOOTSTRAP_TOKEN"],
-  2: ["LIVE_PASS_ADMIN_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"],
-};
-const set = (env, name) => typeof env[name] === "string" && env[name].trim() !== "";
-
-/**
- * What is wrong with a session's environment variables. `stop`: the runner must not start;
- * `warn`: it starts, records the warning and keeps the variable away from the framework.
- */
-export function envProblems(session, env) {
-  const stop = [];
-  const warn = [];
-  for (const name of REQUIRED[session]) if (!set(env, name)) stop.push(`${name} is not set; session ${session} needs it`);
-  if (session === 1 && set(env, "CLOUDFLARE_API_TOKEN")) stop.push("CLOUDFLARE_API_TOKEN is set in session 1; the new account has no everyday token yet, so remove it from the environment");
-  if (session === 2) {
-    for (const name of ["CLOUDFLARE_BOOTSTRAP_TOKEN", "LIVE_PASS_BOOTSTRAP_LONG", "LIVE_PASS_BOOTSTRAP_RERUN"]) {
-      if (set(env, name)) warn.push(`${name} is still set in session 2; the runner keeps it from every command. Remove it from the environment settings.`);
-    }
-  }
-  const values = TOKEN_VARS.filter((n) => set(env, n)).map((n) => [n, env[n].trim()]);
-  for (let i = 0; i < values.length; i++) {
-    for (let j = i + 1; j < values.length; j++) {
-      if (values[i][1] === values[j][1]) stop.push(`${values[i][0]} and ${values[j][0]} hold the same token; each needs its own`);
-    }
-  }
-  return { stop, warn };
 }
 
 /** An in-memory store, for tests. */

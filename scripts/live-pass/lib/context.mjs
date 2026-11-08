@@ -1,6 +1,6 @@
-// The tools a step uses (`ctx`): commands, HTTP, the Cloudflare API with the admin and everyday
-// tokens, snapshots, the server-side collection and the final hand-over. Everything a tool
-// records passes through the run's scrubber.
+// The tools a step uses (`ctx`): commands, HTTP, the Cloudflare API with the owner's token and the
+// everyday token, the secrets directory, members and roles, snapshots, the server-side collection
+// and the final hand-over. Everything a tool records passes through the run's scrubber.
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { createApi, describe, listAll, verifyToken } from "./cloudflare.mjs";
@@ -9,21 +9,23 @@ import { authDbRows, copyLogBucket, d1Query, ensureObservability, matching, quer
 import { diffSnapshots, takeSnapshot } from "./snapshot.mjs";
 import { addProdConfig } from "./steps.mjs";
 
-import { ADMIN_GROUPS, groupKey, missingGroups } from "./groups.mjs";
-
-export { ADMIN_GROUPS };
+import { missingGroups, OWNER_GROUPS, OWNER_TOKEN_NAME } from "./groups.mjs";
+import { RewindRequest } from "./engine.mjs";
+import { SECRET } from "./secrets.mjs";
 
 const pad = (n) => String(n).padStart(3, "0");
 
 /**
- * @param {{ holder: { state: any }, env: Record<string, string|undefined>, scrubber: any, recorder: any, api: any, repoDir: string, workdir: string, print: (t: string) => void, nextSeq: () => number }} deps
+ * @param {{ holder: { state: any }, env: Record<string, string|undefined>, vault: { dir: string, values: Record<string,string>, reload: () => void, save: (name: string, value: string) => void },
+ *   scrubber: any, recorder: any, api: any, repoDir: string, workdir: string, print: (t: string) => void, nextSeq: () => number }} deps
  */
 export function contextFactory(deps) {
-  const { holder, env, scrubber, recorder, api, repoDir, workdir, print } = deps;
+  const { holder, env, vault, scrubber, recorder, api, repoDir, workdir, print } = deps;
   const state = () => holder.state;
   const onApiCall = (c) => recorder.append("api-calls.jsonl", c);
   let lastSnapshot = null;
   let everyday = null;
+  let everydayValue = null;
 
   const projectDir = () => join(workdir, "project", state().appName);
   const projectReady = () => existsSync(join(projectDir(), "node_modules", "@lago-morph", "prototype-framework", "package.json"));
@@ -35,6 +37,7 @@ export function contextFactory(deps) {
     // `base` has live getters (`state`, `facts`): inherit them, never copy them (a spread would freeze them).
     const ctx = Object.assign(Object.create(base), {
       env,
+      vault,
       api,
       repoDir,
       workdir,
@@ -44,18 +47,36 @@ export function contextFactory(deps) {
         scrubber.add(name, value);
       },
 
+      /** A value of the secrets directory (read again from disk: the agent may just have saved it). */
+      secretValue(name) {
+        vault.reload();
+        return vault.values[name];
+      },
+
+      /** Saves a value the runner made (mode 600) and keeps it out of every record. */
+      saveSecret(name, value) {
+        scrubber.add(name, value);
+        vault.save(name, value);
+      },
+
+      /** A command; no token reaches it unless `set` names it (DEC-0793). */
       async exec(argv, { cwd = projectDir(), set = {}, input, timeoutMs, label = "cmd" } = {}) {
-        const protectIds = [state().facts.adminTokenId].filter(Boolean);
-        const rec = await runCommand({ argv, cwd, env: childEnv(env, { session: state().session, set, protectIds }), input, timeoutMs, scrubber, label, echo: true });
+        const protectIds = [state().facts.ownerTokenId].filter(Boolean);
+        const rec = await runCommand({ argv, cwd, env: childEnv(env, { accountId: state().accountId, set, protectIds }), input, timeoutMs, scrubber, label, echo: true });
         const file = fileName("commands", label);
         recorder.json(file, { step: step.id, ...rec });
         base.addCommand({ file, label, argv: rec.argv, exitCode: rec.exitCode, durationMs: rec.durationMs });
         return rec;
       },
 
+      /** A framework command. A part-2 step's command gets the everyday token; a step passes a starter token itself. */
       async fw(args, options = {}) {
         if (!projectReady()) await ctx.ensureProject({ force: false });
-        return ctx.exec([join(projectDir(), "node_modules", ".bin", "prototype-framework"), ...args], { timeoutMs: 25 * 60_000, ...options });
+        if (step.session === 2) await ctx.ensureEveryday();
+        const value = step.session === 2 ? ctx.secretValue(SECRET.everyday) : undefined;
+        if (step.session === 2 && !value && step.id !== "R1") throw new RewindRequest(["R1"], "the everyday token's value was lost with a container and could not be rolled again through the API: R1 asks for it");
+        const set = { ...(value ? { CLOUDFLARE_API_TOKEN: value } : {}), ...(options.set ?? {}) };
+        return ctx.exec([join(projectDir(), "node_modules", ".bin", "prototype-framework"), ...args], { timeoutMs: 25 * 60_000, ...options, set });
       },
 
       async ensureProject({ force }) {
@@ -115,8 +136,56 @@ export function contextFactory(deps) {
       },
 
       everydayApi() {
-        if (everyday === null) everyday = createApi({ token: env.CLOUDFLARE_API_TOKEN ?? "", accountId: state().accountId, onCall: onApiCall, label: "everyday" });
+        const value = ctx.secretValue(SECRET.everyday) ?? "";
+        if (everyday === null || value !== everydayValue) {
+          everyday = createApi({ token: value, accountId: state().accountId, onCall: onApiCall, label: "everyday" });
+          everydayValue = value;
+        }
         return everyday;
+      },
+
+      /** Rolls a token's value (PUT …/tokens/<id>/value): { ok, value } or { ok: false, error }. The value is never recorded. */
+      async rollToken(id) {
+        const r = await api.call("PUT", api.account(`/tokens/${id}/value`), { json: {} });
+        const value = typeof r.body?.result === "string" ? r.body.result : undefined;
+        return r.ok && value ? { ok: true, value } : { ok: false, status: r.status, error: describe(r) };
+      },
+
+      /**
+       * The everyday token's value, rolled again (and saved) when the secrets directory lacks it: a new
+       * container starts with only what the agent saved from the owner's first message.
+       */
+      async ensureEveryday() {
+        const id = state().facts.everydayTokenId;
+        if (ctx.secretValue(SECRET.everyday) || !id) return { rolled: false };
+        const r = await ctx.rollToken(id);
+        if (r.ok) ctx.saveSecret(SECRET.everyday, r.value);
+        base.note(r.ok ? "the everyday token's value was not in the secrets directory (a new container): the runner rolled it again" : `the everyday token's value is missing and rolling it failed: ${r.error}`);
+        return { rolled: r.ok, error: r.error };
+      },
+
+      /** Every role of the test Cloudflare account (the list has several pages: "Administrator" is not on the first). */
+      async roles() {
+        const l = await listAll(api, api.account("/roles"));
+        return { ok: l.ok, error: l.error, items: l.items.map((r) => ({ id: r.id, name: r.name })) };
+      },
+
+      /** Invites a person by email with the given role IDs (POST …/members). */
+      async invite(email, roleIds) {
+        const r = await api.call("POST", api.account("/members"), { json: { email, roles: roleIds, status: "pending" } });
+        return { ok: r.ok, status: r.status, error: r.ok ? undefined : describe(r), id: r.body?.result?.id };
+      },
+
+      /** Sets a member's roles (PUT …/members/<id>). */
+      async setMemberRoles(memberId, roleIds) {
+        const r = await api.call("PUT", api.account(`/members/${memberId}`), { json: { roles: roleIds.map((id) => ({ id })) } });
+        return { ok: r.ok, status: r.status, error: r.ok ? undefined : describe(r), roles: (r.body?.result?.roles ?? []).map((x) => x.name) };
+      },
+
+      /** Waits without the owner (a deploy settling, the role-refresh interval). */
+      async wait(ms, why) {
+        print(`(waiting ${Math.round(ms / 1000)} s: ${why}; nothing to do)`);
+        await new Promise((r) => setTimeout(r, ms));
       },
 
       async tokenGroups(id) {
@@ -125,15 +194,9 @@ export function contextFactory(deps) {
         return r.ok ? (r.body.result.policies ?? []).flatMap((p) => (p.permission_groups ?? []).map((g) => g.name)).sort() : null;
       },
 
-      /** { required, optional }: the admin groups the admin token lacks. */
-      async adminGroupsMissing() {
-        return missingGroups((await ctx.tokenGroups(state().facts.adminTokenId)) ?? []);
-      },
-
-      starterTokens() {
-        const out = {};
-        for (const n of ["CLOUDFLARE_BOOTSTRAP_TOKEN", "LIVE_PASS_BOOTSTRAP_LONG", "LIVE_PASS_BOOTSTRAP_RERUN"]) if (env[n]) out[n] = env[n];
-        return out;
+      /** { required, optional }: the groups the owner's token lacks. */
+      async ownerGroupsMissing() {
+        return missingGroups((await ctx.tokenGroups(state().facts.ownerTokenId)) ?? []);
       },
 
       async freshSnapshot() {
@@ -190,18 +253,13 @@ export function contextFactory(deps) {
         }
       },
 
-      /** Prints the final token's groups and link, and what to hand to the analyst. */
+      /** What the analyst needs: the records' bucket and prefix, the test Cloudflare account's ID, and the same owner token. */
       async finalInstructions() {
-        const pg = await listAll(api, api.account("/tokens/permission_groups"), { perPage: 1000 });
-        const byKey = new Map(pg.items.map((g) => [groupKey(g.name), g.id]));
-        const byName = new Map(ADMIN_GROUPS.filter((n) => byKey.has(groupKey(n))).map((n) => [n, byKey.get(groupKey(n))]));
-        const keys = ADMIN_GROUPS.filter((n) => byName.has(n)).map((n) => ({ key: byName.get(n), type: n.endsWith(" Read") ? "read" : "edit" }));
-        const missing = ADMIN_GROUPS.filter((n) => !byName.has(n));
-        const link = `https://dash.cloudflare.com/?to=/:account/api-tokens&permissionGroupKeys=${encodeURIComponent(JSON.stringify(keys))}&name=live-pass-analysis`;
-        const handover = { bucket: state().bucket, prefix: state().prefix, accountId: state().accountId, finalTokenGroups: ADMIN_GROUPS, finalTokenLink: link, groupsNotResolved: missing };
+        const handover = { bucket: state().bucket, prefix: state().prefix, accountId: state().accountId, token: OWNER_TOKEN_NAME, tokenId: state().facts.ownerTokenId, tokenGroups: OWNER_GROUPS, note: "The analysis and the cleanup use the owner's token live-pass-owner; no new token is made." };
         recorder.json("handover.json", handover);
         base.setFacts({ handover });
-        base.observe("final token groups resolved", { expected: ADMIN_GROUPS, observed: missing.length === 0 ? "all resolved" : `not resolved: ${missing.join(", ")}`, pass: pg.ok ? missing.length === 0 : null, note: pg.ok ? undefined : pg.error });
+        const missing = await ctx.ownerGroupsMissing();
+        base.observe("the owner's token covers the analysis and the cleanup", { expected: OWNER_GROUPS, observed: missing.required.length + missing.optional.length === 0 ? "all held" : `missing: ${[...missing.required, ...missing.optional].join(", ")}`, pass: missing.required.length === 0 });
       },
     });
     return ctx;

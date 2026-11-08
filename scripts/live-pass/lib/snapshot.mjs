@@ -34,7 +34,7 @@ export async function takeSnapshot(api, { skipBuckets = [], objectLimit = 1000 }
     }),
     section(async () => {
       const l = await listAll(api, a("/members"));
-      return { ok: l.ok, error: l.error, items: l.items.map((m) => ({ id: m.id, status: m.status, email: m.user?.email ?? m.email, userId: m.user?.id, roles: (m.roles ?? []).map((r) => r.name).sort(), policies: (m.policies ?? []).map(policyView) })) };
+      return { ok: l.ok, error: l.error, items: l.items.map((m) => ({ id: m.id, status: m.status, email: m.user?.email ?? m.email, userId: m.user?.id, roles: (m.roles ?? []).map((r) => r.name).sort(), roleIds: (m.roles ?? []).map((r) => r.id), policies: (m.policies ?? []).map(policyView) })) };
     }),
     section(async () => {
       const l = await listAll(api, a("/tokens"));

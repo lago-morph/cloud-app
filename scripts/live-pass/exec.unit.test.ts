@@ -1,58 +1,62 @@
 // Unit tests for how the live-pass runner runs commands (scripts/live-pass/lib/exec.mjs): which
 // environment the framework sees, and what a command record holds. Written from the brief: the
-// framework keeps reading the variables it already reads; the runner's own admin token is for
-// snapshots, telemetry and cleanup only; records hold arguments, exit code, timing and scrubbed output.
+// framework keeps reading the variables it already reads, each set only for the command that needs it
+// (DEC-0793); the owner's token is for the runner only; records hold arguments, exit code, timing and
+// scrubbed output.
 import { describe, expect, it, vi } from "vitest";
 import { childEnv, runCommand } from "./lib/exec.mjs";
 import { createScrubber } from "./lib/scrub.mjs";
 
+// This sandbox's own environment holds the primary Cloudflare account's token and ID; the runner's
+// values come from its secrets directory (DEC-0793) and reach a command only as a step sets them.
 const BASE = {
   PATH: "/usr/bin",
   HOME: "/root",
-  LIVE_PASS_ADMIN_TOKEN: "admin-token-value-0123456789",
-  LIVE_PASS_BOOTSTRAP_LONG: "long-token-value-0123456789",
-  LIVE_PASS_BOOTSTRAP_RERUN: "rerun-token-value-0123456789",
-  CLOUDFLARE_ACCOUNT_ID: "acc",
-  CLOUDFLARE_BOOTSTRAP_TOKEN: "boot-token-value-0123456789",
-  CLOUDFLARE_API_TOKEN: "everyday-token-value-0123456789",
+  LIVE_PASS_OWNER_TOKEN: "owner-token-value-0123456789",
+  CLOUDFLARE_ACCOUNT_ID: "primary-account-id",
+  CLOUDFLARE_API_TOKEN: "primary-account-token-0123456789",
+  CLOUDFLARE_BOOTSTRAP_TOKEN: "stale-boot-token-value-0123456789",
+  CLOUDFLARE_EMAIL: "someone@example.com",
 };
+const TEST_ACCOUNT = "test-account-id";
 
 describe("childEnv", () => {
   it("never passes the runner's own variables to a command", () => {
-    const env = childEnv(BASE, { session: 1 });
+    const env = childEnv(BASE, { accountId: TEST_ACCOUNT });
     expect(Object.keys(env).filter((k) => k.startsWith("LIVE_PASS_"))).toEqual([]);
   });
 
-  it("session 1 passes the starter token as CLOUDFLARE_BOOTSTRAP_TOKEN, and no everyday token", () => {
-    const env = childEnv(BASE, { session: 1 });
-    expect(env.CLOUDFLARE_BOOTSTRAP_TOKEN).toBe(BASE.CLOUDFLARE_BOOTSTRAP_TOKEN);
+  it("never passes a Cloudflare variable of the sandbox's own environment (the primary Cloudflare account's), only the test Cloudflare account's ID", () => {
+    const env = childEnv(BASE, { accountId: TEST_ACCOUNT });
     expect(env.CLOUDFLARE_API_TOKEN).toBeUndefined();
-    expect(env.CLOUDFLARE_ACCOUNT_ID).toBe("acc");
-  });
-
-  it("session 2 passes the everyday token and never a starter token, even one left in the environment", () => {
-    const env = childEnv(BASE, { session: 2 });
-    expect(env.CLOUDFLARE_API_TOKEN).toBe(BASE.CLOUDFLARE_API_TOKEN);
     expect(env.CLOUDFLARE_BOOTSTRAP_TOKEN).toBeUndefined();
+    expect(env.CLOUDFLARE_EMAIL).toBeUndefined();
+    expect(env.CLOUDFLARE_ACCOUNT_ID).toBe(TEST_ACCOUNT);
   });
 
-  it("a step may set the starter token for one command (the long-lived or re-run token, or a bad paste)", () => {
-    const env = childEnv(BASE, { session: 1, set: { CLOUDFLARE_BOOTSTRAP_TOKEN: BASE.LIVE_PASS_BOOTSTRAP_LONG } });
-    expect(env.CLOUDFLARE_BOOTSTRAP_TOKEN).toBe(BASE.LIVE_PASS_BOOTSTRAP_LONG);
+  it("passes a token only when the step sets it, for that one command", () => {
+    expect(childEnv(BASE, { accountId: TEST_ACCOUNT, set: { CLOUDFLARE_BOOTSTRAP_TOKEN: "starter-value-0123456789" } }).CLOUDFLARE_BOOTSTRAP_TOKEN).toBe("starter-value-0123456789");
+    const everyday = childEnv(BASE, { accountId: TEST_ACCOUNT, set: { CLOUDFLARE_API_TOKEN: "everyday-value-0123456789" } });
+    expect(everyday.CLOUDFLARE_API_TOKEN).toBe("everyday-value-0123456789");
+    expect(everyday.CLOUDFLARE_BOOTSTRAP_TOKEN).toBeUndefined();
   });
 
-  it("protects the admin token's ID from the framework (PAR-361), and keeps any IDs already protected", () => {
-    expect(childEnv(BASE, { session: 1, protectIds: ["id1"] }).PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS).toBe("id1");
-    expect(childEnv({ ...BASE, PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS: "id0" }, { session: 1, protectIds: ["id1"] }).PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS).toBe("id0,id1");
+  it("refuses to build an environment without the test Cloudflare account's ID", () => {
+    expect(() => childEnv(BASE, {})).toThrow(/account/);
+  });
+
+  it("protects the owner token's ID from the framework (PAR-361), and keeps any IDs already protected", () => {
+    expect(childEnv(BASE, { accountId: TEST_ACCOUNT, protectIds: ["id1"] }).PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS).toBe("id1");
+    expect(childEnv({ ...BASE, PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS: "id0" }, { accountId: TEST_ACCOUNT, protectIds: ["id1"] }).PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS).toBe("id0,id1");
   });
 
   it("behind a proxy, sets NODE_USE_ENV_PROXY=1 as the framework requires", () => {
-    expect(childEnv({ ...BASE, HTTPS_PROXY: "http://proxy:1" }, { session: 1 }).NODE_USE_ENV_PROXY).toBe("1");
-    expect(childEnv(BASE, { session: 1 }).NODE_USE_ENV_PROXY).toBeUndefined();
+    expect(childEnv({ ...BASE, HTTPS_PROXY: "http://proxy:1" }, { accountId: TEST_ACCOUNT }).NODE_USE_ENV_PROXY).toBe("1");
+    expect(childEnv(BASE, { accountId: TEST_ACCOUNT }).NODE_USE_ENV_PROXY).toBeUndefined();
   });
 
   it("keeps unrelated variables such as PATH and HOME", () => {
-    expect(childEnv(BASE, { session: 2 })).toMatchObject({ PATH: "/usr/bin", HOME: "/root" });
+    expect(childEnv(BASE, { accountId: TEST_ACCOUNT })).toMatchObject({ PATH: "/usr/bin", HOME: "/root" });
   });
 });
 

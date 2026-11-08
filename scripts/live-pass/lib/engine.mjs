@@ -2,7 +2,11 @@
 // as many invocations as the run needs.
 //
 // A step has an automated part (`run`), then zero or more owner parts (`owner[i].prompt`, then
-// `owner[i].verify` with the owner's short reply), then an automated `after`. Every part records
+// `owner[i].verify` with the owner's short reply), then an automated `after`. A part with a `when`
+// is asked only when `when(ctx)` holds; its `before` runs first (the runner waiting on its own, as for
+// S14's role-refresh interval) and again after a lost container until the prompt is stored. A prompt names the login whose browser profile it is for, then one link, one to three sentences on what to do
+// there and what the owner should see, then the exact reply (DEC-0793); a part with `saveAs` asks for
+// a pasted value, which the session agent saves in the secrets directory instead of passing it on. Every part records
 // observations: expected against observed, with pass true, false or null (recorded only). The
 // step's result follows from them (`stepResult`). The step in progress, its observations and a
 // waiting prompt live in the state (`pending`), which is saved to the records bucket after every
@@ -11,7 +15,19 @@
 // `advance` returns why it stopped: "owner" (a prompt is waiting), "more" (the time budget is used;
 // call again), "blocked" (a blocking step failed: retry or skip), "session-done" (the checkpoint or
 // the end of the session's steps), "finished" (the final step is done).
-import { beginSession as beginSessionState, finish, nextStep, recordStep, toCheckpoint, withFacts, withPending } from "./checkpoint.mjs";
+import { beginSession as beginSessionState, finish, nextStep, recordStep, rewind, toCheckpoint, withFacts, withPending } from "./checkpoint.mjs";
+
+/**
+ * Thrown by a step's run when an earlier step's result cannot be used in this container: the engine
+ * forgets those steps' results, records this attempt as "restarted", and goes on from the first of them.
+ */
+export class RewindRequest extends Error {
+  constructor(stepIds, reason) {
+    super(reason);
+    this.name = "RewindRequest";
+    this.stepIds = stepIds;
+  }
+}
 
 /** A step's result from its observations. */
 export function stepResult(observations, notApplicable) {
@@ -34,11 +50,32 @@ export function checkResults(observations) {
 
 const message = (e) => (e instanceof Error ? e.message : String(e));
 
+const RUN = "node scripts/live-pass/live-pass.mjs";
+
+/** The first line of every prompt: which login, and so which browser profile, it is for (owner's terminology, DEC-0793). */
+export const LOGIN_LINE = {
+  test: "In the test account login's browser profile:",
+  primary: "In the primary account login's browser profile:",
+};
+
+/**
+ * A prompt's text: a string as it is, or { who, link, text, reply } as the login's line, "Open: <link>",
+ * the sentences, "Reply: <reply>". `who` is "test" (the test account login) or "primary" (the primary
+ * account login); a structured prompt without it is refused.
+ */
+export function formatPrompt(p) {
+  if (typeof p === "string") return p;
+  if (!LOGIN_LINE[p.who]) throw new Error(`it names no login (who is ${JSON.stringify(p.who)}, not "test" or "primary")`);
+  const text = Array.isArray(p.text) ? p.text : [p.text];
+  return [LOGIN_LINE[p.who], ...(p.link ? [`Open: ${p.link}`] : []), ...text.filter(Boolean), `Reply: ${p.reply ?? "ok"}`].join("\n");
+}
+
 /**
  * @param {{ catalogue: any[], holder: { state: any }, save: (s: any) => Promise<void>, makeCtx?: (base: any, step: any) => any,
- *   afterStep?: (ctx: any, step: any, record: any) => Promise<void>, writeStepRecord: (r: any) => void, print: (t: string) => void, now?: () => number }} o
+ *   afterStep?: (ctx: any, step: any, record: any) => Promise<void>, writeStepRecord: (r: any) => void, print: (t: string) => void, now?: () => number,
+ *   secretsDir?: string }} o
  */
-export function createEngine({ catalogue, holder, save, makeCtx = (base) => base, afterStep = async () => {}, writeStepRecord, print, now = () => Date.now() }) {
+export function createEngine({ catalogue, holder, save, makeCtx = (base) => base, afterStep = async () => {}, writeStepRecord, print, now = () => Date.now(), secretsDir = "~/.live-pass-secrets" }) {
   const iso = () => new Date(now()).toISOString();
   const byId = (id) => catalogue.find((s) => s.id === id);
 
@@ -78,8 +115,22 @@ export function createEngine({ catalogue, holder, save, makeCtx = (base) => base
   };
 
   const prompt = (step, p) => {
-    print(`\n=== OWNER STEP ${step.id} (part ${p.part + 1} of ${step.owner.length}): ${step.title} ===\n${p.prompt}\n\nWhen the owner replies, run: node scripts/live-pass/live-pass.mjs answer "<the owner's reply, word for word>"`);
+    const saveAs = step.owner[p.part]?.saveAs;
+    const after = saveAs
+      ? `When the owner replies with a value, save that value (nothing else) with your file-writing tool as ${secretsDir}/${saveAs}, run chmod 600 ${secretsDir}/${saveAs}, then run: ${RUN} answer saved\nNever put the value in a command, and never repeat it. If the owner replies skip, run: ${RUN} answer skip`
+      : `When the owner replies, run: ${RUN} answer "<the owner's reply, word for word>"`;
+    print(`\n=== OWNER STEP ${step.id} (part ${p.part + 1} of ${step.owner.length}): ${step.title} ===\n${p.prompt}\n\n${after}`);
   };
+
+  /** A step's `cleanup` (undoing what its run changed, such as S14's role change): on completion and on a skip. */
+  async function cleanup(step, ctx) {
+    if (!step.cleanup) return;
+    try {
+      await step.cleanup(ctx);
+    } catch (e) {
+      ctx.observe("cleanup error", { expected: "the step's cleanup runs", observed: message(e), pass: false });
+    }
+  }
 
   async function complete(step, ctx) {
     const p = pending();
@@ -90,6 +141,7 @@ export function createEngine({ catalogue, holder, save, makeCtx = (base) => base
         ctx.observe("error", { expected: "the step's checks run", observed: message(e), pass: false });
       }
     }
+    await cleanup(step, ctx);
     const rec = { ...p.record, endedAt: iso() };
     rec.result = stepResult(rec.observations, rec.notApplicable !== undefined);
     try {
@@ -123,6 +175,13 @@ export function createEngine({ catalogue, holder, save, makeCtx = (base) => base
         try {
           await step.run(ctx);
         } catch (e) {
+          if (e instanceof RewindRequest) {
+            writeStepRecord({ ...pending().record, result: "restarted", reason: e.message, goesBackTo: e.stepIds, endedAt: iso() });
+            holder.state = rewind(holder.state, e.stepIds);
+            await save(holder.state);
+            print(`\n(${step.id} goes back to ${e.stepIds.join(", ")}: ${e.message})`);
+            return "done";
+          }
           if (step.blocking) {
             // The attempt's evidence is kept as its own record; a retry starts the step afresh.
             const attempt = (pending().attempts ?? 0) + 1;
@@ -142,9 +201,28 @@ export function createEngine({ catalogue, holder, save, makeCtx = (base) => base
     while (pending().part < parts.length) {
       const p = pending();
       if (p.prompt === undefined) {
+        const when = parts[p.part].when;
+        let skip = false;
+        try {
+          skip = when !== undefined && !when(ctx);
+        } catch (e) {
+          ctx.observe("error", { expected: "the owner part's condition is evaluated", observed: message(e), pass: false });
+        }
+        if (skip) {
+          setPending({ ...p, part: p.part + 1 });
+          await save(holder.state);
+          continue;
+        }
+        if (parts[p.part].before) {
+          try {
+            await parts[p.part].before(ctx);
+          } catch (e) {
+            ctx.observe("error", { expected: "the runner's work before the owner part", observed: message(e), pass: false });
+          }
+        }
         let text;
         try {
-          text = parts[p.part].prompt(ctx);
+          text = formatPrompt(parts[p.part].prompt(ctx));
         } catch (e) {
           text = `(the prompt could not be built: ${message(e)})`;
         }
@@ -210,10 +288,19 @@ export function createEngine({ catalogue, holder, save, makeCtx = (base) => base
   }
 
   async function skip(stepId, reason, budgetMs) {
-    if (!byId(stepId)) throw new Error(`there is no step ${stepId}`);
+    const step = byId(stepId);
+    if (!step) throw new Error(`there is no step ${stepId}`);
+    // A step skipped partway keeps its evidence so far, and its cleanup runs (S14 sets the role back).
+    const started = pending()?.stepId === stepId ? pending().record : null;
+    let record = { id: stepId, title: step.title, result: "skipped", reason, endedAt: iso(), observations: started?.observations ?? [], commands: started?.commands ?? [], owner: started?.owner ?? [], notes: started?.notes ?? [] };
+    if (step.cleanup && (!pending() || pending().stepId === stepId)) {
+      setPending({ stepId, part: 0, ran: true, record: { ...record, observations: [...record.observations] } });
+      await cleanup(step, ctxFor(step));
+      record = { ...record, observations: pending().record.observations, notes: pending().record.notes };
+    }
     if (pending()?.stepId === stepId) setPending(null);
     holder.state = recordStep(holder.state, stepId, { result: "skipped", reason, endedAt: iso() });
-    writeStepRecord({ id: stepId, title: byId(stepId).title, result: "skipped", reason, endedAt: iso(), observations: [], commands: [], owner: [], notes: [] });
+    writeStepRecord(record);
     await save(holder.state);
     return advance(budgetMs);
   }

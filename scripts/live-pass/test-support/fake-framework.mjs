@@ -13,9 +13,27 @@ const done = (code) => {
   save(w);
   process.exit(code);
 };
+// What each command was given (names only, and whether the account is the test Cloudflare account's).
+// `tokenEnv`: every variable whose value is a token of the world (by its ID) or the sandbox's own token
+// ("primary"), whatever the variable's name: which token reached the command, not only which name.
+const tokenEnv = {};
+for (const [k, v] of Object.entries(env)) {
+  if (k === "FAKE_PRIMARY_TOKEN" || !v) continue;
+  const t = w.tokens.find((x) => x.value === v);
+  if (t) tokenEnv[k] = t.id;
+  else if (v === env.FAKE_PRIMARY_TOKEN) tokenEnv[k] = "primary";
+}
+w.frameworkCalls = [...(w.frameworkCalls ?? []), { cmd, args, accountIsTest: env.CLOUDFLARE_ACCOUNT_ID === w.accountId, tokens: ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_BOOTSTRAP_TOKEN"].filter((n) => env[n] !== undefined), tokenEnv }];
 
 if (cmd === "cloudflare-setup") {
   const boot = env.CLOUDFLARE_BOOTSTRAP_TOKEN;
+  // The container is lost in the middle of a bootstrap: the runner dies before the command ends.
+  if (w.loseContainerOnBootstrap && boot !== undefined && w.tokens.some((x) => x.value === boot)) {
+    delete w.loseContainerOnBootstrap;
+    save(w);
+    process.kill(process.ppid, "SIGKILL");
+    process.exit(137);
+  }
   if (boot !== undefined) {
     const t = w.tokens.find((x) => x.value === boot && x.status === "active");
     if (!t) {
@@ -50,6 +68,13 @@ if (cmd === "cloudflare-setup") {
     say("In a cloud session, delete the environment variable: it is already invalid.");
     say("The Cloudflare bootstrap is complete.");
     say(`  admin app: https://prototype-admin.${w.subdomain}.workers.dev`);
+    // The container is lost just after a bootstrap finished, before the runner recorded it.
+    if (w.loseContainerAfterBootstrap) {
+      delete w.loseContainerAfterBootstrap;
+      save(w);
+      process.kill(process.ppid, "SIGKILL");
+      process.exit(137);
+    }
     done(0);
   }
   const t = w.tokens.find((x) => x.value === env.CLOUDFLARE_API_TOKEN);

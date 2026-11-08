@@ -16,15 +16,21 @@ export const GROUPS = {
   "5bc3f8b21c554832afc660159ab75fa4": "Account API Tokens Write",
   "50fc2f43318f40e4855a35d8de5bf643": "OAuth Client Write",
   c1fde68c7bcc44588cbb6ddbc16d6480: "Account Settings Read",
-  aaaa0000000000000000000000000001: "Workers Observability Write",
+  "1af1fa2adc104452b74a9a3364202f20": "Account Settings Write",
+  "82c075da3f4647a2a03becd0fe240f8a": "Workers Observability Write",
 };
 export const idOf = (name) => Object.entries(GROUPS).find(([, n]) => n === name)[0];
 
 export const load = () => JSON.parse(readFileSync(FILE, "utf8"));
 export const save = (w) => writeFileSync(FILE, JSON.stringify(w, null, 1));
 
+// Like the real list (184 roles on 2026-11-08, 4 pages of 50, "Administrator" on page 4): the
+// tester's role is on page 3 and "Administrator" is the last role of page 4.
+const filler = (from, n) => Array.from({ length: n }, (_, i) => ({ id: `rf${from + i}`, name: `Other Role ${from + i}` }));
+const ROLES = [...filler(0, 20), { id: "r1", name: "Super Administrator - All Privileges" }, ...filler(20, 100), { id: "r3", name: "HTTP Applications Read" }, ...filler(120, 61), { id: "r2", name: "Administrator" }];
+
 export function newWorld(accountId) {
-  return { accountId, subdomain: null, now: 0, tokens: [], members: [], roles: [{ id: "r1", name: "Super Administrator - All Privileges" }, { id: "r2", name: "Administrator" }, { id: "r3", name: "HTTP Applications Read" }], oauthClients: [], workers: {}, d1: [], d1Rows: {}, buckets: {}, stores: [], events: [], stageSecrets: {} };
+  return { accountId, subdomain: null, now: 0, tokens: [], members: [], roles: ROLES, oauthClients: [], workers: {}, d1: [], d1Rows: {}, buckets: {}, stores: [], events: [], stageSecrets: {} };
 }
 
 /** Adds an account token to the world and returns its value. */
@@ -40,10 +46,18 @@ const json = (status, body, headers = {}) => new Response(JSON.stringify(body), 
 const ok = (result, extra = {}) => json(200, { success: true, errors: [], messages: [], result, ...extra });
 const err = (status, code, message) => json(status, { success: false, errors: [{ code, message }], messages: [], result: null });
 const tokenView = ({ value: _v, ...t }) => t;
+/** One page of a list, as Cloudflare pages it (`page`, `per_page`, `result_info.total_pages`). */
+function paged(url, items) {
+  const per = Number(url.searchParams.get("per_page") ?? 20);
+  const page = Number(url.searchParams.get("page") ?? 1);
+  return ok(items.slice((page - 1) * per, page * per), { result_info: { page, per_page: per, count: Math.min(per, Math.max(0, items.length - (page - 1) * per)), total_count: items.length, total_pages: Math.max(1, Math.ceil(items.length / per)) } });
+}
 
 function caller(w, req) {
   const auth = req.headers.get("authorization") ?? "";
   const value = auth.replace(/^Bearer /, "");
+  // The sandbox's own token (the primary Cloudflare account's) must never reach the test Cloudflare account.
+  if (process.env.FAKE_PRIMARY_TOKEN && value === process.env.FAKE_PRIMARY_TOKEN) w.primaryTokenUsed = (w.primaryTokenUsed ?? 0) + 1;
   return w.tokens.find((t) => t.value === value && t.status === "active");
 }
 
@@ -60,17 +74,51 @@ async function api(w, req, path, url) {
   const deny = () => err(403, 10000, "Authentication error");
 
   if (path === A && method === "GET") return ok({ id: w.accountId, name: "Live pass test account", type: "standard" });
-  if (path === `${A}/members`) return need("Account Settings Read") ? ok(w.members, { result_info: { page: 1, total_pages: 1 } }) : deny();
-  if (path === `${A}/roles`) return need("Account Settings Read") ? ok(w.roles) : deny();
+  if (path === `${A}/members` && method === "GET") return need("Account Settings Read") ? ok(w.members, { result_info: { page: 1, total_pages: 1 } }) : deny();
+  if (path === `${A}/members` && method === "POST") {
+    if (!need("Account Settings Write")) return deny();
+    const body = JSON.parse(await req.text());
+    if (!body.email) return err(400, 1001, "Invalid request: Value required for parameter 'email'");
+    if (w.members.some((m) => m.user?.email === body.email)) return err(400, 1001, "already a member");
+    const roles = (body.roles ?? []).map((id) => w.roles.find((r) => r.id === id)).filter(Boolean);
+    const m = { id: `m${w.members.length + 1}`, status: "pending", user: { email: body.email }, roles };
+    w.members.push(m);
+    w.invitations = [...(w.invitations ?? []), { email: body.email, roles: body.roles, status: body.status }];
+    return ok(m);
+  }
+  let mm = path.match(new RegExp(`^${A}/members/([^/]+)$`));
+  if (mm && method === "PUT") {
+    if (!need("Account Settings Write")) return deny();
+    const m = w.members.find((x) => x.id === mm[1]);
+    if (!m) return err(404, 1003, "Member not found for account");
+    const body = JSON.parse(await req.text());
+    m.roles = (body.roles ?? []).map((r) => w.roles.find((x) => x.id === r.id)).filter(Boolean);
+    w.roleChanges = [...(w.roleChanges ?? []), { member: m.id, roles: m.roles.map((r) => r.name) }];
+    return ok(m);
+  }
+  if (path === `${A}/roles`) return need("Account Settings Read") ? paged(url, w.roles) : deny();
   if (path === `${A}/tokens/permission_groups`) return ok(Object.entries(GROUPS).map(([id, name]) => ({ id, name })));
   if (path === `${A}/tokens` && method === "GET") return need("Account API Tokens Write") ? ok(w.tokens.map(tokenView), { result_info: { page: 1, total_pages: 1 } }) : deny();
   if (path === `${A}/tokens` && method === "POST") {
     if (!need("Account API Tokens Write")) return deny();
     const body = JSON.parse(await req.text());
     const names = body.policies.flatMap((p) => p.permission_groups.map((g) => GROUPS[g.id]));
+    // Cloudflare refuses an API-made token that can manage tokens (seen live, 2026-10-26 and 2026-11-08).
+    if (names.includes("Account API Tokens Write")) return err(400, 1001, "sub-token is not allowed to have permissions to manage other tokens");
     const value = addToken(w, { name: body.name, groups: names, expiresInS: body.expires_on ? 86_400 : null });
     const t = w.tokens.at(-1);
     return ok({ ...tokenView(t), value });
+  }
+  const roll = path.match(new RegExp(`^${A}/tokens/([^/]+)/value$`));
+  if (roll && method === "PUT") {
+    // The roll (seen live on 2026-11-08): a new value for the same ID; the old value stops working.
+    if (!need("Account API Tokens Write")) return deny();
+    const t = w.tokens.find((x) => x.id === roll[1]);
+    if (!t) return err(404, 1003, "not found");
+    if (w.refuseRoll) return err(403, 9109, "Unauthorized to access requested resource");
+    t.value = randomBytes(30).toString("base64url").slice(0, 40);
+    w.rolled = [...(w.rolled ?? []), t.id];
+    return ok(t.value);
   }
   let m = path.match(new RegExp(`^${A}/tokens/([^/]+)$`));
   if (m) {

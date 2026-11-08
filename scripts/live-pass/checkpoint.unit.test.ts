@@ -1,18 +1,19 @@
 // Unit tests for the live-pass runner's durable state and checkpoint (scripts/live-pass/lib/checkpoint.mjs).
-// Written from the brief: session 1 (starter token, setup) and session 2 (everyday and admin tokens only)
-// are separated by a checkpoint stored in the test account that survives the container being
-// reclaimed, holds everything session 2 needs, and is resumed with one command.
+// Written from the brief: part 1 (starter tokens, setup) and part 2 (the everyday token), called
+// sessions 1 and 2 in the state and run in one Claude session since DEC-0793, are separated by a
+// checkpoint stored in the test Cloudflare account that survives the container being reclaimed, holds
+// everything part 2 needs, and is resumed with one command.
 import { describe, expect, it } from "vitest";
 import {
   beginSession,
   CheckpointError,
-  envProblems,
   LATEST_KEY,
   loadState,
   memoryStore,
   newRun,
   nextStep,
   recordStep,
+  rewind,
   saveState,
   stateKey,
   toCheckpoint,
@@ -74,6 +75,22 @@ describe("nextStep", () => {
   });
 });
 
+describe("rewind", () => {
+  it("forgets the named steps' results and the pending step, so the run asks them again in order (2026-11-08 lost starter token)", () => {
+    const s0 = { ...doneThrough(run(), ["P1", "S4"]), pending: { stepId: "S8", part: 0, ran: false, record: {} } };
+    const s = rewind(s0, ["S4"]);
+    expect(Object.keys(s.done)).toEqual(["P1"]);
+    expect(s.pending).toBeNull();
+    expect(s.revision).toBe(s0.revision + 1);
+    expect(nextStep(s, CATALOGUE)?.id).toBe("S4");
+    expect(Object.keys(s0.done)).toEqual(["P1", "S4"]);
+  });
+
+  it("refuses to forget a step that has no result", () => {
+    expect(() => rewind(doneThrough(run(), ["P1"]), ["R1"])).toThrow(CheckpointError);
+  });
+});
+
 describe("recordStep", () => {
   it("does not modify the state it is given, raises the revision and clears a pending prompt of that step", () => {
     const s = { ...run(), pending: { stepId: "S4", part: 0, prompt: "p", askedAt: T0 } };
@@ -99,34 +116,6 @@ describe("toCheckpoint", () => {
     expect(s.phase).toBe("checkpoint");
     expect(s.done.CP).toMatchObject({ result: "pass" });
     expect(s.checkpointAt).toBe(T0);
-  });
-});
-
-describe("envProblems", () => {
-  const s1 = { LIVE_PASS_ADMIN_TOKEN: "a".repeat(40), CLOUDFLARE_ACCOUNT_ID: "acc", CLOUDFLARE_BOOTSTRAP_TOKEN: "b".repeat(40) };
-  const s2 = { LIVE_PASS_ADMIN_TOKEN: "a".repeat(40), CLOUDFLARE_ACCOUNT_ID: "acc", CLOUDFLARE_API_TOKEN: "c".repeat(40) };
-
-  it("accepts session 1's and session 2's variables", () => {
-    expect(envProblems(1, s1)).toEqual({ stop: [], warn: [] });
-    expect(envProblems(2, s2)).toEqual({ stop: [], warn: [] });
-  });
-
-  it("stops when a required variable is missing, naming it", () => {
-    expect(envProblems(1, { ...s1, CLOUDFLARE_BOOTSTRAP_TOKEN: "" }).stop.join("\n")).toMatch(/CLOUDFLARE_BOOTSTRAP_TOKEN/);
-    expect(envProblems(2, { ...s2, LIVE_PASS_ADMIN_TOKEN: undefined }).stop.join("\n")).toMatch(/LIVE_PASS_ADMIN_TOKEN/);
-    expect(envProblems(2, { ...s2, CLOUDFLARE_API_TOKEN: undefined }).stop.join("\n")).toMatch(/CLOUDFLARE_API_TOKEN/);
-  });
-
-  it("stops when session 1 already has an everyday token, or two variables hold the same token", () => {
-    expect(envProblems(1, { ...s1, CLOUDFLARE_API_TOKEN: "c".repeat(40) }).stop.join("\n")).toMatch(/CLOUDFLARE_API_TOKEN/);
-    expect(envProblems(2, { ...s2, CLOUDFLARE_API_TOKEN: s2.LIVE_PASS_ADMIN_TOKEN }).stop.join("\n")).toMatch(/same/);
-  });
-
-  it("warns, without stopping, when session 2 still has a starter token (the runner keeps it from the framework)", () => {
-    const r = envProblems(2, { ...s2, CLOUDFLARE_BOOTSTRAP_TOKEN: "b".repeat(40), LIVE_PASS_BOOTSTRAP_RERUN: "d".repeat(40) });
-    expect(r.stop).toEqual([]);
-    expect(r.warn.join("\n")).toMatch(/CLOUDFLARE_BOOTSTRAP_TOKEN/);
-    expect(r.warn.join("\n")).toMatch(/LIVE_PASS_BOOTSTRAP_RERUN/);
   });
 });
 

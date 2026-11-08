@@ -4,7 +4,7 @@
 // is resumable from the stored state at any point (a reclaimed container loses nothing).
 import { describe, expect, it } from "vitest";
 import { memoryStore, newRun, saveState, loadState } from "./lib/checkpoint.mjs";
-import { checkResults, createEngine, stepResult } from "./lib/engine.mjs";
+import { checkResults, createEngine, RewindRequest, stepResult } from "./lib/engine.mjs";
 
 type Obs = { pass?: boolean | null };
 type Ctx = { observe: (id: string, o: Record<string, unknown>) => void; facts: Record<string, unknown>; setFacts: (f: Record<string, unknown>) => void; na: (why: string) => void };
@@ -153,6 +153,104 @@ describe("owner steps", () => {
     expect(await h2.engine.advance(60_000)).toBe("owner");
     expect(h2.printed.at(-1)).toContain("Sign in. Reply: ok");
     expect(h2.holder.state.facts.ran).toBe(1);
+  });
+
+  it("prints a structured prompt as the login whose browser profile it is for, one link, what to do there, then the exact reply (DEC-0793)", async () => {
+    const step = { id: "S6", session: 1, title: "admin sign-in", owner: [{ prompt: () => ({ who: "test", link: "https://admin.example/", text: ["Press Sign in with Cloudflare and approve.", 'You should see "Signed in as …".'], reply: "ok" }), verify: () => {} }] };
+    const h = harness([step]);
+    expect(await h.engine.advance(60_000)).toBe("owner");
+    const p = h.printed.at(-1) ?? "";
+    const body = p.slice(p.indexOf("===\n") + 4, p.indexOf("\n\nWhen the owner replies"));
+    expect(body.split("\n")).toEqual(["In the test account login's browser profile:", "Open: https://admin.example/", "Press Sign in with Cloudflare and approve.", 'You should see "Signed in as …".', "Reply: ok"]);
+    expect(p).toContain('When the owner replies, run: node scripts/live-pass/live-pass.mjs answer "<the owner\'s reply, word for word>"');
+  });
+
+  it("names the primary account login for a prompt meant for it, and refuses a structured prompt that names no login", async () => {
+    const step = { id: "S6", session: 1, title: "admin sign-in", owner: [{ prompt: () => ({ who: "primary", link: "https://admin.example/", text: ["Press Sign in."], reply: "ok" }), verify: () => {} }, { prompt: () => ({ link: "https://admin.example/", text: ["Press Sign in."], reply: "ok" }), verify: () => {} }] };
+    const h = harness([step]);
+    await h.engine.advance(60_000);
+    expect(h.printed.at(-1)).toContain("===\nIn the primary account login's browser profile:\nOpen: https://admin.example/");
+    await h.engine.answer("ok", 60_000);
+    expect(h.printed.at(-1)).toContain("(the prompt could not be built: it names no login");
+  });
+
+  it("a prompt that asks for a pasted value tells the agent to save it as a file and answer `saved`, never to pass the value in a command", async () => {
+    const step = { id: "TK", session: 1, title: "starter token", owner: [{ prompt: () => ({ who: "test", link: "https://dash.example/", text: ["Make the token and copy its value."], reply: "paste the value into this chat, or skip" }), saveAs: "LIVE_PASS_STARTER", verify: () => {} }] };
+    const h = createEngine({ catalogue: [step], holder: { state: newRun({ runId: "r1", accountId: "a", version: "v", appName: "app", bucket: "b", runnerSha: "s", now: new Date(T0).toISOString() }) }, save: async () => {}, writeStepRecord: () => {}, print: (t: string) => printed.push(t), secretsDir: "/home/u/.live-pass-secrets" });
+    const printed: string[] = [];
+    await h.advance(60_000);
+    const p = printed.at(-1) ?? "";
+    expect(p).toContain("Reply: paste the value into this chat, or skip");
+    expect(p).toContain("/home/u/.live-pass-secrets/LIVE_PASS_STARTER");
+    expect(p).toContain('answer saved');
+    expect(p).toContain('answer skip');
+  });
+
+  it("skips a part whose `when` is false without asking it, and asks one whose `when` is true", async () => {
+    const step = {
+      id: "S8",
+      session: 1,
+      title: "everyday token",
+      owner: [
+        { prompt: () => "Make it. Reply: ok", verify: (c: Ctx) => c.setFacts({ rolled: true }) },
+        { when: (c: Ctx) => c.facts.rolled !== true, prompt: () => "Paste it.", verify: (c: Ctx) => c.observe("pasted", { pass: true }) },
+        { when: (c: Ctx) => c.facts.rolled === true, prompt: () => "Check it. Reply: ok", verify: (c: Ctx, a: string) => c.observe("checked", { expected: "ok", observed: a, pass: a === "ok" }) },
+      ],
+    };
+    const h = harness([step]);
+    await h.engine.advance(60_000);
+    expect(await h.engine.answer("ok", 60_000)).toBe("owner");
+    expect(h.printed.at(-1)).toContain("Check it.");
+    expect(h.printed.join("\n")).not.toContain("Paste it.");
+    expect(h.printed.at(-1)).toContain("part 3 of 3");
+    await h.engine.answer("ok", 60_000);
+    expect(h.holder.state.done.S8.result).toBe("pass");
+    expect(h.records[0]).toMatchObject({ owner: [{ part: 0, answer: "ok" }, { part: 2, answer: "ok" }] });
+  });
+
+  it("runs a part's `before` (the runner waiting on its own) before the prompt is asked, and again after a lost container until the prompt is stored", async () => {
+    const calls: string[] = [];
+    const step = { id: "S14", session: 1, title: "role change", owner: [{ before: async (c: Ctx) => { calls.push("wait"); c.setFacts({ waited: true }); }, prompt: (c: Ctx) => `Reload. Waited: ${String(c.facts.waited)}`, verify: () => {} }] };
+    const h = harness([step]);
+    expect(await h.engine.advance(60_000)).toBe("owner");
+    expect(h.printed.at(-1)).toContain("Waited: true");
+    const h2 = harness([step], h.store, await loadState(h.store));
+    expect(await h2.engine.advance(60_000)).toBe("owner");
+    expect(calls).toEqual(["wait"]);
+  });
+
+  it("runs a step's `cleanup` when it completes and when it is skipped partway, recording what it did", async () => {
+    const cleaned: string[] = [];
+    const step = (id: string) => ({ id, session: 1, title: id, run: (c: Ctx) => c.setFacts({ changed: id }), owner: [{ prompt: () => "Reload. Reply: ok", verify: () => {} }, { prompt: () => "Again. Reply: ok", verify: () => {} }], cleanup: (c: Ctx) => { cleaned.push(id); c.observe("restored", { expected: "restored", observed: "restored", pass: true }); } });
+    const h = harness([step("A"), step("B")]);
+    await h.engine.advance(60_000);
+    await h.engine.answer("ok", 60_000);
+    await h.engine.answer("ok", 60_000);
+    expect(cleaned).toEqual(["A"]);
+    expect(h.records.find((r) => r.id === "A")?.observations).toEqual(expect.arrayContaining([expect.objectContaining({ id: "restored" })]));
+    await h.engine.answer("ok", 60_000); // B, part 1 of 2
+    await h.engine.skip("B", "the owner stopped here", 60_000);
+    expect(cleaned).toEqual(["A", "B"]);
+    expect(h.holder.state.done.B).toMatchObject({ result: "skipped" });
+    expect(h.records.find((r) => r.id === "B")?.observations).toEqual(expect.arrayContaining([expect.objectContaining({ id: "restored" })]));
+  });
+
+  it("a step that finds an earlier step's result unusable goes back to it: that step runs again, then this one (2026-11-08 lost starter token)", async () => {
+    let value: string | undefined;
+    const tok = { id: "TOK", session: 1, title: "token", owner: [{ prompt: () => "Paste. Reply: the value", verify: (c: Ctx, a: string) => { value = a; c.observe("pasted", { expected: "a value", observed: "given", pass: true }); } }] };
+    const use = { id: "USE", session: 1, title: "use", run: (c: Ctx) => { if (!value) throw new RewindRequest(["TOK"], "the token is not in this container"); c.observe("used", { expected: value, observed: value, pass: true }); } };
+    const h = harness([tok, use]);
+    await h.engine.advance(60_000);
+    await h.engine.answer("v1", 60_000);
+    expect(h.holder.state.done.USE.result).toBe("pass");
+    value = undefined; // a new container: the pasted value is gone
+    h.holder.state = { ...h.holder.state, done: { TOK: h.holder.state.done.TOK } };
+    expect(await h.engine.advance(60_000)).toBe("owner");
+    expect(h.holder.state.done.TOK).toBeUndefined();
+    expect(h.printed.join("\n")).toContain("the token is not in this container");
+    expect(h.records.find((r) => r.id === "USE" && r.result === "restarted")).toMatchObject({ reason: "the token is not in this container" });
+    await h.engine.answer("v2", 60_000);
+    expect(h.holder.state.done.USE.result).toBe("pass");
   });
 
   it("refuses an answer when nothing is waiting", async () => {

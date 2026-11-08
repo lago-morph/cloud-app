@@ -1,10 +1,12 @@
 // How the live-pass runner runs a command, and which environment the framework sees.
 //
 // The framework reads the variables it always has read: CLOUDFLARE_BOOTSTRAP_TOKEN (the starter
-// token), CLOUDFLARE_API_TOKEN (the everyday token) and CLOUDFLARE_ACCOUNT_ID. The runner's own
-// variables (LIVE_PASS_*: the admin token and the extra starter tokens) never reach a command.
-// A command record holds the arguments, the names of the token variables set, the exit code,
-// timing and the scrubbed output; standard input (a generated secret) is never recorded.
+// token), CLOUDFLARE_API_TOKEN (the everyday token) and CLOUDFLARE_ACCOUNT_ID. Each token reaches
+// only the command a step sets it for (DEC-0793): the runner keeps them in its secrets directory,
+// never in its own environment. No CLOUDFLARE_* or LIVE_PASS_* variable of the runner's own
+// environment reaches a command: in a cloud sandbox those can belong to the primary Cloudflare
+// account. A command record holds the arguments, the names of the token variables set, the exit
+// code, timing and the scrubbed output; standard input (a generated secret) is never recorded.
 import { spawn } from "node:child_process";
 
 /** Variables whose presence (never value) a command record lists. */
@@ -18,18 +20,19 @@ const RECORDED_VARS = [
 ];
 
 /**
- * The environment of a command.
+ * The environment of a command: the runner's environment without any CLOUDFLARE_* or LIVE_PASS_*
+ * variable, the test Cloudflare account's ID, and what the step sets for this command.
  * @param {Record<string, string | undefined>} base the runner's own environment
- * @param {{ session: 1 | 2, set?: Record<string, string | undefined>, protectIds?: string[] }} options
+ * @param {{ accountId?: string, set?: Record<string, string | undefined>, protectIds?: string[] }} options
  */
-export function childEnv(base, { session, set = {}, protectIds = [] }) {
+export function childEnv(base, { accountId, set = {}, protectIds = [] }) {
+  if (typeof accountId !== "string" || accountId === "") throw new Error("childEnv needs the test Cloudflare account's ID");
   const env = {};
   for (const [k, v] of Object.entries(base)) {
-    if (v === undefined || k.startsWith("LIVE_PASS_")) continue;
+    if (v === undefined || k.startsWith("LIVE_PASS_") || k.startsWith("CLOUDFLARE_")) continue;
     env[k] = v;
   }
-  if (session === 1) delete env.CLOUDFLARE_API_TOKEN;
-  if (session === 2) delete env.CLOUDFLARE_BOOTSTRAP_TOKEN;
+  env.CLOUDFLARE_ACCOUNT_ID = accountId;
   if (env.HTTPS_PROXY || env.https_proxy) env.NODE_USE_ENV_PROXY = "1";
   const ids = [...(env.PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS ?? "").split(",").filter(Boolean), ...protectIds.filter(Boolean)];
   if (ids.length > 0) env.PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS = [...new Set(ids)].join(",");
