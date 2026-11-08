@@ -55,6 +55,7 @@ export function defineTestingSuite(dialect: Dialect): void {
     return a;
   };
   afterEach(async () => {
+    vi.useRealTimers();
     await Promise.all(apps.splice(0).map((a) => a.dispose()));
   }, HOOK);
   const me = async (a: TestApp) => (await (await a.request("/api/auth/me")).json()) as { level: string; id?: string; displayName?: string | null };
@@ -184,6 +185,10 @@ export function defineTestingSuite(dialect: Dialect): void {
     });
 
     it(`with the fake auth app, a role changed by grantRole/revokeRole or authApp.setRole shows at the next role refresh after PAR-425, with one role call and no new sign-in ${on}`, async () => {
+      // Date is frozen, so TestApp.clock is the only clock that moves and the check at exactly
+      // PAR-425 cannot cross a real second boundary, as in the AUTH-AC tests (root cause
+      // ai/implementation/root-causes/2026-11-08-rc01-role-refresh-pglite.md).
+      vi.useFakeTimers({ toFake: ["Date"] });
       const a = await open({ authAppLoginProvider: true });
       await a.loginWithAuthApp({ sub: "cf-sub-1", role: "user" });
       const signedIn = await me(a);
