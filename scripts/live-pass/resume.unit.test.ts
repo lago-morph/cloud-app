@@ -92,7 +92,6 @@ describe("an offline live pass that loses its container in both parts", () => {
     h.prompt(h.run(c, "resume"), "S13");
     h.owner.testerSignIn("user");
     h.prompt(h.run(c, "answer", "ok"), "S14");
-    h.prompt(h.run(c, "answer", "user"), "S14");
     h.owner.testerSignIn("admin");
     h.prompt(h.run(c, "answer", "admin"), "S14");
     h.owner.testerSignIn("user");

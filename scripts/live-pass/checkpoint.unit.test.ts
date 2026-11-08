@@ -13,6 +13,7 @@ import {
   newRun,
   nextStep,
   recordStep,
+  rewind,
   saveState,
   stateKey,
   toCheckpoint,
@@ -71,6 +72,22 @@ describe("nextStep", () => {
   it("never returns a step of the other session", () => {
     const s = doneThrough(run(), ["P1", "S4", "S8", "CP"]);
     expect(nextStep(s, CATALOGUE)).toBeNull();
+  });
+});
+
+describe("rewind", () => {
+  it("forgets the named steps' results and the pending step, so the run asks them again in order (2026-11-08 lost starter token)", () => {
+    const s0 = { ...doneThrough(run(), ["P1", "S4"]), pending: { stepId: "S8", part: 0, ran: false, record: {} } };
+    const s = rewind(s0, ["S4"]);
+    expect(Object.keys(s.done)).toEqual(["P1"]);
+    expect(s.pending).toBeNull();
+    expect(s.revision).toBe(s0.revision + 1);
+    expect(nextStep(s, CATALOGUE)?.id).toBe("S4");
+    expect(Object.keys(s0.done)).toEqual(["P1", "S4"]);
+  });
+
+  it("refuses to forget a step that has no result", () => {
+    expect(() => rewind(doneThrough(run(), ["P1"]), ["R1"])).toThrow(CheckpointError);
   });
 });
 

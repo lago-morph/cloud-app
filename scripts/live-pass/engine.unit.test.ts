@@ -4,7 +4,7 @@
 // is resumable from the stored state at any point (a reclaimed container loses nothing).
 import { describe, expect, it } from "vitest";
 import { memoryStore, newRun, saveState, loadState } from "./lib/checkpoint.mjs";
-import { checkResults, createEngine, stepResult } from "./lib/engine.mjs";
+import { checkResults, createEngine, RewindRequest, stepResult } from "./lib/engine.mjs";
 
 type Obs = { pass?: boolean | null };
 type Ctx = { observe: (id: string, o: Record<string, unknown>) => void; facts: Record<string, unknown>; setFacts: (f: Record<string, unknown>) => void; na: (why: string) => void };
@@ -233,6 +233,24 @@ describe("owner steps", () => {
     expect(cleaned).toEqual(["A", "B"]);
     expect(h.holder.state.done.B).toMatchObject({ result: "skipped" });
     expect(h.records.find((r) => r.id === "B")?.observations).toEqual(expect.arrayContaining([expect.objectContaining({ id: "restored" })]));
+  });
+
+  it("a step that finds an earlier step's result unusable goes back to it: that step runs again, then this one (2026-11-08 lost starter token)", async () => {
+    let value: string | undefined;
+    const tok = { id: "TOK", session: 1, title: "token", owner: [{ prompt: () => "Paste. Reply: the value", verify: (c: Ctx, a: string) => { value = a; c.observe("pasted", { expected: "a value", observed: "given", pass: true }); } }] };
+    const use = { id: "USE", session: 1, title: "use", run: (c: Ctx) => { if (!value) throw new RewindRequest(["TOK"], "the token is not in this container"); c.observe("used", { expected: value, observed: value, pass: true }); } };
+    const h = harness([tok, use]);
+    await h.engine.advance(60_000);
+    await h.engine.answer("v1", 60_000);
+    expect(h.holder.state.done.USE.result).toBe("pass");
+    value = undefined; // a new container: the pasted value is gone
+    h.holder.state = { ...h.holder.state, done: { TOK: h.holder.state.done.TOK } };
+    expect(await h.engine.advance(60_000)).toBe("owner");
+    expect(h.holder.state.done.TOK).toBeUndefined();
+    expect(h.printed.join("\n")).toContain("the token is not in this container");
+    expect(h.records.find((r) => r.id === "USE" && r.result === "restarted")).toMatchObject({ reason: "the token is not in this container" });
+    await h.engine.answer("v2", 60_000);
+    expect(h.holder.state.done.USE.result).toBe("pass");
   });
 
   it("refuses an answer when nothing is waiting", async () => {

@@ -48,9 +48,6 @@ export const TESTER_ROLE = "HTTP Applications Read";
 // that owns the primary Cloudflare account, invited into the test Cloudflare account). In the records the
 // two are `facts.owner` and `facts.tester`.
 const SHARED_BUCKETS = ["prototype-logs", "sst-state", "prototype-backups"];
-const ROLE_REFRESH_SECONDS = 300; // PAR-425
-/** How long S14 waits after the role change: the refresh interval plus a minute (the offline tests shorten it). */
-const ROLE_WAIT_SECONDS = Number(process.env.LIVE_PASS_ROLE_WAIT_SECONDS ?? ROLE_REFRESH_SECONDS + 60);
 const BOOTSTRAP_MAX_SECONDS = 86_400; // PAR-435
 // Permission group IDs used by the runner's own probe tokens (packages/framework/src/provision/cloudflare/permissions.ts).
 const GROUP_IDS = { workersScriptsWrite: "e086da7e2179491d91ee5f35b3ca210a", r2Write: "bf7481a1826f439697cb59a20b22293e", d1Write: "09b2857d1c31407795e75e3fed8617a1" };
@@ -801,8 +798,8 @@ export const STEPS = [
     id: "S14",
     session: 2,
     check: "A-1",
-    title: "A role change takes effect at the next sign-in (DEC-0703, DEC-0791); the runner changes the role",
-    expected: ["the runner changes the primary account login's role to exactly \"Administrator\" through the API (PUT …/members/<id>, DEC-0793) and waits the role-refresh interval (PAR-425, 300 s) plus a minute", "the primary account login's existing session stays user", "after signing out and in, the primary account login is admin (A-1 part b)", "the runner sets the original role back; a new sign-in gives user"],
+    title: "A role change takes effect at the next sign-in (DEC-0703, DEC-0791); the runner changes the role and sets it back",
+    expected: ["the runner changes the primary account login's role to exactly \"Administrator\" through the API (PUT …/members/<id>, DEC-0793)", "after signing out and in, the primary account login is admin (A-1 part b)", "the runner sets the first role back; the next sign-in gives user", "the role is set back even when S14 fails or is skipped partway", "no wait for the role-refresh interval: that a refresh does not pick up a role change is covered locally by E2E-007 (owner decision on #171, option B)"],
     async run(ctx) {
       if (ctx.facts.roleChangedAt) return;
       const roles = await ctx.roles();
@@ -822,24 +819,6 @@ export const STEPS = [
       if (ctx.facts.roleChangedAt && !ctx.facts.roleRestored) await restoreRole(ctx);
     },
     owner: [
-      {
-        async before(ctx) {
-          const left = Date.parse(ctx.facts.roleChangedAt) + ROLE_WAIT_SECONDS * 1000 - Date.now();
-          if (left > 0) await ctx.wait(left, `the role-refresh interval (${ROLE_REFRESH_SECONDS} s) plus a minute`);
-        },
-        prompt: (ctx) => ({
-          link: `${ctx.facts.appUrl}/api/auth/me`,
-          who: "primary", text: [`Reload this page (the primary account login is still signed in to the app).`, `The runner changed the primary account login's role to Administrator more than ${Math.round(ROLE_REFRESH_SECONDS / 60) + 1} minutes ago; you should still see "level":"user", because a role change shows only at the next sign-in.`],
-          reply: "the level shown: user or admin",
-        }),
-        async verify(ctx, answer) {
-          const level = levelOf(answer);
-          const waited = (Date.now() - Date.parse(ctx.facts.roleChangedAt)) / 1000;
-          ctx.observe("existing session after the interval", { check: "S14", expected: "user", observed: { level, secondsSinceRoleChange: Math.round(waited) }, pass: level === "user" && waited >= ROLE_REFRESH_SECONDS ? true : level !== "user" ? false : null, note: waited < ROLE_REFRESH_SECONDS ? "answered before the interval had passed" : undefined });
-          const t = (await ctx.authDb()).users.rows.find((u) => u.email === ctx.facts.tester?.email);
-          ctx.observe("auth app's recorded role", { check: "S14", expected: "user (recorded at the last sign-in)", observed: t?.role ?? "absent", pass: t?.role === "user" });
-        },
-      },
       {
         prompt: (ctx) => ({
           link: ctx.facts.appUrl,

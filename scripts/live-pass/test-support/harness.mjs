@@ -21,7 +21,7 @@ export const BOOT_GROUPS = ["Workers Scripts Write", "OAuth Client Write", "Secr
 export const EVERYDAY_GROUPS = ["Workers Scripts Write", "Workers R2 Storage Write", "D1 Write", "Secrets Store Read"];
 export const TESTER = "tester@example.com";
 
-export async function harness({ roleWaitSeconds = 1 } = {}) {
+export async function harness() {
   const dir = mkdtempSync(join(tmpdir(), "live-pass-offline-"));
   const worldFile = join(dir, "world.json");
   process.env.FAKE_CF_WORLD = worldFile;
@@ -68,7 +68,7 @@ export async function harness({ roleWaitSeconds = 1 } = {}) {
   };
 
   // The sandbox's own environment holds the primary Cloudflare account's token and ID.
-  const env = (c) => ({ PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "/tmp", FAKE_CF_WORLD: worldFile, FAKE_PRIMARY_TOKEN: PRIMARY_TOKEN, LIVE_PASS_WORKDIR: c.workdir, LIVE_PASS_SECRETS_DIR: c.secrets, LIVE_PASS_ROLE_WAIT_SECONDS: String(roleWaitSeconds), NODE_OPTIONS: `--import ${pathToFileURL(WORLD_MODULE).href}`, CLOUDFLARE_ACCOUNT_ID: PRIMARY_ACCOUNT, CLOUDFLARE_API_TOKEN: PRIMARY_TOKEN });
+  const env = (c) => ({ PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "/tmp", FAKE_CF_WORLD: worldFile, FAKE_PRIMARY_TOKEN: PRIMARY_TOKEN, LIVE_PASS_WORKDIR: c.workdir, LIVE_PASS_SECRETS_DIR: c.secrets, NODE_OPTIONS: `--import ${pathToFileURL(WORLD_MODULE).href}`, CLOUDFLARE_ACCOUNT_ID: PRIMARY_ACCOUNT, CLOUDFLARE_API_TOKEN: PRIMARY_TOKEN });
 
   const runOnce = (c, ...args) => {
     const r = spawnSync(process.execPath, [RUNNER, ...args], { env: env(c), encoding: "utf8", timeout: 240_000 });

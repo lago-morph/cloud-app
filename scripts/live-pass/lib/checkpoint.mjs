@@ -84,6 +84,18 @@ export function recordStep(s, stepId, outcome) {
   });
 }
 
+/**
+ * The state with some steps' results forgotten and nothing pending: the run asks them again, in
+ * catalogue order. Used when a later step finds an earlier one's result unusable in this container
+ * (a starter token or the everyday token's value that was only in a lost container's secrets directory).
+ */
+export function rewind(s, stepIds) {
+  const missing = stepIds.filter((id) => s.done[id] === undefined);
+  if (missing.length > 0) throw new CheckpointError(`cannot go back to ${missing.join(", ")}: no result recorded`);
+  const done = Object.fromEntries(Object.entries(s.done).filter(([id]) => !stepIds.includes(id)));
+  return bump(s, { done, pending: null });
+}
+
 /** The state with new facts merged in. */
 export function withFacts(s, facts) {
   return bump(s, { facts: { ...s.facts, ...facts } });

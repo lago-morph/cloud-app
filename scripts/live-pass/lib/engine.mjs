@@ -15,7 +15,19 @@
 // `advance` returns why it stopped: "owner" (a prompt is waiting), "more" (the time budget is used;
 // call again), "blocked" (a blocking step failed: retry or skip), "session-done" (the checkpoint or
 // the end of the session's steps), "finished" (the final step is done).
-import { beginSession as beginSessionState, finish, nextStep, recordStep, toCheckpoint, withFacts, withPending } from "./checkpoint.mjs";
+import { beginSession as beginSessionState, finish, nextStep, recordStep, rewind, toCheckpoint, withFacts, withPending } from "./checkpoint.mjs";
+
+/**
+ * Thrown by a step's run when an earlier step's result cannot be used in this container: the engine
+ * forgets those steps' results, records this attempt as "restarted", and goes on from the first of them.
+ */
+export class RewindRequest extends Error {
+  constructor(stepIds, reason) {
+    super(reason);
+    this.name = "RewindRequest";
+    this.stepIds = stepIds;
+  }
+}
 
 /** A step's result from its observations. */
 export function stepResult(observations, notApplicable) {
@@ -163,6 +175,13 @@ export function createEngine({ catalogue, holder, save, makeCtx = (base) => base
         try {
           await step.run(ctx);
         } catch (e) {
+          if (e instanceof RewindRequest) {
+            writeStepRecord({ ...pending().record, result: "restarted", reason: e.message, goesBackTo: e.stepIds, endedAt: iso() });
+            holder.state = rewind(holder.state, e.stepIds);
+            await save(holder.state);
+            print(`\n(${step.id} goes back to ${e.stepIds.join(", ")}: ${e.message})`);
+            return "done";
+          }
           if (step.blocking) {
             // The attempt's evidence is kept as its own record; a retry starts the step afresh.
             const attempt = (pending().attempts ?? 0) + 1;

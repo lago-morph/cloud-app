@@ -85,11 +85,10 @@ describe("an offline live pass in one session", () => {
     h.owner.ownerSignInAndUpload();
     r = ask(h.run(c, "answer", "ok"), "S13");
     h.owner.testerSignIn("user");
-    // The runner changes the tester's role itself, waits, then asks the tester to reload.
+    // The runner changes the primary account login's role itself, with no wait (owner decision on #171, option B).
     r = ask(h.run(c, "answer", "ok"), "S14");
     expect(h.world().roleChanges).toEqual([{ member: "m2", roles: ["Administrator"] }]);
-    expect(r.out).toContain("(waiting");
-    r = ask(h.run(c, "answer", "user"), "S14");
+    expect(r.out).not.toContain("(waiting");
     h.owner.testerSignIn("admin");
     r = ask(h.run(c, "answer", "admin"), "S14");
     expect(h.world().roleChanges.at(-1)).toEqual({ member: "m2", roles: ["HTTP Applications Read"] });
@@ -106,10 +105,10 @@ describe("an offline live pass in one session", () => {
     expect(r.out).toContain(`rm -rf ${c.secrets}`);
 
     // ---- Every owner prompt: the login whose browser profile it is for, one link, one to three sentences, the exact reply ----
-    expect(prompts.length).toBe(17);
+    expect(prompts.length).toBe(16);
     expect(prompts.some((p) => /OWNER STEP (TOK-S1|S1) /.test(p))).toBe(false);
     const forPrimary = prompts.filter((p) => p.includes("===\nIn the primary account login's browser profile:")).map((p) => p.match(/OWNER STEP (\S+) \(part (\d+)/)?.slice(1).join("."));
-    expect(forPrimary).toEqual(["P3.1", "S6.2", "S13.2", "S14.1", "S14.2", "S14.3"]);
+    expect(forPrimary).toEqual(["P3.1", "S6.2", "S13.2", "S14.1", "S14.2"]);
     for (const p of prompts) {
       const body = p.slice(p.indexOf("===\n") + 4, p.search(/\n\nWhen the owner replies/)).split("\n");
       expect(body[0], p).toMatch(/^In the (test|primary) account login's browser profile:$/);
