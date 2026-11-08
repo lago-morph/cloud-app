@@ -1,15 +1,22 @@
-// The live pass's steps, in order: session 1 (the starter token; setup in the admin app), the
-// checkpoint, session 2 (the everyday token; stages, sign-ins, role change, removal), the finish.
+// The live pass's steps, in order, all in one Claude session (DEC-0793): part 1 (the starter tokens;
+// setup in the admin app), the checkpoint, part 2 (the everyday token; stages, sign-ins, role change,
+// removal), the finish. In the state and the records a part is a "session" (1 or 2).
 // Step and check IDs keep the runbook's (ai/implementation/live-pass-v0.2.0.md): S1–S17 are its
-// steps, the others (A-, C-, E-, F-, U-) its checks of points the run left unverified.
+// steps, the others (A-, C-, E-, F-, U-) its checks of points the run left unverified; TOK-… are the
+// owner's starter tokens.
 //
+// The runner does by API everything that needs no human Cloudflare login: the tester's invitation and
+// role changes, the roll of the everyday token's value, its probe tokens. Each owner prompt is one
+// link, one to three sentences on what to do there and what the owner should see, and the exact reply.
 // Every step records observations: what was expected, what was observed, pass true/false, or null
-// for a fact recorded without a verdict. Owner steps ask for one short reply; the runner then
-// verifies what it can through the API, the auth app's database and the Workers logs.
+// for a fact recorded without a verdict. After a reply the runner verifies what it can through the
+// API, the auth app's database and the Workers logs.
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createApi, describe as describeR } from "./cloudflare.mjs";
+import { OWNER_GROUPS } from "./groups.mjs";
+import { SECRET } from "./secrets.mjs";
 import { find } from "./snapshot.mjs";
 
 // ---- Fixed names (framework constants this pass checks against) ----
@@ -26,8 +33,16 @@ const SIGNING_SECRETS = ["PROTOTYPE_R2_ACCESS_KEY_ID", "PROTOTYPE_R2_SECRET_ACCE
 const EVERYDAY_NAME = "prototype-framework";
 const EVERYDAY_GROUPS = ["D1 Write", "Secrets Store Read", "Workers R2 Storage Write", "Workers Scripts Write"]; // EVERYDAY_V2, sorted
 const BOOTSTRAP_GROUPS = ["Account API Tokens Write", "OAuth Client Write", "Secrets Store Write", "Workers Scripts Write"];
+/** The framework's own starter-token link (four groups by ID, DEC-0563); the API cannot make this token (code 1001). */
+export const BOOTSTRAP_LINK = `https://dash.cloudflare.com/?to=/:account/api-tokens&permissionGroupKeys=${encodeURIComponent(JSON.stringify(["e086da7e2179491d91ee5f35b3ca210a", "50fc2f43318f40e4855a35d8de5bf643", "adc8fa2bc6124928a8b3314dc63a1235", "5bc3f8b21c554832afc660159ab75fa4"].map((key) => ({ key, type: "edit" }))))}&name=prototype-framework-bootstrap`;
+export const TESTER_ROLE = "HTTP Applications Read";
+/** Who does a step: the owner signs in with the test Cloudflare account's login; the tester is the primary Cloudflare account's login. */
+export const AS_OWNER = "In the browser profile of the test Cloudflare account's login,";
+export const AS_TESTER = "In the browser profile of the primary Cloudflare account's login (the tester),";
 const SHARED_BUCKETS = ["prototype-logs", "sst-state", "prototype-backups"];
 const ROLE_REFRESH_SECONDS = 300; // PAR-425
+/** How long S14 waits after the role change: the refresh interval plus a minute (the offline tests shorten it). */
+const ROLE_WAIT_SECONDS = Number(process.env.LIVE_PASS_ROLE_WAIT_SECONDS ?? ROLE_REFRESH_SECONDS + 60);
 const BOOTSTRAP_MAX_SECONDS = 86_400; // PAR-435
 // Permission group IDs used by the runner's own probe tokens (packages/framework/src/provision/cloudflare/permissions.ts).
 const GROUP_IDS = { workersScriptsWrite: "e086da7e2179491d91ee5f35b3ca210a", r2Write: "bf7481a1826f439697cb59a20b22293e", d1Write: "09b2857d1c31407795e75e3fed8617a1" };
@@ -56,6 +71,52 @@ function expectNoSecret(ctx, rec, check) {
   ctx.observe("no token value in output", { check, expected: "no known token value in the command's output", observed: hits.length === 0 ? "none" : `found: ${hits.join(", ")}`, pass: hits.length === 0 });
 }
 const replyCheck = (ctx, answer, what) => ctx.observe("owner reply", { expected: `"ok": ${what}`, observed: answer, pass: ok(answer) });
+const levelOf = (answer) => (/admin/i.test(answer) ? "admin" : /user/i.test(answer) ? "user" : answer);
+
+/** An owner part that asks for a starter token made from the framework's link, pasted into the chat and saved as `name`. */
+function starterTokenPart(name, ttl, { skippable = true } = {}) {
+  return {
+    saveAs: name,
+    prompt: () => ({
+      link: BOOTSTRAP_LINK,
+      text: [`${AS_OWNER} pick the test Cloudflare account under Account Resources, ${ttl}, then press "Continue to summary" and "Create Token".`, "Copy the token's value (the API cannot make this token: only a dashboard-made token may hold Account API Tokens Edit)."],
+      reply: skippable ? "paste the value into this chat, or skip" : "paste the value into this chat",
+    }),
+    async verify(ctx, answer) {
+      if (skippable && /^\s*skip\b/i.test(answer)) {
+        ctx.observe("starter token", { expected: "pasted, or skipped by the owner", observed: "skipped", pass: null });
+        return;
+      }
+      const value = ctx.secretValue(name);
+      if (!value) {
+        ctx.observe("starter token saved", { expected: `the pasted value saved as ${ctx.vault.dir}/${name}`, observed: "not saved", pass: false });
+        return;
+      }
+      ctx.secret(name, value);
+      const t = await starterToken(ctx, name, value);
+      ctx.observe("starter token", { expected: "an active account token", observed: { ok: t.ok, status: t.status, kind: t.kind, expiresOn: t.expiresOn, secondsLeft: t.secondsLeft }, pass: t.ok && t.status === "active" });
+      if (t.id) ctx.setFacts({ starterTokenIds: { ...(ctx.facts.starterTokenIds ?? {}), [name]: t.id } });
+    },
+  };
+}
+
+/** Rolls the everyday token's value with the owner's token and keeps the new value in the secrets directory (DEC-0793). */
+async function rollEveryday(ctx) {
+  const r = await ctx.rollToken(ctx.facts.everydayTokenId);
+  if (!r.ok) {
+    ctx.observe("everyday token rolled", { check: "U2", expected: "the value rolled with the owner's token (PUT …/tokens/<id>/value)", observed: r.error, pass: null, note: "the owner pastes the value instead" });
+    ctx.setFacts({ everydayRolled: false });
+    return;
+  }
+  ctx.saveSecret(SECRET.everyday, r.value);
+  let v = await ctx.verify(r.value);
+  for (let i = 0; i < 5 && !v.ok; i++) {
+    await new Promise((res) => setTimeout(res, 3000));
+    v = await ctx.verify(r.value);
+  }
+  ctx.observe("everyday token rolled", { check: "U2", expected: `the new value verifies as the same token (${ctx.facts.everydayTokenId})`, observed: v.ok ? { id: v.id, status: v.status } : v.error, pass: v.ok && v.id === ctx.facts.everydayTokenId });
+  ctx.setFacts({ everydayRolled: v.ok && v.id === ctx.facts.everydayTokenId, everydayRolledAt: new Date().toISOString() });
+}
 
 /** The owner and the tester from the members list: owner = Super Administrator, tester = the other accepted member. */
 export function people(snapshot) {
@@ -132,18 +193,16 @@ function checkClients(ctx, snap) {
   }
 }
 
-const ownerLinkHelp = "Reply ok if everything matched; otherwise say in a few words what differed. The runner records the reply word for word.";
-
 // ---- The steps ----
 
 /** @type {any[]} */
 export const STEPS = [
-  // ===================== Session 1 =====================
+  // ===================== Part 1: the starter tokens and the setup =====================
   {
     id: "P1",
     session: 1,
-    title: "Preflight: tools, network, tokens, and an empty account",
-    expected: ["Node and npm present", "api.cloudflare.com, the npm registry and dash.cloudflare.com reachable", "the admin token holds every group the runner needs", "each supplied starter token is active", "the account holds nothing but the records bucket and the run's tokens"],
+    title: "Preflight: tools, network, the owner's token, and an empty test Cloudflare account",
+    expected: ["Node and npm present", "api.cloudflare.com, the npm registry and dash.cloudflare.com reachable", "the owner's token live-pass-owner holds every group the runner needs", "the test Cloudflare account holds nothing but the records bucket and the owner's token"],
     blocking: true,
     async run(ctx) {
       ctx.observe("runner", { expected: null, observed: { node: process.version, platform: process.platform, runnerSha: ctx.state.runnerSha, version: ctx.state.version, app: ctx.state.appName }, pass: null });
@@ -153,25 +212,18 @@ export const STEPS = [
         const r = await ctx.http(url);
         ctx.observe(`reach ${new URL(url).host}`, { expected: "HTTP 200", observed: r.status, pass: r.status === 200 });
       }
-      const missing = await ctx.adminGroupsMissing();
-      ctx.observe("admin token groups", { expected: "every group of the runbook's admin token", observed: missing.required.length === 0 ? "all required present" : `missing: ${missing.required.join(", ")}`, pass: missing.required.length === 0 });
-      ctx.observe("admin token: Workers Observability", { expected: "present (without it no Workers log is collected)", observed: missing.optional.length === 0 ? "present" : "missing: the run goes on without the Workers logs", pass: missing.optional.length === 0 ? true : null });
-      if (missing.required.length > 0) throw new Error(`The admin token LIVE_PASS_ADMIN_TOKEN lacks: ${missing.required.join(", ")}. Make it again as runbook section 1.4 says, put it in the environment settings and start a new session.`);
-      const tokens = {};
-      for (const [name, value] of Object.entries(ctx.starterTokens())) {
-        const t = await starterToken(ctx, name, value);
-        tokens[name] = t;
-        ctx.observe(`starter token ${name}`, { expected: name === "LIVE_PASS_BOOTSTRAP_LONG" ? "active, no expiry" : `active, expiry at most ${BOOTSTRAP_MAX_SECONDS} s away (PAR-435)`, observed: { ok: t.ok, status: t.status, kind: t.kind, expiresOn: t.expiresOn, secondsLeft: t.secondsLeft }, pass: t.ok && t.status === "active" });
-      }
-      ctx.setFacts({ starterTokenIds: Object.fromEntries(Object.entries(tokens).map(([k, v]) => [k, v.id ?? null])) });
+      const missing = await ctx.ownerGroupsMissing();
+      ctx.observe("owner token groups", { expected: OWNER_GROUPS, observed: missing.required.length === 0 ? "all required present" : `missing: ${missing.required.join(", ")}`, pass: missing.required.length === 0 });
+      ctx.observe("owner token: Workers Observability", { expected: "present (without it no Workers log is collected)", observed: missing.optional.length === 0 ? "present" : "missing: the run goes on without the Workers logs", pass: missing.optional.length === 0 ? true : null });
+      if (missing.required.length > 0) throw new Error(`The token live-pass-owner lacks: ${missing.required.map((g) => g.replace(/ Write$/, " Edit")).join(", ")}. In the test Cloudflare account's dashboard, edit the token live-pass-owner and add them (runbook section 1, step 3), then tell the agent to retry.`);
       const snap = await ctx.freshSnapshot();
-      const ours = new Set([ctx.facts.adminTokenId, ...Object.values(ctx.facts.starterTokenIds ?? {})]);
+      const ours = new Set([ctx.facts.ownerTokenId]);
       const otherTokens = (snap.tokens.items ?? []).filter((t) => !ours.has(t.id));
       const buckets = (snap.r2.items ?? []).map((b) => b.name).filter((n) => n !== ctx.state.bucket);
       const empty = { workers: (snap.workers.items ?? []).map((w) => w.name), d1: (snap.d1.items ?? []).map((d) => d.name), buckets, stores: (snap.secretsStore.items ?? []).map((s) => s.name), oauthClients: (snap.oauthClients.items ?? []).map((c) => c.name), otherTokens: otherTokens.map((t) => t.name) };
-      ctx.observe("account empty", { expected: "no Workers, D1, other buckets, stores, OAuth clients or other tokens", observed: empty, pass: Object.values(empty).every((l) => l.length === 0) });
+      ctx.observe("test Cloudflare account empty", { expected: "no Workers, D1, other buckets, stores, OAuth clients or other tokens", observed: empty, pass: Object.values(empty).every((l) => l.length === 0) });
       for (const sec of ["members", "tokens", "oauthClients", "workers", "d1", "r2", "secretsStore"]) {
-        ctx.observe(`snapshot section ${sec} readable`, { expected: "readable with the admin token", observed: snap[sec].ok === false ? snap[sec].error : "readable", pass: snap[sec].ok !== false });
+        ctx.observe(`snapshot section ${sec} readable`, { expected: "readable with the owner's token", observed: snap[sec].ok === false ? snap[sec].error : "readable", pass: snap[sec].ok !== false });
       }
       ctx.observe("workers.dev subdomain before setup", { expected: null, observed: snap.subdomain, pass: null });
     },
@@ -189,45 +241,54 @@ export const STEPS = [
   {
     id: "P3",
     session: 1,
-    title: "The owner and the tester are members",
-    expected: ["two accepted members: the owner (Super Administrator - All Privileges) and the tester with a role that is not an administrator role"],
+    title: "The tester (the primary Cloudflare account's login) is invited and accepts",
+    expected: ["the runner invites the tester's email with the role \"HTTP Applications Read\" (POST …/members, DEC-0793)", "two accepted members: the owner (Super Administrator - All Privileges) and the tester with a role that is not an administrator role"],
     blocking: true,
     async run(ctx) {
+      const email = ctx.facts.testerEmail;
+      if (!email) throw new Error("The runner does not know the tester's email (the primary Cloudflare account's login). Start the run with: node scripts/live-pass/live-pass.mjs start --tester <email>");
       const snap = await ctx.freshSnapshot();
-      const p = people(snap);
       ctx.observe("members before", { expected: null, observed: (snap.members.items ?? []).map((m) => ({ email: m.email, userId: m.userId, status: m.status, roles: m.roles })), pass: null });
-      if (p.owner && p.tester && !isAdminRole(p.tester.roles)) {
+      const existing = find.member(snap, email);
+      if (existing?.status === "accepted" && !isAdminRole(existing.roles)) {
         ctx.setFacts({ skipInvite: true });
+        ctx.observe("invitation", { expected: "sent, or not needed", observed: "not needed: the tester is already an accepted member without an administrator role", pass: true });
+        return;
       }
+      if (existing) {
+        ctx.observe("invitation", { expected: "sent, or not needed", observed: `an invitation is already ${existing.status}; none sent`, pass: existing.status === "pending" ? true : null });
+        return;
+      }
+      const roles = await ctx.roles();
+      const role = roles.items.find((r) => r.name === TESTER_ROLE);
+      if (!role) throw new Error(`The test Cloudflare account offers no role "${TESTER_ROLE}" (${roles.ok ? `${roles.items.length} roles listed` : roles.error}).`);
+      const inv = await ctx.invite(email, [role.id]);
+      ctx.observe("invitation", { check: "P3", expected: `invited ${email} with ${TESTER_ROLE}`, observed: inv.ok ? { status: inv.status, memberId: inv.id } : inv.error, pass: inv.ok });
+      if (!inv.ok) throw new Error(`Inviting ${email} failed: ${inv.error}. The token live-pass-owner needs Account Settings Edit.`);
     },
     owner: [
       {
-        prompt: (ctx) =>
-          ctx.facts.skipInvite
-            ? "Nothing to do: the tester is already a member with a role that is not an administrator role. Reply ok."
-            : [
-                "In your own browser profile: Cloudflare dashboard → Manage Account → Members → Invite.",
-                "  Invite the tester's email address with exactly one role: \"HTTP Applications Read\" (if that role is not offered, pick any one role that is not an administrator role, and say which in your reply).",
-                "In the tester's browser profile (or a private window): accept the invitation from the email, sign in to Cloudflare as the tester, and stay signed in.",
-                ownerLinkHelp,
-              ].join("\n"),
+        when: (ctx) => !ctx.facts.skipInvite,
+        prompt: (ctx) => ({
+          link: `the invitation link in the email Cloudflare just sent to ${ctx.facts.testerEmail}`,
+          text: [`${AS_TESTER} open that email and press its link; sign in if asked, and accept the invitation to the test Cloudflare account.`, "Nothing in the primary Cloudflare account changes."],
+          reply: "ok",
+        }),
         async verify(ctx, answer) {
           replyCheck(ctx, answer, "the tester accepted the invitation");
-          const p = await eventually(ctx, (s) => {
-            const x = people(s);
-            return x.owner && x.tester ? x : undefined;
-          });
-          const found = p ?? people(await ctx.freshSnapshot());
-          ctx.observe("owner", { expected: `an accepted member with ${SUPER_ADMIN}`, observed: found.owner ? { email: found.owner.email, userId: found.owner.userId, roles: found.owner.roles } : "none", pass: found.owner !== undefined });
-          ctx.observe("tester", { expected: "one other accepted member with no administrator role", observed: found.tester ? { email: found.tester.email, userId: found.tester.userId, roles: found.tester.roles } : { others: found.others.length, pending: found.pending.map((m) => m.email) }, pass: found.tester !== undefined && !isAdminRole(found.tester.roles) });
-          if (found.owner && found.tester) {
-            ctx.setFacts({ owner: { email: found.owner.email, userId: found.owner.userId, memberId: found.owner.id }, tester: { email: found.tester.email, userId: found.tester.userId, memberId: found.tester.id, roles: found.tester.roles } });
-          } else {
-            throw new Error("the owner and the tester could not be identified from the members list");
-          }
+          await eventually(ctx, (s) => (find.member(s, ctx.facts.testerEmail)?.status === "accepted" ? s : undefined));
         },
       },
     ],
+    async after(ctx) {
+      const found = people(await ctx.freshSnapshot());
+      const tester = found.tester?.email === ctx.facts.testerEmail ? found.tester : undefined;
+      ctx.observe("owner", { expected: `an accepted member with ${SUPER_ADMIN}`, observed: found.owner ? { email: found.owner.email, userId: found.owner.userId, roles: found.owner.roles } : "none", pass: found.owner !== undefined });
+      ctx.observe("tester", { expected: `${ctx.facts.testerEmail}, accepted, with no administrator role`, observed: tester ? { email: tester.email, userId: tester.userId, roles: tester.roles } : { others: found.others.map((m) => m.email), pending: found.pending.map((m) => m.email) }, pass: tester !== undefined && !isAdminRole(tester.roles) });
+      if (found.owner && tester) {
+        ctx.setFacts({ owner: { email: found.owner.email, userId: found.owner.userId, memberId: found.owner.id }, tester: { email: tester.email, userId: tester.userId, memberId: tester.id, roles: tester.roles, roleIds: tester.roleIds } });
+      }
+    },
   },
   {
     id: "S2",
@@ -246,18 +307,25 @@ export const STEPS = [
     },
   },
   {
+    id: "TOK-S1",
+    session: 1,
+    title: "The owner makes the starter token with no expiry (for S1)",
+    expected: ["a starter token with the framework's four groups and no expiry, pasted by the owner and saved in the secrets directory; or skip (S1 n/a)"],
+    owner: [starterTokenPart(SECRET.starterLong, "leave the end date empty (S1 checks that the framework deletes such a token at once)")],
+  },
+  {
     id: "S1",
     session: 1,
     check: "SETUP-AC-011",
     title: "A starter token with no expiry is deleted at once",
     expected: ["\"…: it has no expiry … Setup deleted it at once and used it for nothing else.\" and the link again", "exit 1", "the token no longer verifies and is gone from the list", "no token value in the output", "nothing else created"],
     async run(ctx) {
-      const value = ctx.env.LIVE_PASS_BOOTSTRAP_LONG;
+      const value = ctx.secretValue(SECRET.starterLong);
       if (!value) {
-        ctx.na("LIVE_PASS_BOOTSTRAP_LONG was not supplied");
+        ctx.na("the owner skipped the starter token with no expiry");
         return;
       }
-      const t = await starterToken(ctx, "LIVE_PASS_BOOTSTRAP_LONG", value);
+      const t = await starterToken(ctx, SECRET.starterLong, value);
       ctx.observe("token before", { expected: "active, no expiry", observed: { status: t.status, expiresOn: t.expiresOn }, pass: t.ok && t.expiresOn === null });
       const before = await ctx.freshSnapshot();
       const rec = await ctx.fw(["cloudflare-setup"], { set: { CLOUDFLARE_BOOTSTRAP_TOKEN: value }, label: "long-lived" });
@@ -273,24 +341,30 @@ export const STEPS = [
     },
   },
   {
+    id: "TOK-S4",
+    session: 1,
+    title: "The owner makes the starter token for the bootstrap (S4)",
+    expected: ["a starter token with the framework's four groups and an end date of tomorrow, pasted by the owner and saved in the secrets directory"],
+    owner: [starterTokenPart(SECRET.starter, "set the end date to tomorrow (the framework refuses a starter token with more than one day left)", { skippable: false })],
+  },
+  {
     id: "C-1",
     session: 1,
     check: "C-1",
     title: "What the dashboard's TTL picker set on the starter tokens (PAR-435)",
-    expected: ["CLOUDFLARE_BOOTSTRAP_TOKEN (and LIVE_PASS_BOOTSTRAP_RERUN, if given) active with expires_on at most 24 h away"],
+    expected: ["the starter token for S4 is active with expires_on at most 24 h away", "it holds exactly the framework's four groups"],
     blocking: true,
     async run(ctx) {
-      const main = await starterToken(ctx, "CLOUDFLARE_BOOTSTRAP_TOKEN", ctx.env.CLOUDFLARE_BOOTSTRAP_TOKEN);
-      ctx.observe("CLOUDFLARE_BOOTSTRAP_TOKEN expiry", { check: "C-1", expected: `active, expires_on at most ${BOOTSTRAP_MAX_SECONDS} s away`, observed: { status: main.status, expiresOn: main.expiresOn, now: new Date().toISOString(), secondsLeft: main.secondsLeft }, pass: main.ok && main.within });
+      const value = ctx.secretValue(SECRET.starter);
+      if (!value) throw new Error(`There is no starter token for S4: the owner's pasted value was not saved as ${ctx.vault.dir}/${SECRET.starter}. Ask the owner for it again (runbook section 5).`);
+      const main = await starterToken(ctx, SECRET.starter, value);
+      ctx.observe("starter token expiry", { check: "C-1", expected: `active, expires_on at most ${BOOTSTRAP_MAX_SECONDS} s away`, observed: { status: main.status, expiresOn: main.expiresOn, now: new Date().toISOString(), secondsLeft: main.secondsLeft }, pass: main.ok && main.within });
       const groups = await ctx.tokenGroups(main.id);
-      ctx.observe("CLOUDFLARE_BOOTSTRAP_TOKEN groups", { check: "S3", expected: BOOTSTRAP_GROUPS, observed: groups, pass: same(groups ?? [], BOOTSTRAP_GROUPS) });
-      if (ctx.env.LIVE_PASS_BOOTSTRAP_RERUN) {
-        const re = await starterToken(ctx, "LIVE_PASS_BOOTSTRAP_RERUN", ctx.env.LIVE_PASS_BOOTSTRAP_RERUN);
-        ctx.observe("LIVE_PASS_BOOTSTRAP_RERUN expiry", { check: "C-1", expected: `active, expires_on at most ${BOOTSTRAP_MAX_SECONDS} s away`, observed: { status: re.status, expiresOn: re.expiresOn, secondsLeft: re.secondsLeft }, pass: re.ok && re.within });
-      }
+      ctx.observe("starter token groups", { check: "S3", expected: BOOTSTRAP_GROUPS, observed: groups, pass: same(groups ?? [], BOOTSTRAP_GROUPS) });
+      ctx.setFacts({ starterTokenIds: { ...(ctx.facts.starterTokenIds ?? {}), [SECRET.starter]: main.id ?? null } });
       if (!main.ok || !main.within) {
         throw new Error(
-          `CLOUDFLARE_BOOTSTRAP_TOKEN is ${main.ok ? `active but expires ${main.expiresOn ?? "never"} (${main.secondsLeft ?? "no"} s away), more than 1 day` : "not usable"}. The setup would delete it at once. Nothing was run with it. Make a new starter token with TODAY as the end date (runbook section 1.4), replace CLOUDFLARE_BOOTSTRAP_TOKEN in the environment settings, start a new session and paste the resume prompt (runbook section 5).`,
+          `The starter token for S4 is ${main.ok ? `active but expires ${main.expiresOn ?? "never"} (${main.secondsLeft ?? "no"} s away), more than 1 day` : "not usable"}. The setup would delete it at once. Nothing was run with it. Ask the owner to make it again with TOMORROW as the end date and paste it; save it as ${ctx.vault.dir}/${SECRET.starter}, then run retry.`,
         );
       }
     },
@@ -303,21 +377,23 @@ export const STEPS = [
     expected: ["\"OAuth clients: created prototype-framework-admin and prototype-framework-sign-in …\"", "\"admin app: deployed (Worker prototype-admin) …\"", "\"the bootstrap token deleted itself\"", "\"The Cloudflare bootstrap is complete.\" and the admin app's URL", "exit 0", "the starter token no longer verifies", "no token value in the output", "two OAuth clients, Secrets Store prototype-framework with four entries, Worker prototype-admin (C-2, C-3, C-4, E-2)"],
     blocking: true,
     async run(ctx) {
+      const value = ctx.secretValue(SECRET.starter);
       const before = await ctx.freshSnapshot();
-      const rec = await ctx.fw(["cloudflare-setup"], { label: "bootstrap" });
+      const rec = await ctx.fw(["cloudflare-setup"], { set: { CLOUDFLARE_BOOTSTRAP_TOKEN: value }, label: "bootstrap" });
       expectExit(ctx, rec, 0, "S4");
       expectText(ctx, rec, ["OAuth clients: created", "admin app: deployed (Worker prototype-admin)", "the bootstrap token deleted itself", "The Cloudflare bootstrap is complete."], "S4");
       expectNoSecret(ctx, rec, "S4");
       ctx.observe("cloud-session note", { check: "S4", expected: "says the environment variable can be deleted (SETUP-REQ-004)", observed: /environment/i.test(out(rec)) ? "mentions the environment" : "no mention", pass: null });
       const m = out(rec).match(/https:\/\/prototype-admin\.([a-z0-9-]+)\.workers\.dev/);
-      const v = await ctx.verify(ctx.env.CLOUDFLARE_BOOTSTRAP_TOKEN);
+      const v = await ctx.verify(value);
       ctx.observe("starter token after", { check: "S4", expected: "no longer verifies (deleted itself)", observed: v.ok ? { status: v.status } : v.error, pass: !v.ok });
       const after = await ctx.freshSnapshot();
-      ctx.observe("starter token gone from the list", { check: "S4", expected: "absent", observed: find.token(after, ctx.facts.starterTokenIds?.CLOUDFLARE_BOOTSTRAP_TOKEN) ? "present" : "absent", pass: find.token(after, ctx.facts.starterTokenIds?.CLOUDFLARE_BOOTSTRAP_TOKEN) === undefined });
+      const id = ctx.facts.starterTokenIds?.[SECRET.starter];
+      ctx.observe("starter token gone from the list", { check: "S4", expected: "absent", observed: find.token(after, id) ? "present" : "absent", pass: find.token(after, id) === undefined });
       ctx.observe("what the bootstrap changed", { expected: null, observed: ctx.diff(before, after), pass: null });
       const subdomain = after.subdomain?.subdomain ?? m?.[1];
       ctx.observe("workers.dev subdomain", { check: "S4", expected: "registered, and the printed URL uses it", observed: { api: after.subdomain?.subdomain, printed: m?.[1] }, pass: !!subdomain && (!m || m[1] === subdomain) });
-      if (!subdomain) throw new Error("the bootstrap printed no admin app URL and the account has no workers.dev subdomain");
+      if (!subdomain) throw new Error("the bootstrap printed no admin app URL and the test Cloudflare account has no workers.dev subdomain");
       ctx.setFacts({ subdomain, adminUrl: `https://prototype-admin.${subdomain}.workers.dev`, authUrl: `https://prototype-auth.${subdomain}.workers.dev`, clientIds: Object.fromEntries(["admin", "signin"].map((k) => [k, find.oauthClient(after, CLIENTS[k])?.client_id ?? find.oauthClient(after, CLIENTS[k])?.id ?? null])) });
       checkClients(ctx, after);
       await checkSecretsStore(ctx, after);
@@ -328,15 +404,22 @@ export const STEPS = [
     },
   },
   {
+    id: "TOK-S5",
+    session: 1,
+    title: "The owner makes the second starter token (for the re-run, S5)",
+    expected: ["a second starter token with the framework's four groups and an end date of tomorrow, pasted by the owner; or skip (S5 n/a)"],
+    owner: [starterTokenPart(SECRET.starterRerun, "set the end date to tomorrow (S5 runs the bootstrap again with it)")],
+  },
+  {
     id: "S5",
     session: 1,
     check: "C-2",
     title: "Bootstrap re-run with a second starter token keeps both clients",
     expected: ["\"OAuth clients: prototype-framework-admin and prototype-framework-sign-in already exist …\"", "admin app redeployed", "the token deleted itself", "exit 0", "both clients keep their IDs"],
     async run(ctx) {
-      const value = ctx.env.LIVE_PASS_BOOTSTRAP_RERUN;
+      const value = ctx.secretValue(SECRET.starterRerun);
       if (!value) {
-        ctx.na("LIVE_PASS_BOOTSTRAP_RERUN was not supplied");
+        ctx.na("the owner skipped the second starter token");
         return;
       }
       const before = await ctx.freshSnapshot();
@@ -368,17 +451,23 @@ export const STEPS = [
     expected: ["consent names client prototype-framework-admin with fixed rows Profile Information, User Details Read, Memberships Read", "owner: \"Signed in as <owner email>\", links Account setup, Everyday token, Status, Clean up v0.1.x email, and Sign out", "tester: 403 \"Only an administrator of this Cloudflare account can use the admin app.\"", "admin app log: \"admin signed in\""],
     owner: [
       {
-        prompt: (ctx) =>
-          [
-            `1. Owner, in your own browser profile: open ${ctx.facts.adminUrl} and press "Sign in with Cloudflare".`,
-            "   The consent page should name the client prototype-framework-admin and show the fixed rows Profile Information, User Details Read, Memberships Read (no optional toggles). Approve.",
-            `   Expected: "Signed in as ${ctx.facts.owner?.email ?? "<your email>"}", links Account setup, Everyday token, Status, Clean up v0.1.x email, and a Sign out button. Stay signed in.`,
-            `2. Tester, in the tester's browser profile: open ${ctx.facts.adminUrl} and do the same.`,
-            "   Expected: \"Only an administrator of this Cloudflare account can use the admin app.\" and no session.",
-            ownerLinkHelp,
-          ].join("\n"),
+        prompt: (ctx) => ({
+          link: ctx.facts.adminUrl,
+          text: [`${AS_OWNER} press "Sign in with Cloudflare" and approve (the consent page names prototype-framework-admin).`, `You should see "Signed in as ${ctx.facts.owner?.email ?? "<your email>"}" and the links Account setup, Everyday token, Status and Clean up v0.1.x email.`],
+          reply: "ok",
+        }),
+        verify(ctx, answer) {
+          replyCheck(ctx, answer, "owner admitted");
+        },
+      },
+      {
+        prompt: (ctx) => ({
+          link: ctx.facts.adminUrl,
+          text: [`${AS_TESTER} press "Sign in with Cloudflare" and approve.`, "You should see \"Only an administrator of this Cloudflare account can use the admin app.\""],
+          reply: "ok",
+        }),
         async verify(ctx, answer) {
-          replyCheck(ctx, answer, "owner admitted, tester refused");
+          replyCheck(ctx, answer, "tester refused");
           const ev = await ctx.logsSince(["admin signed in"], { scripts: [ADMIN_SCRIPT] });
           ctx.observe("admin app log", { check: "S6", expected: "an \"admin signed in\" event", observed: `${ev.matched.length} matching of ${ev.total} events`, pass: ev.ok ? ev.matched.length >= 1 : null, note: ev.ok ? undefined : ev.error });
           const refused = ev.events.filter((e) => /\b403\b/.test(JSON.stringify(e)) && JSON.stringify(e).includes(ADMIN_SCRIPT));
@@ -395,14 +484,11 @@ export const STEPS = [
     expected: ["consent offers five optional toggles (Workers Scripts, D1, Workers R2, Secrets Store, Account API Tokens), all kept ticked", "\"The auth app is deployed at https://prototype-auth.<subdomain>.workers.dev, with its new D1 database.\"", "one Created/already-there line per shared resource", "\"Created the … signing … in Secrets Store.\"", "\"Recorded account setup version 2.\"", "E-8: the signing token prototype-r2-signing is made (release-blocking)", "E-9/F-3: the auth app's bindings", "F-6: the signing entries' comment"],
     owner: [
       {
-        prompt: (ctx) =>
-          [
-            `Owner, in the admin app (${ctx.facts.adminUrl}; sign in again if it asks): open "Account setup" and press "Continue at Cloudflare".`,
-            "The consent page offers five optional toggles (Workers Scripts, D1, Workers R2, Secrets Store, Account API Tokens). Keep all ticked. Approve.",
-            "Expected, in order: \"The auth app is deployed at https://prototype-auth.…workers.dev, with its new D1 database.\", one \"Created …\" line per shared resource (log, state and backup buckets, lifecycle, subdomain), \"Created the … signing … in Secrets Store.\", \"Recorded account setup version 2.\"",
-            "If you see \"That step failed: …\" instead, copy that page's text into your reply.",
-            ownerLinkHelp,
-          ].join("\n"),
+        prompt: (ctx) => ({
+          link: ctx.facts.adminUrl,
+          text: [`${AS_OWNER} open "Account setup", press "Continue at Cloudflare", keep all five toggles ticked and approve (sign in again first if it asks).`, "You should see one line per shared resource and, last, \"Recorded account setup version 2.\""],
+          reply: "ok, or the page's text if it says \"That step failed\"",
+        }),
         async verify(ctx, answer) {
           replyCheck(ctx, answer, "account setup completed");
           const snap = await eventually(ctx, (s) => (find.worker(s, AUTH_SCRIPT) && find.d1(s, AUTH_SCRIPT) ? s : undefined));
@@ -443,14 +529,11 @@ export const STEPS = [
     expected: ["\"Nothing was done: at Cloudflare these permissions were not granted, and this step needs them: secrets-store.read\"", "no token named prototype-framework made or changed"],
     owner: [
       {
-        prompt: (ctx) =>
-          [
-            `Owner, in the admin app (${ctx.facts.adminUrl}): open "Everyday token" and press "Continue at Cloudflare".`,
-            "On the consent page UNTICK \"Secrets Store\" (keep the others ticked) and approve.",
-            "Expected: \"Nothing was done: at Cloudflare these permissions were not granted, and this step needs them:\" listing secrets-store.read. No token is made.",
-            "(A \"That step failed: … 1001/9109\" page instead means the answer's scope was absent or listed unticked scopes: copy its text into your reply.)",
-            ownerLinkHelp,
-          ].join("\n"),
+        prompt: (ctx) => ({
+          link: ctx.facts.adminUrl,
+          text: [`${AS_OWNER} open "Everyday token", press "Continue at Cloudflare", UNTICK "Secrets Store" (keep the others ticked) and approve.`, "You should see \"Nothing was done: …\" naming secrets-store.read."],
+          reply: "ok, or the page's text if it differs",
+        }),
         async verify(ctx, answer) {
           replyCheck(ctx, answer, "nothing was done, secrets-store.read named");
           const s = await ctx.freshSnapshot();
@@ -464,30 +547,40 @@ export const STEPS = [
     id: "S8",
     session: 1,
     check: "U2",
-    title: "Page 2, Everyday token: created with exactly four groups",
-    expected: ["\"The everyday token prototype-framework was created with exactly these permissions:\" and its value, shown once", "the token holds exactly Workers Scripts Write, Workers R2 Storage Write, D1 Write, Secrets Store Read, on this account only, no zone (U2)"],
+    title: "Page 2, Everyday token: created with exactly four groups; the runner rolls its value",
+    expected: ["\"The everyday token prototype-framework was created with exactly these permissions:\" and its value, shown once", "the token holds exactly Workers Scripts Write, Workers R2 Storage Write, D1 Write, Secrets Store Read, on this account only, no zone (U2)", "the runner rolls the token's value with the owner's token (PUT …/tokens/<id>/value) and keeps the new value in the secrets directory; the owner copies nothing (DEC-0793)"],
     owner: [
       {
-        prompt: (ctx) =>
-          [
-            `Owner, in the admin app (${ctx.facts.adminUrl}): open "Everyday token" and press "Continue at Cloudflare". Keep every toggle ticked and approve.`,
-            "Expected: \"The everyday token prototype-framework was created with exactly these permissions:\" with four permissions, and the token's value, shown once.",
-            "Copy the value. Do NOT paste it in this chat. Put it straight into this cloud environment's settings, as runbook section 2 says for session 2:",
-            "  add CLOUDFLARE_API_TOKEN=<the value>, and delete CLOUDFLARE_BOOTSTRAP_TOKEN, LIVE_PASS_BOOTSTRAP_LONG and LIVE_PASS_BOOTSTRAP_RERUN.",
-            "  (This session keeps its old values; only session 2 sees the change.)",
-            ownerLinkHelp,
-          ].join("\n"),
+        prompt: (ctx) => ({
+          link: ctx.facts.adminUrl,
+          text: [`${AS_OWNER} open "Everyday token", press "Continue at Cloudflare", keep every toggle ticked and approve.`, "You should see \"The everyday token prototype-framework was created with exactly these permissions\" and its value; leave the page open, but do not copy the value: the runner replaces it."],
+          reply: "ok",
+        }),
         async verify(ctx, answer) {
-          replyCheck(ctx, answer, "the token was created and its value saved in the environment settings");
+          replyCheck(ctx, answer, "the token was created");
           const t = await eventually(ctx, (s) => (find.tokens(s, EVERYDAY_NAME).length > 0 ? find.tokens(s, EVERYDAY_NAME) : undefined));
           const tokens = t ?? [];
           ctx.observe("one everyday token", { check: "U2", expected: "exactly one token named prototype-framework, active", observed: tokens.map((x) => ({ id: x.id, status: x.status, expires_on: x.expires_on })), pass: tokens.length === 1 && tokens[0].status === "active" });
-          if (tokens.length >= 1) {
-            const g = groupsOf(tokens[0]);
-            ctx.observe("its groups", { check: "U2", expected: EVERYDAY_GROUPS, observed: g, pass: same(g, EVERYDAY_GROUPS) });
-            ctx.observe("its resources", { check: "U2", expected: "this account only, no zone", observed: tokens[0].policies.map((p) => p.resources), pass: accountOnly(tokens[0], ctx.state.accountId) });
-            ctx.setFacts({ everydayTokenId: tokens[0].id });
-          }
+          if (tokens.length < 1) return;
+          const g = groupsOf(tokens[0]);
+          ctx.observe("its groups", { check: "U2", expected: EVERYDAY_GROUPS, observed: g, pass: same(g, EVERYDAY_GROUPS) });
+          ctx.observe("its resources", { check: "U2", expected: "this account only, no zone", observed: tokens[0].policies.map((p) => p.resources), pass: accountOnly(tokens[0], ctx.state.accountId) });
+          ctx.setFacts({ everydayTokenId: tokens[0].id });
+          await rollEveryday(ctx);
+        },
+      },
+      {
+        when: (ctx) => !!ctx.facts.everydayTokenId && ctx.facts.everydayRolled !== true,
+        saveAs: SECRET.everyday,
+        prompt: (ctx) => ({
+          link: ctx.facts.adminUrl,
+          text: [`The runner could not replace the everyday token's value through the API. ${AS_OWNER} copy the value the Everyday token page still shows.`],
+          reply: "paste the value into this chat",
+        }),
+        async verify(ctx) {
+          const value = ctx.secretValue(SECRET.everyday);
+          const v = value ? await ctx.verify(value) : { ok: false, error: "not saved" };
+          ctx.observe("pasted everyday token", { check: "U2", expected: `active, ID ${ctx.facts.everydayTokenId}`, observed: v.ok ? { id: v.id, status: v.status } : v.error, pass: v.ok && v.id === ctx.facts.everydayTokenId });
         },
       },
     ],
@@ -500,12 +593,11 @@ export const STEPS = [
     expected: ["sections Workers (prototype-admin, prototype-auth deployed), Account setup (version 2, framework version, applied time), Registered apps (none yet), Recent sign-ins (none yet)", "no section shows a warning"],
     owner: [
       {
-        prompt: (ctx) =>
-          [
-            `Owner, in the admin app (${ctx.facts.adminUrl}): open "Status" and press "Continue at Cloudflare" (three optional toggles; keep them ticked).`,
-            "Expected sections: Workers (prototype-admin and prototype-auth deployed), Account setup (version 2, the framework version, when applied), Registered apps (none yet), Recent sign-ins (none yet). No section shows a warning.",
-            ownerLinkHelp,
-          ].join("\n"),
+        prompt: (ctx) => ({
+          link: ctx.facts.adminUrl,
+          text: [`${AS_OWNER} open "Status", press "Continue at Cloudflare", keep the toggles ticked and approve.`, "You should see four sections, Workers, Account setup (version 2), Registered apps (none yet) and Recent sign-ins (none yet), and no warning."],
+          reply: "ok",
+        }),
         async verify(ctx, answer) {
           replyCheck(ctx, answer, "four sections, no warning");
           const rows = await ctx.authDb();
@@ -518,48 +610,50 @@ export const STEPS = [
     id: "CP",
     session: 1,
     checkpoint: true,
-    title: "Checkpoint: session 1 done",
+    title: "Checkpoint: part 1 done (the run goes on in the same session)",
     expected: ["server logs, the auth app's records and a snapshot collected", "the checkpoint stored in the records bucket"],
     async run(ctx) {
       await ctx.collectServer("checkpoint");
-      ctx.observe("facts for session 2", { expected: "admin app URL, subdomain, everyday token ID, owner, tester", observed: { adminUrl: ctx.facts.adminUrl, subdomain: ctx.facts.subdomain, everydayTokenId: ctx.facts.everydayTokenId, owner: ctx.facts.owner?.email, tester: ctx.facts.tester?.email }, pass: !!(ctx.facts.adminUrl && ctx.facts.everydayTokenId && ctx.facts.owner && ctx.facts.tester) });
+      ctx.observe("facts for part 2", { expected: "admin app URL, subdomain, everyday token ID, owner, tester", observed: { adminUrl: ctx.facts.adminUrl, subdomain: ctx.facts.subdomain, everydayTokenId: ctx.facts.everydayTokenId, owner: ctx.facts.owner?.email, tester: ctx.facts.tester?.email }, pass: !!(ctx.facts.adminUrl && ctx.facts.everydayTokenId && ctx.facts.owner && ctx.facts.tester) });
     },
   },
 
-  // ===================== Session 2 =====================
+  // ===================== Part 2: stages, sign-ins and the hand-over (same session) =====================
   {
     id: "R1",
     session: 2,
-    title: "Session 2 preflight: only the everyday and admin tokens",
-    expected: ["CLOUDFLARE_API_TOKEN is the everyday token made on page 2, active", "no starter token reaches any command", "network reachable"],
+    title: "Part 2 preflight: the everyday token, and no starter token left",
+    expected: ["the everyday token's value in the secrets directory verifies as the token page 2 made (rolled again if a new container lost it)", "every starter token is gone (each deleted itself, or was deleted at once)", "network reachable"],
     blocking: true,
     async run(ctx) {
-      const v = await ctx.verify(ctx.env.CLOUDFLARE_API_TOKEN);
+      await ctx.ensureEveryday();
+      const value = ctx.secretValue(SECRET.everyday);
+      const v = value ? await ctx.verify(value) : { ok: false, error: `no value in ${ctx.vault.dir}/${SECRET.everyday}` };
       ctx.observe("everyday token", { expected: `active, ID ${ctx.facts.everydayTokenId}`, observed: v.ok ? { id: v.id, status: v.status, kind: v.kind } : v.error, pass: v.ok && v.status === "active" && v.id === ctx.facts.everydayTokenId });
-      for (const name of ["CLOUDFLARE_BOOTSTRAP_TOKEN", "LIVE_PASS_BOOTSTRAP_LONG", "LIVE_PASS_BOOTSTRAP_RERUN"]) {
-        const value = ctx.env[name];
-        if (!value) {
-          ctx.observe(name, { expected: "not set", observed: "not set", pass: true });
+      for (const name of [SECRET.starter, SECRET.starterLong, SECRET.starterRerun]) {
+        const tv = ctx.secretValue(name);
+        if (!tv) {
+          ctx.observe(name, { expected: "gone", observed: "not in the secrets directory", pass: null });
           continue;
         }
-        const t = await ctx.verify(value);
-        ctx.observe(name, { expected: "not set (removed from the environment settings)", observed: `still set; ${t.ok ? `ACTIVE (${t.status})` : "no longer valid"}; kept away from every command`, pass: null });
+        const t = await ctx.verify(tv);
+        ctx.observe(name, { expected: "no longer valid (deleted itself, or deleted at once)", observed: t.ok ? `ACTIVE (${t.status})` : "no longer valid", pass: !t.ok, note: "never passed to a part-2 command" });
       }
       for (const url of ["https://api.cloudflare.com/client/v4/ips", "https://registry.npmjs.org/-/ping", `${ctx.facts.adminUrl}/`]) {
         const r = await ctx.http(url);
         ctx.observe(`reach ${new URL(url).host}`, { expected: "HTTP 200", observed: r.status, pass: r.status === 200 });
       }
-      if (!v.ok || v.id !== ctx.facts.everydayTokenId) throw new Error(`CLOUDFLARE_API_TOKEN is ${v.ok ? `a different token (ID ${v.id}) than the everyday token page 2 made (${ctx.facts.everydayTokenId})` : "not a valid token"}. Put the value page 2 showed into CLOUDFLARE_API_TOKEN in the environment settings and start a new session.`);
+      if (!v.ok || v.id !== ctx.facts.everydayTokenId) throw new Error(`The everyday token's value in ${ctx.vault.dir}/${SECRET.everyday} is ${v.ok ? `a different token (ID ${v.id}) than the one page 2 made (${ctx.facts.everydayTokenId})` : "not usable"}. Run retry; if it blocks again, tell the owner.`);
     },
   },
   {
     id: "R2",
     session: 2,
-    title: "The app again, in the new container",
+    title: "The app is there (made again from the release candidate in a new container)",
     expected: ["the same app from the same release candidate"],
     blocking: true,
     async run(ctx) {
-      await ctx.ensureProject({ force: true });
+      await ctx.ensureProject({ force: false });
     },
   },
   {
@@ -567,7 +661,7 @@ export const STEPS = [
     session: 2,
     check: "SETUP-AC-011",
     title: "\"continue prototype setup\" with the everyday token only; A-1a, A-2",
-    expected: ["no question about an email domain", "\"account setup: current (setup version 2)\"", "\"everyday token: passed the quick check …\"", "U2: the everyday token reads Workers, R2, D1 and the Secrets Store list (a Secrets Store Read token can list stores)", "next step npm run deploy -- --target cloudflare --stage test-first", "exit 0", "A-1a: the role list holds exactly \"Administrator\" and \"Super Administrator - All Privileges\"", "A-2: Cloudflare's issuer string recorded"],
+    expected: ["no question about an email domain", "\"account setup: current (setup version 2)\"", "\"everyday token: passed the quick check …\"", "U2: the everyday token reads Workers, R2, D1 and the Secrets Store list (a Secrets Store Read token can list stores)", "next step npm run deploy -- --target cloudflare --stage test-first", "exit 0", "A-1a: the role list holds exactly \"Administrator\" and \"Super Administrator - All Privileges\" (every page of it)", "A-2: Cloudflare's issuer string recorded"],
     async run(ctx) {
       const rec = await ctx.fw(["cloudflare-setup"], { label: "continue-setup" });
       expectExit(ctx, rec, 0, "S9");
@@ -579,9 +673,10 @@ export const STEPS = [
         const r = await ctx.everydayApi().call("GET", ctx.api.account(p));
         ctx.observe(`everyday token GET ${p}`, { check: "U2", expected: 200, observed: r.ok ? r.status : describeR(r), pass: r.status === 200 && r.ok });
       }
-      const roles = await ctx.api.call("GET", ctx.api.account("/roles?per_page=50"));
-      const names = roles.ok ? (roles.body.result ?? []).map((r) => r.name) : [];
-      ctx.observe("role names (admin token)", { check: "A-1", expected: ADMIN_ROLES, observed: roles.ok ? names : describeR(roles), pass: roles.ok ? ADMIN_ROLES.every((n) => names.includes(n)) : false });
+      // The role list has several pages (184 roles on 2026-11-08; "Administrator" is on the last).
+      const roles = await ctx.roles();
+      const names = roles.items.map((r) => r.name);
+      ctx.observe("role names (owner's token)", { check: "A-1", expected: ADMIN_ROLES, observed: roles.ok ? names.filter((n) => ADMIN_ROLES.includes(n) || n === TESTER_ROLE) : roles.error, pass: roles.ok ? ADMIN_ROLES.every((n) => names.includes(n)) : false });
       const er = await ctx.everydayApi().call("GET", ctx.api.account("/roles?per_page=50"));
       ctx.observe("role list with the everyday token", { check: "A-1", expected: "recorded (it holds no Account Settings Read)", observed: er.ok ? "readable" : describeR(er), pass: null });
       const issuer = await ctx.http("https://dash.cloudflare.com/.well-known/openid-configuration", { json: true });
@@ -679,28 +774,35 @@ export const STEPS = [
     session: 2,
     check: "F-8",
     title: "Real sign-ins: the owner is admin, the tester user; a file upload (F-8)",
-    expected: ["consent names client prototype-framework-sign-in, fixed rows only", "owner: \"Logged in as u_… (admin)\", /api/auth/me level admin", "tester: (user), level user", "F-8: the owner uploads a small image and opens it", "the auth app records the owner as admin and the tester as user"],
+    expected: ["consent names client prototype-framework-sign-in, fixed rows only", "owner: \"Logged in as u_… (admin)\"", "F-8: the owner uploads a small image and opens it", "tester: (user)", "the auth app records the owner as admin and the tester as user"],
     owner: [
       {
-        prompt: (ctx) =>
-          [
-            `1. Owner, own profile: open ${ctx.facts.appUrl} and press "Log in". The consent page names the client prototype-framework-sign-in with fixed rows only. Approve.`,
-            `   Expected: back on the app, "Logged in as u_… (admin)". Open ${ctx.facts.appUrl}/api/auth/me: "level":"admin".`,
-            "2. Owner: on the app's Files page choose a small image (PNG or JPEG), press Upload → \"Uploaded.\"; open it from the list → it loads.",
-            `3. Tester, tester's profile: open ${ctx.facts.appUrl}, "Log in", approve. Expected "(user)" and ${ctx.facts.appUrl}/api/auth/me "level":"user". The tester stays signed in for the next step.`,
-            ownerLinkHelp,
-          ].join("\n"),
+        prompt: (ctx) => ({
+          link: ctx.facts.appUrl,
+          text: [`${AS_OWNER} press "Log in" and approve (the consent page names prototype-framework-sign-in); then on the Files page upload a small PNG or JPEG and open it from the list.`, "You should see \"Logged in as u_… (admin)\", then \"Uploaded.\" and the image."],
+          reply: "ok",
+        }),
         async verify(ctx, answer) {
-          replyCheck(ctx, answer, "owner admin, tester user, upload works");
+          replyCheck(ctx, answer, "owner admin, upload works");
+          const s = await ctx.freshSnapshot();
+          const files = find.bucket(s, `${workerOf(ctx, PROD_STAGE)}-files`);
+          ctx.observe("uploaded object", { check: "F-8", expected: "at least one object in the stage's files bucket", observed: Array.isArray(files?.objects) ? files.objects.length : files ? files.objects : "bucket absent", pass: Array.isArray(files?.objects) && files.objects.length >= 1 });
+        },
+      },
+      {
+        prompt: (ctx) => ({
+          link: ctx.facts.appUrl,
+          text: [`${AS_TESTER} press "Log in" and approve, and stay signed in for the next steps.`, "You should see \"Logged in as u_… (user)\"."],
+          reply: "ok",
+        }),
+        async verify(ctx, answer) {
+          replyCheck(ctx, answer, "tester user");
           const rows = await ctx.authDb();
           const users = rows.users.rows;
           const o = users.find((u) => u.email === ctx.facts.owner?.email);
           const t = users.find((u) => u.email === ctx.facts.tester?.email);
           ctx.observe("owner recorded", { check: "S13", expected: { email: ctx.facts.owner?.email, sub: ctx.facts.owner?.userId, role: "admin" }, observed: o ?? "absent", pass: o?.role === "admin" });
           ctx.observe("tester recorded", { check: "S13", expected: { email: ctx.facts.tester?.email, sub: ctx.facts.tester?.userId, role: "user" }, observed: t ?? "absent", pass: t?.role === "user" });
-          const s = await ctx.freshSnapshot();
-          const files = find.bucket(s, `${workerOf(ctx, PROD_STAGE)}-files`);
-          ctx.observe("uploaded object", { check: "F-8", expected: "at least one object in the stage's files bucket", observed: Array.isArray(files?.objects) ? files.objects.length : files ? files.objects : "bucket absent", pass: Array.isArray(files?.objects) && files.objects.length >= 1 });
           const ev = await ctx.logsSince(["/callback"], { scripts: [AUTH_SCRIPT], wait: true });
           ctx.observe("auth app callbacks in the logs", { check: "S13", expected: "invocations of /callback", observed: `${ev.matched.length} event(s)`, pass: ev.ok ? ev.matched.length >= 1 : null });
         },
@@ -711,38 +813,35 @@ export const STEPS = [
     id: "S14",
     session: 2,
     check: "A-1",
-    title: "A role change takes effect at the next sign-in (DEC-0703, DEC-0791)",
-    expected: ["the tester's existing session stays user after the role-refresh interval (PAR-425, 300 s)", "after signing out and in, the tester is admin with only the \"Administrator\" role (A-1 part b)", "set back to the original role, a new sign-in gives user"],
+    title: "A role change takes effect at the next sign-in (DEC-0703, DEC-0791); the runner changes the role",
+    expected: ["the runner changes the tester's role to exactly \"Administrator\" through the API (PUT …/members/<id>, DEC-0793) and waits the role-refresh interval (PAR-425, 300 s) plus a minute", "the tester's existing session stays user", "after signing out and in, the tester is admin (A-1 part b)", "the runner sets the original role back; a new sign-in gives user"],
+    async run(ctx) {
+      if (ctx.facts.roleChangedAt) return;
+      const roles = await ctx.roles();
+      const admin = roles.items.find((r) => r.name === "Administrator");
+      if (!admin) throw new Error(`the test Cloudflare account offers no role "Administrator" (${roles.ok ? `${roles.items.length} roles listed` : roles.error})`);
+      const r = await ctx.setMemberRoles(ctx.facts.tester?.memberId, [admin.id]);
+      ctx.observe("role change", { check: "A-1", expected: "the tester's role set to Administrator", observed: r.ok ? { status: r.status, roles: r.roles } : r.error, pass: r.ok });
+      const m = await eventually(ctx, (s) => {
+        const x = find.member(s, ctx.facts.tester?.email);
+        return x && same(x.roles, ["Administrator"]) ? x : undefined;
+      });
+      ctx.observe("tester's role", { check: "A-1", expected: ["Administrator"], observed: m?.roles ?? "unchanged", pass: m !== undefined });
+      ctx.setFacts({ roleChangedAt: new Date().toISOString() });
+    },
     owner: [
       {
-        prompt: (ctx) =>
-          [
-            "The tester stays signed in to the app.",
-            `Owner, own profile: Cloudflare dashboard → Manage Account → Members → ${ctx.facts.tester?.email} → change the role to exactly "Administrator" (remove the other role). Save.`,
-            "Reply ok once it is saved.",
-          ].join("\n"),
-        async verify(ctx, answer) {
-          replyCheck(ctx, answer, "role changed to Administrator");
-          const m = await eventually(ctx, (s) => {
-            const x = find.member(s, ctx.facts.tester?.email);
-            return x && x.roles.includes("Administrator") ? x : undefined;
-          });
-          ctx.observe("tester's role", { check: "A-1", expected: ["Administrator"], observed: m?.roles ?? "unchanged", pass: m !== undefined && same(m.roles, ["Administrator"]) });
-          ctx.setFacts({ roleChangedAt: new Date().toISOString() });
+        async before(ctx) {
+          const left = Date.parse(ctx.facts.roleChangedAt) + ROLE_WAIT_SECONDS * 1000 - Date.now();
+          if (left > 0) await ctx.wait(left, `the role-refresh interval (${ROLE_REFRESH_SECONDS} s) plus a minute`);
         },
-      },
-      {
-        prompt: (ctx) => {
-          const at = new Date(Date.parse(ctx.facts.roleChangedAt) + (ROLE_REFRESH_SECONDS + 60) * 1000).toISOString();
-          return [
-            `Wait until ${at.slice(11, 19)} UTC (the role-refresh interval, ${ROLE_REFRESH_SECONDS} s, plus a minute).`,
-            `Then the tester reloads ${ctx.facts.appUrl}/api/auth/me (with DevTools → Network open, the answer may carry a new __Host-session cookie: the refresh ran).`,
-            "Expected: still \"level\":\"user\" — a role change shows only at the next sign-in.",
-            "Reply with the level shown: user or admin.",
-          ].join("\n");
-        },
+        prompt: (ctx) => ({
+          link: `${ctx.facts.appUrl}/api/auth/me`,
+          text: [`${AS_TESTER} reload this page (the tester is still signed in to the app).`, `The runner changed the tester's role to Administrator more than ${Math.round(ROLE_REFRESH_SECONDS / 60) + 1} minutes ago; you should still see "level":"user", because a role change shows only at the next sign-in.`],
+          reply: "the level shown: user or admin",
+        }),
         async verify(ctx, answer) {
-          const level = /admin/i.test(answer) ? "admin" : /user/i.test(answer) ? "user" : answer;
+          const level = levelOf(answer);
           const waited = (Date.now() - Date.parse(ctx.facts.roleChangedAt)) / 1000;
           ctx.observe("existing session after the interval", { check: "S14", expected: "user", observed: { level, secondsSinceRoleChange: Math.round(waited) }, pass: level === "user" && waited >= ROLE_REFRESH_SECONDS ? true : level !== "user" ? false : null, note: waited < ROLE_REFRESH_SECONDS ? "answered before the interval had passed" : undefined });
           const t = (await ctx.authDb()).users.rows.find((u) => u.email === ctx.facts.tester?.email);
@@ -750,23 +849,32 @@ export const STEPS = [
         },
       },
       {
-        prompt: (ctx) => [`Tester: press "Log out" on ${ctx.facts.appUrl}, then "Log in" again.`, `Expected: "(admin)" and ${ctx.facts.appUrl}/api/auth/me "level":"admin".`, "Reply with the level shown: user or admin."].join("\n"),
+        prompt: (ctx) => ({
+          link: ctx.facts.appUrl,
+          text: [`${AS_TESTER} press "Log out", then "Log in" and approve.`, "You should see \"Logged in as u_… (admin)\"."],
+          reply: "the level shown: user or admin",
+        }),
         async verify(ctx, answer) {
-          const level = /admin/i.test(answer) ? "admin" : /user/i.test(answer) ? "user" : answer;
+          const level = levelOf(answer);
           ctx.observe("after a new sign-in", { check: "A-1", expected: "admin (\"Administrator\" is an admin role, PAR-413)", observed: level, pass: level === "admin" });
           const t = (await ctx.authDb()).users.rows.find((u) => u.email === ctx.facts.tester?.email);
           ctx.observe("auth app's recorded role", { check: "A-1", expected: "admin", observed: t?.role ?? "absent", pass: t?.role === "admin" });
+          const r = await ctx.setMemberRoles(ctx.facts.tester?.memberId, ctx.facts.tester?.roleIds ?? []);
+          ctx.observe("role set back", { check: "S14", expected: ctx.facts.tester?.roles, observed: r.ok ? { status: r.status, roles: r.roles } : r.error, pass: r.ok });
+          await eventually(ctx, (s) => {
+            const x = find.member(s, ctx.facts.tester?.email);
+            return x && same(x.roles, ctx.facts.tester?.roles ?? []) ? x : undefined;
+          });
         },
       },
       {
-        prompt: (ctx) =>
-          [
-            `Owner: set ${ctx.facts.tester?.email} back to the original role (${(ctx.facts.tester?.roles ?? []).join(", ") || "the role it had"}) in Manage Account → Members.`,
-            `Tester: "Log out", then "Log in" on ${ctx.facts.appUrl}. Expected "(user)" and "level":"user".`,
-            "Reply with the level shown: user or admin.",
-          ].join("\n"),
+        prompt: (ctx) => ({
+          link: ctx.facts.appUrl,
+          text: [`${AS_TESTER} press "Log out", then "Log in" again.`, `The runner has set the tester's role back to ${(ctx.facts.tester?.roles ?? []).join(", ") || "its first role"}; you should see "Logged in as u_… (user)".`],
+          reply: "the level shown: user or admin",
+        }),
         async verify(ctx, answer) {
-          const level = /admin/i.test(answer) ? "admin" : /user/i.test(answer) ? "user" : answer;
+          const level = levelOf(answer);
           ctx.observe("after the role is set back", { check: "S14", expected: "user", observed: level, pass: level === "user" });
           const m = find.member(await ctx.freshSnapshot(), ctx.facts.tester?.email);
           ctx.observe("tester's role restored", { check: "S14", expected: ctx.facts.tester?.roles, observed: m?.roles, pass: m !== undefined && same(m.roles, ctx.facts.tester?.roles ?? []) });
@@ -783,9 +891,15 @@ export const STEPS = [
     expected: ["owner: \"Log out\" → \"You are not logged in.\", /api/auth/me level anonymous, no __Host-session cookie", "admin app: \"Sign out\" → the sign-in page", "the Cloudflare dashboard session stays (no end_session, DEC-0660)"],
     owner: [
       {
-        prompt: (ctx) => [`Owner on ${ctx.facts.appUrl}: press "Log out". Expected "You are not logged in."; ${ctx.facts.appUrl}/api/auth/me shows "level":"anonymous".`, `Then in the admin app (${ctx.facts.adminUrl}) press "Sign out": the sign-in page shows. Your Cloudflare dashboard stays signed in.`, ownerLinkHelp].join("\n"),
-        async verify(ctx, answer) {
-          replyCheck(ctx, answer, "signed out of both");
+        prompt: (ctx) => ({ link: ctx.facts.appUrl, text: [`${AS_OWNER} press "Log out".`, "You should see \"You are not logged in.\"; the Cloudflare dashboard stays signed in."], reply: "ok" }),
+        verify(ctx, answer) {
+          replyCheck(ctx, answer, "signed out of the app");
+        },
+      },
+      {
+        prompt: (ctx) => ({ link: ctx.facts.adminUrl, text: [`${AS_OWNER} press "Sign out" (sign in first if the admin app asks, then sign out).`, "You should see the admin app's sign-in page."], reply: "ok" }),
+        verify(ctx, answer) {
+          replyCheck(ctx, answer, "signed out of the admin app");
         },
       },
     ],
@@ -798,7 +912,11 @@ export const STEPS = [
     expected: ["Registered apps lists <app>-prodcheck → <APP>/api/auth/callback", "Recent sign-ins lists the owner (admin) and the tester (user)", "both D1 sections show rows, not a warning"],
     owner: [
       {
-        prompt: (ctx) => [`Owner: sign in to the admin app again (${ctx.facts.adminUrl}), open "Status", "Continue at Cloudflare", approve.`, `Expected: Registered apps lists ${ctx.state.appName}-${PROD_STAGE} → ${ctx.facts.appUrl}/api/auth/callback; Recent sign-ins lists you (admin) and the tester (user); no warning.`, ownerLinkHelp].join("\n"),
+        prompt: (ctx) => ({
+          link: ctx.facts.adminUrl,
+          text: [`${AS_OWNER} sign in again, open "Status", press "Continue at Cloudflare" and approve.`, `You should see ${ctx.state.appName}-${PROD_STAGE} under Registered apps, and you (admin) and the tester (user) under Recent sign-ins, with no warning.`],
+          reply: "ok",
+        }),
         async verify(ctx, answer) {
           replyCheck(ctx, answer, "both sections show rows");
           const rows = await ctx.authDb();
@@ -824,14 +942,11 @@ export const STEPS = [
     },
     owner: [
       {
-        prompt: (ctx) =>
-          [
-            `Owner, admin app (${ctx.facts.adminUrl}): open "Everyday token", "Continue at Cloudflare", keep every toggle ticked, approve.`,
-            "Expected, one of:",
-            "  (yes) \"The existing everyday token was updated in place …; its value did not change\" — reply: updated",
-            "  (no)  \"Cloudflare did not let this sign-in change the existing everyday token, so a new one was created …\" — reply: new",
-            "If it is (no): do NOT press \"I have saved the new token: delete the old one\" (it would delete the token session 2 runs on), and do not save the new value.",
-          ].join("\n"),
+        prompt: (ctx) => ({
+          link: ctx.facts.adminUrl,
+          text: [`${AS_OWNER} open "Everyday token", press "Continue at Cloudflare", keep every toggle ticked and approve.`, "The page says either that the existing everyday token was updated in place, or that a new one was created; if a new one was created, do NOT press \"I have saved the new token: delete the old one\" (it would delete the token the run uses)."],
+          reply: "updated, or new",
+        }),
         async verify(ctx, answer) {
           const s = await ctx.freshSnapshot();
           const all = find.tokens(s, EVERYDAY_NAME);
@@ -841,7 +956,7 @@ export const STEPS = [
           ctx.observe("owner reply", { check: "U1", expected: "updated or new", observed: answer, pass: /updated|new/i.test(answer) ? null : false });
           ctx.observe("U1 answer", { check: "U1", expected: "recorded: the stand-in updated to exactly the four groups (yes), or a new token (no)", observed: { standIn: standIn ? groupsOf(standIn) : "absent", newTokens: extra.map((t) => ({ id: t.id, groups: groupsOf(t) })) }, pass: updated || extra.length > 0 });
           ctx.observe("reply agrees with the API", { check: "U1", expected: updated ? "updated" : "new", observed: answer, pass: updated ? /updated/i.test(answer) : /new/i.test(answer) });
-          const v = await ctx.verify(ctx.env.CLOUDFLARE_API_TOKEN);
+          const v = await ctx.verify(ctx.secretValue(SECRET.everyday) ?? "");
           ctx.observe("everyday token still works", { check: "U1", expected: "active", observed: v.ok ? v.status : v.error, pass: v.ok });
           const ev = find.token(s, ctx.facts.everydayTokenId);
           ctx.observe("everyday token's groups", { check: "U2", expected: EVERYDAY_GROUPS, observed: ev ? groupsOf(ev) : "absent", pass: ev !== undefined && same(groupsOf(ev), EVERYDAY_GROUPS) });
@@ -869,7 +984,11 @@ export const STEPS = [
     },
     owner: [
       {
-        prompt: (ctx) => [`Owner, admin app (${ctx.facts.adminUrl}): open "Clean up v0.1.x email", "Continue at Cloudflare", approve.`, "Expected: \"The Worker prototype-mailsink was already gone.\" and \"Deleted the R2 bucket prototype-mailsink and its 1 stored test messages.\", then the dashboard steps.", ownerLinkHelp].join("\n"),
+        prompt: (ctx) => ({
+          link: ctx.facts.adminUrl,
+          text: [`${AS_OWNER} open "Clean up v0.1.x email", press "Continue at Cloudflare" and approve.`, "You should see \"The Worker prototype-mailsink was already gone.\" and \"Deleted the R2 bucket prototype-mailsink and its 1 stored test messages.\""],
+          reply: "ok",
+        }),
         async verify(ctx, answer) {
           replyCheck(ctx, answer, "the bucket and its message deleted");
           const s = await ctx.freshSnapshot();
@@ -909,7 +1028,7 @@ export const STEPS = [
     session: 2,
     final: true,
     title: "Finish: collect everything and hand over",
-    expected: ["all Workers logs of the run, the log bucket, the auth app's records and a final snapshot in the records bucket", "the final token's permission groups and link printed"],
+    expected: ["all Workers logs of the run, the log bucket, the auth app's records and a final snapshot in the records bucket", "the records' bucket and prefix printed; the analysis and the cleanup use the owner's token, no new token"],
     async run(ctx) {
       await ctx.collectServer("final");
       await ctx.finalInstructions();

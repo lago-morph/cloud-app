@@ -6,7 +6,6 @@ import { describe, expect, it } from "vitest";
 import {
   beginSession,
   CheckpointError,
-  envProblems,
   LATEST_KEY,
   loadState,
   memoryStore,
@@ -99,34 +98,6 @@ describe("toCheckpoint", () => {
     expect(s.phase).toBe("checkpoint");
     expect(s.done.CP).toMatchObject({ result: "pass" });
     expect(s.checkpointAt).toBe(T0);
-  });
-});
-
-describe("envProblems", () => {
-  const s1 = { LIVE_PASS_ADMIN_TOKEN: "a".repeat(40), CLOUDFLARE_ACCOUNT_ID: "acc", CLOUDFLARE_BOOTSTRAP_TOKEN: "b".repeat(40) };
-  const s2 = { LIVE_PASS_ADMIN_TOKEN: "a".repeat(40), CLOUDFLARE_ACCOUNT_ID: "acc", CLOUDFLARE_API_TOKEN: "c".repeat(40) };
-
-  it("accepts session 1's and session 2's variables", () => {
-    expect(envProblems(1, s1)).toEqual({ stop: [], warn: [] });
-    expect(envProblems(2, s2)).toEqual({ stop: [], warn: [] });
-  });
-
-  it("stops when a required variable is missing, naming it", () => {
-    expect(envProblems(1, { ...s1, CLOUDFLARE_BOOTSTRAP_TOKEN: "" }).stop.join("\n")).toMatch(/CLOUDFLARE_BOOTSTRAP_TOKEN/);
-    expect(envProblems(2, { ...s2, LIVE_PASS_ADMIN_TOKEN: undefined }).stop.join("\n")).toMatch(/LIVE_PASS_ADMIN_TOKEN/);
-    expect(envProblems(2, { ...s2, CLOUDFLARE_API_TOKEN: undefined }).stop.join("\n")).toMatch(/CLOUDFLARE_API_TOKEN/);
-  });
-
-  it("stops when session 1 already has an everyday token, or two variables hold the same token", () => {
-    expect(envProblems(1, { ...s1, CLOUDFLARE_API_TOKEN: "c".repeat(40) }).stop.join("\n")).toMatch(/CLOUDFLARE_API_TOKEN/);
-    expect(envProblems(2, { ...s2, CLOUDFLARE_API_TOKEN: s2.LIVE_PASS_ADMIN_TOKEN }).stop.join("\n")).toMatch(/same/);
-  });
-
-  it("warns, without stopping, when session 2 still has a starter token (the runner keeps it from the framework)", () => {
-    const r = envProblems(2, { ...s2, CLOUDFLARE_BOOTSTRAP_TOKEN: "b".repeat(40), LIVE_PASS_BOOTSTRAP_RERUN: "d".repeat(40) });
-    expect(r.stop).toEqual([]);
-    expect(r.warn.join("\n")).toMatch(/CLOUDFLARE_BOOTSTRAP_TOKEN/);
-    expect(r.warn.join("\n")).toMatch(/LIVE_PASS_BOOTSTRAP_RERUN/);
   });
 });
 

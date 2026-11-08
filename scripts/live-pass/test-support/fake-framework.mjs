@@ -13,6 +13,8 @@ const done = (code) => {
   save(w);
   process.exit(code);
 };
+// What each command was given (names only, and whether the account is the test Cloudflare account's).
+w.frameworkCalls = [...(w.frameworkCalls ?? []), { cmd, args, accountIsTest: env.CLOUDFLARE_ACCOUNT_ID === w.accountId, tokens: ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_BOOTSTRAP_TOKEN"].filter((n) => env[n] !== undefined) }];
 
 if (cmd === "cloudflare-setup") {
   const boot = env.CLOUDFLARE_BOOTSTRAP_TOKEN;

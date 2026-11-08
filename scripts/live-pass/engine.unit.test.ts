@@ -199,6 +199,17 @@ describe("owner steps", () => {
     expect(h.records[0]).toMatchObject({ owner: [{ part: 0, answer: "ok" }, { part: 2, answer: "ok" }] });
   });
 
+  it("runs a part's `before` (the runner waiting on its own) before the prompt is asked, and again after a lost container until the prompt is stored", async () => {
+    const calls: string[] = [];
+    const step = { id: "S14", session: 1, title: "role change", owner: [{ before: async (c: Ctx) => { calls.push("wait"); c.setFacts({ waited: true }); }, prompt: (c: Ctx) => `Reload. Waited: ${String(c.facts.waited)}`, verify: () => {} }] };
+    const h = harness([step]);
+    expect(await h.engine.advance(60_000)).toBe("owner");
+    expect(h.printed.at(-1)).toContain("Waited: true");
+    const h2 = harness([step], h.store, await loadState(h.store));
+    expect(await h2.engine.advance(60_000)).toBe("owner");
+    expect(calls).toEqual(["wait"]);
+  });
+
   it("refuses an answer when nothing is waiting", async () => {
     const h = harness([auto("A")]);
     await expect(h.engine.answer("ok", 60_000)).rejects.toThrow(/nothing is waiting/);

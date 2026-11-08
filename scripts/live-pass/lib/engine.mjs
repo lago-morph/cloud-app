@@ -171,6 +171,13 @@ export function createEngine({ catalogue, holder, save, makeCtx = (base) => base
           await save(holder.state);
           continue;
         }
+        if (parts[p.part].before) {
+          try {
+            await parts[p.part].before(ctx);
+          } catch (e) {
+            ctx.observe("error", { expected: "the runner's work before the owner part", observed: message(e), pass: false });
+          }
+        }
         let text;
         try {
           text = formatPrompt(parts[p.part].prompt(ctx));
