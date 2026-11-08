@@ -6,6 +6,11 @@ The once-per-release live pass (plan `plan-v0.2.0-testing-auth.md` §7 "Live") o
 
 **Time:** about 20 minutes of preparation, then about 60 minutes per session.
 
+**The owner's answers (2026-11-02, DEC-0789).**
+- **(a)** In the live-pass sessions only, the session's main agent runs `scripts/live-pass/` itself and relays its prompts to you live. This is an exception to the orchestrator rule in `CLAUDE.md` (the main agent otherwise runs nothing and delegates); the session prompts below and "For the agent in the session" say so.
+- **(b)** The optional starter tokens for S1 and S5 (1.4.3 and 1.4.4) stay.
+- **(c)** R2 is enabled before session 1 (1.2), and the runner may turn on Workers Logs for every Worker in the test account.
+
 **Rules.**
 - **Never paste a token value into a chat**, a file, a commit or this runbook. Token values go only into the cloud environment's settings (environment variables), and the last one only to the analyst.
 - A cloud session sees environment variables only as they were when it started. A change takes effect in the **next new session**.
@@ -15,9 +20,14 @@ What changed since the previous version of this runbook (written before PRs #161
 
 ## 1. Before you start (once, in the browser)
 
-1. **The test account.** Make a new Cloudflare account (the Free plan is enough). You are its Super Administrator. Copy the **account ID**: dashboard → the account's home page → Account ID (or from the address bar, `dash.cloudflare.com/<account ID>/…`).
-2. **Turn on R2.** Dashboard → R2 Object Storage → enable it (Cloudflare may ask for a payment method; this pass stays within the free allowances). Create no bucket: the runner and the framework create their own.
-3. **The tester.** A second person, or your own second login with another email address, with a Cloudflare user of their own. Open a second browser profile (or a private window) for the tester and sign in to Cloudflare there. You can invite them now (Manage Account → Members → Invite, role **"HTTP Applications Read"**) or when the agent asks (step P3).
+The pass needs **one** new Cloudflare account and **two different Cloudflare logins (users)** on it: a new login, which owns the account (1.1), and the tester (1.3).
+
+1. **The test account.** Sign up at Cloudflare with a **new email address** (the Free plan is enough). That makes a new login and its own new account; this new login is the owner (Super Administrator) for the pass, and "you" in this runbook. Do not make the test account from the login that will be the tester. Copy the **account ID**: dashboard → the account's home page → Account ID (or from the address bar, `dash.cloudflare.com/<account ID>/…`).
+2. **Turn on R2, before session 1.** Dashboard → R2 Object Storage → enable it (Cloudflare may ask for a payment method; this pass stays within the free allowances). Create no bucket: the runner and the framework create their own.
+3. **The tester.** This can be your **existing main Cloudflare login**. Signed in as the new login, invite the main login's email address to the test account (Manage Account → Members → Invite, role **"HTTP Applications Read"**), now or when the agent asks (step P3). Then open a second browser profile (or a private window), sign in to Cloudflare there with the main login, and accept the invitation.
+   - This only makes the main login a member of the test account; nothing in your main account changes.
+   - S14's change to Administrator, and back, applies only in the test account.
+   - The records hold both logins' email address and user ID (owner-approved).
 4. **Make the tokens.** All are **account API tokens**: Manage Account → Account API Tokens → Create Token, or the pre-filled links below. Choose this account under Account Resources. Copy each value once, straight into the environment settings (step 5).
    1. **Admin token** `live-pass-admin`, for the runner only (snapshots, logs, its records bucket, cleanup of its probes). This link pre-fills six of its eight permissions:
       ```
@@ -29,8 +39,8 @@ What changed since the previous version of this runbook (written before PRs #161
       https://dash.cloudflare.com/?to=/:account/api-tokens&permissionGroupKeys=%5B%7B%22key%22%3A%22e086da7e2179491d91ee5f35b3ca210a%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%2250fc2f43318f40e4855a35d8de5bf643%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22adc8fa2bc6124928a8b3314dc63a1235%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%225bc3f8b21c554832afc660159ab75fa4%22%2C%22type%22%3A%22edit%22%7D%5D&name=prototype-framework-bootstrap
       ```
       TTL: start today, **end date tomorrow**. Make it shortly before session 1. (The framework refuses a starter token that has more than 24 hours left and deletes it at once. The runner checks every starter token's expiry first, before anything uses it; if it says the expiry is too far away, see section 5.)
-   3. **Second starter token** (recommended; step S5, the re-run): the same link, the same TTL, the same name.
-   4. **Long-lived starter token** (recommended; step S1): the same link, the same name, **TTL left empty**. The framework must delete it at once.
+   3. **Second starter token** (optional, recommended; kept by the owner, DEC-0789; step S5, the re-run): the same link, the same TTL, the same name.
+   4. **Long-lived starter token** (optional, recommended; kept by the owner, DEC-0789; step S1): the same link, the same name, **TTL left empty**. The framework must delete it at once.
 
    If you leave out 3 or 4, steps S5 or S1 are recorded as "n/a".
 5. **The cloud environment.** In Claude Code on the web, use (or make) an environment for the repository `lago-morph/cloud-app`:
@@ -59,7 +69,7 @@ Optional variables: `LIVE_PASS_BUCKET` (the records bucket; default `live-pass-r
 1. Check the environment variables are session 1's column of section 2, and the starter tokens were made today (1.4).
 2. Start a **new** cloud session in that environment, on the branch that has the runner (`main` once this runbook's PR is merged), and paste:
    ```
-   Run session 1 of the v0.2.0 live pass. Read only the section "For the agent in the session" of ai/implementation/live-pass-v0.2.0.md and follow it exactly. Run the runner's commands yourself and relay its owner prompts to me word for word. Start with: node scripts/live-pass/live-pass.mjs start
+   Run session 1 of the v0.2.0 live pass. Read only the section "For the agent in the session" of ai/implementation/live-pass-v0.2.0.md and follow it exactly. In this live-pass session you, the main agent, run the runner's commands yourself and relay its owner prompts to me live, word for word: this is an exception to the orchestrator rule in CLAUDE.md, for the live-pass sessions only (owner decision DEC-0789). Start with: node scripts/live-pass/live-pass.mjs start
    ```
 3. The agent asks you, in this order. Each prompt says exactly what to open and what you should see. Reply `ok` when it matched, or say in a few words what differed.
    1. **P3, the tester** (only if not yet a member): invite the tester with "HTTP Applications Read"; the tester accepts the invitation in their profile.
@@ -77,9 +87,9 @@ Optional variables: `LIVE_PASS_BUCKET` (the records bucket; default `live-pass-r
 
 ## 4. Session 2: stages, sign-ins and the hand-over (about 60 minutes)
 
-1. Start a **new** cloud session in the same environment, on the same branch, and paste:
+1. Start a **new** cloud session in the same environment, on the same branch, and paste this prompt (use it rather than the shorter one the runner prints at the end of session 1, which does not carry the `CLAUDE.md` exception):
    ```
-   Run session 2 of the v0.2.0 live pass. Read only the section "For the agent in the session" of ai/implementation/live-pass-v0.2.0.md and follow it exactly. Run the runner's commands yourself and relay its owner prompts to me word for word. Start with: node scripts/live-pass/live-pass.mjs resume
+   Run session 2 of the v0.2.0 live pass. Read only the section "For the agent in the session" of ai/implementation/live-pass-v0.2.0.md and follow it exactly. In this live-pass session you, the main agent, run the runner's commands yourself and relay its owner prompts to me live, word for word: this is an exception to the orchestrator rule in CLAUDE.md, for the live-pass sessions only (owner decision DEC-0789). Start with: node scripts/live-pass/live-pass.mjs resume
    ```
 2. The runner checks that only the everyday and admin tokens are there, makes the app again from the release candidate, runs "continue prototype setup", probes a deploy without Secrets Store Read (U3), and deploys a test stage and the production stage `prodcheck`. This takes 10–20 minutes without you.
 3. **S13, real sign-ins.** You open the app's URL (the prompt gives it), "Log in", approve (the consent names `prototype-framework-sign-in`): "Logged in as u_… (admin)". On the Files page you upload a small PNG or JPEG and open it. The tester logs in in their profile: "(user)". The tester **stays signed in**.
@@ -145,6 +155,8 @@ Every step records expected against observed; IDs are kept from the previous run
 
 Recorded throughout, without your help: every command with its arguments, exit code, timing and output (secrets scrubbed); an API snapshot of the account after every step; every API call's method, path and status; the Workers logs of the admin app, the auth app and the stages (the runner turns on Workers Logs for every Worker); the shared log bucket; the auth app's records of who signed in with which role.
 
+Already confirmed, so not an open point of this pass: a token holding only Secrets Store Read lists the stores and a store's secrets and is refused writes (owner's check of 2026-11-02, DEC-0788). S9 still records the everyday token's own store-list read (U2); U3 stays open.
+
 Not checked in this pass: F-5 (needs a 0.1.x stage with Worker secrets) and its fallback; the removal of a member at the next sign-in (E2E-007 step 4 covers it locally).
 
 ## 7. Cost and cleanup
@@ -160,6 +172,8 @@ Not checked in this pass: F-5 (needs a 0.1.x stage with Worker secrets) and its 
 ## For the agent in the session
 
 You run the live pass's runner for the owner. Read only this section.
+
+**Exception to `CLAUDE.md` (owner decision DEC-0789).** In the live-pass sessions only, you, the session's main agent, run `scripts/live-pass/` yourself and relay its prompts to the owner live. This overrides the orchestrator rule in `CLAUDE.md` (the main agent runs nothing and delegates) for this purpose only: do not spawn subagents for the runner, and do nothing else that the rule forbids.
 
 1. **Run the runner's commands yourself**, from the repository root, with the Bash tool's timeout at its maximum (600000 ms). They are the pass's procedure, not a test suite: run them directly, do not delegate them, and change no file in the repository.
 2. Start with the command the owner's prompt names (`start` in session 1, `resume` in session 2 or after an interruption). Then act on the exit code:

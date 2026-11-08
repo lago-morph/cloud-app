@@ -44,8 +44,11 @@ describe("release-check", () => {
   });
 
   it("accepts the matching tag with a dated CHANGELOG section and returns its notes", () => {
-    const dir = fixture(`# Changelog\n\n## [${fwVersion}] - 2026-11-01\n\n### Added\n\n- x\n\n## [0.0.1] - 2026-01-01\n\n- old\n\n[${fwVersion}]: https://e/x\n`);
-    const r = check(dir, `v${fwVersion}`);
+    // A fixed final version, not the repository's, which may be a candidate (root cause
+    // ai/implementation/root-causes/2026-11-02-V-release-check-tests-assume-final-version.md).
+    const dir = fixture("# Changelog\n\n## [1.2.3] - 2026-11-01\n\n### Added\n\n- x\n\n## [0.0.1] - 2026-01-01\n\n- old\n\n[1.2.3]: https://e/x\n");
+    setVersions(dir, "1.2.3");
+    const r = check(dir, "v1.2.3");
     expect(r.problems).toEqual([]);
     expect(r.notes).toBe("### Added\n\n- x");
     expect(r.prerelease).toBe(false);
@@ -81,8 +84,9 @@ describe("release-check", () => {
   });
 
   it("publishes a final version to the dist-tag latest", () => {
-    const dir = fixture(`## [${fwVersion}] - 2026-11-01\n- x\n`);
-    expect(check(dir, `v${fwVersion}`)).toMatchObject({ prerelease: false, npmTag: "latest" });
+    const dir = fixture("## [1.2.3] - 2026-11-01\n- x\n");
+    setVersions(dir, "1.2.3"); // a fixed final version, not the repository's (root cause above)
+    expect(check(dir, "v1.2.3")).toMatchObject({ prerelease: false, npmTag: "latest" });
   });
 
   it("refuses a release-candidate tag that is not -rc with exactly two digits 01 to 99, and any other pre-release part", () => {
@@ -94,8 +98,9 @@ describe("release-check", () => {
   });
 
   it("marks a version with a pre-release part as a prerelease", () => {
-    const dir = fixture(`## [${fwVersion}-rc01] - 2026-11-01\n- x\n`);
-    // The files say fwVersion, so the versions do not match; the classification still holds.
-    expect(check(dir, `v${fwVersion}-rc01`).prerelease).toBe(true);
+    const dir = fixture("## [1.2.3-rc01] - 2026-11-01\n- x\n");
+    setVersions(dir, "1.2.3");
+    // The files say 1.2.3, so the versions do not match; the classification still holds.
+    expect(check(dir, "v1.2.3-rc01").prerelease).toBe(true);
   });
 });
