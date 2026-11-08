@@ -21,6 +21,7 @@ import { chmodSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { ACCOUNT, BOOT_GROUPS, harness, PRIMARY_ACCOUNT, PRIMARY_TOKEN, TESTER } from "./test-support/harness.mjs";
+import { BOOTSTRAP_LINK } from "./lib/steps.mjs";
 
 type Result = { status: number | null; out: string };
 type H = Awaited<ReturnType<typeof harness>>;
@@ -233,6 +234,73 @@ describe("an offline live pass that loses its container in both parts", () => {
     }
     // Reading the records needs R2 access.
     expect(handover.tokenGroups).toContain("Workers R2 Storage Write");
+  });
+});
+
+// The runbook (section 1, "If something goes wrong"): after a lost container the runner continues where it
+// stopped, and "a starter token you pasted in the lost container may be asked for again". Here the
+// container is lost in the middle of each bootstrap (S4, then S5): the new container's secrets directory
+// holds only the owner's first message. Root-cause record:
+// ai/implementation/root-causes/2026-11-08-live-pass-lost-starter-token.md
+describe("a starter token pasted in a container that is lost during its bootstrap", () => {
+  let h: H;
+  type Call = { cmd: string; tokens: string[] };
+  let tokenlessSetups: Call[] = [];
+  let afterS4Loss: Result;
+  let recovered: Result;
+  let afterS5Loss: Result;
+  let state: { done: Record<string, { result: string; reason?: string }> } = { done: {} };
+
+  beforeAll(async () => {
+    h = await harness();
+    let c = h.container();
+    h.firstMessage(c);
+    h.prompt(h.run(c, "start", "--tester", TESTER), "P3");
+    h.owner.acceptInvitation();
+    h.prompt(h.run(c, "answer", "ok"), "TOK-S4");
+    h.paste(c, "LIVE_PASS_STARTER", h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, 23 * 3600));
+    h.change((w: Record<string, unknown>) => {
+      w.loseContainerOnBootstrap = true;
+    });
+    h.runOnce(c, "answer", "saved"); // the runner dies in the middle of S4's bootstrap
+    const before = h.world().frameworkCalls.length;
+    c = h.container();
+    h.firstMessage(c);
+    afterS4Loss = h.runOnce(c, "resume");
+    tokenlessSetups = (h.world().frameworkCalls as Call[]).slice(before).filter((x) => x.cmd === "cloudflare-setup" && x.tokens.length === 0);
+    // The owner makes a new starter token from the link; the agent saves it and goes on as the runner says.
+    h.paste(c, "LIVE_PASS_STARTER", h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, 23 * 3600));
+    recovered = h.run(c, afterS4Loss.status === 10 ? "answer" : "retry", ...(afterS4Loss.status === 10 ? ["saved"] : []));
+    if (recovered.status !== 10 || !recovered.out.includes("OWNER STEP TOK-S5 ")) return;
+    h.paste(c, "LIVE_PASS_STARTER_RERUN", h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, 23 * 3600));
+    h.change((w: Record<string, unknown>) => {
+      w.loseContainerOnBootstrap = true;
+    });
+    h.runOnce(c, "answer", "saved"); // the runner dies in the middle of S5's bootstrap
+    c = h.container();
+    h.firstMessage(c);
+    afterS5Loss = h.run(c, "resume");
+    state = JSON.parse(Object.entries(h.records()).find(([k]) => k.endsWith("/state.json"))![1]);
+  }, 300_000);
+
+  it("does not run the bootstrap without a starter token", () => {
+    expect(tokenlessSetups, h.transcript.join("\n")).toEqual([]);
+  });
+
+  it("asks for the S4 starter token again: the framework's link and the file to save it as", () => {
+    expect([1, 10], afterS4Loss.out).toContain(afterS4Loss.status);
+    expect(afterS4Loss.out).toContain(BOOTSTRAP_LINK);
+    expect(afterS4Loss.out).toMatch(/\/LIVE_PASS_STARTER(?!_)\b/);
+  });
+
+  it("goes on with the new starter token: S4 passes and TOK-S5 is asked", () => {
+    expect(recovered.status, h.transcript.join("\n")).toBe(10);
+    expect(recovered.out).toContain("OWNER STEP TOK-S5 ");
+  });
+
+  it("does not record S5 as skipped by the owner when the owner pasted its token", () => {
+    expect(afterS5Loss, h.transcript.join("\n")).toBeDefined();
+    expect(state.done.S5?.reason ?? "", JSON.stringify(state.done.S5)).not.toMatch(/skipped/i);
   });
 });
 

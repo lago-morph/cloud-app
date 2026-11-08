@@ -11,13 +11,31 @@
 // sentences, and the exact reply; the records end in R2, the same token reads them; no token value is
 // printed or recorded; the sandbox's own (primary Cloudflare account's) token and ID are never used.
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { BOOT_GROUPS, harness, PRIMARY_TOKEN, TESTER } from "./test-support/harness.mjs";
-import { STEPS } from "./lib/steps.mjs";
+import { BOOTSTRAP_LINK, STEPS } from "./lib/steps.mjs";
+
+const RUNBOOK = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "ai", "implementation", "live-pass-v0.2.0.md");
+/** The runbook's numbered sections: { "3": "After the run: analysis and cleanup", … }. */
+const runbookSections = (): Record<string, string> => Object.fromEntries([...readFileSync(RUNBOOK, "utf8").matchAll(/^## (\d+)\. (.+)$/gm)].map((m) => [m[1], m[2]]));
 
 const PART2 = new Set(STEPS.filter((s: { session: number }) => s.session === 2).map((s: { id: string }) => s.id));
 const BOOT_STEPS = new Set(["S2", "S4", "S5"]);
+
+describe("the runner's closing text", () => {
+  // The agent relays it to the owner word for word; it must send the owner to the runbook's analysis
+  // section. Root-cause record: ai/implementation/root-causes/2026-11-08-live-pass-closing-text-section.md
+  it("names the runbook section that holds the analysis and the cleanup", () => {
+    const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "live-pass.mjs"), "utf8");
+    const text = source.slice(source.indexOf("function finishText"), source.indexOf("function writeResults"));
+    const refs = [...text.matchAll(/runbook's section (\d+)/g)].map((m) => m[1]);
+    expect(refs.length).toBeGreaterThan(0);
+    const sections = runbookSections();
+    for (const n of refs) expect(sections[n], `the closing text names the runbook's section ${n}`).toMatch(/analysis/i);
+  });
+});
 
 describe("an offline live pass in one session", () => {
   it("needs from the owner only the first message, links with one reply each, and two pasted starter tokens; records no token value", async () => {
@@ -38,9 +56,11 @@ describe("an offline live pass in one session", () => {
     // S1 (a starter token with no expiry) is dropped from this pass (owner decision on #171): the owner is never asked for one.
     r = ask(h.run(c, "answer", "ok"), "TOK-S4");
     const boot = h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, 23 * 3600);
+    const ids: Record<string, string> = { boot: h.world().tokens.find((t: { value: string }) => t.value === boot).id };
     h.paste(c, "LIVE_PASS_STARTER", boot);
     r = ask(h.run(c, "answer", "saved"), "TOK-S5");
     const rerun = h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, 23 * 3600);
+    ids.rerun = h.world().tokens.find((t: { value: string }) => t.value === rerun).id;
     h.paste(c, "LIVE_PASS_STARTER_RERUN", rerun);
     r = ask(h.run(c, "answer", "saved"), "S6");
     r = ask(h.run(c, "answer", "ok"), "S6");
@@ -94,6 +114,11 @@ describe("an offline live pass in one session", () => {
     for (const p of prompts) {
       const body = p.slice(p.indexOf("===\n") + 4, p.search(/\n\nWhen the owner replies/)).split("\n");
       expect(body[0], p).toMatch(/^Open: \S/);
+      // One link: a URL, except the tester's invitation, which is the link in the email Cloudflare sent.
+      if (/OWNER STEP P3 /.test(p)) expect(body[0], p).toContain(TESTER);
+      else expect(body[0], p).toMatch(/^Open: https:\/\/\S+$/);
+      // A starter token is made from the framework's own pre-filled link.
+      if (/OWNER STEP TOK-/.test(p)) expect(body[0], p).toBe(`Open: ${BOOTSTRAP_LINK}`);
       expect(body.at(-1), p).toMatch(/^Reply: \S/);
       expect(body.length - 2, p).toBeGreaterThanOrEqual(1);
       expect(body.length - 2, p).toBeLessThanOrEqual(3);
@@ -122,6 +147,14 @@ describe("an offline live pass in one session", () => {
     const w = h.world();
     expect(w.primaryTokenUsed).toBeUndefined();
     expect(w.frameworkCalls.every((x: { accountIsTest: boolean }) => x.accountIsTest)).toBe(true);
+    // By value, under any variable name: each setup gets its own starter token (S2 a non-token), every other
+    // framework command the everyday token, and none the owner's token or the sandbox's own.
+    type Call = { cmd: string; tokenEnv: Record<string, string> };
+    const calls = w.frameworkCalls as Call[];
+    expect(calls.filter((x) => x.cmd === "cloudflare-setup").map((x) => x.tokenEnv)).toEqual([{}, { CLOUDFLARE_BOOTSTRAP_TOKEN: ids.boot }, { CLOUDFLARE_BOOTSTRAP_TOKEN: ids.rerun }, { CLOUDFLARE_API_TOKEN: everydayId }]);
+    const others = calls.filter((x) => x.cmd !== "cloudflare-setup");
+    expect(others.length).toBeGreaterThan(0);
+    for (const x of others) expect(x.tokenEnv, x.cmd).toEqual({ CLOUDFLARE_API_TOKEN: everydayId });
     const commands = readdirSync(join(recordsDir, "commands")).map((f) => JSON.parse(readFileSync(join(recordsDir, "commands", f), "utf8")));
     for (const cmd of commands) {
       expect(cmd.env.CLOUDFLARE_BOOTSTRAP_TOKEN, `${cmd.step} ${cmd.label}`).toBe(BOOT_STEPS.has(cmd.step) ? "set" : undefined);
@@ -194,4 +227,19 @@ describe("an offline live pass in one session", () => {
     for (const [key, body] of Object.entries(rec)) expect(body.includes(shown), `${key} holds the everyday token`).toBe(false);
     expect(h.printed.join("\n").includes(shown)).toBe(false);
   }, 300_000);
+
+  // Edge case of "a pasted token never reaches a record" (DEC-0793): the agent passes the pasted value to
+  // `answer` instead of saving it as the prompt says.
+  it("keeps a starter token out of every record and the output when the agent passes it to `answer` instead of saving it", async () => {
+    const h = await harness();
+    const c = h.container();
+    h.firstMessage(c);
+    h.prompt(h.run(c, "start", "--tester", TESTER), "P3");
+    h.owner.acceptInvitation();
+    h.prompt(h.run(c, "answer", "ok"), "TOK-S4");
+    const boot = h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, 23 * 3600);
+    h.run(c, "answer", boot);
+    for (const [key, body] of Object.entries(h.records())) expect(body.includes(boot), `${key} holds the pasted starter token`).toBe(false);
+    expect(h.printed.join("\n").includes(boot), "the runner printed the pasted starter token").toBe(false);
+  }, 120_000);
 });

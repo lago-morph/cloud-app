@@ -24,12 +24,13 @@ export const idOf = (name) => Object.entries(GROUPS).find(([, n]) => n === name)
 export const load = () => JSON.parse(readFileSync(FILE, "utf8"));
 export const save = (w) => writeFileSync(FILE, JSON.stringify(w, null, 1));
 
-// Like the real list (184 roles on 2026-11-08, "Administrator" on the last of four pages), the
-// three roles the pass uses come after more than one page of other roles.
-const FILLER_ROLES = Array.from({ length: 60 }, (_, i) => ({ id: `rf${i}`, name: `Other Role ${i}` }));
+// Like the real list (184 roles on 2026-11-08, 4 pages of 50, "Administrator" on page 4): the
+// tester's role is on page 3 and "Administrator" is the last role of page 4.
+const filler = (from, n) => Array.from({ length: n }, (_, i) => ({ id: `rf${from + i}`, name: `Other Role ${from + i}` }));
+const ROLES = [...filler(0, 20), { id: "r1", name: "Super Administrator - All Privileges" }, ...filler(20, 100), { id: "r3", name: "HTTP Applications Read" }, ...filler(120, 61), { id: "r2", name: "Administrator" }];
 
 export function newWorld(accountId) {
-  return { accountId, subdomain: null, now: 0, tokens: [], members: [], roles: [...FILLER_ROLES, { id: "r1", name: "Super Administrator - All Privileges" }, { id: "r2", name: "Administrator" }, { id: "r3", name: "HTTP Applications Read" }], oauthClients: [], workers: {}, d1: [], d1Rows: {}, buckets: {}, stores: [], events: [], stageSecrets: {} };
+  return { accountId, subdomain: null, now: 0, tokens: [], members: [], roles: ROLES, oauthClients: [], workers: {}, d1: [], d1Rows: {}, buckets: {}, stores: [], events: [], stageSecrets: {} };
 }
 
 /** Adds an account token to the world and returns its value. */
