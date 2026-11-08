@@ -2,7 +2,7 @@
 // environment the framework sees, and what a command record holds. Written from the brief: the
 // framework keeps reading the variables it already reads; the runner's own admin token is for
 // snapshots, telemetry and cleanup only; records hold arguments, exit code, timing and scrubbed output.
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { childEnv, runCommand } from "./lib/exec.mjs";
 import { createScrubber } from "./lib/scrub.mjs";
 
@@ -112,5 +112,38 @@ describe("runCommand", () => {
     const rec = await runCommand({ argv: [process.execPath, "-e", "setTimeout(() => {}, 10000)"], cwd: process.cwd(), env: {}, scrubber: scrubber(), echo: false, timeoutMs: 300 });
     expect(rec.timedOut).toBe(true);
     expect(rec.exitCode).not.toBe(0);
+  });
+
+  // Review 2026-11-02 (independent test author): what the runner echoes to the session's terminal
+  // must be as free of credential values as the record. A pipe delivers output in chunks of any
+  // size, so a value can arrive split across two chunks.
+  const captureEcho = async (run: () => Promise<unknown>) => {
+    const echoed: string[] = [];
+    const spy = vi.spyOn(process.stdout, "write").mockImplementation((chunk: string | Uint8Array) => {
+      echoed.push(String(chunk));
+      return true;
+    });
+    try {
+      await run();
+    } finally {
+      spy.mockRestore();
+    }
+    return echoed.join("");
+  };
+
+  it("never echoes a secret to the terminal when it arrives split across two output chunks", async () => {
+    const script = 'process.stdout.write("a very-secr"); setTimeout(() => process.stdout.write("et-value-123 b\\n"), 300);';
+    let rec: Awaited<ReturnType<typeof runCommand>> | undefined;
+    const echoed = await captureEcho(async () => {
+      rec = await runCommand({ argv: [process.execPath, "-e", script], cwd: process.cwd(), env: { PATH: process.env.PATH ?? "" }, scrubber: scrubber(), echo: true });
+    });
+    expect(rec?.stdout).toBe("a [REDACTED:SECRET] b\n");
+    expect(echoed).not.toContain("very-secr");
+    expect(echoed).toContain("a [REDACTED:SECRET] b");
+  });
+
+  it("still echoes output that ends without a newline, once the command ends", async () => {
+    const echoed = await captureEcho(() => runCommand({ argv: [process.execPath, "-e", "process.stdout.write('no newline at the end')"], cwd: process.cwd(), env: { PATH: process.env.PATH ?? "" }, scrubber: scrubber(), echo: true }));
+    expect(echoed).toContain("no newline at the end");
   });
 });

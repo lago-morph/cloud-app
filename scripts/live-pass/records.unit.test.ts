@@ -97,4 +97,49 @@ describe("createRecorder", () => {
     expect(await again.sync()).toEqual({ uploaded: 1, failed: [] });
     expect(store.objects.has("a.json")).toBe(true);
   });
+
+  // Review 2026-11-02 (independent test author): a new session, or a reclaimed container, starts
+  // with an empty records directory. The run's append-only logs (events, API calls, HTTP calls,
+  // Workers Logs settings) must keep what earlier containers uploaded.
+  const lines = (body: string | null | undefined) => (body ?? "").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
+
+  it("keeps the lines an earlier container uploaded when a new container appends to the same log", async () => {
+    const store = memoryStore();
+    const first = createRecorder({ dir: mkdtempSync(join(tmpdir(), "live-pass-records-")), scrubber: createScrubber(), store });
+    first.append("events.jsonl", { session: 1 });
+    first.append("api-calls.jsonl", { call: 1 });
+    await first.sync();
+    const second = createRecorder({ dir: mkdtempSync(join(tmpdir(), "live-pass-records-")), scrubber: createScrubber(), store });
+    second.append("events.jsonl", { session: 2 });
+    expect(await second.sync()).toEqual({ uploaded: 1, failed: [] });
+    expect(lines(store.objects.get("events.jsonl"))).toEqual([{ session: 1 }, { session: 2 }]);
+    second.append("events.jsonl", { session: 2, again: true });
+    await second.sync();
+    expect(lines(store.objects.get("events.jsonl"))).toEqual([{ session: 1 }, { session: 2 }, { session: 2, again: true }]);
+    expect(lines(store.objects.get("api-calls.jsonl"))).toEqual([{ call: 1 }]);
+  });
+
+  it("never overwrites a log whose earlier lines it could not read, and uploads it once it can", async () => {
+    const store = memoryStore();
+    await store.put("events.jsonl", `${JSON.stringify({ session: 1 })}\n`);
+    let down = true;
+    const flaky = {
+      async get(k: string) {
+        if (down) throw new Error("HTTP 503");
+        return store.get(k);
+      },
+      async put(k: string, b: string) {
+        await store.put(k, b);
+      },
+    };
+    const dir = mkdtempSync(join(tmpdir(), "live-pass-records-"));
+    const r = createRecorder({ dir, scrubber: createScrubber(), store: flaky });
+    r.append("events.jsonl", { session: 2 });
+    expect((await r.sync()).failed).toHaveLength(1);
+    expect(lines(store.objects.get("events.jsonl"))).toEqual([{ session: 1 }]);
+    down = false;
+    const again = createRecorder({ dir, scrubber: createScrubber(), store: flaky });
+    expect(await again.sync()).toEqual({ uploaded: 1, failed: [] });
+    expect(lines(store.objects.get("events.jsonl"))).toEqual([{ session: 1 }, { session: 2 }]);
+  });
 });

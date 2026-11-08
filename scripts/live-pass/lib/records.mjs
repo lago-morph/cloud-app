@@ -5,17 +5,22 @@ import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statS
 import { dirname, join, relative } from "node:path";
 
 const UNSYNCED = ".unsynced.json";
+/** Append-only files started in this container whose earlier lines (from other containers) are not merged in yet. */
+const UNMERGED = ".unmerged.json";
 
 const contentType = (rel) => (rel.endsWith(".json") ? "application/json" : rel.endsWith(".jsonl") ? "application/x-ndjson" : rel.endsWith(".md") ? "text/markdown; charset=utf-8" : "text/plain; charset=utf-8");
 
 /**
- * @param {{ dir: string, scrubber: ReturnType<typeof import("./scrub.mjs").createScrubber>, store: { put(key: string, body: string, type?: string): Promise<void> } | null }} o
+ * @param {{ dir: string, scrubber: ReturnType<typeof import("./scrub.mjs").createScrubber>, store: { get(key: string): Promise<string | null>, put(key: string, body: string, type?: string): Promise<void> } | null }} o
  */
 export function createRecorder({ dir, scrubber, store }) {
   mkdirSync(dir, { recursive: true });
   const unsyncedPath = join(dir, UNSYNCED);
   const dirty = new Set(existsSync(unsyncedPath) ? JSON.parse(readFileSync(unsyncedPath, "utf8")) : []);
   const remember = () => writeFileSync(unsyncedPath, JSON.stringify([...dirty]));
+  const unmergedPath = join(dir, UNMERGED);
+  const unmerged = new Set(existsSync(unmergedPath) ? JSON.parse(readFileSync(unmergedPath, "utf8")) : []);
+  const rememberUnmerged = () => writeFileSync(unmergedPath, JSON.stringify([...unmerged]));
 
   const write = (rel, content) => {
     const path = join(dir, rel);
@@ -36,6 +41,11 @@ export function createRecorder({ dir, scrubber, store }) {
     append(rel, value) {
       const path = join(dir, rel);
       mkdirSync(dirname(path), { recursive: true });
+      if (!existsSync(path)) {
+        // A new container: the records bucket may already hold this log's earlier lines.
+        unmerged.add(rel);
+        rememberUnmerged();
+      }
       appendFileSync(path, `${JSON.stringify(scrubber.value(value))}\n`);
       dirty.add(rel);
       remember();
@@ -56,6 +66,13 @@ export function createRecorder({ dir, scrubber, store }) {
           continue;
         }
         try {
+          if (unmerged.has(rel)) {
+            // Never overwrite earlier lines: read them first (a failed read keeps the file for the next sync).
+            const earlier = await store.get(rel);
+            if (earlier !== null && earlier !== "") writeFileSync(path, `${earlier}${earlier.endsWith("\n") ? "" : "\n"}${readFileSync(path, "utf8")}`);
+            unmerged.delete(rel);
+            rememberUnmerged();
+          }
           await store.put(rel, readFileSync(path, "utf8"), contentType(rel));
           dirty.delete(rel);
           uploaded += 1;
@@ -72,7 +89,7 @@ export function createRecorder({ dir, scrubber, store }) {
         for (const name of readdirSync(d)) {
           const p = join(d, name);
           if (statSync(p).isDirectory()) walk(p);
-          else if (name !== UNSYNCED) dirty.add(relative(dir, p));
+          else if (name !== UNSYNCED && name !== UNMERGED) dirty.add(relative(dir, p));
         }
       };
       walk(dir);
