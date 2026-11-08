@@ -956,6 +956,7 @@ export const STEPS = [
           ctx.observe("owner reply", { check: "U1", expected: "updated or new", observed: answer, pass: /updated|new/i.test(answer) ? null : false });
           ctx.observe("U1 answer", { check: "U1", expected: "recorded: the stand-in updated to exactly the four groups (yes), or a new token (no)", observed: { standIn: standIn ? groupsOf(standIn) : "absent", newTokens: extra.map((t) => ({ id: t.id, groups: groupsOf(t) })) }, pass: updated || extra.length > 0 });
           ctx.observe("reply agrees with the API", { check: "U1", expected: updated ? "updated" : "new", observed: answer, pass: updated ? /updated/i.test(answer) : /new/i.test(answer) });
+          await ctx.ensureEveryday();
           const v = await ctx.verify(ctx.secretValue(SECRET.everyday) ?? "");
           ctx.observe("everyday token still works", { check: "U1", expected: "active", observed: v.ok ? v.status : v.error, pass: v.ok });
           const ev = find.token(s, ctx.facts.everydayTokenId);

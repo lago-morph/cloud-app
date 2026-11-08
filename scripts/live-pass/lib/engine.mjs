@@ -3,7 +3,8 @@
 //
 // A step has an automated part (`run`), then zero or more owner parts (`owner[i].prompt`, then
 // `owner[i].verify` with the owner's short reply), then an automated `after`. A part with a `when`
-// is asked only when `when(ctx)` holds. A prompt is one link, one to three sentences on what to do
+// is asked only when `when(ctx)` holds; its `before` runs first (the runner waiting on its own, as for
+// S14's role-refresh interval) and again after a lost container until the prompt is stored. A prompt is one link, one to three sentences on what to do
 // there and what the owner should see, then the exact reply (DEC-0793); a part with `saveAs` asks for
 // a pasted value, which the session agent saves in the secrets directory instead of passing it on. Every part records
 // observations: expected against observed, with pass true, false or null (recorded only). The

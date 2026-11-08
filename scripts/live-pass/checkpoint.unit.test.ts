@@ -1,7 +1,8 @@
 // Unit tests for the live-pass runner's durable state and checkpoint (scripts/live-pass/lib/checkpoint.mjs).
-// Written from the brief: session 1 (starter token, setup) and session 2 (everyday and admin tokens only)
-// are separated by a checkpoint stored in the test account that survives the container being
-// reclaimed, holds everything session 2 needs, and is resumed with one command.
+// Written from the brief: part 1 (starter tokens, setup) and part 2 (the everyday token), called
+// sessions 1 and 2 in the state and run in one Claude session since DEC-0793, are separated by a
+// checkpoint stored in the test Cloudflare account that survives the container being reclaimed, holds
+// everything part 2 needs, and is resumed with one command.
 import { describe, expect, it } from "vitest";
 import {
   beginSession,
