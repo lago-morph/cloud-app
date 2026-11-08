@@ -1,6 +1,6 @@
 # Root cause: two test files resolve mock-oauth2-server's classpath at once, and both Maven runs copy into the same `lib/`
 
-Status: awaiting review
+Status: rejected
 
 ## Symptom
 
@@ -63,4 +63,44 @@ Not proposed as the fix: a Vitest `globalSetup` that resolves once before the wo
 
 ## Review
 
-Status: awaiting review
+Reviewer: independent root-cause reviewer subagent (`failure-diagnosis.md`, step 2). Date: 2026-11-08. I did not write this diagnosis or the launcher. Base: `v0.2.0/rc01-mock-oauth2-fix` at b4205bc. Owner's rule: I ran only launcher experiments, in the foreground, in my scratchpad, and deleted them afterwards.
+
+**Verdict: rejected.** The cause is accepted. The proposed fix and the red test are not, for three reasons below:
+- the fix leaves the shared `repo/` as an either/or;
+- the fix's "move aside" step is itself a race;
+- the red test passes or fails on the fixed code by timing.
+
+Only "Proposed fix" and "Verification plan" need to change. Symptom, Evidence, Causal chain and Alternatives can stay.
+
+### What I checked
+1. **Symptom, with `get_job_logs` on job 128589944270.** The checkout is `dc5473a`. The step's `DIRECT` includes both `…/integration/admin-app` and `…/integration/auth-app`. The log has `admin-app-flow.test.ts (9 tests | 9 skipped) 11686ms` at 01:33:11.957 and `sign-in-flow.test.ts (11 tests) 15305ms` at 01:33:17.113. The error is `could not resolve its classpath with Maven into /home/runner/.cache/prototype-framework/mock-oauth2-server/6.1.4/lib (exit 1)`, with `maven-dependency-plugin:3.11.0 … kotlin-reflect-2.2.21.jar … Failed to copy full contents from …/repo/… to …/lib/…`. Then `Test Files 1 failed | 16 passed | 37 skipped (54)`. Confirmed.
+2. **Code.** `launcher.ts:37–53` as described: the `.complete` check, then a shared `settings.xml` rewrite, a shared `-Dmaven.repo.local`, and a shared `-DoutputDirectory=lib`, with no lock, temporary directory or rename. `vitest.integration.config.ts` uses `pool: "forks"`, with no file serialisation and no `globalSetup`. `release.yml` has no `MOCK_OAUTH2_URL`. The callers are exactly the four the record lists. Confirmed.
+3. **Reproduction (two real `ensureClasspath()` calls, same fresh `MOCK_OAUTH2_HOME`, warm `repo/` copied in; Maven 3.9.11, Node 22, launcher.ts run directly).** 8 runs: **1 of 8 failed**, with `Failed to copy full contents from …/repo/io/netty/… to …/lib/…`, and the other process passed. This agrees with the record's 2 of 8. In all 8 runs the final `lib/` had 48 jars byte-identical to `repo/` and `.complete`. So the losing run left no corrupt jar here, but its failure is real.
+4. **Maven's cross-process locks (Maven 3.9.11).**
+   - With `-Daether.syncContext.named.factory=file-lock -Daether.syncContext.named.nameMapper=file-gav`, the run succeeded and created `repo/.locks`, so the properties are honoured.
+   - `factory=no-such-factory` makes Maven fail, so a misspelt factory is not silently ignored on 3.9.
+   - Older Maven (before 3.9) does not know these properties, and nothing in the launcher pins the Maven version.
+
+Links 1–5 are supported by 1–3. The alternatives (network, a stale cache, disk, plugin version, load) are ruled out adequately. A reproduction alone, in two processes with no other load, settles rule 7.
+
+### Why rejected
+1. **The shared `repo/` must be one definite choice (major). The safe one is a private repository per call.**
+   - The shared `repo/` is a latent race in its own right. Maven 3.9's default sync context is in-process only, so two Mavens resolving into one local repository have no cross-process coordination. Artifact files are written to a temporary file and moved, but the tracking files (`_remote.repositories`, `*.lastUpdated`, resolver status) are read-modify-write. The observed failures were all in `lib/`, but on a cold runner both Mavens also download into the same `repo/`.
+   - `file-lock` works on 3.9.11 (check 4). But its safety depends on the Maven on each machine, and in an earlier Maven the properties are ignored.
+   - A private repository costs nothing in steady state. `home()` is already per version, and once `lib/` is published Maven never runs again for that home. Only callers that actually race on a cold cache each download the jars (about 62 MB).
+   - **Required:** each call resolves with `-Dmaven.repo.local=<its own staging area>/repo`, outside the directory that will be published, and deletes it in the `finally`. Drop the shared `repo/` and the `file-lock` alternative.
+2. **The "move aside a `lib/` without `.complete`" step is itself a race (major).** Caller B can see an incomplete `lib/` (left by the old code) just before caller A publishes a complete one. B then renames A's complete `lib/` aside, while A is about to start `java -cp lib/*`. That is the same check-then-act defect again.
+   - **Required:** publish to a directory name the old code never wrote (for example `classpath/`), and write `.complete` inside the staging directory before the rename. Under the new code a published directory is then complete by construction, and no move-aside step is needed. A `lib/` left by the old code is simply ignored. That also stops reuse of a `lib/` the old race may have rewritten while its winner was running `java`.
+   - Keep the rest: a staging directory per call on the same filesystem, a per-call `settings.xml`, `renameSync`, treating `ENOTEMPTY`/`EEXIST` as "another caller won" after checking its `.complete`, cleanup in a `finally`, and no retry, sleep or poll.
+3. **The red test does not decide the green case deterministically (major).** The fake `mvn` returns at once. If the second child reaches `ensureClasspath` after the first has published, it takes the fast path, so there is only one `mvn` invocation. The assertion "the two invocations' output directories differ" then fails on the **fixed** code too, depending on process start-up timing.
+   - **Required:** make the fake `mvn` a barrier. Each invocation records its `-DoutputDirectory` and `-Dmaven.repo.local`, then waits until two invocations have registered (by polling a directory, with a timeout of a few seconds after which it exits non-zero, so a broken test fails loudly instead of hanging). Only then does it write the jar.
+   - Both callers are then inside `mvn` at the same time on both the old and the new code. On the old code both output directories are `home/lib`: red, every run. On the new code they are distinct staging directories, neither is the published path, the repositories are distinct, exactly one publish wins, both calls return the published path, and no staging directory is left: green, every run.
+   - Keep the second case, adapted to 2: a published complete directory is returned without running `mvn`, and an old `lib/` is ignored.
+
+### Coverage of callers
+The fix is inside `ensureClasspath`, so it covers all four callers. Those are the two Vitest `beforeAll`s and the Playwright callers `E2E-017-setup.spec.ts:192` and `support/signin-stack.ts:94`. `playwright.config.ts` sets no `workers`, so Playwright's parallel workers can race in the same way on a cold cache, for example in a local compliance run. No change is needed per caller.
+
+### The release.yml Docker alternative
+- Starting the pinned Docker mock server in `release.yml`'s `verify` job, as `ci.yml:136–140` does, would align release with PR CI. Setting `MOCK_OAUTH2_URL` through `$GITHUB_ENV` would also reach the later compliance step's Playwright callers. The release would then skip Maven, Java start-up and the external mirror.
+- It is a workflow change for the owner to install, and it does not remove the defect. Local and sandbox runs (no Docker; the launcher header names this case) still start several workers on a cold cache, and hit the same race.
+- **So the launcher fix is needed either way, and it alone unblocks rc01 without a workflow install.** The Docker step is an optional parity change for the owner. If it is adopted, the launcher's unit test from 3 remains the only CI guard of the local path, because the release would no longer exercise it.
