@@ -20,9 +20,14 @@ What changed since the previous version of this runbook (written before PRs #161
 
 ## 1. Before you start (once, in the browser)
 
-1. **The test account.** Make a new Cloudflare account (the Free plan is enough). You are its Super Administrator. Copy the **account ID**: dashboard → the account's home page → Account ID (or from the address bar, `dash.cloudflare.com/<account ID>/…`).
+The pass needs **one** new Cloudflare account and **two different Cloudflare logins (users)** on it: a new login, which owns the account (1.1), and the tester (1.3).
+
+1. **The test account.** Sign up at Cloudflare with a **new email address** (the Free plan is enough). That makes a new login and its own new account; this new login is the owner (Super Administrator) for the pass, and "you" in this runbook. Do not make the test account from the login that will be the tester. Copy the **account ID**: dashboard → the account's home page → Account ID (or from the address bar, `dash.cloudflare.com/<account ID>/…`).
 2. **Turn on R2, before session 1.** Dashboard → R2 Object Storage → enable it (Cloudflare may ask for a payment method; this pass stays within the free allowances). Create no bucket: the runner and the framework create their own.
-3. **The tester.** A second person, or your own second login with another email address, with a Cloudflare user of their own. Open a second browser profile (or a private window) for the tester and sign in to Cloudflare there. You can invite them now (Manage Account → Members → Invite, role **"HTTP Applications Read"**) or when the agent asks (step P3).
+3. **The tester.** This can be your **existing main Cloudflare login**. Signed in as the new login, invite the main login's email address to the test account (Manage Account → Members → Invite, role **"HTTP Applications Read"**), now or when the agent asks (step P3). Then open a second browser profile (or a private window), sign in to Cloudflare there with the main login, and accept the invitation.
+   - This only makes the main login a member of the test account; nothing in your main account changes.
+   - S14's change to Administrator, and back, applies only in the test account.
+   - The records hold both logins' email address and user ID (owner-approved).
 4. **Make the tokens.** All are **account API tokens**: Manage Account → Account API Tokens → Create Token, or the pre-filled links below. Choose this account under Account Resources. Copy each value once, straight into the environment settings (step 5).
    1. **Admin token** `live-pass-admin`, for the runner only (snapshots, logs, its records bucket, cleanup of its probes). This link pre-fills six of its eight permissions:
       ```
