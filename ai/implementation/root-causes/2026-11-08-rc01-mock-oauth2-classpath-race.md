@@ -1,6 +1,6 @@
 # Root cause: two test files resolve mock-oauth2-server's classpath at once, and both Maven runs copy into the same `lib/`
 
-Status: awaiting review (attempt 2; attempt 1 rejected on the fix and the verification plan)
+Status: accepted (attempt 2; attempt 1 rejected on the fix and the verification plan)
 
 ## Symptom
 
@@ -201,4 +201,47 @@ Cost: on a cold cache, each racing caller downloads its own repository, about 62
 
 ### Review
 
-Status: awaiting review
+Reviewer: the same independent root-cause reviewer as attempt 1 (`failure-diagnosis.md`, step 2). Date: 2026-11-08. I did not write this diagnosis, the prototype or the launcher. Base: `v0.2.0/rc01-mock-oauth2-fix` at 41c02fb. Owner's rule: only launcher experiments (the rename semantics the publish step relies on), in the foreground, in my scratchpad, deleted afterwards.
+
+**Verdict: accepted.** All three of attempt 1's requirements are met. The publish step is race-free for writers and readers. The `globalSetup` rejection is sound. The barrier test is deterministic in both directions. Two minor points for the fixer follow at the end.
+
+### The three requirements
+1. **A private Maven repository per call: met.** `-Dmaven.repo.local=<staging>/repo` lies outside the directory that is published (`<staging>/lib`) and is removed with the staging area in the `finally` (fix 2, 5). Nothing two calls write is shared, `settings.xml` included. The `file-lock` alternative is dropped.
+2. **A new published name, with no move-aside step: met.**
+   - The code publishes `classpath/`, which the old code never wrote, after writing `.complete` inside the staging copy (fix 1, 3).
+   - The old `lib/`, `repo/` and `settings.xml` are never read, moved or deleted.
+   - A failed rename counts as a lost race only if a complete `classpath/` then exists. Otherwise the error is rethrown, and the code never branches on the platform's error code (fix 4, A2-E4).
+3. **A barrier fake `mvn` with a timeout: met.** The fake waits until two invocations have registered and exits non-zero (3, `barrier timeout`) instead of hanging (A2-E2, plan 1).
+
+### Is the publish race-free?
+- **Two writers.** Each Maven writes only inside its own staging area. `rename(2)` is serialised by the kernel. I checked in Node: a first `renameSync` onto a missing `classpath` succeeds; a second, from another staging `lib`, fails with `ENOTEMPTY` and leaves the winner's `.complete` in place. The loser's check then sees a complete `classpath/` and returns it.
+  - A rename onto an *empty* directory does replace it (I checked that too). The new code never creates `classpath/` except by the rename, so that case cannot arise from the launcher.
+- **A reader during the rename.** `classpath/` either does not exist or is the complete directory, with `.complete` already inside, because a directory rename has no intermediate state. Nothing is written into it after the rename, so a `java -cp classpath/*` started at any time sees a fixed set of whole jars.
+  - Stress check: one process published 200 prepared directories (20 jars plus `.complete` each) by `renameSync` while another read them in a loop. 306 200 observations of an existing `classpath/` saw **0** without `.complete` or with fewer than 21 entries.
+- **A crash.**
+  - Killed before the rename: only a `staging-<pid>-<uuid>` directory is left. No caller ever reads one, and the next caller builds its own.
+  - Killed during the rename: the rename is atomic.
+  - Killed after it: `classpath/` is complete.
+  - A leftover staging area costs only disk space (about 62 MB, because it holds a repository). Leaving it alone instead of deleting other callers' staging areas is right: it may belong to a live caller.
+
+### The `globalSetup` rejection: sound
+The defect needs two processes building into one `home()`, and A2-E1 shows that separate runner processes do that.
+- Worktrees and sessions on one machine share `~/.cache`, and CLAUDE.md has independent items run in parallel worktrees.
+- A Vitest run and a Playwright run are separate processes.
+- The bare `vitest.config.ts` path has no setup.
+
+A `globalSetup` therefore cannot make concurrent builds impossible. It would also make Maven, Java and the mirror a dependency of every run without `MOCK_OAUTH2_URL`, including PR CI runs that select neither suite. The two runners' `globalSetup` semantics are taken from their documentation, not run. That does not matter, because the design is not adopted, and adding it later on top of this fix would be an optimisation only.
+
+### The red test: deterministic
+- With the barrier, the first caller cannot return from `mvn` until the second has entered it. Nothing is published until `mvn` returns, so neither caller can take the fast path, on the current code or on the fix.
+  - On the current code the two output directories and repositories are equal (`home/lib`, `home/repo`): red on every run, as A2-E2 found in 5 of 5.
+  - On the fix they are distinct and exactly one publish wins: green on every run, 5 of 5.
+- Every assertion is symmetric in which caller wins: same returned path, one jar origin (by PID), no `staging-*` left.
+- The other three cases are each red on the current code for a structural reason, not a timing one:
+  - published `classpath/` returned without `mvn`;
+  - old `lib/` ignored and left byte for byte;
+  - a Maven failure leaves nothing behind.
+
+### Minor points for the fixer
+1. Set the barrier timeout well above child-process start-up under load (for example 30 s, below the test's own timeout). The unit layer runs files in parallel, and a timeout that is too short gives a false red, though never a false green.
+2. The fake `mvn` must create its `-DoutputDirectory` itself, as Maven does. `ensureClasspath` should not create `<staging>/lib` in advance, or must create it only as Maven would, so the red-and-green check stays faithful to real Maven.
