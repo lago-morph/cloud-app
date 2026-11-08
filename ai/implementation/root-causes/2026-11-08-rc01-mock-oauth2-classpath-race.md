@@ -1,6 +1,6 @@
 # Root cause: two test files resolve mock-oauth2-server's classpath at once, and both Maven runs copy into the same `lib/`
 
-Status: rejected
+Status: awaiting review (attempt 2; attempt 1 rejected on the fix and the verification plan)
 
 ## Symptom
 
@@ -104,3 +104,101 @@ The fix is inside `ensureClasspath`, so it covers all four callers. Those are th
 - Starting the pinned Docker mock server in `release.yml`'s `verify` job, as `ci.yml:136–140` does, would align release with PR CI. Setting `MOCK_OAUTH2_URL` through `$GITHUB_ENV` would also reach the later compliance step's Playwright callers. The release would then skip Maven, Java start-up and the external mirror.
 - It is a workflow change for the owner to install, and it does not remove the defect. Local and sandbox runs (no Docker; the launcher header names this case) still start several workers on a cold cache, and hit the same race.
 - **So the launcher fix is needed either way, and it alone unblocks rc01 without a workflow install.** The Docker step is an optional parity change for the owner. If it is adopted, the launcher's unit test from 3 remains the only CI guard of the local path, because the release would no longer exercise it.
+
+## Attempt 2
+
+Author: the same diagnosing subagent, after the review above rejected attempt 1's fix and verification plan and accepted its cause. The coordinator also relayed the owner's question: why does each parallel test file run the same setup? Could the classpath be prepared once, in a `globalSetup`, before any worker starts? This attempt evaluates that design first (A2-E1), then gives the fix. Owner's rule: only launcher experiments, in the foreground, in my scratchpad (not committed).
+
+### Symptom
+
+Unchanged from attempt 1, whose symptom the review confirmed. In release run 42434367751, job 128589944270, `admin-app-flow.test.ts`'s `beforeAll` fails in `ensureClasspath` with `copy-dependencies … Failed to copy full contents from …/repo/…/kotlin-reflect-2.2.21.jar to …/lib/kotlin-reflect-2.2.21.jar`, while `sign-in-flow.test.ts` resolves at the same time and passes.
+
+### Evidence
+
+Attempt 1's evidence 1–6 stand; the review confirmed them. New evidence:
+
+**A2-E1. Does a `globalSetup` cover every caller? Not alone.**
+- *Which runners start the mock server.*
+  - Vitest `vitest.integration.config.ts` runs `admin-app-flow.test.ts` and `sign-in-flow.test.ts`. It is used by the release step, by `ci.yml`, and by the harness's `vitest` selection (`tests/compliance/harness/selection.ts:30`).
+  - Playwright `playwright.config.ts` (project `e2e-api` or `e2e-ui`) runs `E2E-017-setup.spec.ts` and the specs that use `support/signin-stack.ts`.
+  - A bare `npx vitest run <file>` loads `vitest.config.ts`, which has no `include` and no setup. Its own comment says such runs are used for PGlite suites.
+  - No config has a `globalSetup` today (grep).
+- *What a `globalSetup` guarantees.* Vitest runs `test.globalSetup` once per project in the main process, before it starts the worker pool. Playwright runs `globalSetup` once in the runner process, before any worker. This is from their documentation; under the owner's rule I did not run either runner to check it. So within one runner process, a `globalSetup` does remove the race between workers, which is the CI failure.
+- *Where builds can still be concurrent: separate runner processes sharing one `home()`.* `home()` defaults to `~/.cache/prototype-framework/mock-oauth2-server/6.1.4`, shared by every checkout and worktree for one user.
+  - This repository's own process runs independent items in parallel, each in its own worktree on the same machine (`CLAUDE.md`; there are 13 worktrees under `/home/user/cloud-app/.claude/worktrees` now).
+  - Two sessions running the integration config at once, or one running Vitest while another runs Playwright, give two `globalSetup`s. On a cold cache, both build at once. That is the same check-then-act race, only between runners instead of workers.
+  - The harness is not a source: it runs its selections one after another (`driver.ts:489–509`, `await` in a `for` loop). CI steps are sequential too.
+- *A `globalSetup` cannot tell whether the selected files need the server.*
+  - Vitest and Playwright call it before, and independently of, the file and `-t`/`--grep` selection.
+  - If it always prepares, then every integration or Playwright run without `MOCK_OAUTH2_URL` needs Maven, Java 21 and the mirror. That includes every PR CI run that does not select the auth-app or admin-app suites, because `ci.yml:137` sets `MOCK_OAUTH2_URL` only when one of them is selected.
+  - Today, nothing else in the repository needs Java (grep for `java` spawns: `launcher.ts` only).
+  - If it prepares only when the selection needs the server, it has to parse argv, which is fragile.
+- *Conclusion.* A `globalSetup` cannot make concurrent builds impossible by construction, because builds in separate processes remain. It also cannot cover the bare `vitest.config.ts` path. So, as the coordinator's brief provides, the fix falls back to a builder that is safe under concurrency. The review's three requirements apply, and a private Maven repository per call is kept because more than one process can still build.
+
+**A2-E2. Prototype of the fix, with a barrier fake `mvn` (scratch: `proto/launcher-proto.ts`, `proto/fake-mvn/mvn`, `proto/barrier.sh`; not committed).**
+- *The fake `mvn`.* It records `-DoutputDirectory`, `-Dmaven.repo.local` and `-s` in a log directory. It then waits until 2 invocations have registered: it checks the directory every 20 ms, and after 10 s it exits 3 with `barrier timeout`. Then it writes `mock-oauth2-server-6.1.4.jar` and one more jar into its output directory.
+- *Run.* Two child processes call `ensureClasspath()` with the same fresh `MOCK_OAUTH2_HOME`.
+- *Current `launcher.ts`:* 5 of 5 runs had 2 invocations with the **same** output directory (`home/lib`) and the **same** repository (`home/repo`). Both calls returned `home/lib`. So an assertion of distinct directories is red on every run.
+- *Prototype:* 5 of 5 runs had 2 invocations with **distinct** output directories and **distinct** repositories. Exactly one `renameSync` won; the other failed with `ENOTEMPTY` and took the winner's directory. Both calls returned `home/classpath`, and the home held only `classpath/`, with no staging directory left.
+- *Why this is deterministic.* The first caller is held inside `mvn` until the second has registered. A published directory appears only after `mvn` returns. So neither caller can take the fast path, on either version of the code.
+
+**A2-E3. Prototype with real Maven (Maven 3.9.11; two concurrent calls; empty home; private repository per call).**
+- 6 of 6 runs: both calls succeeded, and each run had exactly one `lost publish race (ENOTEMPTY)`.
+- `classpath/` held 48 jars, and `kotlin-reflect-2.2.21.jar` is byte-identical (`cmp`) to a cache resolved by a single process.
+- Each call took 17–22 s, because each downloads its own repository.
+- Before the fix, the same setup failed in 2 of 7 cold runs (attempt 1, evidence 5).
+
+**A2-E4. Rename semantics the design relies on.**
+- `rename(2)` of a directory is atomic. On Linux it fails with `ENOTEMPTY` or `EEXIST` when the target is a non-empty directory, as A2-E2 and A2-E3 show for `ENOTEMPTY`. So a published directory is never replaced and never written to again.
+- An *empty* target directory would be replaced, but the new code never creates `classpath/` except by the rename.
+- On other platforms the error code may differ (for example `EPERM` on Windows). So the design treats a failed rename as a lost race only when a complete `classpath/` exists afterwards, and as an error otherwise. It does not branch on the code.
+
+### Causal chain
+
+Unchanged from attempt 1, links 1–5, which the review accepted. A2-E1 adds one point for the fix: the race needs two processes building into one `home()`. Within one runner those are workers; across runners they are separate sessions or worktrees. So removing the race between workers alone does not remove the defect.
+
+### Alternatives ruled out
+
+Attempt 1's alternatives stand (accepted). For the fix:
+- **A `globalSetup` as the fix, with `ensureClasspath` only reading.** It does not cover concurrent runners sharing `~/.cache`, nor the bare `vitest.config.ts` path. It would also make Maven and Java a dependency of runs that do not use the mock server (A2-E1). It is not adopted. It could be added later on top of the fix below to save time, but it is not needed for correctness, and this record does not propose it.
+- **Maven's `file-lock` named locks on a shared repository.** Maven before 3.9 ignores them, and nothing pins the Maven version (review, check 4). Replaced by a private repository per call.
+- **A pointer (symlink or small file naming a uniquely named directory) replaced atomically.** It would also be race-free. But the classpath for a version never changes once built, because `home()` is per version. So publishing once, to a directory that is never replaced, needs no pointer and no replacement step. It is also simpler to verify.
+- **Moving a stale `lib/` aside.** It is itself a race (review, reason 2). The new code never reads, moves or deletes `lib/`.
+
+### Proposed fix
+
+All changes are in `tests/support/mock-oauth2/launcher.ts`, in `ensureClasspath`. The owner is the auth app item (A); SETUP shares the launcher (`scripts/ci/path-map.json`). No caller, config or workflow changes.
+
+1. **Published path.** The published path is `join(home(), "classpath")`, a name the old code never wrote. The fast path returns it if `classpath/.complete` exists and a `mock-oauth2-server-<version>*` jar is in it. A `lib/`, `repo/` or `settings.xml` left by the old code is ignored, and never read, moved or deleted.
+2. **Private staging area per call.** It is `join(home(), \`staging-${process.pid}-${randomUUID()}\`)`, on the same filesystem as `classpath/`, and it holds three things:
+   - its own `settings.xml`;
+   - its own Maven repository (`-Dmaven.repo.local=<staging>/repo`);
+   - its own output directory (`-DoutputDirectory=<staging>/lib`).
+
+   No two calls share any path Maven writes.
+3. **`.complete` before publishing.** After Maven exits 0, write `.complete` into `<staging>/lib`, then `renameSync(<staging>/lib, classpath)`.
+4. **A failed rename.** If `classpath` is then published (as in 1), another caller won: return `classpath`. Otherwise rethrow the rename error. Never retry, sleep or poll.
+5. **Cleanup.** `rmSync(staging, { recursive: true, force: true })` in a `finally`, after success, a lost race or a Maven failure. A staging directory left by a killed process is never read again. It is not cleaned up by others, because it might belong to a live caller.
+6. **Unchanged behaviour.** The Maven failure message, the 540 s timeout, `MOCK_OAUTH2_URL` and `MOCK_OAUTH2_MAVEN_MIRROR` stay the same, and `startMockOAuth2` keeps using `join(<returned dir>, "*")`. Update the comments in the header and at `launcher.ts:39`.
+
+Cost: on a cold cache, each racing caller downloads its own repository, about 62 MB, as in A2-E3. Once `classpath/` is published, Maven never runs again for that version.
+
+### Verification plan
+
+1. **Red test first:** `tests/support/mock-oauth2/launcher.unit.test.ts`, which the unit layer includes through `tests/**/*.unit.test.ts`.
+   - Because `ensureClasspath` is synchronous (`spawnSync`), the concurrent case needs two child processes, each of which imports `launcher.ts` and calls `ensureClasspath()` once. A temporary directory with the fake `mvn` goes first on their `PATH`.
+   - **Concurrent build:** the fake `mvn` is the barrier from A2-E2: it records its paths, waits until 2 have registered, and exits non-zero after a timeout of a few seconds.
+     - Assert that both children exit 0 and return the same path, `home/classpath`.
+     - Assert exactly 2 invocations, with distinct `-DoutputDirectory` values (neither is `home/classpath` or `home/lib`), distinct `-Dmaven.repo.local` values (neither is `home/repo`) and distinct `-s` files.
+     - Assert that `home/classpath/.complete` exists, that the jar there came from exactly one of the two invocations (the fake writes its PID into it), and that no `staging-*` remains.
+     - On the current code this is red on every run: same output directory and same repository (A2-E2). On the fix it is green on every run.
+   - **Published:** with a complete `home/classpath` present, `ensureClasspath()` returns it and the fake `mvn` (no barrier) is never invoked. On the current code this is red, because the code looks at `lib/` and runs `mvn`.
+   - **Old `lib/` ignored:** with a complete old `home/lib` (`.complete` and jar) and no `classpath/`, the fake `mvn` is invoked once, `classpath/` is published, and `lib/` is left byte for byte as it was. On the current code this is red, because the code returns `lib/` without running `mvn`.
+   - **Maven failure:** with a fake `mvn` that exits 1, the call throws the existing message, and neither `classpath/` nor any `staging-*` remains.
+2. **Green:** the same tests pass with the fix.
+3. **Real Maven (launcher experiment):** run the scratch reproduction against the fixed `launcher.ts`, two concurrent calls on an empty home, at least 6 runs. Expect 0 failures, one `ENOTEMPTY` loser per run and 48 jars, as the prototype gave in A2-E3, against 2 of 7 failures before.
+4. **Re-check (step 4):** run `admin-app-flow.test.ts` and `sign-in-flow.test.ts` together in one `vitest run --config vitest.integration.config.ts`, with `MOCK_OAUTH2_HOME` set to an empty directory. Then check the next release candidate's step "Integration tests the harness does not run".
+
+### Review
+
+Status: awaiting review
