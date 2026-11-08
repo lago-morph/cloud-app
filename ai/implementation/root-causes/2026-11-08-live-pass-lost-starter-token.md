@@ -49,4 +49,21 @@ In `lib/steps.mjs`, for each starter token (S4, S5): tell "pasted, then lost" ap
 - The rest of `scripts/live-pass` stays green: `npx vitest run --config vitest.unit.config.ts scripts/live-pass`.
 
 ## Review
-Status: awaiting review
+Status: accepted
+
+Reviewer: the independent root-cause reviewer (a subagent that neither diagnosed this failure nor wrote the runner or the tests), 2026-11-08, on `e398cd8` in a separate worktree. Following the owner's rule, I ran only the `scripts/live-pass` unit tests, in the foreground: 121 passed and 4 failed, which are exactly the four red reproductions of the two 2026-11-08 records. No fix is applied yet. The test changes in `d0b72fe` are additions. The lines it removes are imports, the frameworkCalls entry (rewritten to add `tokenEnv`) and the fake world's role list, which now spreads the roles over four pages. No once-green assertion was weakened.
+
+**Verdict: accepted.**
+1. Reproduced: the three quoted tests fail as stated. The describe's fourth test ("goes on with the new starter token") passes before the fix, so it is not yet a reproduction.
+2. Every link is supported by the code:
+   - E3: S4's `run` reads `secretValue(SECRET.starter)` with no check, and `childEnv` deletes a `set` entry whose value is `undefined`.
+   - E4: `runStep` saves `ran: true` only after `step.run` returns, so a loss during S4 resumes S4 from the start, after C-1 is already recorded.
+   - E5: S5's `run` treats a missing value as "the owner skipped", and the TOK-S5 `skip` branch of `starterTokenPart` records only an observation, so S5 cannot tell the two apart.
+   - E6: the secrets directory is `~/.live-pass-secrets` (`lib/secrets.mjs`), which is lost with the container.
+   - E7: `steps.mjs:326` says "runbook section 5", which is "Cost and cleanup"; "If something goes wrong" is under section 1.
+3. The alternatives are ruled out: the stand-in only kills the runner, and the state that `resume` loads is the runner's own.
+4. The fix addresses the cause, not the symptom. It separates "pasted, then lost" from "skipped" with a recorded skip fact, and it asks again, with `BOOTSTRAP_LINK` and the `saveAs` file, before anything runs.
+5. Minor, for the fixer:
+   - (a) A re-asked S4 token bypasses C-1's expiry check (at most 1 day), which the framework enforces. The re-ask, or S4 itself, should apply the same check to the new value.
+   - (b) A loss after the bootstrap has finished but before `run` returns leaves the starter token deleted and the clients made. S4 would then run as a re-run and record "OAuth clients: created" as failed. Record that case plainly, or note it as an open item; it is a separate state from this defect.
+   - (c) Make the fourth test of the describe red before the fix, or say why it is green.
