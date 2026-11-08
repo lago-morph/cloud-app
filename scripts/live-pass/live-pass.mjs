@@ -106,7 +106,7 @@ const vault = {
 {
   const loaded = loadSecrets(secretsDir);
   const stop = secretsProblems(loaded, { dir: secretsDir, primaryAccountId: env.CLOUDFLARE_ACCOUNT_ID });
-  if (stop.length > 0) fail(3, `the secrets directory is not as the runbook says ("For the agent in the session", step 1):\n  - ${stop.join("\n  - ")}`);
+  if (stop.length > 0) fail(3, `the secrets directory is not as the runbook's section "For the agent in the session", step 1, says:\n  - ${stop.join("\n  - ")}`);
   vault.reload();
 }
 const accountId = vault.values[SECRET.account];
@@ -292,7 +292,7 @@ function finishText(st) {
     `    R2 bucket ${st.bucket}, prefix ${st.prefix}`,
     `    test Cloudflare account ID: ${st.accountId}`,
     "  The analysis and the cleanup use the same token, live-pass-owner: no new token is needed.",
-    "  To have them done, start the analysis session as the runbook's section 4 says and give it these lines and that token.",
+    `  To have them done, start the analysis session as the runbook's section 3 ("After the run: analysis and cleanup") says, and give it these lines and that token.`,
     "",
     `Then delete the secrets directory: rm -rf ${secretsDir}`,
   ].join("\n");

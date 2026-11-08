@@ -17,6 +17,7 @@ import { join } from "node:path";
 import { createApi, describe as describeR } from "./cloudflare.mjs";
 import { OWNER_GROUP_IDS, OWNER_GROUPS } from "./groups.mjs";
 import { SECRET } from "./secrets.mjs";
+import { RewindRequest } from "./engine.mjs";
 import { find } from "./snapshot.mjs";
 
 // ---- Fixed names (framework constants this pass checks against) ----
@@ -91,8 +92,10 @@ function starterTokenPart(name, ttl, { skippable = true } = {}) {
     async verify(ctx, answer) {
       if (skippable && /^\s*skip\b/i.test(answer)) {
         ctx.observe("starter token", { expected: "pasted, or skipped by the owner", observed: "skipped", pass: null });
+        ctx.setFacts({ starterSkipped: { ...(ctx.facts.starterSkipped ?? {}), [name]: true } });
         return;
       }
+      if (ctx.facts.starterSkipped?.[name]) ctx.setFacts({ starterSkipped: { ...ctx.facts.starterSkipped, [name]: false } });
       const value = ctx.secretValue(name);
       if (!value) {
         ctx.observe("starter token saved", { expected: `the pasted value saved as ${ctx.vault.dir}/${name}`, observed: "not saved", pass: false });
@@ -104,6 +107,32 @@ function starterTokenPart(name, ttl, { skippable = true } = {}) {
       if (t.id) ctx.setFacts({ starterTokenIds: { ...(ctx.facts.starterTokenIds ?? {}), [name]: t.id } });
     },
   };
+}
+
+/** Why a starter token is asked for again: its value was only in a lost container's secrets directory. */
+function lostStarter(ctx, name) {
+  return `the starter token pasted earlier is not in this container's secrets directory (${ctx.vault.dir}/${name}): a lost container takes it along, so the runner asks for a new one`;
+}
+
+/** Why a starter token cannot be used: not active, or more than 1 day left (the framework would delete it at once). */
+function unusableStarter(t) {
+  return t.ok ? `the starter token expires ${t.expiresOn ?? "never"} (${t.secondsLeft ?? "no"} s away), more than 1 day: the framework would delete it at once, so nothing ran with it and the runner asks for a new one with tomorrow as the end date` : `the starter token is not usable (${t.error ?? t.status ?? "not active"}), so the runner asks for a new one`;
+}
+
+/** S4 after a container lost once the bootstrap had finished: the clients and the admin app are there; record it plainly and check them. */
+async function bootstrapAlreadyDone(ctx, snap) {
+  ctx.observe("bootstrap already finished", { check: "S4", expected: "the bootstrap ran in this step", observed: "the admin app and both OAuth clients already exist: the bootstrap finished in a container that was lost before S4 was recorded; it is not run again", pass: null });
+  const id = ctx.facts.starterTokenIds?.[SECRET.starter];
+  ctx.observe("starter token gone from the list", { check: "S4", expected: "absent", observed: find.token(snap, id) ? "present" : "absent", pass: find.token(snap, id) === undefined });
+  const subdomain = snap.subdomain?.subdomain;
+  ctx.observe("workers.dev subdomain", { check: "S4", expected: "registered", observed: subdomain ?? "absent", pass: !!subdomain });
+  if (!subdomain) throw new Error("the test Cloudflare account has no workers.dev subdomain");
+  ctx.setFacts({ subdomain, adminUrl: `https://prototype-admin.${subdomain}.workers.dev`, authUrl: `https://prototype-auth.${subdomain}.workers.dev`, clientIds: Object.fromEntries(["admin", "signin"].map((k) => [k, find.oauthClient(snap, CLIENTS[k])?.client_id ?? find.oauthClient(snap, CLIENTS[k])?.id ?? null])) });
+  checkClients(ctx, snap);
+  await checkSecretsStore(ctx, snap);
+  checkAdminWorker(ctx, snap);
+  const page = await ctx.http(ctx.facts.adminUrl);
+  ctx.observe("admin app answers", { check: "S4", expected: "HTTP 200 sign-in page", observed: page.status, pass: page.status === 200 });
 }
 
 /** Sets the primary account login's role back to its first role (S14), and records it. */
@@ -233,7 +262,7 @@ export const STEPS = [
       const missing = await ctx.ownerGroupsMissing();
       ctx.observe("owner token groups", { expected: OWNER_GROUPS, observed: missing.required.length === 0 ? "all required present" : `missing: ${missing.required.join(", ")}`, pass: missing.required.length === 0 });
       ctx.observe("owner token: Workers Observability", { expected: "present (without it no Workers log is collected)", observed: missing.optional.length === 0 ? "present" : "missing: the run goes on without the Workers logs", pass: missing.optional.length === 0 ? true : null });
-      if (missing.required.length > 0) throw new Error(`The token live-pass-owner lacks: ${missing.required.map((g) => g.replace(/ Write$/, " Edit")).join(", ")}. In the test Cloudflare account's dashboard, edit the token live-pass-owner and add them (runbook section 1, step 3), then tell the agent to retry.`);
+      if (missing.required.length > 0) throw new Error(`The token live-pass-owner lacks: ${missing.required.map((g) => g.replace(/ Write$/, " Edit")).join(", ")}. In the test Cloudflare account's dashboard, edit the token live-pass-owner and add them (the runbook's section 1 ("For the owner"), step 3), then tell the agent to retry.`);
       const snap = await ctx.freshSnapshot();
       const ours = new Set([ctx.facts.ownerTokenId]);
       const otherTokens = (snap.tokens.items ?? []).filter((t) => !ours.has(t.id));
@@ -340,17 +369,14 @@ export const STEPS = [
     blocking: true,
     async run(ctx) {
       const value = ctx.secretValue(SECRET.starter);
-      if (!value) throw new Error(`There is no starter token for S4: the owner's pasted value was not saved as ${ctx.vault.dir}/${SECRET.starter}. Ask the owner for it again (runbook section 5).`);
+      if (!value) throw new RewindRequest(["TOK-S4"], lostStarter(ctx, SECRET.starter));
       const main = await starterToken(ctx, SECRET.starter, value);
       ctx.observe("starter token expiry", { check: "C-1", expected: `active, expires_on at most ${BOOTSTRAP_MAX_SECONDS} s away`, observed: { status: main.status, expiresOn: main.expiresOn, now: new Date().toISOString(), secondsLeft: main.secondsLeft }, pass: main.ok && main.within });
       const groups = await ctx.tokenGroups(main.id);
       ctx.observe("starter token groups", { check: "S3", expected: BOOTSTRAP_GROUPS, observed: groups, pass: same(groups ?? [], BOOTSTRAP_GROUPS) });
       ctx.setFacts({ starterTokenIds: { ...(ctx.facts.starterTokenIds ?? {}), [SECRET.starter]: main.id ?? null } });
-      if (!main.ok || !main.within) {
-        throw new Error(
-          `The starter token for S4 is ${main.ok ? `active but expires ${main.expiresOn ?? "never"} (${main.secondsLeft ?? "no"} s away), more than 1 day` : "not usable"}. The setup would delete it at once. Nothing was run with it. Ask the owner to make it again with TOMORROW as the end date and paste it; save it as ${ctx.vault.dir}/${SECRET.starter}, then run retry.`,
-        );
-      }
+      // The framework would delete a token with more than 1 day left at once: nothing runs with it, and the owner gets the link again.
+      if (!main.ok || !main.within) throw new RewindRequest(["TOK-S4"], unusableStarter(main));
     },
   },
   {
@@ -361,8 +387,16 @@ export const STEPS = [
     expected: ["\"OAuth clients: created prototype-framework-admin and prototype-framework-sign-in …\"", "\"admin app: deployed (Worker prototype-admin) …\"", "\"the bootstrap token deleted itself\"", "\"The Cloudflare bootstrap is complete.\" and the admin app's URL", "exit 0", "the starter token no longer verifies", "no token value in the output", "two OAuth clients, Secrets Store prototype-framework with four entries, Worker prototype-admin (C-2, C-3, C-4, E-2)"],
     blocking: true,
     async run(ctx) {
-      const value = ctx.secretValue(SECRET.starter);
       const before = await ctx.freshSnapshot();
+      if (find.worker(before, ADMIN_SCRIPT) && find.oauthClient(before, CLIENTS.admin) && find.oauthClient(before, CLIENTS.signin)) {
+        await bootstrapAlreadyDone(ctx, before);
+        return;
+      }
+      const value = ctx.secretValue(SECRET.starter);
+      if (!value) throw new RewindRequest(["TOK-S4", "C-1"], lostStarter(ctx, SECRET.starter));
+      // A token asked for again (TOK-S4, then C-1) or saved by hand goes through C-1's 1-day check here too.
+      const t = await starterToken(ctx, SECRET.starter, value);
+      if (!t.ok || !t.within) throw new RewindRequest(["TOK-S4", "C-1"], unusableStarter(t));
       const rec = await ctx.fw(["cloudflare-setup"], { set: { CLOUDFLARE_BOOTSTRAP_TOKEN: value }, label: "bootstrap" });
       expectExit(ctx, rec, 0, "S4");
       expectText(ctx, rec, ["OAuth clients: created", "admin app: deployed (Worker prototype-admin)", "the bootstrap token deleted itself", "The Cloudflare bootstrap is complete."], "S4");
@@ -402,10 +436,13 @@ export const STEPS = [
     expected: ["\"OAuth clients: prototype-framework-admin and prototype-framework-sign-in already exist …\"", "admin app redeployed", "the token deleted itself", "exit 0", "both clients keep their IDs"],
     async run(ctx) {
       const value = ctx.secretValue(SECRET.starterRerun);
-      if (!value) {
+      if (!value && ctx.facts.starterSkipped?.[SECRET.starterRerun]) {
         ctx.na("the owner skipped the second starter token");
         return;
       }
+      if (!value) throw new RewindRequest(["TOK-S5"], lostStarter(ctx, SECRET.starterRerun));
+      const t = await starterToken(ctx, SECRET.starterRerun, value);
+      if (!t.ok || !t.within) throw new RewindRequest(["TOK-S5"], unusableStarter(t));
       const before = await ctx.freshSnapshot();
       const rec = await ctx.fw(["cloudflare-setup"], { set: { CLOUDFLARE_BOOTSTRAP_TOKEN: value }, label: "bootstrap-rerun" });
       expectExit(ctx, rec, 0, "S5");
@@ -628,8 +665,26 @@ export const STEPS = [
         const r = await ctx.http(url);
         ctx.observe(`reach ${new URL(url).host}`, { expected: "HTTP 200", observed: r.status, pass: r.status === 200 });
       }
-      if (!v.ok || v.id !== ctx.facts.everydayTokenId) throw new Error(`The everyday token's value in ${ctx.vault.dir}/${SECRET.everyday} is ${v.ok ? `a different token (ID ${v.id}) than the one page 2 made (${ctx.facts.everydayTokenId})` : "not usable"}. Run retry; if it blocks again, tell the owner.`);
+      // A value the runner could not roll again (Cloudflare refused the roll) is asked for below, from a link.
+      if (value && (!v.ok || v.id !== ctx.facts.everydayTokenId)) throw new Error(`The everyday token's value in ${ctx.vault.dir}/${SECRET.everyday} is ${v.ok ? `a different token (ID ${v.id}) than the one page 2 made (${ctx.facts.everydayTokenId})` : "not usable"}. Run retry; if it blocks again, tell the owner.`);
     },
+    owner: [
+      {
+        when: (ctx) => !ctx.secretValue(SECRET.everyday),
+        saveAs: SECRET.everyday,
+        prompt: (ctx) => ({
+          who: "test",
+          link: `https://dash.cloudflare.com/${ctx.state.accountId}/api-tokens`,
+          text: ["The everyday token's value was lost with a container and the runner could not replace it through the API.", "On this page, open the token prototype-framework's menu, choose \"Roll\", confirm, and copy the new value."],
+          reply: "paste the value into this chat",
+        }),
+        async verify(ctx) {
+          const value = ctx.secretValue(SECRET.everyday);
+          const v = value ? await ctx.verify(value) : { ok: false, error: "not saved" };
+          ctx.observe("everyday token rolled in the dashboard", { check: "U2", expected: `active, ID ${ctx.facts.everydayTokenId}`, observed: v.ok ? { id: v.id, status: v.status } : v.error, pass: v.ok && v.id === ctx.facts.everydayTokenId });
+        },
+      },
+    ],
   },
   {
     id: "R2",

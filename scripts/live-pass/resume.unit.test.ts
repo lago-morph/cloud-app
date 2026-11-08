@@ -299,6 +299,107 @@ describe("a starter token pasted in a container that is lost during its bootstra
   });
 });
 
+// Root-cause record 2026-11-08-live-pass-lost-starter-token.md, the reviewer's notes (a) and (b), and the
+// test reviewer's open case for a refused roll.
+describe("the lost-starter-token fix: the reviewer's notes", () => {
+  /** Plays part 1 up to the TOK-S4 prompt. */
+  async function toStarter() {
+    const h = await harness();
+    const c = h.container();
+    h.firstMessage(c);
+    h.prompt(h.run(c, "start", "--primary-login", TESTER), "P3");
+    h.owner.acceptInvitation();
+    h.prompt(h.run(c, "answer", "ok"), "TOK-S4");
+    return { h, c };
+  }
+
+  it("(a) a starter token with more than a day left is never used: nothing runs with it, and the owner gets the link again", async () => {
+    const { h, c } = await toStarter();
+    const long = h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, 3 * 86_400);
+    h.paste(c, "LIVE_PASS_STARTER", long);
+    const r = h.prompt(h.run(c, "answer", "saved"), "TOK-S4");
+    expect(r.out).toContain("more than 1 day");
+    expect(r.out).toContain(starterTokenLink(ACCOUNT));
+    const longId = h.world().tokens.find((t: { value: string }) => t.value === long).id;
+    expect((h.world().frameworkCalls ?? []).filter((x: { tokenEnv: Record<string, string> }) => Object.values(x.tokenEnv).includes(longId))).toEqual([]);
+    h.paste(c, "LIVE_PASS_STARTER", h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, 23 * 3600));
+    h.prompt(h.run(c, "answer", "saved"), "TOK-S5");
+  }, 120_000);
+
+  it("(b) a container lost just after the bootstrap finished resumes cleanly: no new token, S4 records the finished bootstrap", async () => {
+    const { h } = await toStarter();
+    let c = h.container();
+    // the starter token was pasted in the container that is lost
+    c = { ...c, secrets: h.dir + "/secrets-lost" };
+    const first = h.container();
+    h.firstMessage(first);
+    h.paste(first, "LIVE_PASS_STARTER", h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, 23 * 3600));
+    h.change((w: Record<string, unknown>) => {
+      w.loseContainerAfterBootstrap = true;
+    });
+    h.runOnce(first, "answer", "saved"); // C-1 passes; the runner dies once the bootstrap has finished
+    expect(h.world().workers["prototype-admin"]).toBeDefined();
+    const calls = (h.world().frameworkCalls ?? []).length;
+    const next = h.container();
+    h.firstMessage(next);
+    const r = h.prompt(h.run(next, "resume"), "TOK-S5");
+    expect(r.out).not.toContain("OWNER STEP TOK-S4 ");
+    expect((h.world().frameworkCalls ?? []).slice(calls).filter((x: { cmd: string }) => x.cmd === "cloudflare-setup")).toEqual([]);
+    const state = JSON.parse(Object.entries(h.records()).find(([k]) => k.endsWith("/state.json"))![1]);
+    expect(state.done.S4.result).toBe("pass");
+    const s4 = Object.entries(h.records()).filter(([k]) => /\/steps\/\d+-S4\.json$/.test(k)).map(([, b]) => JSON.parse(b)).at(-1);
+    expect(s4.observations).toEqual(expect.arrayContaining([expect.objectContaining({ id: "bootstrap already finished", pass: null })]));
+    expect(state.facts.adminUrl).toMatch(/^https:\/\/prototype-admin\./);
+    void c;
+  }, 180_000);
+
+  it("a refused roll and a container lost in part 2: the owner gets a link to roll the everyday token, and the run finishes", async () => {
+    const { h, c } = await toStarter();
+    h.paste(c, "LIVE_PASS_STARTER", h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, 23 * 3600));
+    h.prompt(h.run(c, "answer", "saved"), "TOK-S5");
+    h.prompt(h.run(c, "answer", "skip"), "S6");
+    h.prompt(h.run(c, "answer", "ok"), "S6");
+    h.owner.adminSignIns();
+    h.prompt(h.run(c, "answer", "ok"), "S7");
+    h.owner.accountSetup();
+    h.prompt(h.run(c, "answer", "ok"), "E-1");
+    h.prompt(h.run(c, "answer", "ok"), "S8");
+    h.change((w: Record<string, unknown>) => {
+      w.refuseRoll = true;
+    });
+    const shown = h.owner.everydayToken();
+    h.prompt(h.run(c, "answer", "ok"), "S8");
+    h.paste(c, "CLOUDFLARE_API_TOKEN", shown);
+    h.prompt(h.run(c, "answer", "saved"), "S10");
+    h.prompt(h.run(c, "answer", "ok"), "S13");
+    // The container is lost in part 2, after the deploys; the pasted everyday value goes with it.
+    const next = h.container();
+    h.firstMessage(next);
+    h.prompt(h.run(next, "resume"), "S13");
+    h.prompt(h.run(next, "skip", "S13", "offline test"), "S14");
+    h.prompt(h.run(next, "skip", "S14", "offline test"), "S15");
+    h.prompt(h.run(next, "skip", "S15", "offline test"), "S16");
+    const r = h.prompt(h.run(next, "skip", "S16", "offline test"), "R1");
+    expect(r.out).toContain(`Open: https://dash.cloudflare.com/${ACCOUNT}/api-tokens`);
+    expect(r.out).toContain("CLOUDFLARE_API_TOKEN, run chmod 600");
+    expect(r.out).toMatch(/In the test account login's browser profile:/);
+    // The test account login rolls the token in the dashboard; the agent saves the new value.
+    let rolled = "";
+    h.change((w: { tokens: { id: string; value: string; name: string }[] }) => {
+      const t = w.tokens.find((x) => x.name === "prototype-framework")!;
+      t.value = rolled = "dashboard-rolled-value-0123456789abcdefgh";
+    });
+    h.paste(next, "CLOUDFLARE_API_TOKEN", rolled);
+    const done = h.run(next, "answer", "saved");
+    expect(done.status, h.transcript.join("\n")).toBe(0);
+    expect(done.out).toContain("THE LIVE PASS IS FINISHED");
+    const rec = h.records();
+    const state = JSON.parse(Object.entries(rec).find(([k]) => k.endsWith("/state.json"))![1]);
+    expect(state.done.S17.result).toBe("pass");
+    for (const [key, body] of Object.entries(rec)) for (const v of [shown, rolled]) expect(body.includes(v), `${key} holds an everyday value`).toBe(false);
+  }, 300_000);
+});
+
 describe("S14 skipped partway, after the runner changed the role", () => {
   it("sets the primary account login's role back and records it", async () => {
     const h = await harness();

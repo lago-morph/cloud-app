@@ -67,3 +67,39 @@ Reviewer: the independent root-cause reviewer (a subagent that neither diagnosed
    - (a) A re-asked S4 token bypasses C-1's expiry check (at most 1 day), which the framework enforces. The re-ask, or S4 itself, should apply the same check to the new value.
    - (b) A loss after the bootstrap has finished but before `run` returns leaves the starter token deleted and the clients made. S4 would then run as a re-run and record "OAuth clients: created" as failed. Record that case plainly, or note it as an open item; it is a separate state from this defect.
    - (c) Make the fourth test of the describe red before the fix, or say why it is green.
+
+## Fix
+
+Author: the runner's implementer for PR #171 (DEC-0793), who neither diagnosed this failure nor reviewed it. Date: 2026-11-08. Red-green: the four reproduction tests in `scripts/live-pass/resume.unit.test.ts` ("a starter token pasted in a container that is lost during its bootstrap") are unchanged. Three of them were red before the fix and are green after it. The fourth is discussed under point (c) below.
+
+### What changed
+- **The engine can go back to an earlier step.**
+  - `lib/engine.mjs` has a new `RewindRequest` (thrown by a step's run), and `lib/checkpoint.mjs` a new `rewind`.
+  - The engine forgets the named steps' results, keeps the attempt as a step record with result `restarted` and its reason, and goes on from the first of those steps.
+  - Unit tests in `engine.unit.test.ts` and `checkpoint.unit.test.ts` were red first.
+- **S4** (`lib/steps.mjs`) never calls the framework without a starter token.
+  - If the token is missing, or C-1's 1-day check fails for it, S4 goes back to `TOK-S4` and `C-1`. The owner then gets the starter token's prompt again: one link, pre-filled for the test Cloudflare account, and the file to save the value as. The new value then goes through C-1 again (the reviewer's note (a)).
+- **C-1** goes back to `TOK-S4` with the reason, instead of blocking, when the token is missing or has more than 1 day left. The wrong "runbook section 5" message is gone.
+- **S5** records "n/a, the owner skipped" only when the owner replied `skip` to TOK-S5. The new fact is `facts.starterSkipped`. A missing or unusable token goes back to `TOK-S5`.
+- **The reviewer's note (b):**
+  - When S4 finds the admin app and both OAuth clients already there, the bootstrap finished in a container that was lost before S4 was recorded.
+  - S4 records that plainly (observation "bootstrap already finished", `pass: null`), checks the clients, the store and the admin Worker, and does not run the bootstrap again.
+  - New test `(b) a container lost just after the bootstrap finished resumes cleanly`, red before the fix. The fake framework has a new `loseContainerAfterBootstrap`.
+- **The reviewer's note (a):** new test `(a) a starter token with more than a day left is never used`, red before the fix.
+- **The test reviewer's open case (a refused roll, then a container lost in part 2):**
+  - A part-2 framework command whose everyday value is missing, and cannot be rolled again, goes back to R1.
+  - R1 then asks the test account login, from one link to the test Cloudflare account's token page, to roll `prototype-framework` in the dashboard and paste the value.
+  - New test, red before the fix.
+
+### The reviewer's note (c)
+The fourth test, "goes on with the new starter token: S4 passes and TOK-S5 is asked", was green before the fix. The test reacts to the exit code it gets after the loss.
+- **Before the fix**, the runner blocked (exit 1). The test then pasted a new token and ran `retry`, and S4's run read the new file.
+- **After the fix**, the runner asks TOK-S4 (exit 10). The test pastes and runs `answer saved`.
+
+So the test checks that the run goes on, by either path. The defect itself is reproduced by the other three tests.
+
+### Not changed
+The framework, and the four reproduction tests' assertions.
+
+### Verification
+`npx vitest run --config vitest.unit.config.ts scripts/live-pass`: 12 files, 140 tests, all pass.

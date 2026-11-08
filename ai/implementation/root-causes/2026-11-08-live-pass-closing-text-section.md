@@ -44,3 +44,25 @@ Reviewer: the independent root-cause reviewer (a subagent that neither diagnosed
 3. The alternatives are ruled out. `live-pass-analysis.md` section 4 is "Clean up", and the test reads the headings at run time.
 4. The fix addresses the cause.
 5. Minor, for the fixer: the new test covers only the "runbook's section N" form inside `finishText`. The other references are written "runbook section N, step M" (`lib/cloudflare.mjs:142`, `lib/steps.mjs:219`; both are correct, section 1 steps 2 and 3) and C-1's message (see the other record). The proposed "check the other references" is worth doing as a test over every such reference in `scripts/live-pass/**`.
+
+## Fix
+
+Author: the runner's implementer for PR #171 (DEC-0793), who neither diagnosed this failure nor reviewed it. Date: 2026-11-08. Red-green: the reproduction test "names the runbook section that holds the analysis and the cleanup" (`run.unit.test.ts`) is unchanged, and was red before the fix and green after it.
+
+### What changed
+- **`live-pass.mjs`, `finishText`:** it now says `the runbook's section 3 ("After the run: analysis and cleanup")`.
+- **Every runbook reference in the runner's text** (`live-pass.mjs`, `lib/cloudflare.mjs`, `lib/steps.mjs`) has one checkable form:
+  - `the runbook's section N ("Heading")`, or `the runbook's section "Heading"` for an unnumbered section;
+  - optionally followed by `, step M`.
+- **New test `scripts/live-pass/runbook-refs.unit.test.ts`**, red before the fix with 4 references in other forms. It reads every printed line of the runner's sources and the runbook's headings and numbered steps at run time, and checks that:
+  - no reference is in another form;
+  - each named section exists with that number and heading;
+  - each named step exists in that section;
+  - the closing text names the analysis section.
+- C-1's "runbook section 5" message is gone (see `2026-11-08-live-pass-lost-starter-token.md`).
+
+### Verification
+`npx vitest run --config vitest.unit.config.ts scripts/live-pass`: 12 files, 140 tests, all pass.
+
+### Open item
+CI's path map (`scripts/ci/path-map.json`) does not list `ai/implementation/live-pass-v0.2.0.md` as read by a test. So a runbook-only change does not run `run.unit.test.ts` or `runbook-refs.unit.test.ts`. Adding a `testInputs` entry touches `scripts/ci/`, so it is left to the orchestrator.

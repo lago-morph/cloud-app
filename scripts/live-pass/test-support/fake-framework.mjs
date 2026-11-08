@@ -68,6 +68,13 @@ if (cmd === "cloudflare-setup") {
     say("In a cloud session, delete the environment variable: it is already invalid.");
     say("The Cloudflare bootstrap is complete.");
     say(`  admin app: https://prototype-admin.${w.subdomain}.workers.dev`);
+    // The container is lost just after a bootstrap finished, before the runner recorded it.
+    if (w.loseContainerAfterBootstrap) {
+      delete w.loseContainerAfterBootstrap;
+      save(w);
+      process.kill(process.ppid, "SIGKILL");
+      process.exit(137);
+    }
     done(0);
   }
   const t = w.tokens.find((x) => x.value === env.CLOUDFLARE_API_TOKEN);

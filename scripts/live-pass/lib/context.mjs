@@ -10,6 +10,7 @@ import { diffSnapshots, takeSnapshot } from "./snapshot.mjs";
 import { addProdConfig } from "./steps.mjs";
 
 import { missingGroups, OWNER_GROUPS, OWNER_TOKEN_NAME } from "./groups.mjs";
+import { RewindRequest } from "./engine.mjs";
 import { SECRET } from "./secrets.mjs";
 
 const pad = (n) => String(n).padStart(3, "0");
@@ -73,6 +74,7 @@ export function contextFactory(deps) {
         if (!projectReady()) await ctx.ensureProject({ force: false });
         if (step.session === 2) await ctx.ensureEveryday();
         const value = step.session === 2 ? ctx.secretValue(SECRET.everyday) : undefined;
+        if (step.session === 2 && !value && step.id !== "R1") throw new RewindRequest(["R1"], "the everyday token's value was lost with a container and could not be rolled again through the API: R1 asks for it");
         const set = { ...(value ? { CLOUDFLARE_API_TOKEN: value } : {}), ...(options.set ?? {}) };
         return ctx.exec([join(projectDir(), "node_modules", ".bin", "prototype-framework"), ...args], { timeoutMs: 25 * 60_000, ...options, set });
       },

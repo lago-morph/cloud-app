@@ -41,14 +41,14 @@ Token live-pass-owner: <the value>
 Primary account login's email: <the email>
 ```
 
-From then on **the agent gives a link each time** a human step is needed. Each prompt first names the login whose browser profile it is for, then gives the link, says what to do there and what should be seen, and names the reply: `ok`, a word such as `user`, `admin`, `updated` or `new`, or a pasted value. If what shows differs, say so in a few words instead. Twice it asks for a **starter token**, made in the test account login's browser profile from a link, and its value pasted (Cloudflare lets only a token made in the dashboard hold "Account API Tokens Edit", so the runner cannot make these); for the second one (S5's) you may reply `skip`. The runner works on its own in between, for up to 20 minutes during the deploys and about 6 minutes before the role-change check.
+From then on **the agent gives a link each time** a human step is needed. Each prompt first names the login whose browser profile it is for, then gives the link, says what to do there and what should be seen, and names the reply: `ok`, a word such as `user`, `admin`, `updated` or `new`, or a pasted value. If what shows differs, say so in a few words instead. Twice it asks for a **starter token**, made in the test account login's browser profile from a link, and its value pasted (Cloudflare lets only a token made in the dashboard hold "Account API Tokens Edit", so the runner cannot make these); for the second one (S5's) you may reply `skip`. The runner works on its own in between, for up to 20 minutes during the deploys.
 
 At the end the agent says **"THE LIVE PASS IS FINISHED"** and prints the records' R2 bucket and prefix. To have the run analysed and the test Cloudflare account cleaned up, start an analysis session (section 3) and give it those lines, the test Cloudflare account's ID and the **same token** `live-pass-owner`. No new token is needed.
 
 ### If something goes wrong
 
 - **The agent says BLOCKED:** a step the rest depends on failed; the message says what to do. When it is fixed, the agent runs `retry`; if you decide to go on without the step, tell the agent and it runs `skip <step> "<your reason>"`.
-- **The session or its container ended** in the middle: start a new session and paste the same message, with `resume` instead of `start` (the agent knows). The runner continues where it stopped and asks a waiting question again. A starter token you pasted in the lost container may be asked for again.
+- **The session or its container ended** in the middle: start a new session and paste the same message, with `resume` instead of `start` (the agent knows). The runner continues where it stopped and asks a waiting question again. A starter token pasted in the lost container is asked for again, with its link; if the everyday token's value was lost and the runner cannot replace it, the test account login gets a link to roll it in the dashboard.
 - **The admin app asks the test account login to sign in again** (its session lasts 15 minutes): sign in, then repeat the page.
 - **You replied something wrong:** tell the agent; it records your correction (`note`).
 
@@ -69,7 +69,7 @@ All in one session, in this order.
 | S7, E-1, S8, S10 | checks what each page made; after S8 **rolls the everyday token's value** (`PUT …/tokens/<id>/value`) and keeps the new value | test account login: runs Account setup, Everyday token with Secrets Store unticked, Everyday token, Status |
 | CP, R1, R2, S9, U3, S11, S12 | collects the logs; checks the everyday token; runs "continue prototype setup"; probes U3; deploys `test-live` and `prodcheck` | — |
 | S13 | checks the auth app's records and the uploaded file | test account login: logs in to the app and uploads an image; primary account login: logs in |
-| S14 | **changes the primary account login's role** to Administrator, waits 6 minutes, later **sets it back** | primary account login: reloads one page, then logs out and in twice |
+| S14 | **changes the primary account login's role** to Administrator, later **sets it back** (also if S14 fails or is skipped partway) | primary account login: logs out and in twice |
 | S15, S16 | — | test account login: logs out of the app and the admin app, then opens Status again |
 | S17, FIN | removes both stages, collects every log, uploads the records to R2 | — |
 
@@ -105,7 +105,7 @@ Every step records expected against observed; IDs are kept from the previous run
 | S11 | Test stage `test-live`: deploys, health 200, mock login gives level `user`. |
 | S12 | Production stage `prodcheck`: no email-domain stop, exit 0; F-1; F-4; `/start` 302 for the registered return, 400 for a foreign one; no mock login; F-5 n/a. |
 | S13 (browser) | The auth app records the test account login as `admin` and the primary account login as `user`; F-8 (an uploaded object in the stage's bucket). |
-| S14 (browser) | The runner sets the primary account login's role to Administrator; after the refresh interval the existing session stays `user` (DEC-0703); after signing in again, `admin` (A-1 part b); the runner sets the role back, and a new sign-in gives `user`. |
+| S14 (browser) | The runner sets the primary account login's role to Administrator; after signing out and in, `admin` (A-1 part b, DEC-0703); the runner sets the role back, and the next sign-in gives `user`. The role is set back even if S14 fails or is skipped partway. There is no wait for the role-refresh interval (owner decision on PR #171, option B): that a re-check does not pick up a role change is covered locally by E2E-007, and a configurable re-check interval goes to the 0.2.0 cleanup. |
 | S15 (browser) | Signed out of the app and the admin app. |
 | S16 (browser) | Page 3: the registered app and both sign-ins (E-4). |
 | S17 | Both stages removed (production after its backup); `/start` 400 and no registry row; no stage resource left; the shared resources kept. |
@@ -149,7 +149,7 @@ You run the live pass's runner for the owner. Read only this section.
    - **1**: BLOCKED. Relay the message to the owner word for word. On their decision run `retry`, or `skip <step> "<their reason>"`. Never skip on your own.
    - **3**: the secrets directory is not as step 1 says. Fix what the message names (a missing file, a file others can read) from the owner's message, or ask the owner for the value it names; then run the same command again.
    - **0**: "THE LIVE PASS IS FINISHED". Relay the closing text to the owner word for word, then run `rm -rf ~/.live-pass-secrets` and stop.
-   - Any other exit, or the Bash tool timed out (the runner may be waiting on its own, as before S14's question): run `node scripts/live-pass/live-pass.mjs next` once; if it fails again, relay the output and stop.
+   - Any other exit, or the Bash tool timed out: run `node scripts/live-pass/live-pass.mjs next` once; if it fails again, relay the output and stop.
 4. If the owner corrects an earlier reply or tells you something the records should hold, run `node scripts/live-pass/live-pass.mjs note "<their words>"`.
 5. **Never print, echo, log or commit a token's value**, and never put one in a command (`answer`, `note`, `echo`, `cat`, `env`, `printenv`, `set`). Do not read the secrets directory's files back. The owner may paste tokens for the test Cloudflare account into this chat (DEC-0793); a value of any other account is exposed, so tell the owner to make a new one.
 6. Do not diagnose or fix anything during the pass. The runner records everything for the analyst.

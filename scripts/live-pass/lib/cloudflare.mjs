@@ -139,7 +139,7 @@ export async function ensureBucket(api, bucket) {
   if (got.ok) return "exists";
   const r = await api.call("POST", api.account("/r2/buckets"), { json: { name: bucket } });
   if (r.ok) return "created";
-  const enable = Array.isArray(r.body?.errors) && r.body.errors.some((e) => e.code === 10042) ? " R2 is not enabled on the test Cloudflare account: enable it in that account's dashboard (runbook section 1, step 2)." : "";
+  const enable = Array.isArray(r.body?.errors) && r.body.errors.some((e) => e.code === 10042) ? ` R2 is not enabled on the test Cloudflare account: enable it in that account's dashboard (the runbook's section 1 ("For the owner"), step 2).` : "";
   throw new Error(`creating the R2 bucket ${bucket} failed: ${describe(r)}.${enable}`);
 }
 
