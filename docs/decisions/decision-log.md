@@ -2283,7 +2283,7 @@ Taken under the owner's instruction "Do not stop and ask me questions. Make an a
 Item: C-T3.
 
 ### DEC-0292 — FILES-AC-003's expired-ticket clause waits for a real expiry (PAR-233)
-Origin: ai-proposed · Status: accepted (accepted under the owner's instruction of 2026-10-25) · Affects: FILES-AC-003; `expired-ticket.spec.ts`
+Origin: ai-proposed · Status: superseded by DEC-0794 (the real-time wait is removed; the browser-clock test covers the clause) · Affects: FILES-AC-003; `expired-ticket.spec.ts`
 
 No contract option or reference route issues a shorter-lived ticket, and the expiry is checked by storage (R2 on Cloudflare), so the clock cannot be moved. The test uses the ticket once (control), waits until its `expiresAt` plus 30 s (bounded: the lifetime must not exceed PAR-233 + 1 min; test timeout PAR-233 + 5 min), and asserts the clause as written: `FILES.TRANSFER_FAILED`, a numeric status ≥ 400, `rejected by storage (HTTP n)`, no storage error body in the message, nothing written. It is in its own spec file so the wait overlaps the other specs. On Cloudflare it is expected to fail (DEC-0101); it is not skipped or weakened. A test-only short ticket lifetime would make the run 15 minutes shorter; that would be a framework change (not requested).
 Taken under the owner's instruction "Do not stop and ask me questions. Make an assumption and continue"; accepted under the owner's instruction of 2026-10-25 ("you should not be asking detailed minor questions about things you designed yourself with no input from me").
@@ -7442,4 +7442,14 @@ Origin: owner (2026-11-02) · Status: accepted · Affects: `ai/implementation/li
 - **(b) The optional S1/S5 starter tokens stay.** The long-lived starter token (S1) and the second starter token (S5) remain optional; without them S1 or S5 is recorded "n/a".
 - **(c) R2 and Workers Logs.** R2 is enabled in the test account before session 1 (runbook 1.2). The runner may turn on Workers Logs for every Worker in the test account (script settings, no redeploy), so that the admin app's and the auth app's log lines are kept for the analyst.
 - **To reverse:** (a) make the live-pass session delegate the runner to a subagent that relays through the main agent; (b) drop 1.4.3 and 1.4.4 and their steps; (c) collect only the framework's own log bucket.
+Item: release candidate 0.2.0-rc01 (V).
+
+### DEC-0794 — FILES-AC-003's 15-minute real-time expired-ticket test is removed; the browser-clock test covers the clause
+Origin: owner (2026-11-08) · Status: accepted · Supersedes: DEC-0292 · Affects: FILES-AC-003, `tests/compliance/criteria/files/expired-ticket.spec.ts`
+
+The owner removed the test "expired-ticket clause: a ticket past PAR-233 …". It waited in real time for a ticket to expire (PAR-233, 15 minutes, plus 30 s).
+- **Why.** It duplicated the clock-based test in the same file. Since DEC-0534, `uploadFile` decides expiry by the browser's clock before sending, and that test sets the page's clock to the ticket's `expiresAt`. The real wait cost about 15 minutes in every run that selects FILES-AC-003, including every release run.
+- **What stays.** FILES-AC-003's expired-ticket clause is covered by the clock-based test (DEC-0534), with the same checks: `FILES.TRANSFER_FAILED`, status null, `rejected before sending: ticket expired`, no request to storage, and the stored file unchanged. The removed test's lifetime check (`expiresAt` − issue time ≤ PAR-233 + 1 min) moves into the clock-based test, which already gets a ticket. Requirements, criteria and framework code are unchanged.
+- **Not covered any more.** No test now sends an upload after a real expiry. Storage's own refusal of an expired ticket is a storage feature that the framework does not implement (DEC-0534, "Clock skew").
+- **To reverse:** restore the removed test from git history, and mark this entry superseded.
 Item: release candidate 0.2.0-rc01 (V).
