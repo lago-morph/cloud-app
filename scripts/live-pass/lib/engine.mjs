@@ -110,6 +110,16 @@ export function createEngine({ catalogue, holder, save, makeCtx = (base) => base
     print(`\n=== OWNER STEP ${step.id} (part ${p.part + 1} of ${step.owner.length}): ${step.title} ===\n${p.prompt}\n\n${after}`);
   };
 
+  /** A step's `cleanup` (undoing what its run changed, such as S14's role change): on completion and on a skip. */
+  async function cleanup(step, ctx) {
+    if (!step.cleanup) return;
+    try {
+      await step.cleanup(ctx);
+    } catch (e) {
+      ctx.observe("cleanup error", { expected: "the step's cleanup runs", observed: message(e), pass: false });
+    }
+  }
+
   async function complete(step, ctx) {
     const p = pending();
     if (step.after) {
@@ -119,6 +129,7 @@ export function createEngine({ catalogue, holder, save, makeCtx = (base) => base
         ctx.observe("error", { expected: "the step's checks run", observed: message(e), pass: false });
       }
     }
+    await cleanup(step, ctx);
     const rec = { ...p.record, endedAt: iso() };
     rec.result = stepResult(rec.observations, rec.notApplicable !== undefined);
     try {
@@ -258,10 +269,19 @@ export function createEngine({ catalogue, holder, save, makeCtx = (base) => base
   }
 
   async function skip(stepId, reason, budgetMs) {
-    if (!byId(stepId)) throw new Error(`there is no step ${stepId}`);
+    const step = byId(stepId);
+    if (!step) throw new Error(`there is no step ${stepId}`);
+    // A step skipped partway keeps its evidence so far, and its cleanup runs (S14 sets the role back).
+    const started = pending()?.stepId === stepId ? pending().record : null;
+    let record = { id: stepId, title: step.title, result: "skipped", reason, endedAt: iso(), observations: started?.observations ?? [], commands: started?.commands ?? [], owner: started?.owner ?? [], notes: started?.notes ?? [] };
+    if (step.cleanup && (!pending() || pending().stepId === stepId)) {
+      setPending({ stepId, part: 0, ran: true, record: { ...record, observations: [...record.observations] } });
+      await cleanup(step, ctxFor(step));
+      record = { ...record, observations: pending().record.observations, notes: pending().record.notes };
+    }
     if (pending()?.stepId === stepId) setPending(null);
     holder.state = recordStep(holder.state, stepId, { result: "skipped", reason, endedAt: iso() });
-    writeStepRecord({ id: stepId, title: byId(stepId).title, result: "skipped", reason, endedAt: iso(), observations: [], commands: [], owner: [], notes: [] });
+    writeStepRecord(record);
     await save(holder.state);
     return advance(budgetMs);
   }

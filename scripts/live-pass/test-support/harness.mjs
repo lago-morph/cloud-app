@@ -159,13 +159,6 @@ export async function harness({ roleWaitSeconds = 1 } = {}) {
         w.d1Rows[db].users = [...users, { sub: "u-tester", email: TESTER, role, updated_at: 2 }];
       });
     },
-    /** Page 2 updates the stand-in token in place (U1 "yes"). */
-    updateStandIn(everydayId) {
-      change((w) => {
-        const t = w.tokens.filter((x) => x.name === "prototype-framework").find((x) => x.id !== everydayId);
-        t.policies[0].permission_groups = EVERYDAY_GROUPS.map((n) => ({ id: fw.idOf(n), name: n }));
-      });
-    },
   };
 
   return { fw, dir, worldFile, tokens, container, paste, firstMessage, env, run, runOnce, world, change, records, prompt, dashboardToken, owner, transcript, printed, invocations: () => invocations };

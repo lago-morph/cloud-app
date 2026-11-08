@@ -219,6 +219,22 @@ describe("owner steps", () => {
     expect(calls).toEqual(["wait"]);
   });
 
+  it("runs a step's `cleanup` when it completes and when it is skipped partway, recording what it did", async () => {
+    const cleaned: string[] = [];
+    const step = (id: string) => ({ id, session: 1, title: id, run: (c: Ctx) => c.setFacts({ changed: id }), owner: [{ prompt: () => "Reload. Reply: ok", verify: () => {} }, { prompt: () => "Again. Reply: ok", verify: () => {} }], cleanup: (c: Ctx) => { cleaned.push(id); c.observe("restored", { expected: "restored", observed: "restored", pass: true }); } });
+    const h = harness([step("A"), step("B")]);
+    await h.engine.advance(60_000);
+    await h.engine.answer("ok", 60_000);
+    await h.engine.answer("ok", 60_000);
+    expect(cleaned).toEqual(["A"]);
+    expect(h.records.find((r) => r.id === "A")?.observations).toEqual(expect.arrayContaining([expect.objectContaining({ id: "restored" })]));
+    await h.engine.answer("ok", 60_000); // B, part 1 of 2
+    await h.engine.skip("B", "the owner stopped here", 60_000);
+    expect(cleaned).toEqual(["A", "B"]);
+    expect(h.holder.state.done.B).toMatchObject({ result: "skipped" });
+    expect(h.records.find((r) => r.id === "B")?.observations).toEqual(expect.arrayContaining([expect.objectContaining({ id: "restored" })]));
+  });
+
   it("refuses an answer when nothing is waiting", async () => {
     const h = harness([auto("A")]);
     await expect(h.engine.answer("ok", 60_000)).rejects.toThrow(/nothing is waiting/);

@@ -97,10 +97,8 @@ describe("an offline live pass in one session", () => {
     r = ask(h.run(c, "answer", "user"), "S15");
     r = ask(h.run(c, "answer", "ok"), "S15");
     r = ask(h.run(c, "answer", "ok"), "S16");
-    r = ask(h.run(c, "answer", "ok"), "U1");
-    h.owner.updateStandIn(everydayId);
-    // E-10 (Clean up v0.1.x email) is not in this pass: the owner has no v0.1.x installs (DEC-0793).
-    r = h.run(c, "answer", "updated");
+    // U1 (the grant and a token it did not create) and E-10 (Clean up v0.1.x email) are not in this pass (DEC-0793).
+    r = h.run(c, "answer", "ok");
     expect(r.status, h.transcript.join("\n")).toBe(0);
     expect(r.out).toContain("THE LIVE PASS IS FINISHED");
     expect(r.out).toMatch(/R2 bucket live-pass-records, prefix runs\/lp-[0-9-]+\//);
@@ -108,7 +106,7 @@ describe("an offline live pass in one session", () => {
     expect(r.out).toContain(`rm -rf ${c.secrets}`);
 
     // ---- Every owner prompt: the login whose browser profile it is for, one link, one to three sentences, the exact reply ----
-    expect(prompts.length).toBe(18);
+    expect(prompts.length).toBe(17);
     expect(prompts.some((p) => /OWNER STEP (TOK-S1|S1) /.test(p))).toBe(false);
     const forPrimary = prompts.filter((p) => p.includes("===\nIn the primary account login's browser profile:")).map((p) => p.match(/OWNER STEP (\S+) \(part (\d+)/)?.slice(1).join("."));
     expect(forPrimary).toEqual(["P3.1", "S6.2", "S13.2", "S14.1", "S14.2", "S14.3"]);
@@ -145,7 +143,6 @@ describe("an offline live pass in one session", () => {
       throw new Error(`steps not passed:\n${details.join("\n")}\n\n${h.transcript.join("\n")}`);
     }
     expect(results.steps.filter((s: { result: string }) => s.result === "n/a").map((s: { id: string }) => s.id)).toEqual([]);
-    expect(results.checks.find((x: { id: string }) => x.id === "U1")?.result).toBe("pass");
     expect(results.checks.find((x: { id: string }) => x.id === "A-1")?.result).toBe("pass");
 
     // ---- Each token reaches only the command that needs it; the sandbox's own values never do ----

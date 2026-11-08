@@ -99,9 +99,7 @@ describe("an offline live pass that loses its container in both parts", () => {
     h.prompt(h.run(c, "answer", "user"), "S15");
     h.prompt(h.run(c, "answer", "ok"), "S15");
     h.prompt(h.run(c, "answer", "ok"), "S16");
-    h.prompt(h.run(c, "answer", "ok"), "U1");
-    h.owner.updateStandIn(everydayId);
-    const r = h.run(c, "answer", "updated");
+    const r = h.run(c, "answer", "ok"); // U1 and E-10 are not in this pass (DEC-0793)
     if (r.status !== 0 || !r.out.includes("THE LIVE PASS IS FINISHED")) throw new Error(`the run did not finish:\n${h.transcript.join("\n")}`);
     rolledAfter = (h.world().rolled ?? []).length;
     if (existsSync(join(c.secrets, "CLOUDFLARE_API_TOKEN"))) values.rolled3 = readFileSync(join(c.secrets, "CLOUDFLARE_API_TOKEN"), "utf8").trim();
@@ -300,6 +298,41 @@ describe("a starter token pasted in a container that is lost during its bootstra
     expect(afterS5Loss, h.transcript.join("\n")).toBeDefined();
     expect(state.done.S5?.reason ?? "", JSON.stringify(state.done.S5)).not.toMatch(/skipped/i);
   });
+});
+
+describe("S14 skipped partway, after the runner changed the role", () => {
+  it("sets the primary account login's role back and records it", async () => {
+    const h = await harness();
+    const c = h.container();
+    h.firstMessage(c);
+    h.prompt(h.run(c, "start", "--primary-login", TESTER), "P3");
+    h.owner.acceptInvitation();
+    h.prompt(h.run(c, "answer", "ok"), "TOK-S4");
+    h.paste(c, "LIVE_PASS_STARTER", h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, 23 * 3600));
+    h.prompt(h.run(c, "answer", "saved"), "TOK-S5");
+    h.prompt(h.run(c, "answer", "skip"), "S6");
+    h.prompt(h.run(c, "answer", "ok"), "S6");
+    h.owner.adminSignIns();
+    h.prompt(h.run(c, "answer", "ok"), "S7");
+    h.owner.accountSetup();
+    h.prompt(h.run(c, "answer", "ok"), "E-1");
+    h.prompt(h.run(c, "answer", "ok"), "S8");
+    h.owner.everydayToken();
+    h.prompt(h.run(c, "answer", "ok"), "S10");
+    h.prompt(h.run(c, "answer", "ok"), "S13");
+    h.owner.ownerSignInAndUpload();
+    h.prompt(h.run(c, "answer", "ok"), "S13");
+    h.owner.testerSignIn("user");
+    h.prompt(h.run(c, "answer", "ok"), "S14");
+    expect(h.world().roleChanges).toEqual([{ member: "m2", roles: ["Administrator"] }]);
+    h.prompt(h.run(c, "skip", "S14", "the owner stopped S14 here"), "S15");
+    expect(h.world().roleChanges.at(-1)).toEqual({ member: "m2", roles: ["HTTP Applications Read"] });
+    expect(h.world().members.find((m: { id: string }) => m.id === "m2").roles.map((r: { name: string }) => r.name)).toEqual(["HTTP Applications Read"]);
+    const rec = h.records();
+    const s14 = Object.entries(rec).filter(([k]) => /\/steps\/\d+-S14\.json$/.test(k)).map(([, b]) => JSON.parse(b)).at(-1);
+    expect(s14.result).toBe("skipped");
+    expect(s14.observations).toEqual(expect.arrayContaining([expect.objectContaining({ id: "role set back", pass: true })]));
+  }, 300_000);
 });
 
 describe("the durable state in the records bucket", () => {

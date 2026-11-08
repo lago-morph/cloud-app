@@ -109,6 +109,18 @@ function starterTokenPart(name, ttl, { skippable = true } = {}) {
   };
 }
 
+/** Sets the primary account login's role back to its first role (S14), and records it. */
+async function restoreRole(ctx) {
+  const t = ctx.facts.tester;
+  const r = await ctx.setMemberRoles(t?.memberId, t?.roleIds ?? []);
+  ctx.observe("role set back", { check: "S14", expected: t?.roles, observed: r.ok ? { status: r.status, roles: r.roles } : r.error, pass: r.ok });
+  const m = await eventually(ctx, (s) => {
+    const x = find.member(s, t?.email);
+    return x && same(x.roles, t?.roles ?? []) ? x : undefined;
+  });
+  if (r.ok && m) ctx.setFacts({ roleRestored: true, roleRestoredAt: new Date().toISOString() });
+}
+
 /** Rolls the everyday token's value with the owner's token and keeps the new value in the secrets directory (DEC-0793). */
 async function rollEveryday(ctx) {
   const r = await ctx.rollToken(ctx.facts.everydayTokenId);
@@ -805,6 +817,10 @@ export const STEPS = [
       ctx.observe("primary account login's role", { check: "A-1", expected: ["Administrator"], observed: m?.roles ?? "unchanged", pass: m !== undefined });
       ctx.setFacts({ roleChangedAt: new Date().toISOString() });
     },
+    /** Whatever happens to S14 (a failure, a skip partway), the primary account login gets its first role back. */
+    async cleanup(ctx) {
+      if (ctx.facts.roleChangedAt && !ctx.facts.roleRestored) await restoreRole(ctx);
+    },
     owner: [
       {
         async before(ctx) {
@@ -835,12 +851,7 @@ export const STEPS = [
           ctx.observe("after a new sign-in", { check: "A-1", expected: "admin (\"Administrator\" is an admin role, PAR-413)", observed: level, pass: level === "admin" });
           const t = (await ctx.authDb()).users.rows.find((u) => u.email === ctx.facts.tester?.email);
           ctx.observe("auth app's recorded role", { check: "A-1", expected: "admin", observed: t?.role ?? "absent", pass: t?.role === "admin" });
-          const r = await ctx.setMemberRoles(ctx.facts.tester?.memberId, ctx.facts.tester?.roleIds ?? []);
-          ctx.observe("role set back", { check: "S14", expected: ctx.facts.tester?.roles, observed: r.ok ? { status: r.status, roles: r.roles } : r.error, pass: r.ok });
-          await eventually(ctx, (s) => {
-            const x = find.member(s, ctx.facts.tester?.email);
-            return x && same(x.roles, ctx.facts.tester?.roles ?? []) ? x : undefined;
-          });
+          await restoreRole(ctx);
         },
       },
       {
@@ -900,53 +911,6 @@ export const STEPS = [
         },
       },
     ],
-  },
-  {
-    id: "U1",
-    session: 2,
-    check: "U1",
-    title: "Can the grant update an everyday token it did not create? (U1, E-5)",
-    expected: ["the runner makes a second token named prototype-framework with two of the four groups", "page 2 either updates it in place to exactly the four groups (yes) or makes a new one (no)", "the everyday token in use keeps working"],
-    async run(ctx) {
-      const made = await ctx.api.call("POST", ctx.api.account("/tokens"), {
-        json: { name: EVERYDAY_NAME, policies: [{ effect: "allow", resources: { [`com.cloudflare.api.account.${ctx.state.accountId}`]: "*" }, permission_groups: [{ id: GROUP_IDS.workersScriptsWrite }, { id: GROUP_IDS.d1Write }] }] },
-      });
-      if (!made.ok) throw new Error(`making the stand-in token failed: ${describeR(made)}`);
-      ctx.secret("u1-stand-in", made.body.result.value);
-      ctx.setFacts({ u1TokenId: made.body.result.id });
-      ctx.observe("stand-in token", { check: "U1", expected: "a token named prototype-framework, not made by the admin app", observed: { id: made.body.result.id, groups: ["Workers Scripts Write", "D1 Write"] }, pass: true });
-    },
-    owner: [
-      {
-        prompt: (ctx) => ({
-          link: ctx.facts.adminUrl,
-          who: "test", text: [`Open "Everyday token", press "Continue at Cloudflare", keep every toggle ticked and approve.`, "The page says either that the existing everyday token was updated in place, or that a new one was created; if a new one was created, do NOT press \"I have saved the new token: delete the old one\" (it would delete the token the run uses)."],
-          reply: "updated, or new",
-        }),
-        async verify(ctx, answer) {
-          const s = await ctx.freshSnapshot();
-          const all = find.tokens(s, EVERYDAY_NAME);
-          const standIn = find.token(s, ctx.facts.u1TokenId);
-          const extra = all.filter((t) => t.id !== ctx.facts.u1TokenId && t.id !== ctx.facts.everydayTokenId);
-          const updated = standIn !== undefined && same(groupsOf(standIn), EVERYDAY_GROUPS);
-          ctx.observe("owner reply", { check: "U1", expected: "updated or new", observed: answer, pass: /updated|new/i.test(answer) ? null : false });
-          ctx.observe("U1 answer", { check: "U1", expected: "recorded: the stand-in updated to exactly the four groups (yes), or a new token (no)", observed: { standIn: standIn ? groupsOf(standIn) : "absent", newTokens: extra.map((t) => ({ id: t.id, groups: groupsOf(t) })) }, pass: updated || extra.length > 0 });
-          ctx.observe("reply agrees with the API", { check: "U1", expected: updated ? "updated" : "new", observed: answer, pass: updated ? /updated/i.test(answer) : /new/i.test(answer) });
-          await ctx.ensureEveryday();
-          const v = await ctx.verify(ctx.secretValue(SECRET.everyday) ?? "");
-          ctx.observe("everyday token still works", { check: "U1", expected: "active", observed: v.ok ? v.status : v.error, pass: v.ok });
-          const ev = find.token(s, ctx.facts.everydayTokenId);
-          ctx.observe("everyday token's groups", { check: "U2", expected: EVERYDAY_GROUPS, observed: ev ? groupsOf(ev) : "absent", pass: ev !== undefined && same(groupsOf(ev), EVERYDAY_GROUPS) });
-          ctx.setFacts({ u1: updated ? "yes" : extra.length > 0 ? "no" : "unclear", u1ExtraTokenIds: extra.map((t) => t.id) });
-        },
-      },
-    ],
-    async after(ctx) {
-      for (const id of [ctx.facts.u1TokenId, ...(ctx.facts.u1ExtraTokenIds ?? [])].filter(Boolean)) {
-        const d = await ctx.api.call("DELETE", ctx.api.account(`/tokens/${id}`));
-        ctx.observe(`cleanup token ${id}`, { expected: "deleted (the runner's stand-in, or the copy page 2 made for it)", observed: d.status, pass: d.ok || d.status === 404 });
-      }
-    },
   },
   {
     id: "S17",

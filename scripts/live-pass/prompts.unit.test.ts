@@ -31,11 +31,12 @@ describe("every owner prompt", () => {
 });
 
 describe("every token prompt", () => {
-  it("covers both starter tokens, TOK-S4 and TOK-S5, and nothing asks for S1's token or runs E-10", () => {
+  it("covers both starter tokens, TOK-S4 and TOK-S5, and nothing asks for S1's token or runs E-10 or U1", () => {
     expect(tokenParts.map((x) => x.step)).toEqual(["TOK-S4", "TOK-S5"]);
     expect(STEPS.map((s: { id: string }) => s.id)).not.toEqual(expect.arrayContaining(["S1"]));
     expect(STEPS.map((s: { id: string }) => s.id)).not.toContain("TOK-S1");
     expect(STEPS.map((s: { id: string }) => s.id)).not.toContain("E-10");
+    expect(STEPS.map((s: { id: string }) => s.id)).not.toContain("U1");
   });
 
   it("links to the test Cloudflare account's token page with the token's name and exactly its required groups", () => {
