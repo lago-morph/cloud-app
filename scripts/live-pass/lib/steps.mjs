@@ -548,7 +548,7 @@ export const STEPS = [
     session: 1,
     check: "U2",
     title: "Page 2, Everyday token: created with exactly four groups; the runner rolls its value",
-    expected: ["\"The everyday token prototype-framework was created with exactly these permissions:\" and its value, shown once", "the token holds exactly Workers Scripts Write, Workers R2 Storage Write, D1 Write, Secrets Store Read, on this account only, no zone (U2)", "the runner rolls the token's value with the owner's token (PUT …/tokens/<id>/value) and keeps the new value in the secrets directory; the owner copies nothing (DEC-0793)"],
+    expected: ["\"The everyday token prototype-framework was created with exactly these permissions:\" and its value, shown once", "the token holds exactly Workers Scripts Write, Workers R2 Storage Write, D1 Write, Secrets Store Read, on the test Cloudflare account only, no zone (U2)", "the runner rolls the token's value with the owner's token (PUT …/tokens/<id>/value) and keeps the new value in the secrets directory; the owner copies nothing (DEC-0793)"],
     owner: [
       {
         prompt: (ctx) => ({
@@ -564,7 +564,7 @@ export const STEPS = [
           if (tokens.length < 1) return;
           const g = groupsOf(tokens[0]);
           ctx.observe("its groups", { check: "U2", expected: EVERYDAY_GROUPS, observed: g, pass: same(g, EVERYDAY_GROUPS) });
-          ctx.observe("its resources", { check: "U2", expected: "this account only, no zone", observed: tokens[0].policies.map((p) => p.resources), pass: accountOnly(tokens[0], ctx.state.accountId) });
+          ctx.observe("its resources", { check: "U2", expected: "the test Cloudflare account only, no zone", observed: tokens[0].policies.map((p) => p.resources), pass: accountOnly(tokens[0], ctx.state.accountId) });
           ctx.setFacts({ everydayTokenId: tokens[0].id });
           await rollEveryday(ctx);
         },
