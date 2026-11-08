@@ -155,18 +155,27 @@ describe("owner steps", () => {
     expect(h2.holder.state.facts.ran).toBe(1);
   });
 
-  it("prints a structured prompt as one link, then what to do there, then the exact reply (DEC-0793)", async () => {
-    const step = { id: "S6", session: 1, title: "admin sign-in", owner: [{ prompt: () => ({ link: "https://admin.example/", text: ["Sign in with Cloudflare and approve.", 'You should see "Signed in as you".'], reply: "ok" }), verify: () => {} }] };
+  it("prints a structured prompt as the login whose browser profile it is for, one link, what to do there, then the exact reply (DEC-0793)", async () => {
+    const step = { id: "S6", session: 1, title: "admin sign-in", owner: [{ prompt: () => ({ who: "test", link: "https://admin.example/", text: ["Press Sign in with Cloudflare and approve.", 'You should see "Signed in as …".'], reply: "ok" }), verify: () => {} }] };
     const h = harness([step]);
     expect(await h.engine.advance(60_000)).toBe("owner");
     const p = h.printed.at(-1) ?? "";
     const body = p.slice(p.indexOf("===\n") + 4, p.indexOf("\n\nWhen the owner replies"));
-    expect(body.split("\n")).toEqual(["Open: https://admin.example/", "Sign in with Cloudflare and approve.", 'You should see "Signed in as you".', "Reply: ok"]);
+    expect(body.split("\n")).toEqual(["In the test account login's browser profile:", "Open: https://admin.example/", "Press Sign in with Cloudflare and approve.", 'You should see "Signed in as …".', "Reply: ok"]);
     expect(p).toContain('When the owner replies, run: node scripts/live-pass/live-pass.mjs answer "<the owner\'s reply, word for word>"');
   });
 
+  it("names the primary account login for a prompt meant for it, and refuses a structured prompt that names no login", async () => {
+    const step = { id: "S6", session: 1, title: "admin sign-in", owner: [{ prompt: () => ({ who: "primary", link: "https://admin.example/", text: ["Press Sign in."], reply: "ok" }), verify: () => {} }, { prompt: () => ({ link: "https://admin.example/", text: ["Press Sign in."], reply: "ok" }), verify: () => {} }] };
+    const h = harness([step]);
+    await h.engine.advance(60_000);
+    expect(h.printed.at(-1)).toContain("===\nIn the primary account login's browser profile:\nOpen: https://admin.example/");
+    await h.engine.answer("ok", 60_000);
+    expect(h.printed.at(-1)).toContain("(the prompt could not be built: it names no login");
+  });
+
   it("a prompt that asks for a pasted value tells the agent to save it as a file and answer `saved`, never to pass the value in a command", async () => {
-    const step = { id: "TK", session: 1, title: "starter token", owner: [{ prompt: () => ({ link: "https://dash.example/", text: ["Make the token and copy its value."], reply: "paste the value into this chat, or skip" }), saveAs: "LIVE_PASS_STARTER", verify: () => {} }] };
+    const step = { id: "TK", session: 1, title: "starter token", owner: [{ prompt: () => ({ who: "test", link: "https://dash.example/", text: ["Make the token and copy its value."], reply: "paste the value into this chat, or skip" }), saveAs: "LIVE_PASS_STARTER", verify: () => {} }] };
     const h = createEngine({ catalogue: [step], holder: { state: newRun({ runId: "r1", accountId: "a", version: "v", appName: "app", bucket: "b", runnerSha: "s", now: new Date(T0).toISOString() }) }, save: async () => {}, writeStepRecord: () => {}, print: (t: string) => printed.push(t), secretsDir: "/home/u/.live-pass-secrets" });
     const printed: string[] = [];
     await h.advance(60_000);

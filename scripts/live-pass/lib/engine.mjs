@@ -4,7 +4,7 @@
 // A step has an automated part (`run`), then zero or more owner parts (`owner[i].prompt`, then
 // `owner[i].verify` with the owner's short reply), then an automated `after`. A part with a `when`
 // is asked only when `when(ctx)` holds; its `before` runs first (the runner waiting on its own, as for
-// S14's role-refresh interval) and again after a lost container until the prompt is stored. A prompt is one link, one to three sentences on what to do
+// S14's role-refresh interval) and again after a lost container until the prompt is stored. A prompt names the login whose browser profile it is for, then one link, one to three sentences on what to do
 // there and what the owner should see, then the exact reply (DEC-0793); a part with `saveAs` asks for
 // a pasted value, which the session agent saves in the secrets directory instead of passing it on. Every part records
 // observations: expected against observed, with pass true, false or null (recorded only). The
@@ -40,11 +40,22 @@ const message = (e) => (e instanceof Error ? e.message : String(e));
 
 const RUN = "node scripts/live-pass/live-pass.mjs";
 
-/** A prompt's text: a string as it is, or { link, text, reply } as "Open: <link>", the sentences, "Reply: <reply>". */
+/** The first line of every prompt: which login, and so which browser profile, it is for (owner's terminology, DEC-0793). */
+export const LOGIN_LINE = {
+  test: "In the test account login's browser profile:",
+  primary: "In the primary account login's browser profile:",
+};
+
+/**
+ * A prompt's text: a string as it is, or { who, link, text, reply } as the login's line, "Open: <link>",
+ * the sentences, "Reply: <reply>". `who` is "test" (the test account login) or "primary" (the primary
+ * account login); a structured prompt without it is refused.
+ */
 export function formatPrompt(p) {
   if (typeof p === "string") return p;
+  if (!LOGIN_LINE[p.who]) throw new Error(`it names no login (who is ${JSON.stringify(p.who)}, not "test" or "primary")`);
   const text = Array.isArray(p.text) ? p.text : [p.text];
-  return [...(p.link ? [`Open: ${p.link}`] : []), ...text.filter(Boolean), `Reply: ${p.reply ?? "ok"}`].join("\n");
+  return [LOGIN_LINE[p.who], ...(p.link ? [`Open: ${p.link}`] : []), ...text.filter(Boolean), `Reply: ${p.reply ?? "ok"}`].join("\n");
 }
 
 /**

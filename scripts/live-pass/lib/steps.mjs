@@ -36,9 +36,10 @@ const BOOTSTRAP_GROUPS = ["Account API Tokens Write", "OAuth Client Write", "Sec
 /** The framework's own starter-token link (four groups by ID, DEC-0563); the API cannot make this token (code 1001). */
 export const BOOTSTRAP_LINK = `https://dash.cloudflare.com/?to=/:account/api-tokens&permissionGroupKeys=${encodeURIComponent(JSON.stringify(["e086da7e2179491d91ee5f35b3ca210a", "50fc2f43318f40e4855a35d8de5bf643", "adc8fa2bc6124928a8b3314dc63a1235", "5bc3f8b21c554832afc660159ab75fa4"].map((key) => ({ key, type: "edit" }))))}&name=prototype-framework-bootstrap`;
 export const TESTER_ROLE = "HTTP Applications Read";
-/** Who does a step: the owner signs in with the test Cloudflare account's login; the tester is the primary Cloudflare account's login. */
-export const AS_OWNER = "In the browser profile of the test Cloudflare account's login,";
-export const AS_TESTER = "In the browser profile of the primary Cloudflare account's login (the tester),";
+// Every prompt names its login (`who`): "test" is the test account login (the new login whose sign-up made
+// the test Cloudflare account; its Super Administrator), "primary" the primary account login (the login
+// that owns the primary Cloudflare account, invited into the test Cloudflare account). In the records the
+// two are `facts.owner` and `facts.tester`.
 const SHARED_BUCKETS = ["prototype-logs", "sst-state", "prototype-backups"];
 const ROLE_REFRESH_SECONDS = 300; // PAR-425
 /** How long S14 waits after the role change: the refresh interval plus a minute (the offline tests shorten it). */
@@ -79,7 +80,7 @@ function starterTokenPart(name, ttl, { skippable = true } = {}) {
     saveAs: name,
     prompt: () => ({
       link: BOOTSTRAP_LINK,
-      text: [`${AS_OWNER} pick the test Cloudflare account under Account Resources, ${ttl}, then press "Continue to summary" and "Create Token".`, "Copy the token's value (the API cannot make this token: only a dashboard-made token may hold Account API Tokens Edit)."],
+      who: "test", text: [`Pick the test Cloudflare account under Account Resources, ${ttl}, then press "Continue to summary" and "Create Token".`, "Copy the token's value (the API cannot make this token: only a dashboard-made token may hold Account API Tokens Edit)."],
       reply: skippable ? "paste the value into this chat, or skip" : "paste the value into this chat",
     }),
     async verify(ctx, answer) {
@@ -241,18 +242,18 @@ export const STEPS = [
   {
     id: "P3",
     session: 1,
-    title: "The tester (the primary Cloudflare account's login) is invited and accepts",
-    expected: ["the runner invites the tester's email with the role \"HTTP Applications Read\" (POST …/members, DEC-0793)", "two accepted members: the owner (Super Administrator - All Privileges) and the tester with a role that is not an administrator role"],
+    title: "The primary account login is invited into the test Cloudflare account and accepts",
+    expected: ["the runner invites the primary account login's email with the role \"HTTP Applications Read\" (POST …/members, DEC-0793)", "two accepted members: the test account login (Super Administrator - All Privileges) and the primary account login with a role that is not an administrator role"],
     blocking: true,
     async run(ctx) {
       const email = ctx.facts.testerEmail;
-      if (!email) throw new Error("The runner does not know the tester's email (the primary Cloudflare account's login). Start the run with: node scripts/live-pass/live-pass.mjs start --tester <email>");
+      if (!email) throw new Error("The runner does not know the primary account login's email. Start the run with: node scripts/live-pass/live-pass.mjs start --primary-login <email>");
       const snap = await ctx.freshSnapshot();
       ctx.observe("members before", { expected: null, observed: (snap.members.items ?? []).map((m) => ({ email: m.email, userId: m.userId, status: m.status, roles: m.roles })), pass: null });
       const existing = find.member(snap, email);
       if (existing?.status === "accepted" && !isAdminRole(existing.roles)) {
         ctx.setFacts({ skipInvite: true });
-        ctx.observe("invitation", { expected: "sent, or not needed", observed: "not needed: the tester is already an accepted member without an administrator role", pass: true });
+        ctx.observe("invitation", { expected: "sent, or not needed", observed: "not needed: the primary account login is already an accepted member without an administrator role", pass: true });
         return;
       }
       if (existing) {
@@ -271,11 +272,11 @@ export const STEPS = [
         when: (ctx) => !ctx.facts.skipInvite,
         prompt: (ctx) => ({
           link: `the invitation link in the email Cloudflare just sent to ${ctx.facts.testerEmail}`,
-          text: [`${AS_TESTER} open that email and press its link; sign in if asked, and accept the invitation to the test Cloudflare account.`, "Nothing in the primary Cloudflare account changes."],
+          who: "primary", text: [`Open that email and press its link; sign in if asked, and accept the invitation to the test Cloudflare account.`, "Nothing in the primary Cloudflare account changes."],
           reply: "ok",
         }),
         async verify(ctx, answer) {
-          replyCheck(ctx, answer, "the tester accepted the invitation");
+          replyCheck(ctx, answer, "the primary account login accepted the invitation");
           await eventually(ctx, (s) => (find.member(s, ctx.facts.testerEmail)?.status === "accepted" ? s : undefined));
         },
       },
@@ -283,8 +284,8 @@ export const STEPS = [
     async after(ctx) {
       const found = people(await ctx.freshSnapshot());
       const tester = found.tester?.email === ctx.facts.testerEmail ? found.tester : undefined;
-      ctx.observe("owner", { expected: `an accepted member with ${SUPER_ADMIN}`, observed: found.owner ? { email: found.owner.email, userId: found.owner.userId, roles: found.owner.roles } : "none", pass: found.owner !== undefined });
-      ctx.observe("tester", { expected: `${ctx.facts.testerEmail}, accepted, with no administrator role`, observed: tester ? { email: tester.email, userId: tester.userId, roles: tester.roles } : { others: found.others.map((m) => m.email), pending: found.pending.map((m) => m.email) }, pass: tester !== undefined && !isAdminRole(tester.roles) });
+      ctx.observe("test account login", { expected: `an accepted member with ${SUPER_ADMIN}`, observed: found.owner ? { email: found.owner.email, userId: found.owner.userId, roles: found.owner.roles } : "none", pass: found.owner !== undefined });
+      ctx.observe("primary account login", { expected: `${ctx.facts.testerEmail}, accepted, with no administrator role`, observed: tester ? { email: tester.email, userId: tester.userId, roles: tester.roles } : { others: found.others.map((m) => m.email), pending: found.pending.map((m) => m.email) }, pass: tester !== undefined && !isAdminRole(tester.roles) });
       if (found.owner && tester) {
         ctx.setFacts({ owner: { email: found.owner.email, userId: found.owner.userId, memberId: found.owner.id }, tester: { email: tester.email, userId: tester.userId, memberId: tester.id, roles: tester.roles, roleIds: tester.roleIds } });
       }
@@ -309,7 +310,7 @@ export const STEPS = [
   {
     id: "TOK-S4",
     session: 1,
-    title: "The owner makes the starter token for the bootstrap (S4)",
+    title: "The test account login makes the starter token for the bootstrap (S4)",
     expected: ["a starter token with the framework's four groups and an end date of tomorrow, pasted by the owner and saved in the secrets directory"],
     owner: [starterTokenPart(SECRET.starter, "set the end date to tomorrow (the framework refuses a starter token with more than one day left)", { skippable: false })],
   },
@@ -372,7 +373,7 @@ export const STEPS = [
   {
     id: "TOK-S5",
     session: 1,
-    title: "The owner makes the second starter token (for the re-run, S5)",
+    title: "The test account login makes the second starter token (for the re-run, S5)",
     expected: ["a second starter token with the framework's four groups and an end date of tomorrow, pasted by the owner; or skip (S5 n/a)"],
     owner: [starterTokenPart(SECRET.starterRerun, "set the end date to tomorrow (S5 runs the bootstrap again with it)")],
   },
@@ -413,31 +414,31 @@ export const STEPS = [
     id: "S6",
     session: 1,
     check: "SETUP-AC-011",
-    title: "Admin app sign-in: the owner is admitted, the tester refused",
-    expected: ["consent names client prototype-framework-admin with fixed rows Profile Information, User Details Read, Memberships Read", "owner: \"Signed in as <owner email>\", links Account setup, Everyday token, Status, Clean up v0.1.x email, and Sign out", "tester: 403 \"Only an administrator of this Cloudflare account can use the admin app.\"", "admin app log: \"admin signed in\""],
+    title: "Admin app sign-in: the test account login is admitted, the primary account login refused",
+    expected: ["consent names client prototype-framework-admin with fixed rows Profile Information, User Details Read, Memberships Read", "test account login: \"Signed in as <its email>\", links Account setup, Everyday token, Status, Clean up v0.1.x email, and Sign out", "primary account login: 403 \"Only an administrator of this Cloudflare account can use the admin app.\"", "admin app log: \"admin signed in\""],
     owner: [
       {
         prompt: (ctx) => ({
           link: ctx.facts.adminUrl,
-          text: [`${AS_OWNER} press "Sign in with Cloudflare" and approve (the consent page names prototype-framework-admin).`, `You should see "Signed in as ${ctx.facts.owner?.email ?? "<your email>"}" and the links Account setup, Everyday token, Status and Clean up v0.1.x email.`],
+          who: "test", text: [`Press "Sign in with Cloudflare" and approve (the consent page names prototype-framework-admin).`, `You should see "Signed in as ${ctx.facts.owner?.email ?? "<the test account login's email>"}" and the links Account setup, Everyday token, Status and Clean up v0.1.x email.`],
           reply: "ok",
         }),
         verify(ctx, answer) {
-          replyCheck(ctx, answer, "owner admitted");
+          replyCheck(ctx, answer, "the test account login admitted");
         },
       },
       {
         prompt: (ctx) => ({
           link: ctx.facts.adminUrl,
-          text: [`${AS_TESTER} press "Sign in with Cloudflare" and approve.`, "You should see \"Only an administrator of this Cloudflare account can use the admin app.\""],
+          who: "primary", text: [`Press "Sign in with Cloudflare" and approve.`, "You should see \"Only an administrator of this Cloudflare account can use the admin app.\""],
           reply: "ok",
         }),
         async verify(ctx, answer) {
-          replyCheck(ctx, answer, "tester refused");
+          replyCheck(ctx, answer, "the primary account login refused");
           const ev = await ctx.logsSince(["admin signed in"], { scripts: [ADMIN_SCRIPT] });
           ctx.observe("admin app log", { check: "S6", expected: "an \"admin signed in\" event", observed: `${ev.matched.length} matching of ${ev.total} events`, pass: ev.ok ? ev.matched.length >= 1 : null, note: ev.ok ? undefined : ev.error });
           const refused = ev.events.filter((e) => /\b403\b/.test(JSON.stringify(e)) && JSON.stringify(e).includes(ADMIN_SCRIPT));
-          ctx.observe("tester refusal in the logs", { check: "S6", expected: "a 403 from the admin app", observed: `${refused.length} event(s)`, pass: ev.ok ? refused.length >= 1 : null });
+          ctx.observe("the primary account login's refusal in the logs", { check: "S6", expected: "a 403 from the admin app", observed: `${refused.length} event(s)`, pass: ev.ok ? refused.length >= 1 : null });
         },
       },
     ],
@@ -452,7 +453,7 @@ export const STEPS = [
       {
         prompt: (ctx) => ({
           link: ctx.facts.adminUrl,
-          text: [`${AS_OWNER} open "Account setup", press "Continue at Cloudflare", keep all five toggles ticked and approve (sign in again first if it asks).`, "You should see one line per shared resource and, last, \"Recorded account setup version 2.\""],
+          who: "test", text: [`Open "Account setup", press "Continue at Cloudflare", keep all five toggles ticked and approve (sign in again first if it asks).`, "You should see one line per shared resource and, last, \"Recorded account setup version 2.\""],
           reply: "ok, or the page's text if it says \"That step failed\"",
         }),
         async verify(ctx, answer) {
@@ -497,7 +498,7 @@ export const STEPS = [
       {
         prompt: (ctx) => ({
           link: ctx.facts.adminUrl,
-          text: [`${AS_OWNER} open "Everyday token", press "Continue at Cloudflare", UNTICK "Secrets Store" (keep the others ticked) and approve.`, "You should see \"Nothing was done: …\" naming secrets-store.read."],
+          who: "test", text: [`Open "Everyday token", press "Continue at Cloudflare", UNTICK "Secrets Store" (keep the others ticked) and approve.`, "You should see \"Nothing was done: …\" naming secrets-store.read."],
           reply: "ok, or the page's text if it differs",
         }),
         async verify(ctx, answer) {
@@ -519,7 +520,7 @@ export const STEPS = [
       {
         prompt: (ctx) => ({
           link: ctx.facts.adminUrl,
-          text: [`${AS_OWNER} open "Everyday token", press "Continue at Cloudflare", keep every toggle ticked and approve.`, "You should see \"The everyday token prototype-framework was created with exactly these permissions\" and its value; leave the page open, but do not copy the value: the runner replaces it."],
+          who: "test", text: [`Open "Everyday token", press "Continue at Cloudflare", keep every toggle ticked and approve.`, "You should see \"The everyday token prototype-framework was created with exactly these permissions\" and its value; leave the page open, but do not copy the value: the runner replaces it."],
           reply: "ok",
         }),
         async verify(ctx, answer) {
@@ -540,7 +541,8 @@ export const STEPS = [
         saveAs: SECRET.everyday,
         prompt: (ctx) => ({
           link: ctx.facts.adminUrl,
-          text: [`The runner could not replace the everyday token's value through the API. ${AS_OWNER} copy the value the Everyday token page still shows.`],
+          who: "test",
+          text: ["The runner could not replace the everyday token's value through the API: copy the value the Everyday token page still shows."],
           reply: "paste the value into this chat",
         }),
         async verify(ctx) {
@@ -561,7 +563,7 @@ export const STEPS = [
       {
         prompt: (ctx) => ({
           link: ctx.facts.adminUrl,
-          text: [`${AS_OWNER} open "Status", press "Continue at Cloudflare", keep the toggles ticked and approve.`, "You should see four sections, Workers, Account setup (version 2), Registered apps (none yet) and Recent sign-ins (none yet), and no warning."],
+          who: "test", text: [`Open "Status", press "Continue at Cloudflare", keep the toggles ticked and approve.`, "You should see four sections, Workers, Account setup (version 2), Registered apps (none yet) and Recent sign-ins (none yet), and no warning."],
           reply: "ok",
         }),
         async verify(ctx, answer) {
@@ -580,7 +582,7 @@ export const STEPS = [
     expected: ["server logs, the auth app's records and a snapshot collected", "the checkpoint stored in the records bucket"],
     async run(ctx) {
       await ctx.collectServer("checkpoint");
-      ctx.observe("facts for part 2", { expected: "admin app URL, subdomain, everyday token ID, owner, tester", observed: { adminUrl: ctx.facts.adminUrl, subdomain: ctx.facts.subdomain, everydayTokenId: ctx.facts.everydayTokenId, owner: ctx.facts.owner?.email, tester: ctx.facts.tester?.email }, pass: !!(ctx.facts.adminUrl && ctx.facts.everydayTokenId && ctx.facts.owner && ctx.facts.tester) });
+      ctx.observe("facts for part 2", { expected: "admin app URL, subdomain, everyday token ID, both logins", observed: { adminUrl: ctx.facts.adminUrl, subdomain: ctx.facts.subdomain, everydayTokenId: ctx.facts.everydayTokenId, owner: ctx.facts.owner?.email, tester: ctx.facts.tester?.email }, pass: !!(ctx.facts.adminUrl && ctx.facts.everydayTokenId && ctx.facts.owner && ctx.facts.tester) });
     },
   },
 
@@ -739,17 +741,17 @@ export const STEPS = [
     id: "S13",
     session: 2,
     check: "F-8",
-    title: "Real sign-ins: the owner is admin, the tester user; a file upload (F-8)",
-    expected: ["consent names client prototype-framework-sign-in, fixed rows only", "owner: \"Logged in as u_… (admin)\"", "F-8: the owner uploads a small image and opens it", "tester: (user)", "the auth app records the owner as admin and the tester as user"],
+    title: "Real sign-ins: the test account login is admin, the primary account login user; a file upload (F-8)",
+    expected: ["consent names client prototype-framework-sign-in, fixed rows only", "test account login: \"Logged in as u_… (admin)\"", "F-8: the test account login uploads a small image and opens it", "primary account login: (user)", "the auth app records the test account login as admin and the primary account login as user"],
     owner: [
       {
         prompt: (ctx) => ({
           link: ctx.facts.appUrl,
-          text: [`${AS_OWNER} press "Log in" and approve (the consent page names prototype-framework-sign-in); then on the Files page upload a small PNG or JPEG and open it from the list.`, "You should see \"Logged in as u_… (admin)\", then \"Uploaded.\" and the image."],
+          who: "test", text: [`Press "Log in" and approve (the consent page names prototype-framework-sign-in); then on the Files page upload a small PNG or JPEG and open it from the list.`, "You should see \"Logged in as u_… (admin)\", then \"Uploaded.\" and the image."],
           reply: "ok",
         }),
         async verify(ctx, answer) {
-          replyCheck(ctx, answer, "owner admin, upload works");
+          replyCheck(ctx, answer, "the test account login admin, upload works");
           const s = await ctx.freshSnapshot();
           const files = find.bucket(s, `${workerOf(ctx, PROD_STAGE)}-files`);
           ctx.observe("uploaded object", { check: "F-8", expected: "at least one object in the stage's files bucket", observed: Array.isArray(files?.objects) ? files.objects.length : files ? files.objects : "bucket absent", pass: Array.isArray(files?.objects) && files.objects.length >= 1 });
@@ -758,17 +760,17 @@ export const STEPS = [
       {
         prompt: (ctx) => ({
           link: ctx.facts.appUrl,
-          text: [`${AS_TESTER} press "Log in" and approve, and stay signed in for the next steps.`, "You should see \"Logged in as u_… (user)\"."],
+          who: "primary", text: [`Press "Log in" and approve, and stay signed in for the next steps.`, "You should see \"Logged in as u_… (user)\"."],
           reply: "ok",
         }),
         async verify(ctx, answer) {
-          replyCheck(ctx, answer, "tester user");
+          replyCheck(ctx, answer, "the primary account login user");
           const rows = await ctx.authDb();
           const users = rows.users.rows;
           const o = users.find((u) => u.email === ctx.facts.owner?.email);
           const t = users.find((u) => u.email === ctx.facts.tester?.email);
-          ctx.observe("owner recorded", { check: "S13", expected: { email: ctx.facts.owner?.email, sub: ctx.facts.owner?.userId, role: "admin" }, observed: o ?? "absent", pass: o?.role === "admin" });
-          ctx.observe("tester recorded", { check: "S13", expected: { email: ctx.facts.tester?.email, sub: ctx.facts.tester?.userId, role: "user" }, observed: t ?? "absent", pass: t?.role === "user" });
+          ctx.observe("test account login recorded", { check: "S13", expected: { email: ctx.facts.owner?.email, sub: ctx.facts.owner?.userId, role: "admin" }, observed: o ?? "absent", pass: o?.role === "admin" });
+          ctx.observe("primary account login recorded", { check: "S13", expected: { email: ctx.facts.tester?.email, sub: ctx.facts.tester?.userId, role: "user" }, observed: t ?? "absent", pass: t?.role === "user" });
           const ev = await ctx.logsSince(["/callback"], { scripts: [AUTH_SCRIPT], wait: true });
           ctx.observe("auth app callbacks in the logs", { check: "S13", expected: "invocations of /callback", observed: `${ev.matched.length} event(s)`, pass: ev.ok ? ev.matched.length >= 1 : null });
         },
@@ -780,19 +782,19 @@ export const STEPS = [
     session: 2,
     check: "A-1",
     title: "A role change takes effect at the next sign-in (DEC-0703, DEC-0791); the runner changes the role",
-    expected: ["the runner changes the tester's role to exactly \"Administrator\" through the API (PUT …/members/<id>, DEC-0793) and waits the role-refresh interval (PAR-425, 300 s) plus a minute", "the tester's existing session stays user", "after signing out and in, the tester is admin (A-1 part b)", "the runner sets the original role back; a new sign-in gives user"],
+    expected: ["the runner changes the primary account login's role to exactly \"Administrator\" through the API (PUT …/members/<id>, DEC-0793) and waits the role-refresh interval (PAR-425, 300 s) plus a minute", "the primary account login's existing session stays user", "after signing out and in, the primary account login is admin (A-1 part b)", "the runner sets the original role back; a new sign-in gives user"],
     async run(ctx) {
       if (ctx.facts.roleChangedAt) return;
       const roles = await ctx.roles();
       const admin = roles.items.find((r) => r.name === "Administrator");
       if (!admin) throw new Error(`the test Cloudflare account offers no role "Administrator" (${roles.ok ? `${roles.items.length} roles listed` : roles.error})`);
       const r = await ctx.setMemberRoles(ctx.facts.tester?.memberId, [admin.id]);
-      ctx.observe("role change", { check: "A-1", expected: "the tester's role set to Administrator", observed: r.ok ? { status: r.status, roles: r.roles } : r.error, pass: r.ok });
+      ctx.observe("role change", { check: "A-1", expected: "the primary account login's role set to Administrator", observed: r.ok ? { status: r.status, roles: r.roles } : r.error, pass: r.ok });
       const m = await eventually(ctx, (s) => {
         const x = find.member(s, ctx.facts.tester?.email);
         return x && same(x.roles, ["Administrator"]) ? x : undefined;
       });
-      ctx.observe("tester's role", { check: "A-1", expected: ["Administrator"], observed: m?.roles ?? "unchanged", pass: m !== undefined });
+      ctx.observe("primary account login's role", { check: "A-1", expected: ["Administrator"], observed: m?.roles ?? "unchanged", pass: m !== undefined });
       ctx.setFacts({ roleChangedAt: new Date().toISOString() });
     },
     owner: [
@@ -803,7 +805,7 @@ export const STEPS = [
         },
         prompt: (ctx) => ({
           link: `${ctx.facts.appUrl}/api/auth/me`,
-          text: [`${AS_TESTER} reload this page (the tester is still signed in to the app).`, `The runner changed the tester's role to Administrator more than ${Math.round(ROLE_REFRESH_SECONDS / 60) + 1} minutes ago; you should still see "level":"user", because a role change shows only at the next sign-in.`],
+          who: "primary", text: [`Reload this page (the primary account login is still signed in to the app).`, `The runner changed the primary account login's role to Administrator more than ${Math.round(ROLE_REFRESH_SECONDS / 60) + 1} minutes ago; you should still see "level":"user", because a role change shows only at the next sign-in.`],
           reply: "the level shown: user or admin",
         }),
         async verify(ctx, answer) {
@@ -817,7 +819,7 @@ export const STEPS = [
       {
         prompt: (ctx) => ({
           link: ctx.facts.appUrl,
-          text: [`${AS_TESTER} press "Log out", then "Log in" and approve.`, "You should see \"Logged in as u_… (admin)\"."],
+          who: "primary", text: [`Press "Log out", then "Log in" and approve.`, "You should see \"Logged in as u_… (admin)\"."],
           reply: "the level shown: user or admin",
         }),
         async verify(ctx, answer) {
@@ -836,14 +838,14 @@ export const STEPS = [
       {
         prompt: (ctx) => ({
           link: ctx.facts.appUrl,
-          text: [`${AS_TESTER} press "Log out", then "Log in" again.`, `The runner has set the tester's role back to ${(ctx.facts.tester?.roles ?? []).join(", ") || "its first role"}; you should see "Logged in as u_… (user)".`],
+          who: "primary", text: [`Press "Log out", then "Log in" again.`, `The runner has set the primary account login's role back to ${(ctx.facts.tester?.roles ?? []).join(", ") || "its first role"}; you should see "Logged in as u_… (user)".`],
           reply: "the level shown: user or admin",
         }),
         async verify(ctx, answer) {
           const level = levelOf(answer);
           ctx.observe("after the role is set back", { check: "S14", expected: "user", observed: level, pass: level === "user" });
           const m = find.member(await ctx.freshSnapshot(), ctx.facts.tester?.email);
-          ctx.observe("tester's role restored", { check: "S14", expected: ctx.facts.tester?.roles, observed: m?.roles, pass: m !== undefined && same(m.roles, ctx.facts.tester?.roles ?? []) });
+          ctx.observe("primary account login's role restored", { check: "S14", expected: ctx.facts.tester?.roles, observed: m?.roles, pass: m !== undefined && same(m.roles, ctx.facts.tester?.roles ?? []) });
           const t = (await ctx.authDb()).users.rows.find((u) => u.email === ctx.facts.tester?.email);
           ctx.observe("auth app's recorded role", { check: "S14", expected: "user", observed: t?.role ?? "absent", pass: t?.role === "user" });
         },
@@ -854,16 +856,16 @@ export const STEPS = [
     id: "S15",
     session: 2,
     title: "Sign-out",
-    expected: ["owner: \"Log out\" → \"You are not logged in.\", /api/auth/me level anonymous, no __Host-session cookie", "admin app: \"Sign out\" → the sign-in page", "the Cloudflare dashboard session stays (no end_session, DEC-0660)"],
+    expected: ["test account login: \"Log out\" → \"You are not logged in.\", /api/auth/me level anonymous, no __Host-session cookie", "admin app: \"Sign out\" → the sign-in page", "the Cloudflare dashboard session stays (no end_session, DEC-0660)"],
     owner: [
       {
-        prompt: (ctx) => ({ link: ctx.facts.appUrl, text: [`${AS_OWNER} press "Log out".`, "You should see \"You are not logged in.\"; the Cloudflare dashboard stays signed in."], reply: "ok" }),
+        prompt: (ctx) => ({ link: ctx.facts.appUrl, who: "test", text: [`Press "Log out".`, "You should see \"You are not logged in.\"; the Cloudflare dashboard stays signed in."], reply: "ok" }),
         verify(ctx, answer) {
           replyCheck(ctx, answer, "signed out of the app");
         },
       },
       {
-        prompt: (ctx) => ({ link: ctx.facts.adminUrl, text: [`${AS_OWNER} press "Sign out" (sign in first if the admin app asks, then sign out).`, "You should see the admin app's sign-in page."], reply: "ok" }),
+        prompt: (ctx) => ({ link: ctx.facts.adminUrl, who: "test", text: [`Press "Sign out" (sign in first if the admin app asks, then sign out).`, "You should see the admin app's sign-in page."], reply: "ok" }),
         verify(ctx, answer) {
           replyCheck(ctx, answer, "signed out of the admin app");
         },
@@ -875,18 +877,18 @@ export const STEPS = [
     session: 2,
     check: "E-4",
     title: "Page 3 again: registered app and recent sign-ins (E-4)",
-    expected: ["Registered apps lists <app>-prodcheck → <APP>/api/auth/callback", "Recent sign-ins lists the owner (admin) and the tester (user)", "both D1 sections show rows, not a warning"],
+    expected: ["Registered apps lists <app>-prodcheck → <APP>/api/auth/callback", "Recent sign-ins lists the test account login (admin) and the primary account login (user)", "both D1 sections show rows, not a warning"],
     owner: [
       {
         prompt: (ctx) => ({
           link: ctx.facts.adminUrl,
-          text: [`${AS_OWNER} sign in again, open "Status", press "Continue at Cloudflare" and approve.`, `You should see ${ctx.state.appName}-${PROD_STAGE} under Registered apps, and you (admin) and the tester (user) under Recent sign-ins, with no warning.`],
+          who: "test", text: [`Sign in again, open "Status", press "Continue at Cloudflare" and approve.`, `You should see ${ctx.state.appName}-${PROD_STAGE} under Registered apps, and the test account login (admin) and the primary account login (user) under Recent sign-ins, with no warning.`],
           reply: "ok",
         }),
         async verify(ctx, answer) {
           replyCheck(ctx, answer, "both sections show rows");
           const rows = await ctx.authDb();
-          ctx.observe("auth app database", { check: "E-4", expected: "the registry row and both people", observed: { registry: rows.registry.rows, users: rows.users.rows.map((u) => ({ email: u.email, role: u.role })) }, pass: rows.registry.rows.length >= 1 && rows.users.rows.length >= 2 });
+          ctx.observe("auth app database", { check: "E-4", expected: "the registry row and both logins", observed: { registry: rows.registry.rows, users: rows.users.rows.map((u) => ({ email: u.email, role: u.role })) }, pass: rows.registry.rows.length >= 1 && rows.users.rows.length >= 2 });
         },
       },
     ],
@@ -910,7 +912,7 @@ export const STEPS = [
       {
         prompt: (ctx) => ({
           link: ctx.facts.adminUrl,
-          text: [`${AS_OWNER} open "Everyday token", press "Continue at Cloudflare", keep every toggle ticked and approve.`, "The page says either that the existing everyday token was updated in place, or that a new one was created; if a new one was created, do NOT press \"I have saved the new token: delete the old one\" (it would delete the token the run uses)."],
+          who: "test", text: [`Open "Everyday token", press "Continue at Cloudflare", keep every toggle ticked and approve.`, "The page says either that the existing everyday token was updated in place, or that a new one was created; if a new one was created, do NOT press \"I have saved the new token: delete the old one\" (it would delete the token the run uses)."],
           reply: "updated, or new",
         }),
         async verify(ctx, answer) {
@@ -953,7 +955,7 @@ export const STEPS = [
       {
         prompt: (ctx) => ({
           link: ctx.facts.adminUrl,
-          text: [`${AS_OWNER} open "Clean up v0.1.x email", press "Continue at Cloudflare" and approve.`, "You should see \"The Worker prototype-mailsink was already gone.\" and \"Deleted the R2 bucket prototype-mailsink and its 1 stored test messages.\""],
+          who: "test", text: [`Open "Clean up v0.1.x email", press "Continue at Cloudflare" and approve.`, "You should see \"The Worker prototype-mailsink was already gone.\" and \"Deleted the R2 bucket prototype-mailsink and its 1 stored test messages.\""],
           reply: "ok",
         }),
         async verify(ctx, answer) {
