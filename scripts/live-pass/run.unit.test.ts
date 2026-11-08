@@ -14,8 +14,8 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { BOOT_GROUPS, harness, PRIMARY_TOKEN, TESTER } from "./test-support/harness.mjs";
-import { BOOTSTRAP_LINK, STEPS } from "./lib/steps.mjs";
+import { ACCOUNT, BOOT_GROUPS, harness, PRIMARY_TOKEN, TESTER } from "./test-support/harness.mjs";
+import { STEPS, starterTokenLink } from "./lib/steps.mjs";
 
 const RUNBOOK = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "ai", "implementation", "live-pass-v0.2.0.md");
 /** The runbook's numbered sections: { "3": "After the run: analysis and cleanup", … }. */
@@ -99,9 +99,8 @@ describe("an offline live pass in one session", () => {
     r = ask(h.run(c, "answer", "ok"), "S16");
     r = ask(h.run(c, "answer", "ok"), "U1");
     h.owner.updateStandIn(everydayId);
-    r = ask(h.run(c, "answer", "updated"), "E-10");
-    h.owner.cleanUpMail();
-    r = h.run(c, "answer", "ok");
+    // E-10 (Clean up v0.1.x email) is not in this pass: the owner has no v0.1.x installs (DEC-0793).
+    r = h.run(c, "answer", "updated");
     expect(r.status, h.transcript.join("\n")).toBe(0);
     expect(r.out).toContain("THE LIVE PASS IS FINISHED");
     expect(r.out).toMatch(/R2 bucket live-pass-records, prefix runs\/lp-[0-9-]+\//);
@@ -109,7 +108,7 @@ describe("an offline live pass in one session", () => {
     expect(r.out).toContain(`rm -rf ${c.secrets}`);
 
     // ---- Every owner prompt: the login whose browser profile it is for, one link, one to three sentences, the exact reply ----
-    expect(prompts.length).toBe(19);
+    expect(prompts.length).toBe(18);
     expect(prompts.some((p) => /OWNER STEP (TOK-S1|S1) /.test(p))).toBe(false);
     const forPrimary = prompts.filter((p) => p.includes("===\nIn the primary account login's browser profile:")).map((p) => p.match(/OWNER STEP (\S+) \(part (\d+)/)?.slice(1).join("."));
     expect(forPrimary).toEqual(["P3.1", "S6.2", "S13.2", "S14.1", "S14.2", "S14.3"]);
@@ -121,7 +120,7 @@ describe("an offline live pass in one session", () => {
       if (/OWNER STEP P3 /.test(p)) expect(body[1], p).toContain(TESTER);
       else expect(body[1], p).toMatch(/^Open: https:\/\/\S+$/);
       // A starter token is made from the framework's own pre-filled link.
-      if (/OWNER STEP TOK-/.test(p)) expect(body[1], p).toBe(`Open: ${BOOTSTRAP_LINK}`);
+      if (/OWNER STEP TOK-/.test(p)) expect(body[1], p).toBe(`Open: ${starterTokenLink(ACCOUNT)}`);
       expect(body.at(-1), p).toMatch(/^Reply: \S/);
       expect(body.length - 3, p).toBeGreaterThanOrEqual(1);
       expect(body.length - 3, p).toBeLessThanOrEqual(3);
@@ -130,6 +129,7 @@ describe("an offline live pass in one session", () => {
       expect(words, p).not.toMatch(/\btester\b|\bthe owner\b|\byour email\b|\byou \(/i);
     }
     // A pasted value goes into a file, never into a command.
+    for (const p of prompts.filter((x) => /OWNER STEP TOK-/.test(x))) expect(p).toContain(`Open: https://dash.cloudflare.com/${ACCOUNT}/api-tokens?permissionGroupKeys=`);
     for (const p of prompts.filter((x) => /OWNER STEP TOK-/.test(x))) expect(p).toMatch(/save that value .* as \S+\/LIVE_PASS_STARTER(_RERUN)?, run chmod 600 .* answer saved/s);
 
     // ---- What the analyst gets ----

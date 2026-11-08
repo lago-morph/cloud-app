@@ -21,7 +21,7 @@ import { chmodSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { ACCOUNT, BOOT_GROUPS, harness, PRIMARY_ACCOUNT, PRIMARY_TOKEN, TESTER } from "./test-support/harness.mjs";
-import { BOOTSTRAP_LINK } from "./lib/steps.mjs";
+import { starterTokenLink } from "./lib/steps.mjs";
 
 type Result = { status: number | null; out: string };
 type H = Awaited<ReturnType<typeof harness>>;
@@ -101,9 +101,7 @@ describe("an offline live pass that loses its container in both parts", () => {
     h.prompt(h.run(c, "answer", "ok"), "S16");
     h.prompt(h.run(c, "answer", "ok"), "U1");
     h.owner.updateStandIn(everydayId);
-    h.prompt(h.run(c, "answer", "updated"), "E-10");
-    h.owner.cleanUpMail();
-    const r = h.run(c, "answer", "ok");
+    const r = h.run(c, "answer", "updated");
     if (r.status !== 0 || !r.out.includes("THE LIVE PASS IS FINISHED")) throw new Error(`the run did not finish:\n${h.transcript.join("\n")}`);
     rolledAfter = (h.world().rolled ?? []).length;
     if (existsSync(join(c.secrets, "CLOUDFLARE_API_TOKEN"))) values.rolled3 = readFileSync(join(c.secrets, "CLOUDFLARE_API_TOKEN"), "utf8").trim();
@@ -289,7 +287,7 @@ describe("a starter token pasted in a container that is lost during its bootstra
 
   it("asks for the S4 starter token again: the framework's link and the file to save it as", () => {
     expect([1, 10], afterS4Loss.out).toContain(afterS4Loss.status);
-    expect(afterS4Loss.out).toContain(BOOTSTRAP_LINK);
+    expect(afterS4Loss.out).toContain(starterTokenLink(ACCOUNT));
     expect(afterS4Loss.out).toMatch(/\/LIVE_PASS_STARTER(?!_)\b/);
   });
 

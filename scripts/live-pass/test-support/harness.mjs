@@ -166,11 +166,6 @@ export async function harness({ roleWaitSeconds = 1 } = {}) {
         t.policies[0].permission_groups = EVERYDAY_GROUPS.map((n) => ({ id: fw.idOf(n), name: n }));
       });
     },
-    cleanUpMail() {
-      change((w) => {
-        delete w.buckets["prototype-mailsink"];
-      });
-    },
   };
 
   return { fw, dir, worldFile, tokens, container, paste, firstMessage, env, run, runOnce, world, change, records, prompt, dashboardToken, owner, transcript, printed, invocations: () => invocations };
