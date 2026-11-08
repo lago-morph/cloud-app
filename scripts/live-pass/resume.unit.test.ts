@@ -50,7 +50,7 @@ describe("an offline live pass that loses its container in both parts", () => {
     // ---- Part 1, container 1 ----
     let c = h.container();
     h.firstMessage(c);
-    h.prompt(h.run(c, "start", "--tester", TESTER), "P3");
+    h.prompt(h.run(c, "start", "--primary-login", TESTER), "P3");
     h.owner.acceptInvitation();
     h.prompt(h.run(c, "answer", "ok"), "TOK-S4");
     h.paste(c, "LIVE_PASS_STARTER", (values.boot = h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, 23 * 3600)));
@@ -255,7 +255,7 @@ describe("a starter token pasted in a container that is lost during its bootstra
     h = await harness();
     let c = h.container();
     h.firstMessage(c);
-    h.prompt(h.run(c, "start", "--tester", TESTER), "P3");
+    h.prompt(h.run(c, "start", "--primary-login", TESTER), "P3");
     h.owner.acceptInvitation();
     h.prompt(h.run(c, "answer", "ok"), "TOK-S4");
     h.paste(c, "LIVE_PASS_STARTER", h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, 23 * 3600));
@@ -309,7 +309,7 @@ describe("the durable state in the records bucket", () => {
     const h = await harness();
     const c = h.container();
     h.firstMessage(c);
-    let r = h.run(c, "start", "--tester", TESTER);
+    let r = h.run(c, "start", "--primary-login", TESTER);
     expect(r.status, h.transcript.join("\n")).toBe(10);
     r = h.run(c, "skip", "S2", `the owner pasted ${h.tokens.owner} by mistake`);
     expect(r.status, h.transcript.join("\n")).toBe(10);
@@ -320,13 +320,13 @@ describe("the durable state in the records bucket", () => {
     expect(h.printed.join("\n").includes(h.tokens.owner), "the runner printed the owner's token").toBe(false);
   }, 120_000);
 
-  it("refuses to start without the tester's email", async () => {
+  it("refuses to start without the primary account login's email", async () => {
     const h = await harness();
     const c = h.container();
     h.firstMessage(c);
     const r = h.runOnce(c, "start");
     expect(r.status).toBe(2);
-    expect(r.out).toContain("--tester <email>");
+    expect(r.out).toContain("--primary-login <email>");
     expect(h.records()).toEqual({});
   }, 60_000);
 });

@@ -50,7 +50,7 @@ describe("an offline live pass in one session", () => {
     };
 
     // ---- Part 1 ----
-    let r = ask(h.run(c, "start", "--tester", TESTER), "P3");
+    let r = ask(h.run(c, "start", "--primary-login", TESTER), "P3");
     expect(h.world().invitations).toEqual([{ email: TESTER, roles: ["r3"], status: "pending" }]);
     h.owner.acceptInvitation();
     // S1 (a starter token with no expiry) is dropped from this pass (owner decision on #171): the owner is never asked for one.
@@ -108,21 +108,26 @@ describe("an offline live pass in one session", () => {
     expect(r.out).toContain("no new token is needed");
     expect(r.out).toContain(`rm -rf ${c.secrets}`);
 
-    // ---- Every owner prompt: one link, one to three sentences, the exact reply ----
+    // ---- Every owner prompt: the login whose browser profile it is for, one link, one to three sentences, the exact reply ----
     expect(prompts.length).toBe(19);
     expect(prompts.some((p) => /OWNER STEP (TOK-S1|S1) /.test(p))).toBe(false);
+    const forPrimary = prompts.filter((p) => p.includes("===\nIn the primary account login's browser profile:")).map((p) => p.match(/OWNER STEP (\S+) \(part (\d+)/)?.slice(1).join("."));
+    expect(forPrimary).toEqual(["P3.1", "S6.2", "S13.2", "S14.1", "S14.2", "S14.3"]);
     for (const p of prompts) {
       const body = p.slice(p.indexOf("===\n") + 4, p.search(/\n\nWhen the owner replies/)).split("\n");
-      expect(body[0], p).toMatch(/^Open: \S/);
-      // One link: a URL, except the tester's invitation, which is the link in the email Cloudflare sent.
-      if (/OWNER STEP P3 /.test(p)) expect(body[0], p).toContain(TESTER);
-      else expect(body[0], p).toMatch(/^Open: https:\/\/\S+$/);
+      expect(body[0], p).toMatch(/^In the (test|primary) account login's browser profile:$/);
+      expect(body[1], p).toMatch(/^Open: \S/);
+      // One link: a URL, except P3's, which is the invitation link in the email Cloudflare sent.
+      if (/OWNER STEP P3 /.test(p)) expect(body[1], p).toContain(TESTER);
+      else expect(body[1], p).toMatch(/^Open: https:\/\/\S+$/);
       // A starter token is made from the framework's own pre-filled link.
-      if (/OWNER STEP TOK-/.test(p)) expect(body[0], p).toBe(`Open: ${BOOTSTRAP_LINK}`);
+      if (/OWNER STEP TOK-/.test(p)) expect(body[1], p).toBe(`Open: ${BOOTSTRAP_LINK}`);
       expect(body.at(-1), p).toMatch(/^Reply: \S/);
-      expect(body.length - 2, p).toBeGreaterThanOrEqual(1);
-      expect(body.length - 2, p).toBeLessThanOrEqual(3);
-      expect(p, p).toMatch(/the (test|primary) Cloudflare account's login/);
+      expect(body.length - 3, p).toBeGreaterThanOrEqual(1);
+      expect(body.length - 3, p).toBeLessThanOrEqual(3);
+      // The owner's terminology: a login is "the test account login" or "the primary account login", never "the tester", "the owner" or "you".
+      const words = body.join("\n").replace(/\S+@\S+/g, "<email>");
+      expect(words, p).not.toMatch(/\btester\b|\bthe owner\b|\byour email\b|\byou \(/i);
     }
     // A pasted value goes into a file, never into a command.
     for (const p of prompts.filter((x) => /OWNER STEP TOK-/.test(x))) expect(p).toMatch(/save that value .* as \S+\/LIVE_PASS_STARTER(_RERUN)?, run chmod 600 .* answer saved/s);
@@ -198,7 +203,7 @@ describe("an offline live pass in one session", () => {
     const h = await harness();
     const c = h.container();
     h.firstMessage(c);
-    h.prompt(h.run(c, "start", "--tester", TESTER), "P3");
+    h.prompt(h.run(c, "start", "--primary-login", TESTER), "P3");
     h.owner.acceptInvitation();
     h.prompt(h.run(c, "answer", "ok"), "TOK-S4");
     h.paste(c, "LIVE_PASS_STARTER", h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, 23 * 3600));
@@ -234,7 +239,7 @@ describe("an offline live pass in one session", () => {
     const h = await harness();
     const c = h.container();
     h.firstMessage(c);
-    h.prompt(h.run(c, "start", "--tester", TESTER), "P3");
+    h.prompt(h.run(c, "start", "--primary-login", TESTER), "P3");
     h.owner.acceptInvitation();
     h.prompt(h.run(c, "answer", "ok"), "TOK-S4");
     const boot = h.dashboardToken("prototype-framework-bootstrap", BOOT_GROUPS, 23 * 3600);

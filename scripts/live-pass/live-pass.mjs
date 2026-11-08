@@ -13,9 +13,10 @@
 // passed on: in a cloud sandbox those can belong to the primary Cloudflare account.
 //
 // Usage: node scripts/live-pass/live-pass.mjs <command> [options]
-//   start --tester <email> [--version <v>] [--app <name>] [--new]
+//   start --primary-login <email> [--version <v>] [--app <name>] [--new]
 //                                                  create the run, then go on as `next`; <email> is the
-//                                                  primary Cloudflare account's login, invited as the tester
+//                                                  primary account login's, which the runner invites into
+//                                                  the test Cloudflare account
 //   next                                           run steps until the owner is needed or the time budget is used
 //   answer "<owner's reply>"                       record the owner's reply to the waiting prompt and go on
 //                                                  (`answer saved` once a pasted value is saved as the prompt says)
@@ -60,7 +61,7 @@ function parse(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--new") opts.new = true;
-    else if (["--version", "--app", "--bucket", "--workdir", "--budget", "--run", "--to", "--tester", "--secrets"].includes(a)) opts[a.slice(2)] = argv[++i];
+    else if (["--version", "--app", "--bucket", "--workdir", "--budget", "--run", "--to", "--primary-login", "--secrets"].includes(a)) opts[a.slice(2)] = argv[++i];
     else if (a.startsWith("--")) throw new Error(`unknown option ${a}`);
     else opts._.push(a);
   }
@@ -149,7 +150,8 @@ const runnerSha = (() => {
 const holder = { state: null };
 
 if (command === "start") {
-  if (!opts.tester || !/^[^@\s]+@[^@\s]+$/.test(opts.tester)) fail(2, "start needs --tester <email>: the email of the primary Cloudflare account's login, which the runner invites into the test Cloudflare account as the tester");
+  const primaryLogin = opts["primary-login"];
+  if (!primaryLogin || !/^[^@\s]+@[^@\s]+$/.test(primaryLogin)) fail(2, "start needs --primary-login <email>: the email of the primary account login, which the runner invites into the test Cloudflare account as the tester");
   let made;
   try {
     made = await ensureBucket(api, bucket);
@@ -167,7 +169,7 @@ if (command === "start") {
   holder.state = withFacts(newRun({ runId, accountId, version: opts.version ?? DEFAULT_VERSION, appName: opts.app ?? "livepass", bucket, runnerSha, now }), {
     ownerTokenId: owner.id,
     ownerTokenExpiresOn: owner.expiresOn,
-    testerEmail: opts.tester,
+    testerEmail: primaryLogin, // the primary account login's email (facts keep the key `tester`)
     recordsBucketWas: made,
   });
   await saveState(store, scrubber.value(holder.state));

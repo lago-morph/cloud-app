@@ -5,7 +5,7 @@
 // The owner makes this one token in the test Cloudflare account's dashboard. It holds every group the
 // runner uses directly: snapshots and cleanup of every resource kind the run makes, the records bucket,
 // Workers Logs, the runner's own probe tokens, the roll of the everyday token's value, and the
-// tester's invitation and role change (Account Settings Write). It cannot stand in for a starter
+// primary account login's invitation and role change (Account Settings Write). It cannot stand in for a starter
 // token: Cloudflare refuses to let an API-made token hold "Account API Tokens Write" (code 1001,
 // "sub-token is not allowed to have permissions to manage other tokens", seen again on 2026-11-08),
 // so the starter tokens are made in the dashboard too.
