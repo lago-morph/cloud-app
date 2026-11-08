@@ -1,6 +1,6 @@
 # Root cause: the `./testing` suite's exact-PAR-425 check runs on the real clock, so it fails whenever a real second boundary falls between sign-in and the check
 
-Status: awaiting review
+Status: accepted
 
 ## Symptom
 
@@ -62,4 +62,34 @@ Test-only, reason code `test-was-wrong` (citing this record), in `packages/frame
 
 ## Review
 
-Status: awaiting review
+Reviewer: independent root-cause reviewer subagent (`failure-diagnosis.md`, step 2). Date: 2026-11-08. I did not write this diagnosis, the suite or the AUTH code. Base: `v0.2.0/rc01-role-refresh-fix` at 24774dc (`de75082` plus this record). Owner's rule: I ran only `testing.postgres.test.ts`, in the foreground. Every experiment edit was reverted, and nothing but this section and the status line is changed.
+
+**Verdict: accepted.** Each link is supported. I reproduced the failure on demand, and the control, on the failing file. The dialect and load alternatives are ruled out. The fix freezes the clock the test already assumes and weakens no assertion.
+
+### What I checked
+1. **Symptom, with `get_job_logs` on job 128575950155.** The checkout is `de75082`. The log has `testing.postgres.test.ts (7 tests | 1 failed) 19287ms`; the failing test is "with the fake auth app … (PGlite) 1212ms", failing with `AssertionError: inside the interval the session's level stands: expected 'admin' to be 'user'` at `testing.suite.ts:199:89`. The local-D1 variant passed in 942 ms, and the file `create.offline.test.ts` (53 836 ms) finished in the same window. Confirmed.
+2. **Code, links 1 and 2.**
+   - `test-app.ts`: `clock.now = () => Date.now() + clockOffset`.
+   - `runtime.ts:108`: `checkedAt: Math.floor(now() / 1000)`. `runtime.ts:185`: `nowSeconds = Math.floor(now() / 1000)`.
+   - `role-refresh.ts`: `refreshDue` is `nowSeconds - checkedAt > 300`.
+   - `testing.suite.ts` has no `useFakeTimers`.
+
+   So at an offset of exactly 300 000 ms, the result depends only on whether a real second boundary falls between sign-in and line 199. Confirmed. PAR-425 in `parameters.md` ("up to and including 300 s; at 301 s it is read again") matches the code.
+3. **Forced-boundary experiment, link 3 (run alone, `-t "fake auth app"`).** I added `await new Promise((r) => setTimeout(r, 1000 - (Date.now() % 1000) + 20))` after `const redeems = …`, before `grantRole`. Result: **failed** with the identical message, `expected 'admin' to be 'user'`, at the shifted line 200. So it reproduces alone, on PGlite, with no load.
+4. **Control.** I kept the forced wait and added `vi.useFakeTimers({ toFake: ["Date"] })` at the test's start and `vi.useRealTimers()` at the top of `afterEach`. The whole file passed: **7 of 7**. So the other six tests are unaffected by the freeze and its reset.
+5. **Mutation, to show the fix weakens nothing.** I kept the frozen set-up from 4 and changed `refreshDue` to `>=`. The test **failed** at the exact-300 s check (`expected 'admin' to be 'user'`). With `Date` frozen, `floor((T + 300 000)/1000) − floor(T/1000)` is exactly 300 for every T, so line 199 still detects an off-by-one boundary, and now does so deterministically. I reverted both edits.
+
+### Links and alternatives
+- **Links 1–3 and 5:** supported by 2–4 above. **Link 4 (probability, PGlite more often):** consistent with the record's timings and the CI log. It is a matter of exposure, not the cause, and the record says so.
+- **Dialect:** ruled out. The path reads only the signed cookie and the in-memory fake, and nothing on it is dialect-specific. A forced boundary fails PGlite alone (3), with no load. I did not re-run the local-D1 forced case (owner's rule: only this file). The code argument and the D1 variant's own exposure under the same logic make it unnecessary for the verdict.
+- **Load (rule 7):** ruled out as a cause, which is why this case still needed diagnosis although it passes alone. The failure reproduces alone on demand (3). Load only widens the real span.
+- **Code defect at the boundary:** ruled out. `>` on whole seconds is what PAR-425 and DEC-0668 specify, and the frozen run passes the exact-300 s check and catches `>=` (5).
+- **DEC-0703 and DEC-0791:** I accept the record's reading. The fake's record changes through `setRole`, and a refresh reads it. The test's clock moves at most about 15 minutes against 12-hour sessions, and an expired session would give `anonymous`, not `admin`.
+
+### Fix: accepted
+- Freezing `Date` in this one test, with `useRealTimers` in `afterEach` before `dispose`, matches the AUTH-AC tests (`tests/compliance/criteria/auth/role-refresh.test.ts:26`; decision log line 6939). Every assertion and message stays the same. Rejecting `ROLE_REFRESH_MS - 1_000` as a weakening is right. The reason code `test-was-wrong` is right.
+- **Same pattern elsewhere in the suite: none.** The only other clock use in `testing.suite.ts` is the `loginWithStub … grantRole` test (`:178–180`). Its "stands" check has no advance (it would need more than 300 s of real time), and its later check is at `+301 s`, which real time can only lengthen. So it needs no change, as the record says.
+- **Beyond the suite:** every other `clock.advance` user either freezes `Date` (`role-refresh.test.ts`, `test-app.unit.test.ts`) or advances past the boundary by at least 1 s (`admin-role.test.ts` uses `(300 + 1) * 1000`; `E2E-007-E2E-018-signin.spec.ts` uses `REFRESH_MS + 1000` and a 60 s expiry margin). None asserts an exact boundary on the real clock.
+
+### Verification plan: adequate
+Steps 1–2 are the red and green I ran in 3–4. For step 1 the fixer should use the temporary wait, then remove it, as written. The fixer runs both dialect files alone only if the owner's rule for that run allows it. Otherwise run the PGlite file and leave D1 to the release re-run (step 5).
