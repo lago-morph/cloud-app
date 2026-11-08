@@ -10,7 +10,7 @@ Each login works in its own browser profile: "the test account login's browser p
 
 **Who does what (owner decision DEC-0793).** The owner makes the test Cloudflare account and one token, then starts one Claude session and pastes one message. The agent runs the runner, `scripts/live-pass/live-pass.mjs`, which does everything that needs no human Cloudflare login, by API: it invites the primary account login, changes that login's role and back, makes its own probe tokens, replaces the everyday token's value so nobody copies it, passes each token only to the command that needs it, waits on its own, and records everything. Whenever a human step is needed, the agent gives **one link**, names the login whose browser profile it is for, says in one to three sentences what to do there and what should be seen, and names the exact reply. Nobody describes what happened: after the run an analyst works it out from the records alone (`ai/implementation/live-pass-analysis.md`).
 
-**Time:** about 10 minutes before the session; then about 2 hours in one session, with about 20 short human steps.
+**Time:** about 10 minutes before the session; then about 2 hours in one session, with 17 short human steps.
 
 ---
 
@@ -27,7 +27,7 @@ Each login works in its own browser profile: "the test account login's browser p
    ```
    https://dash.cloudflare.com/?to=/:account/api-tokens&permissionGroupKeys=%5B%7B%22key%22%3A%225bc3f8b21c554832afc660159ab75fa4%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%221af1fa2adc104452b74a9a3364202f20%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%2209b2857d1c31407795e75e3fed8617a1%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%2250fc2f43318f40e4855a35d8de5bf643%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22adc8fa2bc6124928a8b3314dc63a1235%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%2282c075da3f4647a2a03becd0fe240f8a%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22bf7481a1826f439697cb59a20b22293e%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22e086da7e2179491d91ee5f35b3ca210a%22%2C%22type%22%3A%22edit%22%7D%5D&name=live-pass-owner
    ```
-   Pick the test Cloudflare account under Account Resources and set the end date **a week from today**. The page should list exactly these eight, all **Edit**: Account API Tokens, Account Settings, D1, OAuth Client, Secrets Store, Workers Observability, Workers R2 Storage, Workers Scripts (add any that is missing). Press "Continue to summary", then "Create Token", and copy the value.
+   The link fills in the token's name and all eight permissions. Set only the end date, **a week from today** (the one thing the link cannot fill in), then press "Continue to summary", then "Create Token", and copy the value.
 4. **Copy the test Cloudflare account's ID**: the address bar shows it, `dash.cloudflare.com/<account ID>/…`.
 
 ### The session
@@ -63,7 +63,7 @@ All in one session, in this order.
 | P1, P2 | checks tools, network, the token's eight permissions and that the test Cloudflare account is empty; makes the app `livepass` from `npm create @lago-morph/prototype-app@0.2.0-rc01` | — |
 | P3 | invites the primary account login's email with the role "HTTP Applications Read" | primary account login: accepts the invitation from its email |
 | S2 | runs the setup with a value that is not a token | — |
-| TOK-S4, C-1, S4 | checks the starter token's expiry and groups, then runs the bootstrap | test account login: makes the starter token (end date tomorrow); its value is pasted |
+| TOK-S4, C-1, S4 | checks the starter token's expiry and groups, then runs the bootstrap | test account login: makes the starter token from a link that fills in its name and four permissions (only the end date, tomorrow, is set by hand); its value is pasted |
 | TOK-S5, S5 | runs the bootstrap again | test account login: makes a second starter token, or `skip` |
 | S6 | reads the admin app's log | test account login: signs in to the admin app; primary account login: is refused |
 | S7, E-1, S8, S10 | checks what each page made; after S8 **rolls the everyday token's value** (`PUT …/tokens/<id>/value`) and keeps the new value | test account login: runs Account setup, Everyday token with Secrets Store unticked, Everyday token, Status |
@@ -71,7 +71,6 @@ All in one session, in this order.
 | S13 | checks the auth app's records and the uploaded file | test account login: logs in to the app and uploads an image; primary account login: logs in |
 | S14 | **changes the primary account login's role** to Administrator, waits 6 minutes, later **sets it back** | primary account login: reloads one page, then logs out and in twice |
 | S15, S16 | — | test account login: logs out of the app and the admin app, then opens Status again |
-| U1, E-10 | makes a stand-in token and a stand-in bucket, then checks and removes them | test account login: runs Everyday token and Clean up v0.1.x email |
 | S17, FIN | removes both stages, collects every log, uploads the records to R2 | — |
 
 Every token value stays in a mode-600 directory outside the repository and reaches only the command that needs it: a starter token only the setup command of S2, S4 or S5, the everyday token only the part-2 framework commands. The sandbox's own Cloudflare variables (the primary Cloudflare account's) never reach a command.
@@ -109,8 +108,6 @@ Every step records expected against observed; IDs are kept from the previous run
 | S14 (browser) | The runner sets the primary account login's role to Administrator; after the refresh interval the existing session stays `user` (DEC-0703); after signing in again, `admin` (A-1 part b); the runner sets the role back, and a new sign-in gives `user`. |
 | S15 (browser) | Signed out of the app and the admin app. |
 | S16 (browser) | Page 3: the registered app and both sign-ins (E-4). |
-| U1 (browser) | The grant updates a token it did not create (yes), or makes a new one (no); the everyday token in use keeps working. |
-| E-10 (browser) | The cleanup page deletes the stand-in bucket and its object. |
 | S17 | Both stages removed (production after its backup); `/start` 400 and no registry row; no stage resource left; the shared resources kept. |
 | FIN | All logs and records uploaded; the bucket and prefix printed; `live-pass-owner` covers the analysis and the cleanup. |
 
@@ -124,15 +121,15 @@ Recorded throughout, without any human step: every command with its arguments, e
 - Members: with Account Settings Read, `PUT …/members/<id>` and `POST …/members` are refused (10000); with Account Settings Write, `PUT` of an unknown member answers 1003 "Member not found for account" and `POST` without an email answers 1001 "Value required for parameter 'email'", so both accept an account token with that group.
 - The role list has 184 roles on 4 pages of 50; "Administrator" (on page 4), "Super Administrator - All Privileges" and "HTTP Applications Read" exist. The previous runner read only the first page in S9; it now reads every page.
 
-**Not verified** (the pass itself shows them): that R2 cannot be enabled by API, and whether a new free account needs a payment method for it; the R2 overview link above; that the dashboard pre-fills Account Settings and Workers Observability from their IDs (DEC-0563's check covered the other six); an invitation actually sent to and accepted by a real email, and a role change of a real member (the request bodies `{"email","roles":[<id>]}` and `{"roles":[{"id"}]}` follow Cloudflare's API reference); rolling a token that an OAuth grant made (the everyday token) rather than one an API token made; and whether a dashboard-made token holding only Account API Tokens Write could make the runner's other tokens, which the pass does not rely on.
+**Not verified** (the pass itself shows them): that R2 cannot be enabled by API, and whether a new free account needs a payment method for it; the R2 overview link above; that the dashboard pre-fills Account Settings and Workers Observability from their IDs (DEC-0563's check covered the other six), and that the starter-token link in the form `dash.cloudflare.com/<account ID>/api-tokens?permissionGroupKeys=…&name=…` pre-fills as the `?to=/:account/api-tokens` form does; an invitation actually sent to and accepted by a real email, and a role change of a real member (the request bodies `{"email","roles":[<id>]}` and `{"roles":[{"id"}]}` follow Cloudflare's API reference); rolling a token that an OAuth grant made (the everyday token) rather than one an API token made; and whether a dashboard-made token holding only Account API Tokens Write could make the runner's other tokens, which the pass does not rely on.
 
-Already confirmed, so not an open point of this pass: a token holding only Secrets Store Read lists the stores and a store's secrets and is refused writes (DEC-0788). Not checked: S1, a starter token with no expiry being deleted at once, is dropped from this pass (owner decision on PR #171), so no such token is ever asked for; the rule itself is being removed in the 0.2.0 cleanup. Also not checked: F-5 (needs a 0.1.x stage) and the removal of a member at the next sign-in (E2E-007 step 4 covers it locally).
+Already confirmed, so not an open point of this pass: a token holding only Secrets Store Read lists the stores and a store's secrets and is refused writes (DEC-0788). Not in this pass (owner decisions on PR #171): U1, whether the admin app's grant updates an everyday token it did not create (the name matching it probed is being redesigned in the 0.2.0 cleanup), and E-10, the "Clean up v0.1.x email" page (the owner has no v0.1.x installs). Not checked: S1, a starter token with no expiry being deleted at once, is dropped from this pass (owner decision on PR #171), so no such token is ever asked for; the rule itself is being removed in the 0.2.0 cleanup. Also not checked: F-5 (needs a 0.1.x stage) and the removal of a member at the next sign-in (E2E-007 step 4 covers it locally).
 
 ## 5. Cost and cleanup
 
 **Made by the pass and kept for the analyst:** OAuth clients `prototype-framework-admin` and `prototype-framework-sign-in`; Workers `prototype-admin` and `prototype-auth`; D1 `prototype-auth`; R2 buckets `prototype-logs`, `sst-state`, `prototype-backups` (with the `prodcheck` backup) and `live-pass-records`; Secrets Store `prototype-framework` with six entries; API tokens `prototype-framework`, `prototype-r2-signing` and `live-pass-owner`; the primary account login's membership in the test Cloudflare account. All within the Free plan's allowances at this scale.
 
-**Removed by the pass itself:** the starter tokens (they delete themselves), both stages (S17), the probe Worker and token of U3, the stand-in token of U1 (and any copy page 2 made of it), the stand-in bucket of E-10.
+**Removed by the pass itself:** the starter tokens (they delete themselves), both stages (S17), the probe Worker and token of U3.
 
 **Cleanup** is the analyst's, with `live-pass-owner`, after the records are read (`live-pass-analysis.md` §4). What remains in the test Cloudflare account afterwards: the test account login (its Super Administrator), its `workers.dev` subdomain and Workers Logs history, which expire on their own.
 
