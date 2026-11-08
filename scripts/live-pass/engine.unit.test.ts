@@ -155,6 +155,50 @@ describe("owner steps", () => {
     expect(h2.holder.state.facts.ran).toBe(1);
   });
 
+  it("prints a structured prompt as one link, then what to do there, then the exact reply (DEC-0793)", async () => {
+    const step = { id: "S6", session: 1, title: "admin sign-in", owner: [{ prompt: () => ({ link: "https://admin.example/", text: ["Sign in with Cloudflare and approve.", 'You should see "Signed in as you".'], reply: "ok" }), verify: () => {} }] };
+    const h = harness([step]);
+    expect(await h.engine.advance(60_000)).toBe("owner");
+    const p = h.printed.at(-1) ?? "";
+    const body = p.slice(p.indexOf("===\n") + 4, p.indexOf("\n\nWhen the owner replies"));
+    expect(body.split("\n")).toEqual(["Open: https://admin.example/", "Sign in with Cloudflare and approve.", 'You should see "Signed in as you".', "Reply: ok"]);
+    expect(p).toContain('When the owner replies, run: node scripts/live-pass/live-pass.mjs answer "<the owner\'s reply, word for word>"');
+  });
+
+  it("a prompt that asks for a pasted value tells the agent to save it as a file and answer `saved`, never to pass the value in a command", async () => {
+    const step = { id: "TK", session: 1, title: "starter token", owner: [{ prompt: () => ({ link: "https://dash.example/", text: ["Make the token and copy its value."], reply: "paste the value into this chat, or skip" }), saveAs: "LIVE_PASS_STARTER", verify: () => {} }] };
+    const h = createEngine({ catalogue: [step], holder: { state: newRun({ runId: "r1", accountId: "a", version: "v", appName: "app", bucket: "b", runnerSha: "s", now: new Date(T0).toISOString() }) }, save: async () => {}, writeStepRecord: () => {}, print: (t: string) => printed.push(t), secretsDir: "/home/u/.live-pass-secrets" });
+    const printed: string[] = [];
+    await h.advance(60_000);
+    const p = printed.at(-1) ?? "";
+    expect(p).toContain("Reply: paste the value into this chat, or skip");
+    expect(p).toContain("/home/u/.live-pass-secrets/LIVE_PASS_STARTER");
+    expect(p).toContain('answer saved');
+    expect(p).toContain('answer skip');
+  });
+
+  it("skips a part whose `when` is false without asking it, and asks one whose `when` is true", async () => {
+    const step = {
+      id: "S8",
+      session: 1,
+      title: "everyday token",
+      owner: [
+        { prompt: () => "Make it. Reply: ok", verify: (c: Ctx) => c.setFacts({ rolled: true }) },
+        { when: (c: Ctx) => c.facts.rolled !== true, prompt: () => "Paste it.", verify: (c: Ctx) => c.observe("pasted", { pass: true }) },
+        { when: (c: Ctx) => c.facts.rolled === true, prompt: () => "Check it. Reply: ok", verify: (c: Ctx, a: string) => c.observe("checked", { expected: "ok", observed: a, pass: a === "ok" }) },
+      ],
+    };
+    const h = harness([step]);
+    await h.engine.advance(60_000);
+    expect(await h.engine.answer("ok", 60_000)).toBe("owner");
+    expect(h.printed.at(-1)).toContain("Check it.");
+    expect(h.printed.join("\n")).not.toContain("Paste it.");
+    expect(h.printed.at(-1)).toContain("part 3 of 3");
+    await h.engine.answer("ok", 60_000);
+    expect(h.holder.state.done.S8.result).toBe("pass");
+    expect(h.records[0]).toMatchObject({ owner: [{ part: 0, answer: "ok" }, { part: 2, answer: "ok" }] });
+  });
+
   it("refuses an answer when nothing is waiting", async () => {
     const h = harness([auto("A")]);
     await expect(h.engine.answer("ok", 60_000)).rejects.toThrow(/nothing is waiting/);

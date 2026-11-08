@@ -2,7 +2,10 @@
 // as many invocations as the run needs.
 //
 // A step has an automated part (`run`), then zero or more owner parts (`owner[i].prompt`, then
-// `owner[i].verify` with the owner's short reply), then an automated `after`. Every part records
+// `owner[i].verify` with the owner's short reply), then an automated `after`. A part with a `when`
+// is asked only when `when(ctx)` holds. A prompt is one link, one to three sentences on what to do
+// there and what the owner should see, then the exact reply (DEC-0793); a part with `saveAs` asks for
+// a pasted value, which the session agent saves in the secrets directory instead of passing it on. Every part records
 // observations: expected against observed, with pass true, false or null (recorded only). The
 // step's result follows from them (`stepResult`). The step in progress, its observations and a
 // waiting prompt live in the state (`pending`), which is saved to the records bucket after every
@@ -34,11 +37,21 @@ export function checkResults(observations) {
 
 const message = (e) => (e instanceof Error ? e.message : String(e));
 
+const RUN = "node scripts/live-pass/live-pass.mjs";
+
+/** A prompt's text: a string as it is, or { link, text, reply } as "Open: <link>", the sentences, "Reply: <reply>". */
+export function formatPrompt(p) {
+  if (typeof p === "string") return p;
+  const text = Array.isArray(p.text) ? p.text : [p.text];
+  return [...(p.link ? [`Open: ${p.link}`] : []), ...text.filter(Boolean), `Reply: ${p.reply ?? "ok"}`].join("\n");
+}
+
 /**
  * @param {{ catalogue: any[], holder: { state: any }, save: (s: any) => Promise<void>, makeCtx?: (base: any, step: any) => any,
- *   afterStep?: (ctx: any, step: any, record: any) => Promise<void>, writeStepRecord: (r: any) => void, print: (t: string) => void, now?: () => number }} o
+ *   afterStep?: (ctx: any, step: any, record: any) => Promise<void>, writeStepRecord: (r: any) => void, print: (t: string) => void, now?: () => number,
+ *   secretsDir?: string }} o
  */
-export function createEngine({ catalogue, holder, save, makeCtx = (base) => base, afterStep = async () => {}, writeStepRecord, print, now = () => Date.now() }) {
+export function createEngine({ catalogue, holder, save, makeCtx = (base) => base, afterStep = async () => {}, writeStepRecord, print, now = () => Date.now(), secretsDir = "~/.live-pass-secrets" }) {
   const iso = () => new Date(now()).toISOString();
   const byId = (id) => catalogue.find((s) => s.id === id);
 
@@ -78,7 +91,11 @@ export function createEngine({ catalogue, holder, save, makeCtx = (base) => base
   };
 
   const prompt = (step, p) => {
-    print(`\n=== OWNER STEP ${step.id} (part ${p.part + 1} of ${step.owner.length}): ${step.title} ===\n${p.prompt}\n\nWhen the owner replies, run: node scripts/live-pass/live-pass.mjs answer "<the owner's reply, word for word>"`);
+    const saveAs = step.owner[p.part]?.saveAs;
+    const after = saveAs
+      ? `When the owner replies with a value, save that value (nothing else) with your file-writing tool as ${secretsDir}/${saveAs}, run chmod 600 ${secretsDir}/${saveAs}, then run: ${RUN} answer saved\nNever put the value in a command, and never repeat it. If the owner replies skip, run: ${RUN} answer skip`
+      : `When the owner replies, run: ${RUN} answer "<the owner's reply, word for word>"`;
+    print(`\n=== OWNER STEP ${step.id} (part ${p.part + 1} of ${step.owner.length}): ${step.title} ===\n${p.prompt}\n\n${after}`);
   };
 
   async function complete(step, ctx) {
@@ -142,9 +159,21 @@ export function createEngine({ catalogue, holder, save, makeCtx = (base) => base
     while (pending().part < parts.length) {
       const p = pending();
       if (p.prompt === undefined) {
+        const when = parts[p.part].when;
+        let skip = false;
+        try {
+          skip = when !== undefined && !when(ctx);
+        } catch (e) {
+          ctx.observe("error", { expected: "the owner part's condition is evaluated", observed: message(e), pass: false });
+        }
+        if (skip) {
+          setPending({ ...p, part: p.part + 1 });
+          await save(holder.state);
+          continue;
+        }
         let text;
         try {
-          text = parts[p.part].prompt(ctx);
+          text = formatPrompt(parts[p.part].prompt(ctx));
         } catch (e) {
           text = `(the prompt could not be built: ${message(e)})`;
         }
