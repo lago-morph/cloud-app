@@ -9,7 +9,7 @@ All notable changes to the published packages and the Claude Code plugin from th
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [Semantic Versioning](https://semver.org/); before 1.0.0, a minor version may make breaking changes.
 
-## [0.2.0-rc01] - 2026-11-02
+## [0.2.0-rc01] - 2026-11-07
 
 First release candidate of 0.2.0, published to the npm dist-tag `next` (`latest` stays at 0.1.1). It holds the whole release so far. Try it with `npm create @lago-morph/prototype-app@0.2.0-rc01 my-app`, or move an app with `npm run upgrade -- 0.2.0-rc01`.
 
