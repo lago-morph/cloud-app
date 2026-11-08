@@ -2,10 +2,11 @@
 // in one mode-700 directory outside the repository, one mode-600 file each; the process environment
 // (which in this sandbox holds the primary Cloudflare account's token and ID) is never read.
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { loadSecrets, SECRET, saveSecret, secretsProblems, TOKEN_NAMES } from "./lib/secrets.mjs";
+import { DEFAULT_SECRETS_DIR, loadSecrets, SECRET, saveSecret, secretsProblems, TOKEN_NAMES } from "./lib/secrets.mjs";
 
 const TEST_ACCOUNT = "0123456789abcdef0123456789abcdef";
 const PRIMARY_ACCOUNT = "fedcba9876543210fedcba9876543210";
@@ -47,6 +48,14 @@ describe("loadSecrets", () => {
     expect(loadSecrets(d).loose).toEqual([join(d, SECRET.owner)]);
     chmodSync(d, 0o755);
     expect(loadSecrets(d).loose).toContain(d);
+  });
+});
+
+describe("DEFAULT_SECRETS_DIR", () => {
+  it("is ~/.live-pass-secrets, outside the repository (runbook, \"For the agent in the session\", step 1)", () => {
+    expect(DEFAULT_SECRETS_DIR).toBe(join(homedir(), ".live-pass-secrets"));
+    const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+    expect(relative(repo, DEFAULT_SECRETS_DIR).startsWith("..")).toBe(true);
   });
 });
 
