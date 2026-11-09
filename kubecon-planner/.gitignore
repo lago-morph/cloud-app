@@ -1,0 +1,20 @@
+# A scaffolded app's own ignore list (copied by skill/scripts/scaffold).
+node_modules/
+
+# Framework build output and generated entry points
+dist/
+.framework/
+
+# Local runtime state, logs, captured mail and dev-only secrets (never commit .dev.vars)
+.wrangler/
+.logs/
+.mail/
+.dev.vars
+
+# Cloudflare tokens (cloudflare-setup); never commit
+.env.cloudflare
+
+# Playwright output
+test-results/
+playwright-report/
+blob-report/

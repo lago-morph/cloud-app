@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(.env.cloudflare)",
+      "Edit(.env.cloudflare)",
+      "Bash(grep *.env.cloudflare*)",
+      "Bash(rg *.env.cloudflare*)",
+      "Bash(awk *.env.cloudflare*)",
+      "Bash(less *.env.cloudflare*)",
+      "Bash(more *.env.cloudflare*)",
+      "Bash(source *.env.cloudflare*)",
+      "Bash(. *.env.cloudflare*)",
+      "Bash(echo *CLOUDFLARE_API_TOKEN*)",
+      "Bash(echo *CLOUDFLARE_BOOTSTRAP_TOKEN*)",
+      "Bash(env)",
+      "Bash(env -0)",
+      "Bash(printenv *)",
+      "Bash(set)",
+      "Bash(export)",
+      "Bash(export -p)",
+      "Bash(declare -p*)",
+      "Bash(declare -x*)",
+      "Bash(* /proc/*environ*)"
+    ]
+  }
+}
