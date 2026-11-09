@@ -1,6 +1,0 @@
-smoke: running tests/smoke/**/*.test.ts against https://kubeconplanner-test-kubecon.<account-subdomain>.workers.dev (target cloudflare, stage test-kubecon)
-  passed  the app is healthy
-  passed  the schedule is imported if empty (SQL, KV, outbound fetch)
-  passed  a user can add a session to their schedule and see it
-smoke: 3 passed, 0 failed
-smoke: log for today: R2 bucket prototype-logs, keys under kubeconplanner/test-kubecon/2026/11/09/
