@@ -4,8 +4,8 @@ import { describeError, el } from "../dom";
 import { clock, dayLabel, timeRange, weekday } from "../format";
 import { showSession } from "./session-dialog";
 
-/** Grid scale: pixels per minute (one hour is 72 px). */
-const PX_PER_MINUTE = 1.2;
+/** Grid scale: pixels per minute (one hour is 96 px). */
+const PX_PER_MINUTE = 1.6;
 /** The shortest block drawn, so a two-minute talk is still readable. */
 const MIN_BLOCK_PX = 22;
 /** Hours shown when a day has no selections. */
@@ -33,13 +33,15 @@ function block(s: PlacedSession, startHour: number, titles: ReadonlyMap<string, 
   time.className = "time";
   const title = el("span", s.title);
   title.className = "name";
-  node.append(time);
+  const head = el("span");
+  head.className = "head";
+  head.append(time);
   if (s.conflictsWith.length > 0) {
     const badge = el("span", s.conflictsWith.length === 1 ? "Conflict" : `Conflicts ×${s.conflictsWith.length}`);
     badge.className = "badge";
-    node.append(badge);
+    head.append(badge);
   }
-  node.append(title);
+  node.append(head, title);
   if (s.room !== "") {
     const room = el("span", s.room);
     room.className = "room";

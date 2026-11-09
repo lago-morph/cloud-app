@@ -17,7 +17,7 @@ import { ensureImported, errorCode, signIn } from "./support";
  * - Failures: an unavailable database is in-process only (tests/app.test.ts).
  */
 
-async function day(request: APIRequestContext, date: string): Promise<SessionSummary[]> {
+async function day(request: APIRequestContext, date: string): Promise<readonly SessionSummary[]> {
   const body: SessionList = await (await request.get("/api/sessions", { params: { day: date } })).json();
   return body.sessions;
 }

@@ -1,183 +1,111 @@
-# Template app
+# KubeCon planner
 
-This is the smallest app built on the prototype framework. It uses each capability once: database tables (notes, and one row per finalized upload), key-value storage, file upload with a finalize check and download, a configuration value (`greeting`), one secret (`apiKey`), a tested HMAC signing helper (`src/server/signing.ts`), log entries, and the three access levels (anonymous, user, admin). The scaffolder copies this folder to start a new app. A copied app has its own name: §1 step 2 prints it into `APP`, and the commands below use `$APP`. Where an address below says `template`, read the app's name instead.
+A personal planner for **KubeCon + CloudNativeCon North America 2026** (Salt Lake City, Sunday 8 to Thursday 12 November 2026), built on the prototype framework (`@lago-morph/prototype-framework` 0.2.0-rc01) to run on Cloudflare.
 
-This page lists everything the owner does by hand, as copy-and-paste steps. Run the commands in a terminal, in this app's folder, on macOS or Linux with Node 22.22.0. Replace the `<…>` parts. Never paste a secret value into a command line, a committed file or a chat.
+- **Ingests the schedule** from the public Sessionize feeds behind the official schedule pages: the main conference, the CNCF-hosted co-located events (the Monday talks), and the CNCF Maintainer Summit (Sunday). That is about 850 sessions.
+- **Browse** sessions by day. Search title, speaker and company, and filter by day, track or type, and co-located event. Open any session for its description, speakers and room, and add it to or remove it from **My schedule**.
+- **Saves your selections** per signed-in user, including ones whose times overlap.
+- **My schedule** has one tab per day, Sun to Thu. Each tab draws your sessions on a vertical time grid, sized by duration. Overlapping sessions sit side by side, are drawn in red and are labelled "Conflict".
 
-This release runs apps locally (§1) and on Cloudflare (§2 on). The short version of everything here is the framework's [QUICKSTART.md](https://github.com/lago-morph/cloud-app/blob/main/QUICKSTART.md).
+![My schedule, Tuesday, with conflicting selections](docs/screenshot-day-view.png)
 
-People sign in with Cloudflare. **Only members of the owner's Cloudflare account can sign in**, and every member is a user. Members with the account role "Super Administrator - All Privileges" or "Administrator" are admins (§8). Nothing about people is kept in configuration.
+All times are **Salt Lake City local time** (America/Denver, MST, UTC-07:00 in November). Sessionize publishes them as wall-clock times without an offset. The app stores and shows them exactly as published and never converts them to the browser's time zone.
 
-## 1. Run it on your computer
+## Run it locally
 
-1. Get the framework ready (once per checkout):
-   - In the framework's own repository, run this at the repository root. The last line goes back to this app's folder:
-     ```sh
-     npm ci
-     npm run build -w packages/framework
-     cd apps/template
-     ```
-   - In an app made with the scaffolder, run `npm install` in the app's folder.
-2. Print the app's name and keep it in `APP`. Run this again in each new terminal:
-   ```sh
-   APP=$(npm run --silent build -- --target local --stage local | sed -n 's/^built \([^ ]*\) for .*/\1/p'); echo "$APP"
-   ```
-3. The app's secret `apiKey`, which the admin page checks, needs a local value. An app made with `npm create @lago-morph/prototype-app` already has a random one, set when it was made (and `npm run cloudflare-setup` sets any that is missing). `npm run dev` generates only the framework's own development keys. To set or change the value yourself (in the framework's repository, do this once), run the command, paste any value, press Enter, then press Ctrl-D:
-   ```sh
-   npm run secrets -- set apiKey --target local --stage local
-   ```
-   The value is stored in `.dev.vars`, which git ignores.
-4. Start the app, and open the address it prints (`http://localhost:<port>/`):
-   ```sh
-   npm run dev
-   ```
-   Press Ctrl-C to stop. Locally there is no real sign-in: the login button signs you in as a test user. Tests choose any level with the authentication mock.
-5. Check everything before you call a change done:
-   ```sh
-   npm run verify
-   ```
-6. Read the local log. Entries are JSON lines, one file per UTC day:
-   ```sh
-   cat .logs/$(date -u +%F).log
-   grep '<requestId>' .logs/$(date -u +%F).log
-   ```
-7. To start again from empty local data (the database, files and logs), run `npm run reset-local`. Your code, configuration and `.dev.vars` stay.
-
-## 2. Cloudflare setup (once per account)
-
-Any Cloudflare account works, on the free Workers plan too; no domain is needed. Run, in this app's folder (in Claude Code, say "set up Cloudflare"):
+You need Node 22, and npm (any recent version) for `npm ci`.
 
 ```sh
-npm run cloudflare-setup
+cd kubecon-planner
+npm ci                  # installs from package-lock.json, including the vendored framework in vendor/
+npm run dev             # prints http://localhost:<port>/ ; use exactly "localhost"
 ```
 
-1. It prints one pre-filled dashboard link, for the **bootstrap token**, and where to put it (`.env.cloudflare` in this folder, or the environment). Make the token with an end date under TTL **no more than 1 day away**, put it there, and run the command again.
-2. It deploys the account's **admin app**, deletes the bootstrap token, and prints the admin app's address.
-3. Open the admin app and sign in with your Cloudflare account (you need the role "Super Administrator - All Privileges" or "Administrator"). Do **Account setup**, then make the **Everyday token** and save it as `CLOUDFLARE_API_TOKEN`, as in step 1. The page shows it once; never paste it into a chat.
-4. Run `npm run cloudflare-setup` again (in Claude Code, "continue prototype setup") until it says everything is set up.
+1. Open the printed address and press **Log in**. Locally this signs you in as the mock user.
+2. On first load the schedule table is empty, so the page imports the schedule automatically. It takes a couple of seconds and needs internet access to `sessionize.com`.
+3. **Refresh schedule** on the Browse tab imports again at any time.
 
-Coming from framework 0.1.x: `npm run upgrade` says setup needs re-running; do steps 1–4 once per account. Everyone signs in again, with Cloudflare (QUICKSTART, "Coming from 0.1.x?").
+To wipe local data, run `npm run reset-local`. `dev` does not reload server code, so restart it after a server change.
 
-It never prints a token value, and every later command reads the tokens itself. The steps, and what to do when it stops: [QUICKSTART.md](https://github.com/lago-morph/cloud-app/blob/main/QUICKSTART.md) and the skill's `reference/owner-tasks.md` §2 (in this app, `.claude/skills/prototype-framework/reference/owner-tasks.md`).
-
-## 3. What the account setup creates
-
-The admin app's Account setup page creates the account's shared resources once: the **auth app**, which signs people in to every app, with its database; the log bucket `prototype-logs`; the deploy-state bucket `sst-state`; the backup bucket `prototype-backups` (a removed production stage's data, kept 30 days); and the file-signing credential every stage uses. `deploy` never creates these resources; if any is missing, it says so.
-
-## 4. Deploy a test stage, test it, remove it
-
-A stage whose name starts with `test-` is a test stage. It uses `config/cloudflare/test.json`, has only the mock login for tests, and holds no real data. Stage names are at most 20 lowercase letters, digits and hyphens.
-
-Set the stage name once, in the first line, and deploy. In a new terminal, set `STAGE` again:
+### Checks
 
 ```sh
-STAGE=test-<initials><number>
-npm run deploy -- --target cloudflare --stage "$STAGE"
+npm run verify          # type check, portability lint, migrations, unit/integration tests on SQLite and Postgres, then e2e-api
+npm run test:e2e:ui     # browser tests (Chromium)
 ```
 
-On the first deploy, `deploy` stops after creating the Worker and names the secrets that are not set yet. Set each one, paste the value, press Enter, then press Ctrl-D. Then deploy again:
+- The e2e tests run against a local `dev` server that fetches the **live** Sessionize feeds, so they need outbound HTTPS to `sessionize.com`. They assert only facts that hold as the schedule changes, never exact totals.
+- The unit and integration tests (`tests/*.test.ts`) need no network. They replace Sessionize with fixtures (`tests/support/feeds.ts`).
+- In this repository's cloud sandbox, Chromium is build 1243 while Playwright 1.64.1 expects 1248. Point `PLAYWRIGHT_BROWSERS_PATH` at a directory of symlinks to `/opt/pw-browsers/*` that also links `chromium-1248` and `chromium_headless_shell-1248` to the 1243 builds.
 
-```sh
-npm run secrets -- set apiKey --target cloudflare --stage "$STAGE"
-npm run deploy -- --target cloudflare --stage "$STAGE"
-```
+## How ingestion works
 
-A successful deploy prints the stage's address, `https://template-<stage>.<subdomain>.workers.dev`. Commit your work, because `smoke` refuses to run with uncommitted changes (if git says there is nothing to commit, carry on). Then run the smoke test against the stage, and remove the stage when you are done:
+`POST /api/schedule/refresh` with body `{}`, or `{ "onlyIfEmpty": true }` to import only when nothing is stored yet. Any signed-in user can call it, since the feeds are public. The steps:
 
-```sh
-git add -A
-git commit -m "Changes before the smoke test"
-npm run smoke -- --target cloudflare --stage "$STAGE"
-npm run remove -- --target cloudflare --stage "$STAGE"
-```
+1. **Fetch** (`src/server/schedule-import.ts`). The Worker fetches `https://sessionize.com/api/v2/<code>/view/All` for each feed in `FEEDS` (`src/server/sessionize.ts`):
 
-`remove` deletes the stage's Worker and secrets, its databases, its file bucket and files, and its deploy state. The file-signing credential belongs to the account and stays. It keeps the log entries. If it prints leftovers and exits with an error, run it again. If a leftover stays, delete it in the dashboard by the exact name printed.
+   | Feed | Code | Notes |
+   | --- | --- | --- |
+   | Main conference | `svi82w6c` | Sun to Thu; on Monday it has only one umbrella block per co-located event |
+   | CNCF-hosted co-located events | `ayajbd6b` | the individual Monday talks |
+   | CNCF Maintainer Summit | `qtujim6y` | Sunday |
+   | Sponsor-hosted co-located events | `etvmcsmr` | repeats main-feed sessions under the same IDs; read so nothing is missed, then deduplicated |
 
-## 5. The production stage's values file
+   If any feed fails (an HTTP error, a non-JSON answer or an unexpected shape), the import stops with a 500. The log names the feed, and nothing stored changes. These codes come from the `data-sched-config` attribute of the official schedule pages. If the Linux Foundation changes them, update `FEEDS` (see `data/SOURCE.md`).
 
-Every stage that does not start with `test-` is a production stage, for example `prod`. It needs its own committed values file. Copy the skill's template (in the framework's repository: `skill/templates/production-stage.json`):
+2. **Parse** (`parseFeed`, pure, validated with Zod). For each session it reads the title, description, times, room name, speakers and classification. Each speaker gets a name, plus the company and title from the feed's "Company" and "Speaker Title" questions, or the tagline when there is no company. Classification, per feed:
+   - **Main and sponsor feeds:** the "All Sessions" category gives the **track**, such as Keynote Sessions or Maintainer Track.
+   - **Co-located feed:** "All Sessions" gives the **co-located event** names, such as ArgoCon. A break or reception shared by several events lists all of them. The track is "CNCF-hosted Co-located Events", or Breaks, Experiences or Registration for those entries. "Session format" gives the **format**, such as Breakout Session.
+   - **Maintainer Summit feed:** the track and event are "Maintainer Summit" and "CNCF Maintainer Summit", and the format is the feed's session category.
 
-```sh
-STAGE=prod
-mkdir -p config/cloudflare
-cp ../../skill/templates/production-stage.json "config/cloudflare/$STAGE.json"
-npm run build -- --target cloudflare --stage "$STAGE"
-git add "config/cloudflare/$STAGE.json"
-git commit -m "Add the values file of stage $STAGE"
-```
+   The day is the date part of the start. Sessions without a start or end time are skipped.
 
-`build` must print `built …`. The file's `"values"` may also set the app's configuration keys, for example `"greeting": "Hi"`. It holds no admins and no login settings.
+3. **Merge** (`mergeFeeds`, pure):
+   - Each session ID is kept once; the main feed wins.
+   - The main feed's co-located **umbrella blocks** (track "CNCF-hosted Co-located Events", such as "ArgoCon Hosted by CNCF - Full Day Event") are dropped, because the co-located feed's detailed talks replace them. They are kept if the co-located feed is empty.
+   - The co-located feed's registration entries are dropped, because they repeat the main feed's.
 
-## 6. Deploy a production stage
+4. **Store** (`storeSchedule`). Rows are matched by **Sessionize ID** (unique column `sessionize_id`):
+   - new sessions are inserted;
+   - sessions whose fields changed (compared by a stored fingerprint) are updated in place;
+   - sessions no longer in any feed are deleted.
 
-```sh
-STAGE=prod
-npm run deploy -- --target cloudflare --stage "$STAGE"
-npm run secrets -- set apiKey --target cloudflare --stage "$STAGE"
-npm run deploy -- --target cloudflare --stage "$STAGE"
-```
+   All writes run in one `atomic` unit, which is one D1 batch on Cloudflare. A repeat import of an unchanged schedule writes nothing. An import that would leave the schedule empty is refused, so an outage cannot wipe it. The time and size of the last import are kept in KV (`schedule:last-import`).
 
-The first `deploy` stops and names the unset secrets. Set them as above, pasting each value and then pressing Ctrl-D, and deploy again. The framework generates its own keys. The second deploy registers the stage with the auth app and prints its address. Without the account's auth app it stops before creating anything: do the admin app's Account setup (§2) first.
+Selections (`selections` table: owner, Sessionize ID) name sessions by Sessionize ID, not by row. A re-import never touches them. A session that leaves the feed disappears from My schedule, and comes back, still selected, if it returns.
 
-To change the stage later (code or configuration), commit the change and run the same `deploy` again:
+## API
 
-```sh
-git add -A
-git commit -m "<what you changed>"
-npm run deploy -- --target cloudflare --stage "$STAGE"
-```
+All routes need a signed-in user (anonymous callers get 401).
 
-## 7. Sign in
-
-1. Open `https://template-prod.<subdomain>.workers.dev/` and press the login button.
-2. Sign in on Cloudflare's page with a member of the account, and allow what it asks.
-3. Back on the app, `https://template-prod.<subdomain>.workers.dev/api/auth/me` shows `"level":"user"` or `"level":"admin"`.
-
-To let someone sign in, invite them to the Cloudflare account (Manage Account → Members); a read-only role, for example "HTTP Applications Read", is enough. `npm run check-login -- --target cloudflare --stage "$STAGE"` checks, with no sign-in, that the stage sends people to the auth app with its own address.
-
-## 8. Admins
-
-A member whose Cloudflare account role is "Super Administrator - All Privileges" or "Administrator" is admin; every other member is a user. Change a person's role in the dashboard (Manage Account → Members). No file edit, no commit and no deploy: the change shows when they next sign in (ask them to log out and in again). Removing someone from the account does not end a session they already have; it lasts until it expires (12 hours) or they log out.
-
-## 9. Stop, start and remove
-
-- **Stop or start** a stage in the dashboard (menu names not yet verified). Open Workers & Pages → `template-<stage>` → Settings → Domains & Routes, and disable or enable `workers.dev`. A stopped stage keeps its code, data and secrets, and its address answers 404. Every `deploy` starts the stage again.
-- **Remove a test stage:** `npm run remove -- --target cloudflare --stage "$STAGE"`, with `STAGE` set to the test stage's name (§4).
-- **Remove a production stage.** This deletes its database with no backup. Repeat the stage's name to confirm:
-  ```sh
-  npm run remove -- --target cloudflare --stage prod --confirm-production prod
-  ```
-
-## 10. Reading the logs on Cloudflare
-
-Every error response has a `requestId`. A failed login returns to `/?authError=login_failed&requestId=<id>`. Each log entry is a file in the R2 bucket `prototype-logs`, under `template/<stage>/<yyyy>/<mm>/<dd>/`. The date is UTC, and the file name ends in `-<requestId>.json`.
-
-- **Dashboard** (menu names not yet verified)**:** open Storage & databases → R2 → `prototype-logs`, then the folders `template` / `<stage>` / year / month / day. Open the file whose name ends in the request ID.
-- **Command line, only where both values are in the environment:** these commands need `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` in the shell's environment, for example in a cloud session whose environment settings hold them. With the tokens only in `.env.cloudflare` (§2), the variables are empty and the requests fail: use the dashboard route above. Never `source` or `cat` `.env.cloudflare` to fill them in. List today's entries of a stage, and keep only the line with the request ID. `APP` must be set (§1 step 2):
-  ```sh
-  STAGE='<stage>'; DAY=$(date -u +%Y/%m/%d)
-  curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-    "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets/prototype-logs/objects?per_page=1000&prefix=$APP/$STAGE/$DAY/" \
-    | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);if(!r.success){console.error(JSON.stringify(r.errors));process.exit(1)}for(const o of r.result)console.log(o.key)})' \
-    | grep '<requestId>'
-  ```
-  Then read that entry:
-  ```sh
-  KEY='<paste the key here>'
-  curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-    "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets/prototype-logs/objects/$(node -p 'encodeURIComponent(process.argv[1])' "$KEY")"
-  ```
-- **No entry?** Watch the Worker's output while you repeat the request: `npx wrangler tail "$APP-$STAGE" --format pretty` (it too needs both values in the environment; otherwise open the Worker's logs in the dashboard, Workers & Pages → `template-<stage>` → Logs, menu names not yet verified). More help is in the skill's troubleshooting reference, `skill/reference/troubleshooting.md` in the framework repository.
-
-## 11. Cost: what stays billable while idle
-
-Cloudflare charges for requests and storage. An idle stage has no requests, but its storage remains:
-
-| Billable while idle | How to remove it |
+| Route | Purpose |
 | --- | --- |
-| Each stage's D1 database and R2 file bucket | `remove` the stage (§9). |
-| Leftover test stages: Workers named `template-test-…`, D1 databases `template-test-…-db-<n>` | `remove` each by its stage name. Check Workers & Pages and D1 in the dashboard (menu names not yet verified). |
-| The shared `prototype-logs` bucket, which grows with every entry and is never emptied by `remove` | Delete old entries in the dashboard. To do it automatically, open R2 → `prototype-logs` → Settings → Object lifecycle rules (not yet verified), and delete objects after, for example, 30 days. |
-| The shared `sst-state` bucket, which is small | Keep it while any stage exists. Delete it in the dashboard only after the last stage is removed. |
+| `GET /api/schedule/meta` | session count, last import, days with counts, tracks, co-located events |
+| `POST /api/schedule/refresh` | import (above) |
+| `GET /api/sessions?day=&q=&track=&event=` | the list. `q`: every word must appear in the title or the speakers line (names and companies), ignoring ASCII case. `event` is an exact event name. Ordered by start time, then title. |
+| `GET /api/sessions/:id` | one session with description, speakers and the `selected` flag |
+| `PUT` / `DELETE /api/my-schedule/:id` | add or remove a selection. Both are idempotent and answer 204; `PUT` on an unknown session is 404. |
+| `GET /api/my-schedule` | every conference day with your sessions placed on the grid: minutes, column, number of columns, and `conflictsWith`. Layout and conflict rules are in `src/server/layout.ts`: sessions conflict when their times overlap, and one that starts as another ends does not conflict. |
 
-**Keeping test stages small.** On Cloudflare's free plan, D1 allows about **100,000 rows written per day** per account; reads have a larger limit. When a daily limit is used up, database requests fail until it resets at 00:00 UTC. So keep test data to a few rows, never load data in loops, run one test stage at a time, and remove it right after its smoke test. An account holds at most **10 D1 databases**, and a deploy that changes the schema briefly holds two per stage.
+## Layout
+
+- `src/server/sessionize.ts`: feed parsing and merging (pure).
+- `src/server/layout.ts`: day-grid placement and conflicts (pure).
+- `src/server/schedule-import.ts`: fetch and store.
+- `src/server/routes/`: the routes.
+- `src/client/`: the browser pages (browse, session dialog, My schedule).
+- `tests/sessionize.test.ts`, `tests/layout.test.ts`: unit tests of the pure logic.
+- `tests/app.test.ts`: routes in process, on both SQL dialects.
+- `tests/e2e/api/`: the API flows.
+- `tests/e2e/ui/`: the browser checks.
+- `tests/smoke/`: the deployed-stage smoke test.
+
+### Test fixtures
+
+`tests/fixtures/sessionize/*.ts` are small excerpts of the raw feeds in `data/raw/`: 9 main-feed sessions, 6 co-located, 3 Maintainer Summit and 2 sponsor sessions, with only the speakers, categories and rooms they reference, and descriptions and bios shortened. They include an umbrella block, a registration repeat, a sponsor repeat, a shared break, overlapping talks and a session that ends at midnight. To regenerate them, run `python3 -I data/cut-fixtures.py data/raw tests/fixtures/sessionize`.
+
+## Not done here
+
+- Not deployed. Deploying and the smoke test on a Cloudflare `test-` stage are the owner's step (`BUILD-GUIDE.md` §4). Production sign-in needs the 0.2.0 account setup first.
+- On Cloudflare the import is about 150 statements in one D1 batch plus a few reads. It has not been tried on a real Worker.
+- The main feed's all-day "CNCF Maintainer Summit [SOLD OUT]" block on Sunday is kept alongside the summit's own talks. Only the CNCF co-located umbrella blocks are dropped.

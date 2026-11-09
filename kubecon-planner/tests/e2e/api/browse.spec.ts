@@ -18,7 +18,7 @@ import { ensureImported, errorCode, signIn } from "./support";
  * - Failures: an unavailable database is in-process only (tests/app.test.ts).
  */
 
-async function list(request: Parameters<typeof signIn>[0], params: Record<string, string> = {}): Promise<SessionSummary[]> {
+async function list(request: Parameters<typeof signIn>[0], params: Record<string, string> = {}): Promise<readonly SessionSummary[]> {
   const res = await request.get("/api/sessions", { params });
   expect(res.status()).toBe(200);
   const body: SessionList = await res.json();
