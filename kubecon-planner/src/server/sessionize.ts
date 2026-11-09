@@ -29,7 +29,7 @@ export const COLOCATED_TRACK = "CNCF-hosted Co-located Events";
 const MAINTAINER_TRACK = "Maintainer Summit";
 const MAINTAINER_EVENT = "CNCF Maintainer Summit";
 /** Labels of the co-located feed's "All Sessions" category that are kinds of entry, not events. */
-const COLOCATED_KINDS = ["Breaks", "Experiences", "Registration"] as const;
+const COLOCATED_KINDS: readonly string[] = ["Breaks", "Experiences", "Registration"];
 
 export class FeedFormatError extends Error {
   constructor(message: string) {
@@ -136,7 +136,7 @@ function classify(kind: FeedKind, labels: readonly { readonly category: string; 
       return {
         track: entryKind ?? COLOCATED_TRACK,
         format: named("Session format").map(plainLabel)[0] ?? null,
-        events: groups.filter((g) => !(COLOCATED_KINDS as readonly string[]).includes(g)),
+        events: groups.filter((g) => !COLOCATED_KINDS.includes(g)),
       };
     }
     case "maintainer":

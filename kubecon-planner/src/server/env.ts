@@ -1,12 +1,10 @@
-import { configString, type AppEnv } from "@lago-morph/prototype-framework";
+import type { AppEnv } from "@lago-morph/prototype-framework";
 
-/** Non-secret configuration keys; values per stage are in `config/`. */
-export const config = {
-  greeting: configString({ default: "Hello" }),
-};
+/** Non-secret configuration keys: none. The Sessionize feed codes are in `sessionize.ts`. */
+export const config = {};
 
-/** Secret names; values are set with `secrets set <name>`, never committed. */
-export const secrets = ["apiKey"] as const;
+/** Secret names: none (the Sessionize feeds are public). */
+export const secrets = [] as const;
 
 /** The Hono environment every route module takes: `Hono<Env>`. */
 export type Env = AppEnv<typeof config, (typeof secrets)[number]>;

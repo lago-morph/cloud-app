@@ -1,18 +1,58 @@
-import { api, getCurrentUser } from "@lago-morph/prototype-framework/client";
-import type { Greeting } from "../shared/types";
+import { getCurrentUser } from "@lago-morph/prototype-framework/client";
 import { describeError, el } from "./dom";
 import { accountPage } from "./pages/account";
-import { adminPage } from "./pages/admin";
-import { filesPage } from "./pages/files";
-import { notesPage } from "./pages/notes";
-import { statusPage } from "./pages/status";
+import { browsePage } from "./pages/browse";
+import { myScheduleView } from "./pages/my-schedule";
+import { onSelection } from "./selection";
+
+type View = "browse" | "mine";
+
+function viewFromHash(): View {
+  return window.location.hash === "#my-schedule" ? "mine" : "browse";
+}
 
 async function start(root: HTMLElement): Promise<void> {
-  const [{ greeting }, user] = await Promise.all([api<Greeting>("/hello"), getCurrentUser()]);
-  root.replaceChildren(el("h1", greeting), accountPage(user));
+  const user = await getCurrentUser();
+  const header = el("header");
+  header.append(el("h1", "KubeCon planner"), el("p", "KubeCon + CloudNativeCon North America 2026 · Salt Lake City · Nov 8–12"), accountPage(user));
+  root.replaceChildren(header);
   if (user.level === "anonymous") return;
-  root.append(notesPage(), statusPage(), filesPage());
-  if (user.level === "admin") root.append(adminPage());
+
+  const nav = el("nav");
+  nav.setAttribute("role", "tablist");
+  nav.setAttribute("aria-label", "Views");
+  const browseTab = el("button", "Browse sessions");
+  const mineTab = el("button", "My schedule");
+  for (const tab of [browseTab, mineTab]) tab.setAttribute("role", "tab");
+  nav.append(browseTab, mineTab);
+
+  const browse = browsePage();
+  const mine = myScheduleView();
+  let stale = true;
+  onSelection(() => {
+    stale = true;
+  });
+
+  const show = (view: View): void => {
+    browseTab.setAttribute("aria-selected", String(view === "browse"));
+    mineTab.setAttribute("aria-selected", String(view === "mine"));
+    browse.hidden = view !== "browse";
+    mine.element.hidden = view !== "mine";
+    if (view === "mine" && stale) {
+      stale = false;
+      mine.refresh();
+    }
+  };
+  browseTab.addEventListener("click", () => {
+    window.location.hash = "browse";
+  });
+  mineTab.addEventListener("click", () => {
+    window.location.hash = "my-schedule";
+  });
+  window.addEventListener("hashchange", () => show(viewFromHash()));
+
+  root.append(nav, browse, mine.element);
+  show(viewFromHash());
 }
 
 const root = document.querySelector<HTMLElement>("#app");

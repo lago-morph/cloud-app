@@ -1,21 +1,22 @@
 import { login, logout, type CurrentUser } from "@lago-morph/prototype-framework/client";
-import { el, section } from "../dom";
+import { el } from "../dom";
 
-/** Who is logged in, with login and logout buttons. */
+/** Who is signed in, with sign-in and sign-out buttons. */
 export function accountPage(user: CurrentUser): HTMLElement {
-  const page = section("Account");
+  const box = el("div");
+  box.className = "account";
   if (user.level === "anonymous") {
-    page.append(el("p", "You are not logged in."));
+    box.append(el("p", "Sign in to build your schedule."));
     const button = el("button", "Log in");
     button.addEventListener("click", () => login());
-    page.append(button);
-    return page;
+    box.append(button);
+    return box;
   }
-  page.append(el("p", `Logged in as ${user.displayName ?? user.id} (${user.level}).`));
+  box.append(el("span", `Signed in as ${user.displayName ?? user.id}`));
   const button = el("button", "Log out");
   button.addEventListener("click", () => {
     void logout().then(() => window.location.reload());
   });
-  page.append(button);
-  return page;
+  box.append(button);
+  return box;
 }

@@ -1,23 +1,17 @@
 import { defineApp } from "@lago-morph/prototype-framework";
 import { config, secrets } from "./server/env";
-import { adminRoutes } from "./server/routes/admin";
-import { fileRoutes } from "./server/routes/files";
-import { helloRoutes } from "./server/routes/hello";
-import { noteRoutes } from "./server/routes/notes";
-import { statusRoutes } from "./server/routes/status";
-import { notes, uploads } from "./server/schema";
+import { myScheduleRoutes } from "./server/routes/my-schedule";
+import { scheduleRoutes } from "./server/routes/schedule";
+import { selections, sessions } from "./server/schema";
 
 export const app = defineApp({
   name: "kubeconplanner",
   config,
   secrets,
-  tables: { notes, uploads },
+  tables: { sessions, selections },
   routes: (api) => {
-    helloRoutes(api);
-    noteRoutes(api);
-    statusRoutes(api);
-    fileRoutes(api);
-    adminRoutes(api);
+    scheduleRoutes(api);
+    myScheduleRoutes(api);
   },
 });
 

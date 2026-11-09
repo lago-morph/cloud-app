@@ -7,13 +7,6 @@ export function el<K extends keyof HTMLElementTagNameMap>(tag: K, text = ""): HT
   return node;
 }
 
-/** A titled section of the page. */
-export function section(title: string): HTMLElement {
-  const node = el("section");
-  node.append(el("h2", title));
-  return node;
-}
-
 /** A readable message for a failed call, including the request ID to look up in the log. */
 export function describeError(error: unknown): string {
   if (error instanceof ApiError) {
