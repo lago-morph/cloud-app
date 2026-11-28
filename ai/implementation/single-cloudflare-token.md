@@ -52,10 +52,11 @@ Fuzz targets: none affected. CI path map: no new component or test file outside 
 ## 4. Test results (this branch, 2026-11-27)
 
 - `npm run typecheck`: pass. `npm run lint`: pass.
-- Unit (`vitest.unit.config.ts`, whole suite): see §6 for the final counts. The only failures are the 4 tests of `tests/support/mock-oauth2/launcher.unit.test.ts`, untouched by this branch. Root cause (evidence): they spawn `node` to import `launcher.ts`; this machine's Node 22.22.1 has no TypeScript stripping (`node -e 'console.log(process.features.typescript)'` prints `false`, and importing any `.ts` file fails with `ERR_UNKNOWN_FILE_EXTENSION`). An environment difference (the repository pins Node 22.22.0), not this change.
+- Unit (`vitest.unit.config.ts`, whole suite): 2969 tests in 276 files; 2965 passed, 4 failed. The only failures are the 4 tests of `tests/support/mock-oauth2/launcher.unit.test.ts`, untouched by this branch. Root cause (evidence): they spawn `node` to import `launcher.ts`; this machine's Node 22.22.1 has no TypeScript stripping (`node -e 'console.log(process.features.typescript)'` prints `false`, and importing any `.ts` file fails with `ERR_UNKNOWN_FILE_EXTENSION`). An environment difference (the repository pins Node 22.22.0), not this change.
 - Integration: `tests/compliance/criteria/setup` (both files), `tests/skill/cloudflare-setup.test.ts`, `tests/compliance/criteria/cli/git-warnings.test.ts`, `packages/framework/test/integration/admin-app`: 5 files, 56 tests, all pass (mock-oauth2-server from its Docker image, as CI runs it).
 - E2E: `E2E-017-setup.spec.ts` (project `e2e-api`): 6 passed.
-- Not run here: `criteria/setup/starter-offline.test.ts` and `criteria/cli/commands.test.ts` (each packs and installs a whole app; minutes each). CI runs them.
+- `criteria/setup/starter-offline.test.ts` (the packed starter, installed offline, then `cloudflare-setup` with no credential): 1 passed.
+- Not run here: `criteria/cli/commands.test.ts` (every CLI command in both forms on a template copy; long). CI runs it.
 
 Live, read-only (the owner's account token from `~/.secrets/cloudflare`; every non-GET request refused before sending, by a wrapper; the token never printed, and the output was searched for it): setup reported both settings "from the file /home/…/.secrets/cloudflare", found the account, said "has every permission the framework needs" for a token with about 390 permission groups (no word about the extra ones), then found the account's v0.2.0 setup not current and stopped at its first write (`POST …/oauth_clients`, refused by the wrapper). So the source reporting, the account check, the self-read of the token's policies and the permission comparison work on the real API. The full setup (writes) was not run on the owner's primary account: it would create OAuth clients, Workers, a D1 database, buckets and a signing token there. That is SETUP-AC-011's milestone run, for the owner to schedule (a test account, or the primary account if wanted).
 
@@ -66,6 +67,9 @@ Live, read-only (the owner's account token from `~/.secrets/cloudflare`; every n
 - **Live-pass runner.** `scripts/live-pass/` (DEC-0793) still drives the bootstrap-and-admin-app flow (starter tokens, the Everyday token page). It is not changed here and must be reworked before the next live pass.
 - **Open questions for the owner:** (1) retire the admin app's Account setup and Everyday token pages, or the admin app itself? (2) Run SETUP-AC-011's live setup on which account? (3) Release: this changes PAR-331 and the setup flow, so it belongs in the next release candidate (`0.2.0-rc02`, DEC-0792).
 
-## 6. Final unit counts
+## 6. Final counts
 
-Filled in from the last run before the PR (see the PR body).
+- Unit: 2965 passed, 4 failed (the environment-caused launcher tests of §4), 276 files.
+- Integration run here: 56 passed (5 files), re-run after the last code change: 46 passed (3 files).
+- Offline starter run: 1 passed.
+- E2E-017: 6 passed.
