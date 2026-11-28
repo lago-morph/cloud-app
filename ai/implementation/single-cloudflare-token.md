@@ -91,4 +91,4 @@ A reviewer subagent that wrote neither the code nor the tests read SETUP-REQ-001
 
 **Spec drift for the owner.** SETUP-REQ-004 says a token that cannot read its own permissions "lacks 'Account API Tokens Write', which MUST be named", while SETUP-AC-004 and DEC-0797 name its dashboard name, "Account API Tokens Edit". The tests (and the code) follow the criterion. The wording of SETUP-REQ-004 should probably say "(the dashboard's Account API Tokens Edit)".
 
-**Results.** `criteria/setup/cloudflare-setup.test.ts`: 36 passed (was 31). The four unit files above: 93 passed.
+**Results.** `criteria/setup/cloudflare-setup.test.ts`: 36 passed (was 32). The four unit files above: 93 passed.
