@@ -25,7 +25,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Fixed
 
-- **A new app's `npm install` no longer crashes** with "Cannot read properties of null (reading 'edgesOut')" in npm 10 (Node 22.22.0) (DEC-0803). The template pins `@vitest/browser-playwright` at its `vitest` version, and `npm run upgrade` moves it with `vitest`. An app made with 0.2.0-rc01 whose install fails: add `"@vitest/browser-playwright": "5.0.5"` to its `devDependencies` and run `npm install` again.
+- **A new app's `npm install` no longer crashes** with "Cannot read properties of null (reading 'edgesOut')" in npm 10 (Node 22.22.0) (DEC-0803), and neither does a project that depends on the framework alone. The framework depends on `@vitest/browser-playwright` at its `vitest` version (so it, and its peer `playwright`, are installed with the framework), the template pins it too, and `npm run upgrade` moves it with the framework's version. An app made with 0.2.0-rc01 whose install fails: add `"@vitest/browser-playwright": "5.0.5"` to its `devDependencies` and run `npm install` again.
 
 ## [0.2.0-rc01] - 2026-11-07
 

@@ -62,6 +62,15 @@ describe("package conventions", () => {
     expect(tpl.devDependencies["vitest"]).toMatch(/^\d+\.\d+\.\d+$/);
     expect(tpl.devDependencies["@vitest/browser-playwright"]).toBe(tpl.devDependencies["vitest"]);
   });
+
+  // A project that depends on the framework without the template's pin installs too (DEC-0803).
+  it("the framework depends on @vitest/browser-playwright at its vitest version, and the template pins the same", () => {
+    const fw = JSON.parse(readFileSync(join(REPO, "packages", "framework", "package.json"), "utf8")) as { dependencies: Record<string, string> };
+    const tpl = JSON.parse(readFileSync(join(TEMPLATE, "package.json"), "utf8")) as { devDependencies: Record<string, string> };
+    expect(fw.dependencies["vitest"]).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(fw.dependencies["@vitest/browser-playwright"]).toBe(fw.dependencies["vitest"]);
+    expect(tpl.devDependencies["@vitest/browser-playwright"]).toBe(fw.dependencies["@vitest/browser-playwright"]);
+  });
 });
 
 describe("names", () => {

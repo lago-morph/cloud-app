@@ -21,15 +21,12 @@ import { UsageError } from "../args.js";
 import { EXIT, type Command } from "../io.js";
 import { compareVersions, FRAMEWORK_PACKAGE, installedFrameworkDir, isExactVersion, setupScriptLines, SKILL_DIR } from "./versions.js";
 
-/** The app pins that move with the framework: the versions its own package.json depends on (skill hard rule 5). */
-export const COMPANION_PINS: readonly string[] = ["hono", "zod", "typescript", "vite", "vitest"];
-
 /**
- * App pins that move with the release's `vitest`, which the framework does not depend on itself:
- * npm 10.9.4 crashes a fresh install of an older vitest unless the app pins these at the same
- * version (DEC-0803; ai/implementation/root-causes/2026-11-27-starter-npm-install-edgesout.md).
+ * The app pins that move with the framework: the versions its own package.json depends on (skill hard rule 5).
+ * `@vitest/browser-playwright` is one because npm 10.9.4 crashes a fresh install of an older vitest
+ * unless it is pinned at the same version (DEC-0803; ai/implementation/root-causes/2026-11-27-starter-npm-install-edgesout.md).
  */
-export const VITEST_COMPANION_PINS: readonly string[] = ["@vitest/browser-playwright"];
+export const COMPANION_PINS: readonly string[] = ["hono", "zod", "typescript", "vite", "vitest", "@vitest/browser-playwright"];
 
 /** What `npm view <framework>@<spec>` says about a release. */
 export interface Release {
@@ -86,8 +83,6 @@ export function repin(pkg: AppPackage, release: Release): { pkg: AppPackage; cha
     const version = release.dependencies[name];
     if (version !== undefined && isExactVersion(version)) set(name, version);
   }
-  const vitest = release.dependencies["vitest"];
-  if (vitest !== undefined && isExactVersion(vitest)) for (const name of VITEST_COMPANION_PINS) set(name, vitest);
   return { pkg: next, changed };
 }
 
