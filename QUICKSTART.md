@@ -32,7 +32,7 @@ npm run cloudflare-setup
    - **On your computer:** the file `~/.secrets/cloudflare` in your home directory (`chmod 600 ~/.secrets/cloudflare`). Every app and every Claude Code session on the machine uses it. Set `CLOUDFLARE_SECRETS_FILE` to use another path.
    - **In a cloud session:** the environment's settings (environment menu → Edit → Environment variables), the same two lines; then start a new session.
    Environment variables win over the file.
-3. Run `npm run cloudflare-setup` again (or say **"continue prototype setup"**). It checks the token, then sets the account up in one go: the sign-in clients, the **auth app** that signs people in to every app, the shared buckets and the admin app. It ends with the next step, `npm run deploy -- --target cloudflare --stage test-first`.
+3. Run `npm run cloudflare-setup` again (or say **"continue prototype setup"**). It checks the token, then sets the account up in one go: the sign-in clients, the **auth app** that signs people in to every app, the shared buckets and the admin app. It ends with the next step, `npm run deploy -- --target cloudflare --stage test-first`. The first deploy of a stage stops and names the app's secrets that have no value there yet (the template has one, `apiKey`): set each with `npm run secrets -- set apiKey --target cloudflare --stage test-first` (paste the value, press Enter, then Ctrl-D) and run the deploy again. It prints the app's address.
 
 Already have a token with more permissions, such as an account admin token? Use it: setup says nothing about extra permissions, and if one is missing it names exactly which and gives the link. **The framework never deletes, rolls or changes your token**; it makes and manages only the tokens it needs for itself.
 

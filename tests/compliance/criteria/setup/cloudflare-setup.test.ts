@@ -286,7 +286,12 @@ if (isLocal()) {
       expect(signIn?.body.optional_scopes ?? []).toEqual([]);
       for (const c of clients) {
         expect(c.body.response_types, c.name).toEqual(["code", "id_token"]);
-        expect([...(c.body.scopes as string[])].sort(), c.name).toEqual(["memberships.read", "user-details.read"]);
+        // The API takes every scope in `scopes` and marks the optional ones in `optional_scopes`
+        // (each must also be in `scopes`, code 70748): the required ones are the rest.
+        const optional = (c.body.optional_scopes as string[] | undefined) ?? [];
+        expect([...(c.body.scopes as string[])].filter((s) => !optional.includes(s)).sort(), `${c.name}: required scopes`).toEqual(["memberships.read", "user-details.read"]);
+        expect(optional.filter((s) => !(c.body.scopes as string[]).includes(s)), `${c.name}: optional scopes also in scopes`).toEqual([]);
+        expect(c.body.client_name, "the client's name field").toBe(c.name);
         expect(c.body.token_endpoint_auth_method ?? "none", `${c.name} is confidential`).not.toBe("none");
         expect(Object.entries(c.body).filter(([k, v]) => /public|visibility/i.test(k) && v !== false && v !== "private"), `${c.name} is private`).toEqual([]);
       }
