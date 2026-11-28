@@ -73,3 +73,22 @@ Live, read-only (the owner's account token from `~/.secrets/cloudflare`; every n
 - Integration run here: 56 passed (5 files), re-run after the last code change: 46 passed (3 files).
 - Offline starter run: 1 passed.
 - E2E-017: 6 passed.
+
+## 7. Independent test review (2026-11-27)
+
+A reviewer subagent that wrote neither the code nor the tests read SETUP-REQ-001…007, SETUP-AC-001…011 and DEC-0795…DEC-0801, then the changed tests: `tests/compliance/criteria/setup/cloudflare-setup.test.ts` and its `support/setup-runs.ts`, `token-sources.unit.test.ts`, `cli/cloudflare-settings.unit.test.ts`, `cli/commands/cloudflare-setup.unit.test.ts`, `permissions.unit.test.ts` and E2E-017.
+
+**Verdict.** The tests verify the spec well: the template's two lines exactly, the default and overridden secrets file path, the sources named by variable or path, the guard (user's token, PAR-361 IDs, PUT and roll, DELETE only of signing tokens it saw, bypass encodings), missing permissions by dashboard name with the link, the deny policy, the token that cannot read itself, extra permissions silent, the mode warning (644, 640, 604; 600 and 400 silent) with an unchanged exit status, and the output scan of every run. Each spec item in the brief has a test.
+
+**Gaps found and closed** (`strengthened`, all in `cloudflare-setup.test.ts`, SETUP-AC-001/005/006):
+- The environment winning was tested only for `CLOUDFLARE_API_TOKEN`; SETUP-REQ-002 says each setting. New test: a differing `CLOUDFLARE_ACCOUNT_ID` in the file is not used and its notice names the setting. Before it, no test at any layer failed when the file's account won over the environment's.
+- "The old `.env.cloudflare` and `CLOUDFLARE_BOOTSTRAP_TOKEN` are not used" was checked only with a valid credential also present, so a command that used either as a fallback still passed at the criteria layer. New tests: `.env.cloudflare` as the only source, and the bootstrap token as the only token (from the environment and from the file), each give the no-credential stop with its notice and send no request.
+- A relative `CLOUDFLARE_SECRETS_FILE` was checked at the unit layer only. New criteria test: it is read from the home directory, not from a decoy at the same path in the project.
+- The "only token deletions are of `prototype-r2-signing` tokens" test passed with no deletions at all (its loop over the deletions was vacuous). It now also requires the old signing token's deletion.
+- AC-001's "only the account set" case now checks the template and the link too, as the criterion says.
+
+**Mutation check.** Each new test was confirmed red against a deliberately broken `token-sources.ts`: `.env.cloudflare` read as a fallback; the bootstrap token used as `CLOUDFLARE_API_TOKEN`; a relative path resolved from the current directory; the file's account winning. Each mutation failed exactly the new test, and the file was restored.
+
+**Spec drift for the owner.** SETUP-REQ-004 says a token that cannot read its own permissions "lacks 'Account API Tokens Write', which MUST be named", while SETUP-AC-004 and DEC-0797 name its dashboard name, "Account API Tokens Edit". The tests (and the code) follow the criterion. The wording of SETUP-REQ-004 should probably say "(the dashboard's Account API Tokens Edit)".
+
+**Results.** `criteria/setup/cloudflare-setup.test.ts`: 36 passed (was 31). The four unit files above: 93 passed.

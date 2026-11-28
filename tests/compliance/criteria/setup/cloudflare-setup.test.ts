@@ -22,7 +22,7 @@
  * - "private" is the API's default, so the create request asks for nothing public (plan-v0.2.0
  *   §2.2), and "confidential" is a client authenticated with its secret (DEC-0750).
  */
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { tag } from "../../harness/index.js";
@@ -87,6 +87,9 @@ function expectStopWithoutChange(r: RunResult, world: SetupWorld): void {
   expect(world.tokens.filter((t) => t.deleted).map((t) => t.name), "deleted tokens").toEqual([]);
 }
 
+/** The output's lines. */
+const lines = (text: string): string[] => text.split("\n");
+
 /** The token link on a line of its own. */
 const hasLink = (r: RunResult): boolean => linesEqual(r.out, TOKEN_LINK) === 1;
 
@@ -142,6 +145,8 @@ if (isLocal()) {
       const onlyAccount = await runSetup("AC-001 only the account", world, await project(), { home: home(`CLOUDFLARE_ACCOUNT_ID=${ACCOUNT}\n`) });
       expect(onlyAccount.status).toBe(1);
       expect(onlyAccount.out).toContain("CLOUDFLARE_API_TOKEN is not set");
+      expect(onlyAccount.out.split("\n").filter((l) => (TEMPLATE_LINES as readonly string[]).includes(l))).toEqual([...TEMPLATE_LINES]);
+      expect(hasLink(onlyAccount)).toBe(true);
       expect([...onlyToken.requests, ...onlyAccount.requests]).toEqual([]);
     });
   });
@@ -320,6 +325,8 @@ if (isLocal()) {
       expect(r.status, r.all).toBe(0);
       const deletions = r.requests.filter((q) => / DELETE \/accounts\/[^/]+\/tokens\//.test(q));
       // Each request line starts with the sending token's ID; the deleted ID is in the path.
+      // The old signing token is replaced, so the run does delete: the check below is not vacuous.
+      expect(deletions.length, `the old signing token's deletion:\n${r.requests.join("\n")}`).toBeGreaterThan(0);
       for (const q of deletions) expect(q.slice(q.indexOf(" DELETE "))).not.toMatch(new RegExp(`${t.id}|${other.id}|unrelated`, "i"));
       expect(world.cloud().tokens.has("unrelated")).toBe(true);
       expect(tokenWritesOf(r.requests).filter((q) => !/ DELETE /.test(q))).toEqual([]);
@@ -348,6 +355,63 @@ if (isLocal()) {
       expect(r.requests.filter((q) => q.startsWith("? ")), "requests with the file's token").toEqual([]);
       expect(r.err).toMatch(/CLOUDFLARE_API_TOKEN is set in both the environment and .* using the environment/);
       expect(r.out).toContain(`CLOUDFLARE_ACCOUNT_ID: from the file ${secretsFile(homeDir)}`);
+    });
+
+    it(tag("SETUP-AC-006", "the environment wins for CLOUDFLARE_ACCOUNT_ID too: the file's differing account is not used and a notice names the setting; the token comes from the file"), async () => {
+      const { world, token } = await setUp("ac006envaccount");
+      addSecondAccount(world);
+      const homeDir = home(credential(token.value, SECOND_ACCOUNT));
+      const r = await runSetup("AC-006 environment wins for the account", world, await project(), { home: homeDir, env: { CLOUDFLARE_ACCOUNT_ID: ACCOUNT } });
+      expect(r.status, r.all).toBe(0);
+      expect(r.err).toMatch(/CLOUDFLARE_ACCOUNT_ID is set in both the environment and .* using the environment/);
+      expect(r.out).toContain("CLOUDFLARE_ACCOUNT_ID: from the environment variable CLOUDFLARE_ACCOUNT_ID");
+      expect(r.out).toContain(`CLOUDFLARE_API_TOKEN: from the file ${secretsFile(homeDir)}`);
+      expect(r.requests.filter((q) => q.includes(SECOND_ACCOUNT)), "requests to the file's account").toEqual([]);
+    });
+
+    it(tag("SETUP-AC-006", "a relative CLOUDFLARE_SECRETS_FILE is read from the home directory, never from the project"), async () => {
+      const { world, token } = await setUp("ac006relative");
+      const homeDir = home();
+      const inHome = join(homeDir, "keys", "cf");
+      mkdirSync(join(homeDir, "keys"));
+      writeFileSync(inHome, credential(token.value), { mode: 0o600 });
+      const dir = await project();
+      // A decoy at the same relative path in the project, with a value that is not a token.
+      mkdirSync(join(dir, "keys"));
+      writeFileSync(join(dir, "keys", "cf"), credential(tokenValue("ac006decoy")), { mode: 0o600 });
+      const r = await runSetup("AC-006 relative override", world, dir, { home: homeDir, env: { CLOUDFLARE_SECRETS_FILE: "keys/cf" } });
+      // The two files are the test's own, holding the credential on purpose: SETUP-AC-010's search leaves them out, as it does the default secrets file.
+      const last = RUNS.pop()!;
+      RUNS.push({ ...last, files: Object.fromEntries(Object.entries(last.files).filter(([path]) => path !== join("keys", "cf") && path !== `~/${join("keys", "cf")}`)) });
+      expect(r.status, r.all).toBe(0);
+      expect(r.out).toContain(`CLOUDFLARE_API_TOKEN: from the file ${inHome}`);
+      expect(r.requests.filter((q) => q.startsWith("? ")), "requests with the decoy").toEqual([]);
+    });
+
+    it(tag("SETUP-AC-006", "an old .env.cloudflare holding both settings, with nothing else: not read, so the no-credential stop with its notice; no request; exit 1"), async () => {
+      const { world, token } = await setUp("ac006oldonly");
+      const dir = await project({ oldEnvFile: credential(token.value) });
+      const r = await runSetup("AC-006 old file only", world, dir, { home: home() });
+      expectStopWithoutChange(r, world);
+      expect(r.requests, "no Cloudflare request").toEqual([]);
+      expect(r.err).toMatch(/\.env\.cloudflare.*no longer read/);
+      expect(hasLink(r)).toBe(true);
+      expect(lines(r.out).slice(lines(r.out).indexOf(TEMPLATE_LINES[0]), lines(r.out).indexOf(TEMPLATE_LINES[0]) + 2)).toEqual([...TEMPLATE_LINES]);
+    });
+
+    it(tag("SETUP-AC-006", "CLOUDFLARE_BOOTSTRAP_TOKEN as the only token, in the environment or the secrets file: not used, so CLOUDFLARE_API_TOKEN is named missing; no request; exit 1"), async () => {
+      const { world, token } = await setUp("ac006bootonly");
+      for (const [where, env, secrets] of [
+        ["environment", { CLOUDFLARE_BOOTSTRAP_TOKEN: token.value, CLOUDFLARE_ACCOUNT_ID: ACCOUNT }, undefined],
+        ["file", {}, `CLOUDFLARE_BOOTSTRAP_TOKEN=${token.value}\nCLOUDFLARE_ACCOUNT_ID=${ACCOUNT}\n`],
+      ] as const) {
+        const r = await runSetup(`AC-006 bootstrap only (${where})`, world, await project(), { home: home(secrets), env });
+        expect(r.status, `${where}:\n${r.all}`).toBe(1);
+        expect(r.requests, `${where}: no Cloudflare request`).toEqual([]);
+        expect(r.err, where).toMatch(/CLOUDFLARE_BOOTSTRAP_TOKEN is no longer used/);
+        expect(r.out, where).toContain("CLOUDFLARE_API_TOKEN is not set");
+        expect(hasLink(r), where).toBe(true);
+      }
     });
 
     it(tag("SETUP-AC-006", "CLOUDFLARE_SECRETS_FILE points at another file, which is read"), async () => {
