@@ -242,23 +242,10 @@ One UI test signs in through the sign-in pages in a browser (E2E-005's auth-app 
 
 Pass: each step and each expected error behaves as stated, and no app response carries a provider token or the member's email address.
 
-#### E2E-019 — Upgrade from 0.1.x
-Verifies: SYS-REQ-012
-Where: Local
-Origin: ai-proposed
-
-Make an app the way a 0.1.x user did: with the published 0.1.1 `npm create` starter and framework. Use it under `dev` and store some of the app's own data. Then upgrade it with its own `npm run upgrade -- 0.2.0`, from a local 0.2.0 package tarball (served for the framework's scope by a local registry until 0.2.0 is published), and run `dev` again (plan-v0.2.0 §8).
-
-Expected error: an upgrade to a version the registry does not have stops before changing anything.
-
-Pass:
-- the app's own data survives the upgrade and the next `dev`;
-- the upgrade prints the pointer to re-run Cloudflare setup (0.1.x's own upgrade command prints it, naming `cloudflare-setup` and the bootstrap token);
-- the next `dev` drops the Better Auth, sign-in rate-limit and test-mail tables through the framework's migrations.
-
 ## Retired scenarios
 
-A retired scenario is kept here for the record, outside any `####` heading and with no `Where:` line, so the compliance catalogue no longer expects it. Its ID is never reused (CONVENTIONS §2, §4). No scenario is retired. v0.2.0 rewrote E2E-005…E2E-008 in place for sign-in through the auth app and removed their password, mail and `admins` clauses: E2E-005's mock-only cloud run, E2E-006's test-mail route and sign-in page, E2E-007's sign-up, `mail last` and `admins grant`/`revoke` steps on `prodcheck`, and E2E-008's eight password and mail steps of `check-login` (DEC-0753, DEC-0754).
+A retired scenario is kept here for the record, outside any `####` heading and with no `Where:` line, so the compliance catalogue no longer expects it. Its ID is never reused (CONVENTIONS §2, §4). E2E-019 is retired (DEC-0804). v0.2.0 rewrote E2E-005…E2E-008 in place for sign-in through the auth app and removed their password, mail and `admins` clauses: E2E-005's mock-only cloud run, E2E-006's test-mail route and sign-in page, E2E-007's sign-up, `mail last` and `admins grant`/`revoke` steps on `prodcheck`, and E2E-008's eight password and mail steps of `check-login` (DEC-0753, DEC-0754).
 
 | Retired ID | Former scenario | Former Where | Reason or replacement |
 | --- | --- | --- | --- |
+| E2E-019 | Upgrade from 0.1.x: an app made with the published 0.1.1 starter and framework keeps its data through its own `npm run upgrade -- 0.2.0` and the next `dev`, which drops the Better Auth and test-mail tables | Local | No app was built on 0.1.1, so upgrading from it is not supported or tested (owner, DEC-0804). The published 0.1.1 starter's own `npm install` now fails (npm 10.9.4 edgesOut crash, DEC-0803). The `upgrade` command stays covered by the CLI criteria and its unit tests, and schema evolution with data by E2E-010. |
