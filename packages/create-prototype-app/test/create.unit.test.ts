@@ -53,6 +53,15 @@ describe("package conventions", () => {
     expect(SELF.version).toBe(fw.version);
     expect(tpl.dependencies[FRAMEWORK_PACKAGE]).toBe(fw.version);
   });
+
+  // Without it, npm 10.9.4 (Node 22.22.0) crashes the new app's `npm install` with "Cannot read
+  // properties of null (reading 'edgesOut')" once a newer @vitest/browser-playwright is published
+  // (DEC-0803; root cause ai/implementation/root-causes/2026-11-27-starter-npm-install-edgesout.md).
+  it("the template pins @vitest/browser-playwright at its vitest version", () => {
+    const tpl = JSON.parse(readFileSync(join(TEMPLATE, "package.json"), "utf8")) as { devDependencies: Record<string, string> };
+    expect(tpl.devDependencies["vitest"]).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(tpl.devDependencies["@vitest/browser-playwright"]).toBe(tpl.devDependencies["vitest"]);
+  });
 });
 
 describe("names", () => {

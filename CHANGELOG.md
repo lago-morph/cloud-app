@@ -23,6 +23,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - `.env.cloudflare`: no longer read or written. Move its `CLOUDFLARE_API_TOKEN` (with the permissions setup names) and `CLOUDFLARE_ACCOUNT_ID` to `~/.secrets/cloudflare`, then delete it. Commands print a note while it is there.
 - `cloudflare-setup --switch-account`: the account is always your `CLOUDFLARE_ACCOUNT_ID`.
 
+### Fixed
+
+- **A new app's `npm install` no longer crashes** with "Cannot read properties of null (reading 'edgesOut')" in npm 10 (Node 22.22.0) (DEC-0803). The template pins `@vitest/browser-playwright` at its `vitest` version, and `npm run upgrade` moves it with `vitest`. An app made with 0.2.0-rc01 whose install fails: add `"@vitest/browser-playwright": "5.0.5"` to its `devDependencies` and run `npm install` again.
+
 ## [0.2.0-rc01] - 2026-11-07
 
 First release candidate of 0.2.0, published to the npm dist-tag `next` (`latest` stays at 0.1.1). It holds the whole release so far. Try it with `npm create @lago-morph/prototype-app@0.2.0-rc01 my-app`, or move an app with `npm run upgrade -- 0.2.0-rc01`.
