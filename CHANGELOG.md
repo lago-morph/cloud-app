@@ -11,6 +11,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.2.0-rc02] - 2026-11-27
+
+Second release candidate of 0.2.0, published to the npm dist-tag `next` (`latest` stays at 0.1.1). It holds what changed since 0.2.0-rc01. Try it with `npm create @lago-morph/prototype-app@0.2.0-rc02 my-app`, or move an app with `npm run upgrade -- 0.2.0-rc02`. **The permission list is now version 3: run `npm run cloudflare-setup` again** after upgrading.
+
 ### Changed
 
 - **Cloudflare setup takes one token, which you supply** (DEC-0795…DEC-0800). Put `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the environment (for example a Claude Code cloud session's environment variables) or in `~/.secrets/cloudflare` in your home directory, which every app and session on the machine shares (`CLOUDFLARE_SECRETS_FILE` names another path). The environment wins. With neither, `npm run cloudflare-setup` prints the two-line template, where it goes and a pre-filled link for the token.
@@ -110,6 +114,7 @@ First public release. Release 1 targets local development and Cloudflare (DEC-05
 - The Cloudflare commands have run against a simulated Cloudflare; see `apps/template/README.md` for what is verified on a real account.
 - Google login has not been run against Google.
 
+[0.2.0-rc02]: https://github.com/lago-morph/cloud-app/releases/tag/v0.2.0-rc02
 [0.2.0-rc01]: https://github.com/lago-morph/cloud-app/releases/tag/v0.2.0-rc01
 [0.1.1]: https://github.com/lago-morph/cloud-app/releases/tag/v0.1.1
 [0.1.0]: https://github.com/lago-morph/cloud-app/releases/tag/v0.1.0
