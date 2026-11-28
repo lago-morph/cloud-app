@@ -51,18 +51,17 @@ Any Cloudflare account works, on the free Workers plan too; no domain is needed.
 npm run cloudflare-setup
 ```
 
-1. It prints one pre-filled dashboard link, for the **bootstrap token**, and where to put it (`.env.cloudflare` in this folder, or the environment). Make the token with an end date under TTL **no more than 1 day away**, put it there, and run the command again.
-2. It deploys the account's **admin app**, deletes the bootstrap token, and prints the admin app's address.
-3. Open the admin app and sign in with your Cloudflare account (you need the role "Super Administrator - All Privileges" or "Administrator"). Do **Account setup**, then make the **Everyday token** and save it as `CLOUDFLARE_API_TOKEN`, as in step 1. The page shows it once; never paste it into a chat.
-4. Run `npm run cloudflare-setup` again (in Claude Code, "continue prototype setup") until it says everything is set up.
+1. With no token yet, it prints a two-line template (`CLOUDFLARE_API_TOKEN=` and `CLOUDFLARE_ACCOUNT_ID=`), one pre-filled dashboard link for the token, and where the lines go: the file `~/.secrets/cloudflare` in your home directory (shared by every app on the machine), or a cloud session's environment variables. Make the token (any end date, or none; a token you have with more permissions works too), fill in the lines, put them there, and run the command again. Never paste the token into a chat.
+2. It checks the token and sets the account up in one run: the sign-in clients, the **auth app** that signs people in to every app, the shared buckets and the optional admin app. It never deletes or changes your token.
+3. It ends with the next step, a deploy of a `test-` stage. Run it again whenever it stops (in Claude Code, "continue prototype setup") until it says everything is set up.
 
-Coming from framework 0.1.x: `npm run upgrade` says setup needs re-running; do steps 1–4 once per account. Everyone signs in again, with Cloudflare (QUICKSTART, "Coming from 0.1.x?").
+Coming from framework 0.1.x or 0.2.0-rc01: `npm run upgrade` says setup needs re-running; move the token and account ID from `.env.cloudflare` to `~/.secrets/cloudflare` (with the permissions setup names), delete `.env.cloudflare`, and do steps 1–3 once per account. Everyone signs in again, with Cloudflare (QUICKSTART, "Coming from 0.1.x?").
 
-It never prints a token value, and every later command reads the tokens itself. The steps, and what to do when it stops: [QUICKSTART.md](https://github.com/lago-morph/cloud-app/blob/main/QUICKSTART.md) and the skill's `reference/owner-tasks.md` §2 (in this app, `.claude/skills/prototype-framework/reference/owner-tasks.md`).
+It never prints a token value, and every later command reads the token itself. The steps, and what to do when it stops: [QUICKSTART.md](https://github.com/lago-morph/cloud-app/blob/main/QUICKSTART.md) and the skill's `reference/owner-tasks.md` §2 (in this app, `.claude/skills/prototype-framework/reference/owner-tasks.md`).
 
 ## 3. What the account setup creates
 
-The admin app's Account setup page creates the account's shared resources once: the **auth app**, which signs people in to every app, with its database; the log bucket `prototype-logs`; the deploy-state bucket `sst-state`; the backup bucket `prototype-backups` (a removed production stage's data, kept 30 days); and the file-signing credential every stage uses. `deploy` never creates these resources; if any is missing, it says so.
+`npm run cloudflare-setup` creates the account's shared resources once (the admin app's optional Account setup page does the same): the **auth app**, which signs people in to every app, with its database; the log bucket `prototype-logs`; the deploy-state bucket `sst-state`; the backup bucket `prototype-backups` (a removed production stage's data, kept 30 days); and the file-signing credential every stage uses. `deploy` never creates these resources; if any is missing, it says so and names `npm run cloudflare-setup`.
 
 ## 4. Deploy a test stage, test it, remove it
 
@@ -153,7 +152,7 @@ A member whose Cloudflare account role is "Super Administrator - All Privileges"
 Every error response has a `requestId`. A failed login returns to `/?authError=login_failed&requestId=<id>`. Each log entry is a file in the R2 bucket `prototype-logs`, under `template/<stage>/<yyyy>/<mm>/<dd>/`. The date is UTC, and the file name ends in `-<requestId>.json`.
 
 - **Dashboard** (menu names not yet verified)**:** open Storage & databases → R2 → `prototype-logs`, then the folders `template` / `<stage>` / year / month / day. Open the file whose name ends in the request ID.
-- **Command line, only where both values are in the environment:** these commands need `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` in the shell's environment, for example in a cloud session whose environment settings hold them. With the tokens only in `.env.cloudflare` (§2), the variables are empty and the requests fail: use the dashboard route above. Never `source` or `cat` `.env.cloudflare` to fill them in. List today's entries of a stage, and keep only the line with the request ID. `APP` must be set (§1 step 2):
+- **Command line, only where both values are in the environment:** these commands need `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` in the shell's environment, for example in a cloud session whose environment settings hold them. With the token only in `~/.secrets/cloudflare` (§2), the variables are empty and the requests fail: use the dashboard route above. Never `source` or `cat` `~/.secrets/cloudflare` to fill them in. List today's entries of a stage, and keep only the line with the request ID. `APP` must be set (§1 step 2):
   ```sh
   STAGE='<stage>'; DAY=$(date -u +%Y/%m/%d)
   curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \

@@ -1,6 +1,6 @@
 /**
  * The offline integration run of plan-setup-wizard §6: "run the starter offline, then
- * `cloudflare-setup` with no tokens, and check the exact printed links and template" — SETUP-AC-001
+ * `cloudflare-setup` with no credential, and check the exact printed link and template" — SETUP-AC-001
  * end to end, on an app made by the packaged starter against the packed framework, with no network.
  * It also shows, on that app, SETUP-AC-009's "the command runs the local setup first" (the starter
  * ran with `--no-install`, so no local secret was set before `cloudflare-setup`) and SKILL-AC-008's
@@ -14,14 +14,15 @@
  * does that, possibly at the same time); its package files are staged in a temporary folder with
  * the bundle its `prepack` makes (`bundle(<dir>)`), then packed from there.
  *
- * `cloudflare-setup` runs through the app's npm script with none of the four Cloudflare settings in
- * its environment (the operator's are removed, compliance.md §2, DEC-0604), with every outgoing
- * request of its processes logged (criteria/cli/support/record-requests.mjs): none may go to
- * Cloudflare. The expected text is plan §3.2's (setup.md SETUP-REQ-003); the links are the
- * framework's `deepLink` of the same source tree the tarball was packed from.
+ * `cloudflare-setup` runs through the app's npm script with none of the Cloudflare settings in its
+ * environment (the operator's are removed, compliance.md §2, DEC-0604) and an empty temporary home
+ * directory, so no `~/.secrets/cloudflare` is read (DEC-0795), with every outgoing request of its
+ * processes logged (criteria/cli/support/record-requests.mjs): none may go to Cloudflare. The
+ * expected text is setup.md SETUP-REQ-003's; the link is the framework's `deepLink` of the same
+ * source tree the tarball was packed from.
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -29,13 +30,13 @@ import { afterAll, describe, expect, it } from "vitest";
 import { tag } from "../../harness/index.js";
 import { appLockfile } from "../../../../packages/create-prototype-app/test/lockfile.js";
 import { isLocal, REPO_ROOT } from "../core/support/repo.js";
-import { BOOT_LINK, EVERYDAY_LINK, linesEqual, NEXT_PROMPT_PHRASE, TEMPLATE_LINES } from "./support/setup-runs.js";
+import { EVERYDAY_LINK, linesEqual, NEXT_PROMPT_PHRASE, TEMPLATE_LINES, TOKEN_LINK } from "./support/setup-runs.js";
 
 const STARTER_DIR = join(REPO_ROOT, "packages", "create-prototype-app");
 const FRAMEWORK = join(REPO_ROOT, "packages", "framework");
 const RECORDER = join(REPO_ROOT, "tests", "compliance", "criteria", "cli", "support", "record-requests.mjs");
 const TIMEOUT = 20 * 60_000;
-const SETTINGS = ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_BOOTSTRAP_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_EMAIL_DOMAIN"] as const;
+const SETTINGS = ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_BOOTSTRAP_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_EMAIL_DOMAIN", "CLOUDFLARE_SECRETS_FILE"] as const;
 
 /** The process environment without any Cloudflare setting, npm quiet, git with an identity. */
 function childEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
@@ -45,14 +46,16 @@ function childEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
 }
 
 if (isLocal()) {
-  describe("SETUP: the starter offline, then cloudflare-setup with no tokens", () => {
+  describe("SETUP: the starter offline, then cloudflare-setup with no credential", () => {
     const root = mkdtempSync(join(tmpdir(), "setup-offline-"));
+    // An empty folder for the setup run's secrets file: the operator's ~/.secrets/cloudflare is never read.
+    const emptyHome = join(root, "home");
     afterAll(() => rmSync(root, { recursive: true, force: true }), 120_000);
 
     const npm = (args: string[], cwd: string): string => execFileSync("npm", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: childEnv() });
 
     it(
-      tag(["SETUP-AC-001", "SETUP-AC-009", "SKILL-AC-008"], "an app made by the packed starter, installed offline: cloudflare-setup with no tokens runs the local setup first, prints exactly the bootstrap link (no everyday link) and the three template lines, writes the template, sends no Cloudflare request and exits 1; the app has the template's .claude/settings.json"),
+      tag(["SETUP-AC-001", "SETUP-AC-009", "SKILL-AC-008"], "an app made by the packed starter, installed offline: cloudflare-setup with no credential runs the local setup first, prints exactly the token link (no everyday link), the two template lines and the secrets file path, writes no file, sends no Cloudflare request and exits 1; the app has the template's .claude/settings.json"),
       async () => {
         expect(existsSync(join(FRAMEWORK, "dist", "index.js")), "build the framework first").toBe(true);
         const [packed] = JSON.parse(npm(["pack", "--json", "--ignore-scripts", "--pack-destination", root], FRAMEWORK)) as { filename: string }[];
@@ -78,30 +81,33 @@ if (isLocal()) {
         expect(existsSync(join(app, ".env.cloudflare"))).toBe(false);
 
         const log = join(root, "requests.log");
+        mkdirSync(emptyHome);
         const run = spawnSync("npm", ["run", "--silent", "cloudflare-setup"], {
           cwd: app,
           encoding: "utf8",
-          env: childEnv({ COMPLIANCE_REQUEST_LOG: log, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import=${pathToFileURL(RECORDER).href}`.trim() }),
+          // The secrets file is pointed into an empty folder (PAR-487), so the operator's ~/.secrets/cloudflare is never read.
+          env: { ...childEnv({ COMPLIANCE_REQUEST_LOG: log, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import=${pathToFileURL(RECORDER).href}`.trim() }), CLOUDFLARE_SECRETS_FILE: join(emptyHome, ".secrets", "cloudflare") },
           timeout: 5 * 60_000,
         });
         const out = run.stdout;
         const all = `${run.stdout}\n${run.stderr}`;
         expect(run.status, all).toBe(1);
 
-        // The exact bootstrap link on a line of its own (no everyday link since v0.2.0, DEC-0697), and the template's three lines in order.
-        expect(linesEqual(out, BOOT_LINK), `the bootstrap link:\n${out}`).toBe(1);
+        // The exact token link on a line of its own (no everyday link: one token, DEC-0796), and the template's two lines in order.
+        expect(linesEqual(out, TOKEN_LINK), `the token link:\n${out}`).toBe(1);
         expect(out, "no everyday link").not.toContain(EVERYDAY_LINK);
         const lines = out.split("\n");
         const at = lines.indexOf(TEMPLATE_LINES[0]);
         expect(lines.slice(at, at + TEMPLATE_LINES.length), "the template").toEqual([...TEMPLATE_LINES]);
-        expect(out, "no domain requirement").not.toMatch(/Cloudflare DNS/);
+        expect(out, "the secrets file path").toContain(join(emptyHome, ".secrets", "cloudflare"));
         expect(out).toMatch(/Environment variables/);
         expect(out).toMatch(/new session/i);
         expect(out).toContain(NEXT_PROMPT_PHRASE);
+        expect(all).not.toMatch(/bootstrap/i);
 
-        // The template is written (owner read and write only, PAR-341), and listed in .gitignore.
-        expect(readFileSync(join(app, ".env.cloudflare"), "utf8").split("\n").filter((l) => l !== "")).toEqual([...TEMPLATE_LINES]);
-        if (process.platform !== "win32") expect((statSync(join(app, ".env.cloudflare")).mode & 0o777).toString(8)).toBe("600");
+        // No file is written (DEC-0799): no .env.cloudflare, nothing in the home directory; .env.cloudflare is still listed in .gitignore.
+        expect(existsSync(join(app, ".env.cloudflare"))).toBe(false);
+        expect(readdirSync(emptyHome)).toEqual([]);
         expect(spawnSync("git", ["check-ignore", "-q", ".env.cloudflare"], { cwd: app }).status, "git ignores .env.cloudflare").toBe(0);
 
         // The local setup ran first: the app's declared secret has a local value now.

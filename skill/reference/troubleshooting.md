@@ -35,7 +35,7 @@ The date and time are UTC. `smoke` prints today's prefix.
 
 **Dashboard (no setup; these menu names are not yet verified).** Open Storage & databases → R2 → `prototype-logs`. Then open the folders `<app>` / `<stage>` / year / month / day. The file name ends in the request ID. Open the file and choose Download to read it.
 
-**Command line, only where both values are in the environment.** These commands need `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` in the shell's environment, for example in a cloud session whose environment settings hold them. When the tokens are only in `.env.cloudflare` (the usual case, [owner-tasks.md](owner-tasks.md) §2), the variables are empty and the requests fail: use the dashboard route above instead. Never `source`, `cat` or otherwise read `.env.cloudflare` to fill them in. These two `curl` commands are **verified on Cloudflare**: on a real test stage, the list command found a failed request's key and the read command returned its `CORE.INTERNAL` entry (E2E-011, Cloudflare pass 2–5; the framework repository's `validation/cloudflare/pass-2to5/SUMMARY.md` and `logs/5-trouble.log`). List one day's keys:
+**Command line, only where both values are in the environment.** These commands need `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` in the shell's environment, for example in a cloud session whose environment settings hold them. When the token is only in `~/.secrets/cloudflare` (the usual case on a computer, [owner-tasks.md](owner-tasks.md) §2), the variables are empty and the requests fail: use the dashboard route above instead. Never `source`, `cat` or otherwise read `~/.secrets/cloudflare` (or an old `.env.cloudflare`) to fill them in. These two `curl` commands are **verified on Cloudflare**: on a real test stage, the list command found a failed request's key and the read command returned its `CORE.INTERNAL` entry (E2E-011, Cloudflare pass 2–5; the framework repository's `validation/cloudflare/pass-2to5/SUMMARY.md` and `logs/5-trouble.log`). List one day's keys:
 
 ```sh
 STAGE='<stage>'; DAY=$(date -u +%Y/%m/%d)
@@ -70,7 +70,7 @@ Not yet verified on Cloudflare in this phase.
   ```sh
   npx wrangler tail "$APP-$STAGE" --format pretty
   ```
-  It needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the shell's environment, as the `curl` commands above do; with the tokens only in `.env.cloudflare`, use the dashboard instead (Workers & Pages → `<app>-<stage>` → Logs, menu names not yet verified). Not yet verified on Cloudflare in this phase.
+  It needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the shell's environment, as the `curl` commands above do; with the token only in `~/.secrets/cloudflare`, use the dashboard instead (Workers & Pages → `<app>-<stage>` → Logs, menu names not yet verified). Not yet verified on Cloudflare in this phase.
 - If entries are printed as lines starting `[prototype-framework:log]` in `wrangler tail`, the Worker has no `LOGS` binding. Run `deploy` again.
 - Locally, entries reach `.logs/` only while `npm run dev` runs. In-process tests write no files.
 
@@ -109,8 +109,8 @@ Signed in, but not admin (or still admin): the level comes from the person's rol
 
 `deploy` prints the failed step, the stage's state and the next action. Follow the next action. Common messages:
 
-- `run setup-account … first`, or the account's auth app is missing: do the admin app's Account setup page ([owner-tasks.md](owner-tasks.md) §2 step 5). `npm run cloudflare-setup` names what is missing.
-- A missing `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID`, a missing permission, or "R2 signing credential … missing": run `npm run cloudflare-setup`, which says what to fix ([owner-tasks.md](owner-tasks.md) §2). "Account API Tokens Write" is the bootstrap token's only; the everyday token is made and updated on the admin app's Everyday token page.
+- `run npm run cloudflare-setup first` (older releases: `run setup-account … first`), or the account's auth app is missing: run `npm run cloudflare-setup` ([owner-tasks.md](owner-tasks.md) §2). It names what is missing and sets the account up.
+- A missing `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID`, a missing permission, or "R2 signing credential … missing": run `npm run cloudflare-setup`, which says what to fix ([owner-tasks.md](owner-tasks.md) §2). Setup names each permission the token lacks; add it to the token in the dashboard, or make a new token from setup's link.
 - `NODE_USE_ENV_PROXY`: you are behind an HTTPS proxy. Put `NODE_USE_ENV_PROXY=1 ` in front of the command.
 - `required secrets are not set: …`: this happens on the first deploy of a stage. Set each named secret with `--target cloudflare`, then run `deploy` again.
 - An error about the number of D1 databases: an account holds at most 10, and a schema-changing deploy briefly holds two per stage. Remove unused test stages ([deploying.md](deploying.md)).

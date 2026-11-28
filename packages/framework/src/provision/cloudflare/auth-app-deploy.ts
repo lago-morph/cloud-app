@@ -53,7 +53,7 @@ export interface AuthAppDeployOptions {
 export async function deployAuthApp(api: CloudflareApi, accountId: string, options: AuthAppDeployOptions): Promise<{ origin: string; databaseId: string; databaseCreated: boolean }> {
   const stored = await storedSecrets(api, accountId, options.storeId);
   for (const name of [CLIENT_SECRET_NAMES.signin.id, CLIENT_SECRET_NAMES.signin.secret]) {
-    if (!stored.has(name)) throw new Error(`the sign-in client's ${name} is not in Secrets Store: run npm run cloudflare-setup with a bootstrap token first`);
+    if (!stored.has(name)) throw new Error(`the sign-in client's ${name} is not in Secrets Store: run npm run cloudflare-setup first`);
   }
   const db = await ensureAuthDatabase(api, accountId);
   const origin = appOrigin("signin", options.subdomain);

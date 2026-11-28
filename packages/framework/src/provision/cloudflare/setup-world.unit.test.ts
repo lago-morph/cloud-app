@@ -1,10 +1,10 @@
 /** The fake setup world's own rules (root cause 2026-10-31-C-34a-fake-secrets-store-read). No network. */
 import { describe, expect, it } from "vitest";
 import { ACCOUNT } from "./fake-cloud.test-support.js";
-import { BOOTSTRAP, EVERYDAY_V2 } from "./permissions.js";
+import { EVERYDAY_V2, TOKEN } from "./permissions.js";
 import { SetupWorld } from "./setup-world.test-support.js";
 
-const named = (list: typeof BOOTSTRAP, name: string) => {
+const named = (list: typeof TOKEN, name: string) => {
   const found = list.find((x) => x.name === name);
   if (found === undefined) throw new Error(`no permission group ${name}`);
   return found;
@@ -26,7 +26,7 @@ describe("the fake setup world's Secrets Store rules: a GET needs Secrets Store 
 
   it("a token holding only Secrets Store Write also reads the stores (Write implies Read)", async () => {
     const world = new SetupWorld();
-    world.addToken("everyday", "MARKER-write-only-value", "write-only-id", { groups: [named(BOOTSTRAP, "Secrets Store Write")] });
+    world.addToken("everyday", "MARKER-write-only-value", "write-only-id", { groups: [named(TOKEN, "Secrets Store Write")] });
     expect((await world.apiFor("MARKER-write-only-value")("GET", STORES)).status).toBe(200);
   });
 });

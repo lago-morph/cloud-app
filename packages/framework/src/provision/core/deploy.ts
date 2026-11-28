@@ -210,7 +210,7 @@ async function preflight(ops: TargetOperations, request: DeployRequest): Promise
     const foreign = shared.filter((r) => r.state === "foreign").map((r) => r.name);
     const absent = shared.filter((r) => r.state === "absent").map((r) => r.name);
     if (foreign.length > 0) missing.push(foreignResourcesMessage(foreign));
-    if (absent.length > 0) missing.push(`the account's shared resources are missing (${absent.join(", ")}); run setup-account --target ${ops.target} first`);
+    if (absent.length > 0) missing.push(`the account's shared resources are missing (${absent.join(", ")}); run ${ops.setupCommand ?? `setup-account --target ${ops.target}`} first`);
   });
   if (request.validateConfiguration) {
     const validate = request.validateConfiguration;

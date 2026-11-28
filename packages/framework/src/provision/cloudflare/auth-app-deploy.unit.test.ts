@@ -71,7 +71,7 @@ describe("deployAuthApp", () => {
   it("stops before any write when the sign-in client is not in Secrets Store (the bootstrap did not finish)", async () => {
     cloud.secretStores.get("store1")!.secrets.delete(CLIENT_SECRET_NAMES.signin.secret);
     await expect(deployAuthApp(api, ACCOUNT, { source: SOURCE, storeId: "store1", subdomain: SUB })).rejects.toThrow(
-      "the sign-in client's PROTOTYPE_SIGNIN_CLIENT_SECRET is not in Secrets Store: run npm run cloudflare-setup with a bootstrap token first",
+      "the sign-in client's PROTOTYPE_SIGNIN_CLIENT_SECRET is not in Secrets Store: run npm run cloudflare-setup first",
     );
     expect(cloud.requests.filter((r) => !r.startsWith("GET "))).toEqual([]);
     expect(dbs).toEqual([]);

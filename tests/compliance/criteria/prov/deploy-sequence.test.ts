@@ -31,7 +31,7 @@
  *    (same credentials, no `deniedBuckets`: it counts as absent, PROV §2 "Signing record") and
  *    the backup bucket's lifecycle rule `framework-backups-retention` is removed; a deploy of a
  *    never-deployed stage then exits non-zero with one line `the account's shared resources are
- *    missing (…); run setup-account --target cloudflare first` naming both, and creates nothing.
+ *    missing (…); run npm run cloudflare-setup first` naming both, and creates nothing.
  *    Both are restored byte for byte in a `finally`, also on failure, and read back; a restore
  *    that fails or reads back differently fails the run loudly, naming the `setup-account`
  *    command that repairs the account. Running stages keep working meanwhile (their Worker
@@ -195,7 +195,7 @@ if (!isLocal() && MILESTONE) {
       expect(line, `one message names the absent shared resources:\n${tail(result.output)}`).not.toBe("");
       expect(line, "the message names the R2 signing credential").toContain("R2 signing credential prototype-r2-signing");
       expect(line, "the message names the backup bucket's lifecycle rule").toContain("lifecycle rule of R2 bucket prototype-backups (PAR-311)");
-      expect(line, "the message points to setup-account").toContain("run setup-account --target cloudflare first");
+      expect(line, "the message points to the setup command (DEC-0802)").toContain("run npm run cloudflare-setup first");
       expect(left, "resources the stopped deploy created").toEqual([]);
     }, 15 * 60_000);
   });

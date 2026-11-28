@@ -8,7 +8,7 @@
  * print no git warning and their exit status is unchanged."
  *
  * - `deploy`: the CLI's own Cloudflare binding path in process (`withCloudflareSettings`, which
- *   reads `.env.cloudflare` and prints its warnings, around `deployCommand` and the PROV core),
+ *   prints the old `.env.cloudflare`'s warnings, around `deployCommand` and the PROV core),
  *   with the framework's Cloudflare target on the in-memory account (`FakeCloud`). Both a deploy
  *   that succeeds (exit 0) and one that stops at step 1 (no signing record, exit 1) are run under
  *   every condition, twice each ("on every run"). "The git check itself fails": `git` cannot be
@@ -47,7 +47,7 @@ const ANY_GIT_WARNING = /WARNING[^\n]*(\.env\.cloudflare|git)|\.env\.cloudflare[
 
 const dirs: string[] = [];
 
-/** A folder holding `.env.cloudflare` (a fake everyday token) in the git state `condition` names. */
+/** A folder holding an old `.env.cloudflare` (a fake token; no longer read, DEC-0795) in the git state `condition` names. */
 function folder(condition: Condition): string {
   const dir = mkdtempSync(join(tmpdir(), "cli-ac-008-"));
   dirs.push(dir);
@@ -107,8 +107,9 @@ async function deploy(dir: string, stops: boolean): Promise<{ status: number; er
           }),
         recordDeployOutput: () => undefined,
       }),
-    // The process environment: no Cloudflare setting (the file supplies the token), no proxy.
-    { CLOUDFLARE_ACCOUNT_ID: ACCOUNT },
+    // The process environment supplies the token (`.env.cloudflare` is no longer read, DEC-0795); the
+    // secrets file is a path that does not exist, so the runner's own ~/.secrets/cloudflare is never read. No proxy.
+    { CLOUDFLARE_API_TOKEN: tokenValue("cli008"), CLOUDFLARE_ACCOUNT_ID: ACCOUNT, CLOUDFLARE_SECRETS_FILE: join(tmpdir(), "cli-ac-008-no-secrets-file", "cloudflare") },
   );
   const io = captureIo(dir);
   const status = await command(["--target", "cloudflare", "--stage", "test-cliac008"], io);

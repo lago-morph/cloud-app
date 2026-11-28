@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ACCOUNT, FakeCloud } from "./fake-cloud.test-support.js";
 import {
   ACCOUNT_SETUP_VERSION,
-  BOOTSTRAP,
+  TOKEN,
   comparePolicies,
   deepLink,
   EVERYDAY,
@@ -33,8 +33,9 @@ const dashboardPolicies = (gs: readonly PermissionGroup[], zoneRes: Record<strin
 ];
 
 describe("the permission list", () => {
-  it("has v0.2.0 plan §5.2's four everyday groups, plan §5.1's bootstrap groups, versions and names", () => {
-    expect(PERMISSIONS_VERSION).toBe(2);
+  it("has the one token's six groups (DEC-0797), v0.2.0 plan §5.2's four everyday groups, versions and names", () => {
+    // 3: the one token replaces the bootstrap list (DEC-0797, PAR-331).
+    expect(PERMISSIONS_VERSION).toBe(3);
     // 2: v0.2.0's account setup in the admin app (DEC-0719, PAR-332).
     expect(ACCOUNT_SETUP_VERSION).toBe(2);
     expect(EVERYDAY).toEqual(EVERYDAY_V2);
@@ -42,10 +43,11 @@ describe("the permission list", () => {
     expect(byScope(EVERYDAY, "zone")).toEqual([]);
     expect(names(byScope(EVERYDAY_V1, "account"))).toEqual(["Workers Scripts Write", "Workers R2 Storage Write", "D1 Write", "Email Sending Read"]);
     expect(names(byScope(EVERYDAY_V1, "zone"))).toEqual(["Zone Read", "Analytics Read", "Email Routing Rules Read"]);
-    expect(names(byScope(BOOTSTRAP, "account"))).toEqual(["Workers Scripts Write", "OAuth Client Write", "Secrets Store Write", "Account API Tokens Write"]);
-    expect(byScope(BOOTSTRAP, "zone")).toEqual([]);
-    expect(TOKEN_NAMES).toEqual({ everyday: "prototype-framework", bootstrap: "prototype-framework-bootstrap" });
-    const all = [...EVERYDAY, ...EVERYDAY_V1, ...BOOTSTRAP];
+    expect(names(byScope(TOKEN, "account"))).toEqual(["Workers Scripts Write", "Workers R2 Storage Write", "D1 Write", "Secrets Store Write", "OAuth Client Write", "Account API Tokens Write"]);
+    expect(byScope(TOKEN, "zone")).toEqual([]);
+    // The user's token has its own name, so the admin app's everyday page never finds it by name.
+    expect(TOKEN_NAMES).toEqual({ token: "prototype-framework-cli", everyday: "prototype-framework" });
+    const all = [...EVERYDAY, ...EVERYDAY_V1, ...TOKEN];
     for (const g of all) expect(g.id).toMatch(/^[0-9a-f]{32}$/);
     // One ID per name and one name per ID.
     expect(new Set(all.map((g) => `${g.id} ${g.name}`)).size).toBe(new Set(all.map((g) => g.id)).size);
@@ -67,9 +69,11 @@ describe("the permission list", () => {
     expect(comparePolicies(writeOnly, [read], { accountId: A, zoneId: Z }).missing).toEqual([]);
   });
 
-  it("the bootstrap groups carry the IDs read from permission_groups (v0.2.0 plan §2.1b)", () => {
-    expect(Object.fromEntries(BOOTSTRAP.map((g) => [g.name, g.id]))).toEqual({
+  it("the token's groups carry the IDs read from permission_groups (v0.2.0 plan §2.1b)", () => {
+    expect(Object.fromEntries(TOKEN.map((g) => [g.name, g.id]))).toEqual({
       "Workers Scripts Write": "e086da7e2179491d91ee5f35b3ca210a",
+      "Workers R2 Storage Write": "bf7481a1826f439697cb59a20b22293e",
+      "D1 Write": "09b2857d1c31407795e75e3fed8617a1",
       "OAuth Client Write": "50fc2f43318f40e4855a35d8de5bf643",
       "Secrets Store Write": "adc8fa2bc6124928a8b3314dc63a1235",
       "Account API Tokens Write": "5bc3f8b21c554832afc660159ab75fa4",
@@ -78,7 +82,11 @@ describe("the permission list", () => {
 });
 
 describe("deepLink", () => {
-  for (const kind of ["everyday", "bootstrap"] as const) {
+  it("defaults to the user's one token", () => {
+    expect(deepLink()).toBe(deepLink("token"));
+  });
+
+  for (const kind of ["token", "everyday"] as const) {
     it(`${kind}: the account-token template URL with every group by ID and the name`, () => {
       const link = deepLink(kind);
       expect(link.startsWith("https://dash.cloudflare.com/?to=/:account/api-tokens&permissionGroupKeys=")).toBe(true);
@@ -86,7 +94,7 @@ describe("deepLink", () => {
       expect(url.searchParams.get("to")).toBe("/:account/api-tokens");
       expect(url.searchParams.get("name")).toBe(TOKEN_NAMES[kind]);
       const keys = JSON.parse(url.searchParams.get("permissionGroupKeys")!) as { key: string; type: string }[];
-      const list = kind === "everyday" ? EVERYDAY : BOOTSTRAP;
+      const list = kind === "everyday" ? EVERYDAY : TOKEN;
       expect(keys.map((k) => k.key)).toEqual(list.map((g) => g.id));
       expect(keys.map((k) => k.type)).toEqual(list.map((g) => (g.name.endsWith(" Read") ? "read" : "edit")));
       // URL-encoded as the docs show it: no raw JSON characters, the name's space as %20.
@@ -141,10 +149,24 @@ describe("comparePolicies", () => {
   });
 
   it("the dashboard's single entire-account policy with every group passes", () => {
-    for (const list of [EVERYDAY, EVERYDAY_V1, BOOTSTRAP]) {
+    for (const list of [EVERYDAY, EVERYDAY_V1, TOKEN]) {
       const one = [{ id: "p", effect: "allow" as const, resources: accountRes, permission_groups: list.map((g) => ({ id: g.id, name: g.name })) }];
       expect(comparePolicies(one, list, scope)).toEqual({ missing: [], denied: [], wrongAccount: false, zoneCovered: true });
     }
+  });
+
+  it("a broad admin token (many more groups, on the account and on all its zones) has nothing of TOKEN missing (DEC-0797: more is fine)", () => {
+    const extra = Array.from({ length: 50 }, (_, i) => ({ id: `extra${String(i)}`, name: `Some Other Group ${String(i)}` }));
+    const broad: TokenPolicy[] = [
+      { id: "p1", effect: "allow", resources: accountRes, permission_groups: [...extra, ...TOKEN.map((g) => ({ id: g.id, name: g.name })), { id: "x", name: "Account API Tokens Read" }] },
+      { id: "p2", effect: "allow", resources: allZones, permission_groups: extra },
+    ];
+    expect(comparePolicies(broad, TOKEN, scope)).toEqual({ missing: [], denied: [], wrongAccount: false, zoneCovered: true });
+  });
+
+  it("a token short of TOKEN's groups: exactly those are missing", () => {
+    const short = [{ id: "p", effect: "allow" as const, resources: accountRes, permission_groups: TOKEN.filter((g) => !["OAuth Client Write", "D1 Write"].includes(g.name)).map((g) => ({ id: g.id })) }];
+    expect(names(comparePolicies(short, TOKEN, scope).missing)).toEqual(["D1 Write", "OAuth Client Write"]);
   });
 
   it("an account group in a policy that names only zones of the account is not granted on the account", () => {
@@ -245,6 +267,6 @@ describe("permissionTableMarkdown", () => {
     expect(lines.slice(0, 2)).toEqual(["| Scope | On the dashboard | API name | Permission group ID |", "| --- | --- | --- | --- |"]);
     expect(lines.slice(2)).toEqual(EVERYDAY.map((g) => `| ${g.scope === "account" ? "Account" : "Zone"} | ${g.name.replace(/ Write$/, " Edit")} | ${g.name} | \`${g.id}\` |`));
     expect(lines[2]).toBe("| Account | Workers Scripts Edit | Workers Scripts Write | `e086da7e2179491d91ee5f35b3ca210a` |");
-    expect(permissionTableMarkdown("bootstrap").trimEnd().split("\n")).toHaveLength(2 + BOOTSTRAP.length);
+    expect(permissionTableMarkdown("token").trimEnd().split("\n")).toHaveLength(2 + TOKEN.length);
   });
 });

@@ -65,7 +65,7 @@ import { readStageRecord, writeStageRecord } from "./stage-record.js";
 import type { CloudflareDatabases } from "./databases.js";
 import { missingCredentials, type Environment } from "./environment.js";
 import { checkStageHealth } from "./health.js";
-import { accountResourceClash, filesBucketName, isStageStateObject, legacySigningTokenName, publicOrigin, STATE_BUCKET, workerName } from "./names.js";
+import { accountResourceClash, filesBucketName, isStageStateObject, legacySigningTokenName, publicOrigin, SETUP_COMMAND, STATE_BUCKET, workerName } from "./names.js";
 import { deleteObjects, listObjectKeys } from "./objects.js";
 import { deleteSigningToken, findLegacySigningToken, readSigningPlacement, SIGNING_RESOURCE, SIGNING_SECRET_NAMES, signingCredentialState, tokenWriteProblems, type SigningPlacement } from "./r2-token.js";
 import { INFRASTRUCTURE_COMPONENT, processSstExec, runSst, writeSstApp, type SecretsStoreBinding, type SstExec, type WorkerCode } from "./sst.js";
@@ -147,7 +147,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
   /** Where this deploy takes the signing credential from (DEC-0729); throws when the account has none. */
   async function signingPlacement(): Promise<SigningPlacement> {
     const placement = await readSigningPlacement(api, accountId);
-    if (!placement) throw new Error(`the account's ${SIGNING_RESOURCE} is missing; run setup-account --target cloudflare with the setup token (DEC-0551)`);
+    if (!placement) throw new Error(`the account's ${SIGNING_RESOURCE} is missing; run ${SETUP_COMMAND} first`);
     return placement;
   }
 
@@ -183,6 +183,7 @@ export function createCloudflareTarget(options: CloudflareTargetOptions): Target
 
   return {
     target: "cloudflare",
+    setupCommand: SETUP_COMMAND,
     dialect: "sqlite",
     appResourceKind: "Worker",
 

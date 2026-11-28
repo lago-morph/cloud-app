@@ -16,7 +16,7 @@ npm run dev
 4. copies the Claude Code skill for the framework into `.claude/skills/prototype-framework/`, so Claude Code finds it in the app's folder;
 5. runs `npm install`;
 6. runs `git init` (unless the folder is already inside a git repository);
-7. sets a random local value for each of the app's secrets in `.dev.vars`, and makes sure `.gitignore` lists `.env.cloudflare`;
+7. sets a random local value for each of the app's secrets in `.dev.vars` (the Cloudflare token is not kept in the app: `npm run cloudflare-setup` later prints the two-line template `CLOUDFLARE_API_TOKEN=` / `CLOUDFLARE_ACCOUNT_ID=` for `~/.secrets/cloudflare` or the environment);
 8. makes the first commit.
 
 It asks for no account. If git is missing or a git step fails, it warns and carries on. It ends with what to do next: `cd my-app`, then `npm run dev`, or open the folder in Claude Code and say what to build.

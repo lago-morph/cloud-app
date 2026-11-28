@@ -5459,7 +5459,7 @@ DEC-0540's criterion text counted the 5 consecutive requests from "the first tha
 ## Setup wizard, batch 1: the permission list, the deep links and the token checks (2026-10-26)
 
 ### DEC-0563 — One versioned Cloudflare permission list: the everyday token and the dashboard-made bootstrap token
-Origin: owner (plan-setup-wizard §1, §4.1, 2026-10-26) · Status: accepted; the bootstrap token running the account setup steps and updating the everyday token superseded by DEC-0697 (v0.2.0: the admin app does both) · Supersedes: DEC-0551's setup token (its everyday set is kept and extended) · Affects: PROV §2 "Credentials", SKILL-REQ-006, `skill/reference/owner-tasks.md` §2–§3, `apps/template/README.md` §2, PAR-331, PAR-332, `provision/cloudflare/permissions.ts`
+Origin: owner (plan-setup-wizard §1, §4.1, 2026-10-26) · Status: accepted; the bootstrap token running the account setup steps and updating the everyday token superseded by DEC-0697 (v0.2.0: the admin app does both); the bootstrap token and its list superseded by DEC-0796 and DEC-0797 (one token) · Supersedes: DEC-0551's setup token (its everyday set is kept and extended) · Affects: PROV §2 "Credentials", SKILL-REQ-006, `skill/reference/owner-tasks.md` §2–§3, `apps/template/README.md` §2, PAR-331, PAR-332, `provision/cloudflare/permissions.ts`
 
 One module, `provision/cloudflare/permissions.ts`, holds both tokens' permission groups by Cloudflare permission group ID, API name and scope (account or zone), with `PERMISSIONS_VERSION` (PAR-331) and `ACCOUNT_SETUP_VERSION` (PAR-332). The deep links (DEC-0564), the token checks and the everyday token's in-place upgrade (DEC-0565) and the docs' permission tables (`permissionTableMarkdown`) are generated from it; the hand-written lists in the docs are replaced from it (not yet done here).
 - **Everyday** (`prototype-framework`, 7 groups): DEC-0551's minimal set, plus "Email Routing Rules Read" (owner, 2026-10-26), so the everyday token can check the whole account setup on its own. Account: Workers Scripts Write, Workers R2 Storage Write, D1 Write, Email Sending Read. Zone: Zone Read, Analytics Read, Email Routing Rules Read. Still no permission on API tokens and no zone write permission.
@@ -5468,12 +5468,12 @@ One module, `provision/cloudflare/permissions.ts`, holds both tokens' permission
 - **Versions.** A release that needs more everyday or bootstrap permissions raises PAR-331 with the list; one that needs more account setup raises PAR-332.
 
 ### DEC-0564 — Both tokens come from pre-filled dashboard links, with every group given by ID
-Origin: owner (plan-setup-wizard §1, §2, 2026-10-26; token name of the bootstrap token: ai-proposed) · Status: accepted · Affects: `provision/cloudflare/permissions.ts` (`deepLink`, `TOKEN_NAMES`)
+Origin: owner (plan-setup-wizard §1, §2, 2026-10-26; token name of the bootstrap token: ai-proposed) · Status: accepted; the two links and names superseded by DEC-0797 (one link, `prototype-framework-cli`) · Affects: `provision/cloudflare/permissions.ts` (`deepLink`, `TOKEN_NAMES`)
 
 `deepLink(kind)` is Cloudflare's account-owned token template (developers.cloudflare.com/fundamentals/api/how-to/account-owned-token-template/, read 2026-10-26): `https://dash.cloudflare.com/?to=/:account/api-tokens&permissionGroupKeys=<URL-encoded JSON>&name=<URL-encoded name>`. The JSON is an array of `{ "key": <permission group ID>, "type": "read" | "edit" }` in list order; with an ID as the key the page ignores `type`, which is set from the name anyway ("read" for a Read group, else "edit"). IDs are used because each names exactly one group. The owner checked both links on 2026-10-26: every group arrived ticked (plan §2). The link cannot set the expiry, the account or the zone; the page puts every group in one policy for the entire account, so zone groups cover all the account's zones, which the owner accepted. The pre-filled names are `prototype-framework` (DEC-0551's everyday name) and `prototype-framework-bootstrap`.
 
 ### DEC-0565 — Checking a token against the list, the in-place update body, and the everyday token's quick check
-Origin: ai-proposed · Status: accepted; the bootstrap's in-place upgrade of the everyday token superseded by DEC-0697 (the admin app's page 2 updates it, plan-v0.2.0 §5.2) · Affects: `provision/cloudflare/permissions.ts` (`comparePolicies`, `withMissingPermissions`, `inPlaceUpdateBody`, `probeEveryday`), `provision/cloudflare/fake-cloud.test-support.ts`
+Origin: ai-proposed · Status: accepted; the bootstrap's in-place upgrade of the everyday token superseded by DEC-0697 (the admin app's page 2 updates it, plan-v0.2.0 §5.2); the in-place update as a setup step superseded by DEC-0796 · Affects: `provision/cloudflare/permissions.ts` (`comparePolicies`, `withMissingPermissions`, `inPlaceUpdateBody`, `probeEveryday`), `provision/cloudflare/fake-cloud.test-support.ts`
 
 - **Comparison** (`comparePolicies`, of `GET /accounts/<a>/tokens/<id>`'s policies). Scopes are read as `policyCovers` (DEC-0515) reads them. A required group is missing when no `allow` policy grants it on its scope, or a `deny` policy takes it away; "Zone Write", "Email Sending Write" and "Email Routing Rules Write" also satisfy their Read group. `wrongAccount`: the `allow` policies name accounts, and none is this one or `*`. `zoneCovered`: an `allow` policy granting a required zone group covers the email domain's zone (the zone, all zones, or the whole account); a policy granting only account groups says nothing about zones.
 - **In-place update** (`PUT /accounts/<a>/tokens/<id>`, which keeps the value, verified 2026-10-26). The body keeps the token's name, status, expiry, start time and conditions, and every existing policy (its `id`, effect and resources, its groups by ID), then adds one `allow` policy for the missing account groups on the account and one for the missing zone groups on the email domain's zone (nested under the account, as the dashboard's token shows `zone.*`), or on all the account's zones when no zone is given. A policy naming one specific zone in this nested form is not yet verified live.
@@ -5482,7 +5482,7 @@ Origin: ai-proposed · Status: accepted; the bootstrap's in-place upgrade of the
 ## Setup wizard, batch 2: token sources and git-ignore safety (2026-10-26)
 
 ### DEC-0570 — Cloudflare settings come from the environment first, then `.env.cloudflare` in the project root, for every Cloudflare command
-Origin: owner (2026-10-26, plan-setup-wizard §1 and §4.2); the file format and wiring details ai-proposed · Status: accepted · Affects: PROV §2 "Credentials", cli.md (every command with `--target cloudflare`), `provision/cloudflare/{token-sources,environment}.ts`, `cli/{cloudflare-settings,wiring,main}.ts`, PAR-340
+Origin: owner (2026-10-26, plan-setup-wizard §1 and §4.2); the file format and wiring details ai-proposed · Status: accepted; superseded by DEC-0795 and DEC-0799 (environment, then `~/.secrets/cloudflare`) · Affects: PROV §2 "Credentials", cli.md (every command with `--target cloudflare`), `provision/cloudflare/{token-sources,environment}.ts`, `cli/{cloudflare-settings,wiring,main}.ts`, PAR-340
 
 - **Order.** For each of `CLOUDFLARE_BOOTSTRAP_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_EMAIL_DOMAIN` and `CLOUDFLARE_ACCOUNT_ID`, a non-empty environment variable wins; otherwise the value in `.env.cloudflare` (PAR-340) is used. An empty value counts as absent in either source, and so does an environment value of only whitespace. When both hold a value and they differ, the command prints a note naming the setting and saying the environment is used; it never prints either value.
 - **Every Cloudflare command.** `deploy`, `remove`, `stop`, `start`, `secrets set`, `setup-account`, `check-login`, `admins`, `mail last` and `smoke`, when run with `--target cloudflare`, are built with the environment merged with the file (`cloudflareEnvironment`; each bound once through `cloud` in `cli/wiring.ts`). Nobody exports the variables by hand. A command on the local target reads no file. The "missing Cloudflare credentials" messages now say "set them in the environment or in .env.cloudflare".
@@ -5491,7 +5491,7 @@ Origin: owner (2026-10-26, plan-setup-wizard §1 and §4.2); the file format and
 - **Fill-in.** `fillInSettings` writes `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_EMAIL_DOMAIN` only where the file has them empty or absent (an empty line in place, else the template's commented account line, else a new line), so copying the file starts the next project. A value already in the file is never changed; a value that cannot be written back as one plain line (space, quote, backslash or `#`) is refused without naming it.
 
 ### DEC-0571 — `.env.cloudflare` is left at mode 600 after every write; the bootstrap line is commented out after use
-Origin: owner for the comment-out (2026-10-26, plan-setup-wizard §1); mode 600 ai-proposed (plan §4.2) · Status: accepted · Affects: `provision/cloudflare/token-sources.ts`, PAR-341, PAR-342
+Origin: owner for the comment-out (2026-10-26, plan-setup-wizard §1); mode 600 ai-proposed (plan §4.2) · Status: accepted; superseded by DEC-0799 (the framework writes no credential file) · Affects: `provision/cloudflare/token-sources.ts`, PAR-341, PAR-342
 
 - Every write (`writeTemplateIfAbsent`, `commentOutBootstrap`, `fillInSettings`) leaves the file readable and writable by its owner only (PAR-341). Each write is atomic: the content goes to a new temporary file at that mode in the same directory, which is renamed over the file, so a file that had a wider mode never holds the new content and a reader never sees half a file.
 - `commentOutBootstrap` replaces every active `CLOUDFLARE_BOOTSTRAP_TOKEN=` line, also one the parser cannot read (an unclosed quote), with PAR-342's line, so no value stays in the file, and leaves every other line as it was. Setup calls it after the bootstrap token has deleted itself.
@@ -5511,7 +5511,7 @@ Origin: ai-proposed (from plan-setup-wizard §1 "Setup never prints a token valu
 Notes, warnings and errors of the token sources and the git checks name settings, files and line numbers only, never a value of the file or the environment (tokens, account ID or email domain). Unit tests put a fake token with a marker string in the file and the environment and search every output for the marker.
 
 ### DEC-0574 — The file's bootstrap token is not passed to the everyday commands
-Origin: orchestrator, pending owner review · Status: accepted · Affects: `cli/cloudflare-settings.ts`
+Origin: orchestrator, pending owner review · Status: accepted; superseded by DEC-0796 and DEC-0799 (no bootstrap token) · Affects: `cli/cloudflare-settings.ts`
 
 The Cloudflare commands of DEC-0570 work with the everyday token, so the merged environment they get leaves out `CLOUDFLARE_BOOTSTRAP_TOKEN` from `.env.cloudflare` (a value already in the process environment stays, as before). The bootstrap token then never reaches their tools' processes (SST). `cloudflareEnvironment` and `readCloudflareSettings` still return it, and `cloudflare-setup` opts out with `cloud(name, load, { withBootstrapToken: true })` (`withCloudflareSettings`'s fourth argument). To reverse: drop the filter in `commandCloudflareEnvironment`.
 
@@ -5601,7 +5601,7 @@ Origin: owner (plan-setup-wizard §4.3, §3.2, §3.4); the binding and options a
 - **Without the bootstrap token** the run is complete when `checkAccountSetup` (everyday token) is current for `ACCOUNT_SETUP_VERSION` and the quick check passes; otherwise it names each reason (no setup record, older version, other domain, missing steps, failed reads with their status) and prints only the bootstrap link. **With it**, the steps are applied first and the everyday token is then checked; a valid bootstrap token in a run that needs nothing still checks the everyday token once and deletes itself (plan §1: "check exactly once, before deleting").
 
 ### DEC-0585 — The account is the everyday token's; several are listed by name only; a switch needs `--switch-account`
-Origin: orchestrator, pending owner review · Status: accepted · Affects: `src/provision/cloudflare/{cloudflare-setup,token-sources}.ts`
+Origin: orchestrator, pending owner review · Status: accepted; the account switch superseded by DEC-0799 · Affects: `src/provision/cloudflare/{cloudflare-setup,token-sources}.ts`
 
 - **Question.** Plan §4.3 step 4 says "list them and ask", but account IDs may never be printed. **Choice:** the account names, numbered, and how to copy the chosen account's ID from the dashboard into `CLOUDFLARE_ACCOUNT_ID` (setup does not print it). **To reverse:** accept an account name (`--account <name>`) and record its ID.
 - **Which token decides.** The everyday token's account (an account token's owner, or the one `CLOUDFLARE_ACCOUNT_ID` names among a user token's). A bootstrap token of another account is the bad paste, with the bootstrap link. **To reverse:** let the bootstrap token decide.
@@ -5609,7 +5609,7 @@ Origin: orchestrator, pending owner review · Status: accepted · Affects: `src/
 - **Email domain** (step 5): with none set, the account's zone names are listed and the run stops, also when there is only one, since the choice adds DNS records to that zone. No zone: how to add one.
 
 ### DEC-0586 — Token checks: denies, account scope, the zone grant form, group meta, and tokens setup cannot read
-Origin: ai-proposed (review findings on DEC-0565) · Status: accepted (the zone form not yet verified live) · Amends: DEC-0565 · Affects: `src/provision/cloudflare/{permissions,email-permissions,cloudflare-setup}.ts`
+Origin: ai-proposed (review findings on DEC-0565) · Status: accepted (the zone form not yet verified live); superseded by DEC-0796 · Amends: DEC-0565 · Affects: `src/provision/cloudflare/{permissions,email-permissions,cloudflare-setup}.ts`
 
 - A `deny` takes away the group it names only, not a weaker one ("Zone Write" denied leaves "Zone Read"). `comparePolicies` reports the denied groups (`denied`); setup cannot fix them in place (an `allow` cannot beat a deny), so it explains and gives the everyday link.
 - An account group counts on the account only when the account key's value is `"*"`; an account key holding zones grants only on those zones (also for `setup-account`'s email permission check).
@@ -5617,7 +5617,7 @@ Origin: ai-proposed (review findings on DEC-0565) · Status: accepted (the zone 
 - The everyday token is judged by the bootstrap token's read of its details. When they cannot be read (a user token, or one of another account), the quick check decides: passed, setup goes on and says the permissions were not read; failed, it gives the everyday link. Zone groups granted only on other zones: "scoped to the wrong zone", the everyday link, no update.
 
 ### DEC-0587 — Setup record and account settings review fixes
-Origin: ai-proposed (review findings on DEC-0570, DEC-0571, DEC-0577, DEC-0579) · Status: accepted · Amends: DEC-0570, DEC-0571, DEC-0577, DEC-0579 · Affects: `src/provision/cloudflare/{setup-steps,setup-record,account-settings,target,token-sources,environment}.ts`, `src/cli/commands/operations.ts`, `src/provision/public.ts`
+Origin: ai-proposed (review findings on DEC-0570, DEC-0571, DEC-0577, DEC-0579) · Status: accepted; superseded by DEC-0799 · Amends: DEC-0570, DEC-0571, DEC-0577, DEC-0579 · Affects: `src/provision/cloudflare/{setup-steps,setup-record,account-settings,target,token-sources,environment}.ts`, `src/cli/commands/operations.ts`, `src/provision/public.ts`
 
 - **Bootstrap apply reads directly** (DEC-0579): `applySetupSteps` no longer lets the setup record vouch for a refused read; a refused read stops it, naming the step, before any change.
 - **Version wired.** The CLI's Cloudflare operations pass `setupVersion: ACCOUNT_SETUP_VERSION`, so `setup-account` records the release's version.
@@ -5635,7 +5635,7 @@ Origin: orchestrator, pending owner review · Status: accepted; the plan read wi
 - **Bootstrap token kept** (not deleted) when the setup steps fail, when the everyday token must be made again (wrong zone or account, a deny, or failing reads it cannot fix), and when the in-place update fails, so the next run can check the new everyday token with it. It is deleted only after the everyday token is confirmed or updated. A bootstrap token without an expiry gets a warning.
 
 ### DEC-0589 — Token writes go through a guard; the bootstrap token must be an account token
-Origin: owner (plan §1, §4.3 step 7; "never change or delete the owner's token"); the guard's form ai-proposed · Status: accepted · Affects: `src/provision/cloudflare/cloudflare-setup.ts` (`guardTokenWrites`), PAR-361
+Origin: owner (plan §1, §4.3 step 7; "never change or delete the owner's token"); the guard's form ai-proposed · Status: accepted; the bootstrap self-delete superseded by DEC-0796; the protected IDs stay · Affects: `src/provision/cloudflare/cloudflare-setup.ts` (`guardTokenWrites`), PAR-361
 
 - Every PUT or DELETE of `/accounts/<a>/tokens/<id>` or `/user/tokens/<id>` by either token passes `guardTokenWrites` before it is sent. Refused: an ID in `protectedTokenIds` (the command's option and PAR-361's environment setting); a DELETE of the everyday token; a DELETE of the bootstrap token outside its own last step; a PUT of any token but the everyday token. Setup's own signing token (the `signing-record` step) is not affected unless protected.
 - The self-delete sends `DELETE /accounts/<a>/tokens/<id>` with the bootstrap token and the ID from that token's own `tokens/verify`; the in-place update `PUT`s the everyday token's ID from its own verify call. An everyday token whose ID is protected and lacks permissions is not updated: the run says so and stops.
@@ -5717,7 +5717,7 @@ Origin: ai-proposed (review finding on DEC-0589) · Status: accepted · Amends: 
 - `guardTokenWrites` matches its token paths on `sentPath`, in any case, and compares IDs (protected, everyday, bootstrap) in any case. A non-GET whose URL cannot be parsed is refused. The request is still sent with the caller's path, which the parser turns into the same URL.
 
 ### DEC-0614 — A dangling symbolic `.env.cloudflare` is written through to its target
-Origin: ai-proposed (review finding on DEC-0587) · Status: accepted · Amends: DEC-0587 · Affects: `src/provision/cloudflare/token-sources.ts`
+Origin: ai-proposed (review finding on DEC-0587) · Status: accepted; superseded by DEC-0799 · Amends: DEC-0587 · Affects: `src/provision/cloudflare/token-sources.ts`
 
 - A `.env.cloudflare` that is a symbolic link whose target does not exist yet (`existsSync` is false for it) is no longer replaced by a regular file: each write follows the link with `lstat` and `readlink`, one link at a time (a relative link from the folder it is really in, at most 40 links), and writes the target, creating it at mode 600 with the same temporary file and rename in the target's folder. The link stays a link. A target folder that does not exist fails the write.
 - **Which writes create the target.** Only the writes that may create `.env.cloudflare` at all: the template (`writeTemplateIfAbsent`) and the bootstrap comment-out's rewrite of an existing target. `fillInSettings` never creates a missing file (DEC-0587's "No file is created to fill in", SETUP-AC-002), and a dangling link counts as missing: it returns no setting and creates nothing. Through a link to an existing target it rewrites the target (mode 600, the link kept).
@@ -6298,7 +6298,7 @@ Origin: ai-proposed · Status: accepted · Affects: `provision/cloudflare/permis
 Item: v0.2.0 C.
 
 ### DEC-0681 — A bootstrap token with no expiry, or with an expiry more than 1 day away, is deleted at once
-Origin: ai-proposed · Status: accepted · Affects: `provision/cloudflare/cloudflare-setup.ts` (`bootstrapExpiryProblem`, `refuseLongLived`), SETUP-REQ-004, SETUP-AC-005, PR 30
+Origin: ai-proposed · Status: accepted; superseded by DEC-0796 · Affects: `provision/cloudflare/cloudflare-setup.ts` (`bootstrapExpiryProblem`, `refuseLongLived`), SETUP-REQ-004, SETUP-AC-005, PR 30
 
 - **When the rule applies.** The token's `expires_on` comes from its own verify call. The token is refused when that value is missing, cannot be parsed, or is more than PAR-435 (1 day) after the run's clock. An expiry exactly 1 day away is accepted; 1 day + 1 s is refused.
 - **Before the rule.** The token's own details (`GET …/tokens/<own id>`) are read first. A token that cannot read them lacks "Account API Tokens Write", so it could not delete itself either. It is reported as before ("was the everyday token pasted there?") and is not deleted.
@@ -6314,7 +6314,7 @@ Origin: ai-proposed · Status: accepted · Affects: `provision/cloudflare/cloudf
 Item: v0.2.0 C.
 
 ### DEC-0682 — The bootstrap token does no account setup and never reads or changes the everyday token
-Origin: ai-proposed · Status: accepted · Affects: `provision/cloudflare/cloudflare-setup.ts`, SETUP-REQ-001/004, SETUP-AC-004/005/006/008, PR 30
+Origin: ai-proposed · Status: accepted; superseded by DEC-0796 and DEC-0798 · Affects: `provision/cloudflare/cloudflare-setup.ts`, SETUP-REQ-001/004, SETUP-AC-004/005/006/008, PR 30
 
 - **Why.** The plan §5.1 set (DEC-0680) holds none of the permissions the v0.1.1 bootstrap used for these jobs: R2, D1, Email, Zone and Billing. In v0.2.0 these jobs belong to the admin app (plan §5.2 pages 1 and 2, item E).
 - **The bootstrap run.** With a usable bootstrap token, `cloudflare-setup` runs only the bootstrap. It needs no everyday token, reads no email domain and no plan, and applies no setup step. It does not read the everyday token's permissions and sends no PUT. Its only write in PR 30 is its own DELETE. It records `CLOUDFLARE_ACCOUNT_ID`.
@@ -6326,7 +6326,7 @@ Origin: ai-proposed · Status: accepted · Affects: `provision/cloudflare/cloudf
 Item: v0.2.0 C.
 
 ### DEC-0683 — The bootstrap token deletes itself as the run's last Cloudflare request, and its value is never written
-Origin: ai-proposed · Status: accepted · Affects: `provision/cloudflare/cloudflare-setup.ts` (`bootstrap`, `selfDelete`, `afterSelfDelete`), SETUP-REQ-004/007, PR 30
+Origin: ai-proposed · Status: accepted; superseded by DEC-0796 · Affects: `provision/cloudflare/cloudflare-setup.ts` (`bootstrap`, `selfDelete`, `afterSelfDelete`), SETUP-REQ-004/007, PR 30
 
 - **The end of the run.** The self-delete is the last request of a successful bootstrap. In PRs 31 and 32 it follows the OAuth clients, the secrets and the admin app deploy.
 - **The guard.** The DELETE is armed only around that one request (`guardTokenWrites`, DEC-0589).
@@ -6536,7 +6536,7 @@ Origin: ai-proposed · Status: accepted · Affects: `docs/components/password.md
 Item: v0.2.0 D.
 
 ### DEC-0697 — SETUP for v0.2.0: the command bootstraps the admin app; the admin app does the rest
-Origin: ai-proposed (wording); the substance is the owner's (plan-v0.2.0 §1 D9, D10, §5) · Status: accepted · Supersedes: DEC-0588 (the plan read and the Workers Paid stop); DEC-0563 and DEC-0577 in part (the bootstrap token running the account setup steps and updating the everyday token) · Affects: SETUP-REQ-001…004, SETUP §2, SETUP-AC-001…008, SETUP-AC-011, `component-map.md` (SETUP)
+Origin: ai-proposed (wording); the substance is the owner's (plan-v0.2.0 §1 D9, D10, §5) · Status: accepted; superseded in part by DEC-0795…DEC-0799 (one token; the command sets the account up again) · Supersedes: DEC-0588 (the plan read and the Workers Paid stop); DEC-0563 and DEC-0577 in part (the bootstrap token running the account setup steps and updating the everyday token) · Affects: SETUP-REQ-001…004, SETUP §2, SETUP-AC-001…008, SETUP-AC-011, `component-map.md` (SETUP)
 
 - **Amendments, not edits.** SETUP-REQ-001…004 have origin `owner`, so each gets a v0.2.0 amendment paragraph citing the owner's decisions D9 and D10 and plan §5. They are not rewritten in place. SETUP-REQ-004's original paragraph is replaced, because its core (bootstrap runs setup steps and updates the everyday token in place) is the opposite of D9 and D10.
 - **The texts follow C's implementation decisions** DEC-0680…0685 (the bootstrap's four groups, the PAR-435 expiry rule, no setup steps and no everyday-token access, the self-delete as the last request, the two OAuth clients and their Secrets Store names PAR-436, and the Worker names PAR-438). They describe the end state of v0.2.0, after C's PR 34 removes the email setup and the Workers Paid stop.
@@ -7074,7 +7074,7 @@ The auth app answers `role(sub)` with the role stored at the person's last sign-
 Item: v0.2.0 T2.
 
 ### DEC-0767 — E2E-001 through the packed starter; E2E-019 upgrades from the published 0.1.1 through a local registry
-Origin: ai-proposed · Status: accepted · Affects: `docs/acceptance/e2e-scenarios.md` E2E-001 and E2E-019; `tests/compliance/e2e/E2E-001-E2E-003.spec.ts`, `E2E-019-upgrade.spec.ts`, `support/packs.ts`, `support/registry.ts`; plan §7.1 "Add" item 3, §8
+Origin: ai-proposed · Status: accepted; its E2E-019 part superseded by DEC-0804 (E2E-019 retired) · Affects: `docs/acceptance/e2e-scenarios.md` E2E-001 and E2E-019; `tests/compliance/e2e/E2E-001-E2E-003.spec.ts`, `E2E-019-upgrade.spec.ts`, `support/packs.ts`, `support/registry.ts`; plan §7.1 "Add" item 3, §8
 
 - **E2E-001** now scaffolds with the starter instead of `skill/scripts/scaffold`. The starter is packed as `npm publish` packs it: a copy of `packages/create-prototype-app` with its template and skill bundled by its own `bundle.mjs`, into a temp folder, so nothing is written into the repository during a run. It is given the packed framework (`--framework file:<tarball>`). It installs from the registry as before, and every later step runs offline as before. The app's name is now the folder's (`app`), and the log check follows that name. The tarball assertion follows the starter's `file:` pin.
 - **E2E-019:** 0.2.0 is not published, so the repository's framework is packed, repacked at version 0.2.0, and served for the `@lago-morph` scope by a local registry. The app points the scope at it in `.npmrc`. The app is made by the published 0.1.1 starter and framework, and upgraded by its own `npm run upgrade -- 0.2.0`, which is 0.1.1's upgrade command, as a real user's would be. The run needs the npm registry, as E2E-001 does, but no cloud. **Verifies** SYS-REQ-012: the framework's own schema evolves, and the app's data is kept. SYS-REQ-022 was dropped after review, because the `dev` runs are not network-isolated. The pointer checked is 0.1.1's upgrade wording ("run `npm run cloudflare-setup`. It needs the bootstrap token once"). Plan §8's "bootstrap, then the admin app" is what that setup run then says, and E2E-017 covers it.
@@ -7245,7 +7245,7 @@ Origin: ai-proposed · Status: accepted · Affects: `packages/framework/src/prov
 Item: v0.2.0 T7.
 
 ### DEC-0733 — The bootstrap token is judged before the everyday token is touched: a protected one is refused once its verify call names it, and a refused one reads only itself and then deletes itself as the run's last request
-Origin: ai-proposed · Status: proposed · Affects: `provision/cloudflare/cloudflare-setup.ts` (`run`, `bootstrap`, `refuseLongLived`, `PROTECTED_BOOTSTRAP`), SETUP-REQ-004 (v0.2.0 amendment), SETUP-AC-005, SETUP-AC-011, DEC-0681, DEC-0751, root cause `ai/implementation/root-causes/2026-10-31-T7-bootstrap-token-rules.md` (accepted in review round 2)
+Origin: ai-proposed · Status: proposed; superseded by DEC-0796 · Affects: `provision/cloudflare/cloudflare-setup.ts` (`run`, `bootstrap`, `refuseLongLived`, `PROTECTED_BOOTSTRAP`), SETUP-REQ-004 (v0.2.0 amendment), SETUP-AC-005, SETUP-AC-011, DEC-0681, DEC-0751, root cause `ai/implementation/root-causes/2026-10-31-T7-bootstrap-token-rules.md` (accepted in review round 2)
 
 - **The order.** Right after the bootstrap token's identification, and before the everyday token is identified, the run:
   1. refuses a user token (as before);
@@ -7473,3 +7473,98 @@ The owner removed the test "expired-ticket clause: a ticket past PAR-233 …". I
 - **Not covered any more.** No test now sends an upload after a real expiry. Storage's own refusal of an expired ticket is a storage feature that the framework does not implement (DEC-0534, "Clock skew").
 - **To reverse:** restore the removed test from git history, and mark this entry superseded.
 Item: release candidate 0.2.0-rc01 (V).
+
+## Owner decisions on Cloudflare setup: one token (2026-11-27)
+
+The owner tried to build a real app and found startup far too hard, mainly the two-token flow (a short-lived bootstrap token made from a deep link, which set the admin app up and deleted itself, then an everyday token made in the admin app). Decisions 1 to 5 of DEC-0795…DEC-0800 are the owner's, given in substance; the choices the owner left open are marked ai-proposed. Design notes and test results: `ai/implementation/single-cloudflare-token.md`.
+
+### DEC-0795 — One Cloudflare credential, supplied by the user: the environment, then `~/.secrets/cloudflare`
+Origin: owner (2026-11-27); the override variable's final name: ai-proposed · Status: accepted · Supersedes: DEC-0570, DEC-0571 and DEC-0574 (the sources, the file's writes and the bootstrap filter) · Affects: SETUP-REQ-002, SETUP-REQ-003, SETUP §2, SETUP-AC-001, SETUP-AC-002, SETUP-AC-006, SETUP-AC-007, CLI §2 "Cloudflare settings", provisioning.md §2 "Credentials", skill.md SKILL-REQ-006 and SKILL-REQ-008, PAR-486, PAR-487, `provision/cloudflare/token-sources.ts`, `cli/cloudflare-settings.ts`, `provision/cloudflare/cloudflare-setup.ts`, `apps/template/.claude/settings.json`, QUICKSTART.md, README.md, `apps/template/README.md`, `skill/SKILL.md`, `skill/reference/owner-tasks.md`, `deploying.md`, `troubleshooting.md`
+
+- **Names.** `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, the names wrangler already reads.
+- **Order.** Each setting from the environment first (a Claude Code cloud session's environment variables, a shell's exports). A setting the environment does not set is read from the **secrets file**: `.env` format with the same names, by default `~/.secrets/cloudflare` in the home directory (PAR-486), never relative to a project, so every worktree and session on the machine shares it. `CLOUDFLARE_SECRETS_FILE` overrides the path (PAR-487; the owner suggested this name, and it is kept). `~/` and any relative override are read from the home directory, never from the current directory. When both sources hold a setting and differ, the environment wins and a notice names the setting.
+- **Reporting.** Setup prints where each setting came from: "from the environment variable CLOUDFLARE_API_TOKEN" or "from the file /home/…/.secrets/cloudflare", never the value. Nothing prints or logs the token (DEC-0573, DEC-0590 unchanged).
+- **No credential found.** Setup prints the template, exactly `CLOUDFLARE_API_TOKEN=` and `CLOUDFLARE_ACCOUNT_ID=` with nothing after the `=`, meant to be copied out of the chat and used both as the file's contents and as session environment variables; the resolved file path and the cloud session's Environment variables as the two places it can go; the token's deep link (DEC-0564's machinery, `deepLink("token")`); where the account ID is shown; and the next prompt. Only one of the two missing: the same, naming the missing one.
+- **`CLOUDFLARE_ACCOUNT_ID` is required.** `deploy` already required it (`missingCredentials`), and setup no longer writes it anywhere (DEC-0799), so the template asks for both and setup stops without it. A token that cannot see that account is a stop listing the accounts it sees by name.
+- **Agent protection.** The template's `.claude/settings.json` also denies `Read(~/.secrets/**)` and `Edit(~/.secrets/**)` and the shell readers of `.secrets/cloudflare`; the skill's router says never to open, print or search the file (the `.env.cloudflare` rule stays, for old files).
+- **To reverse:** restore `.env.cloudflare` as the second source (DEC-0570) and the file writes (DEC-0571).
+Item: Cloudflare setup with one token.
+
+### DEC-0796 — No two-token workflow: the framework never deletes, rolls or updates the user's token
+Origin: owner (2026-11-27) · Status: accepted · Supersedes: DEC-0563's bootstrap token, DEC-0565's in-place update as a setup step, DEC-0586, DEC-0589 (the bootstrap's self-delete; the protected IDs stay), DEC-0681, DEC-0683, DEC-0733; DEC-0682 in part (the bootstrap token's limits) · Affects: SETUP-REQ-004, SETUP §2, SETUP-AC-005, PAR-435, `provision/cloudflare/cloudflare-setup.ts` (`guardTokenWrites`), `provision/cloudflare/permissions.ts`
+
+The user creates at most one token. The owner keeps a broad, non-expiring account admin token in `~/.secrets/cloudflare` that he also uses for other work, so the framework must never delete or roll it.
+- **The guard.** Every token write of `cloudflare-setup` passes `guardTokenWrites` (DEC-0589, DEC-0613, DEC-0618 kept): it refuses anything on the user's token's ID (DELETE, PUT, roll, any other method), anything on a PAR-361 ID, every PUT and roll of any token, and a DELETE of any token it did not see named `prototype-r2-signing` in a token list or a create answer. No request carrying the user's token's ID other than a GET is ever sent.
+- **Tokens the framework makes.** It may mint the scoped tokens it needs itself, through the API, and manages only those: today that is the R2 signing token the account setup creates and replaces (DEC-0618). The deployed apps hold no Cloudflare API token (DEC-0691), so no runtime token is minted.
+- **Gone:** `CLOUDFLARE_BOOTSTRAP_TOKEN`, the expiry rule (PAR-435), the self-delete, the commented-out line (PAR-342), the "a user token is refused" rule, and the bootstrap token's protected-ID stop. A user token (My Profile) is accepted; its permissions are read from `/user/tokens/<id>`.
+- **To reverse:** restore the bootstrap token from git history (the v0.2.0-rc01 `cloudflare-setup.ts`) and DEC-0681's rules.
+Item: Cloudflare setup with one token.
+
+### DEC-0797 — The token's permissions: one list of six groups; missing ones named with the link; more is silent
+Origin: owner (2026-11-27: "more permissions: do nothing; missing: say exactly which and give the deep link"); the list itself and the token's name: ai-proposed · Status: accepted · Supersedes: DEC-0563's two lists (the everyday list stays for the admin app's page), DEC-0564's two links and names (the machinery is kept) · Affects: SETUP-REQ-003, SETUP-REQ-004, SETUP-AC-001, SETUP-AC-004, PAR-331, `provision/cloudflare/permissions.ts` (`TOKEN`, `TOKEN_NAMES`, `deepLink`), `scripts/permission-tables.mjs`, QUICKSTART.md, provisioning.md
+
+- **The list** (`TOKEN`, PAR-331 raised to 3): Workers Scripts Write, Workers R2 Storage Write, D1 Write, Secrets Store Write, OAuth Client Write, Account API Tokens Write, all account-scoped, by the IDs DEC-0563 read. It is the union of what setup needs (the old bootstrap list plus the admin app's account setup scopes) and what `deploy` and the other commands need (the everyday list; Secrets Store Write includes Read). Account API Tokens Write lets the token read its own permissions and lets setup mint and replace its signing token. Cloudflare refuses an API-made token holding it (code 1001), which is why the user makes this one token in the dashboard.
+- **The check.** Setup reads the token's own policies with the token (`GET /accounts/<a>/tokens/<id>`, or `/user/tokens/<id>`) and compares them with the list (`comparePolicies`, DEC-0565). Missing groups (also by a `deny`) are listed by their dashboard name and API name, with the deep link, and the run stops before any change. A token that cannot read its own policies is told it lacks "Account API Tokens Edit" and that the others could not be checked. Extra groups, on the account or on zones, are never mentioned.
+- **The link and name.** `deepLink("token")` pre-fills the six groups and the name `prototype-framework-cli`. The name differs from `prototype-framework`, which the admin app's Everyday token page uses to find its own token, so that page never takes the user's token for its own. The link sets no expiry; the instructions say any end date, or none, is fine.
+- **To reverse:** go back to DEC-0563's two lists and DEC-0564's two links.
+Item: Cloudflare setup with one token.
+
+### DEC-0798 — `cloudflare-setup` does the whole account setup with the user's token; the admin app's setup pages become optional
+Origin: ai-proposed (follows from DEC-0796: with one broad token there is no reason to send the user to the admin app) · Status: accepted · Supersedes: DEC-0697 in part (the command no longer sets up the account; the admin app does the account setup and makes the everyday token), DEC-0682 · Affects: SETUP-REQ-001, SETUP §2, SETUP-AC-005, SETUP-AC-011, SKILL-AC-006, component-map (SETUP), cloudflare.md, provisioning.md, `provision/cloudflare/account-setup-run.ts`, `admin-app/setup-page.ts`, `provision/cloudflare/fake-cloud.test-support.ts`
+
+- When `checkAccountSetup` finds the setup record missing or older than `ACCOUNT_SETUP_VERSION`, or a step missing, setup runs with the user's token: the `workers.dev` subdomain, both OAuth clients with their secrets in Secrets Store, the admin app (DEC-0684…DEC-0686, unchanged), then `runAccountSetup`, the admin app's Account setup page's code moved to `provision/cloudflare/account-setup-run.ts` and shared by both (the auth app and its D1 database, the shared buckets, the signing credential in Secrets Store and the setup record; DEC-0719 unchanged). The page now calls the shared function and escapes its lines; its behaviour is unchanged. A current account gets no write.
+- The admin app is still deployed (its status and cleanup pages, and sign-in for administrators); its Account setup and Everyday token pages stay, optional. Nobody needs an everyday token any more.
+- The printed auth app line names the Worker, not its URL (the subdomain stays redacted, DEC-0590); the admin app's URL is printed once, in the summary of the run that deployed it (DEC-0686).
+- The fake Cloudflare (`FakeCloud`) lists and creates D1 databases, so the criteria can run the whole setup.
+- **Open question for the owner:** whether to retire the admin app's Account setup and Everyday token pages, or the admin app itself, in a later release.
+- **To reverse:** stop after the admin app's deploy and send the user to the admin app (DEC-0697).
+Item: Cloudflare setup with one token.
+
+### DEC-0799 — `.env.cloudflare`, `CLOUDFLARE_BOOTSTRAP_TOKEN` and `--switch-account` are removed, not kept for compatibility
+Origin: ai-proposed (the owner asked for the least complex choice, decision 6) · Status: accepted · Supersedes: DEC-0570, DEC-0571, DEC-0574, DEC-0585 (the account switch), DEC-0587, DEC-0614 (the file's symbolic links) · Affects: SETUP-REQ-002, SETUP-REQ-005, SETUP-REQ-006 (retired), SETUP-AC-006, SETUP-AC-009, CLI §2, PAR-340, PAR-341, PAR-342, PAR-343, `provision/cloudflare/token-sources.ts`, `cli/commands/cloudflare-setup.ts`, `cli/main.ts`
+
+- **Removal is the least complex.** Reading `.env.cloudflare` as a third source would keep a project-relative file holding a token (which the owner does not want), its writes (template, fill-in, comment-out, mode 600, symbolic links) and its precedence rules. Only 0.2.0-rc01 and 0.1.x apps have one.
+- **What remains.** The framework neither reads nor writes `.env.cloudflare`. When one is in the project, setup and every Cloudflare command print a notice to move its values to `~/.secrets/cloudflare` (or the environment) and delete it. `CLOUDFLARE_BOOTSTRAP_TOKEN`, in the environment or the secrets file, is ignored with a notice and never passed to a tool's process. The git warnings and the `.gitignore` line for `.env.cloudflare` stay (DEC-0572, PAR-343), so an old file holding a token is not committed.
+- **The framework writes no credential file.** It does not create the secrets file, and does not fill in `CLOUDFLARE_ACCOUNT_ID` anywhere; so the account is always the user's `CLOUDFLARE_ACCOUNT_ID`, and the account switch and `--switch-account` go (SETUP-REQ-006 retired). `cloudflare-setup` takes no arguments; an argument is a usage error that is never echoed.
+- **To reverse:** bring back `.env.cloudflare` as a read-only third source; the account switch would also need setup to record the account again.
+Item: Cloudflare setup with one token.
+
+### DEC-0800 — A secrets file others can read is warned about, never refused
+Origin: owner (2026-11-27) · Status: accepted · Affects: SETUP-REQ-002, SETUP-AC-006, `provision/cloudflare/token-sources.ts`
+
+When the secrets file's mode gives its group or others any access (`mode & 077`), every Cloudflare command and `cloudflare-setup` print a notice with the path and `chmod 600 <path>`, on standard error, and go on; the exit status is the same as with mode 600. Not checked on Windows. The framework never changes the file's mode itself (DEC-0799: it writes nothing).
+- **To reverse:** make the notice a stop.
+Item: Cloudflare setup with one token.
+
+### DEC-0801 — E2E-017 is rewritten for the one token
+Origin: ai-proposed · Status: accepted · Affects: E2E-017, `tests/compliance/e2e/E2E-017-setup.spec.ts`
+
+E2E-017 ("Setup: the bootstrap, then the admin app") becomes "Setup with one token": no credential, then the token in a temporary home's `~/.secrets/cloudflare`, setting the account up in one run, a run that changes nothing, and the deployed admin app's sign-in checks. Its edge cases are the one token's: a missing setting, a missing permission, the environment over the file, a readable secrets file, an interrupted run that makes nothing twice, and the user's token never changed. The bootstrap's expiry cases, the admin app's Account setup page and Everyday token page steps leave the scenario (the pages keep their own integration suite, `packages/framework/test/integration/admin-app`). Agents keep the scenarios current without owner approval (CONVENTIONS §4).
+Item: Cloudflare setup with one token.
+
+### DEC-0802 — Messages send a Cloudflare user to `npm run cloudflare-setup`, not `setup-account`
+Origin: owner (2026-11-27, from the SETUP-AC-011 live run's friction list) · Status: accepted · Affects: PROV §1 step 1, PROV-REQ-004, PROV-AC-002, `provision/core/operations.ts` (`setupCommand`), `provision/core/deploy.ts`, `provision/core/remove.ts`, `provision/cloudflare/names.ts` (`SETUP_COMMAND`), `target.ts`, `account.ts`, `backup.ts`, `r2-token.ts`, `skill/reference/troubleshooting.md`
+
+A new user has only `npm run cloudflare-setup` (QUICKSTART, the starter's README); `setup-account --target cloudflare` stays for scripts (DEC-0798). So the deploy preflight's "shared resources are missing", the missing signing credential or subdomain, the invalid signing record and a production `remove` without its backup bucket now say `run npm run cloudflare-setup …`. The core gets the command from `TargetOperations.setupCommand` (default `setup-account --target <target>`). The messages that still said "with the setup token (DEC-0551)" lose it: there is one token since DEC-0796; a missing "Account API Tokens Write" is named with its dashboard name and "add it to the token". Also from the friction list: a moved signing credential is reported "Moved … into Secrets Store", and the create package's README no longer names `.env.cloudflare`.
+- **To reverse:** drop `setupCommand` from the Cloudflare target; the messages fall back to `setup-account --target cloudflare`.
+Item: Cloudflare setup with one token (live-run friction).
+
+### DEC-0803 — The framework depends on `@vitest/browser-playwright` at its `vitest` version, the template pins it too, and `upgrade` moves it as a companion pin
+Origin: ai-proposed · Status: accepted · Affects: `packages/framework/package.json`, `apps/template/package.json`, `package-lock.json`, `cli/commands/upgrade.ts` (`COMPANION_PINS`), skill hard rule 5, `packages/create-prototype-app/test/create.registry.test.ts`, `vitest.registry.config.ts`, `.github/workflows/release.yml`
+
+A new app's `npm install` (no lockfile) crashed in npm 10.9.4, which ships with the pinned Node 22.22.0, with "Cannot read properties of null (reading 'edgesOut')" once `@vitest/browser-playwright` 5.1.0 was published (root cause `ai/implementation/root-causes/2026-11-27-starter-npm-install-edgesout.md`). npm's tree builder resolves `vitest`'s optional peer `@vitest/browser-playwright` to the newest release, whose exact `vitest` peer is newer than the app's, and crashes instead of reporting a conflict.
+- **Choice** (owner, 2026-11-27, for the framework dependency): the framework declares `@vitest/browser-playwright` in `dependencies` at exactly its `vitest` version, so a project that depends on the framework without the template installs too. The template keeps its own `devDependencies` pin at the same version (unit tests keep the three equal): hard rule 5 names it, and it costs nothing. Since the release now lists it, it is an ordinary companion pin: `repin` sets it, when the app has it, to the release's own version (it first followed the release's `vitest` version through a separate list, `VITEST_COMPANION_PINS`, now gone). Skill hard rule 5 names it with the other pins (to make room under PAR-070's 8,000 bytes, the router's Cloudflare setup flow is shorter; the details stay in `owner-tasks.md` §2). It adds `@vitest/browser`, its required peer `playwright` and a few small packages to every framework install; in an app made from the template, `playwright` is shared with `@playwright/test`.
+- **Test:** a registry layer (`vitest.registry.config.ts`, only `*.registry.test.ts`) installs a starter-made app from the live registry with no lockfile and runs `verify`, and installs a project whose only dependency is the packed framework; the release workflow runs it before publishing. It is in neither the unit nor the integration layer, which run offline.
+- **Rejected:** bumping `vitest` (the crash returns with the next vitest release); `overrides` (still crashes); `--legacy-peer-deps` (required peers go uninstalled); shipping a lockfile with the starter (goes stale, larger change); the template pin alone (first chosen; a project that depends on the framework alone still crashed).
+- **To reverse:** remove the framework dependency, the template pin, its `COMPANION_PINS` entry and the registry layer, once the pinned Node's npm no longer crashes (npm 11 does not).
+Item: Cloudflare setup with one token (PR 180).
+
+### DEC-0804 — Upgrade from 0.1.1 is not supported or tested; E2E-019 is retired
+Origin: owner · Status: accepted · Affects: `docs/acceptance/e2e-scenarios.md` E2E-019 (retired); `tests/compliance/e2e/E2E-019-upgrade.spec.ts` and `tests/compliance/e2e/support/registry.ts` (removed); catalogue and traceability counts in `tests/compliance/harness/catalogue.unit.test.ts`, `tests/compliance/tools/traceability.unit.test.ts`; DEC-0767's E2E-019 part
+
+- **Choice** (owner, 2026-11-27): no app was ever built on 0.1.1, so upgrading from 0.1.1 needn't be supported or tested. E2E-019 made its app with the published 0.1.1 starter, whose own `npm install` now crashes in npm 10.9.4 ("Cannot read properties of null (reading 'edgesOut')", `@vitest/browser-playwright` 5.1.0; DEC-0803). A published release can't change, so the scenario could never pass again.
+- **Retired, not repointed:** the scenario checked only 0.1.x-specific outcomes: the drop of the Better Auth, rate-limit and test-mail tables, and 0.1.1's upgrade wording about the bootstrap token. A scenario rebased on a later release would be a new scenario with other pass conditions. The `upgrade` command stays covered by the CLI criteria (CLI-AC-001) and its unit tests, and schema evolution with data by E2E-010. If an upgrade scenario is wanted later, it is a new ID whose baseline is the oldest published release that installs cleanly (0.2.0-rc02 or later, once published).
+- **Kept:** the framework code that handles what a 0.1.x setup or app left (migration 0004 dropping the 0.1.x tables, the admin app's v0.1.x email cleanup page, `EVERYDAY_V1` in `provision/cloudflare/permissions.ts`, 0.1.x setup-record handling). It is not trivial to remove, migrations are never removed, and it may serve 0.1.x Cloudflare accounts; removing it is a separate item for the owner to decide. `support/packs.ts` keeps its `version` option and E2E-019 mention, since it is E2E-001's file.
+- **Tests changed** (rule 8, `behaviour-changed`, this decision): E2E-019's one test removed; the catalogue's E2E count 19 → 18 and the traceability row count 155 → 154.
+- **To reverse:** restore the scenario and its tests from git, with a baseline release that installs.
+Item: Cloudflare setup with one token (PR 180).

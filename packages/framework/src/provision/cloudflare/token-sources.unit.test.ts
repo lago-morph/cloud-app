@@ -1,283 +1,215 @@
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+/**
+ * The one credential's sources (DEC-0795, DEC-0799, DEC-0800; setup.md SETUP-REQ-002): the
+ * environment first, then the secrets file in the home directory (PAR-486) or where
+ * `CLOUDFLARE_SECRETS_FILE` points (PAR-487). Fake values only; every notice is searched for them.
+ * No network.
+ */
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  BOOTSTRAP_DELETED_LINE,
   cloudflareEnvironment,
-  commentOutBootstrap,
-  mergeCloudflareSettings,
+  CREDENTIAL_TEMPLATE,
+  DEFAULT_SECRETS_FILE,
+  describeSource,
   ENV_CLOUDFLARE_FILE,
-  ENV_CLOUDFLARE_TEMPLATE,
-  fillInSettings,
+  mergeCloudflareSettings,
   readCloudflareSettings,
+  SECRETS_FILE_ENV,
+  secretsFilePath,
   SETTING_NAMES,
-  writeTemplateIfAbsent,
 } from "./token-sources.js";
 
 // Fake values only. The marker makes any leak of a value into a message easy to find.
 const MARKER = "zzLEAKMARKERzz";
 const FILE_TOKEN = `file-token-${MARKER}-1`;
 const ENV_TOKEN = `env-token-${MARKER}-2`;
-
-let dir: string;
-const file = (): string => join(dir, ENV_CLOUDFLARE_FILE);
-const write = (text: string): void => writeFileSync(file(), text);
-const read = (): string => readFileSync(file(), "utf8");
-const mode = (): number => statSync(file()).mode & 0o777;
 const isPosix = process.platform !== "win32";
 
+let home: string;
+let project: string;
+const secrets = (): string => join(home, ".secrets", "cloudflare");
+function writeSecrets(text: string, mode = 0o600, path = secrets()): void {
+  mkdirSync(join(path, ".."), { recursive: true });
+  writeFileSync(path, text, { mode });
+  chmodSync(path, mode);
+}
+const noticesText = (n: readonly string[]): string => n.join("\n");
+
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "pf-token-sources-"));
+  home = mkdtempSync(join(tmpdir(), "pf-home-"));
+  project = mkdtempSync(join(tmpdir(), "pf-project-"));
 });
 afterEach(() => {
-  rmSync(dir, { recursive: true, force: true });
+  rmSync(home, { recursive: true, force: true });
+  rmSync(project, { recursive: true, force: true });
 });
 
-describe(".env.cloudflare and the environment (plan-setup-wizard §4.2; DEC-0570, DEC-0571, DEC-0573)", () => {
-  it("names the three settings and writes the template exactly (no email domain since v0.2.0, DEC-0697)", () => {
-    expect(SETTING_NAMES).toEqual(["CLOUDFLARE_BOOTSTRAP_TOKEN", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"]);
-    expect(ENV_CLOUDFLARE_TEMPLATE).toBe("CLOUDFLARE_BOOTSTRAP_TOKEN=\nCLOUDFLARE_API_TOKEN=\n# CLOUDFLARE_ACCOUNT_ID=        (only if your tokens see more than one account)\n");
-    expect(writeTemplateIfAbsent(dir)).toBe(true);
-    expect(read()).toBe(ENV_CLOUDFLARE_TEMPLATE);
-    if (isPosix) expect(mode()).toBe(0o600);
-    write("CLOUDFLARE_API_TOKEN=kept\n");
-    expect(writeTemplateIfAbsent(dir)).toBe(false);
-    expect(read()).toBe("CLOUDFLARE_API_TOKEN=kept\n");
-    // The template holds no values: every setting reads as absent.
-    rmSync(file());
-    writeTemplateIfAbsent(dir);
-    expect(readCloudflareSettings(dir, {}).values).toEqual({});
+describe("the credential's names and template (owner decisions 1 and 2, DEC-0795)", () => {
+  it("reads exactly CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID, and the template is those two lines with nothing after the =", () => {
+    expect(SETTING_NAMES).toEqual(["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"]);
+    expect(CREDENTIAL_TEMPLATE).toBe("CLOUDFLARE_API_TOKEN=\nCLOUDFLARE_ACCOUNT_ID=\n");
+  });
+});
+
+describe("the secrets file's path (PAR-486, PAR-487)", () => {
+  it("defaults to ~/.secrets/cloudflare in the home directory, never the project", () => {
+    expect(DEFAULT_SECRETS_FILE).toBe("~/.secrets/cloudflare");
+    expect(secretsFilePath({}, home)).toBe(join(home, ".secrets", "cloudflare"));
   });
 
-  it("reads the environment first, then the file; empty values count as absent in either", () => {
-    write(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_ACCOUNT_ID=\nCLOUDFLARE_BOOTSTRAP_TOKEN=file-bootstrap\n`);
-    const settings = readCloudflareSettings(dir, { CLOUDFLARE_API_TOKEN: "", CLOUDFLARE_ACCOUNT_ID: "env-account" });
-    expect(settings.fileExists).toBe(true);
-    expect(settings.values).toEqual({ CLOUDFLARE_API_TOKEN: FILE_TOKEN, CLOUDFLARE_ACCOUNT_ID: "env-account", CLOUDFLARE_BOOTSTRAP_TOKEN: "file-bootstrap" });
-    expect(settings.sources).toEqual({ CLOUDFLARE_API_TOKEN: "file", CLOUDFLARE_ACCOUNT_ID: "environment", CLOUDFLARE_BOOTSTRAP_TOKEN: "file" });
-
-    const none = readCloudflareSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "" });
-    expect(none.values.CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
-    expect(none.sources.CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
+  it("takes the home directory from HOME when no home is passed", () => {
+    expect(secretsFilePath({ HOME: home })).toBe(join(home, ".secrets", "cloudflare"));
   });
 
-  it("CLOUDFLARE_EMAIL_DOMAIN is no longer a setting (v0.2.0, DEC-0697): ignored in the environment and in the file, with no notice", () => {
-    write(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_EMAIL_DOMAIN=file.example\n`);
-    const settings = readCloudflareSettings(dir, { CLOUDFLARE_EMAIL_DOMAIN: "env.example" });
-    expect(settings.values).toEqual({ CLOUDFLARE_API_TOKEN: FILE_TOKEN });
-    expect(settings.sources).toEqual({ CLOUDFLARE_API_TOKEN: "file" });
-    expect(settings.notices).toEqual([]);
+  it("CLOUDFLARE_SECRETS_FILE overrides it: an absolute path as is, ~/ and a relative path from the home directory", () => {
+    expect(SECRETS_FILE_ENV).toBe("CLOUDFLARE_SECRETS_FILE");
+    expect(secretsFilePath({ CLOUDFLARE_SECRETS_FILE: "/etc/elsewhere/cf" }, home)).toBe("/etc/elsewhere/cf");
+    expect(secretsFilePath({ CLOUDFLARE_SECRETS_FILE: "~/keys/cf" }, home)).toBe(join(home, "keys", "cf"));
+    expect(secretsFilePath({ CLOUDFLARE_SECRETS_FILE: "keys/cf" }, home)).toBe(join(home, "keys", "cf"));
+    expect(secretsFilePath({ CLOUDFLARE_SECRETS_FILE: "  " }, home)).toBe(join(home, ".secrets", "cloudflare"));
+  });
+});
+
+describe("environment first, then the secrets file (SETUP-REQ-002)", () => {
+  it("no file and no environment: nothing set, no notice, the file reported absent", () => {
+    const s = readCloudflareSettings({}, { home });
+    expect(s.values).toEqual({});
+    expect(s.notices).toEqual([]);
+    expect(s.fileExists).toBe(false);
+    expect(s.filePath).toBe(secrets());
   });
 
-  it("without a file, the environment alone, and no notices", () => {
-    const settings = readCloudflareSettings(dir, { CLOUDFLARE_API_TOKEN: ENV_TOKEN, OTHER: "x" });
-    expect(settings).toEqual({ values: { CLOUDFLARE_API_TOKEN: ENV_TOKEN }, sources: { CLOUDFLARE_API_TOKEN: "environment" }, notices: [], fileExists: false });
-    expect(cloudflareEnvironment(dir, { CLOUDFLARE_API_TOKEN: ENV_TOKEN, OTHER: "x" })).toEqual({ CLOUDFLARE_API_TOKEN: ENV_TOKEN, OTHER: "x" });
+  it("reads both settings from the file, and says where each came from by path, never by value", () => {
+    writeSecrets(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_ACCOUNT_ID=acct-file\n`);
+    const s = readCloudflareSettings({}, { home });
+    expect(s.values).toEqual({ CLOUDFLARE_API_TOKEN: FILE_TOKEN, CLOUDFLARE_ACCOUNT_ID: "acct-file" });
+    expect(s.sources).toEqual({ CLOUDFLARE_API_TOKEN: "file", CLOUDFLARE_ACCOUNT_ID: "file" });
+    expect(describeSource(s, "CLOUDFLARE_API_TOKEN")).toBe(`the file ${secrets()}`);
+    expect(describeSource(s, "CLOUDFLARE_API_TOKEN")).not.toContain(MARKER);
   });
 
-  it("when both are set and differ, says the environment is used, naming the setting and never a value", () => {
-    write(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_ACCOUNT_ID=same\n`);
-    const settings = readCloudflareSettings(dir, { CLOUDFLARE_API_TOKEN: ENV_TOKEN, CLOUDFLARE_ACCOUNT_ID: "same" });
-    expect(settings.values.CLOUDFLARE_API_TOKEN).toBe(ENV_TOKEN);
-    expect(settings.notices).toEqual(["CLOUDFLARE_API_TOKEN is set in both the environment and .env.cloudflare and they differ: using the environment"]);
-    expect(settings.notices.join("\n")).not.toContain(MARKER);
+  it("the environment wins per setting; a differing value gets a notice naming the setting only", () => {
+    writeSecrets(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_ACCOUNT_ID=acct-file\n`);
+    const s = readCloudflareSettings({ CLOUDFLARE_API_TOKEN: ENV_TOKEN }, { home });
+    expect(s.values).toEqual({ CLOUDFLARE_API_TOKEN: ENV_TOKEN, CLOUDFLARE_ACCOUNT_ID: "acct-file" });
+    expect(s.sources).toEqual({ CLOUDFLARE_API_TOKEN: "environment", CLOUDFLARE_ACCOUNT_ID: "file" });
+    expect(describeSource(s, "CLOUDFLARE_API_TOKEN")).toBe("the environment variable CLOUDFLARE_API_TOKEN");
+    expect(s.notices).toHaveLength(1);
+    expect(s.notices[0]).toMatch(/CLOUDFLARE_API_TOKEN is set in both the environment and .* they differ: using the environment/);
+    expect(noticesText(s.notices)).not.toContain(MARKER);
   });
 
-  it("parses comments, blank lines, quotes, export and inline comments; names unreadable lines by number only", () => {
-    write(
-      [
-        "# a comment",
-        "",
-        `  export CLOUDFLARE_API_TOKEN = "${FILE_TOKEN}"  `,
-        "CLOUDFLARE_ACCOUNT_ID='acc-quoted' # the account",
-        "CLOUDFLARE_EMAIL_DOMAIN=mail.example # the domain",
-        `${FILE_TOKEN}`,
-        `CLOUDFLARE_BOOTSTRAP_TOKEN="${FILE_TOKEN}`,
-        "# CLOUDFLARE_BOOTSTRAP_TOKEN=commented",
-        "UNRELATED=ignored",
-      ].join("\r\n"),
-    );
-    const settings = readCloudflareSettings(dir, {});
-    expect(settings.values).toEqual({ CLOUDFLARE_API_TOKEN: FILE_TOKEN, CLOUDFLARE_ACCOUNT_ID: "acc-quoted" });
-    expect(settings.notices).toEqual([
-      "line 6 of .env.cloudflare is not a NAME=value line and was ignored",
-      "line 7 of .env.cloudflare is not a NAME=value line and was ignored",
-    ]);
-    expect(settings.notices.join("\n")).not.toContain(MARKER);
-    expect(cloudflareEnvironment(dir, {}).UNRELATED).toBeUndefined();
+  it("the same value in both sources gets no notice; whitespace-only or empty values count as absent", () => {
+    writeSecrets(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_ACCOUNT_ID=\n`);
+    const s = readCloudflareSettings({ CLOUDFLARE_API_TOKEN: FILE_TOKEN, CLOUDFLARE_ACCOUNT_ID: "   " }, { home });
+    expect(s.notices).toEqual([]);
+    expect(s.values).toEqual({ CLOUDFLARE_API_TOKEN: FILE_TOKEN });
   });
 
-  it("cloudflareEnvironment merges the file into the environment, the environment winning", () => {
-    write(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_ACCOUNT_ID=file-account\n`);
-    expect(cloudflareEnvironment(dir, { PATH: "/bin", CLOUDFLARE_ACCOUNT_ID: "env-account", CLOUDFLARE_API_TOKEN: "" })).toEqual({
-      PATH: "/bin",
-      CLOUDFLARE_API_TOKEN: FILE_TOKEN,
-      CLOUDFLARE_ACCOUNT_ID: "env-account",
-    });
+  it("the environment alone, with no file, is enough", () => {
+    const s = readCloudflareSettings({ CLOUDFLARE_API_TOKEN: ENV_TOKEN, CLOUDFLARE_ACCOUNT_ID: "acct" }, { home });
+    expect(s.values).toEqual({ CLOUDFLARE_API_TOKEN: ENV_TOKEN, CLOUDFLARE_ACCOUNT_ID: "acct" });
+    expect(s.notices).toEqual([]);
   });
 
-  it.runIf(isPosix)("an unreadable file is a notice, not a failure, and gives no values", () => {
-    if (process.getuid?.() === 0) return; // root reads any file
-    write(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\n`);
-    chmodSync(file(), 0o000);
-    const settings = readCloudflareSettings(dir, {});
-    expect(settings.values).toEqual({});
-    expect(settings.notices).toEqual([".env.cloudflare could not be read (EACCES): using the environment only"]);
+  it("reads the file CLOUDFLARE_SECRETS_FILE names instead of the default", () => {
+    writeSecrets(`CLOUDFLARE_API_TOKEN=default-${MARKER}\n`);
+    const other = join(home, "elsewhere", "cf.env");
+    writeSecrets(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\n`, 0o600, other);
+    const s = readCloudflareSettings({ CLOUDFLARE_SECRETS_FILE: other }, { home });
+    expect(s.values.CLOUDFLARE_API_TOKEN).toBe(FILE_TOKEN);
+    expect(s.filePath).toBe(other);
   });
 
-  it("comments out the bootstrap line and leaves the rest as it was, at mode 600", () => {
-    expect(commentOutBootstrap(dir)).toBe(false);
-    expect(existsSync(file())).toBe(false);
-    write(`# mine\nCLOUDFLARE_BOOTSTRAP_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_API_TOKEN=everyday\n`);
-    chmodSync(file(), 0o644);
-    expect(commentOutBootstrap(dir)).toBe(true);
-    expect(read()).toBe(`# mine\n${BOOTSTRAP_DELETED_LINE}\nCLOUDFLARE_API_TOKEN=everyday\n`);
-    expect(BOOTSTRAP_DELETED_LINE).toBe("# CLOUDFLARE_BOOTSTRAP_TOKEN=deleted by setup process");
-    if (isPosix) expect(mode()).toBe(0o600);
-    expect(readCloudflareSettings(dir, {}).values.CLOUDFLARE_BOOTSTRAP_TOKEN).toBeUndefined();
-    // Nothing left to comment out.
-    expect(commentOutBootstrap(dir)).toBe(false);
+  it("parses .env lines: comments, blank lines, export, quotes and a trailing comment; a later line wins; other names are ignored", () => {
+    writeSecrets(["# my Cloudflare", "", "export CLOUDFLARE_API_TOKEN='first'", `CLOUDFLARE_API_TOKEN="${FILE_TOKEN}" # the admin token`, "CLOUDFLARE_ACCOUNT_ID=acct # mine", "OTHER=x"].join("\n"));
+    const s = readCloudflareSettings({}, { home });
+    expect(s.values).toEqual({ CLOUDFLARE_API_TOKEN: FILE_TOKEN, CLOUDFLARE_ACCOUNT_ID: "acct" });
+    expect(s.notices).toEqual([]);
   });
 
-  it("fills in an empty account ID, uncommenting the template's account line, at mode 600", () => {
-    writeTemplateIfAbsent(dir);
-    chmodSync(file(), 0o664);
-    expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account" })).toEqual(["CLOUDFLARE_ACCOUNT_ID"]);
-    expect(read()).toBe("CLOUDFLARE_BOOTSTRAP_TOKEN=\nCLOUDFLARE_API_TOKEN=\nCLOUDFLARE_ACCOUNT_ID=fake-account\n");
-    if (isPosix) expect(mode()).toBe(0o600);
+  it("a line that is not NAME=value is named by number, never shown, and ignored", () => {
+    writeSecrets(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nthis is ${MARKER} not an assignment\nCLOUDFLARE_ACCOUNT_ID="unclosed ${MARKER}\n`);
+    const s = readCloudflareSettings({}, { home });
+    expect(s.values).toEqual({ CLOUDFLARE_API_TOKEN: FILE_TOKEN });
+    expect(s.notices).toEqual([`line 2 of ${secrets()} is not a NAME=value line and was ignored`, `line 3 of ${secrets()} is not a NAME=value line and was ignored`]);
   });
 
-  it("never changes a value already in the file; adds a missing line; never creates an absent file (plan §3.4, SETUP-AC-002)", () => {
-    // A 0.1.x email domain line is kept as it is.
-    write(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_EMAIL_DOMAIN=kept.example\n`);
-    expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account" })).toEqual(["CLOUDFLARE_ACCOUNT_ID"]);
-    expect(read()).toBe(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_EMAIL_DOMAIN=kept.example\nCLOUDFLARE_ACCOUNT_ID=fake-account\n`);
-    expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "another" })).toEqual([]);
+  it.runIf(isPosix)("a file that cannot be read is a notice, and the environment is used", () => {
+    writeSecrets(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\n`, 0o000);
+    // root reads any file; then there is nothing to check.
+    if (process.getuid?.() === 0) return;
+    const s = readCloudflareSettings({ CLOUDFLARE_ACCOUNT_ID: "acct" }, { home });
+    expect(s.values).toEqual({ CLOUDFLARE_ACCOUNT_ID: "acct" });
+    expect(noticesText(s.notices)).toMatch(/could not be read \(EACCES\): using the environment only/);
+  });
+});
 
-    rmSync(file());
-    expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account" })).toEqual([]);
-    expect(existsSync(file())).toBe(false);
+describe("the framework never writes the credential (DEC-0799)", () => {
+  it("reading leaves the file byte for byte and creates nothing in the home directory or the project", () => {
+    const text = `CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_ACCOUNT_ID=\n`;
+    writeSecrets(text);
+    const before = statSync(secrets()).mtimeMs;
+    readCloudflareSettings({}, { home, projectDir: project });
+    cloudflareEnvironment({}, { home, projectDir: project });
+    expect(readFileSync(secrets(), "utf8")).toBe(text);
+    expect(statSync(secrets()).mtimeMs).toBe(before);
+    expect(readdirSync(join(home, ".secrets"))).toEqual(["cloudflare"]);
+    expect(readdirSync(project)).toEqual([]);
   });
 
-  it("refuses a value it could not write back as one line, without naming the value", () => {
-    writeTemplateIfAbsent(dir);
-    expect(() => fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: `bad ${MARKER}` })).toThrow(/^CLOUDFLARE_ACCOUNT_ID cannot be written to \.env\.cloudflare: the value holds a space, quote, backslash or #$/);
-    expect(read()).toBe(ENV_CLOUDFLARE_TEMPLATE);
+  it("no file: reading does not create one", () => {
+    readCloudflareSettings({}, { home });
+    expect(existsSync(join(home, ".secrets"))).toBe(false);
   });
+});
 
-  it.runIf(isPosix)("every write leaves the file at mode 600, also when it was wider before", () => {
-    const writes: (() => unknown)[] = [
-      () => writeTemplateIfAbsent(dir),
-      () => commentOutBootstrap(dir),
-      () => fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account" }),
-    ];
-    for (const step of writes) {
-      if (existsSync(file())) chmodSync(file(), 0o666);
-      expect(step()).toBeTruthy();
-      expect(mode()).toBe(0o600);
+describe("a secrets file others can read is warned about, never refused (owner decision 5, DEC-0800)", () => {
+  it.runIf(isPosix)("mode 644 or 640: a notice with the path and chmod 600, and the values are still used", () => {
+    for (const mode of [0o644, 0o640, 0o604]) {
+      writeSecrets(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\n`, mode);
+      const s = readCloudflareSettings({}, { home });
+      expect(s.values.CLOUDFLARE_API_TOKEN).toBe(FILE_TOKEN);
+      expect(s.notices.filter((n) => n.includes("can be read by other users")), mode.toString(8)).toEqual([
+        `the secrets file ${secrets()} can be read by other users (mode ${mode.toString(8)}); make it private with: chmod 600 ${secrets()}`,
+      ]);
     }
-    expect(read()).toBe(`${BOOTSTRAP_DELETED_LINE}\nCLOUDFLARE_API_TOKEN=\nCLOUDFLARE_ACCOUNT_ID=fake-account\n`);
   });
 
-  it("the template's hint is not part of a value: a hint-only line reads as empty and is filled; a value typed before the hint is the value", () => {
-    const hint = "(only if your tokens see more than one account)";
-    write(`CLOUDFLARE_API_TOKEN=t\nCLOUDFLARE_ACCOUNT_ID=        ${hint}\n`);
-    expect(readCloudflareSettings(dir, {}).values.CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
-    expect(readCloudflareSettings(dir, {}).notices).toEqual([]);
-    expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account" })).toEqual(["CLOUDFLARE_ACCOUNT_ID"]);
-    expect(read()).toBe("CLOUDFLARE_API_TOKEN=t\nCLOUDFLARE_ACCOUNT_ID=fake-account\n");
+  it.runIf(isPosix)("mode 600 and 400: no warning", () => {
+    for (const mode of [0o600, 0o400]) {
+      writeSecrets(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\n`, mode);
+      expect(readCloudflareSettings({}, { home }).notices, mode.toString(8)).toEqual([]);
+      chmodSync(secrets(), 0o600);
+    }
+  });
+});
 
-    write(`CLOUDFLARE_ACCOUNT_ID=typed-account        ${hint}\nCLOUDFLARE_API_TOKEN=${hint}\n`);
-    expect(readCloudflareSettings(dir, {}).values).toEqual({ CLOUDFLARE_ACCOUNT_ID: "typed-account" });
+describe("the old .env.cloudflare and bootstrap token are not read (DEC-0796, DEC-0799)", () => {
+  it("a project's .env.cloudflare is never read; a notice says to move its values to the secrets file", () => {
+    writeFileSync(join(project, ENV_CLOUDFLARE_FILE), `CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_ACCOUNT_ID=acct\n`);
+    const s = readCloudflareSettings({}, { home, projectDir: project });
+    expect(s.values).toEqual({});
+    expect(s.notices).toEqual([`.env.cloudflare in the project folder is no longer read: put CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in ${secrets()} (or in the environment), then delete .env.cloudflare`]);
   });
 
-  it("an unquoted value with a space inside is unreadable, named by its line number only", () => {
-    write(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN} ${FILE_TOKEN}\nCLOUDFLARE_ACCOUNT_ID=ok\n`);
-    const settings = readCloudflareSettings(dir, {});
-    expect(settings.values).toEqual({ CLOUDFLARE_ACCOUNT_ID: "ok" });
-    expect(settings.notices).toEqual(["line 1 of .env.cloudflare is not a NAME=value line and was ignored"]);
+  it("CLOUDFLARE_BOOTSTRAP_TOKEN in the environment or the file: ignored, with a notice that never shows it", () => {
+    for (const [env, file] of [[{ CLOUDFLARE_BOOTSTRAP_TOKEN: ENV_TOKEN }, ""], [{}, `CLOUDFLARE_BOOTSTRAP_TOKEN=${FILE_TOKEN}\n`]] as const) {
+      if (file !== "") writeSecrets(file);
+      const s = readCloudflareSettings(env, { home });
+      expect(s.values).toEqual({});
+      expect(s.notices).toEqual(["CLOUDFLARE_BOOTSTRAP_TOKEN is no longer used and was ignored: the framework needs only CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID. You can remove it."]);
+    }
   });
+});
 
-  it("an environment value of only whitespace counts as absent", () => {
-    write(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\n`);
-    const settings = readCloudflareSettings(dir, { CLOUDFLARE_API_TOKEN: "  \t", CLOUDFLARE_ACCOUNT_ID: " " });
-    expect(settings.values).toEqual({ CLOUDFLARE_API_TOKEN: FILE_TOKEN });
-    expect(settings.sources).toEqual({ CLOUDFLARE_API_TOKEN: "file" });
-    expect(settings.notices).toEqual([]);
-  });
-
-  it("a whitespace-only environment value is left out of the merged environment, also when the file has none", () => {
-    const merged = cloudflareEnvironment(dir, { CLOUDFLARE_API_TOKEN: "   ", CLOUDFLARE_ACCOUNT_ID: " ", PATH: "/bin" });
-    expect(merged.CLOUDFLARE_API_TOKEN).toBeUndefined();
-    expect(merged.CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
-    expect(merged.PATH).toBe("/bin");
-    expect(mergeCloudflareSettings({ CLOUDFLARE_ACCOUNT_ID: "\t" }, readCloudflareSettings(dir, {})).CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
-  });
-
-  it.runIf(isPosix)("a .env.cloudflare that is a symbolic link is written through to its target, which stays at mode 600; the link stays a link", () => {
-    const shared = join(dir, "shared");
-    mkdirSync(shared);
-    const target = join(shared, "cloudflare.env");
-    writeFileSync(target, `CLOUDFLARE_BOOTSTRAP_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_API_TOKEN=x\n`);
-    chmodSync(target, 0o644);
-    symlinkSync(target, file());
-    expect(commentOutBootstrap(dir)).toBe(true);
-    expect(lstatSync(file()).isSymbolicLink()).toBe(true);
-    expect(readFileSync(target, "utf8")).toBe(`${BOOTSTRAP_DELETED_LINE}\nCLOUDFLARE_API_TOKEN=x\n`);
-    expect(statSync(target).mode & 0o777).toBe(0o600);
-    expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account" })).toEqual(["CLOUDFLARE_ACCOUNT_ID"]);
-    expect(lstatSync(file()).isSymbolicLink()).toBe(true);
-    expect(readFileSync(target, "utf8")).toContain("CLOUDFLARE_ACCOUNT_ID=fake-account\n");
-    expect(readdirSync(shared)).toEqual(["cloudflare.env"]);
-  });
-
-  it.runIf(isPosix)("a .env.cloudflare that is a dangling symbolic link is written through by the template write (target created at mode 600, the link stays a link) and a later rewrite; fillInSettings creates nothing through it (DEC-0614, DEC-0587)", () => {
-    const shared = join(dir, "shared");
-    mkdirSync(shared);
-    const target = join(shared, "cloudflare.env");
-    // A relative link, through a second link, to a file not made yet.
-    symlinkSync("hop", file());
-    symlinkSync(join("shared", "cloudflare.env"), join(dir, "hop"));
-    expect(writeTemplateIfAbsent(dir)).toBe(true);
-    expect(lstatSync(file()).isSymbolicLink()).toBe(true);
-    expect(lstatSync(join(dir, "hop")).isSymbolicLink()).toBe(true);
-    expect(readFileSync(target, "utf8")).toBe(ENV_CLOUDFLARE_TEMPLATE);
-    expect(statSync(target).mode & 0o777).toBe(0o600);
-    expect(readdirSync(shared)).toEqual(["cloudflare.env"]);
-    // A rewrite of the existing target through the links (a new file renamed over it in its own folder).
-    chmodSync(target, 0o644);
-    expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account" })).toEqual(["CLOUDFLARE_ACCOUNT_ID"]);
-    expect(lstatSync(file()).isSymbolicLink()).toBe(true);
-    expect(lstatSync(join(dir, "hop")).isSymbolicLink()).toBe(true);
-    expect(readFileSync(target, "utf8")).toContain("CLOUDFLARE_ACCOUNT_ID=fake-account\n");
-    expect(statSync(target).mode & 0o777).toBe(0o600);
-    expect(readdirSync(shared)).toEqual(["cloudflare.env"]);
-    // fillInSettings never creates a missing file (SETUP-AC-002, DEC-0587): a dangling link counts as missing.
-    rmSync(target);
-    expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account" })).toEqual([]);
-    expect(readdirSync(shared)).toEqual([]);
-    expect(lstatSync(file()).isSymbolicLink()).toBe(true);
-  });
-
-  it("comments out a bootstrap line the parser cannot read, so no value stays in the file", () => {
-    write(`CLOUDFLARE_BOOTSTRAP_TOKEN="${FILE_TOKEN}\nexport CLOUDFLARE_BOOTSTRAP_TOKEN = ${FILE_TOKEN} ${FILE_TOKEN}\nCLOUDFLARE_API_TOKEN=everyday\n`);
-    expect(commentOutBootstrap(dir)).toBe(true);
-    expect(read()).toBe(`${BOOTSTRAP_DELETED_LINE}\n${BOOTSTRAP_DELETED_LINE}\nCLOUDFLARE_API_TOKEN=everyday\n`);
-    expect(read()).not.toContain(MARKER);
-  });
-
-  it.runIf(isPosix)("a rewrite replaces the file atomically (a new file renamed over it), at mode 600, leaving no temporary file", () => {
-    write("CLOUDFLARE_BOOTSTRAP_TOKEN=b\nCLOUDFLARE_ACCOUNT_ID=\n");
-    chmodSync(file(), 0o644);
-    const before = statSync(file()).ino;
-    expect(commentOutBootstrap(dir)).toBe(true);
-    expect(statSync(file()).ino).not.toBe(before);
-    expect(mode()).toBe(0o600);
-    const again = statSync(file()).ino;
-    expect(fillInSettings(dir, { CLOUDFLARE_ACCOUNT_ID: "fake-account" })).toEqual(["CLOUDFLARE_ACCOUNT_ID"]);
-    expect(statSync(file()).ino).not.toBe(again);
-    expect(mode()).toBe(0o600);
-    expect(readdirSync(dir)).toEqual([ENV_CLOUDFLARE_FILE]);
+describe("the merged environment every Cloudflare command runs with", () => {
+  it("adds the file's values, the environment winning, and leaves out the retired bootstrap token and whitespace-only settings", () => {
+    writeSecrets(`CLOUDFLARE_API_TOKEN=${FILE_TOKEN}\nCLOUDFLARE_ACCOUNT_ID=acct-file\n`);
+    const env = { PATH: "/bin", CLOUDFLARE_ACCOUNT_ID: "acct-env", CLOUDFLARE_BOOTSTRAP_TOKEN: ENV_TOKEN };
+    expect(cloudflareEnvironment(env, { home })).toEqual({ PATH: "/bin", CLOUDFLARE_API_TOKEN: FILE_TOKEN, CLOUDFLARE_ACCOUNT_ID: "acct-env" });
+    expect(mergeCloudflareSettings({ CLOUDFLARE_API_TOKEN: "  " }, readCloudflareSettings({}, { home: join(home, "none") }))).toEqual({});
   });
 });

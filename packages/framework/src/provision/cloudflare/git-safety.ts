@@ -82,7 +82,7 @@ export function gitSafetyWarnings(safety: GitSafety): string[] {
   if (!safety.isRepo) {
     return [
       "This project is not a git repository, so nothing records or protects its history. " +
-        "If you make it one later, check that .env.cloudflare is listed in .gitignore before the first commit, because it holds your Cloudflare tokens.",
+        "If you make it one later, keep secrets out of it: the Cloudflare token belongs in ~/.secrets/cloudflare or the environment, never in the project.",
     ];
   }
   const warnings: string[] = [];

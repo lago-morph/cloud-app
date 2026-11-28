@@ -38,7 +38,7 @@ import type { Stage } from "../core/operations.js";
 import { describeFailure, resultOf, succeeded, type CloudflareApi } from "./api.js";
 import { ensureStore, putSecret, storedSecrets } from "./secrets-store.js";
 import { missingPermissions, tokenPolicies } from "./token-policies.js";
-import { ACCOUNT_BUCKETS, legacySigningTokenName, STATE_BUCKET } from "./names.js";
+import { ACCOUNT_BUCKETS, legacySigningTokenName, SETUP_COMMAND, STATE_BUCKET } from "./names.js";
 
 export const ITEM_WRITE_PERMISSION = "Workers R2 Storage Bucket Item Write";
 /** The permission `setup-account` needs to create the credential. */
@@ -128,7 +128,7 @@ export function parseSigningRecord(body: unknown): SigningCredentials {
   const r = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
   const { tokenId, accessKeyId, secretAccessKey } = r;
   if (typeof tokenId !== "string" || tokenId === "" || typeof accessKeyId !== "string" || accessKeyId === "" || typeof secretAccessKey !== "string" || !/^[0-9a-f]{64}$/.test(secretAccessKey)) {
-    throw new Error(`the ${recordResource} is not a valid signing record; run setup-account --target cloudflare with the setup token to replace it`);
+    throw new Error(`the ${recordResource} is not a valid signing record; run ${SETUP_COMMAND} to replace it`);
   }
   return { id: tokenId, accessKeyId, secretAccessKey };
 }
@@ -281,10 +281,10 @@ export async function tokenWriteProblems(api: CloudflareApi, accountId: string):
   try {
     policies = await tokenPolicies(api, accountId);
   } catch (error) {
-    return [`${error instanceof Error ? error.message : String(error)} (creating the ${SIGNING_RESOURCE} needs "${TOKEN_WRITE_PERMISSION}"; use the setup token, DEC-0551)`];
+    return [`${error instanceof Error ? error.message : String(error)} (creating the ${SIGNING_RESOURCE} needs "${TOKEN_WRITE_PERMISSION}", Account API Tokens Edit in the dashboard; add it to the token)`];
   }
   const missing = missingPermissions(policies, [{ name: TOKEN_WRITE_PERMISSION, scope: "account" }], accountId, "");
-  return missing.length === 0 ? [] : [`the Cloudflare API token lacks the permission "${TOKEN_WRITE_PERMISSION}" (account), which creating the ${SIGNING_RESOURCE} needs; run setup-account with the setup token (DEC-0551)`];
+  return missing.length === 0 ? [] : [`the Cloudflare API token lacks the permission "${TOKEN_WRITE_PERMISSION}" (account), which creating the ${SIGNING_RESOURCE} needs; add it to the token (Account API Tokens Edit in the dashboard) and run ${SETUP_COMMAND} again`];
 }
 
 /**

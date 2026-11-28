@@ -319,6 +319,15 @@ describe("deploy step 1: preflight (PROV-REQ-002, PROV-REQ-004)", () => {
     expect(changingCalls(t)).toEqual([]);
   });
 
+  it("missing shared resources on a target with its own setup command: the message names that command (DEC-0802)", async () => {
+    const t = new FakeTarget({ sharedResources: { "R2 bucket prototype-logs": "absent" }, setupCommand: "npm run fake-setup" });
+    const io = captureIo();
+    expect((await runDeploy(t, request(), io)).status).toBe(1);
+    expect(io.err).toContain("the account's shared resources are missing (R2 bucket prototype-logs); run npm run fake-setup first");
+    expect(io.err).not.toContain("setup-account");
+    expect(changingCalls(t)).toEqual([]);
+  });
+
   it("[PROV-AC-007] (core part) a shared resource owned by another account stops deploy with a message naming it and changes nothing", async () => {
     const t = new FakeTarget({ sharedResources: { "R2 bucket prototype-logs": "foreign" } });
     const io = captureIo();

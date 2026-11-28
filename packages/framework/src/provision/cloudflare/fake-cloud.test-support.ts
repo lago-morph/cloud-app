@@ -138,7 +138,9 @@ export class FakeCloud {
   readonly failSst = new Set<string>();
   /** SST's state per `<app>/<stage>`: the logical names of the components it holds. */
   readonly sstState = new Map<string, Set<string>>();
-  /** OAuth clients (`…/oauth_clients`) by client ID: the create body's name and the secret its create answer showed once. */
+  /** D1 databases (`…/d1/database`): only listed and created. */
+  readonly d1Databases: { uuid: string; name: string }[] = [];
+  /** OAuth clients (`…/oauth_clients`) by client ID: the create body's `client_name` and the secret its create answer showed once. */
   readonly oauthClients = new Map<string, { id: string; name: string; body: Record<string, unknown>; secret: string }>();
   /** Secrets Store stores by ID (one by default, as on the live account), each with its secrets by name; values are write-only on the API. */
   readonly secretStores = new Map<string, { name: string; secrets: Map<string, { id: string; value: string; scopes?: unknown; comment?: string }> }>([["store1", { name: "default_secrets_store", secrets: new Map() }]]);
@@ -229,7 +231,17 @@ export class FakeCloud {
     // The everyday token's quick-check reads (permissions.ts `probeEveryday`).
     if (p === `${A}/workers/scripts` && method === "GET") return ok([...this.workers.keys()].map((id) => ({ id })));
     if (p === `${A}/r2/buckets` && method === "GET") return ok({ buckets: [...this.buckets.keys()].map((name) => ({ name })) });
-    if (p === `${A}/d1/database` && method === "GET") return ok([], { result_info: { page: 1, per_page: 1, count: 0, total_count: 0 } });
+    // D1 databases by name (the auth app's, `auth-app-deploy.ts`): listed, filtered by `name`, and created.
+    if (p === `${A}/d1/database` && method === "GET") {
+      const name = url.searchParams.get("name");
+      const list = this.d1Databases.filter((d) => name === null || d.name === name);
+      return ok(list, { result_info: { page: 1, per_page: list.length, count: list.length, total_count: list.length } });
+    }
+    if (p === `${A}/d1/database` && method === "POST") {
+      const made = { uuid: `00000000-0000-4000-8000-${String(this.d1Databases.length + 1).padStart(12, "0")}`, name: String(b.name) };
+      this.d1Databases.push(made);
+      return ok(made);
+    }
     if (p === `${A}/workers/subdomain`) {
       if (method === "PUT") {
         this.subdomain = String(b.subdomain);
@@ -344,13 +356,28 @@ export class FakeCloud {
 
   /** The OAuth clients and the Secrets Store (v0.2.0 plan §5.1 step 2), as `oauth-clients.ts` and `secrets-store.ts` call them. */
   private handleBootstrapResources(method: string, p: string, body: unknown): ApiReply {
-    if (p === `${A}/oauth_clients` && method === "GET") return ok([...this.oauthClients.values()].map((c) => ({ client_id: c.id, name: c.name })));
+    // As the live API answers (2026-11-27, root cause 2026-11-27-single-cloudflare-token-oauth-client-body):
+    // the name is `client_name` in the create body and in the list; a body without it is refused
+    // (code 70705); every optional scope must also be in `scopes` (code 70748). A client is shown
+    // (list and create answer) with its body's fields, `visibility: "private"`, `openid` added to
+    // `scopes` when `response_types` holds `id_token`, `optional_scopes` left out when empty, and
+    // an empty `result_info` on the list (read-only live list, 2026-11-27 review).
+    const shown = (c: { id: string; name: unknown; body: Record<string, unknown> }): Record<string, unknown> => {
+      const { optional_scopes: optional, scopes, ...rest } = c.body;
+      const all = Array.isArray(scopes) ? [...(scopes as unknown[])] : [];
+      if (Array.isArray(rest.response_types) && rest.response_types.includes("id_token") && !all.includes("openid")) all.push("openid");
+      return { client_id: c.id, ...rest, client_name: c.name, scopes: all, ...(Array.isArray(optional) && optional.length > 0 ? { optional_scopes: optional } : {}), visibility: "private" };
+    };
+    if (p === `${A}/oauth_clients` && method === "GET") return ok([...this.oauthClients.values()].map(shown), { result_info: {} });
     if (p === `${A}/oauth_clients` && method === "POST") {
       const b = body as Record<string, unknown>;
+      if (typeof b.client_name !== "string" || b.client_name === "") return err(400, 70705, "client_name is required");
+      const scopes = Array.isArray(b.scopes) ? (b.scopes as unknown[]) : [];
+      if (Array.isArray(b.optional_scopes) && (b.optional_scopes as unknown[]).some((o) => !scopes.includes(o))) return err(400, 70748, "optional scope must exist in client scopes");
       const n = this.nextClient++;
-      const client = { id: `client${n}`, name: String(b.name), body: b, secret: `fake-oauth-client-secret-${n}` };
+      const client = { id: `client${n}`, name: b.client_name, body: b, secret: `fake-oauth-client-secret-${n}` };
       this.oauthClients.set(client.id, client);
-      return ok({ ...b, client_id: client.id, client_secret: client.secret });
+      return ok({ ...shown(client), client_secret: client.secret });
     }
     const c = /^\/accounts\/[^/]+\/oauth_clients\/([^/]+)$/.exec(p);
     if (c && method === "DELETE") return this.oauthClients.delete(c[1]!) ? ok({ client_id: c[1] }) : err(404, 1003, "not found");

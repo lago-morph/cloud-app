@@ -61,7 +61,7 @@ export async function runRemove(ops: TargetOperations, stage: Stage, io: Provisi
     } catch (error) {
       errorLine(io, `remove of production stage ${stage.stage} failed: the backup failed: ${messageOf(error)}`);
       errorLine(io, `  stage state: ${stoppedState}`);
-      errorLine(io, `  next action: fix the problem (run setup-account --target ${ops.target} if the backup bucket is missing) and run remove again`);
+      errorLine(io, `  next action: fix the problem (run ${ops.setupCommand ?? `setup-account --target ${ops.target}`} if the backup bucket is missing) and run remove again`);
       return { status: EXIT.failed, leftovers: [] };
     }
     line(io, `backed up stage ${stage.stage} to ${backup.location}: ${backup.items.join(", ")}`);

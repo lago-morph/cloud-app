@@ -134,6 +134,11 @@ export interface MigrationCheckInput {
 export interface TargetOperations {
   /** The target's name, for messages only (`cloudflare`). The core never branches on it. */
   readonly target: string;
+  /**
+   * The command messages tell the owner to run when the account's shared resources are missing
+   * (DEC-0802; Cloudflare: `npm run cloudflare-setup`); default `setup-account --target <target>`.
+   */
+  readonly setupCommand?: string;
   /** The SQL dialect of this target's databases (selects the migration histories). */
   readonly dialect: Dialect;
   /** The `StageResource.kind` of the stage resource that serves the app (Cloudflare: `Worker`): while it is listed, the app exists. */

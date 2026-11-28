@@ -1,5 +1,5 @@
 /**
- * A fake Cloudflare with several accounts and API tokens, for `cloudflare-setup`'s unit tests
+ * A fake Cloudflare with several accounts and API tokens, for `cloudflare-setup`'s unit and criteria tests
  * (plan-setup-wizard §6): each token has a value, an ID, an owner (an account, or a user token that
  * sees several accounts), an expiry and policies. `apiFor(value)` answers as that token would:
  * `GET /accounts`, both `tokens/verify` endpoints, token details, the in-place `PUT` and `DELETE`
@@ -10,7 +10,7 @@
  */
 import type { ApiReply, CloudflareApi } from "./api.js";
 import { ACCOUNT, FakeCloud } from "./fake-cloud.test-support.js";
-import { BOOTSTRAP, comparePolicies, EVERYDAY, EVERYDAY_V2, TOKEN_NAMES, type PermissionGroup, type TokenPolicy } from "./permissions.js";
+import { comparePolicies, EVERYDAY, EVERYDAY_V2, TOKEN, TOKEN_NAMES, type PermissionGroup, type TokenPolicy } from "./permissions.js";
 
 export const OTHER_ACCOUNT = "fedcba9876543210fedcba9876543210";
 
@@ -21,7 +21,7 @@ const UNAUTHORIZED = err(403, 9109, "Unauthorized to access requested resource")
 
 /** A group of the lists, by name (`EVERYDAY_V2` too: its Secrets Store Read, root cause 2026-10-31-C-34a-fake-secrets-store-read). */
 export function groupNamed(name: string): PermissionGroup {
-  const found = [...EVERYDAY, ...EVERYDAY_V2, ...BOOTSTRAP].find((x) => x.name === name);
+  const found = [...EVERYDAY, ...EVERYDAY_V2, ...TOKEN].find((x) => x.name === name);
   if (found === undefined) throw new Error(`no permission group ${name}`);
   return found;
 }
@@ -75,8 +75,8 @@ export class SetupWorld {
     return this.accounts.get(id)!.cloud;
   }
 
-  /** An account token made from a deep link (its list's groups, the dashboard's policies). */
-  addToken(kind: "everyday" | "bootstrap", value: string, id: string, options: { account?: string; groups?: readonly PermissionGroup[]; expires_on?: string; policies?: TokenPolicy[] } = {}): WorldToken {
+  /** An account token made from a deep link (its list's groups, the dashboard's policies): the user's one token (`token`), or the admin app's everyday token. */
+  addToken(kind: "token" | "everyday", value: string, id: string, options: { account?: string; groups?: readonly PermissionGroup[]; expires_on?: string; policies?: TokenPolicy[] } = {}): WorldToken {
     const account = options.account ?? ACCOUNT;
     const t: WorldToken = {
       id,
@@ -85,7 +85,7 @@ export class SetupWorld {
       name: TOKEN_NAMES[kind],
       status: "active",
       ...(options.expires_on === undefined ? {} : { expires_on: options.expires_on }),
-      policies: options.policies ?? dashboardPolicies(options.groups ?? (kind === "everyday" ? EVERYDAY : BOOTSTRAP), account),
+      policies: options.policies ?? dashboardPolicies(options.groups ?? (kind === "everyday" ? EVERYDAY : TOKEN), account),
       deleted: false,
     };
     this.tokens.push(t);
@@ -100,7 +100,7 @@ export class SetupWorld {
       sees,
       name: "owner",
       status: "active",
-      policies: [{ id: "pol-u", effect: "allow", resources: { "com.cloudflare.api.account.*": "*" }, permission_groups: [...BOOTSTRAP, ...EVERYDAY].map((x) => ({ id: x.id, name: x.name })) }],
+      policies: [{ id: "pol-u", effect: "allow", resources: { "com.cloudflare.api.account.*": "*" }, permission_groups: [...TOKEN, ...EVERYDAY].map((x) => ({ id: x.id, name: x.name })) }],
       deleted: false,
     };
     this.tokens.push(t);
@@ -133,6 +133,8 @@ export class SetupWorld {
     const verified = () => ok({ id: t.id, status: t.status, ...(t.expires_on === undefined ? {} : { expires_on: t.expires_on }) });
     if (p === "/accounts" && method === "GET") return ok(this.visible(t).map((id) => ({ id, name: this.accounts.get(id)!.name })));
     if (p === "/user/tokens/verify") return t.account === undefined ? verified() : INVALID;
+    // A user token reads its own details (its policies), as `cloudflare-setup`'s permission check does.
+    if (p === `/user/tokens/${t.id}` && method === "GET") return t.account === undefined ? ok({ id: t.id, name: t.name, status: t.status, policies: t.policies }) : INVALID;
     const m = /^\/accounts\/([^/]+)(\/.*)?$/.exec(p);
     if (m) {
       const a = m[1]!;

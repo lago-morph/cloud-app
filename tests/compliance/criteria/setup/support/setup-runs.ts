@@ -1,28 +1,30 @@
 /**
- * Shared support for the SETUP criteria (docs/components/setup.md §4, SETUP-AC-001…010): projects
- * in temporary folders, runs of `cloudflare-setup` against the fake Cloudflare API, and the record
- * of every run's output that SETUP-AC-010 searches.
+ * Shared support for the SETUP criteria (docs/components/setup.md §4, SETUP-AC-001…010, rewritten
+ * for the one credential, DEC-0795…DEC-0800): projects and home directories in temporary folders,
+ * runs of `cloudflare-setup` against the fake Cloudflare API, and the record of every run's output
+ * that SETUP-AC-010 searches.
  *
- * Written from setup.md, cli.md and plan-setup-wizard §3–§4, not from the command's code. The
- * command is the framework CLI's own `cloudflare-setup` (`cloudflareSetupCommand`: its argument
- * parsing, the settings sources, the local setup and the git checks are the real ones); only the
- * Cloudflare API (`SetupWorld` on `FakeCloud`, the in-memory account the framework's tests use,
- * shapes recorded from the live API), the network check's reach and the local setup's
- * `npm install` and secret names are injected. No network.
+ * Written from setup.md and cli.md, not from the command's code. The command is the framework CLI's
+ * own `cloudflare-setup` (`cloudflareSetupCommand`: its argument check, the credential's sources,
+ * the local setup and the git checks are the real ones); only the Cloudflare API (`SetupWorld` on
+ * `FakeCloud`, the in-memory account the framework's tests use, shapes recorded from the live API),
+ * the home directory (a temporary one, so the operator's `~/.secrets/cloudflare` is never read), the
+ * network check's reach, the auth app's source and the local setup's `npm install` and secret names
+ * are injected. No network.
  *
- * Every fake sensitive value carries the run's marker (plan §6: "a fake token with a marker
- * string, searched for in every output"): token values, token IDs, the second account's ID, the
- * workers.dev subdomains. The fake's own account ID and zone IDs are registered too.
+ * Every fake sensitive value carries the run's marker (plan-setup-wizard §6: "a fake token with a
+ * marker string, searched for in every output"): token values, token IDs, the second account's ID,
+ * the workers.dev subdomains. The fake's own account ID and zone IDs are registered too.
  */
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { cloudflareSetupCommand, type CloudflareSetupCommandDeps } from "../../../../../packages/framework/src/cli/commands/cloudflare-setup.js";
 import type { ApiReply, CloudflareApi } from "../../../../../packages/framework/src/provision/cloudflare/api.js";
 import { ACCOUNT, FakeCloud } from "../../../../../packages/framework/src/provision/cloudflare/fake-cloud.test-support.js";
-import { ACCOUNT_SETUP_VERSION, deepLink, EVERYDAY, BOOTSTRAP, type PermissionGroup, type TokenPolicy } from "../../../../../packages/framework/src/provision/cloudflare/permissions.js";
+import { ACCOUNT_SETUP_VERSION, deepLink, EVERYDAY, TOKEN, type PermissionGroup, type TokenPolicy } from "../../../../../packages/framework/src/provision/cloudflare/permissions.js";
 import { applySetupSteps, SETUP_STEPS } from "../../../../../packages/framework/src/provision/cloudflare/setup-steps.js";
 import { SetupWorld, type WorldToken } from "../../../../../packages/framework/src/provision/cloudflare/setup-world.test-support.js";
 import { runLocalSetup } from "../../../../../packages/framework/src/provision/core/local-setup.js";
@@ -35,15 +37,9 @@ export const MARK = `setupac${randomBytes(4).toString("hex")}`;
 /** The second account (the account-switch and several-accounts criteria): its ID carries the marker. */
 export const SECOND_ACCOUNT = `${MARK}${randomBytes(9).toString("hex")}`.slice(0, 32);
 
-/** The email domain the projects use: a zone of the fake account. */
-export const DOMAIN = "example.test";
-
-/** The settings' names (setup.md SETUP-REQ-002, PAR-340). */
-export const BOOTSTRAP_SETTING = "CLOUDFLARE_BOOTSTRAP_TOKEN";
-export const EVERYDAY_SETTING = "CLOUDFLARE_API_TOKEN";
-
-/** PAR-342: the bootstrap token's line after use. */
-export const BOOTSTRAP_DELETED_LINE = "# CLOUDFLARE_BOOTSTRAP_TOKEN=deleted by setup process";
+/** The credential's settings (setup.md SETUP-REQ-002, DEC-0795). */
+export const TOKEN_SETTING = "CLOUDFLARE_API_TOKEN";
+export const ACCOUNT_SETTING = "CLOUDFLARE_ACCOUNT_ID";
 
 /** PAR-343: the `.gitignore` marker that keeps setup from adding `.env.cloudflare`. */
 export const KEEP_TRACKED_MARKER = "# keep-env-cloudflare-tracked";
@@ -51,26 +47,22 @@ export const KEEP_TRACKED_MARKER = "# keep-env-cloudflare-tracked";
 /** PAR-361: the setting naming token IDs setup never updates or deletes. */
 export const PROTECTED_IDS_SETTING = "PROTOTYPE_FRAMEWORK_PROTECTED_TOKEN_IDS";
 
-/** The template, exactly its three lines (SETUP-REQ-003 as amended: no email domain since v0.2.0, DEC-0697). */
-export const TEMPLATE_LINES = [
-  "CLOUDFLARE_BOOTSTRAP_TOKEN=",
-  "CLOUDFLARE_API_TOKEN=",
-  "# CLOUDFLARE_ACCOUNT_ID=        (only if your tokens see more than one account)",
-] as const;
+/** The template, exactly its two lines with nothing after the = (SETUP-REQ-003, owner decision 2). */
+export const TEMPLATE_LINES = ["CLOUDFLARE_API_TOKEN=", "CLOUDFLARE_ACCOUNT_ID="] as const;
 
 /** The next prompt (plan §3.2, SETUP-REQ-003). */
 export const NEXT_PROMPT_PHRASE = "continue prototype setup";
 
-export const BOOT_LINK = deepLink("bootstrap");
+/** The one token's link (DEC-0797) and the admin app's everyday token's, which setup never prints. */
+export const TOKEN_LINK = deepLink("token");
 export const EVERYDAY_LINK = deepLink("everyday");
 
-/** Plan §4.1's everyday list and v0.2.0 plan §5.1's bootstrap list, by name (PAR-331 version 2). */
-export const EVERYDAY_NAMES = ["Workers Scripts Write", "Workers R2 Storage Write", "D1 Write", "Email Sending Read", "Zone Read", "Analytics Read", "Email Routing Rules Read"];
-export const BOOTSTRAP_NAMES = ["Workers Scripts Write", "OAuth Client Write", "Secrets Store Write", "Account API Tokens Write"];
+/** The one token's list, by name (PAR-331 version 3). */
+export const TOKEN_NAMES_LIST = ["Workers Scripts Write", "Workers R2 Storage Write", "D1 Write", "Secrets Store Write", "OAuth Client Write", "Account API Tokens Write"];
 
 /** The permission group of either list with this name. */
 export function group(name: string): PermissionGroup {
-  const g = [...EVERYDAY, ...BOOTSTRAP].find((x) => x.name === name);
+  const g = [...EVERYDAY, ...TOKEN].find((x) => x.name === name);
   if (g === undefined) throw new Error(`no permission group named ${name}`);
   return g;
 }
@@ -103,7 +95,7 @@ export interface RecordedRun {
   readonly label: string;
   readonly out: string;
   readonly err: string;
-  /** Files of the project the run left, other than `.env.cloudflare` and `.git/`, with their text. */
+  /** Files the run left in the project (other than `.git/` and an old `.env.cloudflare` the test wrote) and in the home directory (other than the secrets file the test wrote), with their text. */
   readonly files: Readonly<Record<string, string>>;
 }
 
@@ -120,8 +112,10 @@ const worlds = new Set<SetupWorld>();
 export function sensitiveValues(): Map<string, string> {
   const all = new Map(sensitive);
   for (const w of worlds) for (const id of zoneIds(w)) all.set(id, "a zone ID");
-  // The OAuth client secrets the bootstrap's creates showed once (v0.2.0 plan §5.1 step 2).
+  // The OAuth client secrets their creates showed once (v0.2.0 plan §5.1 step 2), and the signing token values the fake made.
   for (const w of worlds) for (const a of w.accounts.values()) for (const c of a.cloud.oauthClients.values()) all.set(c.secret, "an OAuth client secret");
+  // The fake answers a token create with the value `value-of-<id>` (the signing token setup mints).
+  for (const w of worlds) for (const a of w.accounts.values()) for (const id of a.cloud.tokens.keys()) all.set(`value-of-${id}`, "a signing token value");
   return all;
 }
 
@@ -130,7 +124,7 @@ export function sensitiveHits(runs: readonly RecordedRun[] = RUNS): string[] {
   const values = sensitiveValues();
   const hits: string[] = [];
   for (const r of runs) {
-    // The bootstrap prints the admin app's URL, which holds the subdomain (v0.2.0 plan §5.1 step 5; DEC-0686): that URL alone is allowed, on standard output.
+    // The summary prints the admin app's URL, which holds the subdomain (DEC-0686): that URL alone is allowed, on standard output.
     const out = [...values].filter(([, label]) => label.startsWith("workers.dev subdomain")).reduce((text, [sub]) => text.split(`https://prototype-admin.${sub}.workers.dev`).join("<admin app URL>"), r.out);
     const texts: [string, string][] = [["stdout", out], ["stderr", r.err], ...Object.entries(r.files).map(([p, t]): [string, string] => [`file ${p}`, t])];
     for (const [where, text] of texts) {
@@ -164,29 +158,9 @@ export function addSecondAccount(world: SetupWorld): FakeCloud {
   return cloud;
 }
 
-export interface Tokens {
-  readonly everyday: WorldToken;
-  readonly bootstrap: WorldToken;
-}
-
-/** 12 hours from now: a bootstrap token within PAR-435's 1-day expiry (v0.2.0 plan §5.1; supersedes PAR-380's 7 days). */
-export const EXPIRES = new Date(Date.now() + 12 * 3_600_000).toISOString().replace(/\.\d{3}Z$/, "Z");
-
-/** Two days from now: a bootstrap token setup deletes at once (more than 1 day away). */
-export const EXPIRES_TOO_LATE = new Date(Date.now() + 48 * 3_600_000).toISOString().replace(/\.\d{3}Z$/, "Z");
-
-/** An everyday and a bootstrap token made from the deep links on `account`. */
-export function addTokens(world: SetupWorld, label: string, account = ACCOUNT, options: { bootstrapExpires?: string | null } = {}): Tokens {
-  const expires = options.bootstrapExpires === null ? {} : { expires_on: options.bootstrapExpires ?? EXPIRES };
-  return {
-    everyday: world.addToken("everyday", tokenValue(`${label}-everyday`), tokenId(`${label}e`), { account }),
-    bootstrap: world.addToken("bootstrap", tokenValue(`${label}-bootstrap`), tokenId(`${label}b`), { account, ...expires }),
-  };
-}
-
-/** A further bootstrap token on the account (each run that needs one gets its own). */
-export function addBootstrap(world: SetupWorld, label: string, account = ACCOUNT, expires: string | null = EXPIRES): WorldToken {
-  return world.addToken("bootstrap", tokenValue(`${label}-bootstrap`), tokenId(`${label}b`), { account, ...(expires === null ? {} : { expires_on: expires }) });
+/** The user's one token on `account`, made from the deep link (every group of `TOKEN`). */
+export function addToken(world: SetupWorld, label: string, account = ACCOUNT, groups?: readonly PermissionGroup[]): WorldToken {
+  return world.addToken("token", tokenValue(label), tokenId(label), { account, ...(groups === undefined ? {} : { groups }) });
 }
 
 const dirs: string[] = [];
@@ -201,8 +175,8 @@ export interface ProjectOptions {
   readonly repo?: boolean;
   /** `.gitignore`'s text (default `.env.cloudflare` listed); null for none. */
   readonly gitignore?: string | null;
-  /** `.env.cloudflare`'s text; absent for no file. */
-  readonly envFile?: string;
+  /** An old `.env.cloudflare`'s text (DEC-0799: never read); absent for no file. */
+  readonly oldEnvFile?: string;
   /** Whether the local setup has been done already (default true). */
   readonly localSetupDone?: boolean;
 }
@@ -218,7 +192,7 @@ export async function project(options: ProjectOptions = {}): Promise<string> {
   if (options.repo !== false) git(dir, ["init", "-q"]);
   const gitignore = options.gitignore === undefined ? ".env.cloudflare\n" : options.gitignore;
   if (gitignore !== null) writeFileSync(join(dir, ".gitignore"), gitignore);
-  if (options.envFile !== undefined) writeFileSync(join(dir, ".env.cloudflare"), options.envFile);
+  if (options.oldEnvFile !== undefined) writeFileSync(join(dir, ".env.cloudflare"), options.oldEnvFile);
   if (options.localSetupDone !== false) {
     // Dependencies (none) and local secrets; the `.gitignore` step is left as the options set it.
     await runLocalSetup(dir, { declaredSecrets: async () => DECLARED_SECRETS, npmInstall: () => Promise.reject(new Error("no install expected")), ensureIgnored: () => "already" });
@@ -226,18 +200,27 @@ export async function project(options: ProjectOptions = {}): Promise<string> {
   return dir;
 }
 
+/** A home directory; with `secrets`, its `~/.secrets/cloudflare` holds that text at `mode` (default 600). */
+export function home(secrets?: string, mode = 0o600): string {
+  const dir = mkdtempSync(join(tmpdir(), "setup-ac-home-"));
+  dirs.push(dir);
+  if (secrets !== undefined) {
+    mkdirSync(join(dir, ".secrets"), { recursive: true });
+    writeFileSync(join(dir, ".secrets", "cloudflare"), secrets, { mode });
+    chmodSync(join(dir, ".secrets", "cloudflare"), mode);
+  }
+  return dir;
+}
+
+/** The default secrets file of a home directory (PAR-486). */
+export const secretsFile = (homeDir: string): string => join(homeDir, ".secrets", "cloudflare");
+
+/** The secrets file's text: the two settings. */
+export const credential = (token: string, account = ACCOUNT): string => `CLOUDFLARE_API_TOKEN=${token}\nCLOUDFLARE_ACCOUNT_ID=${account}\n`;
+
 export function git(dir: string, args: readonly string[]): string {
   return execFileSync("git", ["-c", "user.name=setup-ac", "-c", "user.email=setup-ac@example.invalid", ...args], { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
-
-/** `.env.cloudflare` lines. */
-export const envFile = (values: Readonly<Record<string, string>>): string =>
-  Object.entries(values)
-    .map(([k, v]) => `${k}=${v}`)
-    .join("\n") + "\n";
-
-export const readEnvFile = (dir: string): string => readFileSync(join(dir, ".env.cloudflare"), "utf8");
-export const envFileExists = (dir: string): boolean => existsSync(join(dir, ".env.cloudflare"));
 
 // ---------------------------------------------------------------------------------------------
 // Runs
@@ -246,6 +229,8 @@ export const envFileExists = (dir: string): boolean => existsSync(join(dir, ".en
 export interface RunOptions {
   /** The process environment (default none of the settings). */
   readonly env?: Readonly<Record<string, string>>;
+  /** The home directory (default a new, empty one). */
+  readonly home?: string;
   readonly args?: readonly string[];
   /** The Cloudflare API per token (default the world's). */
   readonly apiFor?: (token: string) => CloudflareApi;
@@ -273,13 +258,13 @@ export const writesOf = (requests: readonly string[]): string[] => requests.filt
 /** Token updates or deletions among the requests. */
 export const tokenWritesOf = (requests: readonly string[]): string[] => requests.filter((r) => / (PUT|DELETE) \/(accounts\/[^/]+|user)\/tokens\//.test(r));
 
-function projectFiles(dir: string, at = dir): Record<string, string> {
+function filesUnder(dir: string, skip: readonly string[], at = dir): Record<string, string> {
   const out: Record<string, string> = {};
   for (const name of readdirSync(at)) {
     const full = join(at, name);
     const rel = relative(dir, full);
-    if (rel === ".git" || rel === ".env.cloudflare" || rel === "node_modules") continue;
-    if (statSync(full).isDirectory()) Object.assign(out, projectFiles(dir, full));
+    if (skip.includes(rel)) continue;
+    if (statSync(full).isDirectory()) Object.assign(out, filesUnder(dir, skip, full));
     else out[rel] = readFileSync(full, "utf8");
   }
   return out;
@@ -308,8 +293,12 @@ export async function runSetup(label: string, world: SetupWorld, dir: string, op
   };
   const reached: string[] = [];
   const before = world.requests.length;
+  const homeDir = options.home ?? home();
   const status = await cloudflareSetupCommand({
     env: options.env ?? {},
+    home: homeDir,
+    authAppSource: () => 'export default { fetch() { return new Response("auth app"); } };',
+    frameworkVersion: "0.0.0-test",
     apiFor: options.apiFor ?? world.apiFor,
     reach: async (url) => {
       reached.push(url);
@@ -319,14 +308,12 @@ export async function runSetup(label: string, world: SetupWorld, dir: string, op
     stepOptions: { newSubdomain: () => SUB },
   })([...(options.args ?? [])], io);
   const requests = world.requests.slice(before);
-  RUNS.push({ label, out: io.out, err: io.err, files: projectFiles(dir) });
+  const files = { ...filesUnder(dir, [".git", ".env.cloudflare", "node_modules"]), ...Object.fromEntries(Object.entries(filesUnder(homeDir, [join(".secrets", "cloudflare")])).map(([k, v]) => [`~/${k}`, v])) };
+  RUNS.push({ label, out: io.out, err: io.err, files });
   return { status, out: io.out, err: io.err, all: io.out + io.err, stdinReads, reached, requests };
 }
 
-/**
- * The account setup on the fake account, as the admin app's Account setup page does it since
- * v0.2.0 (plan §5.2 page 1; DEC-0682): every step and the setup record, through the fake's own API.
- */
+/** The account set up as an earlier run (or the admin app) left it: every step and the setup record, through the fake's own API. */
 export async function setUpAccount(world: SetupWorld, account = ACCOUNT): Promise<void> {
   // `ACCOUNT` is right for every account: each `FakeCloud` answers under the fake's own account ID (the world maps the real one to it).
   await applySetupSteps(world.cloud(account).api, ACCOUNT, {
@@ -336,21 +323,6 @@ export async function setUpAccount(world: SetupWorld, account = ACCOUNT): Promis
     now: () => new Date(),
     newSubdomain: () => SUB,
   });
-}
-
-/**
- * A first project set up from scratch with a fresh pair of tokens (the state SETUP-AC-002, -004,
- * -005 and -007 start from): the account set up (`setUpAccount`), then the bootstrap run;
- * exit 0 is required, with the output in the error otherwise.
- */
-export async function setUpFirstProject(label: string): Promise<{ world: SetupWorld; dir: string; tokens: Tokens }> {
-  const world = freshWorld();
-  await setUpAccount(world);
-  const tokens = addTokens(world, label);
-  const dir = await project({ envFile: envFile({ [BOOTSTRAP_SETTING]: tokens.bootstrap.value, [EVERYDAY_SETTING]: tokens.everyday.value, CLOUDFLARE_EMAIL_DOMAIN: DOMAIN }) });
-  const r = await runSetup(`${label}: first setup`, world, dir);
-  if (r.status !== 0) throw new Error(`the first setup of ${label} did not complete (exit ${String(r.status)}):\n${r.all}`);
-  return { world, dir, tokens };
 }
 
 /** The lines of `text` equal (after trimming) to `line`. */

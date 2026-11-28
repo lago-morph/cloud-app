@@ -17,7 +17,7 @@ Read this page, then only the references your task needs (task map below).
 2. **Never insert user text as HTML.** Build elements and set `textContent`; no `innerHTML` or other raw-HTML sinks.
 3. **Pass `npm run verify` before declaring any work done**, including its e2e-api tests, and `npm run test:e2e:ui` when a page changed. Never skip or weaken a test, and never disable, suppress or weaken a check (`eslint-disable`, `@ts-ignore`, `any`, `as` casts, editing lint configuration).
 4. **Claim an app works on a cloud only after its smoke test has passed on a deployed stage there** (`smoke --target <t> --stage test-…`). Local success says nothing about a cloud.
-5. **Never change framework version pins**: the exact versions of `@lago-morph/prototype-framework`, `hono`, `zod`, `typescript`, `vite`, `vitest`, `@playwright/test` and `fast-check` in the app's `package.json`.
+5. **Never change framework version pins**: the exact versions of `@lago-morph/prototype-framework`, `hono`, `zod`, `typescript`, `vite`, `vitest`, `@vitest/browser-playwright`, `@playwright/test` and `fast-check` in the app's `package.json`.
 6. **Never work around the framework.** If you suspect a framework defect (a contract or reference that does not hold, a check that rejects code the references allow, a capability that is missing for the task), add an entry to `FRAMEWORK-ISSUE.md` at the app's root instead of patching, copying or bypassing framework code. Each entry states:
    - the task attempted;
    - the contract or reference consulted (file and section);
@@ -31,9 +31,9 @@ Read this page, then only the references your task needs (task map below).
 
 ## Cloudflare setup
 
-On "set up Cloudflare", "continue prototype setup" or "continue setup", run `npm run cloudflare-setup` and relay its output as is: links, template and next prompt unchanged. It does only what is missing, so run it again whenever asked. Exit status 1 with a message is a stop for the user, not a failure to work around. The flow: the owner makes the bootstrap token from its link (expiry at most 1 day); setup deploys the admin app and deletes that token; the owner signs in to the admin app, does account setup there, and makes and saves the everyday token; then "continue prototype setup" checks it. Steps and stops: [owner-tasks.md](reference/owner-tasks.md) §2.
+On "set up Cloudflare", "continue prototype setup" or "continue setup", run `npm run cloudflare-setup` and relay its output as is: links, template and next prompt unchanged. It does only what is missing, so run it again whenever asked. Exit status 1 with a message is a stop for the user, not a failure to work around. The flow: with no credential, setup prints a template and a token link; the owner puts the token and account ID in `~/.secrets/cloudflare` or the session's environment and says "continue prototype setup"; setup then sets the account up, never changing the owner's token. Steps and stops: [owner-tasks.md](reference/owner-tasks.md) §2.
 
-- **Never open, print or search `.env.cloudflare`**, and never echo `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_BOOTSTRAP_TOKEN`. The CLI reads them itself. Never ask for a token in the chat.
+- **Never open, print or search `.env.cloudflare` or `~/.secrets/cloudflare`** (or the file `CLOUDFLARE_SECRETS_FILE` names), and never echo `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_BOOTSTRAP_TOKEN`. The CLI reads them itself. Never ask for a token in the chat.
 - **Git checks**, when a session starts work on the app and before every commit or push: `git check-ignore -q .env.cloudflare` and `git ls-files --error-unmatch .env.cloudflare`. Each time the file is not ignored (the first exits non-zero) or is tracked (the second exits 0), remind the user and point to [owner-tasks.md](reference/owner-tasks.md) §2. Never refuse to commit because of it.
 
 ## Task map
@@ -52,7 +52,7 @@ On "set up Cloudflare", "continue prototype setup" or "continue setup", run `npm
 | Test (TDD, in-process, e2e, smoke, fuzz); a test or check fails; a test must change | [testing.md](reference/testing.md) and the file it names |
 | Deploy, run the smoke test on a cloud, remove a stage | [deploying.md](reference/deploying.md) |
 | Diagnose a failing request or deploy; a `verify` diagnostic | [troubleshooting.md](reference/troubleshooting.md), and the reference the diagnostic names |
-| Set up Cloudflare; steps the owner performs (bootstrap token and admin app, secrets, sign-in, admins, deploy and remove, logs) | [owner-tasks.md](reference/owner-tasks.md) |
+| Set up Cloudflare; steps the owner performs (the one token, secrets, sign-in, admins, deploy and remove, logs) | [owner-tasks.md](reference/owner-tasks.md) |
 
 Every `verify` diagnostic ends with `(read skill/reference/<file>.md)`; that file has a "Check rules that send you here" section for the rule.
 

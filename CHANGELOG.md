@@ -9,6 +9,24 @@ All notable changes to the published packages and the Claude Code plugin from th
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [Semantic Versioning](https://semver.org/); before 1.0.0, a minor version may make breaking changes.
 
+## [Unreleased]
+
+### Changed
+
+- **Cloudflare setup takes one token, which you supply** (DEC-0795…DEC-0800). Put `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the environment (for example a Claude Code cloud session's environment variables) or in `~/.secrets/cloudflare` in your home directory, which every app and session on the machine shares (`CLOUDFLARE_SECRETS_FILE` names another path). The environment wins. With neither, `npm run cloudflare-setup` prints the two-line template, where it goes and a pre-filled link for the token.
+- `cloudflare-setup` checks the token's permissions (missing ones are named with the link; extra ones are fine, so an account admin token works) and then sets the whole account up in one run: the sign-in clients, the auth app, the shared buckets and the admin app. The admin app's Account setup and Everyday token pages are now optional.
+- **The framework never deletes, rolls or changes your token.** It makes and replaces only its own file-signing token.
+
+### Removed
+
+- The bootstrap token (`CLOUDFLARE_BOOTSTRAP_TOKEN`), its expiry rule and its self-deletion, and the everyday token as a setup step.
+- `.env.cloudflare`: no longer read or written. Move its `CLOUDFLARE_API_TOKEN` (with the permissions setup names) and `CLOUDFLARE_ACCOUNT_ID` to `~/.secrets/cloudflare`, then delete it. Commands print a note while it is there.
+- `cloudflare-setup --switch-account`: the account is always your `CLOUDFLARE_ACCOUNT_ID`.
+
+### Fixed
+
+- **A new app's `npm install` no longer crashes** with "Cannot read properties of null (reading 'edgesOut')" in npm 10 (Node 22.22.0) (DEC-0803), and neither does a project that depends on the framework alone. The framework depends on `@vitest/browser-playwright` at its `vitest` version (so it, and its peer `playwright`, are installed with the framework), the template pins it too, and `npm run upgrade` moves it with the framework's version. An app made with 0.2.0-rc01 whose install fails: add `"@vitest/browser-playwright": "5.0.5"` to its `devDependencies` and run `npm install` again.
+
 ## [0.2.0-rc01] - 2026-11-07
 
 First release candidate of 0.2.0, published to the npm dist-tag `next` (`latest` stays at 0.1.1). It holds the whole release so far. Try it with `npm create @lago-morph/prototype-app@0.2.0-rc01 my-app`, or move an app with `npm run upgrade -- 0.2.0-rc01`.

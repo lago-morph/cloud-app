@@ -32,7 +32,7 @@
 import type { BackupListing, Stage, StageBackup, StageDatabase } from "../core/operations.js";
 import { describeFailure, resultOf, type CloudflareApi, type CloudflareBytesApi } from "./api.js";
 import { inspectBucket } from "./account.js";
-import { filesBucketName } from "./names.js";
+import { filesBucketName, SETUP_COMMAND } from "./names.js";
 import { listObjectKeys } from "./objects.js";
 import type { DatabaseExport } from "./databases.js";
 
@@ -110,7 +110,7 @@ export async function backupStage(options: BackupOptions, stage: Stage, database
   const { api, accountId } = options;
   const bucket = await inspectBucket(api, accountId, BACKUP_BUCKET);
   if (bucket.state !== "owned") {
-    throw new Error(`the ${BACKUP_BUCKET_RESOURCE} is ${bucket.state === "absent" ? "missing" : "not this account's"}; run setup-account --target cloudflare first`);
+    throw new Error(`the ${BACKUP_BUCKET_RESOURCE} is ${bucket.state === "absent" ? "missing" : "not this account's"}; run ${SETUP_COMMAND} first`);
   }
   const stamp = backupStamp((options.now ?? Date.now)());
   const prefix = `${stage.app}/${stage.stage}/${stamp}/`;

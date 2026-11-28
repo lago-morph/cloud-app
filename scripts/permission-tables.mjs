@@ -3,7 +3,7 @@
 // (`permissionTableMarkdown` in packages/framework/src/provision/cloudflare/permissions.ts; DEC-0563, DEC-0602).
 // Usage: node scripts/permission-tables.mjs           rewrite the tables in place (needs `npm run build -w packages/framework`)
 //        node scripts/permission-tables.mjs --check   exit 1 and name each file whose tables differ from the list
-// A table sits between `<!-- permission-table: everyday -->` (or `bootstrap`) and `<!-- /permission-table -->`;
+// A table sits between `<!-- permission-table: everyday -->` (or `token`) and `<!-- /permission-table -->`;
 // everything between the two lines is replaced. tests/permission-tables.unit.test.ts fails when a committed table drifts.
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -12,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 /** The files that carry generated tables, relative to the repository root. */
 export const TABLE_FILES = ["QUICKSTART.md", "docs/components/provisioning.md"];
 
-const START = /^<!-- permission-table: (everyday|bootstrap) -->$/;
+const START = /^<!-- permission-table: (token|everyday) -->$/;
 const END = "<!-- /permission-table -->";
 
 /**
@@ -20,7 +20,7 @@ const END = "<!-- /permission-table -->";
  * end marker, and on a file with no marker at all.
  *
  * @param {string} text
- * @param {(kind: "everyday" | "bootstrap") => string} table the Markdown of one table, ending in a newline
+ * @param {(kind: "token" | "everyday") => string} table the Markdown of one table, ending in a newline
  * @param {string} [name] the file's name, for the error messages
  */
 export function withTables(text, table, name = "the file") {

@@ -21,8 +21,12 @@ import { UsageError } from "../args.js";
 import { EXIT, type Command } from "../io.js";
 import { compareVersions, FRAMEWORK_PACKAGE, installedFrameworkDir, isExactVersion, setupScriptLines, SKILL_DIR } from "./versions.js";
 
-/** The app pins that move with the framework: the versions its own package.json depends on (skill hard rule 5). */
-export const COMPANION_PINS: readonly string[] = ["hono", "zod", "typescript", "vite", "vitest"];
+/**
+ * The app pins that move with the framework: the versions its own package.json depends on (skill hard rule 5).
+ * `@vitest/browser-playwright` is one because npm 10.9.4 crashes a fresh install of an older vitest
+ * unless it is pinned at the same version (DEC-0803; ai/implementation/root-causes/2026-11-27-starter-npm-install-edgesout.md).
+ */
+export const COMPANION_PINS: readonly string[] = ["hono", "zod", "typescript", "vite", "vitest", "@vitest/browser-playwright"];
 
 /** What `npm view <framework>@<spec>` says about a release. */
 export interface Release {
@@ -90,8 +94,8 @@ export function cloudflareVerdict(before: SetupVersions | undefined, after: Setu
   if (after.permissions > before.permissions) raised.push(`token permissions ${before.permissions} → ${after.permissions}`);
   if (after.accountSetup > before.accountSetup) raised.push(`account setup ${before.accountSetup} → ${after.accountSetup}`);
   if (raised.length === 0) return "Cloudflare setup: nothing new is needed; no need to re-run it.";
-  // Since v0.2.0 the bootstrap deploys only the admin app; the account setup and the everyday token are its pages (plan-v0.2.0 §5, §8; DEC-0736).
-  return `Cloudflare setup needs re-running (${raised.join(", ")}): make a new bootstrap token with an expiry of 1 day or less and run \`npm run cloudflare-setup\`, which deploys the admin app. Then open the admin app it prints, sign in, and use its Account setup and Everyday token pages.`;
+  // One token since DEC-0795…DEC-0799: setup does the whole account setup with it (DEC-0798).
+  return `Cloudflare setup needs re-running (${raised.join(", ")}): put one Cloudflare API token with the permissions setup names, and the account ID, in ~/.secrets/cloudflare or the environment (CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID; .env.cloudflare is no longer read), then run \`npm run cloudflare-setup\`. It sets the account up and never changes the token.`;
 }
 
 export function upgradeCommand(deps: UpgradeDeps): Command {

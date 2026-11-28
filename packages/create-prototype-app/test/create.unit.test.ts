@@ -53,6 +53,24 @@ describe("package conventions", () => {
     expect(SELF.version).toBe(fw.version);
     expect(tpl.dependencies[FRAMEWORK_PACKAGE]).toBe(fw.version);
   });
+
+  // Without it, npm 10.9.4 (Node 22.22.0) crashes the new app's `npm install` with "Cannot read
+  // properties of null (reading 'edgesOut')" once a newer @vitest/browser-playwright is published
+  // (DEC-0803; root cause ai/implementation/root-causes/2026-11-27-starter-npm-install-edgesout.md).
+  it("the template pins @vitest/browser-playwright at its vitest version", () => {
+    const tpl = JSON.parse(readFileSync(join(TEMPLATE, "package.json"), "utf8")) as { devDependencies: Record<string, string> };
+    expect(tpl.devDependencies["vitest"]).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(tpl.devDependencies["@vitest/browser-playwright"]).toBe(tpl.devDependencies["vitest"]);
+  });
+
+  // A project that depends on the framework without the template's pin installs too (DEC-0803).
+  it("the framework depends on @vitest/browser-playwright at its vitest version, and the template pins the same", () => {
+    const fw = JSON.parse(readFileSync(join(REPO, "packages", "framework", "package.json"), "utf8")) as { dependencies: Record<string, string> };
+    const tpl = JSON.parse(readFileSync(join(TEMPLATE, "package.json"), "utf8")) as { devDependencies: Record<string, string> };
+    expect(fw.dependencies["vitest"]).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(fw.dependencies["@vitest/browser-playwright"]).toBe(fw.dependencies["vitest"]);
+    expect(tpl.devDependencies["@vitest/browser-playwright"]).toBe(fw.dependencies["@vitest/browser-playwright"]);
+  });
 });
 
 describe("names", () => {

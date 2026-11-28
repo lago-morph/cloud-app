@@ -10,49 +10,45 @@ Needs Node 22.22.0 and git. No account of any kind.
 npm create @lago-morph/prototype-app@latest my-app
 ```
 
-This makes the folder `my-app` from the template app, with the Claude Code skill in `.claude/skills/prototype-framework/`, installs it, gives each secret a random local value, makes a git repository with a first commit, and keeps `.env.cloudflare` out of git. Then `cd my-app` and `npm run dev`, or open the folder in Claude Code and say what to build.
+This makes the folder `my-app` from the template app, with the Claude Code skill in `.claude/skills/prototype-framework/`, installs it, gives each secret a random local value, and makes a git repository with a first commit. Then `cd my-app` and `npm run dev`, or open the folder in Claude Code and say what to build.
 
 **In a Claude Code cloud session**, start the session on a repository made this way (push `my-app` to an empty repository), or on an empty repository with the setup script below, and ask Claude to make the app.
 
-## Put it on Cloudflare: one link, one command, then the admin app
+## Put it on Cloudflare: one token, one command
 
-Any Cloudflare account works, on the free Workers plan too. No domain is needed. In the app's folder run (in Claude Code, say **"set up Cloudflare"**):
+Any Cloudflare account works, on the free Workers plan too. No domain is needed. You need **one Cloudflare API token** and your **account ID**. In the app's folder run (in Claude Code, say **"set up Cloudflare"**):
 
 ```sh
 npm run cloudflare-setup
 ```
 
-1. It prints one pre-filled dashboard link, for the **bootstrap token**, and a template of three lines. Open the link, pick your account if asked, and under TTL set an end date **no more than 1 day away** (setup deletes a longer-lived token at once); then create the token and copy it.
-2. Put it in `CLOUDFLARE_BOOTSTRAP_TOKEN`:
-   - **Command line:** in `.env.cloudflare` in the app's folder, with your editor (or in the environment), then run `npm run cloudflare-setup` again.
-   - **Cloud session:** in the environment's settings (environment menu → Edit → Environment variables), then start a new session and say **"continue prototype setup"**.
-3. Setup creates the account's sign-in clients, deploys the **admin app**, deletes the bootstrap token, and prints the admin app's address.
-4. **Open the admin app and sign in** with your Cloudflare account (you need the role "Super Administrator - All Privileges" or "Administrator" in it). On **Account setup**, set the account up: this deploys the **auth app**, which signs people in to every app, and the shared buckets. On **Everyday token**, make the token every command uses; the page shows it once. Put it in `CLOUDFLARE_API_TOKEN` the same way as step 2. The agent never sees it.
-5. Run `npm run cloudflare-setup` again (or say **"continue prototype setup"**). It checks everything and gives the next step, `npm run deploy -- --target cloudflare --stage test-first`.
+1. With no token yet, it prints this template, a pre-filled dashboard link for the token, and where the lines go:
+   ```
+   CLOUDFLARE_API_TOKEN=
+   CLOUDFLARE_ACCOUNT_ID=
+   ```
+   Open the link, pick your account if asked, keep the ticked permissions, choose any end date (or none), create the token and copy it. Your account ID is on the account's home page in the dashboard.
+2. Fill in the two lines and put them in **one** of these places:
+   - **On your computer:** the file `~/.secrets/cloudflare` in your home directory (`chmod 600 ~/.secrets/cloudflare`). Every app and every Claude Code session on the machine uses it. Set `CLOUDFLARE_SECRETS_FILE` to use another path.
+   - **In a cloud session:** the environment's settings (environment menu → Edit → Environment variables), the same two lines; then start a new session.
+   Environment variables win over the file.
+3. Run `npm run cloudflare-setup` again (or say **"continue prototype setup"**). It checks the token, then sets the account up in one go: the sign-in clients, the **auth app** that signs people in to every app, the shared buckets and the admin app. It ends with the next step, `npm run deploy -- --target cloudflare --stage test-first`. The first deploy of a stage stops and names the app's secrets that have no value there yet (the template has one, `apiKey`): set each with `npm run secrets -- set apiKey --target cloudflare --stage test-first` (paste the value, press Enter, then Ctrl-D) and run the deploy again. It prints the app's address.
 
-Setup never prints a token value or an account ID, and asks nothing on the keyboard: when it needs you it stops with exit status 1 and says what to do (`--switch-account` answers its one question). It does only what is missing: re-run it after a bad paste, after a framework release that needs more, or on another account. For a second app on the same account, copy `.env.cloudflare` into its folder: it needs no bootstrap token. Only members of your Cloudflare account can sign in to your apps; members with those two roles are the apps' admins, from their next sign-in. Every step, and what to do when setup stops: [skill/reference/owner-tasks.md](skill/reference/owner-tasks.md).
+Already have a token with more permissions, such as an account admin token? Use it: setup says nothing about extra permissions, and if one is missing it names exactly which and gives the link. **The framework never deletes, rolls or changes your token**; it makes and manages only the tokens it needs for itself.
 
-**Coming from 0.1.x?** `npm run upgrade` says that setup needs re-running: do steps 1–5 once per account. Password accounts and sessions are gone: everyone signs in again, with Cloudflare. The framework's old sign-in and test-mail tables are dropped on the next `dev` or `deploy`; the app's own data stays. The admin app offers an optional **Clean up v0.1.x email** page for the old email resources.
+Setup never prints a token value or an account ID, and asks nothing on the keyboard: when it needs you it stops with exit status 1 and says what to do. It does only what is missing: re-run it after a bad paste or after a framework release that needs more. A second app on the same machine needs nothing new. Only members of your Cloudflare account can sign in to your apps; members with the role "Super Administrator - All Privileges" or "Administrator" are the apps' admins, from their next sign-in. The **admin app** that setup deploys is optional (status and cleanup pages). Every step, and what to do when setup stops: [skill/reference/owner-tasks.md](skill/reference/owner-tasks.md).
 
-What each token holds:
+**Coming from 0.1.x or 0.2.0-rc01?** `.env.cloudflare` and the bootstrap token are no longer used: put your token and account ID in `~/.secrets/cloudflare` (or the environment), delete `.env.cloudflare`, and run `npm run cloudflare-setup` once per account. From 0.1.x, password accounts and sessions are gone: everyone signs in again, with Cloudflare. The framework's old sign-in and test-mail tables are dropped on the next `dev` or `deploy`; the app's own data stays. The admin app offers an optional **Clean up v0.1.x email** page for the old email resources.
 
-**Everyday token** `prototype-framework` (every command; the admin app makes it):
-<!-- permission-table: everyday -->
+The token's permissions (the link ticks them all):
+<!-- permission-table: token -->
 | Scope | On the dashboard | API name | Permission group ID |
 | --- | --- | --- | --- |
 | Account | Workers Scripts Edit | Workers Scripts Write | `e086da7e2179491d91ee5f35b3ca210a` |
 | Account | Workers R2 Storage Edit | Workers R2 Storage Write | `bf7481a1826f439697cb59a20b22293e` |
 | Account | D1 Edit | D1 Write | `09b2857d1c31407795e75e3fed8617a1` |
-| Account | Secrets Store Read | Secrets Store Read | `5e33b7d77788455c9fdf18cbd38ee5a0` |
-<!-- /permission-table -->
-
-**Bootstrap token** `prototype-framework-bootstrap` (once; setup deletes it):
-<!-- permission-table: bootstrap -->
-| Scope | On the dashboard | API name | Permission group ID |
-| --- | --- | --- | --- |
-| Account | Workers Scripts Edit | Workers Scripts Write | `e086da7e2179491d91ee5f35b3ca210a` |
-| Account | OAuth Client Edit | OAuth Client Write | `50fc2f43318f40e4855a35d8de5bf643` |
 | Account | Secrets Store Edit | Secrets Store Write | `adc8fa2bc6124928a8b3314dc63a1235` |
+| Account | OAuth Client Edit | OAuth Client Write | `50fc2f43318f40e4855a35d8de5bf643` |
 | Account | Account API Tokens Edit | Account API Tokens Write | `5bc3f8b21c554832afc660159ab75fa4` |
 <!-- /permission-table -->
 

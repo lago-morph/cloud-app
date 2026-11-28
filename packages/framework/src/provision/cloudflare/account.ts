@@ -31,7 +31,7 @@ import { randomBytes } from "node:crypto";
 import type { SharedResource } from "../core/operations.js";
 import { describeFailure, resultOf, succeeded, type CloudflareApi } from "./api.js";
 import { BACKUP_BUCKET, BACKUP_LIFECYCLE_RESOURCE, hasBackupLifecycle, setBackupLifecycle } from "./backup.js";
-import { STATE_BUCKET } from "./names.js";
+import { SETUP_COMMAND, STATE_BUCKET } from "./names.js";
 import { createAccountSigningCredential, SIGNING_RESOURCE, signingCredentialState } from "./r2-token.js";
 
 export type { CloudflareApi } from "./api.js";
@@ -98,14 +98,14 @@ async function registerSubdomain(api: CloudflareApi, accountId: string, options:
   const r = await api("PUT", `/accounts/${accountId}/workers/subdomain`, { subdomain });
   if (succeeded(r)) return;
   throw new Error(
-    `registering the ${SUBDOMAIN_RESOURCE} ${subdomain} failed: ${describeFailure(r)}; register one in the Cloudflare dashboard (Workers & Pages) and run setup-account again`,
+    `registering the ${SUBDOMAIN_RESOURCE} ${subdomain} failed: ${describeFailure(r)}; register one in the Cloudflare dashboard (Workers & Pages) and run ${SETUP_COMMAND} again`,
   );
 }
 
 /** The account subdomain every stage's public origin is built from; fails when there is none. */
 export async function accountSubdomain(api: CloudflareApi, accountId: string): Promise<string> {
   const subdomain = await readSubdomain(api, accountId);
-  if (subdomain === undefined) throw new Error(`the account has no ${SUBDOMAIN_RESOURCE}; run setup-account --target cloudflare first`);
+  if (subdomain === undefined) throw new Error(`the account has no ${SUBDOMAIN_RESOURCE}; run ${SETUP_COMMAND} first`);
   return subdomain;
 }
 

@@ -21,7 +21,7 @@ export default {
       config = await readAdminConfig(env);
     } catch (e) {
       log(logLine("error", e instanceof Error ? e.message : "admin app misconfigured"));
-      return page("Prototype admin", "<p>The admin app is not set up correctly. Run <code>npm run cloudflare-setup</code> again with a bootstrap token.</p>", { status: 500 });
+      return page("Prototype admin", "<p>The admin app is not set up correctly. Run <code>npm run cloudflare-setup</code> again.</p>", { status: 500 });
     }
     return handleAdminRequest(request, { fetch: (input, init) => fetch(input, init), now: Date.now, log, config, pages: ADMIN_PAGES });
   },
