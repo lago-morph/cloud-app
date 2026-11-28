@@ -1,6 +1,6 @@
 # Root cause: E2E-001 / LOCAL-AC-001 cannot launch Chromium ("Executable doesn't exist at <tmp>/home/.cache/ms-playwright/…")
 
-Status: awaiting review
+Status: accepted
 
 ## Symptom
 
@@ -62,4 +62,14 @@ Results so far (2026-11-28, fixer; the fix was made before review at the orchest
 
 ## Review
 
-Status: awaiting review (to be written by an independent reviewer)
+Verdict: accepted
+
+Reviewer: an independent root-cause reviewer subagent that neither diagnosed this failure nor wrote the fix (testing-standards rule 1), 2026-11-28. The fix was made before review; this review covers the record and commit b3ad1ca7.
+
+- **Symptom and evidence 1 (run 46100846636, `--log`).** Confirmed: step "Playwright browser" downloaded `chromium_headless_shell-1248` to `/home/runner/.cache/ms-playwright/`; E2E-001 failed with `browserType.launch: Executable doesn't exist at /tmp/e2e-scaffold-zHl94t/home/.cache/ms-playwright/chromium_headless_shell-1248/…`. Same revision, different directory. The run's other failure is E2E-019, out of scope (retired by DEC-0804).
+- **Link 2 (Playwright's rule).** Confirmed in `playwright-core` 1.64.1 `lib/coreBundle.js`: `localCacheDir = process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache")`, overridden by `PLAYWRIGHT_BROWSERS_PATH`. With `HOME=<root>/home` the lookup path is exactly the one in the error, so links 1 to 3 follow from the spec's `offline()` (`HOME = offlineHome`) and this rule.
+- **Link 4 (hidden until now).** Not re-checked run by run; it does not bear on the cause, which the failing run and the rule establish on their own.
+- **Alternatives.** Agreed. Wrong revision and skipped install are ruled out by the log; the path in the error is the empty home's, so it is not a namespace visibility problem.
+- **Fix.** Minimal and at the cause: `noCredentials` moved unchanged to `support/offline-env.ts`, plus `PLAYWRIGHT_BROWSERS_PATH` set only when `HOME` is overridden, computed the way Playwright computes it (an existing value, including `0`, is kept). The fix does not weaken E2E-001 (docs/acceptance/e2e-scenarios.md: "no cloud credentials and networking to cloud providers blocked"). The credential and `COMPLIANCE_` filter is unchanged and still unit-tested. `HOME` is still the empty directory. Every offline step still runs under `unshare -rn` with the cloud-provider probe. The added variable is a path to browser binaries and holds no credentials. Chromium now launches inside the offline namespace, which makes the test stronger.
+- **Red-green.** `offline-env.unit.test.ts` passes 5/5 here (official Node 22.22.1) and in CI. The record states red before the fix (3 of 5); not re-run by this reviewer.
+- **Verification (CI run 46104781354, head b3ad1ca7, `--log`).** `compliance` succeeded: IDS included E2E-001 and LOCAL-AC-001, the E2E-001-E2E-003 spec ran (7.9 min), `60 passed`, no failures; the unit job ran `offline-env.unit.test.ts` (5 tests). This closes verification-plan item 3.
