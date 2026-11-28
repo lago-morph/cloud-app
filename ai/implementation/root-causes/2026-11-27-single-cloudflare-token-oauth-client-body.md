@@ -1,6 +1,6 @@
 # Root cause: setup creates OAuth clients with field names the live API does not accept
 
-Status: awaiting review
+Status: reviewed, accepted (2026-11-27)
 
 ## Symptom
 
@@ -45,6 +45,25 @@ Exit status 1. Nothing had been created (the inventory after the run equalled th
 
 ## Review
 
-Status: awaiting review
+Verdict: accepted-with-changes (2026-11-27; the change: the fake's list and create answer, below). Reviewer: a root-cause reviewer subagent that neither diagnosed nor fixed this failure (testing-standards rule 1).
 
-The diagnoser was also the fixer (one subagent, which may not start others; testing-standards rule 1): an independent reviewer should check this record.
+The diagnoser was also the fixer (one subagent, which may not start others); this review is the independent check.
+
+**Diagnosis: confirmed.** Each link of the causal chain was checked against a source other than the record:
+- **Cloudflare's API reference** (developers.cloudflare.com, IAM → OAuth clients, "Create" and "List", read 2026-11-27): the create body requires `client_name`, `grant_types`, `redirect_uris`, `response_types`, `scopes` and `token_endpoint_auth_method`; `optional_scopes` is optional, "each value must also appear in `scopes`", and `openid`/`offline_access` are added or removed from `scopes` by `response_types`/`grant_types`. There is no `name` field anywhere; the list's items carry `client_name`. This matches evidence 3 and all three defects of the causal chain.
+- **A read-only live list** (`GET …/oauth_clients?per_page=100` with the token in `~/.secrets/cloudflare`; no write): the two clients the fixed run made are listed as `client_name` `prototype-framework-admin` and `prototype-framework-sign-in`, `visibility: "private"`, `token_endpoint_auth_method: "client_secret_post"`, `response_types ["code","id_token"]`; the admin client's `scopes` are the two required, the six optional and `openid`, its `optional_scopes` the six; the sign-in client has `scopes` the two plus `openid` and no `optional_scopes` key at all. So the fixed body is what the live API stores.
+- **The alternatives** ruled out are ruled out by probe 2 (same token, same transport, success) and by the docs (`visibility` is not a body field).
+
+**Fix: correct and complete for the defects found.** `clientBody` and the list filter now use the documented names; the comment's *unverified* paragraph is replaced by facts the probes and the list show.
+
+**The tests fail on the old code** (mutation runs, `oauth-clients.unit.test.ts`, 15 tests):
+- the whole pre-fix `oauth-clients.ts`: 9 of 15 fail (the record's red run, reproduced);
+- only the list filter reverted to `name`: 4 fail (run again, replacement, review A, review B);
+- only the optional scopes left out of `scopes`: 8 fail (the body test and every create, the fake's code 70748).
+`tests/compliance/criteria/setup/cloudflare-setup.test.ts` (SETUP-AC-005) now checks `client_name` and that the optional scopes are in `scopes`.
+
+**The fake against the live API.** The three behaviours the record names (the name field, codes 70705 and 70748) match. Gaps found and fixed in this review (`fake-cloud.test-support.ts`): the list and the create answer now show the client as the live API does, with its body's fields, `openid` added to `scopes` when `response_types` holds `id_token`, `optional_scopes` left out when empty, and an empty `result_info` on the list (live answers `{}`). Still not modelled, and acceptable because setup never sends them: refusal of other missing required fields, of unknown scope names and of `openid` as an optional scope.
+
+**For the owner (not caused by this fix):** the live list answers `result_info: {}`, and the reference documents no `per_page` parameter for the list (its example shows `per_page: 20`). So `ensureOAuthClients`'s one-page guard (`total_count > list.length`) never fires live. If the API ignores `per_page` and pages at 20, an account with more than 20 OAuth clients could hide a framework client on page 2, and setup would make a second one. This could not be checked read-only on an account with 3 clients.
+
+**Re-run by the reviewer** (official Node 22.22.1): the unit suite 2970 of 2970; `criteria/setup`, `criteria/prov/preflight-fake`, `skill/cloudflare-setup` and the other `tests/skill` files pass except two unrelated to this change: SKILL-AC-001's router size (`skill/SKILL.md` is 8,098 bytes, over PAR-070's 8,000, already at `0368d86d`) and SKILL-AC-004 (Chromium is not installed on this machine); `test/integration/admin-app` 9 of 9 (mock-oauth2-server from its Docker image); E2E-017 6 of 6; typecheck and lint pass.
