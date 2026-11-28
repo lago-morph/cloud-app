@@ -29,24 +29,12 @@ import { join } from "node:path";
 import { tag } from "../harness/index.js";
 import { expect, test } from "../harness/playwright.js";
 import { REPO_ROOT, TEMPLATE_DIR, run, tail, type RunResult } from "./support/process.js";
+import { noCredentials } from "./support/offline-env.js";
 import { packFramework, packStarter } from "./support/packs.js";
 
 const OFFLINE = join(REPO_ROOT, "scripts", "offline.sh");
 const PAGES_SCRIPT = join(REPO_ROOT, "tests", "compliance", "e2e", "support", "template-pages.ts");
 const PACKAGE = "@lago-morph/prototype-framework";
-
-/** The environment without cloud credentials (and without the owner's home directory). */
-function noCredentials(home: string | undefined): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(process.env)) {
-    if (v === undefined) continue;
-    if (/^(CLOUDFLARE_|CF_|AWS_|GOOGLE_|GCLOUD|CLOUDSDK_|AZURE_|SST_)/.test(k)) continue;
-    if (/^COMPLIANCE_/.test(k)) continue;
-    out[k] = v;
-  }
-  if (home !== undefined) out.HOME = home;
-  return out;
-}
 
 let root: string;
 /** The packed framework the starter was given. */
@@ -57,7 +45,7 @@ let verifiedClean = false;
 
 /** Runs a command in a network namespace with no network (loopback only). */
 function offline(args: readonly string[], options: { readonly cwd: string; readonly input?: string; readonly timeoutMs: number }): Promise<RunResult> {
-  return run("unshare", ["-rn", "sh", OFFLINE, ...args], { ...options, env: noCredentials(offlineHome) });
+  return run("unshare", ["-rn", "sh", OFFLINE, ...args], { ...options, env: noCredentials(process.env, offlineHome) });
 }
 
 function verify(): Promise<RunResult> {
@@ -75,7 +63,7 @@ test.beforeAll(async () => {
   framework = await packFramework(root);
   const starter = await packStarter(root);
   // The starter's own bin, as `npm create @lago-morph/prototype-app` runs it: copy, name, pin, skill, npm install, local setup, git.
-  const scaffold = await run(process.execPath, [join(starter, "bin", "create-prototype-app.js"), appDir, "--framework", `file:${framework}`], { cwd: root, env: noCredentials(undefined), timeoutMs: 15 * 60_000 });
+  const scaffold = await run(process.execPath, [join(starter, "bin", "create-prototype-app.js"), appDir, "--framework", `file:${framework}`], { cwd: root, env: noCredentials(process.env, undefined), timeoutMs: 15 * 60_000 });
   expect(scaffold.status, `npm create failed:\n${tail(scaffold.output)}`).toBe(0);
   expect(existsSync(join(appDir, ".claude", "skills", "prototype-framework", "SKILL.md")), "the starter added the skill").toBe(true);
 });
