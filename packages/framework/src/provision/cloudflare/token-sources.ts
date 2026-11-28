@@ -5,7 +5,7 @@
  * 1. the process environment (a Claude Code cloud session's environment variables, a shell's
  *    exports);
  * 2. the secrets file, in `.env` format with the same names: `~/.secrets/cloudflare` in the home
- *    directory (PAR-450), or the path `CLOUDFLARE_SECRETS_FILE` names (PAR-451). It is never
+ *    directory (PAR-486), or the path `CLOUDFLARE_SECRETS_FILE` names (PAR-487). It is never
  *    relative to the project, so every project, worktree and session of the machine shares it: a
  *    relative override is read from the home directory, and `~/` is the home directory.
  * A setting set (non-empty) in the environment wins. When both hold a value and the values differ,
@@ -31,10 +31,10 @@ import type { Environment } from "./environment.js";
 /** The project's old settings file (PAR-340, retired by DEC-0799): never read; only its presence is noted. */
 export const ENV_CLOUDFLARE_FILE = ".env.cloudflare";
 
-/** PAR-451: the environment variable that overrides the secrets file's path. */
+/** PAR-487: the environment variable that overrides the secrets file's path. */
 export const SECRETS_FILE_ENV = "CLOUDFLARE_SECRETS_FILE";
 
-/** PAR-450: the secrets file's default path, under the home directory. */
+/** PAR-486: the secrets file's default path, under the home directory. */
 export const DEFAULT_SECRETS_FILE = "~/.secrets/cloudflare";
 
 /** The settings the credential consists of, in the template's order. */
@@ -76,7 +76,7 @@ export interface SettingsOptions {
 const isSettingName = (name: string): name is SettingName => (SETTING_NAMES as readonly string[]).includes(name);
 
 /**
- * The secrets file's absolute path (PAR-450, PAR-451): `CLOUDFLARE_SECRETS_FILE` when set, else
+ * The secrets file's absolute path (PAR-486, PAR-487): `CLOUDFLARE_SECRETS_FILE` when set, else
  * `~/.secrets/cloudflare`. `~` and `~/…` are the home directory (`home`, else `HOME` in `env`, else
  * `os.homedir()`); any other relative path is read from the home directory, never from the project
  * or the current directory.

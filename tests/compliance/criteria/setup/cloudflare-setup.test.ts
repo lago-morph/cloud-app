@@ -6,7 +6,7 @@
  * real account and is not here.
  *
  * Expectations come from SETUP-REQ-001…007 and the parameters they name (PAR-343, PAR-361, PAR-436,
- * PAR-450, PAR-451), not from the command's code. The command is the framework CLI's own
+ * PAR-486, PAR-487), not from the command's code. The command is the framework CLI's own
  * (support/setup-runs.ts says what is injected). Every run's standard output, standard error and the
  * files it leaves are recorded; the last test (SETUP-AC-010) searches all of them for every fake
  * token value, token ID, account ID, zone ID and workers.dev subdomain.

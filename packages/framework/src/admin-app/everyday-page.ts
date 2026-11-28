@@ -31,7 +31,7 @@ function showValue(value: string, lead: string): PageResult {
       "<p>Where it goes (keep it out of chats, commits and logs: the agent never needs to see it):</p>",
       "<ul>",
       `<li>In a Claude Code cloud session: open the environment menu, choose Edit, and add <code>${SETTING}=&lt;the value&gt;</code> under Environment variables; save, then start a new session.</li>`,
-      `<li>On your own computer: add the line <code>${SETTING}=&lt;the value&gt;</code> to <code>.env.cloudflare</code> in the project folder (setup keeps that file out of git).</li>`,
+      `<li>On your own computer: put the line <code>${SETTING}=&lt;the value&gt;</code> in <code>~/.secrets/cloudflare</code> in your home directory (keep it private: <code>chmod 600</code>).</li>`,
       "</ul>",
       '<p>Then tell the agent: "continue prototype setup".</p>',
     ].join("\n"),

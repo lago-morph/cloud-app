@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { BOOTSTRAP, EVERYDAY, permissionTableMarkdown } from "../packages/framework/src/provision/cloudflare/permissions.js";
+import { EVERYDAY, permissionTableMarkdown, TOKEN } from "../packages/framework/src/provision/cloudflare/permissions.js";
 import { TABLE_FILES, withTables } from "../scripts/permission-tables.mjs";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -18,16 +18,16 @@ describe("permission tables in the docs", () => {
     });
   }
 
-  it("every table file holds both tokens' tables", () => {
+  it("every table file holds the one token's table (DEC-0797), and none the retired bootstrap token's", () => {
     for (const file of TABLE_FILES) {
       const text = readFileSync(join(REPO, file), "utf8");
-      expect(text, file).toContain("<!-- permission-table: everyday -->");
-      expect(text, file).toContain("<!-- permission-table: bootstrap -->");
+      expect(text, file).toContain("<!-- permission-table: token -->");
+      expect(text, file).not.toContain("<!-- permission-table: bootstrap -->");
     }
   });
 
   it("the generated tables list every group of the list, by ID", () => {
-    for (const [kind, list] of [["everyday", EVERYDAY], ["bootstrap", BOOTSTRAP]] as const) {
+    for (const [kind, list] of [["token", TOKEN], ["everyday", EVERYDAY]] as const) {
       const table = permissionTableMarkdown(kind);
       expect(table.trimEnd().split("\n")).toHaveLength(list.length + 2);
       for (const g of list) expect(table).toContain(`\`${g.id}\``);
@@ -36,8 +36,8 @@ describe("permission tables in the docs", () => {
 
   it("replaces only what is between the markers, and refuses an unclosed or missing marker", () => {
     const fake = (kind: string): string => `| ${kind} |\n`;
-    const text = "a\n<!-- permission-table: everyday -->\nold\nold\n<!-- /permission-table -->\nb\n<!-- permission-table: bootstrap -->\n<!-- /permission-table -->\n";
-    expect(withTables(text, fake)).toBe("a\n<!-- permission-table: everyday -->\n| everyday |\n<!-- /permission-table -->\nb\n<!-- permission-table: bootstrap -->\n| bootstrap |\n<!-- /permission-table -->\n");
+    const text = "a\n<!-- permission-table: everyday -->\nold\nold\n<!-- /permission-table -->\nb\n<!-- permission-table: token -->\n<!-- /permission-table -->\n";
+    expect(withTables(text, fake)).toBe("a\n<!-- permission-table: everyday -->\n| everyday |\n<!-- /permission-table -->\nb\n<!-- permission-table: token -->\n| token |\n<!-- /permission-table -->\n");
     expect(() => withTables("<!-- permission-table: everyday -->\nx\n", fake, "f.md")).toThrow(/f\.md: line 1 opens a permission table that is never closed/);
     expect(() => withTables("no tables\n", fake, "g.md")).toThrow(/g\.md: no <!-- permission-table/);
   });

@@ -31,9 +31,9 @@ Read this page, then only the references your task needs (task map below).
 
 ## Cloudflare setup
 
-On "set up Cloudflare", "continue prototype setup" or "continue setup", run `npm run cloudflare-setup` and relay its output as is: links, template and next prompt unchanged. It does only what is missing, so run it again whenever asked. Exit status 1 with a message is a stop for the user, not a failure to work around. The flow: the owner makes the bootstrap token from its link (expiry at most 1 day); setup deploys the admin app and deletes that token; the owner signs in to the admin app, does account setup there, and makes and saves the everyday token; then "continue prototype setup" checks it. Steps and stops: [owner-tasks.md](reference/owner-tasks.md) §2.
+On "set up Cloudflare", "continue prototype setup" or "continue setup", run `npm run cloudflare-setup` and relay its output as is: links, template and next prompt unchanged. It does only what is missing, so run it again whenever asked. Exit status 1 with a message is a stop for the user, not a failure to work around. The flow: with no credential, setup prints a two-line template (`CLOUDFLARE_API_TOKEN=`, `CLOUDFLARE_ACCOUNT_ID=`) and a link; the owner makes one token from the link (or uses one they have), puts both lines in `~/.secrets/cloudflare` or the cloud session's environment variables, and says "continue prototype setup"; setup then sets the whole account up. It never deletes or changes the owner's token. Steps and stops: [owner-tasks.md](reference/owner-tasks.md) §2.
 
-- **Never open, print or search `.env.cloudflare`**, and never echo `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_BOOTSTRAP_TOKEN`. The CLI reads them itself. Never ask for a token in the chat.
+- **Never open, print or search `.env.cloudflare` or `~/.secrets/cloudflare`** (or the file `CLOUDFLARE_SECRETS_FILE` names), and never echo `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_BOOTSTRAP_TOKEN`. The CLI reads them itself. Never ask for a token in the chat.
 - **Git checks**, when a session starts work on the app and before every commit or push: `git check-ignore -q .env.cloudflare` and `git ls-files --error-unmatch .env.cloudflare`. Each time the file is not ignored (the first exits non-zero) or is tracked (the second exits 0), remind the user and point to [owner-tasks.md](reference/owner-tasks.md) §2. Never refuse to commit because of it.
 
 ## Task map
@@ -52,7 +52,7 @@ On "set up Cloudflare", "continue prototype setup" or "continue setup", run `npm
 | Test (TDD, in-process, e2e, smoke, fuzz); a test or check fails; a test must change | [testing.md](reference/testing.md) and the file it names |
 | Deploy, run the smoke test on a cloud, remove a stage | [deploying.md](reference/deploying.md) |
 | Diagnose a failing request or deploy; a `verify` diagnostic | [troubleshooting.md](reference/troubleshooting.md), and the reference the diagnostic names |
-| Set up Cloudflare; steps the owner performs (bootstrap token and admin app, secrets, sign-in, admins, deploy and remove, logs) | [owner-tasks.md](reference/owner-tasks.md) |
+| Set up Cloudflare; steps the owner performs (the one token, secrets, sign-in, admins, deploy and remove, logs) | [owner-tasks.md](reference/owner-tasks.md) |
 
 Every `verify` diagnostic ends with `(read skill/reference/<file>.md)`; that file has a "Check rules that send you here" section for the rule.
 

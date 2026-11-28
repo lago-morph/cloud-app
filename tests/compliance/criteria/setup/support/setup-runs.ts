@@ -212,7 +212,7 @@ export function home(secrets?: string, mode = 0o600): string {
   return dir;
 }
 
-/** The default secrets file of a home directory (PAR-450). */
+/** The default secrets file of a home directory (PAR-486). */
 export const secretsFile = (homeDir: string): string => join(homeDir, ".secrets", "cloudflare");
 
 /** The secrets file's text: the two settings. */

@@ -150,23 +150,23 @@ describe("upgrade (plan-setup-wizard §4.8a)", () => {
 describe("whether Cloudflare setup needs re-running", () => {
   it("compares the versions the app had with the new release's", () => {
     expect(cloudflareVerdict({ permissions: 1, accountSetup: 1 }, { permissions: 2, accountSetup: 1 })).toBe(
-      "Cloudflare setup needs re-running (token permissions 1 → 2): make a new bootstrap token with an expiry of 1 day or less and run `npm run cloudflare-setup`, which deploys the admin app. Then open the admin app it prints, sign in, and use its Account setup and Everyday token pages.",
+      "Cloudflare setup needs re-running (token permissions 1 → 2): put one Cloudflare API token with the permissions setup names, and the account ID, in ~/.secrets/cloudflare or the environment (CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID; .env.cloudflare is no longer read), then run `npm run cloudflare-setup`. It sets the account up and never changes the token.",
     );
     expect(cloudflareVerdict({ permissions: 1, accountSetup: 1 }, { permissions: 2, accountSetup: 3 })).toContain("token permissions 1 → 2, account setup 1 → 3");
     expect(cloudflareVerdict({ permissions: 2, accountSetup: 2 }, { permissions: 2, accountSetup: 2 })).toContain("nothing new is needed");
   });
 
-  it("points a 0.1.x app moving to v0.2.0 to the bootstrap and then the admin app (plan-v0.2.0 §8)", () => {
-    // 0.1.x exported PERMISSIONS_VERSION 1; v0.2.0 raises it (DEC-0680) and ACCOUNT_SETUP_VERSION (E).
-    const verdict = cloudflareVerdict({ permissions: 1, accountSetup: 1 }, { permissions: 2, accountSetup: 2 });
-    expect(verdict).toContain("bootstrap token");
-    expect(verdict).toContain("1 day or less");
-    expect(verdict).toContain("npm run cloudflare-setup");
-    expect(verdict).toContain("admin app");
-    expect(verdict).toContain("Account setup");
-    expect(verdict).toContain("Everyday token");
-    expect(verdict.indexOf("npm run cloudflare-setup")).toBeLessThan(verdict.indexOf("Account setup"));
-    expect(verdict).not.toMatch(/needs the bootstrap token once/);
+  it("points an app moving to the one-token release to the one token and cloudflare-setup (DEC-0795, DEC-0798)", () => {
+    // 0.1.x exported PERMISSIONS_VERSION 1, 0.2.0-rc01 2; the one token raises it to 3 (DEC-0797).
+    for (const before of [{ permissions: 1, accountSetup: 1 }, { permissions: 2, accountSetup: 2 }]) {
+      const verdict = cloudflareVerdict(before, { permissions: 3, accountSetup: 2 });
+      expect(verdict).toContain("one Cloudflare API token");
+      expect(verdict).toContain("~/.secrets/cloudflare");
+      expect(verdict).toContain(".env.cloudflare is no longer read");
+      expect(verdict).toContain("npm run cloudflare-setup");
+      expect(verdict).toContain("never changes the token");
+      expect(verdict).not.toMatch(/bootstrap|Everyday token|admin app/);
+    }
   });
 
   it("is unknown when either release does not export the versions", () => {

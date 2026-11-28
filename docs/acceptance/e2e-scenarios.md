@@ -196,28 +196,28 @@ An automated scan of every app-facing contract (`docs/contracts/ts/` excluding `
 
 Pass: the scan finds nothing, and the review is recorded with its findings resolved.
 
-#### E2E-017 — Setup: the bootstrap, then the admin app
+#### E2E-017 — Setup with one token
 Verifies: SYS-REQ-015, SYS-REQ-018
 Where: Local
 Origin: ai-proposed
 
-From a new project and an account with nothing set up, follow the setup flow (plan-v0.2.0 §5), locally, against the fake Cloudflare API, which accepts mock-oauth2-server's access tokens and enforces each grant's scopes:
-1. Run `cloudflare-setup` with a bootstrap token. It makes both OAuth clients, deploys the admin app, deletes the token, and comments out its line in `.env.cloudflare` without its value.
-2. Run the admin app that the bootstrap uploaded, with its bindings, under local workerd. An administrator signs in through mock-oauth2-server.
-3. On the account setup page, set the account up: the auth app with its D1 database, the shared resources, the signing credential in Secrets Store and the setup record.
-4. On the everyday token page, make the everyday token. Save it, as the person would, and run `cloudflare-setup` again with it.
+From a new project and an account with nothing set up, follow the setup flow with the user's one token (DEC-0795…DEC-0800; rewritten from the bootstrap-and-admin-app flow by DEC-0801), locally, against the fake Cloudflare API, with a temporary home directory:
+1. Run `cloudflare-setup` with no credential. It prints the two-line template `CLOUDFLARE_API_TOKEN=` / `CLOUDFLARE_ACCOUNT_ID=`, the secrets file's path, the token's pre-filled link and the next prompt, writes nothing and sends nothing.
+2. Put the token and the account ID in `~/.secrets/cloudflare` and run it again. It sets the account up in one run: both OAuth clients with their secrets in Secrets Store, the admin app, the auth app with its D1 database, the shared buckets, the signing credential and the setup record; it prints the next step.
+3. Run it a third time. It finds everything set up and changes nothing.
+4. Run the admin app that the setup uploaded, with its bindings, under local workerd, with mock-oauth2-server as Cloudflare's OAuth. An administrator signs in.
 
 Expected errors and edge cases:
-- a bootstrap token with no expiry, or one expiring 1 day and 1 second away, is deleted at once and used for nothing else; one expiring exactly 1 day away is accepted;
-- a bootstrap token missing a permission is named, writes nothing and is kept;
-- a bootstrap interrupted while deploying the admin app, and an account setup interrupted before its record, each complete when run again, making nothing twice (one of each client, database and signing token);
-- a grant is only for the OAuth client the bootstrap registered, and only for the scopes that client allows;
-- an anonymous visitor, a member with no administrator role and someone outside the account are refused by the admin app;
-- a page whose optional scope was unticked names it and writes nothing.
+- one of the two settings missing is named, with the template; nothing is sent;
+- a token missing a permission gets that permission named as the dashboard shows it, with the link; nothing is written and the token is kept;
+- the environment wins over the secrets file; a secrets file others can read is warned about and the run still completes;
+- a setup interrupted while deploying the admin app completes when run again, making nothing twice (one of each client, database and signing token);
+- across every run the user's token is never updated, rolled or deleted, and its policies are unchanged;
+- an anonymous visitor, a member with no administrator role and someone outside the account are refused by the admin app.
 
-The live run of the same steps is the owner's (SETUP-AC-011, SKILL-AC-006; plan-v0.2.0 §7 "Live" steps 1 and 2).
+The live run of the same steps is the owner's (SETUP-AC-011, SKILL-AC-006).
 
-Pass: each step and each expected error behaves as stated. The everyday token holds exactly the four groups of plan-v0.2.0 §5.2 page 2, and `cloudflare-setup` with it finds the account set up and changes nothing. No bootstrap or everyday token value, OAuth token or client secret appears in any output, project file or admin-app response, except the everyday value, once, on its own page.
+Pass: each step and each expected error behaves as stated. No token value, OAuth token or client secret appears in any output, project file or admin-app response.
 
 #### E2E-018 — Sign-in through the auth app
 Verifies: SYS-REQ-017, SYS-REQ-018, SYS-REQ-019

@@ -1,7 +1,7 @@
 /**
  * The one credential's sources (DEC-0795, DEC-0799, DEC-0800; setup.md SETUP-REQ-002): the
- * environment first, then the secrets file in the home directory (PAR-450) or where
- * `CLOUDFLARE_SECRETS_FILE` points (PAR-451). Fake values only; every notice is searched for them.
+ * environment first, then the secrets file in the home directory (PAR-486) or where
+ * `CLOUDFLARE_SECRETS_FILE` points (PAR-487). Fake values only; every notice is searched for them.
  * No network.
  */
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -53,7 +53,7 @@ describe("the credential's names and template (owner decisions 1 and 2, DEC-0795
   });
 });
 
-describe("the secrets file's path (PAR-450, PAR-451)", () => {
+describe("the secrets file's path (PAR-486, PAR-487)", () => {
   it("defaults to ~/.secrets/cloudflare in the home directory, never the project", () => {
     expect(DEFAULT_SECRETS_FILE).toBe("~/.secrets/cloudflare");
     expect(secretsFilePath({}, home)).toBe(join(home, ".secrets", "cloudflare"));

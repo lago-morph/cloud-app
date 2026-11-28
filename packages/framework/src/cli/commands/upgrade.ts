@@ -90,8 +90,8 @@ export function cloudflareVerdict(before: SetupVersions | undefined, after: Setu
   if (after.permissions > before.permissions) raised.push(`token permissions ${before.permissions} → ${after.permissions}`);
   if (after.accountSetup > before.accountSetup) raised.push(`account setup ${before.accountSetup} → ${after.accountSetup}`);
   if (raised.length === 0) return "Cloudflare setup: nothing new is needed; no need to re-run it.";
-  // Since v0.2.0 the bootstrap deploys only the admin app; the account setup and the everyday token are its pages (plan-v0.2.0 §5, §8; DEC-0736).
-  return `Cloudflare setup needs re-running (${raised.join(", ")}): make a new bootstrap token with an expiry of 1 day or less and run \`npm run cloudflare-setup\`, which deploys the admin app. Then open the admin app it prints, sign in, and use its Account setup and Everyday token pages.`;
+  // One token since DEC-0795…DEC-0799: setup does the whole account setup with it (DEC-0798).
+  return `Cloudflare setup needs re-running (${raised.join(", ")}): put one Cloudflare API token with the permissions setup names, and the account ID, in ~/.secrets/cloudflare or the environment (CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID; .env.cloudflare is no longer read), then run \`npm run cloudflare-setup\`. It sets the account up and never changes the token.`;
 }
 
 export function upgradeCommand(deps: UpgradeDeps): Command {

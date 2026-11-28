@@ -51,7 +51,7 @@ Amendment for v0.2.0 (Origin: owner, plan-v0.2.0 §5.3, §6 · Decision: DEC-069
 
 Amendment (Origin: ai-proposed · Decision: DEC-0550, DEC-0551): on Cloudflare the shared resources also include the stages' R2 signing credential: the account API token `prototype-r2-signing` and its record `framework/r2-signing.json` in the state home. `setup-account` creates it when absent, after checking that the credentials carry "Account API Tokens Write" and naming that permission if not. It is the only command that needs a permission on API tokens; the owner runs it with the setup token (owner-tasks).
 
-Amendment (Origin: owner, plan-setup-wizard §4.3, §4.4 · Decision: DEC-0563, DEC-0577, DEC-0578): `setup-account` stays, for scripts and advanced users, as the account-setup step that `cloudflare-setup` calls with the bootstrap token (SETUP-REQ-001). It runs as named, idempotent steps, each inspected before it is applied, and writes the account setup record last; DEC-0551's setup token is replaced by the dashboard-made bootstrap token.
+Amendment (Origin: owner, plan-setup-wizard §4.3, §4.4 · Decision: DEC-0563, DEC-0577, DEC-0578): `setup-account` stays, for scripts and advanced users, as the account-setup step that `cloudflare-setup` calls (with the user's one token since DEC-0798; SETUP-REQ-001). It runs as named, idempotent steps, each inspected before it is applied, and writes the account setup record last; DEC-0551's setup token is replaced by the dashboard-made bootstrap token.
 
 Amendment for v0.2.0 (Origin: owner, plan-v0.2.0 §1 D10, §5.2 · Decision: DEC-0697, DEC-0698): `cloudflare-setup` no longer calls `setup-account`. On Cloudflare the account setup steps run from the admin app's Account setup page, through the signed-in admin's grant (setup.md §2). `setup-account` stays for scripts and advanced users, with the same named, idempotent steps and the same setup record.
 
@@ -72,7 +72,20 @@ SST (PAR-100) is the provisioning engine on both clouds (DEC-0036). It is driven
 **Credentials.** Cloud credentials come from the environment SST normally uses. The preflight step lists which are missing, by name only.
 
 Amendment (Origin: owner, plan-setup-wizard §4.1, §4.2 · Decision: DEC-0563, DEC-0564, DEC-0570, DEC-0574; supersedes DEC-0551's two lists): on Cloudflare every command reads its settings from the environment first, then from `.env.cloudflare` in the project root (PAR-340), and a value in both that differs is taken from the environment with a note naming the setting; nobody exports them by hand. The owner keeps two account API tokens, both made from pre-filled dashboard links (`deepLink`) and both checked against one versioned list (`provision/cloudflare/permissions.ts`, PAR-331). The tables below are generated from it (`node scripts/permission-tables.mjs`; a unit test fails when they drift, DEC-0602).
-- the **everyday token** `prototype-framework`, in `CLOUDFLARE_API_TOKEN`, for every command: `deploy`, `remove` (a production stage's backup included), `stop`, `start`, `secrets set`, `check-login`, `admins`, `mail`, and the checks of `cloudflare-setup`. It has no permission on API tokens and no zone write permission; its R2 access reads the account setup record. The file's bootstrap token is never passed to these commands (DEC-0574).
+
+Amendment (Origin: owner, 2026-11-27 · Decision: DEC-0795, DEC-0796, DEC-0797, DEC-0799; supersedes the two tokens and `.env.cloudflare` above): every command reads `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` from the environment first, then from the secrets file `~/.secrets/cloudflare` in the home directory (PAR-486; `CLOUDFLARE_SECRETS_FILE` overrides it, PAR-487); `.env.cloudflare` and `CLOUDFLARE_BOOTSTRAP_TOKEN` are no longer read. The user keeps **one token**, made from the pre-filled link (`deepLink("token")`, name `prototype-framework-cli`), for every command and for `cloudflare-setup`; a broader token works as well. The framework never deletes, rolls or updates it; it mints and manages only its own R2 signing token. The table below is generated from the list (`node scripts/permission-tables.mjs`; a unit test fails when it drifts, DEC-0602):
+<!-- permission-table: token -->
+| Scope | On the dashboard | API name | Permission group ID |
+| --- | --- | --- | --- |
+| Account | Workers Scripts Edit | Workers Scripts Write | `e086da7e2179491d91ee5f35b3ca210a` |
+| Account | Workers R2 Storage Edit | Workers R2 Storage Write | `bf7481a1826f439697cb59a20b22293e` |
+| Account | D1 Edit | D1 Write | `09b2857d1c31407795e75e3fed8617a1` |
+| Account | Secrets Store Edit | Secrets Store Write | `adc8fa2bc6124928a8b3314dc63a1235` |
+| Account | OAuth Client Edit | OAuth Client Write | `50fc2f43318f40e4855a35d8de5bf643` |
+| Account | Account API Tokens Edit | Account API Tokens Write | `5bc3f8b21c554832afc660159ab75fa4` |
+<!-- /permission-table -->
+
+The admin app's Everyday token page can still make a narrower token named `prototype-framework` for a person who wants one; nothing needs it:
 <!-- permission-table: everyday -->
 | Scope | On the dashboard | API name | Permission group ID |
 | --- | --- | --- | --- |
@@ -81,19 +94,10 @@ Amendment (Origin: owner, plan-setup-wizard §4.1, §4.2 · Decision: DEC-0563, 
 | Account | D1 Edit | D1 Write | `09b2857d1c31407795e75e3fed8617a1` |
 | Account | Secrets Store Read | Secrets Store Read | `5e33b7d77788455c9fdf18cbd38ee5a0` |
 <!-- /permission-table -->
-- the **bootstrap token** `prototype-framework-bootstrap`, in `CLOUDFLARE_BOOTSTRAP_TOKEN`, made in the dashboard because the API cannot create a token that holds "Account API Tokens Write". `cloudflare-setup` uses it only when the account setup is out of date or the everyday token lacks a permission, then the token deletes itself and its line in `.env.cloudflare` is commented out (PAR-342). `setup-account` run on its own takes it in `CLOUDFLARE_API_TOKEN`, as it took DEC-0551's setup token.
-<!-- permission-table: bootstrap -->
-| Scope | On the dashboard | API name | Permission group ID |
-| --- | --- | --- | --- |
-| Account | Workers Scripts Edit | Workers Scripts Write | `e086da7e2179491d91ee5f35b3ca210a` |
-| Account | OAuth Client Edit | OAuth Client Write | `50fc2f43318f40e4855a35d8de5bf643` |
-| Account | Secrets Store Edit | Secrets Store Write | `adc8fa2bc6124928a8b3314dc63a1235` |
-| Account | Account API Tokens Edit | Account API Tokens Write | `5bc3f8b21c554832afc660159ab75fa4` |
-<!-- /permission-table -->
 
 `smoke` sends no Cloudflare API request and needs no token. DEC-0551 lists the calls behind each everyday permission; the account setup's steps are in cloudflare.md `setupAccount`.
 
-**Cloudflare setup** (`cloudflare-setup`, plan-setup-wizard §4.3; [setup.md](setup.md)). The re-runnable command that reads the state and does only what is missing: local setup, the git-ignore warnings, both tokens' checks, the account and the setup record. In v0.2.0 (DEC-0697) the bootstrap token is used only to create the two OAuth clients, store their secrets, deploy the admin app and delete itself; the account setup steps (`setup-account`'s, PROV-REQ-004) and the everyday token are done in the admin app (setup.md §2). **Account switch:** when the tokens' account differs from the project's recorded one (`CLOUDFLARE_ACCOUNT_ID`), setup says that stages on the old account keep running and offers to remove them while the old token still works, then sets up the new account as needed and updates `CLOUDFLARE_ACCOUNT_ID`. It never moves a stage between accounts.
+**Cloudflare setup** (`cloudflare-setup`, plan-setup-wizard §4.3; [setup.md](setup.md)). The re-runnable command that reads the state and does only what is missing: local setup, the git-ignore warnings, the credential, the token's check, and, with the user's one token, the whole account setup (the OAuth clients, the admin app, then the admin app's account setup code: the auth app, the shared resources, the signing credential and the setup record; DEC-0798). There is no account switch since DEC-0799: the account is the user's `CLOUDFLARE_ACCOUNT_ID`. It never moves a stage between accounts.
 
 **Errors** from these tooling commands are reported as messages with a non-zero exit status; they are not part of the runtime error catalogue.
 

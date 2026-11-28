@@ -85,7 +85,7 @@ if (isLocal()) {
         const run = spawnSync("npm", ["run", "--silent", "cloudflare-setup"], {
           cwd: app,
           encoding: "utf8",
-          // The secrets file is pointed into an empty folder (PAR-451), so the operator's ~/.secrets/cloudflare is never read.
+          // The secrets file is pointed into an empty folder (PAR-487), so the operator's ~/.secrets/cloudflare is never read.
           env: { ...childEnv({ COMPLIANCE_REQUEST_LOG: log, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import=${pathToFileURL(RECORDER).href}`.trim() }), CLOUDFLARE_SECRETS_FILE: join(emptyHome, ".secrets", "cloudflare") },
           timeout: 5 * 60_000,
         });

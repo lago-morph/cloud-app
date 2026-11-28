@@ -4,7 +4,7 @@ The one re-runnable command that takes a project from no Cloudflare access to a 
 
 Since the owner's decisions of 2026-11-27 (DEC-0795…DEC-0800) there is **one credential, supplied by the user**: a Cloudflare API token in `CLOUDFLARE_API_TOKEN` and the account in `CLOUDFLARE_ACCOUNT_ID`, from the environment or from the secrets file `~/.secrets/cloudflare`. The framework never deletes, rolls or updates that token. The two-token flow of v0.2.0-rc01 (a short-lived bootstrap token that deleted itself, and an everyday token made in the admin app; DEC-0563, DEC-0697) is gone: its text is in git history and in those decisions.
 
-Contracts: none app-facing. The token's permission list is `packages/framework/src/provision/cloudflare/permissions.ts` (`TOKEN`; PAR-331, PAR-332, DEC-0797); the secrets file is PAR-450 and its override PAR-451.
+Contracts: none app-facing. The token's permission list is `packages/framework/src/provision/cloudflare/permissions.ts` (`TOKEN`; PAR-331, PAR-332, DEC-0797); the secrets file is PAR-486 and its override PAR-487.
 
 ## 1. Requirements
 
@@ -18,7 +18,7 @@ The admin app's Account setup and Everyday token pages stay but are optional: th
 #### SETUP-REQ-002 — One credential: the environment, then `~/.secrets/cloudflare`
 Origin: owner · Derives from: SYS-REQ-023 · Decision: DEC-0795, DEC-0799, DEC-0800
 
-The command, like every Cloudflare command, MUST take `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (the names wrangler reads) from the environment first; a setting the environment does not set MUST be taken from the secrets file, a file in `.env` format with the same names. The secrets file is `~/.secrets/cloudflare` in the user's home directory (PAR-450), never a path relative to the project, so every project, worktree and session on the machine shares it; `CLOUDFLARE_SECRETS_FILE` overrides the path (PAR-451; `~/` and any relative path are read from the home directory). When both sources hold a setting and differ, the environment MUST win and a notice MUST name the setting. The command MUST say which source each setting came from (the variable, or the file's path), never the value.
+The command, like every Cloudflare command, MUST take `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (the names wrangler reads) from the environment first; a setting the environment does not set MUST be taken from the secrets file, a file in `.env` format with the same names. The secrets file is `~/.secrets/cloudflare` in the user's home directory (PAR-486), never a path relative to the project, so every project, worktree and session on the machine shares it; `CLOUDFLARE_SECRETS_FILE` overrides the path (PAR-487; `~/` and any relative path are read from the home directory). When both sources hold a setting and differ, the environment MUST win and a notice MUST name the setting. The command MUST say which source each setting came from (the variable, or the file's path), never the value.
 
 The framework MUST NOT create, write or change the secrets file, and MUST NOT write either value anywhere. A secrets file readable by its group or by others MUST be warned about on every run (with `chmod 600` and the path) and MUST NOT fail the run. The project's old `.env.cloudflare` (PAR-340) and `CLOUDFLARE_BOOTSTRAP_TOKEN` MUST NOT be read; when either is present, a notice MUST say it is no longer used.
 
