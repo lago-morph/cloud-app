@@ -7559,6 +7559,7 @@ A new app's `npm install` (no lockfile) crashed in npm 10.9.4, which ships with 
 - **To reverse:** remove the framework dependency, the template pin, its `COMPANION_PINS` entry and the registry layer, once the pinned Node's npm no longer crashes (npm 11 does not).
 Item: Cloudflare setup with one token (PR 180).
 
+
 ### DEC-0804 — Upgrade from 0.1.1 is not supported or tested; E2E-019 is retired
 Origin: owner · Status: accepted · Affects: `docs/acceptance/e2e-scenarios.md` E2E-019 (retired); `tests/compliance/e2e/E2E-019-upgrade.spec.ts` and `tests/compliance/e2e/support/registry.ts` (removed); catalogue and traceability counts in `tests/compliance/harness/catalogue.unit.test.ts`, `tests/compliance/tools/traceability.unit.test.ts`; DEC-0767's E2E-019 part
 
@@ -7568,6 +7569,7 @@ Origin: owner · Status: accepted · Affects: `docs/acceptance/e2e-scenarios.md`
 - **Tests changed** (rule 8, `behaviour-changed`, this decision): E2E-019's one test removed; the catalogue's E2E count 19 → 18 and the traceability row count 155 → 154.
 - **To reverse:** restore the scenario and its tests from git, with a baseline release that installs.
 Item: Cloudflare setup with one token (PR 180).
+
 ## Owner decision on mock-oauth2-server (2026-11-27)
 
 ### DEC-0805 — mock-oauth2-server runs from its pinned Docker image in every environment; the Java/Maven path is removed
