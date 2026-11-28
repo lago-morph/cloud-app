@@ -186,4 +186,17 @@ describe("repin", () => {
     expect(repin(pkg, RELEASE).changed).toEqual([]);
     expect(repin({ dependencies: { [FW]: "0.1.0", zod: "4.6.7" } }, { version: "0.2.0", dependencies: { zod: "^4.7.0" } }).changed).toEqual([`${FW} 0.2.0`]);
   });
+
+  // npm 10.9.4 crashes installing a vitest pin older than the newest @vitest/browser-playwright unless
+  // the app pins @vitest/browser-playwright at the same version (DEC-0802; root cause
+  // ai/implementation/root-causes/2026-11-27-starter-npm-install-edgesout.md). The framework does not
+  // depend on it, so it follows the release's vitest.
+  it("moves @vitest/browser-playwright to the release's vitest version, only when the app has it", () => {
+    const release: Release = { version: "0.3.0", dependencies: { vitest: "5.1.2" } };
+    const { pkg, changed } = repin({ dependencies: { [FW]: "0.2.0" }, devDependencies: { vitest: "5.0.5", "@vitest/browser-playwright": "5.0.5" } }, release);
+    expect(pkg.devDependencies).toEqual({ vitest: "5.1.2", "@vitest/browser-playwright": "5.1.2" });
+    expect(changed).toEqual([`${FW} 0.3.0`, "vitest 5.1.2", "@vitest/browser-playwright 5.1.2"]);
+    expect(repin({ dependencies: { [FW]: "0.2.0" }, devDependencies: { vitest: "5.0.5" } }, release).pkg.devDependencies).toEqual({ vitest: "5.1.2" });
+    expect(repin({ dependencies: { [FW]: "0.2.0" }, devDependencies: { vitest: "5.0.5", "@vitest/browser-playwright": "5.0.5" } }, { version: "0.3.0", dependencies: { vitest: "^5.1.0" } }).changed).toEqual([`${FW} 0.3.0`]);
+  });
 });

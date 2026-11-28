@@ -71,6 +71,11 @@ jobs:
         run: node scripts/ci/classify.mjs --check-duplicates
       - name: Unit tests
         run: npm run test:unit
+      # A new app's own npm install with no lockfile, from the live registry, with the npm this Node
+      # ships (DEC-0802): the offline tests install from a lockfile and cannot see a registry change
+      # that breaks it (ai/implementation/root-causes/2026-11-27-starter-npm-install-edgesout.md).
+      - name: npm create against the live registry
+        run: npx vitest run --config vitest.registry.config.ts
       - name: Selection for a full run
         id: all
         run: node scripts/ci/classify.mjs --all --github-output "$GITHUB_OUTPUT"

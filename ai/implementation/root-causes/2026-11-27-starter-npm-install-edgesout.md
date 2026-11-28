@@ -1,6 +1,6 @@
 # Root cause: a new app's `npm install` crashes in npm 10.9.4 ("Cannot read properties of null (reading 'edgesOut')")
 
-Status: awaiting review
+Status: reviewed (accepted, with corrections; fixed by DEC-0802)
 
 ## Symptom
 
@@ -42,4 +42,14 @@ On a fresh directory with npm 10.9.4: `npm create` from the packed starter, with
 
 ## Review
 
-Status: awaiting review
+Verdict: accepted, with two corrections that do not change the cause.
+
+Reviewer: an independent subagent that did not diagnose this failure (2026-11-27). Reproduced with the official nodejs.org v22.22.0 linux-x64 tarball (SHASUMS256 verified; npm 10.9.4), used only through PATH, against the live registry:
+
+- **Reproduced.** The packed starter (`npm exec --package=<starter tgz> -- create-prototype-app my-app --framework file:<framework tgz>`) fails its `npm install` with the same error. The minimal case (`devDependencies: {vitest: "5.0.5"}`, no lockfile) crashes in `npm install --dry-run`; it succeeds with `--before=2026-11-01`, with `--legacy-peer-deps`, and with `npx npm@11`. Adding `"@vitest/browser-playwright": "5.0.5"` makes it succeed. The same holds for `vitest` 5.0.0 and 5.0.3 (crash alone, success with the matching `@vitest/browser-playwright`), which supports link 3's claim that any pin older than the newest `@vitest/browser-playwright` crashes and that the matching pin fixes it whatever is published later. `vitest` 4.0.10 alone succeeds (its peer set differs).
+- **Correction 1 (evidence 1).** `@lago-morph/prototype-framework@0.2.0-rc01` is not on the public registry (`npm view` lists only 0.0.0-stage, 0.1.0 and 0.1.1, and `npm install` of 0.2.0-rc01 is ETARGET), so that experiment cannot have run as written. The conclusion stands on other evidence: a project whose only dependency is the packed framework tarball crashes the same way (the framework depends on `vitest` 5.0.5), and so does the minimal case with no framework. It also means a project that depends on the framework without the template's pin still crashes; the fix below covers apps made by the starter.
+- **Correction 2 (proposed fix).** Adding the name to `COMPANION_PINS` would do nothing: `repin` takes those versions from the release's own `dependencies`, which do not include `@vitest/browser-playwright`. The pin has to follow the release's `vitest` version instead (`VITEST_COMPANION_PINS`).
+- **Alternatives.** Agreed with those ruled out. Also checked: `@vitest/browser-playwright` in the framework's dependencies fixes the bare-framework case too (a stand-in package depending on both installs), but adds a runtime dependency (and the required peer `playwright`) to every framework install; left to the owner (DEC-0802 "Rejected").
+- **Fix (DEC-0802), red-green.** Red first: `create.unit.test.ts` "the template pins @vitest/browser-playwright at its vitest version", `upgrade.unit.test.ts` "moves @vitest/browser-playwright to the release's vitest version, only when the app has it", and the new registry test `create.registry.test.ts` (packed starter, its own `npm install` with no lockfile from the registry, then `verify`), which failed under npm 10.9.4 with this error. Then the template pin, `repin` and the lockfile; all three pass. Skill hard rule 5 is not changed: `skill/SKILL.md` is already 8,098 bytes at this branch's head, over PAR-070's 8,000 (`tests/skill/budgets-and-links.test.ts` fails there before this fix). The registry test runs in `vitest.registry.config.ts`, which the release workflow runs before publishing.
+- **Verification.** With npm 10.9.4: the packed starter from the branch makes an app in a fresh folder, its `npm install` succeeds, and `npm run verify` passes (app tests and its 3 e2e-api tests). The unit layer, typecheck, lint, the duplicate check and the offline create test (`unshare -rn`) pass. "The same after `npm run upgrade`" is covered by the `repin` unit test only: no newer framework release exists to upgrade to.
+- **Roles.** The orchestrator asked this one subagent to review, implement and run the tests; the test-case author, runner and evaluator roles were not separate subagents.
