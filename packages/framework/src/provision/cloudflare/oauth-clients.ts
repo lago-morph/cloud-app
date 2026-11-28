@@ -18,10 +18,11 @@
  * other client of that name is useless (its secret cannot be read again): it is deleted and made
  * anew. The secret is never printed or returned; `onSecret` hands it to the run's redaction.
  *
- * *Unverified* (DEC-0684; the live pass checks them): the create body's field names other than
- * `redirect_uris` and `response_types` (`name`, `grant_types`, `token_endpoint_auth_method`,
- * `scopes`, `optional_scopes`), the answer's `client_id` and `client_secret`, the list's fields, and
- * `DELETE …/oauth_clients/<id>`.
+ * Verified live (2026-11-27, SETUP-AC-011; root cause 2026-11-27-single-cloudflare-token-oauth-client-body):
+ * the name is `client_name` in the create body and in the list (a body without it gets code 70705);
+ * every optional scope must also be listed in `scopes` (code 70748 otherwise); `visibility` defaults
+ * to `private`; the create answer holds `client_id` and `client_secret`; `DELETE …/oauth_clients/<id>`
+ * works.
  */
 import { randomSubdomain } from "./account.js";
 import { describeFailure, succeeded, type CloudflareApi } from "./api.js";
@@ -60,14 +61,16 @@ export const appOrigin = (kind: ClientKind, subdomain: string): string => `https
 
 /** The create body of one client (`POST /accounts/<a>/oauth_clients`). */
 export function clientBody(kind: ClientKind, subdomain: string): Record<string, unknown> {
+  const optional = kind === "admin" ? [...ADMIN_OPTIONAL_SCOPES] : [];
   return {
-    name: CLIENT_NAMES[kind],
+    client_name: CLIENT_NAMES[kind],
     redirect_uris: [`${appOrigin(kind, subdomain)}/callback`],
     response_types: ["code", "id_token"],
     grant_types: ["authorization_code"],
     token_endpoint_auth_method: "client_secret_post",
-    scopes: [...REQUIRED_SCOPES],
-    optional_scopes: kind === "admin" ? [...ADMIN_OPTIONAL_SCOPES] : [],
+    // Every optional scope must also be in `scopes` (the API refuses it otherwise, code 70748).
+    scopes: [...REQUIRED_SCOPES, ...optional],
+    optional_scopes: optional,
   };
 }
 
@@ -105,7 +108,7 @@ export async function ensureOAuthClients(api: CloudflareApi, accountId: string, 
   const kept: ClientKind[] = [];
   for (const kind of ["admin", "signin"] as const) {
     const names = CLIENT_SECRET_NAMES[kind];
-    const existing = (list as { client_id?: unknown; id?: unknown; name?: unknown }[]).filter((c) => c.name === CLIENT_NAMES[kind]);
+    const existing = (list as { client_id?: unknown; id?: unknown; client_name?: unknown }[]).filter((c) => c.client_name === CLIENT_NAMES[kind]);
     // Kept only when both entries name, in their comment, a client listed under this name (DEC-0685):
     // an entry left by a deleted client or by a part-done replacement does not count.
     const owner = stored.get(names.id)?.comment;

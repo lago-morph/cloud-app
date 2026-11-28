@@ -140,7 +140,7 @@ export class FakeCloud {
   readonly sstState = new Map<string, Set<string>>();
   /** D1 databases (`…/d1/database`): only listed and created. */
   readonly d1Databases: { uuid: string; name: string }[] = [];
-  /** OAuth clients (`…/oauth_clients`) by client ID: the create body's name and the secret its create answer showed once. */
+  /** OAuth clients (`…/oauth_clients`) by client ID: the create body's `client_name` and the secret its create answer showed once. */
   readonly oauthClients = new Map<string, { id: string; name: string; body: Record<string, unknown>; secret: string }>();
   /** Secrets Store stores by ID (one by default, as on the live account), each with its secrets by name; values are write-only on the API. */
   readonly secretStores = new Map<string, { name: string; secrets: Map<string, { id: string; value: string; scopes?: unknown; comment?: string }> }>([["store1", { name: "default_secrets_store", secrets: new Map() }]]);
@@ -356,11 +356,17 @@ export class FakeCloud {
 
   /** The OAuth clients and the Secrets Store (v0.2.0 plan §5.1 step 2), as `oauth-clients.ts` and `secrets-store.ts` call them. */
   private handleBootstrapResources(method: string, p: string, body: unknown): ApiReply {
-    if (p === `${A}/oauth_clients` && method === "GET") return ok([...this.oauthClients.values()].map((c) => ({ client_id: c.id, name: c.name })));
+    // As the live API answers (2026-11-27, root cause 2026-11-27-single-cloudflare-token-oauth-client-body):
+    // the name is `client_name` in the create body and in the list; a body without it is refused
+    // (code 70705); every optional scope must also be in `scopes` (code 70748).
+    if (p === `${A}/oauth_clients` && method === "GET") return ok([...this.oauthClients.values()].map((c) => ({ client_id: c.id, client_name: c.name, visibility: "private" })));
     if (p === `${A}/oauth_clients` && method === "POST") {
       const b = body as Record<string, unknown>;
+      if (typeof b.client_name !== "string" || b.client_name === "") return err(400, 70705, "client_name is required");
+      const scopes = Array.isArray(b.scopes) ? (b.scopes as unknown[]) : [];
+      if (Array.isArray(b.optional_scopes) && (b.optional_scopes as unknown[]).some((o) => !scopes.includes(o))) return err(400, 70748, "optional scope must exist in client scopes");
       const n = this.nextClient++;
-      const client = { id: `client${n}`, name: String(b.name), body: b, secret: `fake-oauth-client-secret-${n}` };
+      const client = { id: `client${n}`, name: b.client_name, body: b, secret: `fake-oauth-client-secret-${n}` };
       this.oauthClients.set(client.id, client);
       return ok({ ...b, client_id: client.id, client_secret: client.secret });
     }

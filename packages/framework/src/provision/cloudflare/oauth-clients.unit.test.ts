@@ -9,23 +9,24 @@ const SUB = "pf-clientsub";
 const writes = (cloud: FakeCloud) => cloud.requests.filter((r) => !r.startsWith("GET "));
 
 describe("clientBody (plan §5.1 step 2)", () => {
-  it("the admin client: private and confidential, code + id_token, the two required scopes, one optional scope per admin-page need", () => {
+  it("the admin client: named by client_name, private and confidential, code + id_token, the two required scopes, one optional scope per admin-page need", () => {
     expect(REQUIRED_SCOPES).toEqual(["user-details.read", "memberships.read"]);
     expect(ADMIN_OPTIONAL_SCOPES).toEqual(["account-api-tokens.write", "d1.write", "secrets-store.read", "secrets-store.write", "workers-r2.write", "workers-scripts.write"]);
     expect(clientBody("admin", SUB)).toEqual({
-      name: "prototype-framework-admin",
+      client_name: "prototype-framework-admin",
       redirect_uris: [`https://prototype-admin.${SUB}.workers.dev/callback`],
       response_types: ["code", "id_token"],
       grant_types: ["authorization_code"],
       token_endpoint_auth_method: "client_secret_post",
-      scopes: ["user-details.read", "memberships.read"],
+      // The live API refuses an optional scope that is not also in `scopes` (code 70748).
+      scopes: ["user-details.read", "memberships.read", ...ADMIN_OPTIONAL_SCOPES],
       optional_scopes: [...ADMIN_OPTIONAL_SCOPES],
     });
   });
 
   it("the sign-in client: the two required scopes only, no optional scope, the auth app's callback", () => {
     expect(clientBody("signin", SUB)).toEqual({
-      name: "prototype-framework-sign-in",
+      client_name: "prototype-framework-sign-in",
       redirect_uris: [`https://prototype-auth.${SUB}.workers.dev/callback`],
       response_types: ["code", "id_token"],
       grant_types: ["authorization_code"],
@@ -171,7 +172,7 @@ describe("ensureOAuthClients (plan §5.1 step 2)", () => {
 
   it("a create answer without a secret: fails naming the client; nothing is stored for it", async () => {
     const cloud = new FakeCloud();
-    cloud.override.set(`POST /accounts/${ACCOUNT}/oauth_clients`, { status: 200, body: { success: true, errors: [], result: { client_id: "c-x", name: CLIENT_NAMES.admin } } });
+    cloud.override.set(`POST /accounts/${ACCOUNT}/oauth_clients`, { status: 200, body: { success: true, errors: [], result: { client_id: "c-x", client_name: CLIENT_NAMES.admin } } });
     await expect(ensureOAuthClients(cloud.api, ACCOUNT, { subdomain: SUB })).rejects.toThrow(`creating the OAuth client ${CLIENT_NAMES.admin}: Cloudflare's answer held no client secret`);
     expect(cloud.secretStores.get("store1")!.secrets.size).toBe(0);
   });
