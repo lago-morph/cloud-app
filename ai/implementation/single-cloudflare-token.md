@@ -92,3 +92,51 @@ A reviewer subagent that wrote neither the code nor the tests read SETUP-REQ-001
 **Spec drift for the owner.** SETUP-REQ-004 says a token that cannot read its own permissions "lacks 'Account API Tokens Write', which MUST be named", while SETUP-AC-004 and DEC-0797 name its dashboard name, "Account API Tokens Edit". The tests (and the code) follow the criterion. The wording of SETUP-REQ-004 should probably say "(the dashboard's Account API Tokens Edit)".
 
 **Results.** `criteria/setup/cloudflare-setup.test.ts`: 36 passed (was 32). The four unit files above: 93 passed.
+
+## 8. Live setup on the owner's account (SETUP-AC-011, 2026-11-27)
+
+Owner-approved run on the owner's primary account with the owner's token (`admin`, ID `1107f6db…`, from `~/.secrets/cloudflare`). Done as a new user: the framework and the starter packed from this branch (`npm pack`), a new app made by the packed starter in a fresh temporary directory (`/tmp/live-setup-ynoS/my-app`, app name `livetry`, `--framework file:<tarball>`), then QUICKSTART's steps literally, then the template README's deploy, smoke and remove. Official Node 22.22.1 (npm 10.9.4) from a downloaded tarball, on `PATH` for these commands only. The token was never printed; every run's output was searched for the token value and the account ID (0 hits each).
+
+**Result: pass, after one fix.** Through to a deployed app: setup exit 0, deploy, `smoke` 4 of 4 passed, `remove`.
+
+| Step | Result |
+| --- | --- |
+| Starter `npm install` | **Failed**: npm 10.9.4 crashes, `Cannot read properties of null (reading 'edgesOut')`. Pre-existing, not this branch: it fails the same with the published `0.2.0-rc01`, and with `vitest@5.0.5` alone, since vitest 5.1.0 (2026-11-02). Record `root-causes/2026-11-27-starter-npm-install-edgesout.md` (proposed fix, not applied). The run went on with a lockfile cut from the repository's (`appLockfile`), as the offline tests do. |
+| `cloudflare-setup`, no credential (`CLOUDFLARE_SECRETS_FILE` at a missing file) | Local setup run first; the two template lines, the file path, the cloud-session variant and the link; exit 1. |
+| A pasted non-token, and a random 40-character token, in the environment | The env-wins note, each source, "Cloudflare does not accept it as an API token" (HTTP 400 code 6003, and HTTP 403 code 9109), the link; exit 1. |
+| `cloudflare-setup` with the owner's token, first try | Sources reported, the account found by name, "has every permission the framework needs" (no word about the token's ~390 groups), then **failed** at the first write: `creating the OAuth client prototype-framework-admin failed: HTTP 400: client_name is required (code 70705)`. Nothing created. |
+| Fix | `root-causes/2026-11-27-single-cloudflare-token-oauth-client-body.md`: the create body needs `client_name`, every optional scope must also be in `scopes` (code 70748, probed), and the list names clients by `client_name`. Commit `1ecca2b4`; the fake now answers as the live API. |
+| `cloudflare-setup` again | Both OAuth clients, the admin app, the auth app with its D1 database, buckets already there, the signing credential replaced and moved into Secrets Store, setup record version 2; "Cloudflare setup is complete"; the next step; exit 0. |
+| `cloudflare-setup` a second time | "Everything is already set up and current: nothing to do", exit 0; account inventory unchanged. |
+| `deploy --target cloudflare --stage test-first` | Stops at step 5: "required secrets are not set: apiKey" (documented in the template README and owner-tasks §4, not in QUICKSTART: fixed). After `secrets set apiKey`, deployed; `https://livetry-test-first.<subdomain>.workers.dev`. |
+| `smoke` | 4 passed, 0 failed. |
+| Admin app sign-in (automated part) | `POST /signin` redirects to `dash.cloudflare.com/oauth2/auth` with the new admin client's ID; Cloudflare answers with its login page (client accepted). The real sign-in stays the owner's (DEC-0692). |
+| `remove --stage test-first` | Removed; inventory equal to the one after setup. |
+| The owner's token afterwards | Same ID, status active, `modified_on` 2026-10-18 unchanged, policies' hash unchanged (before and after every run). `Read-all` untouched. |
+
+**Resources the run created, still in place** (account-level, what `cloudflare-setup` makes once per account; no teardown in the docs):
+- OAuth clients `prototype-framework-admin` (`867a3668…`) and `prototype-framework-sign-in` (`e68d2ae7…`);
+- Workers `prototype-admin` and `prototype-auth` (at `prototype-admin.cloud-app-asdf.workers.dev` and `prototype-auth.…`);
+- D1 database `prototype-auth` (`667e3fc6…`);
+- Secrets Store `default_secrets_store` entries `PROTOTYPE_ADMIN_CLIENT_ID`, `PROTOTYPE_ADMIN_CLIENT_SECRET`, `PROTOTYPE_SIGNIN_CLIENT_ID`, `PROTOTYPE_SIGNIN_CLIENT_SECRET`, `PROTOTYPE_R2_ACCESS_KEY_ID`, `PROTOTYPE_R2_SECRET_ACCESS_KEY`;
+- account token `prototype-r2-signing` `96f332cb…` (it **replaced** the earlier `prototype-r2-signing` `8c957457…`, which setup deleted, as SETUP-AC-005 allows; stages deployed before with the old key need a redeploy, which setup said);
+- the setup record `framework/account.json` in the existing bucket `sst-state`; log entries under `livetry/test-first/2026/11/28/` in `prototype-logs`.
+
+Created and removed by the run: the stage `test-first` of `livetry` (Worker, D1 `livetry-test-first-db-1`, secret), and two probe OAuth clients (`pf-probe-subset` was refused, `pf-probe-superset` created and deleted). Pre-existing Workers, buckets, D1 databases and the `kubecon-planner` client were not touched. The app folder `/tmp/live-setup-ynoS` is local only.
+
+**Friction a new user meets** (fixed ones marked):
+1. **Blocker, pre-existing:** `npm create @lago-morph/prototype-app` fails at `npm install` with npm 10.9.4 (the npm of the pinned Node 22.22.0) — the first command of QUICKSTART. Record above; needs its own item before `0.2.0-rc02` is useful to anyone new.
+2. *Fixed:* QUICKSTART ended at "the next step, deploy", but the first deploy stops for the template's `apiKey`; it now says so and gives the command.
+3. *Fixed:* `docs/RELEASING.md` step 2 still said a new permission goes into `EVERYDAY` or `BOOTSTRAP` and is added to the everyday token with the bootstrap token.
+4. When the account's shared resources are missing, `deploy` says "run setup-account --target cloudflare first" (`provision/core/deploy.ts:213`; `target.ts:150` adds "with the setup token (DEC-0551)"); for Cloudflare the user's command is `npm run cloudflare-setup`. Not hit in this run (setup came first); worth a small item.
+5. "Moved the R2 signing credential prototype-r2-signing in Secrets Store." reads oddly ("into"); upgraders only.
+6. The starter's README step 7 still says it "makes sure `.gitignore` lists `.env.cloudflare`" (kept for old files, but it names a file new users never have).
+7. A re-run trusts the setup record: with the record current it does not look at the OAuth clients or Workers, so a client deleted in the dashboard is not noticed. By design (DEC-0577); noted only.
+
+**Live pass and the release candidate.** `docs/RELEASING.md` does not make a live pass a condition of tagging a candidate: the runbook (`live-pass-v0.2.0.md`, DEC-0793) is a pass *of a published* candidate, in a new test account, with the owner's browser steps. So `scripts/live-pass/` was not reworked or run here. It still drives the bootstrap-token and admin-app-page flow (starter tokens, the Everyday token page) and must be reworked for the one-token flow before the live pass of `0.2.0-rc02`.
+
+**Test results after the fixes** (Node 22.22.1 from the tarball): unit 2969 of 2969 (276 files; the launcher tests pass with official Node); integration `criteria/setup`, `admin-app`, `cli/git-warnings`, `skill/cloudflare-setup`: 60 of 60 (mock-oauth2-server from its pinned Docker image); E2E-017: 6 of 6; typecheck and lint pass.
+
+**Changes to once-green tests, by reason:** `test-was-wrong` (record `2026-11-27-single-cloudflare-token-oauth-client-body.md`): `oauth-clients.unit.test.ts` (the two `clientBody` expectations: `client_name`, and the admin client's `scopes` holding the optional six; the no-secret override answer uses `client_name`), `fake-cloud.test-support.ts` (lists `client_name`, refuses 70705 and 70748), `criteria/setup/cloudflare-setup.test.ts` SETUP-AC-005 (required scopes read as `scopes` minus `optional_scopes`); `strengthened`: SETUP-AC-005 also checks every optional scope is in `scopes` and the `client_name` field.
+
+**Deviation (testing-standards rule 1).** One subagent, which may not start others, ran the live run, diagnosed, fixed and re-ran; both root-cause records await an independent review.
