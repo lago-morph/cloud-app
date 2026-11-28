@@ -279,6 +279,6 @@ describe("Cloudflare shared log bucket ownership (PROV-REQ-004)", () => {
 
   it("the account subdomain is read from Cloudflare each time (recorded there, not on the owner's machine)", async () => {
     expect(await accountSubdomain(stubApi({ [`GET ${SUBDOMAIN_PATH}`]: ok({ subdomain: "example" }) }), ACCOUNT)).toBe("example");
-    await expect(accountSubdomain(stubApi({ [`GET ${SUBDOMAIN_PATH}`]: ok({ subdomain: "" }) }), ACCOUNT)).rejects.toThrow(/no workers\.dev subdomain.*setup-account/);
+    await expect(accountSubdomain(stubApi({ [`GET ${SUBDOMAIN_PATH}`]: ok({ subdomain: "" }) }), ACCOUNT)).rejects.toThrow(/no workers\.dev subdomain; run npm run cloudflare-setup first/);
   });
 });

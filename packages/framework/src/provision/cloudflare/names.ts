@@ -28,6 +28,13 @@ export const publicOrigin = (stage: Stage, accountSubdomain: string): string => 
 /** SST's state home on Cloudflare: one R2 bucket per account, name fixed by SST (DEC-0084). */
 export const STATE_BUCKET = "sst-state";
 
+/**
+ * The command a message sends the user to when the account setup is missing or incomplete
+ * (DEC-0802): the starter's npm script for `cloudflare-setup`, which runs the account setup with
+ * the user's one token (DEC-0798). `setup-account --target cloudflare` stays for scripts.
+ */
+export const SETUP_COMMAND = "npm run cloudflare-setup";
+
 /** The account-level mail sink (MAIL §2, DEC-0518): its Worker and its R2 bucket share this name. */
 export const MAIL_SINK_NAME = "prototype-mailsink";
 

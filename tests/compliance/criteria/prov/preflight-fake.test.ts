@@ -7,7 +7,7 @@
  *   the backup bucket existed (no `deniedBuckets`, PROV §2 "Signing record"), stops the deploy at
  *   step 1, and the preflight names every absent shared resource in one message, here with the
  *   backup bucket's lifecycle rule (PAR-311, DEC-0543): `the account's shared resources are
- *   missing (…); run setup-account --target cloudflare first`. The deploy sends only reads;
+ *   missing (…); run npm run cloudflare-setup first`. The deploy sends only reads;
  *   no stage resource exists afterwards;
  * - "deploy needs no permission on API tokens" (DEC-0550, DEC-0551): with every API-token
  *   endpoint refusing (HTTP 403, as for the everyday token), the deploy succeeds and sends no
@@ -73,7 +73,7 @@ describe("PROV-AC-002 account clauses on the fake Cloudflare API (DEC-0560)", ()
     expect(lines, `one message names the absent shared resources:\n${io.err}`).toHaveLength(1);
     expect(lines[0]).toContain("R2 signing credential prototype-r2-signing");
     expect(lines[0]).toContain("lifecycle rule of R2 bucket prototype-backups (PAR-311)");
-    expect(lines[0]).toContain("run setup-account --target cloudflare first");
+    expect(lines[0]).toContain("run npm run cloudflare-setup first");
     expect(cloud.requests.filter((r) => !r.startsWith("GET ")), "requests that change anything").toEqual([]);
     expect(io.err.includes(FAKE_SIGNING.secretAccessKey), "the output does not print the credential").toBe(false);
     expect((await target.listStageResources(STAGE)).resources, "stage resources the stopped deploy created").toEqual([]);
@@ -85,7 +85,7 @@ describe("PROV-AC-002 account clauses on the fake Cloudflare API (DEC-0560)", ()
     cloud.buckets.get("sst-state")?.delete("framework/r2-signing.json");
     const io = captureIo();
     expect((await runDeploy(target, REQUEST, io)).status, io.err).not.toBe(0);
-    expect(io.err).toMatch(/the account's shared resources are missing \(.*R2 signing credential prototype-r2-signing.*\); run setup-account --target cloudflare first/);
+    expect(io.err).toMatch(/the account's shared resources are missing \(.*R2 signing credential prototype-r2-signing.*\); run npm run cloudflare-setup first/);
     expect(cloud.requests.filter((r) => !r.startsWith("GET ")), "requests that change anything").toEqual([]);
     expect((await target.listStageResources(STAGE)).resources, "stage resources the stopped deploy created").toEqual([]);
   });

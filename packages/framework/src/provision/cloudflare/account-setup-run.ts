@@ -108,7 +108,7 @@ export async function runAccountSetup(api: CloudflareApi, accountId: string, opt
     if (states.get(step.id) === "absent" || move) {
       if (step.id === "signing-record") {
         const out = await createAccountSigningCredential(api, a, { secretsStore: true });
-        lines.push(`${move ? "Moved" : "Created"} the ${step.resource}${out.where === "record" ? " (Secrets Store was unavailable, so its record holds it; run account setup again later)" : " in Secrets Store"}.`);
+        lines.push(`${move ? "Moved" : "Created"} the ${step.resource}${out.where === "record" ? " (Secrets Store was unavailable, so its record holds it; run account setup again later)" : (move ? " into Secrets Store" : " in Secrets Store")}.`);
         if (out.replaced.length > 0) lines.push("It replaced an older one: redeploy each deployed stage so its file uploads and downloads use the new key.");
       } else {
         await step.create(api, a, {}, (m) => lines.push(m));

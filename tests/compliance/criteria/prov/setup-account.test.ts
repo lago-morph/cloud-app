@@ -199,7 +199,7 @@ if (!isLocal()) {
       try {
         const r = await runCli(["deploy", "--target", t, "--stage", stage], { cwd: copy.dir, timeoutMs: 10 * 60_000 });
         expect(r.status, `deploy without setup-account must fail:\n${tail(r.output)}`).not.toBe(0);
-        expect(r.output, "the message tells the owner to run setup-account").toContain("setup-account");
+        expect(r.output, "the message tells the owner to run the setup command (DEC-0802)").toContain("npm run cloudflare-setup");
         expect(r.output, "the message names the missing shared resource").toContain(LOG_BUCKET);
         expect(await listStageResources({ target: t, app: "reference", stage }), "resources the stopped deploy created").toEqual([]);
       } finally {

@@ -51,6 +51,8 @@ export interface FakeTargetOptions {
   readonly sharedResources?: Readonly<Record<string, SharedResource["state"]>>;
   readonly databases?: readonly { readonly name: string; readonly records?: readonly string[]; readonly rows?: number }[];
   readonly dialect?: Dialect;
+  /** The target's `setupCommand` (DEC-0802); default none, so messages name `setup-account --target fake`. */
+  readonly setupCommand?: string;
 }
 
 const key = (s: Stage) => `${s.app}/${s.stage}`;
@@ -59,6 +61,7 @@ const fakeOrigin = (s: Stage) => `https://${s.app}-${s.stage}.fake.example`;
 export class FakeTarget implements TargetOperations {
   readonly target = "fake";
   readonly dialect: Dialect;
+  readonly setupCommand?: string;
   readonly appResourceKind = "runtime";
   /** Every operation call, in order, as `<operation> <detail>`. */
   readonly calls: string[] = [];
@@ -94,6 +97,7 @@ export class FakeTarget implements TargetOperations {
 
   constructor(options: FakeTargetOptions = {}) {
     this.dialect = options.dialect ?? "sqlite";
+    if (options.setupCommand !== undefined) this.setupCommand = options.setupCommand;
     const shared: Readonly<Record<string, SharedResource["state"]>> = options.sharedResources ?? { "log bucket": "owned" };
     for (const [name, state] of Object.entries(shared)) this.shared.set(name, state);
     for (const db of options.databases ?? []) {

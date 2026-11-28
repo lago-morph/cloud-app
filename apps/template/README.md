@@ -57,11 +57,11 @@ npm run cloudflare-setup
 
 Coming from framework 0.1.x or 0.2.0-rc01: `npm run upgrade` says setup needs re-running; move the token and account ID from `.env.cloudflare` to `~/.secrets/cloudflare` (with the permissions setup names), delete `.env.cloudflare`, and do steps 1–3 once per account. Everyone signs in again, with Cloudflare (QUICKSTART, "Coming from 0.1.x?").
 
-It never prints a token value, and every later command reads the tokens itself. The steps, and what to do when it stops: [QUICKSTART.md](https://github.com/lago-morph/cloud-app/blob/main/QUICKSTART.md) and the skill's `reference/owner-tasks.md` §2 (in this app, `.claude/skills/prototype-framework/reference/owner-tasks.md`).
+It never prints a token value, and every later command reads the token itself. The steps, and what to do when it stops: [QUICKSTART.md](https://github.com/lago-morph/cloud-app/blob/main/QUICKSTART.md) and the skill's `reference/owner-tasks.md` §2 (in this app, `.claude/skills/prototype-framework/reference/owner-tasks.md`).
 
 ## 3. What the account setup creates
 
-The admin app's Account setup page creates the account's shared resources once: the **auth app**, which signs people in to every app, with its database; the log bucket `prototype-logs`; the deploy-state bucket `sst-state`; the backup bucket `prototype-backups` (a removed production stage's data, kept 30 days); and the file-signing credential every stage uses. `deploy` never creates these resources; if any is missing, it says so.
+`npm run cloudflare-setup` creates the account's shared resources once (the admin app's optional Account setup page does the same): the **auth app**, which signs people in to every app, with its database; the log bucket `prototype-logs`; the deploy-state bucket `sst-state`; the backup bucket `prototype-backups` (a removed production stage's data, kept 30 days); and the file-signing credential every stage uses. `deploy` never creates these resources; if any is missing, it says so and names `npm run cloudflare-setup`.
 
 ## 4. Deploy a test stage, test it, remove it
 

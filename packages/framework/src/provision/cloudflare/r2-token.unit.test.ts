@@ -115,7 +115,7 @@ describe("the account's R2 signing credential (DEC-0550)", () => {
     expect(await readSigningCredentials(stubApi({ [`GET ${RECORD}`]: err(404, 10007, "The specified key does not exist.") }), ACCOUNT)).toBeUndefined();
     const record = { tokenId: "tok123", accessKeyId: "tok123", secretAccessKey: SECRET };
     expect(await readSigningCredentials(stubApi({ [`GET ${RECORD}`]: { status: 200, body: record } }), ACCOUNT)).toEqual({ id: "tok123", accessKeyId: "tok123", secretAccessKey: SECRET });
-    expect(() => parseSigningRecord({ ...record, secretAccessKey: "short" })).toThrow(/not a valid signing record; run setup-account/);
+    expect(() => parseSigningRecord({ ...record, secretAccessKey: "short" })).toThrow(/not a valid signing record; run npm run cloudflare-setup to replace it/);
     await expect(readSigningCredentials(stubApi({ [`GET ${RECORD}`]: err(403, 10002, "Unauthorized") }), ACCOUNT)).rejects.toThrow(/reading the record .* failed: HTTP 403/);
   });
 
@@ -126,7 +126,7 @@ describe("the account's R2 signing credential (DEC-0550)", () => {
     });
     expect(await tokenWriteProblems(stubApi(policies(["Account API Tokens Write"])), ACCOUNT)).toEqual([]);
     const readOnly = stubApi(policies(["Account API Tokens Read", "Workers Scripts Write"]));
-    expect((await tokenWriteProblems(readOnly, ACCOUNT))[0]).toMatch(/lacks the permission "Account API Tokens Write".*setup token/);
+    expect((await tokenWriteProblems(readOnly, ACCOUNT))[0]).toMatch(/lacks the permission "Account API Tokens Write".*add it to the token \(Account API Tokens Edit in the dashboard\) and run npm run cloudflare-setup again/);
     expect(readOnly.requests.every((r) => r.startsWith("GET "))).toBe(true);
     const unreadable = stubApi({ [`GET ${TOKENS}/verify`]: ok({ id: "self", status: "active" }), [`GET ${TOKENS}/self`]: err(403, 9109, "Unauthorized") });
     expect((await tokenWriteProblems(unreadable, ACCOUNT))[0]).toMatch(/cannot read its own permissions.*Account API Tokens Write/);

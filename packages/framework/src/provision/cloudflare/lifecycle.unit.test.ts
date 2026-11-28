@@ -183,7 +183,7 @@ describe("production remove backs up first (DEC-0543)", () => {
     ["the database export fails", (s) => s.databases.failingExports.add("notes-prod-db-1"), /exporting D1 database notes-prod-db-1/],
     ["a file cannot be read", (s) => s.cloud.bytesFailures.set(`GET /accounts/${ACCOUNT}/r2/buckets/notes-prod-files/objects/${encodeURIComponent("notes.txt\u0001")}`, 500), /reading file "notes\.txt\\u0001"/],
     ["a backup object cannot be written", (s) => s.cloud.bytesFailures.set(`PUT /accounts/${ACCOUNT}/r2/buckets/prototype-backups/objects/${encodeURIComponent(`${prefix}manifest.json`)}`, 500), /writing .*manifest\.json to R2 bucket prototype-backups failed/],
-    ["the backup bucket is missing", (s) => void s.cloud.buckets.delete("prototype-backups"), /R2 bucket prototype-backups is missing; run setup-account/],
+    ["the backup bucket is missing", (s) => void s.cloud.buckets.delete("prototype-backups"), /R2 bucket prototype-backups is missing; run npm run cloudflare-setup first/],
   ];
   for (const [what, inject, why] of failures) {
     it(`when ${what}, nothing of the stage is deleted and remove exits 1`, async () => {

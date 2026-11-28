@@ -109,7 +109,7 @@ Signed in, but not admin (or still admin): the level comes from the person's rol
 
 `deploy` prints the failed step, the stage's state and the next action. Follow the next action. Common messages:
 
-- `run setup-account … first`, or the account's auth app is missing: do the admin app's Account setup page ([owner-tasks.md](owner-tasks.md) §2 step 5). `npm run cloudflare-setup` names what is missing.
+- `run npm run cloudflare-setup first` (older releases: `run setup-account … first`), or the account's auth app is missing: run `npm run cloudflare-setup` ([owner-tasks.md](owner-tasks.md) §2). It names what is missing and sets the account up.
 - A missing `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID`, a missing permission, or "R2 signing credential … missing": run `npm run cloudflare-setup`, which says what to fix ([owner-tasks.md](owner-tasks.md) §2). Setup names each permission the token lacks; add it to the token in the dashboard, or make a new token from setup's link.
 - `NODE_USE_ENV_PROXY`: you are behind an HTTPS proxy. Put `NODE_USE_ENV_PROXY=1 ` in front of the command.
 - `required secrets are not set: …`: this happens on the first deploy of a stage. Set each named secret with `--target cloudflare`, then run `deploy` again.

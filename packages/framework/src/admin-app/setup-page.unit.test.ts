@@ -183,7 +183,7 @@ describe("page 1: account setup", () => {
     cloud.buckets.set("sst-state", new Set());
     cloud.addSigningCredential();
     const r = await setup();
-    expect(await r.text()).toContain("in Secrets Store");
+    expect(await r.text()).toContain("Moved the R2 signing credential prototype-r2-signing into Secrets Store.");
     const store = cloud.secretStores.get("store1")!;
     for (const name of Object.values(SIGNING_SECRET_NAMES)) expect(store.secrets.has(name), name).toBe(true);
     const record = cloud.objectBodies.get("sst-state/framework/r2-signing.json") as Record<string, unknown>;

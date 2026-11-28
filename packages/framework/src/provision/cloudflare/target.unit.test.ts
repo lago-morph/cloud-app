@@ -98,7 +98,7 @@ describe("Cloudflare preflight (PROV-REQ-002 step 1)", () => {
     expect(b.cloud.requests).toEqual([`GET /accounts/${ACCOUNT}/tokens/verify`]);
   });
 
-  it("[PROV-AC-002] unit part: deploy with the everyday token's permissions (no Account API Tokens at all) deploys a stage; without the account's signing credential it stops at step 1, naming it and setup-account", async () => {
+  it("[PROV-AC-002] unit part: deploy with the everyday token's permissions (no Account API Tokens at all) deploys a stage; without the account's signing credential it stops at step 1, naming it and the setup command (DEC-0802)", async () => {
     const { cloud, target } = setup();
     const refused = { status: 403, body: { success: false, errors: [{ code: 9109, message: "Unauthorized to access requested resource" }] } };
     cloud.override.set(`GET /accounts/${ACCOUNT}/tokens/permission_groups`, refused);
@@ -117,20 +117,20 @@ describe("Cloudflare preflight (PROV-REQ-002 step 1)", () => {
     const io2 = captureIo();
     const result = await runDeploy(b.target, request(), io2);
     expect(result.failure?.step).toBe("preflight");
-    expect(io2.err).toMatch(/R2 signing credential prototype-r2-signing.*run setup-account --target cloudflare first/);
+    expect(io2.err).toMatch(/R2 signing credential prototype-r2-signing.*run npm run cloudflare-setup first/);
     expect(b.cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
     expect(io2.err).not.toContain(FAKE_SIGNING.secretAccessKey);
 
     // Both re-run requirements (batch B's backup bucket, batch C's signing record, or a record whose
-    // token predates the backup bucket's deny entry): one preflight message naming each, pointing to setup-account.
+    // token predates the backup bucket's deny entry): one preflight message naming each, pointing to the setup command.
     const c = setup();
     c.cloud.buckets.delete("prototype-backups");
     c.cloud.objectBodies.set("sst-state/framework/r2-signing.json", { tokenId: "tok0", accessKeyId: "tok0", secretAccessKey: "5".repeat(64), deniedBuckets: ["prototype-logs", "sst-state", "prototype-mailsink"] });
     const io3 = captureIo();
     expect((await runDeploy(c.target, request(), io3)).failure?.step).toBe("preflight");
-    const lines = io3.err.split("\n").filter((l) => l.includes("setup-account"));
+    const lines = io3.err.split("\n").filter((l) => l.includes("npm run cloudflare-setup"));
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatch(/R2 bucket prototype-backups.*R2 signing credential prototype-r2-signing.*run setup-account --target cloudflare first/);
+    expect(lines[0]).toMatch(/R2 bucket prototype-backups.*R2 signing credential prototype-r2-signing.*run npm run cloudflare-setup first/);
     expect(c.cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
   });
 });
@@ -468,7 +468,7 @@ describe("deploy on Cloudflare (PROV-REQ-002 steps 3, 5, 6, 7)", () => {
     cloud.tokenPolicies = FULL_POLICIES.map((p) => ({ ...p, permission_groups: p.permission_groups.filter((g) => g.name !== "Account API Tokens Write").concat(p.id === "p1" ? [{ id: "r", name: "Account API Tokens Read" }] : []) }));
     const io = captureIo();
     expect(await runSetupAccount(target, io)).toEqual({ status: 1, created: [] });
-    expect(io.err).toMatch(/lacks the permission "Account API Tokens Write" \(account\), which creating the R2 signing credential prototype-r2-signing needs/);
+    expect(io.err).toMatch(/lacks the permission "Account API Tokens Write" \(account\), which creating the R2 signing credential prototype-r2-signing needs; add it to the token \(Account API Tokens Edit in the dashboard\) and run npm run cloudflare-setup again/);
     expect(cloud.requests.every((r) => r.startsWith("GET "))).toBe(true);
     expect(cloud.buckets.size).toBe(0);
     // With the credential in place, the setup token's token permission is no longer needed.

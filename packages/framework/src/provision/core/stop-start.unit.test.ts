@@ -217,7 +217,7 @@ describe("production remove: backup first (DEC-0543)", () => {
   });
 
   it("a failed backup deletes nothing and exits 1", async () => {
-    const t = deployed(prod).fail("backupStage", new Error("the R2 bucket prototype-backups is missing; run setup-account --target cloudflare first"));
+    const t = deployed(prod).fail("backupStage", new Error("the R2 bucket prototype-backups is missing; run npm run cloudflare-setup first"));
     const io = captureIo();
     expect(await runRemove(t, prod, io)).toEqual({ status: 1, leftovers: [] });
     expect(t.calls.some((c) => /^(dropDatabase|removeStage)/.test(c))).toBe(false);
