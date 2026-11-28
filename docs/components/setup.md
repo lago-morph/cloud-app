@@ -35,7 +35,7 @@ Every message that needs the user to act MUST include the exact link or command.
 #### SETUP-REQ-004 — The user's token: checked, used, never changed
 Origin: owner · Derives from: SYS-REQ-023 · Decision: DEC-0796, DEC-0797, DEC-0589
 
-The command MUST verify the token and read its own permissions with it, and compare them with the release's list (`TOKEN`). A token with more permissions than the list MUST be accepted without any message about them. A token lacking any MUST stop the run before any change, naming exactly the missing permissions and giving the token link; a token that cannot read its own permissions lacks "Account API Tokens Write", which MUST be named, with the note that the others could not be checked.
+The command MUST verify the token and read its own permissions with it, and compare them with the release's list (`TOKEN`). A token with more permissions than the list MUST be accepted without any message about them. A token lacking any MUST stop the run before any change, naming exactly the missing permissions and giving the token link; a token that cannot read its own permissions lacks "Account API Tokens Edit", which MUST be named, with the note that the others could not be checked.
 
 The framework MUST NEVER delete, roll or update the user's token, nor any token whose ID PAR-361 names. It MAY mint tokens it needs itself through the API (the R2 signing token), and MUST manage (replace or delete) only tokens it created. The user creates at most one token.
 
