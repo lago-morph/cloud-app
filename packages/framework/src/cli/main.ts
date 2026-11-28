@@ -21,7 +21,7 @@ const smokeBinding: Command = cloud("smoke", async (env) => {
   return withCloudProcessCheck(await smoke(), env);
 });
 
-/** The cloud commands (D-05), each bound through `cloud` (`.env.cloudflare`, DEC-0570). */
+/** The cloud commands (D-05), each bound through `cloud` (the secrets file, DEC-0795). */
 const deployBinding: Command = cloud("deploy", async (env) => (await import("./commands/deploy.js")).deployBinding(env));
 const removeBinding: Command = cloud("remove", async (env) => (await import("./commands/remove.js")).removeBinding(env));
 const stopBinding: Command = cloud("stop", async (env) => (await import("./commands/stop-start.js")).stopBinding(env));
@@ -42,7 +42,7 @@ const COMMANDS: Readonly<Record<string, Entry>> = {
   start: { summary: "start --target <t> --stage <s>: start a stopped stage", run: startBinding },
   secrets: { summary: "secrets set <name> --target <t> --stage <s>: set a secret from standard input", run: secretsBinding },
   "setup-account": { summary: "setup-account --target <t>: one-time account setup", run: setupAccountBinding },
-  "cloudflare-setup": { summary: "cloudflare-setup [--switch-account]: the re-runnable Cloudflare setup (tokens, account, the bootstrap)", run: cloudflareSetupBinding },
+  "cloudflare-setup": { summary: "cloudflare-setup: the re-runnable Cloudflare setup (your one token, the account, everything the framework needs on it)", run: cloudflareSetupBinding },
   "check-login": { summary: "check-login --target <t> --stage <s>: automated real-login check on a production stage", run: checkLoginBinding },
   "reset-local": { summary: "clear local state (local D1, R2, .logs/ and .mail/)", run: resetLocalBinding },
   "version-check": { summary: "compare the app's framework, its skill copies and npm's latest release; changes nothing", run: versionCheckBinding },

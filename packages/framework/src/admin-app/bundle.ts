@@ -21,7 +21,8 @@ export const ADMIN_APP_NODE_IMPORTS: readonly string[] = Object.freeze(["node:cr
 
 const entry = (dir: string, name: string): string => (existsSync(join(dir, `${name}.ts`)) ? join(dir, `${name}.ts`) : join(dir, `${name}.js`));
 
-function frameworkVersion(): string {
+/** This package's version, as the setup record records it. */
+export function frameworkVersion(): string {
   const version = (JSON.parse(readFileSync(join(HERE, "..", "..", "package.json"), "utf8")) as { version?: unknown }).version;
   if (typeof version !== "string") throw new Error("the framework's package.json has no version");
   return version;

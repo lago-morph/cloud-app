@@ -4,7 +4,6 @@
  * does not load ESLint, `secrets set` does not load the migration checker).
  */
 import { join } from "node:path";
-import type { CloudflareSettingsOptions } from "./cloudflare-settings.js";
 import type { ProcessEnvironment } from "./commands/smoke-cloud.js";
 import type { Command } from "./io.js";
 
@@ -37,15 +36,13 @@ export const resetLocalBinding: Command = lazy(async () => (await import("./comm
 
 /**
  * A command loaded when it runs whose Cloudflare form (`--target cloudflare`) is built with the
- * environment merged with `.env.cloudflare`, after the file's notices and git warnings are printed
- * (plan-setup-wizard §4.2 and §4.5; DEC-0570, DEC-0572). Every command that reaches Cloudflare is
- * bound through it.
+ * environment merged with the secrets file, after the sources' notices and the old file's git
+ * warnings are printed (DEC-0795; DEC-0572). Every command that reaches Cloudflare is bound through it.
  */
 export const cloud =
-  (name: string, load: (env: ProcessEnvironment) => Promise<Command>, options: CloudflareSettingsOptions = {}): Command =>
+  (name: string, load: (env: ProcessEnvironment) => Promise<Command>): Command =>
   async (args, io) =>
-    // `{ withBootstrapToken: true }` opts out of DEC-0574 (the file's bootstrap token too): for `cloudflare-setup` only.
-    (await import("./cloudflare-settings.js")).withCloudflareSettings(name, load, process.env, options)(args, io);
+    (await import("./cloudflare-settings.js")).withCloudflareSettings(name, load, process.env)(args, io);
 
 export const secretsBinding: Command = cloud("secrets set", async (env) => {
   const [{ secretsCommand }, { loadApp }, { setLocalSecret }, { cloudSecretsBinding }] = await Promise.all([
@@ -86,5 +83,5 @@ export const devBinding: Command = lazy(async () => (await import("./commands/de
 export const versionCheckBinding: Command = lazy(async () => (await import("./commands/version-check.js")).versionCheckBinding());
 export const upgradeBinding: Command = lazy(async () => (await import("./commands/upgrade.js")).upgradeBinding());
 
-/** `cloudflare-setup` (plan-setup-wizard §4.3; DEC-0584): it has no `--target` and reads `.env.cloudflare` itself, bootstrap token included, after the local setup. */
+/** `cloudflare-setup` (plan-setup-wizard §4.3; DEC-0584): it has no `--target` and reads the credential itself (DEC-0795), after the local setup. */
 export const cloudflareSetupBinding: Command = lazy(async () => (await import("./commands/cloudflare-setup.js")).cloudflareSetupBinding());

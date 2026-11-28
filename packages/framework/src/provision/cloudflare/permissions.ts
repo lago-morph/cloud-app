@@ -1,22 +1,21 @@
 /**
- * The one versioned Cloudflare permission list (DEC-0563; plan-setup-wizard §4.1): the everyday
- * token's and the bootstrap token's permission groups, by ID, name and scope. The dashboard deep
- * links, the token checks, the in-place upgrade of the everyday token and the docs' permission
- * tables are all generated from it.
+ * The one versioned Cloudflare permission list (DEC-0563; plan-setup-wizard §4.1): the permission
+ * groups of the user's one token and of the admin app's everyday token, by ID, name and scope. The
+ * dashboard deep link, the token check and the docs' permission tables are all generated from it.
  *
+ * - `TOKEN` (`prototype-framework-cli`): the one token the user makes and supplies as
+ *   `CLOUDFLARE_API_TOKEN` (DEC-0795…DEC-0797). Six account groups: everything `cloudflare-setup`
+ *   does (the OAuth clients, Secrets Store, the admin and auth apps, the shared buckets, the R2
+ *   signing token it mints for itself) and everything `deploy` does. A token with more passes the
+ *   check silently; the framework never updates, rolls or deletes it (DEC-0796).
  * - `EVERYDAY` (`prototype-framework`): v0.2.0 plan §5.2 page 2's four account groups (DEC-0715,
- *   DEC-0716), the same list as `EVERYDAY_V2`: Workers Scripts Write, Workers R2 Storage Write, D1
- *   Write and Secrets Store Read. No zone group: v0.2.0 has no email domain. It cannot create tokens.
+ *   DEC-0716), the token the admin app's Everyday token page can make. Since DEC-0796 nobody needs
+ *   it for setup; it stays for that page.
  * - `EVERYDAY_V1`: the 0.1.x everyday set (DEC-0551 plus "Email Routing Rules Read"), kept only to
  *   name the groups an update removes from an old token.
- * - `BOOTSTRAP` (`prototype-framework-bootstrap`): v0.2.0 plan §5.1's four groups (DEC-0680),
- *   what `cloudflare-setup` needs to create the OAuth clients, store their secrets and deploy the
- *   admin app. The account setup itself moved to the admin app. The API cannot create a token that
- *   itself holds "Account API Tokens Write" (400, code 1001, verified 2026-10-26), so the owner makes
- *   it from the dashboard link with an expiry of 1 day at most; it deletes itself when setup is done.
  *
- * A release that needs more raises `PERMISSIONS_VERSION` (PAR-331) or `ACCOUNT_SETUP_VERSION`
- * (PAR-332) with the list.
+ * The bootstrap token's list is gone (DEC-0796): there is no second token. A release that needs
+ * more raises `PERMISSIONS_VERSION` (PAR-331) or `ACCOUNT_SETUP_VERSION` (PAR-332) with the list.
  *
  * The IDs are Cloudflare's public permission group IDs, read from
  * `GET /accounts/<a>/tokens/permission_groups` on 2026-10-26. A group is matched by ID, or by name
@@ -36,8 +35,8 @@ export interface PermissionGroup {
   readonly scope: PermissionScope;
 }
 
-/** PAR-331: the version of `EVERYDAY` and `BOOTSTRAP`; raised whenever a release changes them (2: v0.2.0, DEC-0680). */
-export const PERMISSIONS_VERSION = 2;
+/** PAR-331: the version of `TOKEN` and `EVERYDAY`; raised whenever a release changes them (2: v0.2.0, DEC-0680; 3: the one token, DEC-0797). */
+export const PERMISSIONS_VERSION = 3;
 /**
  * PAR-332: the version of the account setup this release expects (the setup record's
  * `setupVersion`). 2: v0.2.0's account setup in the admin app (the auth app, the signing credential
@@ -87,12 +86,22 @@ export const EVERYDAY_V2: readonly PermissionGroup[] = Object.freeze([GROUPS.wor
 export const EVERYDAY: readonly PermissionGroup[] = EVERYDAY_V2;
 
 /**
- * The bootstrap token's 4 groups (v0.2.0 plan §5.1, IDs from §2.1b; DEC-0680), all account-scoped:
- * deploying the admin (and later auth) Worker and registering the `workers.dev` subdomain, creating
- * both OAuth clients, putting their secrets in Secrets Store, and "Account API Tokens Write", which
- * only lets the token delete itself (and is why the dashboard must make it).
+ * The user's one token (DEC-0797): six account groups. Workers Scripts Write deploys the admin, auth
+ * and app Workers and registers the `workers.dev` subdomain; OAuth Client Write makes the admin and
+ * sign-in clients; Secrets Store Write stores their secrets and the signing credential (and reads
+ * them, as Write implies Read); Workers R2 Storage Write and D1 Write make the shared buckets and the
+ * databases; Account API Tokens Write lets setup read the token's own permissions and mint (and
+ * replace) the R2 signing token it owns. The dashboard link makes it; Cloudflare refuses an
+ * API-made token holding "Account API Tokens Write" (code 1001).
  */
-export const BOOTSTRAP: readonly PermissionGroup[] = Object.freeze([GROUPS.workersScriptsWrite, GROUPS.oauthClientWrite, GROUPS.secretsStoreWrite, GROUPS.apiTokensWrite]);
+export const TOKEN: readonly PermissionGroup[] = Object.freeze([
+  GROUPS.workersScriptsWrite,
+  GROUPS.r2StorageWrite,
+  GROUPS.d1Write,
+  GROUPS.secretsStoreWrite,
+  GROUPS.oauthClientWrite,
+  GROUPS.apiTokensWrite,
+]);
 
 /**
  * Stronger groups that also grant a read group: a token made by hand with the write group passes
@@ -105,12 +114,15 @@ const SATISFIED_BY: Readonly<Record<string, readonly { readonly id: string; read
   [GROUPS.secretsStoreRead.id]: [GROUPS.secretsStoreWrite],
 });
 
-export type TokenKind = "everyday" | "bootstrap";
+export type TokenKind = "token" | "everyday";
 
-/** The names the deep links pre-fill. */
-export const TOKEN_NAMES: Readonly<Record<TokenKind, string>> = Object.freeze({ everyday: "prototype-framework", bootstrap: "prototype-framework-bootstrap" });
+/**
+ * The names the deep links pre-fill. The user's token has its own name, so the admin app's Everyday
+ * token page, which finds its token by the name `prototype-framework`, never takes it for its own.
+ */
+export const TOKEN_NAMES: Readonly<Record<TokenKind, string>> = Object.freeze({ token: "prototype-framework-cli", everyday: "prototype-framework" });
 
-const LISTS: Readonly<Record<TokenKind, readonly PermissionGroup[]>> = Object.freeze({ everyday: EVERYDAY, bootstrap: BOOTSTRAP });
+const LISTS: Readonly<Record<TokenKind, readonly PermissionGroup[]>> = Object.freeze({ token: TOKEN, everyday: EVERYDAY });
 
 /** The dashboard's name of a group: "Write" shows as "Edit". */
 export const dashboardName = (g: PermissionGroup): string => g.name.replace(/ Write$/, " Edit");
@@ -125,7 +137,7 @@ export const DEEP_LINK_BASE = "https://dash.cloudflare.com/?to=/:account/api-tok
  * permission group ID, and `type` is then ignored; `name` is optional). The link cannot set the
  * expiry, the account or the zone; the user picks them on the page.
  */
-export function deepLink(kind: TokenKind): string {
+export function deepLink(kind: TokenKind = "token"): string {
   const keys = LISTS[kind].map((g) => ({ key: g.id, type: g.name.endsWith(" Read") ? "read" : "edit" }));
   return `${DEEP_LINK_BASE}&permissionGroupKeys=${encodeURIComponent(JSON.stringify(keys))}&name=${encodeURIComponent(TOKEN_NAMES[kind])}`;
 }
@@ -167,8 +179,8 @@ const grantsGroup = (p: TokenPolicy, want: PermissionGroup): boolean => [want, .
 const accountsNamed = (p: TokenPolicy): string[] => Object.keys(p.resources).filter((k) => k.startsWith(ACCOUNT_PREFIX) && !k.startsWith(ZONE_PREFIX)).map((k) => k.slice(ACCOUNT_PREFIX.length));
 
 /**
- * Compares a token's policies with a required list (the plan's step 7 check of the everyday token,
- * read with the bootstrap token). Scopes are read as `token-policies.ts`'s `policyCovers` reads
+ * Compares a token's policies with a required list (`cloudflare-setup`'s check of the user's token,
+ * read with the token itself; DEC-0797). Scopes are read as `token-policies.ts`'s `policyCovers` reads
  * them: an account group needs the account (or `*`), a zone group the zone, all zones, or the whole
  * account.
  */

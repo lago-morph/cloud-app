@@ -138,6 +138,8 @@ export class FakeCloud {
   readonly failSst = new Set<string>();
   /** SST's state per `<app>/<stage>`: the logical names of the components it holds. */
   readonly sstState = new Map<string, Set<string>>();
+  /** D1 databases (`…/d1/database`): only listed and created. */
+  readonly d1Databases: { uuid: string; name: string }[] = [];
   /** OAuth clients (`…/oauth_clients`) by client ID: the create body's name and the secret its create answer showed once. */
   readonly oauthClients = new Map<string, { id: string; name: string; body: Record<string, unknown>; secret: string }>();
   /** Secrets Store stores by ID (one by default, as on the live account), each with its secrets by name; values are write-only on the API. */
@@ -229,7 +231,17 @@ export class FakeCloud {
     // The everyday token's quick-check reads (permissions.ts `probeEveryday`).
     if (p === `${A}/workers/scripts` && method === "GET") return ok([...this.workers.keys()].map((id) => ({ id })));
     if (p === `${A}/r2/buckets` && method === "GET") return ok({ buckets: [...this.buckets.keys()].map((name) => ({ name })) });
-    if (p === `${A}/d1/database` && method === "GET") return ok([], { result_info: { page: 1, per_page: 1, count: 0, total_count: 0 } });
+    // D1 databases by name (the auth app's, `auth-app-deploy.ts`): listed, filtered by `name`, and created.
+    if (p === `${A}/d1/database` && method === "GET") {
+      const name = url.searchParams.get("name");
+      const list = this.d1Databases.filter((d) => name === null || d.name === name);
+      return ok(list, { result_info: { page: 1, per_page: list.length, count: list.length, total_count: list.length } });
+    }
+    if (p === `${A}/d1/database` && method === "POST") {
+      const made = { uuid: `00000000-0000-4000-8000-${String(this.d1Databases.length + 1).padStart(12, "0")}`, name: String(b.name) };
+      this.d1Databases.push(made);
+      return ok(made);
+    }
     if (p === `${A}/workers/subdomain`) {
       if (method === "PUT") {
         this.subdomain = String(b.subdomain);

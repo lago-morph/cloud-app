@@ -140,7 +140,7 @@ describe("page 1: account setup", () => {
     cloud.secretStores.get("store1")!.secrets.clear();
     const r = await setup();
     expect(r.status).toBe(502);
-    expect(await r.text()).toContain("run npm run cloudflare-setup with a bootstrap token first");
+    expect(await r.text()).toContain("run npm run cloudflare-setup first");
     expect(writes()).toEqual([]);
     expect(dbs).toEqual([]);
   });

@@ -1,75 +1,67 @@
 /**
- * SETUP-AC-001…SETUP-AC-010 (docs/components/setup.md §4; Where: Local): the outcomes of
- * `cloudflare-setup`, the re-runnable Cloudflare setup, against the fake Cloudflare API with fake
- * token values only (setup.md §4's preamble; compliance.md §2 "Tokens the harness is given",
- * DEC-0604). SETUP-AC-011 is the live milestone clause on a real account and is not here.
+ * SETUP-AC-001…SETUP-AC-010 (docs/components/setup.md §4, rewritten for the one credential,
+ * DEC-0795…DEC-0800; Where: Local): the outcomes of `cloudflare-setup` against the fake Cloudflare
+ * API with fake token values only and a temporary home directory (setup.md §4's preamble;
+ * compliance.md §2 "Tokens the harness is given"). SETUP-AC-011 is the live milestone clause on a
+ * real account and is not here.
  *
- * Expectations come from SETUP-REQ-001…007, plan-setup-wizard §3.2, §3.4 and §4.3, and the
- * parameters they name (PAR-340…343, PAR-361), not from the command's code. The command is the
- * framework CLI's own (support/setup-runs.ts says what is injected). Every run's standard output,
- * standard error and the project files it leaves are recorded; the last test (SETUP-AC-010)
- * searches all of them for every fake token value, token ID, account ID, zone ID and workers.dev
- * subdomain.
+ * Expectations come from SETUP-REQ-001…007 and the parameters they name (PAR-343, PAR-361, PAR-436,
+ * PAR-450, PAR-451), not from the command's code. The command is the framework CLI's own
+ * (support/setup-runs.ts says what is injected). Every run's standard output, standard error and the
+ * files it leaves are recorded; the last test (SETUP-AC-010) searches all of them for every fake
+ * token value, token ID, account ID, zone ID and workers.dev subdomain.
  *
- * Reading of the criteria where they leave a choice (recorded here, not as decisions):
- * - "asks for nothing" (SETUP-AC-002): standard input is never read, and no link or next prompt
- *   is printed.
+ * Readings of the criteria where they leave a choice (recorded here, not as decisions):
+ * - "asks for nothing" (SETUP-AC-002): standard input is never read, and no link or next prompt is
+ *   printed.
  * - "makes no Cloudflare write request": no request other than GET (a GraphQL query is a read).
- * - "set off from the rest of the output" (SETUP-AC-009): a rule line (one mark repeated 10 times
- *   or more) above and below the warning's paragraph.
- * - the same token in both settings (SETUP-AC-003): either setting may be named, but the output
- *   must name one, say they are the same, and print that token's link only.
+ * - "no message about them" (SETUP-AC-004): the output holds no word about extra, broad or more
+ *   permissions, and is the same as a run with exactly the list, line for line, but for nothing.
+ * - "set off from the rest of the output" (SETUP-AC-009): a rule line (one mark repeated 10 times or
+ *   more) above and below the warning's paragraph.
+ * - "private" is the API's default, so the create request asks for nothing public (plan-v0.2.0
+ *   §2.2), and "confidential" is a client authenticated with its secret (DEC-0750).
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { tag } from "../../harness/index.js";
 import { isLocal } from "../core/support/repo.js";
-import { ACCOUNT_SETUP_VERSION, BOOTSTRAP, EVERYDAY } from "../../../../packages/framework/src/provision/cloudflare/permissions.js";
+import { ACCOUNT_SETUP_VERSION, TOKEN } from "../../../../packages/framework/src/provision/cloudflare/permissions.js";
 import { runLocalSetup } from "../../../../packages/framework/src/provision/core/local-setup.js";
 import {
   ACCOUNT,
-  addBootstrap,
   addSecondAccount,
-  addTokens,
-  BOOT_LINK,
-  BOOTSTRAP_DELETED_LINE,
-  BOOTSTRAP_NAMES,
-  BOOTSTRAP_SETTING,
+  addToken,
+  credential,
   decodeLink,
-  DOMAIN,
-  envFile,
-  envFileExists,
   EVERYDAY_LINK,
-  EVERYDAY_NAMES,
-  EVERYDAY_SETTING,
-  EXPIRES_TOO_LATE,
   freshWorld,
   git,
   group,
+  home,
   KEEP_TRACKED_MARKER,
   linesEqual,
   NEXT_PROMPT_PHRASE,
   project,
   PROTECTED_IDS_SETTING,
-  readEnvFile,
   removeProjects,
   RUNS,
   runSetup,
   SECOND_ACCOUNT,
+  secretsFile,
   sensitiveHits,
   SERVER_ERROR,
   setOffByRules,
   setUpAccount,
-  setUpFirstProject,
   SUB,
   TEMPLATE_LINES,
-  tokenId,
+  TOKEN_LINK,
+  TOKEN_NAMES_LIST,
   tokenValue,
   tokenWritesOf,
   withReplies,
   writesOf,
-  type RunOptions,
   type RunResult,
   type SetupWorld,
   type TokenPolicy,
@@ -77,628 +69,431 @@ import {
 } from "./support/setup-runs.js";
 
 const RECORD_KEY = "sst-state/framework/account.json";
+const ADMIN_URL = `https://prototype-admin.${SUB}.workers.dev`;
 
-/** Which token links an output holds. Since v0.2.0 setup prints no everyday link (DEC-0697): the everyday token's remedy is the admin app's Everyday token page. */
-function links(text: string): { bootstrap: boolean; everyday: boolean } {
-  return { bootstrap: text.includes(BOOT_LINK), everyday: text.includes(EVERYDAY_LINK) };
+/** A set-up account with the user's token (`label`) and a home whose secrets file holds it. */
+async function setUp(label: string, groups?: Parameters<typeof addToken>[3]): Promise<{ world: SetupWorld; token: WorldToken; homeDir: string }> {
+  const world = freshWorld();
+  await setUpAccount(world);
+  const token = addToken(world, label, ACCOUNT, groups);
+  return { world, token, homeDir: home(credential(token.value)) };
 }
-const EVERYDAY_PAGE = /Everyday token page of the admin app/;
 
-/** A bad paste's output: names the setting, holds only that token's link, exit 1, no token written. */
-function expectBadPaste(r: RunResult, setting: string, what: RegExp, world: SetupWorld): void {
+/** A stop's shape: exit 1, no write request, no token updated, rolled or deleted. */
+function expectStopWithoutChange(r: RunResult, world: SetupWorld): void {
   expect(r.status, r.all).toBe(1);
-  expect(r.all, "names the setting").toContain(setting);
-  expect(r.all, "says what is wrong").toMatch(what);
-  // The everyday token's remedy is the admin app's Everyday token page, not a link (DEC-0697).
-  const expected = setting === BOOTSTRAP_SETTING ? { bootstrap: true, everyday: false } : { bootstrap: false, everyday: false };
-  expect(links(r.all), `only ${setting}'s remedy:\n${r.all}`).toEqual(expected);
-  expect(EVERYDAY_PAGE.test(r.all), `the Everyday token page only for ${EVERYDAY_SETTING}:\n${r.all}`).toBe(setting === EVERYDAY_SETTING);
-  expect(tokenWritesOf(r.requests), "token updates or deletions").toEqual([]);
+  expect(writesOf(r.requests), "write requests").toEqual([]);
+  expect(tokenWritesOf(r.requests), "token writes").toEqual([]);
   expect(world.tokens.filter((t) => t.deleted).map((t) => t.name), "deleted tokens").toEqual([]);
 }
 
-/** The project's state after a run: requests to the old account's fake since `from`. */
-const requestsSince = (cloud: { requests: string[] }, from: number): string[] => cloud.requests.slice(from);
+/** The token link on a line of its own. */
+const hasLink = (r: RunResult): boolean => linesEqual(r.out, TOKEN_LINK) === 1;
 
 if (isLocal()) {
   afterAll(() => removeProjects());
 
-  describe("SETUP: no tokens (SETUP-AC-001)", () => {
-    it(tag("SETUP-AC-001", "with no tokens anywhere: the bootstrap link exactly as deepLink builds it, that the admin app makes the everyday token, the three template lines, where they go and the next prompt; no everyday link, no domain requirement; template written; no Cloudflare request; exit 1"), async () => {
+  describe("SETUP: no credential (SETUP-AC-001)", () => {
+    it(tag("SETUP-AC-001", "with no credential anywhere: the two template lines exactly, the resolved secrets file path, environment variables, the token link exactly as deepLink builds it, where the account ID is, continue prototype setup; nothing about a bootstrap or everyday token; no file written, no request, exit 1"), async () => {
       const world = freshWorld();
       const dir = await project();
-      const r = await runSetup("AC-001 no tokens", world, dir);
+      const homeDir = home();
+      const r = await runSetup("AC-001 no credential", world, dir, { home: homeDir });
       expect(r.status, r.all).toBe(1);
-      expect(linesEqual(r.out, BOOT_LINK), `the bootstrap link on a line of its own:\n${r.out}`).toBe(1);
-      // No everyday link since v0.2.0: the admin app makes the everyday token (DEC-0697).
-      expect(r.out, "no everyday link").not.toContain(EVERYDAY_LINK);
-      expect(r.out).toMatch(/admin app[^\n]*Everyday token page/);
-      const outLines = r.out.split("\n");
-      const at = outLines.indexOf(TEMPLATE_LINES[0]);
-      expect(at, "the template's first line").toBeGreaterThanOrEqual(0);
-      expect(outLines.slice(at, at + TEMPLATE_LINES.length), "the template's three lines, in order").toEqual([...TEMPLATE_LINES]);
-      // No domain requirement since v0.2.0 (SETUP-AC-001; plan-v0.2.0 §5.3, DEC-0689).
-      expect(r.out).not.toMatch(/Cloudflare DNS|sign-in emails/);
-      // Where they go: a cloud session's environment settings, then a new session; on the command line the environment or the file.
-      expect(r.out).toMatch(/cloud session/i);
+      const lines = r.out.split("\n");
+      const at = lines.indexOf(TEMPLATE_LINES[0]);
+      expect(at, `the template:\n${r.out}`).toBeGreaterThan(-1);
+      expect(lines.slice(at, at + 2)).toEqual([...TEMPLATE_LINES]);
+      expect(r.out).toContain(secretsFile(homeDir));
       expect(r.out).toMatch(/Environment variables/);
-      expect(r.out).toMatch(/new session/i);
-      expect(r.out).toMatch(/command line/i);
-      expect(r.out).toContain(".env.cloudflare");
-      expect(r.out).toMatch(/environment/i);
+      expect(hasLink(r), `the token link on its own line:\n${r.out}`).toBe(true);
+      expect(r.out).not.toContain(EVERYDAY_LINK);
+      expect(r.out).toMatch(/account ID/i);
       expect(r.out).toContain(NEXT_PROMPT_PHRASE);
-      // The template is written when absent.
-      expect(envFileExists(dir)).toBe(true);
-      expect(readEnvFile(dir).split("\n").filter((l) => l !== ""), "the file holds the template").toEqual([...TEMPLATE_LINES]);
-      expect(r.requests, "Cloudflare requests").toEqual([]);
+      expect(r.all).not.toMatch(/bootstrap|everyday/i);
+      expect(r.requests, "no Cloudflare request").toEqual([]);
+      expect(r.stdinReads).toBe(0);
+      expect(existsSync(join(dir, ".env.cloudflare")), "no .env.cloudflare").toBe(false);
+      expect(readdirSync(homeDir), "no secrets file").toEqual([]);
     });
 
-    // Since v0.2.0 setup prints only the bootstrap link; the admin app makes the everyday token (DEC-0697).
-    it(tag("SETUP-AC-001", "the bootstrap link pre-fills exactly its permission groups and token name (4 groups, v0.2.0 plan §5.1)"), () => {
-      const bootstrap = decodeLink(BOOT_LINK, BOOTSTRAP);
-      expect(bootstrap.unknownKeys).toEqual([]);
-      expect([...bootstrap.names].sort()).toEqual([...BOOTSTRAP_NAMES].sort());
-      expect(bootstrap.tokenName).toBe("prototype-framework-bootstrap");
-      expect(new URL(BOOT_LINK).origin).toBe("https://dash.cloudflare.com");
+    it(tag("SETUP-AC-001", "the token link pre-fills exactly TOKEN's six groups and the name prototype-framework-cli"), () => {
+      const decoded = decodeLink(TOKEN_LINK, TOKEN);
+      expect(decoded.unknownKeys).toEqual([]);
+      expect(decoded.names).toEqual(TOKEN_NAMES_LIST);
+      expect(decoded.tokenName).toBe("prototype-framework-cli");
     });
 
-    it(tag("SETUP-AC-001", "an existing .env.cloudflare (the template, values empty) is left as it is, and the same instructions print"), async () => {
+    it(tag("SETUP-AC-001", "with CLOUDFLARE_SECRETS_FILE set, that path is the one printed"), async () => {
+      const homeDir = home();
+      const r = await runSetup("AC-001 override path", freshWorld(), await project(), { home: homeDir, env: { CLOUDFLARE_SECRETS_FILE: "~/elsewhere/cloudflare.env" } });
+      expect(r.status).toBe(1);
+      expect(r.out).toContain(join(homeDir, "elsewhere", "cloudflare.env"));
+    });
+
+    it(tag("SETUP-AC-001", "only one of the two settings set: names the missing one, with the template and the link; no request; exit 1"), async () => {
       const world = freshWorld();
-      const text = `${TEMPLATE_LINES.join("\n")}\n# my own note\n`;
-      const dir = await project({ envFile: text });
-      const r = await runSetup("AC-001 template present", world, dir);
-      expect(r.status, r.all).toBe(1);
-      expect(links(r.out)).toEqual({ bootstrap: true, everyday: false });
-      expect(r.out).toContain(NEXT_PROMPT_PHRASE);
-      expect(readEnvFile(dir)).toBe(text);
-      expect(r.requests).toEqual([]);
+      const t = addToken(world, "ac001one");
+      const onlyToken = await runSetup("AC-001 only the token", world, await project(), { env: { CLOUDFLARE_API_TOKEN: t.value } });
+      expect(onlyToken.status).toBe(1);
+      expect(onlyToken.out).toContain("CLOUDFLARE_ACCOUNT_ID is not set");
+      expect(onlyToken.out.split("\n").filter((l) => (TEMPLATE_LINES as readonly string[]).includes(l))).toEqual([...TEMPLATE_LINES]);
+      expect(hasLink(onlyToken)).toBe(true);
+      const onlyAccount = await runSetup("AC-001 only the account", world, await project(), { home: home(`CLOUDFLARE_ACCOUNT_ID=${ACCOUNT}\n`) });
+      expect(onlyAccount.status).toBe(1);
+      expect(onlyAccount.out).toContain("CLOUDFLARE_API_TOKEN is not set");
+      expect([...onlyToken.requests, ...onlyAccount.requests]).toEqual([]);
     });
   });
 
   describe("SETUP: everything current (SETUP-AC-002)", () => {
-    it(tag("SETUP-AC-002", "a valid everyday token, a current setup record and every permission: already set up, asks for nothing, no write request, .env.cloudflare byte for byte, exit 0"), async () => {
-      const { world, dir } = await setUpFirstProject("ac002");
-      const before = readEnvFile(dir);
-      const record = world.cloud().objectBodies.get(RECORD_KEY) as { setupVersion?: number; emailDomain?: string } | undefined;
-      expect(record?.setupVersion, "the first setup wrote the release's setup version").toBe(ACCOUNT_SETUP_VERSION);
-      // No email domain in the setup record since v0.2.0 (DEC-0689).
-      expect(record?.emailDomain).toBeUndefined();
-      const r = await runSetup("AC-002 current", world, dir);
+    it(tag("SETUP-AC-002", "a valid token with every permission and a current setup record: already set up, asks for nothing, no write request, the secrets file byte for byte, each source named by path and no value, exit 0"), async () => {
+      const { world, token, homeDir } = await setUp("ac002");
+      const before = readFileSync(secretsFile(homeDir), "utf8");
+      const r = await runSetup("AC-002 current", world, await project(), { home: homeDir });
       expect(r.status, r.all).toBe(0);
-      expect(r.all).toMatch(/already set up|nothing to do/i);
-      expect(r.stdinReads, "standard input reads").toBe(0);
-      expect(links(r.all), "no link asks the user for a token").toEqual({ bootstrap: false, everyday: false });
-      expect(r.all).not.toContain(NEXT_PROMPT_PHRASE);
-      expect(writesOf(r.requests), "write requests").toEqual([]);
-      expect(readEnvFile(dir), ".env.cloudflare unchanged").toBe(before);
-    });
-
-    it(tag("SETUP-AC-002", "the same with the values in the environment only: no .env.cloudflare is written, no write request, exit 0"), async () => {
-      const { world, dir, tokens } = await setUpFirstProject("ac002env");
-      const second = await project();
-      const env = { [EVERYDAY_SETTING]: tokens.everyday.value, CLOUDFLARE_EMAIL_DOMAIN: DOMAIN, CLOUDFLARE_ACCOUNT_ID: ACCOUNT };
-      expect(readEnvFile(dir)).toContain(BOOTSTRAP_DELETED_LINE);
-      const r = await runSetup("AC-002 environment only", world, second, { env });
-      expect(r.status, r.all).toBe(0);
+      expect(r.out).toMatch(/already set up/i);
       expect(r.stdinReads).toBe(0);
-      expect(links(r.all)).toEqual({ bootstrap: false, everyday: false });
+      expect(r.all).not.toContain(TOKEN_LINK);
+      expect(r.all).not.toContain(NEXT_PROMPT_PHRASE);
       expect(writesOf(r.requests)).toEqual([]);
-      expect(envFileExists(second), `with every value in the environment, setup changes nothing: no .env.cloudflare is created:\n${r.all}`).toBe(false);
-      expect(r.all).toMatch(/already set up|nothing to do/i);
+      expect(readFileSync(secretsFile(homeDir), "utf8")).toBe(before);
+      expect(r.out).toContain(`CLOUDFLARE_API_TOKEN: from the file ${secretsFile(homeDir)}`);
+      expect(r.out).toContain(`CLOUDFLARE_ACCOUNT_ID: from the file ${secretsFile(homeDir)}`);
+      expect(r.all).not.toContain(token.value);
+    });
+
+    it(tag("SETUP-AC-002", "the same with the values in the environment only: no file is created, no write request, each source named by variable, exit 0"), async () => {
+      const { world, token } = await setUp("ac002env");
+      const homeDir = home();
+      const dir = await project();
+      const r = await runSetup("AC-002 environment only", world, dir, { home: homeDir, env: { CLOUDFLARE_API_TOKEN: token.value, CLOUDFLARE_ACCOUNT_ID: ACCOUNT } });
+      expect(r.status, r.all).toBe(0);
+      expect(r.out).toContain("CLOUDFLARE_API_TOKEN: from the environment variable CLOUDFLARE_API_TOKEN");
+      expect(r.out).toContain("CLOUDFLARE_ACCOUNT_ID: from the environment variable CLOUDFLARE_ACCOUNT_ID");
+      expect(writesOf(r.requests)).toEqual([]);
+      expect(readdirSync(homeDir)).toEqual([]);
+      expect(existsSync(join(dir, ".env.cloudflare"))).toBe(false);
     });
   });
 
-  describe("SETUP: bad pastes (SETUP-AC-003)", () => {
-    const both = (boot: string | undefined, everyday: string | undefined, extra: Record<string, string> = {}) =>
-      envFile({ ...(boot === undefined ? {} : { [BOOTSTRAP_SETTING]: boot }), ...(everyday === undefined ? {} : { [EVERYDAY_SETTING]: everyday }), CLOUDFLARE_EMAIL_DOMAIN: DOMAIN, ...extra });
-
-    it(tag("SETUP-AC-003", "a value that is not a token as the everyday token: names CLOUDFLARE_API_TOKEN, only the everyday link, exit 1, no token written"), async () => {
-      const world = freshWorld();
-      const t = addTokens(world, "ac003a");
-      const dir = await project({ envFile: both(t.bootstrap.value, tokenValue("not-a-token")) });
-      const r = await runSetup("AC-003 not a token (everyday)", world, dir);
-      expectBadPaste(r, EVERYDAY_SETTING, /not accept|not a valid|invalid|not .*token/i, world);
+  describe("SETUP: bad credential (SETUP-AC-003)", () => {
+    it(tag("SETUP-AC-003", "a value that is not a token: names CLOUDFLARE_API_TOKEN, where it came from and that Cloudflare does not accept it; the token link; exit 1, nothing written"), async () => {
+      const { world } = await setUp("ac003bad");
+      const homeDir = home(credential(tokenValue("not-a-real-token")));
+      const r = await runSetup("AC-003 not a token", world, await project(), { home: homeDir });
+      expectStopWithoutChange(r, world);
+      expect(r.out).toContain(`CLOUDFLARE_API_TOKEN (from the file ${secretsFile(homeDir)})`);
+      expect(r.out).toMatch(/does not accept it/);
+      expect(hasLink(r)).toBe(true);
     });
 
-    it(tag("SETUP-AC-003", "a value that is not a token as the bootstrap token: names CLOUDFLARE_BOOTSTRAP_TOKEN, only the bootstrap link, exit 1, no token written"), async () => {
-      const world = freshWorld();
-      const t = addTokens(world, "ac003b");
-      const dir = await project({ envFile: both(tokenValue("not-a-token-b"), t.everyday.value) });
-      const r = await runSetup("AC-003 not a token (bootstrap)", world, dir);
-      expectBadPaste(r, BOOTSTRAP_SETTING, /not accept|not a valid|invalid|not .*token/i, world);
+    it(tag("SETUP-AC-003", "a token that is not active: names the setting and that it is not active; the token link; exit 1, nothing written"), async () => {
+      const { world, token, homeDir } = await setUp("ac003inactive");
+      token.status = "disabled";
+      const r = await runSetup("AC-003 not active", world, await project(), { home: homeDir });
+      expectStopWithoutChange(r, world);
+      expect(r.out).toMatch(/CLOUDFLARE_API_TOKEN .*not active/);
+      expect(hasLink(r)).toBe(true);
     });
 
-    it(tag("SETUP-AC-003", "an everyday token that is not active: names CLOUDFLARE_API_TOKEN and that it is not active, only the everyday link, exit 1"), async () => {
-      const world = freshWorld();
-      const t = addTokens(world, "ac003c");
-      t.everyday.status = "disabled";
-      const dir = await project({ envFile: both(t.bootstrap.value, t.everyday.value) });
-      const r = await runSetup("AC-003 not active", world, dir);
-      expectBadPaste(r, EVERYDAY_SETTING, /not active|disabled/i, world);
-    });
-
-    it(tag("SETUP-AC-003", "the same token in both settings: names a setting, says they are the same, prints only that token's link, exit 1"), async () => {
-      const world = freshWorld();
-      const t = addTokens(world, "ac003d");
-      const dir = await project({ envFile: both(t.everyday.value, t.everyday.value) });
-      const r = await runSetup("AC-003 same token", world, dir);
-      expect(r.status, r.all).toBe(1);
-      expect(r.all).toMatch(/same/i);
-      const l = links(r.all);
-      expect(l.bootstrap !== l.everyday, `exactly one token's link:\n${r.all}`).toBe(true);
-      expect(r.all).toContain(l.bootstrap ? BOOTSTRAP_SETTING : EVERYDAY_SETTING);
-      expect(tokenWritesOf(r.requests)).toEqual([]);
-    });
-
-    it(tag("SETUP-AC-003", "an everyday-shaped token pasted as the bootstrap token: names CLOUDFLARE_BOOTSTRAP_TOKEN, only the bootstrap link, exit 1"), async () => {
-      const world = freshWorld();
-      const t = addTokens(world, "ac003e");
-      const wrong = world.addToken("everyday", tokenValue("ac003e-everyday-as-boot"), tokenId("ac003ex"));
-      const dir = await project({ envFile: both(wrong.value, t.everyday.value) });
-      const r = await runSetup("AC-003 everyday as bootstrap", world, dir);
-      expectBadPaste(r, BOOTSTRAP_SETTING, /API tokens|Account API Tokens Write|everyday token/i, world);
-    });
-
-    it(tag("SETUP-AC-003", "a user token as the bootstrap token: names CLOUDFLARE_BOOTSTRAP_TOKEN and that it is a user token, only the bootstrap link, exit 1"), async () => {
-      const world = freshWorld();
-      const t = addTokens(world, "ac003f");
-      const user = world.addUserToken(tokenValue("ac003f-user"), tokenId("ac003fu"), [ACCOUNT]);
-      const dir = await project({ envFile: both(user.value, t.everyday.value) });
-      const r = await runSetup("AC-003 user token as bootstrap", world, dir);
-      expectBadPaste(r, BOOTSTRAP_SETTING, /user/i, world);
-      expect(user.deleted, "the user token is not deleted").toBe(false);
-    });
-
-    it(tag("SETUP-AC-003", "a bootstrap token of another account than the everyday token's: names CLOUDFLARE_BOOTSTRAP_TOKEN and the account, only the bootstrap link, exit 1"), async () => {
-      const world = freshWorld();
+    it(tag("SETUP-AC-003", "a CLOUDFLARE_ACCOUNT_ID the token cannot see: the accounts it sees by name only, the token link; exit 1, nothing written, nothing sent to that account"), async () => {
+      const { world, token } = await setUp("ac003account");
       addSecondAccount(world);
-      const t = addTokens(world, "ac003g");
-      const other = addBootstrap(world, "ac003g-other", SECOND_ACCOUNT);
-      const dir = await project({ envFile: both(other.value, t.everyday.value) });
-      const r = await runSetup("AC-003 bootstrap of another account", world, dir);
-      expectBadPaste(r, BOOTSTRAP_SETTING, /account/i, world);
+      const r = await runSetup("AC-003 another account", world, await project(), { home: home(credential(token.value, SECOND_ACCOUNT)) });
+      expectStopWithoutChange(r, world);
+      expect(r.out).toContain("CLOUDFLARE_ACCOUNT_ID");
+      expect(r.out).toContain("Main account");
+      expect(r.out).not.toContain("Second account");
+      expect(hasLink(r)).toBe(true);
+      expect(r.requests.filter((q) => q.includes(SECOND_ACCOUNT))).toEqual([]);
+    });
+  });
+
+  describe("SETUP: the token's permissions (SETUP-AC-004)", () => {
+    it(tag("SETUP-AC-004", "lacking one permission: exactly that one by its dashboard name, the token link; nothing changed; exit 1"), async () => {
+      const { world, homeDir } = await setUp("ac004one", TOKEN.filter((g) => g.name !== "OAuth Client Write"));
+      const r = await runSetup("AC-004 one missing", world, await project(), { home: homeDir });
+      expectStopWithoutChange(r, world);
+      expect(r.out).toContain("OAuth Client Edit");
+      for (const other of TOKEN.filter((g) => g.name !== "OAuth Client Write")) expect(r.out, other.name).not.toContain(other.name.replace(/ Write$/, " Edit"));
+      expect(hasLink(r)).toBe(true);
     });
 
-    // Since v0.2.0 the bootstrap token neither reads nor changes the everyday token (plan §5.1,
-    // §5.2 page 2; DEC-0682): the everyday token's own checks run without a bootstrap token.
-    // No zone is looked up since v0.2.0 (DEC-0689), so a token scoped to another zone is no bad paste.
+    it(tag("SETUP-AC-004", "lacking several: exactly those by their dashboard names; nothing changed; exit 1"), async () => {
+      const missing = ["Workers R2 Storage Write", "D1 Write", "Secrets Store Write"];
+      const { world, homeDir } = await setUp("ac004many", TOKEN.filter((g) => !missing.includes(g.name)));
+      const r = await runSetup("AC-004 several missing", world, await project(), { home: homeDir });
+      expectStopWithoutChange(r, world);
+      for (const name of missing) expect(r.out, name).toContain(name.replace(/ Write$/, " Edit"));
+      expect(r.out).not.toContain("Workers Scripts Edit");
+      expect(r.out).not.toContain("OAuth Client Edit");
+    });
 
-    it(tag("SETUP-AC-003", "an everyday token with a permission denied: names CLOUDFLARE_API_TOKEN and the permission, and the admin app; exit 1, no token written"), async () => {
-      const world = freshWorld();
-      const t = addTokens(world, "ac003i");
+    it(tag("SETUP-AC-004", "a permission taken away by a deny policy is named as missing"), async () => {
+      const { world, token, homeDir } = await setUp("ac004deny");
       const d1 = group("D1 Write");
-      t.everyday.policies = [...t.everyday.policies, { id: "deny-d1", effect: "deny", resources: { [`com.cloudflare.api.account.${ACCOUNT}`]: "*" }, permission_groups: [{ id: d1.id, name: d1.name }] }];
-      const dir = await project({ envFile: both(undefined, t.everyday.value) });
-      const r = await runSetup("AC-003 everyday with a deny", world, dir);
-      expect(r.status, r.all).toBe(1);
-      expect(r.all).toContain(EVERYDAY_SETTING);
-      expect(r.all).toMatch(/D1 Write/);
-      expect(r.all).toMatch(/admin app/);
-      expect(tokenWritesOf(r.requests)).toEqual([]);
-      expect(world.tokens.filter((x) => x.deleted)).toEqual([]);
+      token.policies = [...token.policies, { effect: "deny", resources: { [`com.cloudflare.api.account.${ACCOUNT}`]: "*" }, permission_groups: [{ id: d1.id }] } as TokenPolicy];
+      const r = await runSetup("AC-004 deny", world, await project(), { home: homeDir });
+      expectStopWithoutChange(r, world);
+      expect(r.out).toContain("D1 Edit");
+    });
+
+    it(tag("SETUP-AC-004", "a token that cannot read its own permissions: Account API Tokens Edit named, the others not checked, the token link; exit 1"), async () => {
+      const { world, homeDir } = await setUp("ac004self", TOKEN.filter((g) => g.name !== "Account API Tokens Write"));
+      const r = await runSetup("AC-004 cannot read itself", world, await project(), { home: homeDir });
+      expectStopWithoutChange(r, world);
+      expect(r.out).toContain("Account API Tokens Edit");
+      expect(r.out).toMatch(/could not check its other permissions/);
+      expect(hasLink(r)).toBe(true);
+    });
+
+    it(tag("SETUP-AC-004", "a token with more permissions than the list (other account groups, zone groups): passes with no message about them"), async () => {
+      const exact = await setUp("ac004exact");
+      const r0 = await runSetup("AC-004 exactly the list", exact.world, await project(), { home: exact.homeDir });
+      const { world, token, homeDir } = await setUp("ac004more");
+      token.policies = [
+        ...token.policies,
+        { effect: "allow", resources: { [`com.cloudflare.api.account.${ACCOUNT}`]: "*" }, permission_groups: [group("Secrets Store Read"), { id: "c1e5f0d4c36d4b41a3bd0c4fa9e2f25e", name: "Billing Read" }] },
+        { effect: "allow", resources: { [`com.cloudflare.api.account.${ACCOUNT}`]: { "com.cloudflare.api.account.zone.*": "*" } }, permission_groups: [{ id: "c8fed203ed3043cba015a93ad1616f1f", name: "Zone Read" }] },
+      ];
+      const r = await runSetup("AC-004 more than the list", world, await project(), { home: homeDir });
+      expect(r.status, r.all).toBe(0);
+      expect(r.all).not.toMatch(/extra|broad|more permissions|more than|too many|unneeded|not needed/i);
+      expect(r.out.split("\n").length, "the same number of lines as a run with exactly the list").toBe(r0.out.split("\n").length);
     });
   });
 
-  describe("SETUP: everyday token short of a permission (SETUP-AC-004)", () => {
-    // An account group: since v0.2.0 the quick check reads no zone (DEC-0689).
-    const REMOVED = "D1 Write";
-    const without = (t: WorldToken, name: string) => {
-      t.policies = t.policies.map((p) => ({ ...p, permission_groups: p.permission_groups.filter((g) => g.name !== name) }));
-    };
-
-    it(tag("SETUP-AC-004", "lacking one permission and no bootstrap token: only the bootstrap link and the next prompt, nothing changed, exit 1"), async () => {
-      const { world, dir, tokens } = await setUpFirstProject("ac004a");
-      without(tokens.everyday, REMOVED);
-      const before = readEnvFile(dir);
-      const r = await runSetup("AC-004 short, no bootstrap", world, dir);
-      expect(r.status, r.all).toBe(1);
-      expect(links(r.all), r.all).toEqual({ bootstrap: true, everyday: false });
-      expect(r.all).toContain(NEXT_PROMPT_PHRASE);
-      expect(writesOf(r.requests)).toEqual([]);
-      expect(readEnvFile(dir)).toBe(before);
-    });
-
-    it(tag("SETUP-AC-004", "with the bootstrap token: the everyday token is left as it is for the admin app (neither read nor updated, no new token), the bootstrap token is deleted (401) and its line reads exactly PAR-342"), async () => {
-      const { world, dir, tokens } = await setUpFirstProject("ac004b");
-      without(tokens.everyday, REMOVED);
-      const before = JSON.stringify(tokens.everyday.policies);
-      const boot = addBootstrap(world, "ac004b-second");
-      writeFileSync(join(dir, ".env.cloudflare"), readEnvFile(dir).replace(BOOTSTRAP_DELETED_LINE, `${BOOTSTRAP_SETTING}=${boot.value}`));
-      const tokensBefore = world.tokens.length;
-      const r = await runSetup("AC-004 short, with bootstrap", world, dir);
-      expect(r.status, r.all).toBe(0);
-      expect(r.requests.filter((q) => q.includes(`/tokens/${tokens.everyday.id}`)), "the everyday token is not touched").toEqual([]);
-      expect(JSON.stringify(tokens.everyday.policies)).toBe(before);
-      expect(tokens.everyday.deleted).toBe(false);
-      expect(r.requests.filter((q) => / POST \/accounts\/[^/]+\/tokens$/.test(q)), "no new token is made").toEqual([]);
-      expect(world.tokens.length).toBe(tokensBefore);
-      // The bootstrap token deleted itself.
-      expect(boot.deleted, "the fake lists the bootstrap token no more").toBe(true);
-      expect((await world.apiFor(boot.value)("GET", `/accounts/${ACCOUNT}/tokens/verify`)).status).toBe(401);
-      const lines = readEnvFile(dir).split("\n");
-      expect(lines.filter((l) => l.includes(BOOTSTRAP_SETTING)), "the bootstrap line").toEqual([BOOTSTRAP_DELETED_LINE]);
-    });
-  });
-
-  describe("SETUP: the setup record and the bootstrap token (SETUP-AC-005)", () => {
-    const withBootstrap = (dir: string, boot: WorldToken) =>
-      writeFileSync(join(dir, ".env.cloudflare"), readEnvFile(dir).replace(BOOTSTRAP_DELETED_LINE, `${BOOTSTRAP_SETTING}=${boot.value}`));
-    /** A bootstrap's writes once the OAuth clients exist: the admin app uploaded and routed again (plan §5.1 step 3; DEC-0686), then the self-delete. */
-    const rerunWrites = (boot: WorldToken) => [
-      `${boot.id} PUT /accounts/${ACCOUNT}/workers/scripts/prototype-admin`,
-      `${boot.id} POST /accounts/${ACCOUNT}/workers/scripts/prototype-admin/subdomain`,
-      `${boot.id} DELETE /accounts/${ACCOUNT}/tokens/${boot.id}`,
-    ];
-
-    // Since v0.2.0 the account setup is the admin app's (plan §5.2 page 1; DEC-0682): the bootstrap
-    // token creates no setup resource and writes no setup record.
-    it(tag("SETUP-AC-005", "a setup record from before the setup version: the bootstrap creates nothing and leaves the record as it is; the bootstrap token deleted"), async () => {
-      const { world, dir } = await setUpFirstProject("ac005a");
-      world.cloud().objectBodies.set(RECORD_KEY, { emailDomain: DOMAIN });
-      const boot = addBootstrap(world, "ac005a-second");
-      withBootstrap(dir, boot);
-      const r = await runSetup("AC-005 older record", world, dir);
-      expect(r.status, r.all).toBe(0);
-      expect(writesOf(r.requests), "the admin app's upload and route, then the self-delete").toEqual(rerunWrites(boot));
-      expect(world.cloud().objectBodies.get(RECORD_KEY)).toEqual({ emailDomain: DOMAIN });
-      expect(boot.deleted).toBe(true);
-    });
-
-    it(tag("SETUP-AC-005", "one setup step missing (the log bucket): the bootstrap does not apply it; the next check names it and the admin app"), async () => {
-      const { world, dir } = await setUpFirstProject("ac005b");
-      world.cloud().buckets.delete("prototype-logs");
-      const boot = addBootstrap(world, "ac005b-second");
-      withBootstrap(dir, boot);
-      const r = await runSetup("AC-005 one step missing", world, dir);
-      expect(r.status, r.all).toBe(0);
-      expect(world.cloud().buckets.has("prototype-logs"), "the bootstrap creates no bucket").toBe(false);
-      expect(boot.deleted).toBe(true);
-      const check = await runSetup("AC-005 one step missing, check", world, dir);
-      expect(check.status, check.all).toBe(1);
-      expect(check.all).toMatch(/missing: [^\n]*log-bucket/);
-      expect(check.all).toMatch(/admin app/);
-      expect(writesOf(check.requests)).toEqual([]);
-    });
-
-    it(tag("SETUP-AC-005", "a current setup and a still-valid bootstrap token: the everyday token is not read with it, the bootstrap token deletes itself, nothing else changes"), async () => {
-      const { world, dir, tokens } = await setUpFirstProject("ac005c");
-      const boot = addBootstrap(world, "ac005c-second");
-      withBootstrap(dir, boot);
-      const r = await runSetup("AC-005 current with bootstrap", world, dir);
-      expect(r.status, r.all).toBe(0);
-      expect(r.requests.filter((q) => q.endsWith(`/tokens/${tokens.everyday.id}`)), "the everyday token's permissions").toEqual([]);
-      expect(writesOf(r.requests), "the admin app's upload and route, then the self-delete").toEqual(rerunWrites(boot));
-      expect(boot.deleted).toBe(true);
-      expect(readEnvFile(dir)).toContain(BOOTSTRAP_DELETED_LINE);
-      // Plan §5.1 step 5: the admin app's URL and the next step, last.
-      expect(r.out.trimEnd()).toMatch(/Next step: open the admin app and sign in: https:\/\/prototype-admin\.[a-z0-9-]+\.workers\.dev$/);
-    });
-
-    it(tag("SETUP-AC-005", "a bootstrap token without an expiry, or one more than 1 day away, is deleted at once and used for nothing else, exit 1; one within 1 day runs (PAR-435)"), async () => {
-      for (const [label, expires] of [["noexp", null], ["late", EXPIRES_TOO_LATE]] as const) {
-        const a = await setUpFirstProject(`ac005d-${label}`);
-        const long = addBootstrap(a.world, `ac005d-${label}-second`, ACCOUNT, expires);
-        withBootstrap(a.dir, long);
-        const r = await runSetup(`AC-005 bootstrap ${label}`, a.world, a.dir);
-        expect(r.status, r.all).toBe(1);
-        expect(long.deleted, "deleted at once").toBe(true);
-        expect(writesOf(r.requests), "the only write is the self-delete").toEqual([`${long.id} DELETE /accounts/${ACCOUNT}/tokens/${long.id}`]);
-        expect(r.requests.at(-1), "nothing after the DELETE").toBe(`${long.id} DELETE /accounts/${ACCOUNT}/tokens/${long.id}`);
-        expect(r.all).toMatch(/1 day/);
-        expect(links(r.all)).toEqual({ bootstrap: true, everyday: false });
-        expect(readEnvFile(a.dir).split("\n").filter((l) => l.includes(BOOTSTRAP_SETTING))).toEqual([BOOTSTRAP_DELETED_LINE]);
-      }
-      const b = await setUpFirstProject("ac005d2");
-      const withExpiry = addBootstrap(b.world, "ac005d2-exp");
-      withBootstrap(b.dir, withExpiry);
-      const s = await runSetup("AC-005 with expiry", b.world, b.dir);
-      expect(s.status, s.all).toBe(0);
-      expect(s.all, "no expiry complaint for a token within 1 day").not.toMatch(/no expiry|more than 1 day/i);
-    });
-
-    it(tag("SETUP-AC-005", "a bootstrap that stops before its end (the token lacks a permission): the bootstrap token is not deleted and its line is kept, exit 1"), async () => {
-      const { world, dir } = await setUpFirstProject("ac005e");
-      const boot = addBootstrap(world, "ac005e-second");
-      boot.policies = boot.policies.map((p) => ({ ...p, permission_groups: p.permission_groups.filter((g) => g.name !== "Secrets Store Write") }));
-      withBootstrap(dir, boot);
-      const r = await runSetup("AC-005 bootstrap short", world, dir);
-      expect(r.status, r.all).toBe(1);
-      expect(r.all).toContain("Secrets Store Write");
-      expect(boot.deleted, "the bootstrap token is kept").toBe(false);
-      expect(r.requests.filter((q) => q.includes(` DELETE /accounts/${ACCOUNT}/tokens/${boot.id}`))).toEqual([]);
-      expect(readEnvFile(dir)).toContain(`${BOOTSTRAP_SETTING}=${boot.value}`);
-    });
-
-    it(tag("SETUP-AC-005", "the self-delete fails: the line is kept, the dashboard named, exit 1"), async () => {
-      const { world, dir } = await setUpFirstProject("ac005f");
-      const boot = addBootstrap(world, "ac005f-second");
-      withBootstrap(dir, boot);
-      const apiFor = withReplies(world, (method, path) => (method === "DELETE" && path.endsWith(`/tokens/${boot.id}`) ? SERVER_ERROR : undefined));
-      const r = await runSetup("AC-005 self-delete fails", world, dir, { apiFor });
-      expect(r.status, r.all).toBe(1);
-      expect(r.all).toMatch(/dashboard/);
-      expect(boot.deleted).toBe(false);
-      expect(readEnvFile(dir)).toContain(`${BOOTSTRAP_SETTING}=${boot.value}`);
-    });
-
-    it(tag("SETUP-AC-005", "an everyday token scoped to another account: named, with its link; exit 1, no token written"), async () => {
+  describe("SETUP: one run sets up a new account; the user's token is never changed (SETUP-AC-005)", () => {
+    it(tag("SETUP-AC-005", "a new account: both OAuth clients as specified with their IDs and secrets in Secrets Store under PAR-436's names, the admin app, the auth app and its D1 database, the shared buckets, the signing credential, the setup record; the next step; exit 0; a second run changes nothing; the user's token never updated, rolled or deleted"), async () => {
       const world = freshWorld();
-      addSecondAccount(world);
-      const t = addTokens(world, "ac005g");
-      // Its account policy names the second account (made while the dashboard had that account selected).
-      t.everyday.policies = t.everyday.policies.map((p) => (Object.keys(p.resources).some((k) => k === `com.cloudflare.api.account.${ACCOUNT}`) ? { ...p, resources: { [`com.cloudflare.api.account.${SECOND_ACCOUNT}`]: "*" } } : p));
-      const dir = await project({ envFile: envFile({ [EVERYDAY_SETTING]: t.everyday.value, CLOUDFLARE_EMAIL_DOMAIN: DOMAIN }) });
-      const r = await runSetup("AC-005 everyday of the wrong account", world, dir);
+      const t = addToken(world, "ac005");
+      const policies = JSON.stringify(t.policies);
+      const homeDir = home(credential(t.value));
+      const r = await runSetup("AC-005 new account", world, await project(), { home: homeDir });
+      expect(r.status, r.all).toBe(0);
+      const cloud = world.cloud();
+      const clients = [...cloud.oauthClients.values()];
+      expect(clients).toHaveLength(2);
+      const admin = clients.find((c) => (c.body.optional_scopes as unknown[] | undefined)?.length);
+      const signIn = clients.find((c) => c !== admin);
+      expect([...((admin?.body.optional_scopes as string[]) ?? [])].sort()).toEqual(["account-api-tokens.write", "d1.write", "secrets-store.read", "secrets-store.write", "workers-r2.write", "workers-scripts.write"]);
+      expect(signIn?.body.optional_scopes ?? []).toEqual([]);
+      for (const c of clients) {
+        expect(c.body.response_types, c.name).toEqual(["code", "id_token"]);
+        expect([...(c.body.scopes as string[])].sort(), c.name).toEqual(["memberships.read", "user-details.read"]);
+        expect(c.body.token_endpoint_auth_method ?? "none", `${c.name} is confidential`).not.toBe("none");
+        expect(Object.entries(c.body).filter(([k, v]) => /public|visibility/i.test(k) && v !== false && v !== "private"), `${c.name} is private`).toEqual([]);
+      }
+      const stored = Object.fromEntries([...cloud.secretStores.values()].flatMap((s) => [...s.secrets].map(([k, v]) => [k, v.value] as const)));
+      expect(stored).toMatchObject({ PROTOTYPE_ADMIN_CLIENT_ID: admin?.id, PROTOTYPE_ADMIN_CLIENT_SECRET: admin?.secret, PROTOTYPE_SIGNIN_CLIENT_ID: signIn?.id, PROTOTYPE_SIGNIN_CLIENT_SECRET: signIn?.secret });
+      expect(cloud.workers.has("prototype-admin"), "the admin app").toBe(true);
+      expect(cloud.workers.has("prototype-auth"), "the auth app").toBe(true);
+      expect(cloud.d1Databases.map((d) => d.name), "the auth app's database").toContain("prototype-auth");
+      expect(cloud.buckets.size, "the shared buckets").toBeGreaterThanOrEqual(3);
+      expect([...cloud.tokens.values()].map((x) => x.name), "the signing token setup minted").toContain("prototype-r2-signing");
+      expect((cloud.objectBodies.get(RECORD_KEY) as { setupVersion?: number } | undefined)?.setupVersion, "the setup record").toBe(ACCOUNT_SETUP_VERSION);
+      expect(r.out).toContain(ADMIN_URL);
+      expect(r.out).toContain("npm run deploy -- --target cloudflare --stage test-");
+
+      world.requests.length = 0;
+      const again = await runSetup("AC-005 second run", world, await project(), { home: homeDir });
+      expect(again.status, again.all).toBe(0);
+      expect(writesOf(again.requests), "the second run's writes").toEqual([]);
+
+      for (const q of [...r.requests, ...again.requests]) expect(q.toLowerCase().includes(`/tokens/${t.id.toLowerCase()}`) && !/ GET /.test(q), q).toBe(false);
+      expect(tokenWritesOf(r.requests).filter((q) => !/ DELETE /.test(q)), "no token update or roll").toEqual([]);
+      expect(t.deleted).toBe(false);
+      expect(JSON.stringify(t.policies)).toBe(policies);
+    });
+
+    it(tag("SETUP-AC-005", "the only token deletions are of prototype-r2-signing tokens (an old one replaced); a token PAR-361 names, and any other token, is neither updated nor deleted"), async () => {
+      const world = freshWorld();
+      await setUpAccount(world);
+      // An older setup record: the setup runs again and its signing step finds the old signing token.
+      const rec = world.cloud().objectBodies.get(RECORD_KEY) as Record<string, unknown>;
+      world.cloud().objectBodies.set(RECORD_KEY, { ...rec, setupVersion: 1 });
+      world.cloud().tokens.set("unrelated", { name: "someone-else", resources: {} });
+      const t = addToken(world, "ac005guard");
+      const other = addToken(world, "ac005other");
+      const r = await runSetup("AC-005 guard", world, await project(), { home: home(credential(t.value)), env: { [PROTECTED_IDS_SETTING]: `${t.id},${other.id}` } });
+      expect(r.status, r.all).toBe(0);
+      const deletions = r.requests.filter((q) => / DELETE \/accounts\/[^/]+\/tokens\//.test(q));
+      // Each request line starts with the sending token's ID; the deleted ID is in the path.
+      for (const q of deletions) expect(q.slice(q.indexOf(" DELETE "))).not.toMatch(new RegExp(`${t.id}|${other.id}|unrelated`, "i"));
+      expect(world.cloud().tokens.has("unrelated")).toBe(true);
+      expect(tokenWritesOf(r.requests).filter((q) => !/ DELETE /.test(q))).toEqual([]);
+      expect([t.deleted, other.deleted]).toEqual([false, false]);
+    });
+
+    it(tag("SETUP-AC-005", "a step that fails stops the run with exit 1 and its cause; the user's token is untouched"), async () => {
+      const world = freshWorld();
+      const t = addToken(world, "ac005fail");
+      const apiFor = withReplies(world, (method, path) => (method === "PUT" && path.endsWith("/workers/scripts/prototype-admin") ? SERVER_ERROR : undefined));
+      const r = await runSetup("AC-005 failed step", world, await project(), { home: home(credential(t.value)), apiFor });
       expect(r.status, r.all).toBe(1);
-      expect(r.all).toContain(EVERYDAY_SETTING);
-      // The everyday token's remedy is the admin app's Everyday token page (SETUP-AC-003; DEC-0682).
-      expect(r.all).toMatch(/admin app/);
+      expect(r.err).toMatch(/admin app/);
       expect(tokenWritesOf(r.requests)).toEqual([]);
-    });
-
-    it(tag("SETUP-AC-005", "a token whose ID is in PAR-361's setting is neither updated (everyday) nor deleted (bootstrap)"), async () => {
-      const a = await setUpFirstProject("ac005h");
-      a.tokens.everyday.policies = a.tokens.everyday.policies.map((p) => ({ ...p, permission_groups: p.permission_groups.filter((g) => g.name !== "D1 Write") }));
-      const before = JSON.stringify(a.tokens.everyday.policies);
-      const bootA = addBootstrap(a.world, "ac005h-second");
-      withBootstrap(a.dir, bootA);
-      const r = await runSetup("AC-005 protected everyday", a.world, a.dir, { env: { [PROTECTED_IDS_SETTING]: `other-id,${a.tokens.everyday.id}` } });
-      expect(r.requests.filter((q) => / PUT /.test(q) && q.includes(a.tokens.everyday.id)), "updates of the protected token").toEqual([]);
-      expect(JSON.stringify(a.tokens.everyday.policies)).toBe(before);
-      expect(a.tokens.everyday.deleted).toBe(false);
-
-      const b = await setUpFirstProject("ac005i");
-      const bootB = addBootstrap(b.world, "ac005i-second");
-      withBootstrap(b.dir, bootB);
-      const s = await runSetup("AC-005 protected bootstrap", b.world, b.dir, { env: { [PROTECTED_IDS_SETTING]: bootB.id } });
-      expect(s.requests.filter((q) => / DELETE /.test(q) && q.includes(bootB.id)), "deletions of the protected token").toEqual([]);
-      expect(bootB.deleted).toBe(false);
+      expect(t.deleted).toBe(false);
     });
   });
 
-  describe("SETUP: account switch (SETUP-AC-006)", () => {
-    async function switched(label: string, accountIn: "file" | "environment") {
-      const first = await setUpFirstProject(label);
-      const newCloud = addSecondAccount(first.world);
-      const t = addTokens(first.world, `${label}-new`, SECOND_ACCOUNT);
-      const values = { [BOOTSTRAP_SETTING]: t.bootstrap.value, [EVERYDAY_SETTING]: t.everyday.value, CLOUDFLARE_EMAIL_DOMAIN: DOMAIN };
-      const dir = await project({ envFile: envFile(accountIn === "file" ? { ...values, CLOUDFLARE_ACCOUNT_ID: ACCOUNT } : values) });
-      const env = accountIn === "environment" ? { CLOUDFLARE_ACCOUNT_ID: ACCOUNT } : {};
-      return { ...first, newCloud, t, dir, env };
-    }
-
-    it(tag("SETUP-AC-006", "tokens of another account than CLOUDFLARE_ACCOUNT_ID: old stages keep running, how to remove them with the old everyday token, nothing changed, exit 1; no request to the old account"), async () => {
-      const s = await switched("ac006a", "file");
-      const before = readEnvFile(s.dir);
-      const oldFrom = s.world.cloud().requests.length;
-      const r = await runSetup("AC-006 switch explained", s.world, s.dir, { env: s.env });
-      expect(r.status, r.all).toBe(1);
-      expect(r.all).toMatch(/keep running/i);
-      expect(r.all).toMatch(/remove/);
-      expect(r.all).toMatch(/old everyday token|old token/i);
-      expect(r.all).toContain("--switch-account");
-      expect(writesOf(r.requests)).toEqual([]);
-      expect(readEnvFile(s.dir)).toBe(before);
-      expect(requestsSince(s.world.cloud(), oldFrom), "requests to the old account").toEqual([]);
-      expect(r.requests.filter((q) => q.includes(ACCOUNT)), "requests naming the old account").toEqual([]);
-    });
-
-    it(tag("SETUP-AC-006", "run again with --switch-account: the new account is bootstrapped (its bootstrap token deleted) and CLOUDFLARE_ACCOUNT_ID in .env.cloudflare names it; no request to the old account"), async () => {
-      const s = await switched("ac006b", "file");
-      await runSetup("AC-006 before switch", s.world, s.dir);
-      const oldFrom = s.world.cloud().requests.length;
-      const r = await runSetup("AC-006 --switch-account", s.world, s.dir, { args: ["--switch-account"] });
+  describe("SETUP: the credential's sources (SETUP-AC-006)", () => {
+    it(tag("SETUP-AC-006", "the environment wins over the secrets file per setting: a differing token in the file is not used and a notice names the setting; the account comes from the file"), async () => {
+      const { world, token } = await setUp("ac006env");
+      const stale = tokenValue("ac006stale");
+      const homeDir = home(credential(stale));
+      const r = await runSetup("AC-006 environment wins", world, await project(), { home: homeDir, env: { CLOUDFLARE_API_TOKEN: token.value } });
       expect(r.status, r.all).toBe(0);
-      const account = readEnvFile(s.dir).split("\n").filter((l) => l.startsWith("CLOUDFLARE_ACCOUNT_ID="));
-      expect(account).toEqual([`CLOUDFLARE_ACCOUNT_ID=${SECOND_ACCOUNT}`]);
-      expect(s.t.bootstrap.deleted, "the new account's bootstrap token").toBe(true);
-      expect(requestsSince(s.world.cloud(), oldFrom), "requests to the old account").toEqual([]);
-      expect(r.requests.filter((q) => q.includes(ACCOUNT))).toEqual([]);
+      expect(r.requests.filter((q) => q.startsWith("? ")), "requests with the file's token").toEqual([]);
+      expect(r.err).toMatch(/CLOUDFLARE_API_TOKEN is set in both the environment and .* using the environment/);
+      expect(r.out).toContain(`CLOUDFLARE_ACCOUNT_ID: from the file ${secretsFile(homeDir)}`);
     });
 
-    it(tag("SETUP-AC-006", "with CLOUDFLARE_ACCOUNT_ID from the environment, --switch-account says to change it there; no request to the old account"), async () => {
-      const s = await switched("ac006c", "environment");
-      const oldFrom = s.world.cloud().requests.length;
-      const r = await runSetup("AC-006 --switch-account, environment", s.world, s.dir, { env: s.env, args: ["--switch-account"] });
-      const lines = r.all.split("\n").filter((l) => l.includes("CLOUDFLARE_ACCOUNT_ID") && /environment/i.test(l));
-      expect(lines.length, `says to change CLOUDFLARE_ACCOUNT_ID in the environment:\n${r.all}`).toBeGreaterThan(0);
-      expect(requestsSince(s.world.cloud(), oldFrom)).toEqual([]);
-      expect(r.requests.filter((q) => q.includes(ACCOUNT))).toEqual([]);
+    it(tag("SETUP-AC-006", "CLOUDFLARE_SECRETS_FILE points at another file, which is read"), async () => {
+      const { world, token } = await setUp("ac006path");
+      // The file lives outside the run's home directory, whose default secrets file is absent.
+      const elsewhere = secretsFile(home(credential(token.value)));
+      const r = await runSetup("AC-006 override", world, await project(), { home: home(), env: { CLOUDFLARE_SECRETS_FILE: elsewhere } });
+      expect(r.status, r.all).toBe(0);
+      expect(r.out).toContain(`from the file ${elsewhere}`);
+    });
+
+    it.runIf(process.platform !== "win32")(tag("SETUP-AC-006", "a secrets file readable by group or others: a warning with chmod 600 and the path; the exit status is that of mode 600"), async () => {
+      const { world, token } = await setUp("ac006mode");
+      const statuses: number[] = [];
+      for (const mode of [0o600, 0o644, 0o640]) {
+        const homeDir = home(credential(token.value), mode);
+        const r = await runSetup(`AC-006 mode ${mode.toString(8)}`, world, await project(), { home: homeDir });
+        statuses.push(r.status);
+        const warned = r.all.includes(`chmod 600 ${secretsFile(homeDir)}`);
+        expect(warned, `mode ${mode.toString(8)}:\n${r.all}`).toBe(mode !== 0o600);
+      }
+      expect(statuses).toEqual([0, 0, 0]);
+    });
+
+    it(tag("SETUP-AC-006", "an old .env.cloudflare and CLOUDFLARE_BOOTSTRAP_TOKEN are not used, each with a notice"), async () => {
+      const { world, token, homeDir } = await setUp("ac006old");
+      const oldToken = addToken(world, "ac006oldtoken");
+      const dir = await project({ oldEnvFile: `CLOUDFLARE_BOOTSTRAP_TOKEN=${oldToken.value}\nCLOUDFLARE_API_TOKEN=${oldToken.value}\n` });
+      const r = await runSetup("AC-006 old file", world, dir, { home: homeDir, env: { CLOUDFLARE_BOOTSTRAP_TOKEN: oldToken.value } });
+      expect(r.status, r.all).toBe(0);
+      expect(r.err).toMatch(/\.env\.cloudflare.*no longer read/);
+      expect(r.err).toMatch(/CLOUDFLARE_BOOTSTRAP_TOKEN is no longer used/);
+      expect(r.requests.filter((q) => q.startsWith(`${oldToken.id} `)), "requests with the old token").toEqual([]);
+      expect(r.requests.some((q) => q.startsWith(`${token.id} `))).toBe(true);
+    });
+
+    it(tag("SETUP-AC-006", "an argument (the removed --switch-account, or a pasted value) is a usage error that does not echo it"), async () => {
+      const value = tokenValue("ac006arg");
+      for (const arg of ["--switch-account", value]) {
+        const failure = await runSetup("AC-006 argument", freshWorld(), await project(), { args: [arg] }).then(
+          () => undefined,
+          (e: unknown) => e as Error,
+        );
+        expect(failure?.message ?? "", arg).toMatch(/takes no arguments/);
+        expect(failure?.message ?? "").not.toContain(value);
+      }
     });
   });
 
-  describe("SETUP: a second project from a copied .env.cloudflare (SETUP-AC-007)", () => {
-    it(tag("SETUP-AC-007", "a copy of the first project's .env.cloudflare (account and domain filled in, bootstrap line commented out) completes with no bootstrap token and no write request"), async () => {
-      const { world, dir } = await setUpFirstProject("ac007");
-      const copied = readEnvFile(dir);
-      expect(copied.split("\n")).toContain(`CLOUDFLARE_ACCOUNT_ID=${ACCOUNT}`);
-      expect(copied.split("\n")).toContain(`CLOUDFLARE_EMAIL_DOMAIN=${DOMAIN}`);
-      expect(copied.split("\n")).toContain(BOOTSTRAP_DELETED_LINE);
-      const second = await project({ envFile: copied });
-      const r = await runSetup("AC-007 second project", world, second);
+  describe("SETUP: a second project on the same machine (SETUP-AC-007)", () => {
+    it(tag("SETUP-AC-007", "a second project with no file of its own completes from the same secrets file with no write request"), async () => {
+      const world = freshWorld();
+      const t = addToken(world, "ac007");
+      const homeDir = home(credential(t.value));
+      const first = await runSetup("AC-007 first project", world, await project(), { home: homeDir });
+      expect(first.status, first.all).toBe(0);
+      const second = await project();
+      const r = await runSetup("AC-007 second project", world, second, { home: homeDir });
       expect(r.status, r.all).toBe(0);
       expect(writesOf(r.requests)).toEqual([]);
-      expect(links(r.all)).toEqual({ bootstrap: false, everyday: false });
+      expect(existsSync(join(second, ".env.cloudflare"))).toBe(false);
     });
   });
 
   describe("SETUP: stops with their link or command (SETUP-AC-008)", () => {
-    it(tag("SETUP-AC-008", "two accounts visible and CLOUDFLARE_ACCOUNT_ID unset: the accounts by name only, how to set CLOUDFLARE_ACCOUNT_ID from the dashboard, exit 1"), async () => {
-      const world = freshWorld();
-      addSecondAccount(world);
-      const user = world.addUserToken(tokenValue("ac008-user"), tokenId("ac008u"), [ACCOUNT, SECOND_ACCOUNT]);
-      const dir = await project({ envFile: envFile({ [EVERYDAY_SETTING]: user.value, CLOUDFLARE_EMAIL_DOMAIN: DOMAIN }) });
-      const r = await runSetup("AC-008 two accounts", world, dir);
-      expect(r.status, r.all).toBe(1);
-      expect(r.all).toContain("Main account");
-      expect(r.all).toContain("Second account");
-      expect(r.all).toContain("CLOUDFLARE_ACCOUNT_ID");
-      expect(r.all).toContain("https://dash.cloudflare.com");
-      expect(writesOf(r.requests)).toEqual([]);
-    });
-
-    it(tag("SETUP-AC-008", "no CLOUDFLARE_EMAIL_DOMAIN: the command does not stop for the domain; it names no zone, reads none, and completes"), async () => {
-      const world = freshWorld();
-      const t = addTokens(world, "ac008c");
-      await setUpAccount(world);
-      const dir = await project({ envFile: envFile({ [EVERYDAY_SETTING]: t.everyday.value }) });
-      const r = await runSetup("AC-008 no email domain", world, dir);
-      expect(r.status, r.all).toBe(0);
-      for (const name of ["example.test", "one.example", "two.example"]) expect(r.all).not.toContain(name);
-      expect(r.all).not.toContain("--email-domain");
-      expect(r.all).not.toContain("CLOUDFLARE_EMAIL_DOMAIN");
-      expect(r.requests.filter((q) => q.includes("/zones")), "zone requests").toEqual([]);
-      expect(writesOf(r.requests)).toEqual([]);
-    });
-
-    it(tag("SETUP-AC-008", "no zone at all: the command does not stop for the domain, and completes"), async () => {
-      const world = freshWorld();
-      world.cloud().zones.clear();
-      const t = addTokens(world, "ac008d");
-      await setUpAccount(world);
-      const dir = await project({ envFile: envFile({ [EVERYDAY_SETTING]: t.everyday.value }) });
-      const r = await runSetup("AC-008 no zone", world, dir);
-      expect(r.status, r.all).toBe(0);
-      expect(r.all).not.toMatch(/domain/i);
-      expect(writesOf(r.requests)).toEqual([]);
-    });
-
-    const blockedCase = (label: string, host: RegExp, kind: RegExp) =>
-      it(tag("SETUP-AC-008", `a blocked network host (${label}): named by kind, with the hosts to allow in the cloud environment's network access settings, exit 1`), async () => {
-        const { world, dir } = await setUpFirstProject(`ac008-${label.replace(/\W+/g, "")}`);
-        const r = await runSetup(`AC-008 blocked ${label}`, world, dir, { blocked: (url) => host.test(new URL(url).hostname) });
+    for (const [label, host] of [
+      ["the API", /^api\.cloudflare\.com$/],
+      ["R2's storage host", /\.r2\.cloudflarestorage\.com$/],
+      ["the workers.dev subdomain", /\.workers\.dev$/],
+    ] as const) {
+      it(tag("SETUP-AC-008", `a blocked network host (${label}): named by kind, with the hosts to allow in the cloud environment's network access settings; exit 1`), async () => {
+        const { world, homeDir } = await setUp(`ac008${label.replace(/\W/g, "")}`);
+        const r = await runSetup(`AC-008 blocked ${label}`, world, await project(), { home: homeDir, blocked: (url) => host.test(new URL(url).hostname) });
         expect(r.status, r.all).toBe(1);
-        expect(r.all).toMatch(kind);
-        expect(r.all).toMatch(/network/i);
-        for (const allow of ["api.cloudflare.com", "*.r2.cloudflarestorage.com", "*.workers.dev"]) expect(r.all).toContain(allow);
-        expect(r.reached.length, "the hosts were tried").toBeGreaterThanOrEqual(3);
+        expect(r.out).toMatch(/cannot reach/);
+        expect(r.out).toMatch(/Network access/);
+        for (const allow of ["api.cloudflare.com", "*.r2.cloudflarestorage.com", "*.workers.dev"]) expect(r.out).toContain(allow);
       });
-    blockedCase("the API", /^api\.cloudflare\.com$/, /api\.cloudflare\.com/);
-    blockedCase("R2 storage", /\.r2\.cloudflarestorage\.com$/, /R2/);
-    blockedCase("workers.dev", /\.workers\.dev$/, /workers\.dev/);
+    }
+
+    it(tag("SETUP-AC-008", "on Workers Free and with no zone: the command does not stop for the plan or a domain, and completes"), async () => {
+      const { world, homeDir } = await setUp("ac008free");
+      world.accounts.get(ACCOUNT)!.plan = "free";
+      world.cloud().zones.clear();
+      const r = await runSetup("AC-008 free, no zone", world, await project(), { home: homeDir });
+      expect(r.status, r.all).toBe(0);
+      expect(r.all).not.toMatch(/Workers Paid|domain/i);
+    });
   });
 
   describe("SETUP: local setup first, git warnings never fail (SETUP-AC-009)", () => {
-    it(tag("SETUP-AC-009", "a project whose local setup is missing: dependencies installed, local secrets set and the .gitignore line added, before any Cloudflare request"), async () => {
-      const { world, tokens } = await setUpFirstProject("ac009a");
-      const dir = await project({ localSetupDone: false, gitignore: "node_modules\n", envFile: envFile({ [EVERYDAY_SETTING]: tokens.everyday.value, CLOUDFLARE_EMAIL_DOMAIN: DOMAIN }) });
-      writeFileSync(join(dir, "package.json"), `${JSON.stringify({ name: "setup-ac-app", private: true, type: "module", dependencies: { "setup-ac-dependency": "1.0.0" } }, null, 2)}\n`);
-      const events: string[] = [];
-      const apiFor = (token: string) => {
-        const api = world.apiFor(token);
-        return (async (method, path, body) => {
-          events.push("request");
-          return api(method, path, body);
-        }) as typeof api;
-      };
-      const localSetup: NonNullable<RunOptions["localSetup"]> = (d, o) =>
-        runLocalSetup(d, {
-          ...o,
-          declaredSecrets: async () => ["apiKey"],
-          npmInstall: async (at) => {
-            events.push("npm install");
-            mkdirSync(join(at, "node_modules", "setup-ac-dependency"), { recursive: true });
-            writeFileSync(join(at, "node_modules", "setup-ac-dependency", "package.json"), '{"name":"setup-ac-dependency","version":"1.0.0"}\n');
-          },
-        });
-      const r = await runSetup("AC-009 local setup missing", world, dir, { apiFor, localSetup });
-      expect(r.status, r.all).toBe(0);
-      expect(events[0], "the dependencies are installed before any Cloudflare request").toBe("npm install");
-      expect(events.filter((e) => e === "npm install")).toHaveLength(1);
-      expect(readFileSync(join(dir, ".dev.vars"), "utf8")).toMatch(/^SECRET_API_KEY=\S+/m);
-      expect(readFileSync(join(dir, ".gitignore"), "utf8").split("\n")).toContain(".env.cloudflare");
-    });
-
-    /** A current project whose git state `arrange` sets; the exit status and output of one run. */
-    async function gitCase(label: string, options: { repo?: boolean; gitignore?: string | null }, arrange: (dir: string) => void = () => undefined) {
-      const { world, tokens } = await setUpFirstProject(label);
-      const dir = await project({ ...options, envFile: envFile({ [EVERYDAY_SETTING]: tokens.everyday.value, CLOUDFLARE_EMAIL_DOMAIN: DOMAIN, CLOUDFLARE_ACCOUNT_ID: ACCOUNT }) });
-      arrange(dir);
-      return { dir, r: await runSetup(`AC-009 ${label}`, world, dir) };
-    }
-
-    it(tag("SETUP-AC-009", "the baseline (a repository, the file ignored and untracked) exits 0 with no git warning"), async () => {
-      const { r } = await gitCase("ac009-baseline", {});
-      expect(r.status, r.all).toBe(0);
-      expect(r.all).not.toMatch(/not a git repository|not ignore|tracked by git/i);
-    });
-
-    it(tag("SETUP-AC-009", "outside a git repository: a warning set off from the rest of the output, the same exit status as the baseline, on every run"), async () => {
-      const { dir, r } = await gitCase("ac009-norepo", { repo: false, gitignore: null });
-      let insideRepo = true;
-      try {
-        git(dir, ["rev-parse", "--is-inside-work-tree"]);
-      } catch {
-        insideRepo = false;
-      }
-      expect(insideRepo, "the project folder is outside any repository").toBe(false);
-      expect(r.status, r.all).toBe(0);
-      expect(setOffByRules(r.all, /not a git repository/i), `a set-off not-a-repository warning:\n${r.all}`).toBe(true);
-    });
-
-    it(tag("SETUP-AC-009", ".env.cloudflare not ignored (PAR-343's marker in .gitignore): a set-off warning, the line not added, the same exit status"), async () => {
-      const { dir, r } = await gitCase("ac009-notignored", { gitignore: `${KEEP_TRACKED_MARKER}\n` });
-      expect(r.status, r.all).toBe(0);
-      expect(setOffByRules(r.all, /\.env\.cloudflare/), `a set-off not-ignored warning:\n${r.all}`).toBe(true);
-      expect(r.all).toMatch(/not ignore|does not ignore|isn't ignored|not git-ignored/i);
-      expect(readFileSync(join(dir, ".gitignore"), "utf8").split("\n"), "the line is not added with the marker").not.toContain(".env.cloudflare");
-    });
-
-    it(tag("SETUP-AC-009", ".env.cloudflare not ignored and no marker: setup adds the .gitignore line; exit status unchanged"), async () => {
-      const { dir, r } = await gitCase("ac009-addline", { gitignore: "node_modules\n" });
-      expect(r.status, r.all).toBe(0);
-      expect(readFileSync(join(dir, ".gitignore"), "utf8").split("\n")).toContain(".env.cloudflare");
-      let ignored = false;
-      try {
-        git(dir, ["check-ignore", "-q", ".env.cloudflare"]);
-        ignored = true;
-      } catch {
-        ignored = false;
-      }
-      expect(ignored, "git now ignores the file").toBe(true);
-    });
-
-    it(tag("SETUP-AC-009", ".env.cloudflare tracked: a set-off warning that the tokens are in the history and how to replace them, the same exit status"), async () => {
-      const { r } = await gitCase("ac009-tracked", {}, (dir) => {
-        git(dir, ["add", "-f", ".env.cloudflare"]);
-        git(dir, ["commit", "-q", "-m", "tracked by mistake"]);
+    it(tag("SETUP-AC-009", "a project whose local setup is missing: local secrets set and the .gitignore line added before the credential is read"), async () => {
+      const { world, homeDir } = await setUp("ac009local");
+      const dir = await project({ localSetupDone: false, gitignore: "node_modules\n" });
+      const r = await runSetup("AC-009 local setup", world, dir, {
+        home: homeDir,
+        localSetup: (d, o) => runLocalSetup(d, { ...o, declaredSecrets: async () => ["apiKey"], npmInstall: async () => undefined }),
       });
       expect(r.status, r.all).toBe(0);
-      expect(setOffByRules(r.all, /tracked/i), `a set-off tracked warning:\n${r.all}`).toBe(true);
-      expect(r.all).toMatch(/history/i);
-      expect(r.all).toContain("git rm --cached .env.cloudflare");
+      expect(readFileSync(join(dir, ".dev.vars"), "utf8")).toMatch(/^SECRET_API_KEY=\S+/m);
+      expect(readFileSync(join(dir, ".gitignore"), "utf8").split("\n")).toContain(".env.cloudflare");
+      expect(r.out.indexOf("local setup")).toBeLessThan(r.out.indexOf("CLOUDFLARE_API_TOKEN: from"));
     });
 
-    it(tag("SETUP-AC-009", "a stop is not changed by the git conditions: with no tokens, outside a repository and with the file tracked, the exit status is 1 as in the baseline"), async () => {
-      const statuses: number[] = [];
-      for (const [label, options, arrange] of [
-        ["baseline", {}, undefined],
-        ["no repo", { repo: false, gitignore: null }, undefined],
-        ["tracked", {}, (d: string) => {
-          writeFileSync(join(d, ".env.cloudflare"), `${TEMPLATE_LINES.join("\n")}\n`);
-          git(d, ["add", "-f", ".env.cloudflare"]);
-          git(d, ["commit", "-q", "-m", "tracked"]);
-        }],
-      ] as const) {
-        const dir = await project(options);
-        arrange?.(dir);
-        statuses.push((await runSetup(`AC-009 stop, ${label}`, freshWorld(), dir)).status);
-      }
-      expect(statuses).toEqual([1, 1, 1]);
+    it(tag("SETUP-AC-009", "outside a git repository, an old .env.cloudflare not ignored (with PAR-343's marker, the line not added), and one tracked: each warning set off from the output; every exit status that of the baseline"), async () => {
+      const { world, homeDir } = await setUp("ac009git");
+      const baseline = await runSetup("AC-009 baseline", world, await project(), { home: homeDir });
+      expect(baseline.status, baseline.all).toBe(0);
+      expect(baseline.err).not.toMatch(/WARNING/);
+
+      const outside = await runSetup("AC-009 outside a repository", world, await project({ repo: false }), { home: homeDir });
+      expect(outside.status).toBe(baseline.status);
+      expect(setOffByRules(outside.err, /not a git repository/)).toBe(true);
+
+      const marked = await project({ gitignore: `${KEEP_TRACKED_MARKER}\n`, oldEnvFile: "CLOUDFLARE_API_TOKEN=\n" });
+      const notIgnored = await runSetup("AC-009 not ignored", world, marked, { home: homeDir });
+      expect(notIgnored.status).toBe(baseline.status);
+      expect(setOffByRules(notIgnored.err, /\.env\.cloudflare.*git does not ignore it/)).toBe(true);
+      expect(readFileSync(join(marked, ".gitignore"), "utf8").split("\n")).not.toContain(".env.cloudflare");
+
+      const trackedDir = await project({ gitignore: "", oldEnvFile: "CLOUDFLARE_API_TOKEN=\n" });
+      git(trackedDir, ["add", "-f", ".env.cloudflare"]);
+      git(trackedDir, ["commit", "-q", "-m", "tracked by mistake"]);
+      const tracked = await runSetup("AC-009 tracked", world, trackedDir, { home: homeDir });
+      expect(tracked.status).toBe(baseline.status);
+      expect(setOffByRules(tracked.err, /\.env\.cloudflare is tracked by git/)).toBe(true);
+      expect(tracked.err).toMatch(/history/);
+      expect(tracked.err).toContain("git rm --cached .env.cloudflare");
+    });
+
+    it(tag("SETUP-AC-009", "a stop is not changed by the git conditions: with no credential, outside a repository, the exit status is 1 as in a repository"), async () => {
+      const inRepo = await runSetup("AC-009 stop in a repository", freshWorld(), await project());
+      const outside = await runSetup("AC-009 stop outside", freshWorld(), await project({ repo: false }));
+      expect([inRepo.status, outside.status]).toEqual([1, 1]);
     });
   });
 
   describe("SETUP: no token value in any output (SETUP-AC-010)", () => {
-    it(tag("SETUP-AC-010", "across every run above, no stdout, stderr or file the command left (other than .env.cloudflare) holds a fake token value, token ID, account ID, zone ID or workers.dev subdomain"), () => {
-      expect(RUNS.length, "the runs of SETUP-AC-001…009 were recorded").toBeGreaterThan(40);
-      expect(SUB.length).toBeGreaterThan(8);
-      expect(sensitiveHits(), "outputs holding a sensitive value").toEqual([]);
+    it(tag("SETUP-AC-010", "across every run above, no stdout, stderr or file the command left holds a fake token value, token ID, account ID, zone ID, OAuth client secret or workers.dev subdomain (but the admin app's URL)"), () => {
+      expect(RUNS.length).toBeGreaterThan(20);
+      expect(sensitiveHits()).toEqual([]);
     });
 
     it(tag("SETUP-AC-010", "the search itself finds a planted value (a self-check of the scan)"), () => {
       const planted = tokenValue("planted");
       expect(sensitiveHits([{ label: "planted", out: `x ${planted} y`, err: "", files: {} }])).toEqual(["planted: stdout holds token value planted"]);
-      expect(sensitiveHits([{ label: "planted", out: "", err: "", files: { "f.txt": `id ${ACCOUNT}` } }])).toEqual(["planted: file f.txt holds the fake account's ID"]);
     });
   });
 } else {

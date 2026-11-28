@@ -1,13 +1,13 @@
 /**
- * `cloudflare-setup [--switch-account]` (CLI-REQ-001; plan-setup-wizard §4.3; DEC-0584; since
- * v0.2.0 without `--email-domain`, DEC-0689): the re-runnable Cloudflare setup (`runCloudflareSetup`). It has no `--target`:
- * it reads `.env.cloudflare` itself, bootstrap token included (DEC-0574's opt-out, DEC-0584), after
- * running the local setup, so it is bound with `lazy`, not `cloud`. The template's npm script
- * `cloudflare-setup` runs it.
+ * `cloudflare-setup` (CLI-REQ-001; plan-setup-wizard §4.3; DEC-0584): the re-runnable Cloudflare
+ * setup (`runCloudflareSetup`). It takes no options: since DEC-0799 there is no `--switch-account`
+ * (the account is the user's `CLOUDFLARE_ACCOUNT_ID`, which setup never writes). It has no
+ * `--target`: it reads the credential itself (DEC-0795) after running the local setup, so it is
+ * bound with `lazy`, not `cloud`. The template's npm script `cloudflare-setup` runs it.
  */
 import { createCloudflareApi } from "../../provision/cloudflare/api.js";
 import { runCloudflareSetup, type CloudflareSetupDeps } from "../../provision/cloudflare/cloudflare-setup.js";
-import { parseOptions } from "../args.js";
+import { UsageError } from "../args.js";
 import type { Command } from "../io.js";
 import { cloudProcessProblems, type ProcessEnvironment } from "./smoke-cloud.js";
 
@@ -18,15 +18,12 @@ export type CloudflareSetupCommandDeps = Omit<CloudflareSetupDeps, "projectDir">
 
 export function cloudflareSetupCommand(deps: CloudflareSetupCommandDeps): Command {
   return async (args, io) => {
-    const switchAccount = args.includes("--switch-account");
-    parseOptions(
-      args.filter((a) => a !== "--switch-account"),
-      ["switch-account"],
-    );
-    // The process check (D-05) stops the run only before its first request, so the local setup and the no-token instructions still run.
+    // The arguments are never echoed: one may be a pasted token.
+    if (args.length > 0) throw new UsageError("cloudflare-setup takes no arguments (--switch-account is gone: set CLOUDFLARE_ACCOUNT_ID to the account to use)");
+    // The process check (D-05) stops the run only before its first request, so the local setup and the no-credential instructions still run.
     const problems = cloudProcessProblems(deps.env);
     const unreachable = problems.length === 0 ? {} : { unreachable: problems.join("; ") };
-    return runCloudflareSetup({ ...deps, ...unreachable, projectDir: io.cwd }, { switchAccount }, io);
+    return runCloudflareSetup({ ...deps, ...unreachable, projectDir: io.cwd }, io);
   };
 }
 

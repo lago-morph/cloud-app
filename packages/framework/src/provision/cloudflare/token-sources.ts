@@ -1,67 +1,97 @@
 /**
- * Where the Cloudflare tokens and account settings come from (plan-setup-wizard §4.2; DEC-0570,
- * DEC-0571, DEC-0573). Two sources, in this order:
- * 1. the process environment;
- * 2. the file `.env.cloudflare` in the project root (PAR-340), which the framework CLI reads,
- *    creates and edits itself.
- * A setting set (non-empty) in the environment wins. When both hold a value and the values
- * differ, a notice says the environment is used, naming the setting only. Empty values (and, in
- * the environment, values of only whitespace) count as absent in either source.
+ * Where the one Cloudflare credential comes from (DEC-0795, owner, 2026-11-27). Two sources, in
+ * this order, for each of `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (the names wrangler
+ * reads):
+ * 1. the process environment (a Claude Code cloud session's environment variables, a shell's
+ *    exports);
+ * 2. the secrets file, in `.env` format with the same names: `~/.secrets/cloudflare` in the home
+ *    directory (PAR-450), or the path `CLOUDFLARE_SECRETS_FILE` names (PAR-451). It is never
+ *    relative to the project, so every project, worktree and session of the machine shares it: a
+ *    relative override is read from the home directory, and `~/` is the home directory.
+ * A setting set (non-empty) in the environment wins. When both hold a value and the values differ,
+ * a notice says the environment is used, naming the setting only. Empty values (and, in the
+ * environment, values of only whitespace) count as absent in either source.
+ *
+ * The framework only reads the file: it never creates, writes or changes it (DEC-0799), and it never
+ * writes the credential anywhere. A file readable by its group or by others is warned about, never
+ * refused (DEC-0800). The project's old `.env.cloudflare` (PAR-340, retired) and the old
+ * `CLOUDFLARE_BOOTSTRAP_TOKEN` are not read; a notice says so when either is there (DEC-0799).
  *
  * The file is simple `KEY=VALUE` lines: `#` comments, blank lines, an optional `export ` prefix,
- * optional single or double quotes around the value, and an unquoted value's ` #` comment. An
- * unquoted value's trailing `(…)` hint, as on the template's account line, is dropped, so a line
- * with only the hint reads as empty; an unquoted value with a space left inside is unreadable. Only
- * the three names of `SETTING_NAMES` are read (since v0.2.0 not `CLOUDFLARE_EMAIL_DOMAIN`, DEC-0697); other names are ignored. Nothing here ever prints,
- * logs or returns in a message a value of the file or the environment (DEC-0573): notices name
- * settings and line numbers only.
- *
- * Every write leaves the file readable and writable by its owner only (mode 600, PAR-341), and
- * replaces it atomically: a temporary file at that mode in the same directory, renamed over it. A
- * `.env.cloudflare` that is a symbolic link is written through to its target (DEC-0587), also a
- * dangling one, whose target is then created (DEC-0614).
+ * optional single or double quotes around the value, and an unquoted value's ` #` comment; an
+ * unquoted value with a space left inside is unreadable. Only `SETTING_NAMES` are read; other names
+ * are ignored. Nothing here ever prints, logs or returns in a message a value of the file or the
+ * environment (DEC-0573): notices name settings, paths and line numbers only.
  */
-import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync, lstatSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { isAbsolute, join, resolve } from "node:path";
 import type { Environment } from "./environment.js";
 
-/** The file's name, in the project root (PAR-340). */
+/** The project's old settings file (PAR-340, retired by DEC-0799): never read; only its presence is noted. */
 export const ENV_CLOUDFLARE_FILE = ".env.cloudflare";
 
-/** The settings the file may hold, in the template's order. */
-export const SETTING_NAMES = ["CLOUDFLARE_BOOTSTRAP_TOKEN", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"] as const;
+/** PAR-451: the environment variable that overrides the secrets file's path. */
+export const SECRETS_FILE_ENV = "CLOUDFLARE_SECRETS_FILE";
+
+/** PAR-450: the secrets file's default path, under the home directory. */
+export const DEFAULT_SECRETS_FILE = "~/.secrets/cloudflare";
+
+/** The settings the credential consists of, in the template's order. */
+export const SETTING_NAMES = ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"] as const;
 export type SettingName = (typeof SETTING_NAMES)[number];
 
-/** The file's mode after every write: owner read and write only (PAR-341). */
-export const ENV_CLOUDFLARE_MODE = 0o600;
+/** The old second token's setting (DEC-0796): no longer read. */
+export const RETIRED_BOOTSTRAP_SETTING = "CLOUDFLARE_BOOTSTRAP_TOKEN";
 
-/** What replaces the bootstrap token's line once the token has deleted itself (plan §4.2, PAR-342). */
-export const BOOTSTRAP_DELETED_LINE = "# CLOUDFLARE_BOOTSTRAP_TOKEN=deleted by setup process";
+/**
+ * The template setup prints when no credential is found (owner decision 2, DEC-0795): exactly two
+ * lines with nothing after the `=`, usable both as the secrets file's contents and as a session's
+ * environment variables.
+ */
+export const CREDENTIAL_TEMPLATE = SETTING_NAMES.map((n) => `${n}=`).join("\n") + "\n";
 
-/** The template setup prints and writes (plan §3.2; SETUP-REQ-003 as amended, DEC-0697), exactly its three lines: no email domain since v0.2.0. */
-export const ENV_CLOUDFLARE_TEMPLATE = [
-  "CLOUDFLARE_BOOTSTRAP_TOKEN=",
-  "CLOUDFLARE_API_TOKEN=",
-  "# CLOUDFLARE_ACCOUNT_ID=        (only if your tokens see more than one account)",
-].join("\n") + "\n";
+export type SettingSource = "environment" | "file";
 
 export interface CloudflareSettings {
   /** The value of each setting that is set; empty strings are treated as absent. */
   readonly values: Readonly<Partial<Record<SettingName, string>>>;
   /** Where each value in `values` came from. */
-  readonly sources: Readonly<Partial<Record<SettingName, "environment" | "file">>>;
-  /** What the user should know about the sources; names and line numbers only, never values. */
+  readonly sources: Readonly<Partial<Record<SettingName, SettingSource>>>;
+  /** What the user should know about the sources; names, paths and line numbers only, never values. */
   readonly notices: readonly string[];
-  /** Whether `.env.cloudflare` exists in the project root. */
+  /** The secrets file's resolved, absolute path (whether or not it exists). */
+  readonly filePath: string;
+  /** Whether the secrets file exists. */
   readonly fileExists: boolean;
+}
+
+export interface SettingsOptions {
+  /** The home directory (default `os.homedir()`). */
+  readonly home?: string;
+  /** The project directory: when given, an old `.env.cloudflare` there gets a notice. */
+  readonly projectDir?: string;
 }
 
 const isSettingName = (name: string): name is SettingName => (SETTING_NAMES as readonly string[]).includes(name);
 
+/**
+ * The secrets file's absolute path (PAR-450, PAR-451): `CLOUDFLARE_SECRETS_FILE` when set, else
+ * `~/.secrets/cloudflare`. `~` and `~/…` are the home directory (`home`, else `HOME` in `env`, else
+ * `os.homedir()`); any other relative path is read from the home directory, never from the project
+ * or the current directory.
+ */
+export function secretsFilePath(env: Environment, home?: string): string {
+  home ??= (env.HOME ?? "").trim() === "" ? homedir() : (env.HOME ?? "").trim();
+  const set = (env[SECRETS_FILE_ENV] ?? "").trim();
+  const path = set === "" ? DEFAULT_SECRETS_FILE : set;
+  if (path === "~") return home;
+  if (path.startsWith("~/")) return join(home, path.slice(2));
+  return isAbsolute(path) ? path : resolve(home, path);
+}
+
 /** One parsed assignment line of the file. */
 interface Assignment {
-  readonly index: number;
   readonly name: string;
   readonly value: string;
 }
@@ -80,24 +110,15 @@ function parseValue(raw: string): string | undefined {
     return text.slice(1, end);
   }
   const comment = text.search(/\s#/);
-  // The template's hint, "(only if …)", is never part of a value (a hint-only line is empty).
-  const value = (comment < 0 ? text : text.slice(0, comment)).trim().replace(/\s*\([^()]*\)$/, "");
+  const value = (comment < 0 ? text : text.slice(0, comment)).trim();
   return /\s/.test(value) ? undefined : value;
 }
 
-interface ParsedFile {
-  readonly lines: string[];
-  readonly assignments: readonly Assignment[];
-  /** 1-based numbers of lines that are neither blank, a comment nor an assignment. */
-  readonly unreadable: readonly number[];
-}
-
-function parseFile(text: string): ParsedFile {
-  const lines = text.split(/\r?\n/);
-  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+/** The file's assignments, and the 1-based numbers of lines that are neither blank, a comment nor an assignment. */
+function parseFile(text: string): { assignments: Assignment[]; unreadable: number[] } {
   const assignments: Assignment[] = [];
   const unreadable: number[] = [];
-  lines.forEach((line, index) => {
+  text.split(/\r?\n/).forEach((line, index) => {
     const trimmed = line.trim();
     if (trimmed === "" || trimmed.startsWith("#")) return;
     const match = ASSIGNMENT.exec(line);
@@ -106,177 +127,89 @@ function parseFile(text: string): ParsedFile {
       unreadable.push(index + 1);
       return;
     }
-    assignments.push({ index, name: match[1] ?? "", value });
+    assignments.push({ name: match[1] ?? "", value });
   });
-  return { lines, assignments, unreadable };
-}
-
-const filePath = (projectDir: string): string => join(projectDir, ENV_CLOUDFLARE_FILE);
-
-function readParsed(projectDir: string): ParsedFile | undefined {
-  const path = filePath(projectDir);
-  if (!existsSync(path)) return undefined;
-  return parseFile(readFileSync(path, "utf8"));
-}
-
-/** The file's value of each setting; a later line wins over an earlier one, as in a shell. */
-function fileValues(parsed: ParsedFile): Partial<Record<SettingName, string>> {
-  const values: Partial<Record<SettingName, string>> = {};
-  for (const a of parsed.assignments) if (isSettingName(a.name)) values[a.name] = a.value;
-  return values;
+  return { assignments, unreadable };
 }
 
 /**
- * The merged settings of the environment and `.env.cloudflare` (environment first). Never throws
- * for a missing file; a file that cannot be read is reported as a notice and treated as empty.
+ * The credential from the environment and the secrets file (environment first). Never throws: a
+ * missing file is no file, and a file that cannot be read is reported as a notice and treated as
+ * empty.
  */
-export function readCloudflareSettings(projectDir: string, env: Environment): CloudflareSettings {
+export function readCloudflareSettings(env: Environment, options: SettingsOptions = {}): CloudflareSettings {
   const notices: string[] = [];
-  let parsed: ParsedFile | undefined;
+  const path = secretsFilePath(env, options.home);
   let fileExists = false;
+  const file: Partial<Record<SettingName, string>> = {};
+  let bootstrapInFile = false;
   try {
-    fileExists = existsSync(filePath(projectDir));
-    parsed = readParsed(projectDir);
+    fileExists = existsSync(path);
+    if (fileExists) {
+      // DEC-0800: a file others can read is warned about, never refused (no effect on Windows).
+      const mode = statSync(path).mode;
+      if (process.platform !== "win32" && (mode & 0o077) !== 0) {
+        notices.push(`the secrets file ${path} can be read by other users (mode ${(mode & 0o777).toString(8)}); make it private with: chmod 600 ${path}`);
+      }
+      const parsed = parseFile(readFileSync(path, "utf8"));
+      for (const line of parsed.unreadable) notices.push(`line ${String(line)} of ${path} is not a NAME=value line and was ignored`);
+      // A later line wins over an earlier one, as in a shell.
+      for (const a of parsed.assignments) {
+        if (isSettingName(a.name)) file[a.name] = a.value;
+        else if (a.name === RETIRED_BOOTSTRAP_SETTING && a.value !== "") bootstrapInFile = true;
+      }
+    }
   } catch (error) {
-    notices.push(`${ENV_CLOUDFLARE_FILE} could not be read (${error instanceof Error && "code" in error ? String(error.code) : "unreadable"}): using the environment only`);
+    notices.push(`the secrets file ${path} could not be read (${error instanceof Error && "code" in error ? String(error.code) : "unreadable"}): using the environment only`);
   }
-  for (const line of parsed?.unreadable ?? []) {
-    notices.push(`line ${String(line)} of ${ENV_CLOUDFLARE_FILE} is not a NAME=value line and was ignored`);
-  }
-  const file = parsed === undefined ? {} : fileValues(parsed);
   const values: Partial<Record<SettingName, string>> = {};
-  const sources: Partial<Record<SettingName, "environment" | "file">> = {};
+  const sources: Partial<Record<SettingName, SettingSource>> = {};
   for (const name of SETTING_NAMES) {
     const fromEnv = (env[name] ?? "").trim() === "" ? "" : (env[name] ?? "");
     const fromFile = file[name] ?? "";
     if (fromEnv !== "") {
       values[name] = fromEnv;
       sources[name] = "environment";
-      if (fromFile !== "" && fromFile !== fromEnv) {
-        notices.push(`${name} is set in both the environment and ${ENV_CLOUDFLARE_FILE} and they differ: using the environment`);
-      }
+      if (fromFile !== "" && fromFile !== fromEnv) notices.push(`${name} is set in both the environment and ${path} and they differ: using the environment`);
     } else if (fromFile !== "") {
       values[name] = fromFile;
       sources[name] = "file";
     }
   }
-  return { values, sources, notices, fileExists };
+  if ((env[RETIRED_BOOTSTRAP_SETTING] ?? "").trim() !== "" || bootstrapInFile) {
+    notices.push(`${RETIRED_BOOTSTRAP_SETTING} is no longer used and was ignored: the framework needs only ${SETTING_NAMES.join(" and ")}. You can remove it.`);
+  }
+  if (options.projectDir !== undefined) {
+    try {
+      if (existsSync(join(options.projectDir, ENV_CLOUDFLARE_FILE))) {
+        notices.push(`${ENV_CLOUDFLARE_FILE} in the project folder is no longer read: put ${SETTING_NAMES.join(" and ")} in ${path} (or in the environment), then delete ${ENV_CLOUDFLARE_FILE}`);
+      }
+    } catch {
+      // the old file's notice never fails a command
+    }
+  }
+  return { values, sources, notices, filePath: path, fileExists };
+}
+
+/** Where a setting's value came from, for the user: the variable, or the file's path. Never the value. */
+export function describeSource(settings: CloudflareSettings, name: SettingName): string {
+  const source = settings.sources[name];
+  if (source === "environment") return `the environment variable ${name}`;
+  if (source === "file") return `the file ${settings.filePath}`;
+  return "nowhere (not set)";
 }
 
 /**
  * The settings merged into an environment (environment values win). A setting the environment holds
- * only whitespace is left out, as absent, also when the file has no value for it.
+ * only whitespace is left out, as absent, also when the file has no value for it. The retired
+ * bootstrap setting is left out (DEC-0796), so it never reaches the tools' processes.
  */
 export function mergeCloudflareSettings(env: Environment, settings: CloudflareSettings): Environment {
-  const kept = Object.fromEntries(Object.entries(env).filter(([name, value]) => !(isSettingName(name) && (value ?? "").trim() === "")));
+  const kept = Object.fromEntries(Object.entries(env).filter(([name, value]) => name !== RETIRED_BOOTSTRAP_SETTING && !(isSettingName(name) && (value ?? "").trim() === "")));
   return { ...kept, ...settings.values };
 }
 
-/** The process environment with `.env.cloudflare`'s values added (the environment wins). Every Cloudflare command uses this. */
-export function cloudflareEnvironment(projectDir: string, env: Environment): Environment {
-  return mergeCloudflareSettings(env, readCloudflareSettings(projectDir, env));
-}
-
-/**
- * The file a path's symbolic links lead to, followed one link at a time (as `lstat` sees them), so a
- * dangling link names the target it would create (DEC-0614); the path itself when it is no link.
- */
-function linkTarget(path: string): string {
-  let current = path;
-  for (let hops = 0; hops < 40; hops++) {
-    let isLink: boolean;
-    try {
-      isLink = lstatSync(current).isSymbolicLink();
-    } catch {
-      return current;
-    }
-    if (!isLink) return current;
-    // A relative link is read from the folder it is really in.
-    current = resolve(realpathSync(dirname(current)), readlinkSync(current));
-  }
-  throw new Error(`${ENV_CLOUDFLARE_FILE} is a chain of more than 40 symbolic links; setup did not write it`);
-}
-
-/**
- * Replaces the file atomically at mode 600: the content goes to a new temporary file at that mode
- * in the same directory, which is renamed over the file, so a reader sees the old or the new file
- * whole, and a file that had a wider mode never holds the new content.
- */
-function writeFile(projectDir: string, lines: readonly string[]): void {
-  // A symbolic link (a file shared between projects) is written through to its target, which keeps
-  // being the file; the temporary file is made next to the target, so the rename stays atomic.
-  const path = linkTarget(filePath(projectDir));
-  const temporary = join(dirname(path), `${basename(path)}.${randomBytes(6).toString("hex")}.tmp`);
-  try {
-    writeFileSync(temporary, lines.length === 0 ? "" : `${lines.join("\n")}\n`, { encoding: "utf8", mode: ENV_CLOUDFLARE_MODE, flag: "wx" });
-    chmodSync(temporary, ENV_CLOUDFLARE_MODE);
-    renameSync(temporary, path);
-  } finally {
-    rmSync(temporary, { force: true });
-  }
-}
-
-/** Writes the template when the file does not exist; true when it wrote it. */
-export function writeTemplateIfAbsent(projectDir: string): boolean {
-  if (existsSync(filePath(projectDir))) return false;
-  writeFile(projectDir, ENV_CLOUDFLARE_TEMPLATE.trimEnd().split("\n"));
-  return true;
-}
-
-const BOOTSTRAP_LINE = /^\s*(?:export\s+)?CLOUDFLARE_BOOTSTRAP_TOKEN\s*=/;
-
-/**
- * Replaces every active `CLOUDFLARE_BOOTSTRAP_TOKEN=` line with `BOOTSTRAP_DELETED_LINE` (the
- * token has deleted itself), also a line the parser cannot read (an unclosed quote), so no value
- * stays in the file. True when a line changed; a missing file or no such line is false.
- */
-export function commentOutBootstrap(projectDir: string): boolean {
-  const parsed = readParsed(projectDir);
-  if (parsed === undefined) return false;
-  let changed = false;
-  const lines = parsed.lines.map((line) => {
-    if (!BOOTSTRAP_LINE.test(line)) return line;
-    changed = true;
-    return BOOTSTRAP_DELETED_LINE;
-  });
-  if (changed) writeFile(projectDir, lines);
-  return changed;
-}
-
-type FillName = "CLOUDFLARE_ACCOUNT_ID";
-
-/** A commented-out assignment with no value, as the template's `# CLOUDFLARE_ACCOUNT_ID=  (…)` line. */
-const commentedEmpty = (name: string): RegExp => new RegExp(`^\\s*#\\s*${name}\\s*=\\s*(\\(.*\\))?\\s*$`);
-
-/**
- * Fills in `CLOUDFLARE_ACCOUNT_ID` where the file has it empty or absent (since v0.2.0 not
- * `CLOUDFLARE_EMAIL_DOMAIN`, DEC-0697), so copying the file starts the next project (plan §4.2). A value already in the file is
- * never changed. An empty line is filled in place; else the template's commented line is
- * uncommented and filled; else a line is added. An absent file is never created (settings that
- * live in the environment only stay there; plan §3.4, SETUP-AC-002). Returns the names
- * filled in. `replace` names settings whose value in the file is changed when it differs: only the
- * account switch replaces `CLOUDFLARE_ACCOUNT_ID` (plan §3.4; DEC-0585).
- */
-export function fillInSettings(projectDir: string, values: Partial<Record<FillName, string>>, options: { readonly replace?: readonly FillName[] } = {}): string[] {
-  const parsed = readParsed(projectDir);
-  if (parsed === undefined) return [];
-  const current = fileValues(parsed);
-  const lines = [...parsed.lines];
-  const filled: string[] = [];
-  for (const name of ["CLOUDFLARE_ACCOUNT_ID"] as const) {
-    const value = values[name]?.trim() ?? "";
-    const have = current[name] ?? "";
-    if (value === "" || have === value || (have !== "" && !(options.replace ?? []).includes(name))) continue;
-    if (/[\s#"'\\]/.test(value)) throw new Error(`${name} cannot be written to ${ENV_CLOUDFLARE_FILE}: the value holds a space, quote, backslash or #`);
-    const line = `${name}=${value}`;
-    const active = parsed.assignments.filter((a) => a.name === name);
-    const last = active[active.length - 1];
-    const commented = lines.findIndex((l) => commentedEmpty(name).test(l));
-    if (last !== undefined) lines[last.index] = line;
-    else if (commented >= 0) lines[commented] = line;
-    else lines.push(line);
-    filled.push(name);
-  }
-  if (filled.length > 0) writeFile(projectDir, lines);
-  return filled;
+/** The process environment with the secrets file's values added (the environment wins). Every Cloudflare command uses this. */
+export function cloudflareEnvironment(env: Environment, options: SettingsOptions = {}): Environment {
+  return mergeCloudflareSettings(env, readCloudflareSettings(env, options));
 }

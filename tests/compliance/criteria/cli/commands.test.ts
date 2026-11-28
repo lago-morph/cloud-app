@@ -26,7 +26,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { tag } from "../../harness/index.js";
 import { delay, npmScript, npxCli, readDevVars, scratchCopy, startDev, type CommandResult, type ScratchApp } from "../core/support/processes.js";
 import { isLocal, PACKAGE_NAME, TEMPLATE_DIR, uniqueValue } from "../core/support/repo.js";
-import { BOOT_LINK, EVERYDAY_LINK } from "../setup/support/setup-runs.js";
+import { EVERYDAY_LINK, TOKEN_LINK } from "../setup/support/setup-runs.js";
 
 type Form = "npx" | "npm";
 const FORMS: readonly Form[] = ["npx", "npm"];
@@ -43,8 +43,12 @@ const CLOUD_COMMANDS = ["deploy", "deploy --start", "remove", "stop", "start", "
 /** A version `upgrade` cannot find on npm, so it changes nothing. */
 const NO_SUCH_RELEASE = "0.0.0-compliance.no-such-release";
 
-/** The Cloudflare settings, empty (absent to the CLI), so no command here sees a token of the operator's environment. */
-const NO_CLOUDFLARE_SETTINGS = { CLOUDFLARE_API_TOKEN: "", CLOUDFLARE_BOOTSTRAP_TOKEN: "", CLOUDFLARE_ACCOUNT_ID: "", CLOUDFLARE_EMAIL_DOMAIN: "" };
+/**
+ * The Cloudflare settings, empty (absent to the CLI), and the secrets file pointed at a path that
+ * does not exist (PAR-451), so no command here sees a token of the operator's environment or home
+ * directory (DEC-0795).
+ */
+const NO_CLOUDFLARE_SETTINGS = { CLOUDFLARE_API_TOKEN: "", CLOUDFLARE_BOOTSTRAP_TOKEN: "", CLOUDFLARE_ACCOUNT_ID: "", CLOUDFLARE_EMAIL_DOMAIN: "", CLOUDFLARE_SECRETS_FILE: "/nonexistent/compliance-cli-ac-001/cloudflare" };
 
 const ARGS: Readonly<Record<string, readonly string[]>> = {
   secrets: ["set", "apiKey", "--target", "local", "--stage", "local"],
@@ -122,7 +126,7 @@ if (isLocal()) {
       packageJsonBefore = await copy.read("package.json");
       unknown = await npxCli(["definitely-not-a-command"], { cwd: copy.dir, timeoutMs: 120_000 });
       // The local commands in both forms first, then the dispatched ones: `cloudflare-setup` adds
-      // `.env.cloudflare` to `.gitignore`, and `smoke` needs a clean tree for its evidence record.
+      // `.env.cloudflare` (the old file, DEC-0799) to `.gitignore`, and `smoke` needs a clean tree for its evidence record.
       for (const group of [LOCAL_COMMANDS, CLOUD_COMMANDS]) {
         for (const form of FORMS) {
           for (const command of group) {
@@ -175,16 +179,15 @@ if (isLocal()) {
       expect(packageJsonAfterUpgrade, "package.json after both upgrade runs").toBe(packageJsonBefore);
     });
 
-    it(tag("CLI-AC-001", "cloudflare-setup with no token prints its instructions (the bootstrap link, continue prototype setup) and exits 1 in both forms"), () => {
+    it(tag("CLI-AC-001", "cloudflare-setup with no credential prints its instructions (the two-line template, the token link, continue prototype setup) and exits 1 in both forms"), () => {
       for (const form of FORMS) {
         const r = results.get(`${form} cloudflare-setup`);
         expect(r?.status, `${form} cloudflare-setup:\n${r?.output.slice(-2000) ?? ""}`).toBe(1);
-        expect(r?.output).toContain(BOOT_LINK);
-        // Since v0.2.0 the everyday token comes from the admin app, never a dashboard link (DEC-0689, SETUP-AC-001).
+        expect(r?.output).toContain(TOKEN_LINK);
+        // One token since DEC-0796: no everyday-token link.
         expect(r?.output).not.toContain(EVERYDAY_LINK);
-        expect(r?.output).toContain(
-          "the admin app makes it on its Everyday token page once this setup has deployed the admin app. Open the admin app, sign in, make the token there and put it in CLOUDFLARE_API_TOKEN.",
-        );
+        expect(r?.output).toContain("CLOUDFLARE_API_TOKEN=\nCLOUDFLARE_ACCOUNT_ID=\n");
+        expect(r?.output).toContain("/nonexistent/compliance-cli-ac-001/cloudflare");
         expect(r?.output).toContain("continue prototype setup");
       }
     });
