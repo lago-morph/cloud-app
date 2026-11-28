@@ -19,7 +19,7 @@ These are the lasting text of the v0.2.0 testing standards (`ai/implementation/p
 
    The orchestrator spawns every one of them. A subagent never creates another agent or a cloud session.
 2. **Unit tests use red/green/refactor**, one behaviour at a time. Before writing code, confirm that the test fails for the expected reason. Unit tests need no network. Every fix is red-green: first a test that reproduces the failure and fails, then the fix.
-3. **Integration tests use real local dependencies** instead of mocks of them: Miniflare/workerd, PGlite, the file system, and local stand-ins such as mock-oauth2-server. On Cloudflare, they run on a `test-` stage where a criterion's Where column says Cloud.
+3. **Integration tests use real local dependencies** instead of mocks of them: Miniflare/workerd, PGlite, the file system, and local stand-ins such as mock-oauth2-server (its pinned Docker image, DEC-0805). On Cloudflare, they run on a `test-` stage where a criterion's Where column says Cloud.
    - Use fakes only for external platforms that have no local stand-in, such as the fake Cloudflare APIs in `tests/compliance/criteria/_fakes/`. A run against fakes only is not evidence for a criterion whose Where column says Cloud.
    - Every framework component has a comprehensive integration suite, under `packages/framework/test/integration/<component>/` or in its compliance criteria. A missing suite is a gap, and the plan turns it into a test-author item.
 4. **E2E covers every user-facing and operator-facing flow**: its happy path, its expected errors, and its edge cases. A feature is not done until all three are covered end to end.

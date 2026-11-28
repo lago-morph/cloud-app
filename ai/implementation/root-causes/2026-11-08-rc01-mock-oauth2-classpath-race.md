@@ -2,6 +2,8 @@
 
 Status: accepted (attempt 2; attempt 1 rejected on the fix and the verification plan)
 
+Superseded (2026-11-27, DEC-0805): the Maven/Java path this record fixes is removed. The launcher now runs mock-oauth2-server from its pinned Docker image, one container per caller, with nothing cached on disk. This record stays as history; its line references are to the removed code.
+
 ## Symptom
 
 Release workflow run 42434367751, job 128589944270, commit `dc5473a` (tag `v0.2.0-rc01`), step "Integration tests the harness does not run (tagged with no criterion or scenario)": `Test Files 1 failed | 16 passed | 37 skipped (54)`.

@@ -6198,7 +6198,7 @@ The Worker module's default export serves HTTP (`/start`, `/callback`); the name
 Item: v0.2.0 A.
 
 ### DEC-0662 — mock-oauth2-server 6.1.4: locally its classpath from Maven through a Central mirror, in CI the Docker image
-Origin: ai-proposed · Status: accepted · Affects: `tests/support/mock-oauth2/{launcher.ts,pom.xml}`, the CI step (orchestrator's follow-up PR on S3), plan §4.3
+Origin: ai-proposed · Status: superseded by DEC-0805 · Affects: `tests/support/mock-oauth2/{launcher.ts,pom.xml}`, the CI step (orchestrator's follow-up PR on S3), plan §4.3
 
 Found by experiment on 2026-10-31 through the sandbox's agent proxy:
 - `repo1.maven.org` and `repo.maven.apache.org` answered **429** ("Your ip has exceeded rate limits") for `no/nav/security/mock-oauth2-server/maven-metadata.xml`.
@@ -7568,3 +7568,16 @@ Origin: owner · Status: accepted · Affects: `docs/acceptance/e2e-scenarios.md`
 - **Tests changed** (rule 8, `behaviour-changed`, this decision): E2E-019's one test removed; the catalogue's E2E count 19 → 18 and the traceability row count 155 → 154.
 - **To reverse:** restore the scenario and its tests from git, with a baseline release that installs.
 Item: Cloudflare setup with one token (PR 180).
+## Owner decision on mock-oauth2-server (2026-11-27)
+
+### DEC-0805 — mock-oauth2-server runs from its pinned Docker image in every environment; the Java/Maven path is removed
+Origin: owner (2026-11-27; the decision of `ai/specs/0.2.0-cleanup.md` §6(h), 2026-11-08) · Status: accepted · Supersedes: DEC-0662 · Affects: `tests/support/mock-oauth2/launcher.ts` and its unit test (`pom.xml` removed), plan-v0.2.0 §4.3, `.claude/skills/testing-standards/SKILL.md` rule 3
+
+- **With `MOCK_OAUTH2_URL` set** (CI's "mock-oauth2-server" step in `ci.yml`), the launcher uses that server and starts nothing, as before.
+- **Otherwise every `startMockOAuth2()` runs `docker run -d --rm`** of `MOCK_OAUTH2_IMAGE` (`ghcr.io/navikt/mock-oauth2-server:6.1.4@sha256:647dd8c7…0192`), in its own container named `mock-oauth2-<pid>-<random>` and labelled `prototype-framework.mock-oauth2=<pid>`, published on `127.0.0.1::8080` so Docker picks a free host port (no choose-then-bind race). It reads the port with `docker port` and waits up to 60 s for `/default/.well-known/openid-configuration`; if the container stops first, it throws with the container's log. `stop()` runs `docker rm -f`; so do a failed start and the process exiting or being interrupted (SIGINT, SIGTERM, SIGHUP; the signal's default outcome is kept). One container per caller, so parallel test files, Playwright workers and other worktrees never share one; nothing is cached on disk, so the classpath race of root cause `ai/implementation/root-causes/2026-11-08-rc01-mock-oauth2-classpath-race.md` cannot occur.
+- **One image pin.** `MOCK_OAUTH2_IMAGE` in the launcher is the source of truth. `ci.yml` keeps the literal string (this change leaves the workflows alone); `launcher.unit.test.ts` fails when any `.github/workflows/*.yml` names another `mock-oauth2-server:` image string.
+- **No Docker:** it throws, naming the remedy: no `docker` on PATH → "Docker is not installed … Install Docker (and start its daemon), or set MOCK_OAUTH2_URL"; a daemon that does not answer `docker version` → "Start the Docker daemon, or set MOCK_OAUTH2_URL". It never skips and never starts a daemon.
+- **Removed:** `ensureClasspath`, the Java spawn, `pom.xml`, `MOCK_OAUTH2_HOME`, `MOCK_OAUTH2_MAVEN_MIRROR` and the fake-`mvn` unit tests. Java 21 and Maven are no longer prerequisites of any test. An old cache in `~/.cache/prototype-framework/mock-oauth2-server/` is not read and can be deleted.
+- **Not done here** (§6(h) items left for the 0.2.0 cleanup): one shared container per run through a Vitest/Playwright `globalSetup`, `npm run docker:start`, and the `release.yml`/`ci.yml` step changes. Without them, release and the harness's e2e specs in CI now take the Docker path above instead of Maven; GitHub's runners have Docker.
+- **To reverse:** restore `pom.xml`, `ensureClasspath` and their tests from git history, and mark this entry superseded.
+Item: v0.2.0, mock-oauth2-server from Docker.

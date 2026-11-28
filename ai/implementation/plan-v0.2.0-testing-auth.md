@@ -266,7 +266,7 @@ The app clears its cookie. Cloudflare's session logout (`end_session`) is option
 ### 4.3 Local and test stages
 - **Locally:** mock login only, as today. No auth app is needed.
 - **`test-` stages:** mock login only. (Today they also run the password provider, DEC-0516.)
-- **Integration tests:** a fake auth app behind the same service-binding interface. For the upstream OAuth part, run navikt/mock-oauth2-server in CI and locally (Java is available in the sandbox; Docker in GitHub Actions).
+- **Integration tests:** a fake auth app behind the same service-binding interface. For the upstream OAuth part, run navikt/mock-oauth2-server from its pinned Docker image in CI and locally (DEC-0805; `MOCK_OAUTH2_URL` names an already running one). Java and Maven are not needed.
 - **Live:** the owner signs in once for real per release (§7).
 
 ### 4.4 Role mapping (a PAR, so it can change)
